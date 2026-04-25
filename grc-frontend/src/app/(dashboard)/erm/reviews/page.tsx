@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { ermApi, evidenceApi, risksApi, tenantApi } from '@/lib/api';
 import {
   RiskReview,
@@ -16,12 +16,12 @@ import {
   Clock,
   Loader2,
   Plus,
-  X,
   AlertCircle,
   Upload,
   User,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 
 interface TenantUserOption {
   id: number;
@@ -52,6 +52,7 @@ export default function ReviewsPage() {
       const response = await ermApi.reviews.getAll(params);
       return response.data;
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: pendingReviews } = useQuery({
@@ -95,7 +96,7 @@ export default function ReviewsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
           <div className="flex items-center gap-3">
@@ -129,17 +130,19 @@ export default function ReviewsPage() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900"
-        >
-          <option value="all">All Statuses</option>
-          <option value="pending">Pending</option>
-          <option value="in_review">In Review</option>
-          <option value="completed">Completed</option>
-          <option value="overdue">Overdue</option>
-        </select>
+        <MultiSelectDropdown
+          title="Status"
+          items={[
+            { value: 'pending', label: 'Pending' },
+            { value: 'in_review', label: 'In Review' },
+            { value: 'completed', label: 'Completed' },
+            { value: 'overdue', label: 'Overdue' },
+          ]}
+          selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
+          onApply={(values) => setStatusFilter(values[0] || 'all')}
+          multiSelect={false}
+          placeholder="All Statuses"
+        />
         {canCreate && (
           <button
             onClick={() => setShowCreateModal(true)}
@@ -287,80 +290,91 @@ function ReviewModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-xl bg-white p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Schedule Review</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+    <RightSlidePanel
+      isOpen
+      onClose={onClose}
+      title="Schedule Review"
+    >
+      <div className="px-6 py-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-600">Risk</label>
-            <select
-              value={formData.risk_id}
-              onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              required
-            >
-              {risks.map((risk) => (
-                <option key={risk.id} value={risk.id}>
-                  {risk.title}
-                </option>
-              ))}
-            </select>
+            <label className="block text-sm text-slate-600 mb-1">Risk</label>
+            <MultiSelectDropdown
+              title="Risk"
+              items={risks.map((risk) => ({
+                value: String(risk.id),
+                label: risk.title,
+                subLabel: risk.risk_category,
+              }))}
+              selectedValues={formData.risk_id ? [String(formData.risk_id)] : []}
+              onApply={(values) => setFormData({ ...formData, risk_id: values[0] ? Number(values[0]) : 0 })}
+              multiSelect={false}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              forceSearch
+              searchPlaceholder="Search risk by title..."
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-600">Review Cycle</label>
-              <select
-                value={formData.review_cycle}
-                onChange={(e) => setFormData({ ...formData, review_cycle: e.target.value as ReviewCycle })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              >
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="semi_annual">Semi-Annual</option>
-                <option value="annual">Annual</option>
-              </select>
+              <label className="block text-sm text-slate-600 mb-1">Review Cycle</label>
+              <MultiSelectDropdown
+                title="Cycle"
+                items={[
+                  { value: 'monthly', label: 'Monthly' },
+                  { value: 'quarterly', label: 'Quarterly' },
+                  { value: 'semi_annual', label: 'Semi-Annual' },
+                  { value: 'annual', label: 'Annual' },
+                ]}
+                selectedValues={formData.review_cycle ? [formData.review_cycle] : []}
+                onApply={(values) => setFormData({ ...formData, review_cycle: (values[0] as ReviewCycle) || 'quarterly' })}
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+              />
             </div>
             <div>
-              <label className="block text-sm text-slate-600">Review Type</label>
-              <select
-                value={formData.review_type}
-                onChange={(e) => setFormData({ ...formData, review_type: e.target.value as ReviewType })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              >
-                <option value="periodic">Periodic</option>
-                <option value="triggered">Triggered</option>
-                <option value="ad_hoc">Ad Hoc</option>
-                <option value="audit">Audit</option>
-              </select>
+              <label className="block text-sm text-slate-600 mb-1">Review Type</label>
+              <MultiSelectDropdown
+                title="Type"
+                items={[
+                  { value: 'periodic', label: 'Periodic' },
+                  { value: 'triggered', label: 'Triggered' },
+                  { value: 'ad_hoc', label: 'Ad Hoc' },
+                  { value: 'audit', label: 'Audit' },
+                ]}
+                selectedValues={formData.review_type ? [formData.review_type] : []}
+                onApply={(values) => setFormData({ ...formData, review_type: (values[0] as ReviewType) || 'periodic' })}
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+              />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600">Assign To</label>
-            <select
-              value={formData.reviewer_id ?? ''}
-              onChange={(e) =>
+            <label className="block text-sm text-slate-600 mb-1">Assign To</label>
+            <MultiSelectDropdown
+              title="Assignee"
+              items={tenantUsers.map((user) => ({
+                value: String(user.id),
+                label: user.display_name,
+                subLabel: user.email,
+              }))}
+              selectedValues={formData.reviewer_id ? [String(formData.reviewer_id)] : []}
+              onApply={(values) =>
                 setFormData({
                   ...formData,
-                  reviewer_id: e.target.value ? Number(e.target.value) : undefined,
+                  reviewer_id: values[0] ? Number(values[0]) : undefined,
                 })
               }
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-            >
-              <option value="">Unassigned</option>
-              {tenantUsers.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.display_name} ({user.email})
-                </option>
-              ))}
-            </select>
+              multiSelect={false}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              forceSearch
+              placeholder="Unassigned"
+            />
           </div>
 
           <div>
@@ -393,7 +407,7 @@ function ReviewModal({
           </div>
         </form>
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
@@ -518,21 +532,15 @@ function StartReviewModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">
-            {review.status === 'pending' ? 'Start Review' : 'Complete Review'}
-          </h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <p className="mt-1 text-sm text-slate-600">
-          {review.risk_title || `Risk #${review.risk_id}`} • Update risk values, optionally attach evidence, then complete the review.
-        </p>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-5">
+    <RightSlidePanel
+      isOpen
+      onClose={onClose}
+      width="w-full max-w-2xl"
+      title={review.status === 'pending' ? 'Start Review' : 'Complete Review'}
+      subtitle={`${review.risk_title || `Risk #${review.risk_id}`} • Update risk values, optionally attach evidence, then complete the review.`}
+    >
+      <div className="px-6 py-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="rounded-lg border border-slate-200 p-4">
             <h3 className="text-sm font-semibold text-slate-900">Inherent Risk</h3>
             <div className="mt-3 grid grid-cols-2 gap-4">
@@ -673,6 +681,6 @@ function StartReviewModal({
           </div>
         </form>
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }

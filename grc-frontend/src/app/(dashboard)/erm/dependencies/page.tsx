@@ -4,9 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
 import {
-  RiskDependency,
   RiskDependencyCreate,
-  CascadeAnalysis,
   Risk,
   DependencyType,
 } from '@/types';
@@ -14,11 +12,12 @@ import {
   GitBranch,
   Loader2,
   Plus,
-  X,
   Trash2,
   ArrowRight,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 const DEPENDENCY_TYPES: { value: DependencyType; label: string; color: string }[] = [
   { value: 'causes', label: 'Causes', color: 'text-red-400' },
@@ -77,26 +76,25 @@ export default function DependenciesPage() {
     );
   }
 
+  const riskOptions = (risks || []).map((r) => ({ value: String(r.id), label: r.title }));
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Risk Dependencies</h2>
+            <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Dependencies</h2>
             <p className="text-sm text-slate-600">Visualize relationships between risks</p>
           </div>
-          <select
-            value={selectedRisk || ''}
-            onChange={(e) => setSelectedRisk(e.target.value ? Number(e.target.value) : null)}
-            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900"
-          >
-            <option value="">Select risk for cascade analysis</option>
-            {risks?.map((risk) => (
-              <option key={risk.id} value={risk.id}>
-                {risk.title}
-              </option>
-            ))}
-          </select>
+          <MultiSelectDropdown
+            title="Select risk for cascade analysis"
+            items={riskOptions}
+            selectedValues={selectedRisk ? [String(selectedRisk)] : []}
+            onApply={(values) => setSelectedRisk(values[0] ? Number(values[0]) : null)}
+            multiSelect={false}
+            forceSearch
+            triggerVariant="input"
+          />
         </div>
         {canCreate && (
           <button
@@ -115,7 +113,7 @@ export default function DependenciesPage() {
           <p className="mt-1 text-sm text-slate-600">
             Total Cascade Score: <span className="font-bold text-blue-400">{cascadeAnalysis.total_cascade_score.toFixed(1)}</span>
           </p>
-          
+
           {cascadeAnalysis.direct_impacts && cascadeAnalysis.direct_impacts.length > 0 && (
             <div className="mt-4">
               <p className="text-sm font-medium text-slate-700">Direct Impacts:</p>
@@ -183,25 +181,26 @@ export default function DependenciesPage() {
         </div>
       )}
 
-      {showCreateModal && (
-        <DependencyModal
-          risks={risks || []}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={() => {
-            setShowCreateModal(false);
-            queryClient.invalidateQueries({ queryKey: ['erm-dependencies'] });
-          }}
-        />
-      )}
+      <DependencyPanel
+        isOpen={showCreateModal}
+        risks={risks || []}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => {
+          setShowCreateModal(false);
+          queryClient.invalidateQueries({ queryKey: ['erm-dependencies'] });
+        }}
+      />
     </div>
   );
 }
 
-function DependencyModal({
+function DependencyPanel({
+  isOpen,
   risks,
   onClose,
   onSuccess,
 }: {
+  isOpen: boolean;
   risks: Risk[];
   onClose: () => void;
   onSuccess: () => void;
@@ -228,110 +227,98 @@ function DependencyModal({
     createMutation.mutate(formData as RiskDependencyCreate);
   };
 
+  const riskOptions = risks.map((r) => ({ value: String(r.id), label: r.title }));
+  const typeOptions = DEPENDENCY_TYPES.map((t) => ({ value: t.value, label: t.label }));
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-xl bg-white p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Add Dependency</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Add Dependency"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">Source Risk</label>
+          <MultiSelectDropdown
+            title="Source Risk"
+            items={riskOptions}
+            selectedValues={formData.source_risk_id ? [String(formData.source_risk_id)] : []}
+            onApply={(values) => setFormData({ ...formData, source_risk_id: values[0] ? Number(values[0]) : 0 })}
+            multiSelect={false}
+            forceSearch
+            triggerVariant="input"
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div>
-            <label className="block text-sm text-slate-600">Source Risk</label>
-            <select
-              value={formData.source_risk_id}
-              onChange={(e) => setFormData({ ...formData, source_risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              required
-            >
-              {risks.map((risk) => (
-                <option key={risk.id} value={risk.id}>
-                  {risk.title}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">Dependency Type</label>
+          <MultiSelectDropdown
+            title="Dependency Type"
+            items={typeOptions}
+            selectedValues={formData.dependency_type ? [formData.dependency_type] : []}
+            onApply={(values) => setFormData({ ...formData, dependency_type: (values[0] as DependencyType) || 'related' })}
+            multiSelect={false}
+          />
+        </div>
 
-          <div>
-            <label className="block text-sm text-slate-600">Dependency Type</label>
-            <select
-              value={formData.dependency_type}
-              onChange={(e) => setFormData({ ...formData, dependency_type: e.target.value as DependencyType })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-            >
-              {DEPENDENCY_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">Target Risk</label>
+          <MultiSelectDropdown
+            title="Target Risk"
+            items={riskOptions}
+            selectedValues={formData.target_risk_id ? [String(formData.target_risk_id)] : []}
+            onApply={(values) => setFormData({ ...formData, target_risk_id: values[0] ? Number(values[0]) : 0 })}
+            multiSelect={false}
+            forceSearch
+            triggerVariant="input"
+          />
+        </div>
 
-          <div>
-            <label className="block text-sm text-slate-600">Target Risk</label>
-            <select
-              value={formData.target_risk_id}
-              onChange={(e) => setFormData({ ...formData, target_risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              required
-            >
-              {risks.map((risk) => (
-                <option key={risk.id} value={risk.id}>
-                  {risk.title}
-                </option>
-              ))}
-            </select>
+        <div>
+          <label className="block text-sm text-slate-600">Strength (1-5)</label>
+          <input
+            type="range"
+            min="1"
+            max="5"
+            value={formData.strength}
+            onChange={(e) => setFormData({ ...formData, strength: Number(e.target.value) })}
+            className="mt-1 w-full"
+          />
+          <div className="flex justify-between text-xs text-slate-500">
+            <span>Weak</span>
+            <span className="font-medium text-slate-900">{formData.strength}</span>
+            <span>Strong</span>
           </div>
+        </div>
 
-          <div>
-            <label className="block text-sm text-slate-600">Strength (1-5)</label>
-            <input
-              type="range"
-              min="1"
-              max="5"
-              value={formData.strength}
-              onChange={(e) => setFormData({ ...formData, strength: Number(e.target.value) })}
-              className="mt-1 w-full"
-            />
-            <div className="flex justify-between text-xs text-slate-500">
-              <span>Weak</span>
-              <span className="font-medium text-slate-900">{formData.strength}</span>
-              <span>Strong</span>
-            </div>
-          </div>
+        <div>
+          <label className="block text-sm text-slate-600">Description (optional)</label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
+            rows={2}
+          />
+        </div>
 
-          <div>
-            <label className="block text-sm text-slate-600">Description (optional)</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              rows={2}
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={createMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
-            >
-              {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Create
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex justify-end gap-3 pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={createMutation.isPending}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
+          >
+            {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Create
+          </button>
+        </div>
+      </form>
+    </RightSlidePanel>
   );
 }

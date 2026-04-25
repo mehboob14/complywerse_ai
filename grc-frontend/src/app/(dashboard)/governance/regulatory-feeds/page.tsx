@@ -1,13 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Rss,
   RefreshCw,
-  AlertCircle,
   CheckCircle,
   Loader2,
   ExternalLink,
@@ -18,15 +17,15 @@ import {
   ChevronDown,
   ChevronRight,
   Trash2,
-  Edit,
+  Edit2,
   Play,
   Eye,
   ArrowRightCircle,
   Database,
-  Filter,
   Plus,
-  X,
 } from 'lucide-react';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 interface FeedSource {
   id: number;
@@ -161,6 +160,7 @@ export default function RegulatoryFeedsPage() {
       const response = await apiClient.get('/governance/regulatory-feeds/items', { params });
       return response.data as FeedItem[];
     },
+    placeholderData: keepPreviousData,
   });
 
   const seedCBSLMutation = useMutation({
@@ -299,11 +299,25 @@ export default function RegulatoryFeedsPage() {
   const analyzedCount = items?.filter(i => i.status === 'analyzed').length || 0;
   const processedCount = items?.filter(i => i.status === 'processed').length || 0;
 
+  const filterItems = FILTER_OPTIONS.filter((opt) => opt.value !== '').map((opt) => ({
+    value: opt.value,
+    label: opt.label,
+  }));
+  const categoryItems = [
+    { value: 'general', label: 'General' },
+    { value: 'press_releases', label: 'Press Releases' },
+    { value: 'regulatory_policy', label: 'Regulatory Policy' },
+    { value: 'notices', label: 'Notices' },
+    { value: 'monetary_policy', label: 'Monetary Policy' },
+    { value: 'enforcement', label: 'Enforcement' },
+    { value: 'guidance', label: 'Guidance' },
+  ];
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-black">Regulatory Feeds</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-black">Regulatory Feeds</h1>
           <p className="text-sm text-gray-600 mt-1">
             Manage regulatory update feeds and monitor compliance changes
           </p>
@@ -488,7 +502,7 @@ export default function RegulatoryFeedsPage() {
                                 )}
                               </button>
                               {canCreate && <button className="btn-ghost btn-sm" title="Edit">
-                                <Edit className="h-4 w-4" />
+                                <Edit2 className="h-4 w-4" />
                               </button>}
                               {canDelete && <button
                                 onClick={() => {
@@ -527,18 +541,13 @@ export default function RegulatoryFeedsPage() {
               <h2 className="text-base font-semibold text-black">Feed Items</h2>
             </div>
             <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-gray-600" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="select min-w-[140px]"
-              >
-                {FILTER_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+              <MultiSelectDropdown
+                title="Status"
+                items={filterItems}
+                selectedValues={statusFilter ? [statusFilter] : []}
+                onApply={(values) => setStatusFilter(values[0] || '')}
+                multiSelect={false}
+              />
             </div>
           </div>
         </div>
@@ -801,135 +810,125 @@ export default function RegulatoryFeedsPage() {
         </div>
       </div>
 
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-lg mx-4 rounded-xl border border-gray-300 bg-white shadow-xl max-h-[82vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-300">
-              <h2 className="text-base font-semibold text-black">Add Custom Feed Source</h2>
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="text-gray-600 hover:text-black"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                createFeedMutation.mutate(newFeed);
-              }}
-              className="p-5 space-y-3.5"
+      <RightSlidePanel
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        title="Add Custom Feed Source"
+        footer={
+          <div className="flex justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={() => setShowAddModal(false)}
+              className="btn-secondary"
             >
-              <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1">
-                  Feed Name *
-                </label>
-                <input
-                  type="text"
-                  value={newFeed.name}
-                  onChange={(e) => setNewFeed({ ...newFeed, name: e.target.value })}
-                  required
-                  className="input w-full"
-                  placeholder="e.g., SEC Press Releases"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1">
-                  RSS Feed URL *
-                </label>
-                <input
-                  type="url"
-                  value={newFeed.source_url}
-                  onChange={(e) => setNewFeed({ ...newFeed, source_url: e.target.value })}
-                  required
-                  className="input w-full"
-                  placeholder="https://example.com/rss/feed.xml"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1">
-                    Regulator
-                  </label>
-                  <input
-                    type="text"
-                    value={newFeed.regulator}
-                    onChange={(e) => setNewFeed({ ...newFeed, regulator: e.target.value })}
-                    className="input w-full"
-                    placeholder="e.g., SEC"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1">
-                    Country
-                  </label>
-                  <input
-                    type="text"
-                    value={newFeed.country}
-                    onChange={(e) => setNewFeed({ ...newFeed, country: e.target.value })}
-                    className="input w-full"
-                    placeholder="e.g., United States"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1">
-                    Category
-                  </label>
-                  <select
-                    value={newFeed.category}
-                    onChange={(e) => setNewFeed({ ...newFeed, category: e.target.value })}
-                    className="select w-full"
-                  >
-                    <option value="general">General</option>
-                    <option value="press_releases">Press Releases</option>
-                    <option value="regulatory_policy">Regulatory Policy</option>
-                    <option value="notices">Notices</option>
-                    <option value="monetary_policy">Monetary Policy</option>
-                    <option value="enforcement">Enforcement</option>
-                    <option value="guidance">Guidance</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1">
-                    Poll Interval (hours)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="168"
-                    value={newFeed.poll_interval_hours}
-                    onChange={(e) => setNewFeed({ ...newFeed, poll_interval_hours: parseInt(e.target.value) || 24 })}
-                    className="input w-full"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2.5 pt-3.5 border-t border-gray-300">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createFeedMutation.isPending || !newFeed.name || !newFeed.source_url}
-                  className="btn-primary flex items-center gap-2"
-                >
-                  {createFeedMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Plus className="h-4 w-4" />
-                  )}
-                  Add Feed
-                </button>
-              </div>
-            </form>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="add-feed-form"
+              disabled={createFeedMutation.isPending || !newFeed.name || !newFeed.source_url}
+              className="btn-primary flex items-center gap-2"
+            >
+              {createFeedMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              Add Feed
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form
+          id="add-feed-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            createFeedMutation.mutate(newFeed);
+          }}
+          className="space-y-3.5"
+        >
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">
+              Feed Name *
+            </label>
+            <input
+              type="text"
+              value={newFeed.name}
+              onChange={(e) => setNewFeed({ ...newFeed, name: e.target.value })}
+              required
+              className="input w-full"
+              placeholder="e.g., SEC Press Releases"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">
+              RSS Feed URL *
+            </label>
+            <input
+              type="url"
+              value={newFeed.source_url}
+              onChange={(e) => setNewFeed({ ...newFeed, source_url: e.target.value })}
+              required
+              className="input w-full"
+              placeholder="https://example.com/rss/feed.xml"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Regulator
+              </label>
+              <input
+                type="text"
+                value={newFeed.regulator}
+                onChange={(e) => setNewFeed({ ...newFeed, regulator: e.target.value })}
+                className="input w-full"
+                placeholder="e.g., SEC"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Country
+              </label>
+              <input
+                type="text"
+                value={newFeed.country}
+                onChange={(e) => setNewFeed({ ...newFeed, country: e.target.value })}
+                className="input w-full"
+                placeholder="e.g., United States"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Category
+              </label>
+              <MultiSelectDropdown
+                title="Category"
+                items={categoryItems}
+                selectedValues={[newFeed.category]}
+                onApply={(values) => setNewFeed({ ...newFeed, category: values[0] || 'general' })}
+                multiSelect={false}
+                triggerVariant="input"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">
+                Poll Interval (hours)
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="168"
+                value={newFeed.poll_interval_hours}
+                onChange={(e) => setNewFeed({ ...newFeed, poll_interval_hours: parseInt(e.target.value) || 24 })}
+                className="input w-full"
+              />
+            </div>
+          </div>
+        </form>
+      </RightSlidePanel>
     </div>
   );
 }

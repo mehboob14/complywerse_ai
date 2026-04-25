@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   CheckCircle,
   Loader2,
-  AlertCircle,
   FileText,
   BookOpen,
   FileCheck,
@@ -18,11 +17,11 @@ import {
   Lightbulb,
   Shield,
   Layers,
-  Filter,
   CalendarDays,
   CheckCircle2,
   Eye,
 } from 'lucide-react';
+import { MultiSelectDropdown } from '@/components/ui';
 
 interface ReviewDocument {
   id: number;
@@ -198,7 +197,8 @@ export default function GovernanceReviewsPage() {
       if (typeFilter) params.doc_type = typeFilter;
       const response = await governanceApi.getOverdueReviews(params);
       return response.data as ReviewListResponse;
-    }
+    },
+    placeholderData: keepPreviousData,
   });
 
   const { data: upcomingData, isLoading: upcomingLoading } = useQuery({
@@ -208,7 +208,8 @@ export default function GovernanceReviewsPage() {
       if (typeFilter) params.doc_type = typeFilter;
       const response = await governanceApi.getUpcomingReviews(params);
       return response.data as ReviewListResponse;
-    }
+    },
+    placeholderData: keepPreviousData,
   });
 
   const { data: governanceActions, isLoading: actionsLoading } = useQuery({
@@ -227,7 +228,8 @@ export default function GovernanceReviewsPage() {
         const response = await governanceApi.getAllGovernanceActions(params);
         return response.data as GovernanceActionsResponse;
       }
-    }
+    },
+    placeholderData: keepPreviousData,
   });
 
   const completeMutation = useMutation({
@@ -288,23 +290,23 @@ export default function GovernanceReviewsPage() {
 
   if (reviewsSection === 'actions') {
     return (
-      <div className="space-y-5">
-        <div className="flex items-center justify-between">
+      <div className="space-y-4 sm:space-y-6 px-3 sm:px-6 py-3 sm:py-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-          <h1 className="text-sm font-semibold text-black">My Reviews</h1>
-          <p className="text-xs text-gray-500">Track and manage your submitted actions requiring review</p>
+          <h1 className="text-lg sm:text-xl font-semibold text-black">My Reviews</h1>
+          <p className="text-xs sm:text-sm text-gray-600">Track and manage your submitted actions requiring review</p>
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => setReviewsSection('actions')}
-              className="flex items-center gap-1.5 rounded border border-blue-600 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700"
+              className="flex items-center gap-1.5 rounded-lg border border-blue-600 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700"
             >
               <Eye className="h-3.5 w-3.5" />
               Actions {pendingActionsCount > 0 && <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] text-white">{pendingActionsCount}</span>}
             </button>
             <button
               onClick={() => setReviewsSection('documents')}
-              className="flex items-center gap-1.5 rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
             >
               <FileCheck className="h-4 w-4" />
               Documents
@@ -357,21 +359,22 @@ export default function GovernanceReviewsPage() {
         </div>
 
         <div className="rounded-xl border border-gray-300 bg-white">
-          <div className="flex flex-col gap-4 border-b border-gray-300 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-1.5 overflow-x-auto">
+          <div className="border-b-2 border-gray-200 px-3 sm:px-4">
+            <nav className="flex gap-4 sm:gap-6 overflow-x-auto" aria-label="Action status">
               {['all', 'pending_review', 'in_review', 'approved', 'rejected'].map((status) => (
                 <button
                   key={status}
                   onClick={() => setActionStatusFilter(status)}
-                  className={`flex items-center gap-1.5 whitespace-nowrap rounded border px-2.5 py-1 text-xs font-medium transition-colors ${actionStatusFilter === status
-                      ? 'border-blue-600 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
+                  className={`whitespace-nowrap border-b-2 px-1 py-2.5 text-sm font-medium transition-colors ${
+                    actionStatusFilter === status
+                      ? 'border-blue-600 text-blue-700'
+                      : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                  }`}
                 >
                   {status === 'all' ? 'All Actions' : status.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                 </button>
               ))}
-            </div>
+            </nav>
           </div>
 
           <div className="p-3">
@@ -450,11 +453,11 @@ export default function GovernanceReviewsPage() {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6 py-3 sm:py-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-sm font-semibold text-black">Document Reviews</h1>
-          <p className="text-xs text-gray-500">Track and complete document review schedules</p>
+          <h1 className="text-lg sm:text-xl font-semibold text-black">Document Reviews</h1>
+          <p className="text-xs sm:text-sm text-gray-600">Track and complete document review schedules</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -540,16 +543,17 @@ export default function GovernanceReviewsPage() {
       </div>
 
       <div className="rounded-xl border border-gray-300 bg-white">
-        <div className="flex flex-col gap-4 border-b border-gray-300 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-1.5 overflow-x-auto">
+        <div className="flex flex-col gap-3 border-b-2 border-gray-200 px-3 sm:px-4 sm:flex-row sm:items-center sm:justify-between">
+          <nav className="flex gap-4 sm:gap-6 overflow-x-auto" aria-label="Review tabs">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as TabType)}
-                className={`flex items-center gap-1.5 whitespace-nowrap rounded border px-2.5 py-1 text-xs font-medium transition-colors ${activeTab === tab.key
-                    ? 'border-blue-600 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                  }`}
+                className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-1 py-2.5 text-sm font-medium transition-colors ${
+                  activeTab === tab.key
+                    ? 'border-blue-600 text-blue-700'
+                    : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+                }`}
               >
                 {tab.label}
                 {tab.count > 0 && (
@@ -562,19 +566,18 @@ export default function GovernanceReviewsPage() {
                 )}
               </button>
             ))}
-          </div>
+          </nav>
 
-          <div className="flex items-center gap-3">
-            <Filter className="h-4 w-4 text-gray-600" />
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            >
-              {DOCUMENT_TYPES.map(type => (
-                <option key={type.value} value={type.value}>{type.label}</option>
-              ))}
-            </select>
+          <div className="pb-3 sm:pb-0">
+            <MultiSelectDropdown
+              title="Type"
+              items={DOCUMENT_TYPES.filter((t) => t.value).map((t) => ({ value: t.value, label: t.label }))}
+              selectedValues={typeFilter ? [typeFilter] : []}
+              onApply={(values) => setTypeFilter(values[0] || '')}
+              multiSelect={false}
+              placeholder="All Types"
+              size="sm"
+            />
           </div>
         </div>
 

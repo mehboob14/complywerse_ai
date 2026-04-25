@@ -124,13 +124,20 @@ export function MultiSelectDropdown({
 
       const rect = trigger.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const dropdownHeight = dropdownRef.current?.offsetHeight ?? 360;
+      const spaceBelow = viewportHeight - rect.bottom - 16;
+      const spaceAbove = rect.top - 16;
+      // Prefer downward, but flip up when the panel is taller than the space below
+      // *and* there is more room above. Avoids the panel getting clipped against the
+      // viewport bottom in nested modals/sheets.
+      const placeAbove = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
 
-      // Always open downward — consistent placement across the platform.
       setDropdownStyle({
-        top: rect.bottom + 8,
+        top: placeAbove ? rect.top - 8 : rect.bottom + 8,
         left: Math.max(8, Math.min(rect.left, viewportWidth - 328)),
         width: Math.max(rect.width, 220),
-        placeAbove: false,
+        placeAbove,
       });
     };
 
@@ -172,12 +179,10 @@ export function MultiSelectDropdown({
     if (!multiSelect) {
       setDraftValues((current) => {
         const next = current[0] === value ? [] : [value];
-        if (autoApply) {
-          onApply(next);
-          // Single-select with autoApply: commit + close so the picker feels instant.
-          setIsOpen(false);
-          setQuery('');
-        }
+        onApply(next);
+        // Single-select: commit + close so the picker feels instant.
+        setIsOpen(false);
+        setQuery('');
         return next;
       });
       return;
@@ -187,31 +192,13 @@ export function MultiSelectDropdown({
       const next = current.includes(value)
         ? current.filter((entry) => entry !== value)
         : [...current, value];
-      if (autoApply) {
-        onApply(next);
-      }
+      onApply(next);
       return next;
     });
   };
 
-  const handleApply = () => {
-    onApply(draftValues);
-    setIsOpen(false);
-    setQuery('');
-  };
-
-  const handleReset = () => {
-    setDraftValues([]);
-    onApply([]);
-    setIsOpen(false);
-    setQuery('');
-  };
-
-  const handleSelectAll = () => {
-    if (!multiSelect) return;
-    const enabledValues = items.filter((item) => !item.disabled).map((item) => item.value);
-    setDraftValues(enabledValues);
-  };
+  // Suppress unused-prop warning. autoApply is always-on now; prop kept for compatibility.
+  void autoApply;
 
   const triggerLabel = (() => {
     if (selectedLabels.length === 0) {
@@ -341,34 +328,6 @@ export function MultiSelectDropdown({
             )}
           </div>
 
-          {!autoApply && (
-            <div className="flex items-center justify-between border-t border-slate-200 px-3 py-2">
-              <button
-                type="button"
-                onClick={handleSelectAll}
-                disabled={!multiSelect || filteredItems.length === 0}
-                className="text-sm font-medium text-slate-900 underline disabled:cursor-not-allowed disabled:text-slate-400"
-              >
-                Select All
-              </button>
-              <div className="flex flex-col items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleApply}
-                  className="min-w-20 rounded-full border  bg-primary-600 px-3 py-1 text-sm font-medium text-black hover:bg-primary-700"
-                >
-                  Apply
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="min-w-20 rounded-full border border-slate-400 bg-slate-100 px-3 py-1 text-sm font-medium text-slate-800 hover:bg-slate-200"
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-          )}
         </div>,
         document.body
       )}

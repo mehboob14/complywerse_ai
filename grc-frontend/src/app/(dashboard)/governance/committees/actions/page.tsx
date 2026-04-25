@@ -1,11 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { committeeApi } from '@/lib/api';
 import {
   CheckSquare,
-  Search,
   AlertCircle,
   Clock,
   CheckCircle,
@@ -17,9 +16,11 @@ import {
   Sparkles,
   Upload,
   Loader2,
-  X,
 } from 'lucide-react';
 import Link from 'next/link';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 interface Action {
   id: number;
@@ -98,6 +99,7 @@ export default function ActionsPage() {
   });
 
   const { data: actions, isLoading } = useQuery({
+    placeholderData: keepPreviousData,
     queryKey: ['all-actions', statusFilter, committeeFilter, overdueOnly],
     queryFn: async () => {
       try {
@@ -251,15 +253,36 @@ export default function ActionsPage() {
     );
   }
 
+  const statusItems = [
+    { value: 'open', label: 'Open' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'overdue', label: 'Overdue' },
+  ];
+  const committeeItems = useMemo(
+    () => (committees || []).map((c) => ({ value: String(c.id), label: c.name })),
+    [committees],
+  );
+  const actionTypeItems = [
+    { value: 'follow_up', label: 'Follow Up' },
+    { value: 'policy_approval', label: 'Policy Approval' },
+    { value: 'risk_review', label: 'Risk Review' },
+    { value: 'audit_response', label: 'Audit Response' },
+  ];
+  const meetingItems = useMemo(
+    () => meetings.map((m) => ({ value: String(m.id), label: m.title })),
+    [meetings],
+  );
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="page-header">
         <div>
           <Link href="/governance/committees" className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4">
             <ArrowLeft className="h-4 w-4" />
             Back to Committees
           </Link>
-          <h1 className="text-2xl font-semibold text-slate-900">Oversight Actions</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Oversight Actions</h1>
           <p className="text-slate-600 mt-1">Track and manage actions across all committees</p>
         </div>
         <button
@@ -321,38 +344,29 @@ export default function ActionsPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-600" />
-          <input
-            type="text"
-            placeholder="Search actions..."
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-[200px] max-w-md">
+          <SearchInput
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10 w-full"
+            onChange={setSearchTerm}
+            placeholder="Search actions..."
+            size="md"
           />
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="input"
-        >
-          <option value="">All Statuses</option>
-          <option value="open">Open</option>
-          <option value="in_progress">In Progress</option>
-          <option value="completed">Completed</option>
-          <option value="overdue">Overdue</option>
-        </select>
-        <select
-          value={committeeFilter}
-          onChange={(e) => setCommitteeFilter(e.target.value)}
-          className="input"
-        >
-          <option value="">All Committees</option>
-          {(committees || []).map((committee) => (
-            <option key={committee.id} value={committee.id}>{committee.name}</option>
-          ))}
-        </select>
+        <MultiSelectDropdown
+          title="Status"
+          items={statusItems}
+          selectedValues={statusFilter ? [statusFilter] : []}
+          onApply={(values) => setStatusFilter(values[0] || '')}
+          multiSelect={false}
+        />
+        <MultiSelectDropdown
+          title="Committee"
+          items={committeeItems}
+          selectedValues={committeeFilter ? [committeeFilter] : []}
+          onApply={(values) => setCommitteeFilter(values[0] || '')}
+          multiSelect={false}
+        />
         <label className="flex items-center gap-2 text-slate-700 text-sm cursor-pointer">
           <input
             type="checkbox"
@@ -411,16 +425,24 @@ export default function ActionsPage() {
                   </div>
                 </div>
                 <div className="ml-4">
-                  <select
-                    value={action.status}
-                    onChange={(e) => updateActionMutation.mutate({ id: action.id, data: { status: e.target.value } })}
-                    className="input text-sm"
-                    disabled={updateActionMutation.isPending}
-                  >
-                    <option value="open">Open</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                  </select>
+                  <MultiSelectDropdown
+                    title="Status"
+                    items={[
+                      { value: 'open', label: 'Open' },
+                      { value: 'in_progress', label: 'In Progress' },
+                      { value: 'completed', label: 'Completed' },
+                    ]}
+                    selectedValues={[action.status]}
+                    onApply={(values) => {
+                      const next = values[0];
+                      if (next && next !== action.status) {
+                        updateActionMutation.mutate({ id: action.id, data: { status: next } });
+                      }
+                    }}
+                    multiSelect={false}
+                    triggerVariant="input"
+                    showSelectionInTrigger
+                  />
                 </div>
               </div>
             </div>
@@ -435,166 +457,162 @@ export default function ActionsPage() {
         </div>
       )}
 
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-semibold text-slate-900">Add Manual Action Item</h2>
-              <button
-                onClick={() => setIsCreateModalOpen(false)}
-                className="rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              >
-                <X className="h-5 w-5" />
-              </button>
+      <RightSlidePanel
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Add Manual Action Item"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setIsCreateModalOpen(false)}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="create-action-form"
+              disabled={createActionMutation.isPending || !createFormData.committee_id || !createFormData.title.trim()}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+            >
+              {createActionMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Create Action
+            </button>
+          </div>
+        }
+      >
+        <form id="create-action-form" onSubmit={handleCreateManualAction} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Committee *</label>
+              <MultiSelectDropdown
+                title="Committee"
+                items={committeeItems}
+                selectedValues={createFormData.committee_id ? [createFormData.committee_id] : []}
+                onApply={(values) =>
+                  setCreateFormData((prev) => ({
+                    ...prev,
+                    committee_id: values[0] || '',
+                    meeting_id: '',
+                  }))
+                }
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select committee"
+              />
             </div>
 
-            <form onSubmit={handleCreateManualAction} className="space-y-4 p-6 max-h-[80vh] overflow-y-auto">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Committee *</label>
-                  <select
-                    value={createFormData.committee_id}
-                    onChange={(e) =>
-                      setCreateFormData((prev) => ({
-                        ...prev,
-                        committee_id: e.target.value,
-                        meeting_id: '',
-                      }))
-                    }
-                    className="input w-full"
-                    required
-                  >
-                    <option value="">Select committee</option>
-                    {(committees || []).map((committee) => (
-                      <option key={committee.id} value={committee.id}>{committee.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Meeting (Optional)</label>
-                  <select
-                    value={createFormData.meeting_id}
-                    onChange={(e) => setCreateFormData((prev) => ({ ...prev, meeting_id: e.target.value }))}
-                    className="input w-full"
-                    disabled={!createFormData.committee_id || isMeetingsLoading}
-                  >
-                    <option value="">No linked meeting</option>
-                    {meetings.map((meeting) => (
-                      <option key={meeting.id} value={meeting.id}>{meeting.title}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Title *</label>
-                <input
-                  type="text"
-                  value={createFormData.title}
-                  onChange={(e) => setCreateFormData((prev) => ({ ...prev, title: e.target.value }))}
-                  className="input w-full"
-                  placeholder="Action item title"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Action Type</label>
-                  <select
-                    value={createFormData.action_type}
-                    onChange={(e) => setCreateFormData((prev) => ({ ...prev, action_type: e.target.value }))}
-                    className="input w-full"
-                  >
-                    <option value="follow_up">Follow Up</option>
-                    <option value="policy_approval">Policy Approval</option>
-                    <option value="risk_review">Risk Review</option>
-                    <option value="audit_response">Audit Response</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Due Date</label>
-                  <input
-                    type="date"
-                    value={createFormData.due_date}
-                    onChange={(e) => setCreateFormData((prev) => ({ ...prev, due_date: e.target.value }))}
-                    className="input w-full"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
-                <textarea
-                  value={createFormData.description}
-                  onChange={(e) => setCreateFormData((prev) => ({ ...prev, description: e.target.value }))}
-                  className="input w-full h-28"
-                  placeholder="Describe the action item"
-                />
-              </div>
-
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <p className="mb-2 text-sm font-medium text-slate-800">AI Assistant</p>
-                <div className="mb-3">
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Upload reference file (optional)</label>
-                  <input
-                    type="file"
-                    onChange={(e) => setAiFile(e.target.files?.[0] || null)}
-                    className="block w-full text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
-                    accept=".txt,.md,.csv,.json,.pdf,.doc,.docx"
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => aiRewordMutation.mutate()}
-                    disabled={aiRewordMutation.isPending || (!createFormData.description.trim() && !aiFile)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
-                  >
-                    {aiRewordMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    AI Reword
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => aiSummaryMutation.mutate()}
-                    disabled={aiSummaryMutation.isPending || (!createFormData.description.trim() && !aiFile)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
-                  >
-                    {aiSummaryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                    Generate Summary
-                  </button>
-                </div>
-              </div>
-
-              {createActionMutation.isError && (
-                <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-600">
-                  Failed to create action item. Please check required fields and try again.
-                </div>
-              )}
-
-              <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createActionMutation.isPending || !createFormData.committee_id || !createFormData.title.trim()}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-                >
-                  {createActionMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Create Action
-                </button>
-              </div>
-            </form>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Meeting (Optional)</label>
+              <MultiSelectDropdown
+                title="Meeting"
+                items={meetingItems}
+                selectedValues={createFormData.meeting_id ? [createFormData.meeting_id] : []}
+                onApply={(values) =>
+                  setCreateFormData((prev) => ({ ...prev, meeting_id: values[0] || '' }))
+                }
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder={
+                  !createFormData.committee_id
+                    ? 'Select committee first'
+                    : isMeetingsLoading
+                      ? 'Loading meetings...'
+                      : 'No linked meeting'
+                }
+              />
+            </div>
           </div>
-        </div>
-      )}
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Title *</label>
+            <input
+              type="text"
+              value={createFormData.title}
+              onChange={(e) => setCreateFormData((prev) => ({ ...prev, title: e.target.value }))}
+              className="input w-full"
+              placeholder="Action item title"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Action Type</label>
+              <MultiSelectDropdown
+                title="Action Type"
+                items={actionTypeItems}
+                selectedValues={[createFormData.action_type]}
+                onApply={(values) =>
+                  setCreateFormData((prev) => ({ ...prev, action_type: values[0] || 'follow_up' }))
+                }
+                multiSelect={false}
+                triggerVariant="input"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Due Date</label>
+              <input
+                type="date"
+                value={createFormData.due_date}
+                onChange={(e) => setCreateFormData((prev) => ({ ...prev, due_date: e.target.value }))}
+                className="input w-full"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
+            <textarea
+              value={createFormData.description}
+              onChange={(e) => setCreateFormData((prev) => ({ ...prev, description: e.target.value }))}
+              className="input w-full h-28"
+              placeholder="Describe the action item"
+            />
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <p className="mb-2 text-sm font-medium text-slate-800">AI Assistant</p>
+            <div className="mb-3">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Upload reference file (optional)</label>
+              <input
+                type="file"
+                onChange={(e) => setAiFile(e.target.files?.[0] || null)}
+                className="block w-full text-sm text-slate-700 file:mr-4 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+                accept=".txt,.md,.csv,.json,.pdf,.doc,.docx"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => aiRewordMutation.mutate()}
+                disabled={aiRewordMutation.isPending || (!createFormData.description.trim() && !aiFile)}
+                className="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+              >
+                {aiRewordMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                AI Reword
+              </button>
+              <button
+                type="button"
+                onClick={() => aiSummaryMutation.mutate()}
+                disabled={aiSummaryMutation.isPending || (!createFormData.description.trim() && !aiFile)}
+                className="inline-flex items-center gap-2 rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+              >
+                {aiSummaryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                Generate Summary
+              </button>
+            </div>
+          </div>
+
+          {createActionMutation.isError && (
+            <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-600">
+              Failed to create action item. Please check required fields and try again.
+            </div>
+          )}
+        </form>
+      </RightSlidePanel>
     </div>
   );
 }

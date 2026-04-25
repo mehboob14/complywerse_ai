@@ -11,19 +11,16 @@ import {
   AlertCircle,
   Building2,
   Calendar,
-  User,
   Target,
   Shield,
   Play,
   CheckCircle,
-  XCircle,
   Plus,
-  Link2,
-  X,
   Sparkles,
   ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 interface Finding {
   id: number;
@@ -87,8 +84,6 @@ interface LinkModalProps {
 function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalProps) {
   const [entityId, setEntityId] = useState('');
 
-  if (!isOpen) return null;
-
   const handleSubmit = () => {
     if (!entityId) return;
     onConfirm(Number(entityId));
@@ -96,28 +91,11 @@ function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalPro
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">Link to {type === 'risk' ? 'Risk' : 'Internal Control'}</h3>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            {type === 'risk' ? 'Risk' : 'Control'} ID <span className="text-red-400">*</span>
-          </label>
-          <input
-            type="number"
-            value={entityId}
-            onChange={(e) => setEntityId(e.target.value)}
-            placeholder={`Enter ${type} ID...`}
-            className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder-slate-400"
-          />
-        </div>
-
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Link to ${type === 'risk' ? 'Risk' : 'Internal Control'}`}
+      footer={
         <div className="flex justify-end gap-3">
           <button onClick={onClose} disabled={isLoading} className="btn-secondary">
             Cancel
@@ -131,8 +109,21 @@ function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalPro
             Link
           </button>
         </div>
+      }
+    >
+      <div className="mb-4">
+        <label className="mb-1 block text-sm font-medium text-slate-700">
+          {type === 'risk' ? 'Risk' : 'Control'} ID <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="number"
+          value={entityId}
+          onChange={(e) => setEntityId(e.target.value)}
+          placeholder={`Enter ${type} ID...`}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        />
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
@@ -148,8 +139,6 @@ function CreateActionModal({ isOpen, onClose, onConfirm, isLoading }: CreateActi
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState('');
 
-  if (!isOpen) return null;
-
   const handleSubmit = () => {
     if (!title) return;
     onConfirm({ title, description, due_date: dueDate || undefined });
@@ -159,48 +148,11 @@ function CreateActionModal({ isOpen, onClose, onConfirm, isLoading }: CreateActi
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">Create Mitigation Action</h3>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="space-y-4 mb-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Title <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Action title..."
-              className="input w-full"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe the action..."
-              className="input w-full h-24"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Due Date</label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="input w-full"
-            />
-          </div>
-        </div>
-
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Create Mitigation Action"
+      footer={
         <div className="flex justify-end gap-3">
           <button onClick={onClose} disabled={isLoading} className="btn-secondary">
             Cancel
@@ -214,8 +166,41 @@ function CreateActionModal({ isOpen, onClose, onConfirm, isLoading }: CreateActi
             Create
           </button>
         </div>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Title <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Action title..."
+            className="input w-full"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe the action..."
+            className="input w-full h-32"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Due Date</label>
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            className="input w-full"
+          />
+        </div>
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
@@ -309,7 +294,7 @@ export default function FindingDetailPage() {
   const nextStatus = STATUS_FLOW[currentStatusIndex + 1];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex items-center gap-4">
         <Link
           href="/risks/rcsa/findings"
@@ -320,7 +305,7 @@ export default function FindingDetailPage() {
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <AlertTriangle className={`h-6 w-6 ${severityStyle.text}`} />
-            <h1 className="text-2xl font-semibold text-slate-900">{finding.title}</h1>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{finding.title}</h1>
           </div>
           <div className="flex items-center gap-4 mt-1 text-sm text-slate-600">
             <span className="flex items-center gap-1.5">

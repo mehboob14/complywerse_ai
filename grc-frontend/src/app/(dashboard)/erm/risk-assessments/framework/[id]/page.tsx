@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { ermApi, tenantApi } from '@/lib/api';
 import { ArrowLeft, Loader2, Plus, RefreshCw, Trash2, Upload, CheckCircle2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 
 interface EvidenceItem {
   id: number;
@@ -218,14 +219,14 @@ export default function FrameworkRiskAssessmentDetailPage() {
   }
 
   return (
-    <div className="space-y-6 text-[var(--color-text)]">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6 text-[var(--color-text)]">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div className="flex items-center gap-3">
           <button onClick={() => router.push('/erm/risk-assessments/framework')} className="cw-btn-secondary rounded-lg p-2">
             <ArrowLeft size={16} />
           </button>
           <div>
-            <h1 className="text-2xl font-semibold text-[var(--color-text)]">{assessment.name}</h1>
+            <h1 className="text-lg sm:text-xl font-semibold text-[var(--color-text)]">{assessment.name}</h1>
             <p className="text-sm text-[var(--color-muted)]">
               {assessment.framework_name || 'Framework'} · {assessment.questions.length} questions
             </p>
@@ -234,28 +235,29 @@ export default function FrameworkRiskAssessmentDetailPage() {
         <div className="cw-card flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
           <div>
             <label className="mb-1 block text-xs font-medium text-[var(--color-muted)]">Assessment Status</label>
-            <select
-              className="cw-field rounded-lg px-3 py-2 text-sm"
-              value={assessment.status}
-              onChange={(e) => updateAssessmentMutation.mutate({ status: e.target.value })}
-            >
-              {ASSESSMENT_STATUS.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
+            <MultiSelectDropdown
+              title="Assessment Status"
+              triggerVariant="input"
+              multiSelect={false}
+              selectedValues={[assessment.status]}
+              onApply={(vals) => vals[0] && updateAssessmentMutation.mutate({ status: vals[0] })}
+              items={ASSESSMENT_STATUS.map((s) => ({ value: s.value, label: s.label }))}
+            />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-[var(--color-muted)]">Generate Questions</label>
             <div className="flex items-center gap-2">
-              <select
-                className="cw-field rounded-lg px-3 py-2 text-sm"
-                value={generateCount}
-                onChange={(e) => setGenerateCount(e.target.value)}
-              >
-                {[10, 15, 20, 25, 30, 40, 50].map((count) => (
-                  <option key={count} value={count}>{count}</option>
-                ))}
-              </select>
+              <MultiSelectDropdown
+                title="Count"
+                triggerVariant="input"
+                multiSelect={false}
+                selectedValues={[generateCount]}
+                onApply={(vals) => setGenerateCount(vals[0] || '20')}
+                items={[10, 15, 20, 25, 30, 40, 50].map((count) => ({
+                  value: String(count),
+                  label: String(count),
+                }))}
+              />
               <button
                 className="cw-btn-secondary flex items-center gap-2 rounded-lg px-3 py-2"
                 onClick={() => {
@@ -335,31 +337,34 @@ export default function FrameworkRiskAssessmentDetailPage() {
             <div className="grid gap-3 lg:grid-cols-3">
               <div>
                 <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Status</label>
-                <select
-                  className="cw-field w-full rounded-lg px-3 py-2"
-                  value={question.status}
-                  onChange={(e) => updateQuestionMutation.mutate({ questionId: question.id, data: { status: e.target.value } })}
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
-                  ))}
-                </select>
+                <MultiSelectDropdown
+                  title="Status"
+                  triggerVariant="input"
+                  multiSelect={false}
+                  selectedValues={[question.status]}
+                  onApply={(vals) => vals[0] && updateQuestionMutation.mutate({ questionId: question.id, data: { status: vals[0] } })}
+                  items={STATUS_OPTIONS.map((s) => ({ value: s.value, label: s.label }))}
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Assignee</label>
-                <select
-                  className="cw-field w-full rounded-lg bg-white px-3 py-2 text-gray-900"
-                  value={question.assigned_user_id || ''}
-                  onChange={(e) => updateQuestionMutation.mutate({
+                <MultiSelectDropdown
+                  title="Assignee"
+                  triggerVariant="input"
+                  multiSelect={false}
+                  forceSearch
+                  selectedValues={question.assigned_user_id ? [String(question.assigned_user_id)] : []}
+                  onApply={(vals) => updateQuestionMutation.mutate({
                     questionId: question.id,
-                    data: { assigned_user_id: e.target.value ? Number(e.target.value) : null },
+                    data: { assigned_user_id: vals[0] ? Number(vals[0]) : null },
                   })}
-                >
-                  <option value="" className="bg-white text-gray-900">Unassigned</option>
-                  {(users || []).map((u) => (
-                    <option key={u.id} value={u.id} className="bg-white text-gray-900">{u.display_name || u.username}</option>
-                  ))}
-                </select>
+                  items={(users || []).map((u) => ({
+                    value: String(u.id),
+                    label: u.display_name || u.username,
+                    subLabel: u.email || undefined,
+                  }))}
+                  placeholder="Unassigned"
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Evidence Upload</label>

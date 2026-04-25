@@ -11,6 +11,7 @@ import {
   AlertCircle, FileText, ChevronDown, ChevronUp, CheckCircle, XCircle,
   Shield, Edit2, X, ClipboardCheck, Link2, Sparkles,
 } from 'lucide-react';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 type AssessmentStatus = 'draft' | 'in_progress' | 'under_review' | 'approved' | 'closed';
 type AssessmentType = 'periodic' | 'annual' | 'ad_hoc' | 'triggered';
@@ -357,7 +358,7 @@ export default function RiskAssessmentDetailPage() {
   const statusStyle = STATUS_CONFIG[assessment.status] || STATUS_CONFIG.draft;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <Link
@@ -368,7 +369,7 @@ export default function RiskAssessmentDetailPage() {
           </Link>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-slate-900">{assessment.name}</h1>
+              <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{assessment.name}</h1>
               <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyle.bgColor} ${statusStyle.color}`}>
                 {statusStyle.label}
               </span>
@@ -729,16 +730,34 @@ export default function RiskAssessmentDetailPage() {
         </div>
       )}
 
-      {showAddRisksModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-2xl rounded-xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-semibold text-slate-900">Add Risks to Assessment</h2>
-              <button onClick={() => { setShowAddRisksModal(false); setSelectedRiskIds(new Set()); }} className="rounded p-1 text-slate-600 hover:bg-white hover:text-slate-900">
-                <X size={20} />
+      <RightSlidePanel
+        isOpen={showAddRisksModal}
+        onClose={() => { setShowAddRisksModal(false); setSelectedRiskIds(new Set()); }}
+        width="w-full max-w-2xl"
+        title="Add Risks to Assessment"
+        footer={
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-600">{selectedRiskIds.size} selected</span>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowAddRisksModal(false); setSelectedRiskIds(new Set()); }}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => bulkAddMutation.mutate(Array.from(selectedRiskIds))}
+                disabled={selectedRiskIds.size === 0 || bulkAddMutation.isPending}
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+              >
+                {bulkAddMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                Add Selected ({selectedRiskIds.size})
               </button>
             </div>
-            <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+          </div>
+        }
+      >
+            <div>
               {!availableRisks ? (
                 <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary-400" /></div>
               ) : availableRisks.length === 0 ? (
@@ -774,28 +793,7 @@ export default function RiskAssessmentDetailPage() {
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4">
-              <span className="text-sm text-slate-600">{selectedRiskIds.size} selected</span>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setShowAddRisksModal(false); setSelectedRiskIds(new Set()); }}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => bulkAddMutation.mutate(Array.from(selectedRiskIds))}
-                  disabled={selectedRiskIds.size === 0 || bulkAddMutation.isPending}
-                  className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-                >
-                  {bulkAddMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-                  Add Selected ({selectedRiskIds.size})
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      </RightSlidePanel>
 
       {showEditModal && <EditAssessmentModal assessment={assessment} onClose={() => setShowEditModal(false)} onSave={(data) => updateMutation.mutate(data)} isPending={updateMutation.isPending} />}
 
@@ -975,13 +973,12 @@ function EditAssessmentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="mx-4 w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">Edit Assessment</h2>
-          <button onClick={onClose} className="rounded p-1 text-slate-600 hover:bg-white hover:text-slate-900"><X size={20} /></button>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4 px-6 py-4 max-h-[70vh] overflow-y-auto">
+    <RightSlidePanel
+      isOpen={true}
+      onClose={onClose}
+      title="Edit Assessment"
+    >
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Name <span className="text-red-400">*</span></label>
             <input type="text" required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none" />
@@ -1035,8 +1032,7 @@ function EditAssessmentModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
@@ -1069,13 +1065,22 @@ function LinkModal({
   const items = type === 'kri' ? (kris || []) : type === 'incident' ? (incidents || []) : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="mx-4 w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-          <button onClick={onClose} className="rounded p-1 text-slate-600 hover:bg-white hover:text-slate-900"><X size={20} /></button>
+    <RightSlidePanel
+      isOpen={true}
+      onClose={onClose}
+      width="w-full max-w-md"
+      title={title}
+      footer={
+        <div className="flex justify-end gap-3">
+          <button onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Cancel</button>
+          <button onClick={handleLink} disabled={!selectedId || isPending} className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+            {isPending && <Loader2 size={14} className="animate-spin" />}
+            Link
+          </button>
         </div>
-        <div className="space-y-4 px-6 py-4 max-h-[60vh] overflow-y-auto">
+      }
+    >
+        <div className="space-y-4">
           {type === 'rcsa' ? (
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">RCSA Finding ID</label>
@@ -1109,14 +1114,6 @@ function LinkModal({
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder={type === 'incident' ? 'How does this incident impact the risk rating?' : 'Optional notes...'} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none" />
           </div>
         </div>
-        <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
-          <button onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Cancel</button>
-          <button onClick={handleLink} disabled={!selectedId || isPending} className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
-            {isPending && <Loader2 size={14} className="animate-spin" />}
-            Link
-          </button>
-        </div>
-      </div>
-    </div>
+    </RightSlidePanel>
   );
 }

@@ -9,8 +9,9 @@ import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CertificationJourney, ControlImplementation, ProgressSummary, CertificationControl, SubControlWithEvidence, ControlEvidence, ITAsset } from '@/types';
 import ControlImplementationModal from '@/components/ControlImplementationModal';
-import { 
-  Loader2, 
+import { SearchInput, MultiSelectDropdown } from '@/components/ui';
+import {
+  Loader2,
   AlertCircle,
   Shield,
   ChevronRight,
@@ -22,7 +23,6 @@ import {
   AlertTriangle,
   Play,
   Check,
-  Search,
   XCircle,
   ArrowLeft,
   Layers,
@@ -1976,47 +1976,58 @@ export default function CertificationJourneyPage() {
 
         {controlsSubTab === 'library' && (
           <div>
-            <div className="mb-4 flex gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder={`Search ${entityLabelPlural.toLowerCase()}...`}
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <div className="flex-1 min-w-[180px] sm:min-w-[260px]">
+                <SearchInput
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="input w-full pl-10"
+                  onChange={setSearchQuery}
+                  placeholder={`Search ${entityLabelPlural.toLowerCase()}...`}
+                  size="md"
                 />
               </div>
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value as CategoryFilter)}
-                className="input w-48"
-              >
-                <option value="all">All Categories</option>
-                <option value="organizational">Organizational</option>
-                <option value="people">People</option>
-                <option value="physical">Physical</option>
-                <option value="technological">Technological</option>
-              </select>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-                className="input w-48"
-              >
-                <option value="all">All Statuses</option>
-                <option value="implemented">Implemented</option>
-                <option value="partial">In Progress</option>
-                <option value="not_implemented">Not Started</option>
-              </select>
-              <select
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value as SortOrder)}
-                className="input w-48"
-              >
-                <option value="default">Sort by Default</option>
-                <option value="asc">Clause # (Ascending)</option>
-                <option value="desc">Clause # (Descending)</option>
-              </select>
+              <MultiSelectDropdown
+                title="Category"
+                items={[
+                  { value: 'organizational', label: 'Organizational' },
+                  { value: 'people', label: 'People' },
+                  { value: 'physical', label: 'Physical' },
+                  { value: 'technological', label: 'Technological' },
+                ]}
+                selectedValues={categoryFilter !== 'all' ? [categoryFilter] : []}
+                onApply={(v) => setCategoryFilter((v[0] as CategoryFilter) || 'all')}
+                multiSelect={false}
+                autoApply
+                placeholder="All Categories"
+                size="md"
+              />
+              <MultiSelectDropdown
+                title="Status"
+                items={[
+                  { value: 'implemented', label: 'Implemented' },
+                  { value: 'partial', label: 'In Progress' },
+                  { value: 'not_implemented', label: 'Not Started' },
+                ]}
+                selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
+                onApply={(v) => setStatusFilter((v[0] as StatusFilter) || 'all')}
+                multiSelect={false}
+                autoApply
+                placeholder="All Statuses"
+                size="md"
+              />
+              <MultiSelectDropdown
+                title="Sort"
+                items={[
+                  { value: 'default', label: 'Default' },
+                  { value: 'asc', label: 'Clause # (Asc)' },
+                  { value: 'desc', label: 'Clause # (Desc)' },
+                ]}
+                selectedValues={[sortOrder]}
+                onApply={(v) => setSortOrder((v[0] as SortOrder) || 'default')}
+                multiSelect={false}
+                autoApply
+                placeholder="Sort"
+                size="md"
+              />
             </div>
 
             <div className="space-y-3">

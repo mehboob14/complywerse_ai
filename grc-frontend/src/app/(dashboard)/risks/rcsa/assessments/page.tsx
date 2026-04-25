@@ -6,19 +6,18 @@ import { rcsaApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   ClipboardCheck,
-  Search,
   Eye,
   Play,
-  Send,
   ArrowRight,
   Loader2,
   AlertCircle,
   Calendar,
   Building2,
   User,
-  Filter,
 } from 'lucide-react';
 import Link from 'next/link';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 
 interface Assessment {
   id: number;
@@ -193,60 +192,52 @@ export default function RCSAAssessmentsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="page-header">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">RCSA Assessments</h1>
-            <p className="text-slate-600 mt-1">View and complete your assigned risk assessments</p>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">RCSA Assessments</h1>
+            <p className="text-slate-600 mt-1 text-sm">View and complete your assigned risk assessments</p>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-600" />
-          <input
-            type="text"
-            placeholder="Search assessments..."
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-[200px] max-w-md">
+          <SearchInput
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10 w-full"
+            onChange={setSearchTerm}
+            placeholder="Search assessments..."
           />
         </div>
-        <select
-          value={campaignFilter}
-          onChange={(e) => setCampaignFilter(e.target.value)}
-          className="input"
-        >
-          <option value="">All Campaigns</option>
-          {(campaigns || []).map((campaign) => (
-            <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
-          ))}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="input"
-        >
-          <option value="">All Statuses</option>
-          <option value="not_started">Not Started</option>
-          <option value="in_progress">In Progress</option>
-          <option value="submitted">Submitted</option>
-          <option value="under_review">Under Review</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-        </select>
-        <select
-          value={businessUnitFilter}
-          onChange={(e) => setBusinessUnitFilter(e.target.value)}
-          className="input"
-        >
-          <option value="">All Business Units</option>
-          {businessUnits.map((unit) => (
-            <option key={unit} value={unit}>{unit}</option>
-          ))}
-        </select>
+        <MultiSelectDropdown
+          title="Campaign"
+          items={(campaigns || []).map((c) => ({ value: String(c.id), label: c.name }))}
+          selectedValues={campaignFilter ? [campaignFilter] : []}
+          onApply={(vals) => setCampaignFilter(vals[0] || '')}
+          multiSelect={false}
+        />
+        <MultiSelectDropdown
+          title="Status"
+          items={[
+            { value: 'not_started', label: 'Not Started' },
+            { value: 'in_progress', label: 'In Progress' },
+            { value: 'submitted', label: 'Submitted' },
+            { value: 'under_review', label: 'Under Review' },
+            { value: 'approved', label: 'Approved' },
+            { value: 'rejected', label: 'Rejected' },
+          ]}
+          selectedValues={statusFilter ? [statusFilter] : []}
+          onApply={(vals) => setStatusFilter(vals[0] || '')}
+          multiSelect={false}
+        />
+        <MultiSelectDropdown
+          title="Business Unit"
+          items={businessUnits.map((unit) => ({ value: unit, label: unit }))}
+          selectedValues={businessUnitFilter ? [businessUnitFilter] : []}
+          onApply={(vals) => setBusinessUnitFilter(vals[0] || '')}
+          multiSelect={false}
+        />
       </div>
 
       <div className="card overflow-hidden">

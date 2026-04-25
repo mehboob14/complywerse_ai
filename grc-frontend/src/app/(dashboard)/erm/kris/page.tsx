@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -24,6 +24,7 @@ import {
   Upload,
   Sparkles,
 } from 'lucide-react';
+import { MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 
 const KRI_STATUS_COLORS = {
   green: 'bg-green-500',
@@ -51,6 +52,7 @@ export default function KRIsPage() {
       const response = await ermApi.kris.getAll();
       return response.data;
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: alerts } = useQuery({
@@ -108,11 +110,11 @@ export default function KRIsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Key Risk Indicators</h2>
+            <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Key Risk Indicators</h2>
             <p className="text-sm text-slate-600">Monitor and track risk metrics</p>
           </div>
           {alertCount > 0 && (
@@ -427,20 +429,6 @@ function KRIModal({
   });
   const [aiSuggestionNote, setAiSuggestionNote] = useState<string | null>(null);
   const isFirstMount = useRef(true);
-  const [riskSearch, setRiskSearch] = useState('');
-
-  const filteredRisks = useMemo(() => {
-    const term = riskSearch.trim().toLowerCase();
-    if (!term) return risks;
-    const matches = risks.filter((risk) => {
-      const title = (risk.title || '').toLowerCase();
-      const category = (risk.risk_category || '').toLowerCase();
-      return title.includes(term) || category.includes(term) || String(risk.id).includes(term);
-    });
-    if (matches.some((risk) => risk.id === formData.risk_id)) return matches;
-    const selected = risks.find((risk) => risk.id === formData.risk_id);
-    return selected ? [selected, ...matches] : matches;
-  }, [risks, riskSearch, formData.risk_id]);
 
   const createMutation = useMutation({
     mutationFn: (data: RiskKRICreate) => ermApi.kris.create(data),
@@ -504,16 +492,13 @@ function KRIModal({
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-xl bg-white p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">{kri ? 'Edit KRI' : 'Create KRI'}</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+    <RightSlidePanel
+      isOpen
+      onClose={onClose}
+      title={kri ? 'Edit KRI' : 'Create KRI'}
+    >
+      <div className="px-6 py-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-slate-600">Use AI to prefill KRI details for manual entry</p>
@@ -531,26 +516,22 @@ function KRIModal({
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600">Risk</label>
-            <input
-              type="text"
-              value={riskSearch}
-              onChange={(e) => setRiskSearch(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              placeholder="Search risk by title..."
+            <label className="block text-sm text-slate-600 mb-1">Risk</label>
+            <MultiSelectDropdown
+              title="Risk"
+              items={risks.map((risk) => ({
+                value: String(risk.id),
+                label: risk.title,
+                subLabel: risk.risk_category,
+              }))}
+              selectedValues={formData.risk_id ? [String(formData.risk_id)] : []}
+              onApply={(values) => setFormData({ ...formData, risk_id: values[0] ? Number(values[0]) : 0 })}
+              multiSelect={false}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              forceSearch
+              searchPlaceholder="Search risk by title..."
             />
-            <select
-              value={formData.risk_id}
-              onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-              className="mt-2 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              required
-            >
-              {filteredRisks.map((risk) => (
-                <option key={risk.id} value={risk.id}>
-                  {risk.title}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div>
@@ -576,18 +557,22 @@ function KRIModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-600">Metric Type</label>
-              <select
-                value={formData.metric_type}
-                onChange={(e) => setFormData({ ...formData, metric_type: e.target.value as KRIMetricType })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              >
-                <option value="percentage">Percentage</option>
-                <option value="count">Count</option>
-                <option value="currency">Currency</option>
-                <option value="ratio">Ratio</option>
-                <option value="score">Score</option>
-              </select>
+              <label className="block text-sm text-slate-600 mb-1">Metric Type</label>
+              <MultiSelectDropdown
+                title="Metric Type"
+                items={[
+                  { value: 'percentage', label: 'Percentage' },
+                  { value: 'count', label: 'Count' },
+                  { value: 'currency', label: 'Currency' },
+                  { value: 'ratio', label: 'Ratio' },
+                  { value: 'score', label: 'Score' },
+                ]}
+                selectedValues={formData.metric_type ? [formData.metric_type] : []}
+                onApply={(values) => setFormData({ ...formData, metric_type: (values[0] as KRIMetricType) || 'percentage' })}
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+              />
             </div>
             <div>
               <label className="block text-sm text-slate-600">Unit</label>
@@ -623,29 +608,37 @@ function KRIModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-600">Direction</label>
-              <select
-                value={formData.threshold_direction}
-                onChange={(e) => setFormData({ ...formData, threshold_direction: e.target.value as KRIThresholdDirection })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              >
-                <option value="higher_is_better">Higher is Better</option>
-                <option value="lower_is_better">Lower is Better</option>
-              </select>
+              <label className="block text-sm text-slate-600 mb-1">Direction</label>
+              <MultiSelectDropdown
+                title="Direction"
+                items={[
+                  { value: 'higher_is_better', label: 'Higher is Better' },
+                  { value: 'lower_is_better', label: 'Lower is Better' },
+                ]}
+                selectedValues={formData.threshold_direction ? [formData.threshold_direction] : []}
+                onApply={(values) => setFormData({ ...formData, threshold_direction: (values[0] as KRIThresholdDirection) || 'higher_is_better' })}
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+              />
             </div>
             <div>
-              <label className="block text-sm text-slate-600">Frequency</label>
-              <select
-                value={formData.frequency}
-                onChange={(e) => setFormData({ ...formData, frequency: e.target.value as KRIFrequency })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              >
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="annually">Annually</option>
-              </select>
+              <label className="block text-sm text-slate-600 mb-1">Frequency</label>
+              <MultiSelectDropdown
+                title="Frequency"
+                items={[
+                  { value: 'daily', label: 'Daily' },
+                  { value: 'weekly', label: 'Weekly' },
+                  { value: 'monthly', label: 'Monthly' },
+                  { value: 'quarterly', label: 'Quarterly' },
+                  { value: 'annually', label: 'Annually' },
+                ]}
+                selectedValues={formData.frequency ? [formData.frequency] : []}
+                onApply={(values) => setFormData({ ...formData, frequency: (values[0] as KRIFrequency) || 'monthly' })}
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+              />
             </div>
           </div>
 
@@ -668,7 +661,7 @@ function KRIModal({
           </div>
         </form>
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
@@ -695,18 +688,15 @@ function MeasureKRIModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl bg-white p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Record Measurement</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <p className="mt-2 text-slate-600">{kri.name}</p>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+    <RightSlidePanel
+      isOpen
+      onClose={onClose}
+      width="w-full max-w-md"
+      title="Record Measurement"
+      subtitle={kri.name}
+    >
+      <div className="px-6 py-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-slate-600">Value</label>
             <div className="mt-1 flex items-center gap-2">
@@ -751,6 +741,6 @@ function MeasureKRIModal({
           </div>
         </form>
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }

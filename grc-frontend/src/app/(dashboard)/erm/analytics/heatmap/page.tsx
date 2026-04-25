@@ -16,6 +16,7 @@ import {
   Filter,
   RotateCcw,
 } from 'lucide-react';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 
 const LIKELIHOOD_LABELS = ['Rare', 'Unlikely', 'Possible', 'Likely', 'Almost Certain'];
 const IMPACT_LABELS = ['Insignificant', 'Minor', 'Moderate', 'Major', 'Catastrophic'];
@@ -125,7 +126,7 @@ export default function InteractiveHeatMapPage() {
   const impactLabels = data?.impact_labels || IMPACT_LABELS;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex items-center gap-4">
         <Link
           href="/erm/analytics"
@@ -135,7 +136,7 @@ export default function InteractiveHeatMapPage() {
           Back
         </Link>
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Interactive Risk Heat Map</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Interactive Risk Heat Map</h1>
           <p className="text-sm text-slate-600">Visualize risk distribution across likelihood and impact dimensions</p>
         </div>
       </div>
@@ -165,18 +166,16 @@ export default function InteractiveHeatMapPage() {
           </button>
         </div>
 
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900"
-        >
-          <option value="">All Categories</option>
-          {CATEGORIES.map((cat) => (
-            <option key={cat.value} value={cat.value}>
-              {cat.label}
-            </option>
-          ))}
-        </select>
+        <MultiSelectDropdown
+          title="Category"
+          items={[
+            { value: '', label: 'All Categories' },
+            ...CATEGORIES.map((cat) => ({ value: cat.value, label: cat.label })),
+          ]}
+          selectedValues={[category]}
+          onApply={(values) => setCategory(values[0] ?? '')}
+          multiSelect={false}
+        />
 
         {hasFilters && (
           <button

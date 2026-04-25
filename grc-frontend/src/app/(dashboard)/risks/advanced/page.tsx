@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { advancedErmApi, risksApi } from '@/lib/api';
+import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import {
   RiskKRI,
   RiskKRICreate,
@@ -37,7 +39,6 @@ import {
   Plus,
   TrendingDown,
   TrendingUp,
-  X,
   Edit2,
   Trash2,
   AlertCircle,
@@ -102,11 +103,11 @@ export default function AdvancedERMPage() {
   const queryClient = useQueryClient();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Advanced ERM</h1>
-          <p className="text-slate-600">Enterprise Risk Management - KRIs, Incidents, Reviews & Reports</p>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Advanced ERM</h1>
+          <p className="text-sm text-slate-600">Enterprise Risk Management - KRIs, Incidents, Reviews & Reports</p>
         </div>
         <Link
           href="/risks"
@@ -116,21 +117,23 @@ export default function AdvancedERMPage() {
         </Link>
       </div>
 
-      <div className="flex space-x-1 rounded-xl bg-white p-1">
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === tab.id
-                ? 'bg-primary-600 text-white'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-            }`}
-          >
-            <tab.icon className="h-4 w-4" />
-            {tab.label}
-          </button>
-        ))}
+      <div className="border-b border-slate-200">
+        <nav className="flex gap-1 overflow-x-auto">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <tab.icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          ))}
+        </nav>
       </div>
 
       <div className="rounded-xl bg-white p-6">
@@ -252,40 +255,37 @@ function KRIsTab() {
         </div>
       )}
 
-      {showCreateModal && (
-        <KRIModal
-          risks={risks || []}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={() => {
-            setShowCreateModal(false);
-            queryClient.invalidateQueries({ queryKey: ['kris'] });
-          }}
-        />
-      )}
+      <KRIModal
+        isOpen={showCreateModal}
+        risks={risks || []}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => {
+          setShowCreateModal(false);
+          queryClient.invalidateQueries({ queryKey: ['kris'] });
+        }}
+      />
 
-      {editingKRI && (
-        <KRIModal
-          kri={editingKRI}
-          risks={risks || []}
-          onClose={() => setEditingKRI(null)}
-          onSuccess={() => {
-            setEditingKRI(null);
-            queryClient.invalidateQueries({ queryKey: ['kris'] });
-          }}
-        />
-      )}
+      <KRIModal
+        isOpen={!!editingKRI}
+        kri={editingKRI || undefined}
+        risks={risks || []}
+        onClose={() => setEditingKRI(null)}
+        onSuccess={() => {
+          setEditingKRI(null);
+          queryClient.invalidateQueries({ queryKey: ['kris'] });
+        }}
+      />
 
-      {showMeasureModal && (
-        <MeasureKRIModal
-          kri={showMeasureModal}
-          onClose={() => setShowMeasureModal(null)}
-          onSuccess={() => {
-            setShowMeasureModal(null);
-            queryClient.invalidateQueries({ queryKey: ['kris'] });
-            queryClient.invalidateQueries({ queryKey: ['kri-alerts'] });
-          }}
-        />
-      )}
+      <MeasureKRIModal
+        isOpen={!!showMeasureModal}
+        kri={showMeasureModal}
+        onClose={() => setShowMeasureModal(null)}
+        onSuccess={() => {
+          setShowMeasureModal(null);
+          queryClient.invalidateQueries({ queryKey: ['kris'] });
+          queryClient.invalidateQueries({ queryKey: ['kri-alerts'] });
+        }}
+      />
     </div>
   );
 }
@@ -383,11 +383,13 @@ function KRICard({
 }
 
 function KRIModal({
+  isOpen,
   kri,
   risks,
   onClose,
   onSuccess,
 }: {
+  isOpen: boolean;
   kri?: RiskKRI;
   risks: Risk[];
   onClose: () => void;
@@ -428,16 +430,12 @@ function KRIModal({
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-xl bg-white p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">{kri ? 'Edit KRI' : 'Create KRI'}</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title={kri ? 'Edit KRI' : 'Create KRI'}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-slate-600">Risk</label>
             <select
@@ -568,25 +566,27 @@ function KRIModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
 function MeasureKRIModal({
+  isOpen,
   kri,
   onClose,
   onSuccess,
 }: {
-  kri: RiskKRI;
+  isOpen: boolean;
+  kri: RiskKRI | null;
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [value, setValue] = useState<number>(kri.current_value || 0);
+  const [value, setValue] = useState<number>(kri?.current_value || 0);
   const [notes, setNotes] = useState('');
 
   const measureMutation = useMutation({
-    mutationFn: (data: { value: number; notes?: string }) => advancedErmApi.measureKRI(kri.id, data),
+    mutationFn: (data: { value: number; notes?: string }) =>
+      advancedErmApi.measureKRI(kri?.id || 0, data),
     onSuccess,
   });
 
@@ -596,63 +596,57 @@ function MeasureKRIModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl bg-white p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Record Measurement</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Record Measurement"
+      subtitle={kri?.name}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm text-slate-600">Value</label>
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              type="number"
+              step="0.01"
+              value={value}
+              onChange={(e) => setValue(Number(e.target.value))}
+              className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              required
+            />
+            {kri?.unit && <span className="text-slate-600">{kri.unit}</span>}
+          </div>
         </div>
 
-        <p className="mt-2 text-slate-600">{kri.name}</p>
+        <div>
+          <label className="block text-sm text-slate-600">Notes (optional)</label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+            rows={2}
+          />
+        </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          <div>
-            <label className="block text-sm text-slate-600">Value</label>
-            <div className="mt-1 flex items-center gap-2">
-              <input
-                type="number"
-                step="0.01"
-                value={value}
-                onChange={(e) => setValue(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-                required
-              />
-              {kri.unit && <span className="text-slate-600">{kri.unit}</span>}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm text-slate-600">Notes (optional)</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              rows={2}
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={measureMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
-            >
-              {measureMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Record
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex justify-end gap-3 pt-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={measureMutation.isPending}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
+          >
+            {measureMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Record
+          </button>
+        </div>
+      </form>
+    </RightSlidePanel>
   );
 }
 
@@ -675,6 +669,7 @@ function IncidentsTab() {
       const response = await advancedErmApi.getIncidents(params);
       return response.data;
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: dashboard } = useQuery({
@@ -761,31 +756,27 @@ function IncidentsTab() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex gap-2">
-          <select
-            value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900"
-          >
-            <option value="all">All Severities</option>
-            {SEVERITIES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900"
-          >
-            <option value="all">All Statuses</option>
-            {INCIDENT_STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap gap-2">
+          <MultiSelectDropdown
+            title="Severity"
+            items={[
+              { value: 'all', label: 'All Severities' },
+              ...SEVERITIES.map(s => ({ value: s.value, label: s.label })),
+            ]}
+            selectedValues={severityFilter === 'all' ? [] : [severityFilter]}
+            onApply={(values) => setSeverityFilter(values[0] || 'all')}
+            multiSelect={false}
+          />
+          <MultiSelectDropdown
+            title="Status"
+            items={[
+              { value: 'all', label: 'All Statuses' },
+              ...INCIDENT_STATUSES.map(s => ({ value: s.value, label: s.label })),
+            ]}
+            selectedValues={statusFilter === 'all' ? [] : [statusFilter]}
+            onApply={(values) => setStatusFilter(values[0] || 'all')}
+            multiSelect={false}
+          />
         </div>
         {canCreate && (
           <button
@@ -879,40 +870,40 @@ function IncidentsTab() {
         </div>
       )}
 
-      {showCreateModal && (
-        <IncidentModal
-          risks={risks || []}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={() => {
-            setShowCreateModal(false);
-            queryClient.invalidateQueries({ queryKey: ['incidents'] });
-            queryClient.invalidateQueries({ queryKey: ['incident-dashboard'] });
-          }}
-        />
-      )}
+      <IncidentModal
+        isOpen={showCreateModal}
+        risks={risks || []}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => {
+          setShowCreateModal(false);
+          queryClient.invalidateQueries({ queryKey: ['incidents'] });
+          queryClient.invalidateQueries({ queryKey: ['incident-dashboard'] });
+        }}
+      />
 
-      {editingIncident && (
-        <IncidentModal
-          incident={editingIncident}
-          risks={risks || []}
-          onClose={() => setEditingIncident(null)}
-          onSuccess={() => {
-            setEditingIncident(null);
-            queryClient.invalidateQueries({ queryKey: ['incidents'] });
-            queryClient.invalidateQueries({ queryKey: ['incident-dashboard'] });
-          }}
-        />
-      )}
+      <IncidentModal
+        isOpen={!!editingIncident}
+        incident={editingIncident || undefined}
+        risks={risks || []}
+        onClose={() => setEditingIncident(null)}
+        onSuccess={() => {
+          setEditingIncident(null);
+          queryClient.invalidateQueries({ queryKey: ['incidents'] });
+          queryClient.invalidateQueries({ queryKey: ['incident-dashboard'] });
+        }}
+      />
     </div>
   );
 }
 
 function IncidentModal({
+  isOpen,
   incident,
   risks,
   onClose,
   onSuccess,
 }: {
+  isOpen: boolean;
   incident?: RiskIncident;
   risks: Risk[];
   onClose: () => void;
@@ -954,16 +945,12 @@ function IncidentModal({
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">{incident ? 'Edit Incident' : 'Log Incident'}</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title={incident ? 'Edit Incident' : 'Log Incident'}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-slate-600">Title</label>
             <input
@@ -1093,8 +1080,7 @@ function IncidentModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
@@ -1113,6 +1099,7 @@ function ReviewsTab() {
       const response = await advancedErmApi.getReviews(params);
       return response.data;
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: pendingReviews } = useQuery({
@@ -1182,17 +1169,19 @@ function ReviewsTab() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900"
-        >
-          <option value="all">All Statuses</option>
-          <option value="pending">Pending</option>
-          <option value="in_review">In Review</option>
-          <option value="completed">Completed</option>
-          <option value="overdue">Overdue</option>
-        </select>
+        <MultiSelectDropdown
+          title="Status"
+          items={[
+            { value: 'all', label: 'All Statuses' },
+            { value: 'pending', label: 'Pending' },
+            { value: 'in_review', label: 'In Review' },
+            { value: 'completed', label: 'Completed' },
+            { value: 'overdue', label: 'Overdue' },
+          ]}
+          selectedValues={statusFilter === 'all' ? [] : [statusFilter]}
+          onApply={(values) => setStatusFilter(values[0] || 'all')}
+          multiSelect={false}
+        />
         {canCreate && (
           <button
             onClick={() => setShowCreateModal(true)}
@@ -1218,17 +1207,16 @@ function ReviewsTab() {
         </div>
       )}
 
-      {showCreateModal && (
-        <ReviewModal
-          risks={risks || []}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={() => {
-            setShowCreateModal(false);
-            queryClient.invalidateQueries({ queryKey: ['reviews'] });
-            queryClient.invalidateQueries({ queryKey: ['pending-reviews'] });
-          }}
-        />
-      )}
+      <ReviewModal
+        isOpen={showCreateModal}
+        risks={risks || []}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => {
+          setShowCreateModal(false);
+          queryClient.invalidateQueries({ queryKey: ['reviews'] });
+          queryClient.invalidateQueries({ queryKey: ['pending-reviews'] });
+        }}
+      />
     </div>
   );
 }
@@ -1303,10 +1291,12 @@ function ReviewCard({ review }: { review: RiskReview }) {
 }
 
 function ReviewModal({
+  isOpen,
   risks,
   onClose,
   onSuccess,
 }: {
+  isOpen: boolean;
   risks: Risk[];
   onClose: () => void;
   onSuccess: () => void;
@@ -1329,16 +1319,12 @@ function ReviewModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-xl bg-white p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Schedule Review</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Schedule Review"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-slate-600">Risk</label>
             <select
@@ -1413,8 +1399,7 @@ function ReviewModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
@@ -1472,18 +1457,16 @@ function DependenciesTab() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-semibold text-slate-900">Risk Dependencies</h2>
-          <select
-            value={selectedRisk || ''}
-            onChange={(e) => setSelectedRisk(e.target.value ? Number(e.target.value) : null)}
-            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900"
-          >
-            <option value="">Select risk for cascade analysis</option>
-            {risks?.map((risk) => (
-              <option key={risk.id} value={risk.id}>
-                {risk.title}
-              </option>
-            ))}
-          </select>
+          <MultiSelectDropdown
+            title="Risk"
+            placeholder="Select risk for cascade analysis"
+            items={(risks || []).map(r => ({ value: String(r.id), label: r.title }))}
+            selectedValues={selectedRisk ? [String(selectedRisk)] : []}
+            onApply={(values) => setSelectedRisk(values[0] ? Number(values[0]) : null)}
+            multiSelect={false}
+            forceSearch
+            triggerVariant="input"
+          />
         </div>
         {canCreate && (
           <button
@@ -1570,25 +1553,26 @@ function DependenciesTab() {
         </div>
       )}
 
-      {showCreateModal && (
-        <DependencyModal
-          risks={risks || []}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={() => {
-            setShowCreateModal(false);
-            queryClient.invalidateQueries({ queryKey: ['dependencies'] });
-          }}
-        />
-      )}
+      <DependencyModal
+        isOpen={showCreateModal}
+        risks={risks || []}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => {
+          setShowCreateModal(false);
+          queryClient.invalidateQueries({ queryKey: ['dependencies'] });
+        }}
+      />
     </div>
   );
 }
 
 function DependencyModal({
+  isOpen,
   risks,
   onClose,
   onSuccess,
 }: {
+  isOpen: boolean;
   risks: Risk[];
   onClose: () => void;
   onSuccess: () => void;
@@ -1616,16 +1600,12 @@ function DependencyModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg rounded-xl bg-white p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Add Dependency</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Add Dependency"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-slate-600">Source Risk</label>
             <select
@@ -1718,8 +1698,7 @@ function DependencyModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 

@@ -23,12 +23,13 @@ import {
   Send,
   ThumbsUp,
   ThumbsDown,
-  X,
   Calendar,
   User,
   Building2,
 } from 'lucide-react';
 import Link from 'next/link';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 interface InternalControlDetail {
   id: number;
@@ -195,7 +196,7 @@ export default function InternalControlDetailPage() {
       const response = await ermApi.risks.getAll();
       return response.data;
     },
-    enabled: showRiskModal,
+    enabled: activeTab === 'risks' || showRiskModal,
   });
 
   const submitMutation = useMutation({
@@ -296,7 +297,7 @@ export default function InternalControlDetailPage() {
   const canApproveReject = control.status === 'pending_approval';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex items-center gap-4">
         <Link
           href="/erm/internal-controls"
@@ -306,7 +307,7 @@ export default function InternalControlDetailPage() {
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900">{control.name}</h1>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{control.name}</h1>
             {control.is_key_control && (
               <span className="flex items-center gap-1 rounded bg-purple-500/20 px-2 py-1 text-xs font-medium text-purple-400">
                 <Key className="h-3 w-3" />
@@ -361,15 +362,15 @@ export default function InternalControlDetailPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1 rounded-xl bg-white p-1">
+      <div className="flex flex-wrap gap-1 border-b border-slate-200">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${
               activeTab === tab.id
-                ? 'bg-primary-600 text-white'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
             <tab.icon className="h-4 w-4" />
@@ -810,39 +811,33 @@ export default function InternalControlDetailPage() {
         </div>
       )}
 
-      {showTestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">Add Test</h2>
-              <button
-                onClick={() => setShowTestModal(false)}
-                className="rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                createTestMutation.mutate({
-                  test_type: formData.get('test_type'),
-                  test_period_start: formData.get('test_period_start') || undefined,
-                  test_period_end: formData.get('test_period_end') || undefined,
-                  sample_size: formData.get('sample_size')
-                    ? Number(formData.get('sample_size'))
-                    : undefined,
-                  exceptions_found: formData.get('exceptions_found')
-                    ? Number(formData.get('exceptions_found'))
-                    : undefined,
-                  result: formData.get('result') || undefined,
-                  findings: formData.get('findings') || undefined,
-                  recommendations: formData.get('recommendations') || undefined,
-                });
-              }}
-              className="space-y-4"
-            >
+      <RightSlidePanel
+        isOpen={showTestModal}
+        onClose={() => setShowTestModal(false)}
+        title="Add Test"
+      >
+        <form
+          id="control-test-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            createTestMutation.mutate({
+              test_type: formData.get('test_type'),
+              test_period_start: formData.get('test_period_start') || undefined,
+              test_period_end: formData.get('test_period_end') || undefined,
+              sample_size: formData.get('sample_size')
+                ? Number(formData.get('sample_size'))
+                : undefined,
+              exceptions_found: formData.get('exceptions_found')
+                ? Number(formData.get('exceptions_found'))
+                : undefined,
+              result: formData.get('result') || undefined,
+              findings: formData.get('findings') || undefined,
+              recommendations: formData.get('recommendations') || undefined,
+            });
+          }}
+          className="space-y-4"
+        >
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Test Type</label>
                 <select
@@ -920,41 +915,34 @@ export default function InternalControlDetailPage() {
                   className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
                 />
               </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowTestModal(false)}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createTestMutation.isPending}
-                  className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
-                >
-                  {createTestMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Add Test
-                </button>
-              </div>
-            </form>
-          </div>
+        </form>
+        <div className="mt-4 flex justify-end gap-3 border-t border-slate-200 pt-4">
+          <button
+            type="button"
+            onClick={() => setShowTestModal(false)}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="control-test-form"
+            disabled={createTestMutation.isPending}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
+          >
+            {createTestMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Add Test
+          </button>
         </div>
-      )}
+      </RightSlidePanel>
 
-      {showRiskModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">Link Risk</h2>
-              <button
-                onClick={() => setShowRiskModal(false)}
-                className="rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+      <RightSlidePanel
+        isOpen={showRiskModal}
+        onClose={() => setShowRiskModal(false)}
+        title="Link Risk"
+      >
             <form
+              id="control-risk-form"
               onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
@@ -1008,41 +996,34 @@ export default function InternalControlDetailPage() {
                   <option value="ineffective">Ineffective</option>
                 </select>
               </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowRiskModal(false)}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={linkRiskMutation.isPending}
-                  className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
-                >
-                  {linkRiskMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Link Risk
-                </button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {showEscalationModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">Add Escalation Rule</h2>
+            <div className="mt-4 flex justify-end gap-3 border-t border-slate-200 pt-4">
               <button
-                onClick={() => setShowEscalationModal(false)}
-                className="rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                type="button"
+                onClick={() => setShowRiskModal(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
               >
-                <X className="h-5 w-5" />
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="control-risk-form"
+                disabled={linkRiskMutation.isPending}
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
+              >
+                {linkRiskMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                Link Risk
               </button>
             </div>
+      </RightSlidePanel>
+
+      <RightSlidePanel
+        isOpen={showEscalationModal}
+        onClose={() => setShowEscalationModal(false)}
+        title="Add Escalation Rule"
+      >
             <form
+              id="control-esc-form"
               onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
@@ -1097,105 +1078,98 @@ export default function InternalControlDetailPage() {
                 />
                 <label className="text-sm font-medium text-slate-700">Active</label>
               </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowEscalationModal(false)}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createEscalationMutation.isPending}
-                  className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
-                >
-                  {createEscalationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Add Escalation
-                </button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {showWorkflowModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-xl font-bold capitalize text-slate-900">
-                {showWorkflowModal === 'submit'
-                  ? 'Submit for Approval'
-                  : showWorkflowModal === 'approve'
-                  ? 'Approve Control'
-                  : 'Reject Control'}
-              </h2>
+            <div className="mt-4 flex justify-end gap-3 border-t border-slate-200 pt-4">
               <button
-                onClick={() => {
-                  setShowWorkflowModal(null);
-                  setWorkflowComments('');
-                }}
-                className="rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                type="button"
+                onClick={() => setShowEscalationModal(false)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
               >
-                <X className="h-5 w-5" />
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="control-esc-form"
+                disabled={createEscalationMutation.isPending}
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
+              >
+                {createEscalationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                Add Escalation
               </button>
             </div>
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Comments</label>
-                <textarea
-                  value={workflowComments}
-                  onChange={(e) => setWorkflowComments(e.target.value)}
-                  rows={4}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder:text-slate-600"
-                  placeholder="Add comments (optional)..."
-                />
-              </div>
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => {
-                    setShowWorkflowModal(null);
-                    setWorkflowComments('');
-                  }}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    if (showWorkflowModal === 'submit') {
-                      submitMutation.mutate();
-                    } else if (showWorkflowModal === 'approve') {
-                      approveMutation.mutate();
-                    } else {
-                      rejectMutation.mutate();
-                    }
-                  }}
-                  disabled={
-                    submitMutation.isPending || approveMutation.isPending || rejectMutation.isPending
-                  }
-                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-slate-900 disabled:opacity-50 ${
-                    showWorkflowModal === 'reject'
-                      ? 'bg-red-600 hover:bg-red-500'
-                      : showWorkflowModal === 'approve'
-                      ? 'bg-green-600 hover:bg-green-500'
-                      : 'bg-blue-600 hover:bg-blue-500'
-                  }`}
-                >
-                  {(submitMutation.isPending ||
-                    approveMutation.isPending ||
-                    rejectMutation.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {showWorkflowModal === 'submit'
-                    ? 'Submit'
-                    : showWorkflowModal === 'approve'
-                    ? 'Approve'
-                    : 'Reject'}
-                </button>
-              </div>
-            </div>
+      </RightSlidePanel>
+
+      <RightSlidePanel
+        isOpen={!!showWorkflowModal}
+        onClose={() => {
+          setShowWorkflowModal(null);
+          setWorkflowComments('');
+        }}
+        width="w-full max-w-md"
+        title={
+          showWorkflowModal === 'submit'
+            ? 'Submit for Approval'
+            : showWorkflowModal === 'approve'
+            ? 'Approve Control'
+            : 'Reject Control'
+        }
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => {
+                setShowWorkflowModal(null);
+                setWorkflowComments('');
+              }}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (showWorkflowModal === 'submit') {
+                  submitMutation.mutate();
+                } else if (showWorkflowModal === 'approve') {
+                  approveMutation.mutate();
+                } else {
+                  rejectMutation.mutate();
+                }
+              }}
+              disabled={
+                submitMutation.isPending || approveMutation.isPending || rejectMutation.isPending
+              }
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${
+                showWorkflowModal === 'reject'
+                  ? 'bg-red-600 hover:bg-red-500'
+                  : showWorkflowModal === 'approve'
+                  ? 'bg-green-600 hover:bg-green-500'
+                  : 'bg-blue-600 hover:bg-blue-500'
+              }`}
+            >
+              {(submitMutation.isPending ||
+                approveMutation.isPending ||
+                rejectMutation.isPending) && <Loader2 className="h-4 w-4 animate-spin" />}
+              {showWorkflowModal === 'submit'
+                ? 'Submit'
+                : showWorkflowModal === 'approve'
+                ? 'Approve'
+                : 'Reject'}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Comments</label>
+            <textarea
+              value={workflowComments}
+              onChange={(e) => setWorkflowComments(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder:text-slate-600"
+              placeholder="Add comments (optional)..."
+            />
           </div>
         </div>
-      )}
+      </RightSlidePanel>
     </div>
   );
 }

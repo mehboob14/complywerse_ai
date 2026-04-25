@@ -3,11 +3,11 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { controlLibraryApi } from '@/lib/api';
+import { MultiSelectDropdown } from '@/components/ui';
 import {
   GitCompare,
   Loader2,
   Download,
-  ChevronDown,
   Shield,
   Sparkles,
   ArrowRight,
@@ -210,12 +210,18 @@ export default function FrameworkComparisonPage() {
   const sourceFramework = frameworkOptions.find(f => f.id === sourceFrameworkId);
   const destFramework = frameworkOptions.find(f => f.id === destFrameworkId);
 
+  const frameworkItems = frameworkOptions.map((fw) => ({
+    value: String(fw.id),
+    label: `${fw.name}${fw.version ? ` (${fw.version})` : ''}`,
+    subLabel: `${fw.control_count} controls`,
+  }));
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-black sm:text-2xl">Framework Comparison</h1>
-          <p className="text-sm text-gray-600">Crosswalk mapping between regulatory frameworks</p>
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Framework Comparison</h1>
+          <p className="mt-1 text-sm text-slate-600">Crosswalk mapping between regulatory frameworks</p>
         </div>
         {crosswalkData?.crosswalk && crosswalkData.crosswalk.length > 0 && (
           <button
@@ -228,68 +234,58 @@ export default function FrameworkComparisonPage() {
         )}
       </div>
 
-      <div className="card">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-4">
-          <div className="flex-1">
-            <label className="mb-1.5 block text-sm font-medium text-gray-700">Source Framework</label>
-            <div className="relative">
-              <select
-                value={sourceFrameworkId || ''}
-                onChange={(e) => {
-                  setSourceFrameworkId(e.target.value ? Number(e.target.value) : null);
-                  setCompareTriggered(false);
-                }}
-                className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-black hover:border-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              >
-                <option value="">Select source framework...</option>
-                {frameworksLoading ? (
-                  <option disabled>Loading...</option>
-                ) : (
-                  frameworkOptions.map(fw => (
-                    <option key={fw.id} value={fw.id} disabled={fw.id === destFrameworkId}>
-                      {fw.name} {fw.version ? `(${fw.version})` : ''} — {fw.control_count} controls
-                    </option>
-                  ))
-                )}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
-            </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          <div className="flex-1 min-w-0">
+            <label className="mb-1.5 block text-xs font-medium text-slate-600">Source Framework</label>
+            <MultiSelectDropdown
+              title="Source"
+              items={frameworkItems.filter((it) => Number(it.value) !== destFrameworkId)}
+              selectedValues={sourceFrameworkId ? [String(sourceFrameworkId)] : []}
+              onApply={(v) => {
+                setSourceFrameworkId(v[0] ? Number(v[0]) : null);
+                setCompareTriggered(false);
+              }}
+              multiSelect={false}
+              autoApply
+              forceSearch
+              triggerVariant="input"
+              placeholder={frameworksLoading ? 'Loading...' : 'Select source framework'}
+              searchPlaceholder="Search frameworks"
+              size="md"
+              triggerClassName="w-full"
+            />
           </div>
 
-          <div className="flex items-center justify-center lg:pb-1">
+          <div className="hidden lg:flex items-center justify-center pb-1">
             <ArrowRight className="h-5 w-5 text-gray-500" />
           </div>
 
-          <div className="flex-1">
-            <label className="mb-1.5 block text-sm font-medium text-gray-700">Destination Framework</label>
-            <div className="relative">
-              <select
-                value={destFrameworkId || ''}
-                onChange={(e) => {
-                  setDestFrameworkId(e.target.value ? Number(e.target.value) : null);
-                  setCompareTriggered(false);
-                }}
-                className="w-full appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-black hover:border-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              >
-                <option value="">Select destination framework...</option>
-                {frameworksLoading ? (
-                  <option disabled>Loading...</option>
-                ) : (
-                  frameworkOptions.map(fw => (
-                    <option key={fw.id} value={fw.id} disabled={fw.id === sourceFrameworkId}>
-                      {fw.name} {fw.version ? `(${fw.version})` : ''} — {fw.control_count} controls
-                    </option>
-                  ))
-                )}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
-            </div>
+          <div className="flex-1 min-w-0">
+            <label className="mb-1.5 block text-xs font-medium text-slate-600">Destination Framework</label>
+            <MultiSelectDropdown
+              title="Destination"
+              items={frameworkItems.filter((it) => Number(it.value) !== sourceFrameworkId)}
+              selectedValues={destFrameworkId ? [String(destFrameworkId)] : []}
+              onApply={(v) => {
+                setDestFrameworkId(v[0] ? Number(v[0]) : null);
+                setCompareTriggered(false);
+              }}
+              multiSelect={false}
+              autoApply
+              forceSearch
+              triggerVariant="input"
+              placeholder={frameworksLoading ? 'Loading...' : 'Select destination framework'}
+              searchPlaceholder="Search frameworks"
+              size="md"
+              triggerClassName="w-full"
+            />
           </div>
 
           <button
             onClick={handleCompare}
             disabled={!sourceFrameworkId || !destFrameworkId || sourceFrameworkId === destFrameworkId}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-2.5 font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 sm:px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <GitCompare className="h-4 w-4" />
             Compare
@@ -297,37 +293,37 @@ export default function FrameworkComparisonPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="stat-card">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/10 p-3">
-              <Shield className="h-6 w-6 text-blue-600" />
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="rounded-lg bg-blue-50 p-1.5">
+              <Shield className="h-4 w-4 text-blue-600" />
             </div>
+            <p className="text-xs font-medium text-slate-500 truncate">Available Frameworks</p>
           </div>
-          <p className="stat-value">{frameworkOptions.length || 0}</p>
-          <p className="stat-label">Available Frameworks</p>
+          <p className="text-lg sm:text-xl font-semibold text-slate-900">{frameworkOptions.length || 0}</p>
         </div>
-        <div className="stat-card">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3">
-              <GitCompare className="h-6 w-6 text-blue-400" />
+        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="rounded-lg bg-blue-50 p-1.5">
+              <GitCompare className="h-4 w-4 text-blue-500" />
             </div>
+            <p className="text-xs font-medium text-slate-500 truncate">Source Controls</p>
           </div>
-          <p className="stat-value">{crosswalkData?.total || 0}</p>
-          <p className="stat-label">Source Controls</p>
+          <p className="text-lg sm:text-xl font-semibold text-slate-900">{crosswalkData?.total || 0}</p>
         </div>
-        <div className="stat-card">
-          <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/10 p-3">
-              <Sparkles className="h-6 w-6 text-green-400" />
+        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="rounded-lg bg-emerald-50 p-1.5">
+              <Sparkles className="h-4 w-4 text-emerald-600" />
             </div>
+            <p className="text-xs font-medium text-slate-500 truncate">Mapped Controls</p>
           </div>
-          <p className="stat-value">
+          <p className="text-lg sm:text-xl font-semibold text-slate-900">
             {crosswalkData?.crosswalk
-              ? crosswalkData.crosswalk.filter(r => r.match_count > 0).length
+              ? crosswalkData.crosswalk.filter((r) => r.match_count > 0).length
               : 0}
           </p>
-          <p className="stat-label">Mapped Controls</p>
         </div>
       </div>
 

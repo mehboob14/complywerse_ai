@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { committeeApi, apiClient, frameworkUploadApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -18,7 +18,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Eye,
-  Edit,
+  Edit2,
   Building2,
   Upload,
   Download,
@@ -36,9 +36,10 @@ import {
   GitCompare,
   ShieldCheck,
   Trash2,
-  Pencil,
 } from 'lucide-react';
 import Link from 'next/link';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 interface Committee {
   id: number;
@@ -293,7 +294,8 @@ export default function CommitteeDetailPage() {
       const response = await committeeApi.getMembers(committeeId);
       return response.data as Member[];
     },
-    enabled: !!committee,
+    enabled: !!committee && (activeTab === 'members' || activeTab === 'overview' || isAddMemberModalOpen),
+    placeholderData: keepPreviousData,
   });
 
   const { data: charters } = useQuery({
@@ -303,6 +305,7 @@ export default function CommitteeDetailPage() {
       return response.data as Charter[];
     },
     enabled: !!committee,
+    placeholderData: keepPreviousData,
   });
 
   const { data: meetings } = useQuery({
@@ -314,7 +317,8 @@ export default function CommitteeDetailPage() {
       const data = payload as { items?: Meeting[] };
       return data.items || [];
     },
-    enabled: !!committee,
+    enabled: !!committee && (activeTab === 'meetings' || activeTab === 'actions' || activeTab === 'overview' || isScheduleMeetingModalOpen || isCreateActionModalOpen),
+    placeholderData: keepPreviousData,
   });
 
   const { data: actions } = useQuery({
@@ -330,7 +334,8 @@ export default function CommitteeDetailPage() {
         assigned_to_name: item.assigned_to_name || item.assignee_name || '',
       })) as Action[];
     },
-    enabled: !!committee,
+    enabled: !!committee && (activeTab === 'actions' || activeTab === 'overview' || isCreateActionModalOpen),
+    placeholderData: keepPreviousData,
   });
 
   const { data: currentUser } = useQuery({
@@ -634,7 +639,7 @@ export default function CommitteeDetailPage() {
   });
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div>
         <Link href="/governance/committees" className="mb-3 flex items-center gap-2 text-slate-600 hover:text-slate-900">
           <ArrowLeft className="h-4 w-4" />
@@ -648,7 +653,7 @@ export default function CommitteeDetailPage() {
             </div>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-lg font-semibold text-slate-900">{committee.name}</h1>
+                <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{committee.name}</h1>
                 <span className={`rounded-full px-2.5 py-0.5 text-xs ${typeStyle.bg} ${typeStyle.text}`}>
                   {typeStyle.label}
                 </span>
@@ -668,8 +673,8 @@ export default function CommitteeDetailPage() {
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === tab.id
-                ? 'border-primary-500 text-black'
-                : 'border-transparent text-black hover:text-black hover:border-slate-300'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
             }`}
           >
             <tab.icon className="h-4 w-4" />
@@ -939,15 +944,18 @@ export default function CommitteeDetailPage() {
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-black">Status</label>
-                    <select
-                      value={editCharterStatus}
-                      onChange={(e) => setEditCharterStatus(e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
-                    >
-                      <option value="draft">Draft</option>
-                      <option value="active">Active</option>
-                      <option value="expired">Expired</option>
-                    </select>
+                    <MultiSelectDropdown
+                      title="Status"
+                      items={[
+                        { value: 'draft', label: 'Draft' },
+                        { value: 'active', label: 'Active' },
+                        { value: 'expired', label: 'Expired' },
+                      ]}
+                      selectedValues={[editCharterStatus]}
+                      onApply={(values) => setEditCharterStatus(values[0] || 'draft')}
+                      multiSelect={false}
+                      triggerVariant="input"
+                    />
                   </div>
                   <div className="flex justify-end gap-3">
                     <button
@@ -1027,7 +1035,7 @@ export default function CommitteeDetailPage() {
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors text-sm"
                         title="Edit charter"
                       >
-                        <Pencil className="h-3.5 w-3.5" />
+                        <Edit2 className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={() => {
@@ -1187,152 +1195,150 @@ export default function CommitteeDetailPage() {
         </div>
       )}
 
-      {isCreateActionModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-black">Create Action Item</h2>
-              <button onClick={() => setIsCreateActionModalOpen(false)} className="text-black hover:text-black">
-                <X className="h-5 w-5" />
+      <RightSlidePanel
+        isOpen={isCreateActionModalOpen}
+        onClose={() => setIsCreateActionModalOpen(false)}
+        title="Create Action Item"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={() => setIsCreateActionModalOpen(false)} className="btn-secondary">Cancel</button>
+            <button
+              type="submit"
+              form="committee-create-action-form"
+              disabled={createActionMutation.isPending || !newAction.title.trim()}
+              className="btn-primary"
+            >
+              {createActionMutation.isPending ? 'Creating...' : 'Create Action'}
+            </button>
+          </div>
+        }
+      >
+        <form
+          id="committee-create-action-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const payload: Record<string, unknown> = {
+              committee_id: committeeId,
+              title: newAction.title.trim(),
+              action_type: newAction.action_type,
+            };
+            if (newAction.meeting_id) payload.meeting_id = parseInt(newAction.meeting_id, 10);
+            if (newAction.description.trim()) payload.description = newAction.description.trim();
+            if (newAction.due_date) payload.due_date = newAction.due_date;
+            if (newAction.assigned_to_id) payload.assigned_to = parseInt(newAction.assigned_to_id, 10);
+            createActionMutation.mutate(payload);
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Meeting (Optional)</label>
+            <MultiSelectDropdown
+              title="Meeting"
+              items={(meetings || []).map((meeting) => ({ value: String(meeting.id), label: meeting.title }))}
+              selectedValues={newAction.meeting_id ? [newAction.meeting_id] : []}
+              onApply={(values) => setNewAction({ ...newAction, meeting_id: values[0] || '' })}
+              multiSelect={false}
+              triggerVariant="input"
+              placeholder="No linked meeting"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Title *</label>
+            <input
+              type="text"
+              value={newAction.title}
+              onChange={(e) => setNewAction({ ...newAction, title: e.target.value })}
+              className="input w-full"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-black mb-1">Action Type</label>
+              <MultiSelectDropdown
+                title="Action Type"
+                items={[
+                  { value: 'follow_up', label: 'Follow Up' },
+                  { value: 'policy_approval', label: 'Policy Approval' },
+                  { value: 'risk_review', label: 'Risk Review' },
+                  { value: 'audit_response', label: 'Audit Response' },
+                ]}
+                selectedValues={[newAction.action_type]}
+                onApply={(values) => setNewAction({ ...newAction, action_type: values[0] || 'follow_up' })}
+                multiSelect={false}
+                triggerVariant="input"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-black mb-1">Due Date</label>
+              <input
+                type="date"
+                value={newAction.due_date}
+                onChange={(e) => setNewAction({ ...newAction, due_date: e.target.value })}
+                className="input w-full"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Assign To</label>
+            <MultiSelectDropdown
+              title="Assign To"
+              items={normalizedTenantUsers.map((u) => ({ value: String(u.id), label: u.name }))}
+              selectedValues={newAction.assigned_to_id ? [newAction.assigned_to_id] : []}
+              onApply={(values) => setNewAction({ ...newAction, assigned_to_id: values[0] || '' })}
+              multiSelect={false}
+              triggerVariant="input"
+              forceSearch
+              placeholder="Leave Unassigned (Pending)"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Description</label>
+            <textarea
+              value={newAction.description}
+              onChange={(e) => setNewAction({ ...newAction, description: e.target.value })}
+              className="input w-full h-28"
+            />
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <p className="text-sm font-medium text-black">AI Assistant</p>
+            <div>
+              <label className="block text-xs font-medium text-black mb-1">Upload reference file (optional)</label>
+              <input
+                type="file"
+                accept=".txt,.md,.csv,.json,.pdf,.doc,.docx"
+                onChange={(e) => setActionUploadFile(e.target.files?.[0] || null)}
+                className="block w-full text-sm text-black"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => aiRewordActionMutation.mutate()}
+                disabled={aiRewordActionMutation.isPending || (!newAction.description.trim() && !actionUploadFile)}
+                className="inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+              >
+                {aiRewordActionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                AI Reword
+              </button>
+              <button
+                type="button"
+                onClick={() => aiSummarizeActionMutation.mutate()}
+                disabled={aiSummarizeActionMutation.isPending || (!newAction.description.trim() && !actionUploadFile)}
+                className="inline-flex items-center gap-2 rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+              >
+                {aiSummarizeActionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                Generate Summary
               </button>
             </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const payload: Record<string, unknown> = {
-                  committee_id: committeeId,
-                  title: newAction.title.trim(),
-                  action_type: newAction.action_type,
-                };
-                if (newAction.meeting_id) payload.meeting_id = parseInt(newAction.meeting_id, 10);
-                if (newAction.description.trim()) payload.description = newAction.description.trim();
-                if (newAction.due_date) payload.due_date = newAction.due_date;
-                if (newAction.assigned_to_id) payload.assigned_to = parseInt(newAction.assigned_to_id, 10);
-                createActionMutation.mutate(payload);
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Meeting (Optional)</label>
-                <select
-                  value={newAction.meeting_id}
-                  onChange={(e) => setNewAction({ ...newAction, meeting_id: e.target.value })}
-                  className="input w-full"
-                >
-                  <option value="">No linked meeting</option>
-                  {(meetings || []).map((meeting) => (
-                    <option key={meeting.id} value={meeting.id}>{meeting.title}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Title *</label>
-                <input
-                  type="text"
-                  value={newAction.title}
-                  onChange={(e) => setNewAction({ ...newAction, title: e.target.value })}
-                  className="input w-full"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-black mb-1">Action Type</label>
-                  <select
-                    value={newAction.action_type}
-                    onChange={(e) => setNewAction({ ...newAction, action_type: e.target.value })}
-                    className="input w-full"
-                  >
-                    <option value="follow_up">Follow Up</option>
-                    <option value="policy_approval">Policy Approval</option>
-                    <option value="risk_review">Risk Review</option>
-                    <option value="audit_response">Audit Response</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-black mb-1">Due Date</label>
-                  <input
-                    type="date"
-                    value={newAction.due_date}
-                    onChange={(e) => setNewAction({ ...newAction, due_date: e.target.value })}
-                    className="input w-full"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Assign To</label>
-                <select
-                  value={newAction.assigned_to_id}
-                  onChange={(e) => setNewAction({ ...newAction, assigned_to_id: e.target.value })}
-                  className="input w-full"
-                >
-                  <option value="">Leave Unassigned (Pending)</option>
-                  {normalizedTenantUsers.map((tenantUser) => {
-                    return (
-                      <option key={tenantUser.id} value={tenantUser.id}>
-                        {tenantUser.name}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Description</label>
-                <textarea
-                  value={newAction.description}
-                  onChange={(e) => setNewAction({ ...newAction, description: e.target.value })}
-                  className="input w-full h-28"
-                />
-              </div>
-
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
-                <p className="text-sm font-medium text-black">AI Assistant</p>
-                <div>
-                  <label className="block text-xs font-medium text-black mb-1">Upload reference file (optional)</label>
-                  <input
-                    type="file"
-                    accept=".txt,.md,.csv,.json,.pdf,.doc,.docx"
-                    onChange={(e) => setActionUploadFile(e.target.files?.[0] || null)}
-                    className="block w-full text-sm text-black"
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => aiRewordActionMutation.mutate()}
-                    disabled={aiRewordActionMutation.isPending || (!newAction.description.trim() && !actionUploadFile)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50"
-                  >
-                    {aiRewordActionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    AI Reword
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => aiSummarizeActionMutation.mutate()}
-                    disabled={aiSummarizeActionMutation.isPending || (!newAction.description.trim() && !actionUploadFile)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
-                  >
-                    {aiSummarizeActionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                    Generate Summary
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setIsCreateActionModalOpen(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" disabled={createActionMutation.isPending || !newAction.title.trim()} className="btn-primary">
-                  {createActionMutation.isPending ? 'Creating...' : 'Create Action'}
-                </button>
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        </form>
+      </RightSlidePanel>
 
       {/* AI Comparison Modal */}
       {showComparisonModal && comparisonResult && (
@@ -1538,169 +1544,182 @@ export default function CommitteeDetailPage() {
         </div>
       )}
 
-      {/* Add Member Modal */}
-      {isAddMemberModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4 border border-slate-200">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-black">Add Member</h2>
-              <button onClick={() => setIsAddMemberModalOpen(false)} className="text-black hover:text-black">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); addMemberMutation.mutate({ user_id: parseInt(newMember.user_id, 10), role: newMember.role }); }} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">User *</label>
-                <select
-                  value={newMember.user_id}
-                  onChange={(e) => setNewMember({ ...newMember, user_id: e.target.value })}
-                  className="input w-full"
-                  required
-                >
-                  <option value="">Select User</option>
-                  {availableUsers.map((tenantUser) => {
-                    return (
-                      <option key={tenantUser.id} value={tenantUser.id}>
-                        {tenantUser.name}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Role</label>
-                <select value={newMember.role} onChange={(e) => setNewMember({ ...newMember, role: e.target.value })} className="input w-full">
-                  <option value="member">Member</option>
-                  <option value="chair">Chair</option>
-                  <option value="secretary">Secretary</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setIsAddMemberModalOpen(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" disabled={addMemberMutation.isPending} className="btn-primary">
-                  {addMemberMutation.isPending ? 'Adding...' : 'Add Member'}
-                </button>
-              </div>
-            </form>
+      {/* Add Member Panel */}
+      <RightSlidePanel
+        isOpen={isAddMemberModalOpen}
+        onClose={() => setIsAddMemberModalOpen(false)}
+        title="Add Member"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={() => setIsAddMemberModalOpen(false)} className="btn-secondary">Cancel</button>
+            <button
+              type="submit"
+              form="add-member-form"
+              disabled={addMemberMutation.isPending || !newMember.user_id}
+              className="btn-primary"
+            >
+              {addMemberMutation.isPending ? 'Adding...' : 'Add Member'}
+            </button>
           </div>
-        </div>
-      )}
-
-      {/* Schedule Meeting Modal */}
-      {isScheduleMeetingModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-200">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-black">Schedule Meeting</h2>
-              <button onClick={() => setIsScheduleMeetingModalOpen(false)} className="text-black hover:text-black">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); createMeetingMutation.mutate(newMeeting); }} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Meeting Title *</label>
-                <input type="text" value={newMeeting.title} onChange={(e) => setNewMeeting({ ...newMeeting, title: e.target.value })} className="input w-full" required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Meeting Type</label>
-                <select value={newMeeting.meeting_type} onChange={(e) => setNewMeeting({ ...newMeeting, meeting_type: e.target.value })} className="input w-full">
-                  <option value="regular">Regular</option>
-                  <option value="special">Special</option>
-                  <option value="emergency">Emergency</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Date *</label>
-                <input type="date" value={newMeeting.scheduled_date} onChange={(e) => setNewMeeting({ ...newMeeting, scheduled_date: e.target.value })} className="input w-full" required />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-black mb-1">Start Time</label>
-                  <input type="time" value={newMeeting.start_time} onChange={(e) => setNewMeeting({ ...newMeeting, start_time: e.target.value })} className="input w-full" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-black mb-1">End Time</label>
-                  <input type="time" value={newMeeting.end_time} onChange={(e) => setNewMeeting({ ...newMeeting, end_time: e.target.value })} className="input w-full" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Location</label>
-                <input type="text" value={newMeeting.location} onChange={(e) => setNewMeeting({ ...newMeeting, location: e.target.value })} className="input w-full" placeholder="e.g., Boardroom A, Virtual" />
-              </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setIsScheduleMeetingModalOpen(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" disabled={createMeetingMutation.isPending} className="btn-primary">
-                  {createMeetingMutation.isPending ? 'Scheduling...' : 'Schedule Meeting'}
-                </button>
-              </div>
-            </form>
+        }
+      >
+        <form
+          id="add-member-form"
+          onSubmit={(e) => { e.preventDefault(); addMemberMutation.mutate({ user_id: parseInt(newMember.user_id, 10), role: newMember.role }); }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">User *</label>
+            <MultiSelectDropdown
+              title="User"
+              items={availableUsers.map((u) => ({ value: String(u.id), label: u.name }))}
+              selectedValues={newMember.user_id ? [newMember.user_id] : []}
+              onApply={(values) => setNewMember({ ...newMember, user_id: values[0] || '' })}
+              multiSelect={false}
+              triggerVariant="input"
+              forceSearch
+              placeholder="Select user"
+            />
           </div>
-        </div>
-      )}
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Role</label>
+            <MultiSelectDropdown
+              title="Role"
+              items={[
+                { value: 'member', label: 'Member' },
+                { value: 'chair', label: 'Chair' },
+                { value: 'secretary', label: 'Secretary' },
+              ]}
+              selectedValues={[newMember.role]}
+              onApply={(values) => setNewMember({ ...newMember, role: values[0] || 'member' })}
+              multiSelect={false}
+              triggerVariant="input"
+            />
+          </div>
+        </form>
+      </RightSlidePanel>
 
-      {/* Framework Selection Modal */}
-      {showFrameworkSelectionModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-2xl mx-4 border border-slate-200 max-h-[80vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-black">Select Frameworks for Charter</h2>
-              <button onClick={() => setShowFrameworkSelectionModal(false)} className="text-black hover:text-black">
-                <X className="h-5 w-5" />
-              </button>
+      {/* Schedule Meeting Panel */}
+      <RightSlidePanel
+        isOpen={isScheduleMeetingModalOpen}
+        onClose={() => setIsScheduleMeetingModalOpen(false)}
+        title="Schedule Meeting"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={() => setIsScheduleMeetingModalOpen(false)} className="btn-secondary">Cancel</button>
+            <button
+              type="submit"
+              form="schedule-meeting-form"
+              disabled={createMeetingMutation.isPending}
+              className="btn-primary"
+            >
+              {createMeetingMutation.isPending ? 'Scheduling...' : 'Schedule Meeting'}
+            </button>
+          </div>
+        }
+      >
+        <form
+          id="schedule-meeting-form"
+          onSubmit={(e) => { e.preventDefault(); createMeetingMutation.mutate(newMeeting); }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Meeting Title *</label>
+            <input type="text" value={newMeeting.title} onChange={(e) => setNewMeeting({ ...newMeeting, title: e.target.value })} className="input w-full" required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Meeting Type</label>
+            <MultiSelectDropdown
+              title="Meeting Type"
+              items={[
+                { value: 'regular', label: 'Regular' },
+                { value: 'special', label: 'Special' },
+                { value: 'emergency', label: 'Emergency' },
+              ]}
+              selectedValues={[newMeeting.meeting_type]}
+              onApply={(values) => setNewMeeting({ ...newMeeting, meeting_type: values[0] || 'regular' })}
+              multiSelect={false}
+              triggerVariant="input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Date *</label>
+            <input type="date" value={newMeeting.scheduled_date} onChange={(e) => setNewMeeting({ ...newMeeting, scheduled_date: e.target.value })} className="input w-full" required />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-black mb-1">Start Time</label>
+              <input type="time" value={newMeeting.start_time} onChange={(e) => setNewMeeting({ ...newMeeting, start_time: e.target.value })} className="input w-full" />
             </div>
-            
-            <div className="space-y-3 mb-6">
-              <p className="text-sm text-black">Select one or more frameworks to generate the charter based on those frameworks only. If you don&apos;t select any, all available frameworks will be used.</p>
-              
-              {!availableFrameworks || availableFrameworks.length === 0 ? (
-                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                  <p className="text-sm text-black">No frameworks available. Please upload or parse frameworks first.</p>
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-[40vh] overflow-y-auto border border-slate-200 rounded-lg p-4">
-                  {availableFrameworks.map((fw: any) => (
-                    <label key={fw.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedFrameworkIds.includes(fw.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedFrameworkIds([...selectedFrameworkIds, fw.id]);
-                          } else {
-                            setSelectedFrameworkIds(selectedFrameworkIds.filter(id => id !== fw.id));
-                          }
-                        }}
-                        className="rounded border-slate-300"
-                      />
-                      <div className="flex-1">
-                        <p className="font-medium text-black">{fw.name}</p>
-                        <p className="text-xs text-black">{fw.classification || 'N/A'}</p>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-              <button
-                onClick={() => setShowFrameworkSelectionModal(false)}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => aiGenerateMutation.mutate()}
-                disabled={aiGenerateMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-              >
-                {aiGenerateMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Generate Charter
-              </button>
+            <div>
+              <label className="block text-sm font-medium text-black mb-1">End Time</label>
+              <input type="time" value={newMeeting.end_time} onChange={(e) => setNewMeeting({ ...newMeeting, end_time: e.target.value })} className="input w-full" />
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Location</label>
+            <input type="text" value={newMeeting.location} onChange={(e) => setNewMeeting({ ...newMeeting, location: e.target.value })} className="input w-full" placeholder="e.g., Boardroom A, Virtual" />
+          </div>
+        </form>
+      </RightSlidePanel>
+
+      {/* Framework Selection Panel */}
+      <RightSlidePanel
+        isOpen={showFrameworkSelectionModal}
+        onClose={() => setShowFrameworkSelectionModal(false)}
+        title="Select Frameworks for Charter"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setShowFrameworkSelectionModal(false)}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => aiGenerateMutation.mutate()}
+              disabled={aiGenerateMutation.isPending}
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+            >
+              {aiGenerateMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Generate Charter
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-black">Select one or more frameworks to generate the charter based on those frameworks only. If you don&apos;t select any, all available frameworks will be used.</p>
+
+          {!availableFrameworks || availableFrameworks.length === 0 ? (
+            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <p className="text-sm text-black">No frameworks available. Please upload or parse frameworks first.</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto border border-slate-200 rounded-lg p-4">
+              {availableFrameworks.map((fw: any) => (
+                <label key={fw.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedFrameworkIds.includes(fw.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedFrameworkIds([...selectedFrameworkIds, fw.id]);
+                      } else {
+                        setSelectedFrameworkIds(selectedFrameworkIds.filter(id => id !== fw.id));
+                      }
+                    }}
+                    className="rounded border-slate-300"
+                  />
+                  <div className="flex-1">
+                    <p className="font-medium text-black">{fw.name}</p>
+                    <p className="text-xs text-black">{fw.classification || 'N/A'}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </RightSlidePanel>
     </div>
   );
 }

@@ -1,15 +1,14 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { risksApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Risk, RiskCategory, RiskStatus, RiskDashboard, HeatmapCell } from '@/types';
-import { 
-  AlertTriangle, 
-  Loader2, 
-  AlertCircle, 
-  Search, 
+import {
+  AlertTriangle,
+  Loader2,
+  AlertCircle,
   Plus,
   X,
   TrendingUp,
@@ -20,12 +19,14 @@ import {
   Trash2,
   Upload,
   Download,
-  FileSpreadsheet,
   CheckCircle,
   BarChart3
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRef } from 'react';
+import SearchInput from '@/components/ui/SearchInput';
+import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 type ScoreFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
 
@@ -95,6 +96,7 @@ export default function RisksPage() {
       const response = await risksApi.getAll();
       return response.data;
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: dashboard } = useQuery({
@@ -295,11 +297,11 @@ export default function RisksPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Enterprise Risk Management</h1>
-          <p className="text-slate-600">Identify, assess, and manage organizational risks</p>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Enterprise Risk Management</h1>
+          <p className="text-sm text-slate-600">Identify, assess, and manage organizational risks</p>
         </div>
         <div className="flex gap-2">
           <Link
@@ -570,51 +572,50 @@ export default function RisksPage() {
 
         <div className="space-y-4 lg:col-span-2">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
-              <input
-                type="text"
-                placeholder="Search risks..."
+            <div className="flex-1">
+              <SearchInput
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+                onChange={setSearchTerm}
+                placeholder="Search risks..."
               />
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value as RiskCategory | 'all')}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-              >
-                <option value="all">All Categories</option>
-                {RISK_CATEGORIES.map(cat => (
-                  <option key={cat.value} value={cat.value}>{cat.label}</option>
-                ))}
-              </select>
+              <MultiSelectDropdown
+                title="Category"
+                items={[
+                  { value: 'all', label: 'All Categories' },
+                  ...RISK_CATEGORIES.map(c => ({ value: c.value, label: c.label })),
+                ]}
+                selectedValues={categoryFilter === 'all' ? [] : [categoryFilter]}
+                onApply={(values) => setCategoryFilter((values[0] as RiskCategory) || 'all')}
+                multiSelect={false}
+              />
 
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as RiskStatus | 'all')}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-              >
-                <option value="all">All Status</option>
-                {RISK_STATUSES.map(status => (
-                  <option key={status.value} value={status.value}>{status.label}</option>
-                ))}
-              </select>
+              <MultiSelectDropdown
+                title="Status"
+                items={[
+                  { value: 'all', label: 'All Status' },
+                  ...RISK_STATUSES.map(s => ({ value: s.value, label: s.label })),
+                ]}
+                selectedValues={statusFilter === 'all' ? [] : [statusFilter]}
+                onApply={(values) => setStatusFilter((values[0] as RiskStatus) || 'all')}
+                multiSelect={false}
+              />
 
-              <select
-                value={scoreFilter}
-                onChange={(e) => setScoreFilter(e.target.value as ScoreFilter)}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-              >
-                <option value="all">All Scores</option>
-                <option value="critical">Critical (≥20)</option>
-                <option value="high">High (12-19)</option>
-                <option value="medium">Medium (6-11)</option>
-                <option value="low">Low (&lt;6)</option>
-              </select>
+              <MultiSelectDropdown
+                title="Score"
+                items={[
+                  { value: 'all', label: 'All Scores' },
+                  { value: 'critical', label: 'Critical (≥20)' },
+                  { value: 'high', label: 'High (12-19)' },
+                  { value: 'medium', label: 'Medium (6-11)' },
+                  { value: 'low', label: 'Low (<6)' },
+                ]}
+                selectedValues={scoreFilter === 'all' ? [] : [scoreFilter]}
+                onApply={(values) => setScoreFilter((values[0] as ScoreFilter) || 'all')}
+                multiSelect={false}
+              />
             </div>
           </div>
 
@@ -713,7 +714,7 @@ export default function RisksPage() {
                             className="rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                             title="Edit"
                           >
-                            <Edit2 size={16} />
+                            <Edit2 className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => {
@@ -724,7 +725,7 @@ export default function RisksPage() {
                             className="rounded p-1 text-slate-600 hover:bg-red-900/50 hover:text-red-400"
                             title="Delete"
                           >
-                            <Trash2 size={16} />
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
                       </td>
@@ -749,33 +750,34 @@ export default function RisksPage() {
         </div>
       </div>
 
-      {isModalOpen && (
-        <RiskModal
-          risk={editingRisk}
-          onClose={() => {
-            setIsModalOpen(false);
-            setEditingRisk(null);
-          }}
-          onSave={(data) => {
-            if (editingRisk) {
-              updateMutation.mutate({ id: editingRisk.id, data });
-            } else {
-              createMutation.mutate(data);
-            }
-          }}
-          isLoading={createMutation.isPending || updateMutation.isPending}
-        />
-      )}
+      <RiskModal
+        isOpen={isModalOpen}
+        risk={editingRisk}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingRisk(null);
+        }}
+        onSave={(data) => {
+          if (editingRisk) {
+            updateMutation.mutate({ id: editingRisk.id, data });
+          } else {
+            createMutation.mutate(data);
+          }
+        }}
+        isLoading={createMutation.isPending || updateMutation.isPending}
+      />
     </div>
   );
 }
 
 function RiskModal({
+  isOpen,
   risk,
   onClose,
   onSave,
   isLoading,
 }: {
+  isOpen: boolean;
   risk: Risk | null;
   onClose: () => void;
   onSave: (data: Partial<Risk>) => void;
@@ -795,8 +797,8 @@ function RiskModal({
   });
 
   const inherentScore = formData.inherent_likelihood * formData.inherent_impact;
-  const residualScore = formData.residual_likelihood && formData.residual_impact 
-    ? formData.residual_likelihood * formData.residual_impact 
+  const residualScore = formData.residual_likelihood && formData.residual_impact
+    ? formData.residual_likelihood * formData.residual_impact
     : undefined;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -811,18 +813,12 @@ function RiskModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">
-            {risk ? 'Edit Risk' : 'Create Risk'}
-          </h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X size={20} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title={risk ? 'Edit Risk' : 'Create Risk'}
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700">Title *</label>
             <input
@@ -980,7 +976,6 @@ function RiskModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </RightSlidePanel>
   );
 }

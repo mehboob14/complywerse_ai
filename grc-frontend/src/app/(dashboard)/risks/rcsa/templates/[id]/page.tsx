@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { rcsaApi } from '@/lib/api';
 import {
   FileText,
@@ -25,6 +25,7 @@ import {
   Shield,
 } from 'lucide-react';
 import Link from 'next/link';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 interface Question {
   id: number;
@@ -77,7 +78,6 @@ const TYPE_COLORS: Record<string, { bg: string; text: string }> = {
 export default function TemplateDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const router = useRouter();
   const templateId = Number(params.id);
   const isEditMode = searchParams.get('edit') === 'true';
   const queryClient = useQueryClient();
@@ -244,15 +244,15 @@ export default function TemplateDetailPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="page-header">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <div>
         <div className="flex items-center gap-4 mb-4">
           <Link href="/risks/rcsa/templates" className="text-slate-600 hover:text-slate-900">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold text-slate-900">{template.name}</h1>
+              <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{template.name}</h1>
               <span className={`text-xs px-2 py-0.5 rounded-full ${template.source === 'system' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
                 {template.source}
               </span>
@@ -520,31 +520,32 @@ export default function TemplateDetailPage() {
         )}
       </div>
 
-      {isQuestionModalOpen && (
-        <QuestionModal
-          question={editingQuestion}
-          onClose={() => {
-            setIsQuestionModalOpen(false);
-            setEditingQuestion(null);
-          }}
-          onSave={(data) => {
-            if (editingQuestion) {
-              handleUpdateQuestion(data);
-            } else {
-              handleAddQuestion(data);
-            }
-          }}
-        />
-      )}
+      <QuestionModal
+        isOpen={isQuestionModalOpen}
+        question={editingQuestion}
+        onClose={() => {
+          setIsQuestionModalOpen(false);
+          setEditingQuestion(null);
+        }}
+        onSave={(data) => {
+          if (editingQuestion) {
+            handleUpdateQuestion(data);
+          } else {
+            handleAddQuestion(data);
+          }
+        }}
+      />
     </div>
   );
 }
 
 function QuestionModal({
+  isOpen,
   question,
   onClose,
   onSave,
 }: {
+  isOpen: boolean;
   question: Question | null;
   onClose: () => void;
   onSave: (data: Partial<Question>) => void;
@@ -567,30 +568,25 @@ function QuestionModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto py-8">
-      <div className="bg-white rounded-xl p-6 w-full max-w-lg border border-slate-200 mx-4">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-medium text-slate-900">
-            {question ? 'Edit Question' : 'Add Question'}
-          </h3>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const formData = new FormData(e.currentTarget);
-            onSave({
-              question_text: formData.get('question_text') as string,
-              question_type: questionType as Question['question_type'],
-              category: formData.get('category') as string,
-              is_required: formData.get('is_required') === 'on',
-              guidance: formData.get('guidance') as string,
-              options: questionType === 'multiple_choice' ? options.filter(o => o.trim()) : undefined,
-            });
-          }}
-        >
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title={question ? 'Edit Question' : 'Add Question'}
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const formData = new FormData(e.currentTarget);
+          onSave({
+            question_text: formData.get('question_text') as string,
+            question_type: questionType as Question['question_type'],
+            category: formData.get('category') as string,
+            is_required: formData.get('is_required') === 'on',
+            guidance: formData.get('guidance') as string,
+            options: questionType === 'multiple_choice' ? options.filter(o => o.trim()) : undefined,
+          });
+        }}
+      >
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Question Text</label>
@@ -702,16 +698,15 @@ function QuestionModal({
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 mt-6">
-            <button type="button" onClick={onClose} className="btn-secondary">
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary">
-              {question ? 'Update Question' : 'Add Question'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex justify-end gap-3 mt-6">
+          <button type="button" onClick={onClose} className="btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" className="btn-primary">
+            {question ? 'Update Question' : 'Add Question'}
+          </button>
+        </div>
+      </form>
+    </RightSlidePanel>
   );
 }

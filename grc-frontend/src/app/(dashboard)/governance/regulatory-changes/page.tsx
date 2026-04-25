@@ -1,26 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { regulatoryApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 import {
   FileWarning,
   Plus,
-  Search,
   Eye,
   Trash2,
-  X,
   AlertTriangle,
   Clock,
   CheckCircle,
   AlertCircle,
   FileText,
   Building2,
-  BarChart3,
-  Filter,
   Loader2,
-  ArrowRight,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -146,6 +142,7 @@ export default function RegulatoryChangesPage() {
 
   const { data: changes, isLoading: changesLoading } = useQuery({
     queryKey: ['regulatory-changes', sourceFilter, statusFilter, priorityFilter, searchTerm],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       try {
         const response = await regulatoryApi.getChanges({
@@ -261,10 +258,10 @@ export default function RegulatoryChangesPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-black">Regulatory Change Management</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-black">Regulatory Change Management</h1>
           <p className="mt-1 text-gray-600">Track and manage regulatory changes and their implementation</p>
         </div>
 
@@ -288,60 +285,51 @@ export default function RegulatoryChangesPage() {
       </div>
 
       <div className="rounded-xl border border-gray-300 bg-white">
-        <div className='flex items-center justify-between border-b border-gray-300 p-4'>
-        <div className="flex flex-col gap-4   lg:flex-row lg:items-center">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-600" />
-            <input
-              type="text"
-              placeholder="Search changes..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 bg-gray-100 pl-10 pr-4 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            />
+        <div className='flex flex-col gap-3 lg:flex-row lg:items-center justify-between border-b border-gray-300 p-4'>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center flex-1">
+            <div className="flex-1 max-w-md">
+              <SearchInput
+                value={searchTerm}
+                onChange={setSearchTerm}
+                placeholder="Search changes..."
+                size="md"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <MultiSelectDropdown
+                title="Source"
+                items={SOURCE_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
+                selectedValues={sourceFilter ? [sourceFilter] : []}
+                onApply={(vals) => setSourceFilter(vals[0] || '')}
+                multiSelect={false}
+              />
+              <MultiSelectDropdown
+                title="Status"
+                items={STATUS_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
+                selectedValues={statusFilter ? [statusFilter] : []}
+                onApply={(vals) => setStatusFilter(vals[0] || '')}
+                multiSelect={false}
+              />
+              <MultiSelectDropdown
+                title="Priority"
+                items={PRIORITY_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
+                selectedValues={priorityFilter ? [priorityFilter] : []}
+                onApply={(vals) => setPriorityFilter(vals[0] || '')}
+                multiSelect={false}
+              />
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Filter className="h-4 w-4 text-gray-600" />
-            <select
-              value={sourceFilter}
-              onChange={(e) => setSourceFilter(e.target.value)}
-              className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+          {canCreate && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="btn-primary flex items-center gap-2"
             >
-              {SOURCE_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
-            >
-              {STATUS_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <select
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
-              className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
-            >
-              {PRIORITY_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-                {canCreate && (
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="btn-primary flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          New Change
-        </button>
-        )}
+              <Plus className="h-4 w-4" />
+              New Change
+            </button>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -447,20 +435,13 @@ export default function RegulatoryChangesPage() {
         </div>
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-xl border border-gray-300 bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-black">New Regulatory Change</h2>
-              <button
-                onClick={() => { setIsModalOpen(false); resetForm(); }}
-                className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-black transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
+      <RightSlidePanel
+        isOpen={isModalOpen}
+        onClose={() => { setIsModalOpen(false); resetForm(); }}
+        title="New Regulatory Change"
+        width="w-full max-w-2xl"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-800 mb-1">Title *</label>
                 <input
@@ -588,9 +569,7 @@ export default function RegulatoryChangesPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </RightSlidePanel>
     </div>
   );
 }

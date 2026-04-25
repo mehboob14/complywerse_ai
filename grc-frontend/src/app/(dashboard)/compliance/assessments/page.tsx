@@ -5,9 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import Link from 'next/link';
 import apiClient, { AdminUser, adminApi } from '@/lib/api';
+import { SearchInput, MultiSelectDropdown } from '@/components/ui';
 import {
   FileText,
-  Search,
   Upload,
   X,
   Loader2,
@@ -18,7 +18,8 @@ import {
   Eye,
   Trash2,
   Sparkles,
-  Filter,
+  LayoutDashboard,
+  ClipboardCheck,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -636,104 +637,84 @@ export default function AssessmentsPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-xl border border-slate-200 bg-white p-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveView('overview')}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-              activeView === 'overview'
-                ? 'bg-blue-600 text-white'
-                : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            Overview
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveView('assessment')}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-              activeView === 'assessment'
-                ? 'bg-blue-600 text-white'
-                : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            Assessment
-          </button>
+    <div className="space-y-4 sm:space-y-5">
+      <div className="border-b border-gray-200 overflow-x-auto">
+        <div className="flex items-center gap-0 min-w-max">
+          {[
+            { id: 'overview' as const, label: 'Overview', icon: LayoutDashboard },
+            { id: 'assessment' as const, label: 'Assessment', icon: ClipboardCheck },
+          ].map(({ id, label, icon: Icon }) => {
+            const isActive = activeView === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveView(id)}
+                className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
+                  isActive
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Icon size={14} />
+                {label}
+              </button>
+            );
+          })}
         </div>
-      </section>
+      </div>
 
       {activeView === 'assessment' && (
-        <section className="rounded-xl border border-slate-200 bg-white p-3">
-          <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
-            <div className="relative w-full xl:flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by name, source, assessor, file..."
-                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-              />
-            </div>
-            <select
-              value={typeFilter}
-              onChange={(e) => {
-                setTypeFilter(e.target.value);
-                setPage(0);
-              }}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none xl:w-[180px]"
-            >
-              {TYPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(0);
-              }}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none xl:w-[160px]"
-            >
-              {STATUS_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <div className="flex w-full items-center gap-2 xl:w-auto xl:ml-auto">
-              <Filter className="h-3.5 w-3.5 text-slate-400" />
-              <select
-                value={sourceFilter}
-                onChange={(e) => {
-                  setSourceFilter(e.target.value);
-                  setPage(0);
-                }}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-500 focus:outline-none xl:w-[220px]"
-              >
-                <option value="">All Sources</option>
-                {sourceOptions.map((sourceOption) => (
-                  <option key={sourceOption} value={sourceOption}>
-                    {sourceOption}
-                  </option>
-                ))}
-              </select>
-              {canCreate && (
-                <button
-                  onClick={() => setIsUploadModalOpen(true)}
-                  className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
-                >
-                  <Upload className="h-4 w-4" />
-                  Upload Assessment
-                </button>
-              )}
-            </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex-1 min-w-[180px] sm:min-w-[260px]">
+            <SearchInput
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder="Search by name, source, assessor, file..."
+              size="md"
+            />
           </div>
-        </section>
+          <MultiSelectDropdown
+            title="Type"
+            items={TYPE_OPTIONS.filter((o) => o.value).map((o) => ({ value: o.value, label: o.label }))}
+            selectedValues={typeFilter ? [typeFilter] : []}
+            onApply={(v) => { setTypeFilter(v[0] || ''); setPage(0); }}
+            multiSelect={false}
+            autoApply
+            placeholder="All Types"
+            size="md"
+          />
+          <MultiSelectDropdown
+            title="Status"
+            items={STATUS_OPTIONS.filter((o) => o.value).map((o) => ({ value: o.value, label: o.label }))}
+            selectedValues={statusFilter ? [statusFilter] : []}
+            onApply={(v) => { setStatusFilter(v[0] || ''); setPage(0); }}
+            multiSelect={false}
+            autoApply
+            placeholder="All Statuses"
+            size="md"
+          />
+          <MultiSelectDropdown
+            title="Source"
+            items={sourceOptions.map((s) => ({ value: s, label: s }))}
+            selectedValues={sourceFilter ? [sourceFilter] : []}
+            onApply={(v) => { setSourceFilter(v[0] || ''); setPage(0); }}
+            multiSelect={false}
+            autoApply
+            placeholder="All Sources"
+            size="md"
+          />
+          {canCreate && (
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="ml-auto inline-flex shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 sm:px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              <Upload className="h-4 w-4" />
+              <span className="hidden sm:inline">Upload Assessment</span>
+              <span className="sm:hidden">Upload</span>
+            </button>
+          )}
+        </div>
       )}
 
       {activeView === 'overview' && (
@@ -970,10 +951,15 @@ export default function AssessmentsPage() {
                   return (
                     <tr key={assessment.id} className="hover:bg-slate-50">
                       <td className="px-3 py-2 align-top">
-                        <Link href={`/compliance/assessments/${assessment.id}`} className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                        <Link href={`/compliance/assessments/${assessment.id}`} className="block text-sm font-medium text-slate-900 hover:text-blue-700 transition-colors">
                           {assessment.name}
                         </Link>
-                        <p className="text-xs text-slate-500">{assessment.file_name || '-'}</p>
+                        {assessment.file_name && (
+                          <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-slate-600">
+                            <FileText className="h-3 w-3 text-slate-400" />
+                            <span className="truncate max-w-[260px]" title={assessment.file_name}>{assessment.file_name}</span>
+                          </p>
+                        )}
                       </td>
                       <td className="px-3 py-2 align-top">
                         <p className="text-xs text-slate-700">{formatAssessmentType(assessment.assessment_type)}</p>

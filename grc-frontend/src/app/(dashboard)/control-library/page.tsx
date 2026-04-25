@@ -31,7 +31,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
-import { StatCard, ProgressRing, DataCard } from '@/components/ui';
+import { StatCard, ProgressRing, DataCard, SearchInput, MultiSelectDropdown } from '@/components/ui';
 
 interface ControlGroup {
   id: number;
@@ -438,39 +438,35 @@ export default function ControlLibraryPage() {
 
       <div className="card">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1 sm:max-w-xs">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
-              <input
-                type="text"
-                placeholder="Search by name or code..."
+          <div className="flex flex-1 flex-wrap items-center gap-2">
+            <div className="flex-1 min-w-[180px] sm:max-w-xs">
+              <SearchInput
                 value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
-                className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-black placeholder-gray-500 focus:border-primary-500 focus:outline-none"
+                onChange={(v) => { setSearchTerm(v); setPage(0); }}
+                placeholder="Search by name or code..."
+                size="md"
               />
             </div>
-
-            <select
-              value={categoryFilter}
-              onChange={(e) => { setCategoryFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
-            >
-              <option value="">All Categories</option>
-              {categories?.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-
-            <select
-              value={domainFilter}
-              onChange={(e) => { setDomainFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
-            >
-              <option value="">All Domains</option>
-              {domains?.map(dom => (
-                <option key={dom} value={dom}>{dom}</option>
-              ))}
-            </select>
+            <MultiSelectDropdown
+              title="Category"
+              items={(categories || []).map((cat) => ({ value: cat, label: cat }))}
+              selectedValues={categoryFilter ? [categoryFilter] : []}
+              onApply={(v) => { setCategoryFilter(v[0] || ''); setPage(0); }}
+              multiSelect={false}
+              autoApply
+              placeholder="All Categories"
+              size="md"
+            />
+            <MultiSelectDropdown
+              title="Domain"
+              items={(domains || []).map((dom) => ({ value: dom, label: dom }))}
+              selectedValues={domainFilter ? [domainFilter] : []}
+              onApply={(v) => { setDomainFilter(v[0] || ''); setPage(0); }}
+              multiSelect={false}
+              autoApply
+              placeholder="All Domains"
+              size="md"
+            />
           </div>
 
           <div className="flex items-center gap-4">

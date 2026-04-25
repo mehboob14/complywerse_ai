@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { rcsaApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import {
@@ -13,10 +13,7 @@ import {
   Download,
   Send,
   Plus,
-  X,
   Building2,
-  User,
-  Calendar,
   CheckCircle,
   Clock,
   AlertCircle,
@@ -24,9 +21,10 @@ import {
   Users,
   FileText,
   Mail,
-  Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 
 interface Assessment {
   id: number;
@@ -101,7 +99,6 @@ const ASSESSMENT_STATUS_COLORS: Record<string, { bg: string; text: string; icon:
 
 export default function CampaignDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const campaignId = Number(params.id);
   const queryClient = useQueryClient();
 
@@ -242,15 +239,15 @@ export default function CampaignDetailPage() {
   const pendingAssessments = (campaign.assessments || []).filter(a => a.status === 'not_started' || a.status === 'in_progress');
 
   return (
-    <div className="space-y-8">
-      <div className="page-header">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <div>
         <div className="flex items-center gap-4 mb-4">
           <Link href="/risks/rcsa/campaigns" className="text-slate-600 hover:text-slate-900">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold text-slate-900">{campaign.name}</h1>
+              <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{campaign.name}</h1>
               <span className={`text-xs px-2 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
                 {campaign.status}
               </span>
@@ -538,71 +535,69 @@ export default function CampaignDetailPage() {
         </div>
       </div>
 
-      {isAssignModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md border border-slate-200 mx-4">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-slate-900">Assign Business Unit</h3>
-              <button onClick={() => { setIsAssignModalOpen(false); setSelectedBusinessUnitId(0); setSelectedAssessorId(0); }} className="text-slate-600 hover:text-slate-900">
-                <X className="h-5 w-5" />
-              </button>
+      <RightSlidePanel
+        isOpen={isAssignModalOpen}
+        onClose={() => { setIsAssignModalOpen(false); setSelectedBusinessUnitId(0); setSelectedAssessorId(0); }}
+        title="Assign Business Unit"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!selectedBusinessUnitId) return;
+            assignMutation.mutate({
+              business_unit_ids: [selectedBusinessUnitId],
+              assessor_ids: selectedAssessorId ? { [selectedBusinessUnitId]: selectedAssessorId } : undefined,
+            });
+          }}
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Business Unit</label>
+              <MultiSelectDropdown
+                title="Business Unit"
+                items={availableBusinessUnits.map((bu) => ({ value: String(bu.id), label: bu.name }))}
+                selectedValues={selectedBusinessUnitId ? [String(selectedBusinessUnitId)] : []}
+                onApply={(vals) => setSelectedBusinessUnitId(Number(vals[0] || 0))}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select business unit"
+                className="w-full"
+                triggerClassName="w-full"
+              />
+              {availableBusinessUnits.length === 0 && businessUnits && businessUnits.length > 0 && (
+                <p className="text-xs text-amber-600 mt-1">All business units have already been assigned.</p>
+              )}
             </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!selectedBusinessUnitId) return;
-                assignMutation.mutate({
-                  business_unit_ids: [selectedBusinessUnitId],
-                  assessor_ids: selectedAssessorId ? { [selectedBusinessUnitId]: selectedAssessorId } : undefined,
-                });
-              }}
-            >
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Business Unit</label>
-                  <select
-                    value={selectedBusinessUnitId}
-                    onChange={(e) => setSelectedBusinessUnitId(Number(e.target.value))}
-                    className="input w-full"
-                    required
-                  >
-                    <option value={0}>Select business unit</option>
-                    {availableBusinessUnits.map((bu) => (
-                      <option key={bu.id} value={bu.id}>{bu.name}</option>
-                    ))}
-                  </select>
-                  {availableBusinessUnits.length === 0 && businessUnits && businessUnits.length > 0 && (
-                    <p className="text-xs text-amber-400 mt-1">All business units have already been assigned.</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Assessor (Optional)</label>
-                  <select
-                    value={selectedAssessorId}
-                    onChange={(e) => setSelectedAssessorId(Number(e.target.value))}
-                    className="input w-full"
-                  >
-                    <option value={0}>Select assessor</option>
-                    {(tenantUsers || []).map((tu) => (
-                      <option key={tu.user_id} value={tu.user_id}>
-                        {tu.user?.display_name || tu.user?.username || tu.user?.email || `User #${tu.user_id}`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => { setIsAssignModalOpen(false); setSelectedBusinessUnitId(0); setSelectedAssessorId(0); }} className="btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={assignMutation.isPending || !selectedBusinessUnitId}>
-                  {assignMutation.isPending ? 'Assigning...' : 'Assign'}
-                </button>
-              </div>
-            </form>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Assessor (Optional)</label>
+              <MultiSelectDropdown
+                title="Assessor"
+                items={(tenantUsers || []).map((tu) => ({
+                  value: String(tu.user_id),
+                  label: tu.user?.display_name || tu.user?.username || tu.user?.email || `User #${tu.user_id}`,
+                  subLabel: tu.user?.email,
+                }))}
+                selectedValues={selectedAssessorId ? [String(selectedAssessorId)] : []}
+                onApply={(vals) => setSelectedAssessorId(Number(vals[0] || 0))}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select assessor"
+                forceSearch
+                className="w-full"
+                triggerClassName="w-full"
+              />
+            </div>
           </div>
-        </div>
-      )}
+          <div className="flex justify-end gap-3 mt-6">
+            <button type="button" onClick={() => { setIsAssignModalOpen(false); setSelectedBusinessUnitId(0); setSelectedAssessorId(0); }} className="btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={assignMutation.isPending || !selectedBusinessUnitId}>
+              {assignMutation.isPending ? 'Assigning...' : 'Assign'}
+            </button>
+          </div>
+        </form>
+      </RightSlidePanel>
     </div>
   );
 }

@@ -8,21 +8,20 @@ import { usePermissions } from '@/hooks/usePermissions';
 import {
   ClipboardList,
   Plus,
-  Search,
   Eye,
   Play,
   XCircle,
   Trash2,
-  X,
   Calendar,
   Building2,
-  Users,
   CheckCircle,
   Clock,
-  AlertCircle,
   FileText,
 } from 'lucide-react';
 import Link from 'next/link';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 interface Campaign {
   id: number;
@@ -154,12 +153,12 @@ export default function RCSACampaignsPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="page-header">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">RCSA Campaigns</h1>
-            <p className="text-slate-600 mt-1">Manage Risk & Control Self-Assessment campaigns</p>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">RCSA Campaigns</h1>
+            <p className="text-slate-600 mt-1 text-sm">Manage Risk & Control Self-Assessment campaigns</p>
           </div>
           {canCreate && (
           <button
@@ -173,36 +172,32 @@ export default function RCSACampaignsPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-600" />
-          <input
-            type="text"
-            placeholder="Search campaigns..."
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-[200px] max-w-md">
+          <SearchInput
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10 w-full"
+            onChange={setSearchTerm}
+            placeholder="Search campaigns..."
           />
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="input"
-        >
-          <option value="">All Statuses</option>
-          <option value="draft">Draft</option>
-          <option value="active">Active</option>
-          <option value="closed">Closed</option>
-        </select>
-        <select
-          value={periodFilter}
-          onChange={(e) => setPeriodFilter(e.target.value)}
-          className="input"
-        >
-          {PERIOD_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
+        <MultiSelectDropdown
+          title="Status"
+          items={[
+            { value: 'draft', label: 'Draft' },
+            { value: 'active', label: 'Active' },
+            { value: 'closed', label: 'Closed' },
+          ]}
+          selectedValues={statusFilter ? [statusFilter] : []}
+          onApply={(vals) => setStatusFilter(vals[0] || '')}
+          multiSelect={false}
+        />
+        <MultiSelectDropdown
+          title="Period"
+          items={PERIOD_OPTIONS.filter((o) => o.value).map((o) => ({ value: o.value, label: o.label }))}
+          selectedValues={periodFilter ? [periodFilter] : []}
+          onApply={(vals) => setPeriodFilter(vals[0] || '')}
+          multiSelect={false}
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -345,106 +340,100 @@ export default function RCSACampaignsPage() {
         </div>
       )}
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg border border-slate-200 mx-4">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-slate-900">Create New Campaign</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-600 hover:text-slate-900">
-                <X className="h-5 w-5" />
-              </button>
+      <RightSlidePanel
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Create New Campaign"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const periodValue = formData.get('period') as string;
+            const periodType = periodValue.startsWith('Q') ? 'quarterly' : 'annual';
+            createMutation.mutate({
+              name: formData.get('name') as string,
+              description: formData.get('description') as string,
+              template_id: Number(formData.get('template_id')),
+              period_type: periodType,
+              period_label: periodValue,
+              start_date: new Date(formData.get('start_date') as string).toISOString(),
+              due_date: new Date(formData.get('end_date') as string).toISOString(),
+              business_unit_ids: [],
+            });
+          }}
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Campaign Name</label>
+              <input
+                type="text"
+                name="name"
+                className="input w-full"
+                required
+                placeholder="e.g., Q1 2026 RCSA"
+              />
             </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                const periodValue = formData.get('period') as string;
-                const periodType = periodValue.startsWith('Q') ? 'quarterly' : 'annual';
-                createMutation.mutate({
-                  name: formData.get('name') as string,
-                  description: formData.get('description') as string,
-                  template_id: Number(formData.get('template_id')),
-                  period_type: periodType,
-                  period_label: periodValue,
-                  start_date: new Date(formData.get('start_date') as string).toISOString(),
-                  due_date: new Date(formData.get('end_date') as string).toISOString(),
-                  business_unit_ids: [],
-                });
-              }}
-            >
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Campaign Name</label>
-                  <input
-                    type="text"
-                    name="name"
-                    className="input w-full"
-                    required
-                    placeholder="e.g., Q1 2026 RCSA"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                  <textarea
-                    name="description"
-                    className="input w-full"
-                    rows={2}
-                    placeholder="Brief description of this campaign"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Template</label>
-                  <select name="template_id" className="input w-full" required>
-                    <option value="">Select a template</option>
-                    {(templates || []).map((template) => (
-                      <option key={template.id} value={template.id}>{template.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Period</label>
-                  <select name="period" className="input w-full" required>
-                    <option value="">Select period</option>
-                    <option value="Q1 2026">Q1 2026</option>
-                    <option value="Q2 2026">Q2 2026</option>
-                    <option value="Q3 2026">Q3 2026</option>
-                    <option value="Q4 2026">Q4 2026</option>
-                    <option value="Annual 2026">Annual 2026</option>
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
-                    <input
-                      type="date"
-                      name="start_date"
-                      className="input w-full"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">End Date</label>
-                    <input
-                      type="date"
-                      name="end_date"
-                      className="input w-full"
-                      required
-                    />
-                  </div>
-                </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+              <textarea
+                name="description"
+                className="input w-full"
+                rows={2}
+                placeholder="Brief description of this campaign"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Template</label>
+              <select name="template_id" className="input w-full" required>
+                <option value="">Select a template</option>
+                {(templates || []).map((template) => (
+                  <option key={template.id} value={template.id}>{template.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Period</label>
+              <select name="period" className="input w-full" required>
+                <option value="">Select period</option>
+                <option value="Q1 2026">Q1 2026</option>
+                <option value="Q2 2026">Q2 2026</option>
+                <option value="Q3 2026">Q3 2026</option>
+                <option value="Q4 2026">Q4 2026</option>
+                <option value="Annual 2026">Annual 2026</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  name="start_date"
+                  className="input w-full"
+                  required
+                />
               </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={createMutation.isPending}>
-                  {createMutation.isPending ? 'Creating...' : 'Create Campaign'}
-                </button>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">End Date</label>
+                <input
+                  type="date"
+                  name="end_date"
+                  className="input w-full"
+                  required
+                />
               </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
+          <div className="flex justify-end gap-3 mt-6">
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={createMutation.isPending}>
+              {createMutation.isPending ? 'Creating...' : 'Create Campaign'}
+            </button>
+          </div>
+        </form>
+      </RightSlidePanel>
     </div>
   );
 }

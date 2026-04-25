@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { complianceApi, evidenceApi, governanceApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { SearchInput, MultiSelectDropdown } from '@/components/ui';
 
 import {
   FileText,
-  Search,
   X,
   Eye,
   ChevronLeft,
@@ -355,7 +355,7 @@ export default function PolicyStatementsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {successMessage && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-center gap-3">
           <CheckCircle className="h-5 w-5 text-emerald-600" />
@@ -369,70 +369,71 @@ export default function PolicyStatementsPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search statements..."
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-[180px] sm:max-w-md">
+          <SearchInput
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black placeholder-gray-400"
+            onChange={setSearchTerm}
+            placeholder="Search statements..."
+            size="md"
           />
         </div>
-        <div className="flex flex-wrap gap-2">
-          {selectedStatementIds.length > 0 && canCreate && (
-            <button
-              onClick={() => setIsConvertModalOpen(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 font-medium"
-            >
-              <Shield className="h-4 w-4" />
-              Convert to Controls ({selectedStatementIds.length})
-            </button>
-          )}
-          <select
-            value={documentFilter}
-            onChange={(e) => { setDocumentFilter(e.target.value); setPage(0); }}
-            className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[180px]"
+        <MultiSelectDropdown
+          title="Document"
+          items={documents.map((doc: any) => ({
+            value: String(doc.id),
+            label: doc.title || doc.document_code || `Document ${doc.id}`,
+          }))}
+          selectedValues={documentFilter ? [documentFilter] : []}
+          onApply={(v) => { setDocumentFilter(v[0] || ''); setPage(0); }}
+          multiSelect={false}
+          autoApply
+          forceSearch
+          placeholder="All Documents"
+          searchPlaceholder="Search documents"
+          size="md"
+        />
+        <MultiSelectDropdown
+          title="Status"
+          items={STATUS_OPTIONS.filter((o) => o.value).map((o) => ({ value: o.value, label: o.label }))}
+          selectedValues={statusFilter ? [statusFilter] : []}
+          onApply={(v) => { setStatusFilter(v[0] || ''); setPage(0); }}
+          multiSelect={false}
+          autoApply
+          placeholder="All Statuses"
+          size="md"
+        />
+        <MultiSelectDropdown
+          title="Priority"
+          items={PRIORITY_OPTIONS.filter((o) => o.value).map((o) => ({ value: o.value, label: o.label }))}
+          selectedValues={priorityFilter ? [priorityFilter] : []}
+          onApply={(v) => { setPriorityFilter(v[0] || ''); setPage(0); }}
+          multiSelect={false}
+          autoApply
+          placeholder="All Priorities"
+          size="md"
+        />
+        {categories.length > 0 && (
+          <MultiSelectDropdown
+            title="Category"
+            items={categories.map((cat: string) => ({ value: cat, label: cat }))}
+            selectedValues={categoryFilter ? [categoryFilter] : []}
+            onApply={(v) => { setCategoryFilter(v[0] || ''); setPage(0); }}
+            multiSelect={false}
+            autoApply
+            placeholder="All Categories"
+            size="md"
+          />
+        )}
+        {selectedStatementIds.length > 0 && canCreate && (
+          <button
+            onClick={() => setIsConvertModalOpen(true)}
+            className="ml-auto px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm font-medium"
           >
-            <option value="">All Documents</option>
-            {documents.map((doc: any) => (
-              <option key={doc.id} value={String(doc.id)}>
-                {doc.title || doc.document_code || `Document ${doc.id}`}
-              </option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
-            className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[150px]"
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <select
-            value={priorityFilter}
-            onChange={(e) => { setPriorityFilter(e.target.value); setPage(0); }}
-            className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[130px]"
-          >
-            {PRIORITY_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          {categories.length > 0 && (
-            <select
-              value={categoryFilter}
-              onChange={(e) => { setCategoryFilter(e.target.value); setPage(0); }}
-              className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-[130px]"
-            >
-              <option value="">All Categories</option>
-              {categories.map((cat: string) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          )}
-        </div>
+            <Shield className="h-4 w-4" />
+            Convert to Controls ({selectedStatementIds.length})
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -556,7 +557,7 @@ export default function PolicyStatementsPage() {
       {isConvertModalOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
               <div>
                 <h2 className="text-lg font-semibold text-black">Convert to Internal Controls</h2>
                 <p className="text-sm text-gray-600">Create controls from {selectedStatementIds.length} selected statement(s)</p>
@@ -566,7 +567,7 @@ export default function PolicyStatementsPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-sm text-gray-700">
                   <span className="font-semibold text-black">{selectedStatementIds.length}</span> statement(s) will be converted to internal controls.
@@ -600,7 +601,7 @@ export default function PolicyStatementsPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-3 p-4 sm:p-6 border-t border-gray-200">
               <button onClick={() => setIsConvertModalOpen(false)} className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium">
                 Cancel
               </button>
@@ -705,24 +706,25 @@ export default function PolicyStatementsPage() {
                   <LinkIcon className="h-4 w-4" />
                   Link Evidence
                 </label>
-                <div className="space-y-2 max-h-40 overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-3">
-                  {(evidenceList || []).map((ev: any) => (
-                    <label key={ev.id} className="flex items-center gap-2 cursor-pointer hover:bg-white p-2 rounded">
-                      <input
-                        type="checkbox"
-                        checked={evidenceToLink.includes(ev.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setEvidenceToLink([...evidenceToLink, ev.id]);
-                          } else {
-                            setEvidenceToLink(evidenceToLink.filter(id => id !== ev.id));
-                          }
-                        }}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-700">{ev.name}</span>
-                    </label>
-                  ))}
+                <MultiSelectDropdown
+                  title="Evidence"
+                  items={(evidenceList || []).map((ev: any) => ({
+                    value: String(ev.id),
+                    label: ev.name || `Evidence #${ev.id}`,
+                    subLabel: ev.evidence_type,
+                  }))}
+                  selectedValues={evidenceToLink.map(String)}
+                  onApply={(values) => setEvidenceToLink(values.map(Number))}
+                  multiSelect
+                  autoApply
+                  forceSearch
+                  triggerVariant="input"
+                  triggerClassName="w-full"
+                  placeholder={`${evidenceToLink.length} evidence linked — click to manage`}
+                  searchPlaceholder="Search evidence"
+                  size="sm"
+                />
+                <div className="hidden">
                   {(!evidenceList || evidenceList.length === 0) && (
                     <p className="text-sm text-gray-500 text-center py-2">No evidence available</p>
                   )}

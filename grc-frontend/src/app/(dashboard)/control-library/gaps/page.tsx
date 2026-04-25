@@ -122,7 +122,6 @@ interface FrameworkGapsResponse {
 }
 
 const TABS = [
-  { id: 'unmapped', label: 'Unmapped Controls', icon: Layers },
   { id: 'no-evidence', label: 'Without Evidence', icon: FileWarning },
   { id: 'evidence-gaps', label: 'Evidence Gaps', icon: AlertTriangle },
 ];
@@ -163,7 +162,7 @@ function frameworkSelectionKey(frameworkId: number, frameworkType?: string | nul
 }
 
 export default function GapAnalysisDashboardPage() {
-  const [activeTab, setActiveTab] = useState('unmapped');
+  const [activeTab, setActiveTab] = useState('no-evidence');
   const [selectedFrameworkId, setSelectedFrameworkId] = useState<number | null>(null);
   const [selectedFrameworkType, setSelectedFrameworkType] = useState<string | null>(null);
   const [coverageFrameworkSelection, setCoverageFrameworkSelection] = useState<string>('all');
@@ -269,7 +268,7 @@ export default function GapAnalysisDashboardPage() {
   const topFrameworkGapsData = useMemo(() => {
     return [...uniqueFrameworkCoverage]
       .sort((a, b) => b.controls_without_evidence - a.controls_without_evidence)
-      .slice(0, 8)
+      .slice(0, 12)
       .map((framework) => ({
         key: frameworkSelectionKey(framework.framework_id, framework.framework_type),
         name: framework.framework_code || framework.framework_name,
@@ -392,14 +391,7 @@ export default function GapAnalysisDashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard
-          title="Unmapped Controls"
-          value={dashboard?.unmapped_controls || 0}
-          icon={Layers}
-          variant="warning"
-          subtitle={`${dashboard?.mapping_percentage || 0}% mapped`}
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Without Evidence"
           value={dashboard?.controls_without_evidence || 0}
@@ -431,81 +423,7 @@ export default function GapAnalysisDashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <DataCard
-          title="Mapping Health"
-          subtitle="Mapped vs. unmapped controls"
-          icon={PieChartIcon}
-          empty={mappingHealthData.length === 0}
-          emptyMessage="No mapping data"
-        >
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={mappingHealthData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={48}
-                  outerRadius={84}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {mappingHealthData.map((entry, index) => (
-                    <Cell key={`mapping-cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    color: '#0f172a',
-                  }}
-                />
-                <Legend wrapperStyle={{ color: '#334155' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </DataCard>
-
-        <DataCard
-          title="Evidence Health"
-          subtitle="Controls with and without evidence"
-          icon={Target}
-          empty={evidenceHealthData.length === 0}
-          emptyMessage="No evidence data"
-        >
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={evidenceHealthData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={48}
-                  outerRadius={84}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {evidenceHealthData.map((entry, index) => (
-                    <Cell key={`evidence-cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#ffffff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    color: '#0f172a',
-                  }}
-                />
-                <Legend wrapperStyle={{ color: '#334155' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </DataCard>
-
+      <div className="grid grid-cols-1 gap-4">
         <DataCard
           title="Framework Coverage"
           subtitle="Select a framework to inspect coverage"
@@ -571,11 +489,14 @@ export default function GapAnalysisDashboardPage() {
               </div>
             </div>
           ) : (
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
+            <div
+              className="overflow-y-auto"
+              style={{ height: Math.min(420, Math.max(220, frameworkChartData.length * 22 + 16)) }}
+            >
+              <ResponsiveContainer width="100%" height={Math.max(220, frameworkChartData.length * 22)}>
                 <BarChart data={frameworkChartData} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 4 }}>
                   <XAxis type="number" domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 11 }} />
-                  <YAxis dataKey="name" type="category" tick={{ fill: '#334155', fontSize: 11 }} width={145} interval={0} tickFormatter={(value) => shortenFrameworkLabel(String(value), 18)} />
+                  <YAxis dataKey="name" type="category" tick={{ fill: '#334155', fontSize: 11 }} width={160} interval={0} tickFormatter={(value) => shortenFrameworkLabel(String(value), 22)} />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: '#ffffff',
@@ -605,15 +526,22 @@ export default function GapAnalysisDashboardPage() {
 
       <DataCard
         title="Top Framework Gaps"
-        subtitle="Frameworks with highest controls missing evidence"
+        subtitle={`Top ${topFrameworkGapsData.length} frameworks with highest controls missing evidence`}
         icon={AlertCircle}
         empty={topFrameworkGapsData.length === 0}
         emptyMessage="No framework gaps detected"
       >
-        <div className="h-64">
+        <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={topFrameworkGapsData} margin={{ top: 6, right: 8, left: 8, bottom: 6 }}>
-              <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={55} />
+            <BarChart data={topFrameworkGapsData} margin={{ top: 8, right: 12, left: 8, bottom: 70 }}>
+              <XAxis
+                dataKey="name"
+                tick={{ fill: '#475569', fontSize: 11 }}
+                interval={0}
+                angle={-35}
+                textAnchor="end"
+                height={70}
+              />
               <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
               <Tooltip
                 contentStyle={{
@@ -627,7 +555,15 @@ export default function GapAnalysisDashboardPage() {
                   return [`${uncovered} missing evidence`, payload?.payload?.fullName || 'Framework'];
                 }}
               />
-              <Bar dataKey="uncovered" fill={COLORS.high} radius={[6, 6, 0, 0]} />
+              <Bar dataKey="uncovered" radius={[6, 6, 0, 0]}>
+                {topFrameworkGapsData.map((entry, index) => {
+                  const max = topFrameworkGapsData[0]?.uncovered || 1;
+                  const ratio = entry.uncovered / max;
+                  // Severity-graded coloring: top gaps are red, mid amber, lower blue.
+                  const fill = ratio >= 0.66 ? COLORS.critical : ratio >= 0.33 ? COLORS.high : COLORS.low;
+                  return <Cell key={`top-gap-${index}`} fill={fill} />;
+                })}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>

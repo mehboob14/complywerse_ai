@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { attestationApi } from '@/lib/api';
+import { MultiSelectDropdown } from '@/components/ui';
 import {
   ClipboardCheck,
   ArrowLeft,
@@ -87,6 +88,7 @@ export default function CampaignDetailPage() {
 
   const { data: requestsData, isLoading: requestsLoading } = useQuery({
     queryKey: ['attestation-campaign-requests', campaignId],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       try {
         const response = await attestationApi.getCampaignRequests(campaignId);
@@ -194,7 +196,7 @@ export default function CampaignDetailPage() {
   const pendingRequests = requests.filter(a => a.status === 'pending' || a.status === 'overdue');
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="page-header">
         <div className="flex items-center gap-4 mb-4">
           <Link href="/governance/attestations/campaigns" className="text-gray-500 hover:text-black">
@@ -202,7 +204,7 @@ export default function CampaignDetailPage() {
           </Link>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold text-black">{campaign.name}</h1>
+              <h1 className="text-lg sm:text-xl font-semibold text-black">{campaign.name}</h1>
               <span className={`text-xs px-2 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
                 {campaign.status}
               </span>
@@ -300,17 +302,18 @@ export default function CampaignDetailPage() {
             Attestation Requests ({filteredRequests.length})
           </h3>
           <div className="flex items-center gap-3">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="input text-sm"
-            >
-              <option value="">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="completed">Completed</option>
-              <option value="overdue">Overdue</option>
-              <option value="escalated">Escalated</option>
-            </select>
+            <MultiSelectDropdown
+              title="Status"
+              items={[
+                { value: 'pending', label: 'Pending' },
+                { value: 'completed', label: 'Completed' },
+                { value: 'overdue', label: 'Overdue' },
+                { value: 'escalated', label: 'Escalated' },
+              ]}
+              selectedValues={statusFilter ? [statusFilter] : []}
+              onApply={(vals) => setStatusFilter(vals[0] || '')}
+              multiSelect={false}
+            />
             {selectedRequests.length > 0 && (
               <button
                 onClick={handleBulkReminder}

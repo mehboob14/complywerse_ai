@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { WorkflowDashboard, PendingApprovalItem } from '@/types';
+import { RightSlidePanel } from '@/components/ui';
 import {
   FileCheck,
   Loader2,
@@ -13,7 +14,6 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
-  X,
   FileText,
   Plus,
   Settings,
@@ -137,8 +137,6 @@ interface ApprovalModalProps {
 function ApprovalModal({ isOpen, onClose, onConfirm, title, actionType, isLoading }: ApprovalModalProps) {
   const [comments, setComments] = useState('');
 
-  if (!isOpen) return null;
-
   const handleSubmit = () => {
     if (actionType === 'reject' && !comments.trim()) {
       return;
@@ -147,38 +145,12 @@ function ApprovalModal({ isOpen, onClose, onConfirm, title, actionType, isLoadin
   };
 
   return (
-    <div className="cw-overlay fixed inset-0 z-50 flex items-center justify-center">
-      <div className="cw-modal-panel w-full max-w-md rounded-xl p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="cw-text-default text-lg font-semibold">
-            {actionType === 'approve' ? 'Approve Document' : 'Reject Document'}
-          </h3>
-          <button onClick={onClose} className="cw-text-muted hover:cw-text-default">
-            <X size={20} />
-          </button>
-        </div>
-
-        <p className="cw-text-default mb-4 text-sm">
-          {actionType === 'approve'
-            ? `You are about to approve "${title}".`
-            : `You are about to reject "${title}". Please provide a reason.`}
-        </p>
-
-        <div className="mb-4">
-          <label className="cw-label mb-1 block text-sm font-medium">
-            Comments {actionType === 'reject' && <span className="cw-required">*</span>}
-          </label>
-          <textarea
-            value={comments}
-            onChange={(e) => setComments(e.target.value)}
-            placeholder={actionType === 'approve' ? 'Optional comments...' : 'Reason for rejection...'}
-            className="cw-field h-24 w-full rounded-lg px-3 py-2"
-          />
-          {actionType === 'reject' && !comments.trim() && (
-            <p className="cw-required mt-1 text-xs">Comments are required when rejecting</p>
-          )}
-        </div>
-
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title={actionType === 'approve' ? 'Approve Document' : 'Reject Document'}
+      width="w-full max-w-md"
+      footer={
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
@@ -200,8 +172,29 @@ function ApprovalModal({ isOpen, onClose, onConfirm, title, actionType, isLoadin
             {actionType === 'approve' ? 'Approve' : 'Reject'}
           </button>
         </div>
+      }
+    >
+      <p className="cw-text-default mb-4 text-sm">
+        {actionType === 'approve'
+          ? `You are about to approve "${title}".`
+          : `You are about to reject "${title}". Please provide a reason.`}
+      </p>
+
+      <div className="mb-4">
+        <label className="cw-label mb-1 block text-sm font-medium">
+          Comments {actionType === 'reject' && <span className="cw-required">*</span>}
+        </label>
+        <textarea
+          value={comments}
+          onChange={(e) => setComments(e.target.value)}
+          placeholder={actionType === 'approve' ? 'Optional comments...' : 'Reason for rejection...'}
+          className="cw-field h-24 w-full rounded-lg px-3 py-2"
+        />
+        {actionType === 'reject' && !comments.trim() && (
+          <p className="cw-required mt-1 text-xs">Comments are required when rejecting</p>
+        )}
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
@@ -232,8 +225,6 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
     auto_publish_on_complete: template?.auto_publish_on_complete || false,
   });
 
-  if (!isOpen) return null;
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData);
@@ -249,18 +240,13 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
   };
 
   return (
-    <div className="cw-overlay fixed inset-0 z-50 flex items-center justify-center">
-      <div className="cw-modal-panel w-full max-w-lg rounded-xl p-6 max-h-[90vh] overflow-y-auto">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="cw-text-default text-lg font-semibold">
-            {template ? 'Edit Template' : 'New Workflow Template'}
-          </h3>
-          <button onClick={onClose} className="cw-text-muted hover:cw-text-default">
-            <X size={20} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title={template ? 'Edit Template' : 'New Workflow Template'}
+      width="w-full max-w-lg"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="cw-label mb-1 block text-sm font-medium">
               Name <span className="cw-required">*</span>
@@ -361,9 +347,8 @@ function TemplateModal({ isOpen, onClose, onSubmit, template, isLoading }: Templ
               {template ? 'Save Changes' : 'Create Template'}
             </button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </RightSlidePanel>
   );
 }
 
@@ -397,26 +382,19 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
     sequence: step?.sequence ?? nextSequence,
   });
 
-  if (!isOpen) return null;
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData);
   };
 
   return (
-    <div className="cw-overlay fixed inset-0 z-50 flex items-center justify-center">
-      <div className="cw-modal-panel w-full max-w-md rounded-xl p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="cw-text-default text-lg font-semibold">
-            {step ? 'Edit Step' : 'Add Workflow Step'}
-          </h3>
-          <button onClick={onClose} className="cw-text-muted hover:cw-text-default">
-            <X size={20} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title={step ? 'Edit Step' : 'Add Workflow Step'}
+      width="w-full max-w-md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="cw-label mb-1 block text-sm font-medium">
               Step Name <span className="cw-required">*</span>
@@ -500,9 +478,8 @@ function StepModal({ isOpen, onClose, onSubmit, step, nextSequence, isLoading }:
               {step ? 'Save Changes' : 'Add Step'}
             </button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </RightSlidePanel>
   );
 }
 
@@ -538,6 +515,7 @@ export default function GovernanceWorkflowsPage() {
 
   const { data: pendingData, isLoading: pendingLoading } = useQuery({
     queryKey: ['pending-approvals'],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const response = await governanceApi.getPendingApprovals();
       return response.data as { items: PendingApprovalItem[]; total: number };
@@ -546,6 +524,7 @@ export default function GovernanceWorkflowsPage() {
 
   const { data: overdueData } = useQuery({
     queryKey: ['overdue-approvals'],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const response = await governanceApi.getOverdueApprovals();
       return response.data as { items: PendingApprovalItem[]; total: number };
@@ -554,6 +533,7 @@ export default function GovernanceWorkflowsPage() {
 
   const { data: templates, isLoading: templatesLoading } = useQuery({
     queryKey: ['workflow-templates'],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       const response = await governanceApi.getWorkflowTemplates();
       return response.data as WorkflowTemplate[];
@@ -776,39 +756,41 @@ export default function GovernanceWorkflowsPage() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="cw-text-default text-sm font-semibold">Approval Workflows</h1>
+          <h1 className="cw-text-default text-lg sm:text-xl font-semibold">Approval Workflows</h1>
           <p className="cw-text-muted text-xs">
             Manage document approvals, workflow templates, and review pending requests
           </p>
         </div>
       </div>
 
-      <div className="flex gap-2 border-b border-[var(--color-border)] pb-2">
-        <button
-          onClick={() => { setMainTab('approvals'); setSelectedTemplate(null); }}
-          className={`flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
-            mainTab === 'approvals'
-              ? 'border-blue-600 bg-blue-50 text-blue-700'
-              : 'text-[var(--color-muted)] border-transparent hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]'
-          }`}
-        >
-          <FileCheck size={13} />
-          Approvals
-        </button>
-        <button
-          onClick={() => setMainTab('templates')}
-          className={`flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
-            mainTab === 'templates'
-              ? 'border-blue-600 bg-blue-50 text-blue-700'
-              : 'text-[var(--color-muted)] border-transparent hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]'
-          }`}
-        >
-          <Settings size={13} />
-          Workflow Templates
-        </button>
+      <div className="border-b border-gray-300">
+        <nav className="flex gap-1 overflow-x-auto">
+          <button
+            onClick={() => { setMainTab('approvals'); setSelectedTemplate(null); }}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              mainTab === 'approvals'
+                ? 'border-blue-600 text-blue-700'
+                : 'border-transparent text-gray-600 hover:text-black'
+            }`}
+          >
+            <FileCheck size={16} />
+            Approvals
+          </button>
+          <button
+            onClick={() => setMainTab('templates')}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              mainTab === 'templates'
+                ? 'border-blue-600 text-blue-700'
+                : 'border-transparent text-gray-600 hover:text-black'
+            }`}
+          >
+            <Settings size={16} />
+            Workflow Templates
+          </button>
+        </nav>
       </div>
 
       {mainTab === 'approvals' && (
@@ -865,15 +847,15 @@ export default function GovernanceWorkflowsPage() {
 
           <div className="rounded-xl border border-gray-300 bg-white">
             <div className="border-b border-gray-300">
-              <nav className="flex gap-1 p-2">
+              <nav className="flex gap-1 px-2 overflow-x-auto">
                 {(['pending', 'approved', 'rejected', 'all'] as ApprovalTabType[]).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                       activeTab === tab
-                        ? 'border-blue-600 bg-blue-50 text-blue-700'
-                        : 'border-transparent text-gray-600 hover:bg-gray-50 hover:text-black'
+                        ? 'border-blue-600 text-blue-700'
+                        : 'border-transparent text-gray-600 hover:text-black'
                     }`}
                   >
                     {tab.charAt(0).toUpperCase() + tab.slice(1)}

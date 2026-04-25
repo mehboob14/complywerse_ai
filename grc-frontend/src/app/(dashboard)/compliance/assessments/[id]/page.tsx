@@ -852,33 +852,34 @@ export default function AssessmentDetailPage() {
           </button>
         </div>
       )}
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 flex-wrap">
         <Link
           href="/compliance/assessments"
-          className="mt-0.5 rounded-lg p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black transition-colors"
+          className="mt-0.5 rounded-lg p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black transition-colors flex-shrink-0"
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600 flex-shrink-0">
               <FileText className="h-5 w-5" />
             </div>
-            <div>
-              <h1 className="text-xl font-semibold text-black">{assessment.name}</h1>
-              <p className="text-sm text-gray-600">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight truncate">{assessment.name}</h1>
+              <p className="mt-0.5 text-sm text-slate-600 truncate">
                 {assessment.assessment_type.replace(/_/g, ' ')} • {assessment.file_name}
               </p>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
           <span className={`px-2.5 py-1 text-xs font-medium rounded-lg ${statusStyle.bg} ${statusStyle.text}`}>
             {statusStyle.label}
           </span>
           <button onClick={handleExport} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
             <Download className="h-3.5 w-3.5" />
-            Export Excel
+            <span className="hidden sm:inline">Export Excel</span>
+            <span className="sm:hidden">Export</span>
           </button>
         </div>
       </div>

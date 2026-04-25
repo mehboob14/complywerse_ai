@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { 
+import { InlineLinkPicker } from '@/components/ui';
+import {
   ArrowLeft, Loader2, AlertCircle, FileCheck, Calendar, Clock,
   CheckCircle, XCircle, FileText, Edit, ScanText, Brain, Link2,
   AlertTriangle, Eye, Trash2, Send, ThumbsUp, ThumbsDown, RefreshCw,
@@ -312,7 +313,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get('/evidence-mgmt/links/available-controls');
       return response.data;
     },
-    enabled: showLinkModal,
+    enabled: activeTab === 'controls' || showLinkModal,
   });
 
   const { data: risksList } = useQuery<Array<{ id: number; title: string }>>({
@@ -321,7 +322,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get('/risks');
       return response.data;
     },
-    enabled: showRiskModal,
+    enabled: activeTab === 'cross-links' || showRiskModal,
   });
 
   const { data: assetsList } = useQuery<Array<{ id: number; name: string }>>({
@@ -330,7 +331,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get('/assets');
       return response.data;
     },
-    enabled: showAssetModal,
+    enabled: activeTab === 'cross-links' || showAssetModal,
   });
 
   const { data: incidentsList } = useQuery<Array<{ id: number; title: string; severity?: string | null }>>({
@@ -339,7 +340,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get('/erm/incidents');
       return response.data;
     },
-    enabled: showIncidentModal,
+    enabled: activeTab === 'cross-links' || showIncidentModal,
   });
 
   const { data: policyStatementsList } = useQuery<{
@@ -351,7 +352,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get('/compliance/statements', { params: { limit: 200 } });
       return response.data;
     },
-    enabled: showPolicyModal,
+    enabled: activeTab === 'cross-links' || showPolicyModal,
   });
 
   const { data: clauseMappings } = useQuery<ClauseMapping[]>({
@@ -1028,16 +1029,24 @@ export default function EvidenceDetailPage() {
           />
         )}
         {activeTab === 'controls' && (
-          <ControlsTab 
+          <ControlsTab
             controlsData={controlsData}
             usageData={allLinks}
             onUnlink={(mappingId) => unlinkControlMutation.mutate(mappingId)}
             isUnlinking={unlinkControlMutation.isPending}
             onOpenLinkModal={() => setShowLinkModal(true)}
+            availableControls={availableControls}
+            onLinkControl={(fwId, ctrlId) => {
+              setSelectedFrameworkId(fwId);
+              setSelectedControlId(ctrlId);
+              // Trigger via a small async hop so state updates land before mutate runs.
+              setTimeout(() => linkControlMutation.mutate(), 0);
+            }}
+            isLinkingControl={linkControlMutation.isPending}
           />
         )}
         {activeTab === 'cross-links' && (
-          <CrossLinksTab 
+          <CrossLinksTab
             links={allLinks}
             onUnlinkRisk={(linkId) => unlinkRiskMutation.mutate(linkId)}
             onUnlinkAsset={(linkId) => unlinkAssetMutation.mutate(linkId)}
@@ -1053,6 +1062,30 @@ export default function EvidenceDetailPage() {
             onOpenAssetModal={() => setShowAssetModal(true)}
             onOpenIncidentModal={() => setShowIncidentModal(true)}
             onOpenPolicyModal={() => setShowPolicyModal(true)}
+            risksList={risksList}
+            assetsList={assetsList}
+            incidentsList={incidentsList}
+            policyStatementsList={policyStatementsList}
+            onLinkRisk={(id) => {
+              setSelectedRiskId(id);
+              setTimeout(() => linkRiskMutation.mutate(), 0);
+            }}
+            onLinkAsset={(id) => {
+              setSelectedAssetId(id);
+              setTimeout(() => linkAssetMutation.mutate(), 0);
+            }}
+            onLinkIncident={(id) => {
+              setSelectedIncidentId(id);
+              setTimeout(() => linkIncidentMutation.mutate(), 0);
+            }}
+            onLinkPolicy={(id) => {
+              setSelectedPolicyStatementId(id);
+              setTimeout(() => linkPolicyMutation.mutate(), 0);
+            }}
+            isLinkingRisk={linkRiskMutation.isPending}
+            isLinkingAsset={linkAssetMutation.isPending}
+            isLinkingIncident={linkIncidentMutation.isPending}
+            isLinkingPolicy={linkPolicyMutation.isPending}
           />
         )}
       </div>
@@ -1847,18 +1880,24 @@ function AssessmentTab({
   );
 }
 
-function ControlsTab({ 
+function ControlsTab({
   controlsData,
   usageData,
   onUnlink,
   isUnlinking,
-  onOpenLinkModal
-}: { 
+  onOpenLinkModal,
+  availableControls,
+  onLinkControl,
+  isLinkingControl,
+}: {
   controlsData?: ControlsResponse;
   usageData?: AllLinksResponse;
   onUnlink: (mappingId: number) => void;
   isUnlinking: boolean;
   onOpenLinkModal: () => void;
+  availableControls?: { frameworks: Array<{ id: number; name: string; controls: Array<{ id: number; control_id: string; title: string }> }> };
+  onLinkControl: (frameworkId: number, controlId: number) => void;
+  isLinkingControl: boolean;
 }) {
   if (!controlsData) {
     return (
@@ -1879,20 +1918,34 @@ function ControlsTab({
       usageData.policy_statements.total
     : 0;
 
+  const flatControlItems = (availableControls?.frameworks || []).flatMap((fw) =>
+    fw.controls.map((c) => ({
+      value: `${fw.id}:${c.id}`,
+      label: `${c.control_id} — ${c.title}`,
+      subLabel: fw.name,
+    }))
+  );
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h3 className="flex items-center gap-2 text-base sm:text-lg font-semibold text-black">
           <Shield className="h-5 w-5 text-blue-600" />
           Linked Controls ({totalControls})
         </h3>
-        <button
-          onClick={onOpenLinkModal}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
-        >
-          <Plus className="h-4 w-4" />
-          Link Control
-        </button>
+        <InlineLinkPicker
+          triggerLabel="Link Control"
+          triggerClassName="flex items-center gap-2 rounded-lg bg-primary-600 px-3 sm:px-4 py-2 text-sm text-white hover:bg-primary-700 transition-colors disabled:opacity-50"
+          items={flatControlItems}
+          isLoading={isLinkingControl}
+          emptyText="No controls available"
+          searchPlaceholder="Search controls or frameworks"
+          popoverWidth={400}
+          onSelect={(value) => {
+            const [fwId, ctrlId] = value.split(':').map(Number);
+            onLinkControl(fwId, ctrlId);
+          }}
+        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[2fr,1fr]">
@@ -2030,7 +2083,7 @@ function ControlsTab({
   );
 }
 
-function CrossLinksTab({ 
+function CrossLinksTab({
   links,
   onUnlinkRisk,
   onUnlinkAsset,
@@ -2040,8 +2093,20 @@ function CrossLinksTab({
   onOpenRiskModal,
   onOpenAssetModal,
   onOpenIncidentModal,
-  onOpenPolicyModal
-}: { 
+  onOpenPolicyModal,
+  risksList,
+  assetsList,
+  incidentsList,
+  policyStatementsList,
+  onLinkRisk,
+  onLinkAsset,
+  onLinkIncident,
+  onLinkPolicy,
+  isLinkingRisk,
+  isLinkingAsset,
+  isLinkingIncident,
+  isLinkingPolicy,
+}: {
   links?: AllLinksResponse;
   onUnlinkRisk: (linkId: number) => void;
   onUnlinkAsset: (linkId: number) => void;
@@ -2052,7 +2117,48 @@ function CrossLinksTab({
   onOpenAssetModal: () => void;
   onOpenIncidentModal: () => void;
   onOpenPolicyModal: () => void;
+  risksList?: Array<{ id: number; title?: string | null }>;
+  assetsList?: Array<{ id: number; name?: string | null }>;
+  incidentsList?: Array<{ id: number; title: string; severity?: string | null }>;
+  policyStatementsList?: { statements?: Array<{ id: number; statement_code: string; statement_summary?: string | null }> };
+  onLinkRisk: (id: number) => void;
+  onLinkAsset: (id: number) => void;
+  onLinkIncident: (id: number) => void;
+  onLinkPolicy: (id: number) => void;
+  isLinkingRisk: boolean;
+  isLinkingAsset: boolean;
+  isLinkingIncident: boolean;
+  isLinkingPolicy: boolean;
 }) {
+  const linkedRiskIds = new Set((links?.risks?.links || []).map((l) => l.risk_id));
+  const linkedAssetIds = new Set((links?.assets?.links || []).map((l: any) => l.asset_id));
+  const linkedIncidentIds = new Set((links?.incidents?.links || []).map((l: any) => l.incident_id));
+  const linkedPolicyIds = new Set((links?.policy_statements?.links || []).map((l: any) => l.policy_statement_id));
+
+  const riskItems = (risksList || [])
+    .filter((r) => !linkedRiskIds.has(r.id))
+    .map((r) => ({ value: String(r.id), label: r.title || `Risk #${r.id}` }));
+  const assetItems = (assetsList || [])
+    .filter((a) => !linkedAssetIds.has(a.id))
+    .map((a) => ({ value: String(a.id), label: a.name || `Asset #${a.id}` }));
+  void linkedAssetIds;
+  const incidentItems = (incidentsList || [])
+    .filter((i) => !linkedIncidentIds.has(i.id))
+    .map((i) => ({
+      value: String(i.id),
+      label: i.title || `Incident #${i.id}`,
+      subLabel: i.severity ?? undefined,
+    }));
+  const policyItems = (policyStatementsList?.statements || [])
+    .filter((s) => !linkedPolicyIds.has(s.id))
+    .map((s) => ({
+      value: String(s.id),
+      label: s.statement_code || `Statement #${s.id}`,
+      subLabel: s.statement_summary ?? undefined,
+    }));
+
+  // Suppress unused-warnings for the legacy modal openers (kept for fallback)
+  void onOpenRiskModal; void onOpenAssetModal; void onOpenIncidentModal; void onOpenPolicyModal;
   if (!links) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -2097,19 +2203,24 @@ function CrossLinksTab({
         </h3>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <LinkSection 
-          title="Linked Risks" 
-          icon={AlertTriangle} 
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
+        <LinkSection
+          title="Linked Risks"
+          icon={AlertTriangle}
           iconColor="text-red-400"
           count={links.risks.total}
           addButton={
-            <button
-              onClick={onOpenRiskModal}
-              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
-            >
-              <Plus className="h-4 w-4" /> Add
-            </button>
+            <InlineLinkPicker
+              triggerLabel="Add"
+              triggerClassName="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+              triggerIcon={<Plus className="h-4 w-4" />}
+              items={riskItems}
+              isLoading={isLinkingRisk}
+              emptyText="No risks available"
+              searchPlaceholder="Search risks"
+              popoverWidth={320}
+              onSelect={(value) => onLinkRisk(Number(value))}
+            />
           }
         >
           {links.risks.links.length > 0 ? (
@@ -2148,12 +2259,17 @@ function CrossLinksTab({
           iconColor="text-blue-400"
           count={links.assets.total}
           addButton={
-            <button
-              onClick={onOpenAssetModal}
-              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
-            >
-              <Plus className="h-4 w-4" /> Add
-            </button>
+            <InlineLinkPicker
+              triggerLabel="Add"
+              triggerClassName="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+              triggerIcon={<Plus className="h-4 w-4" />}
+              items={assetItems}
+              isLoading={isLinkingAsset}
+              emptyText="No assets available"
+              searchPlaceholder="Search assets"
+              popoverWidth={320}
+              onSelect={(value) => onLinkAsset(Number(value))}
+            />
           }
         >
           {links.assets.links.length > 0 ? (
@@ -2192,12 +2308,17 @@ function CrossLinksTab({
           iconColor="text-orange-400"
           count={links.incidents.total}
           addButton={
-            <button
-              onClick={onOpenIncidentModal}
-              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
-            >
-              <Plus className="h-4 w-4" /> Add
-            </button>
+            <InlineLinkPicker
+              triggerLabel="Add"
+              triggerClassName="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+              triggerIcon={<Plus className="h-4 w-4" />}
+              items={incidentItems}
+              isLoading={isLinkingIncident}
+              emptyText="No incidents available"
+              searchPlaceholder="Search incidents"
+              popoverWidth={320}
+              onSelect={(value) => onLinkIncident(Number(value))}
+            />
           }
         >
           {links.incidents.links.length > 0 ? (
@@ -2243,12 +2364,17 @@ function CrossLinksTab({
           iconColor="text-purple-400"
           count={links.policy_statements.total}
           addButton={
-            <button
-              onClick={onOpenPolicyModal}
-              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
-            >
-              <Plus className="h-4 w-4" /> Add
-            </button>
+            <InlineLinkPicker
+              triggerLabel="Add"
+              triggerClassName="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+              triggerIcon={<Plus className="h-4 w-4" />}
+              items={policyItems}
+              isLoading={isLinkingPolicy}
+              emptyText="No policy statements available"
+              searchPlaceholder="Search statements"
+              popoverWidth={360}
+              onSelect={(value) => onLinkPolicy(Number(value))}
+            />
           }
         >
           {links.policy_statements.links.length > 0 ? (

@@ -5,11 +5,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import Link from 'next/link';
 import apiClient, { evidenceAIApi, QuickAssessResponse } from '@/lib/api';
-import { 
-  FileCheck, 
-  Loader2, 
-  AlertCircle, 
-  Search, 
+import { SearchInput, MultiSelectDropdown } from '@/components/ui';
+import {
+  FileCheck,
+  Loader2,
+  AlertCircle,
+  Search,
   Filter,
   Upload,
   X,
@@ -342,41 +343,41 @@ export default function EvidencePage() {
 
       <div className="space-y-3 bg-[var(--color-subtle)] px-4 py-3 sm:px-6">
         <div className="flex flex-col gap-2 2xl:flex-row 2xl:items-center 2xl:justify-between">
-          <div className="flex flex-1 flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
-            <div className="relative flex-1 lg:min-w-[220px] lg:max-w-xs">
-              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
-              <input
-                type="text"
-                placeholder="Search by name or description..."
+          <div className="flex flex-1 flex-wrap items-center gap-2">
+            <div className="flex-1 min-w-[180px] sm:min-w-[260px] lg:max-w-xs">
+              <SearchInput
                 value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
-                className="w-full rounded-md border border-gray-300 bg-white py-1.5 pl-8 pr-3 text-sm text-black placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                onChange={(v) => { setSearchTerm(v); setPage(0); }}
+                placeholder="Search by name or description..."
+                size="md"
               />
             </div>
-
-            <select
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setPage(0); }}
-              className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-black focus:border-blue-500 focus:outline-none"
-            >
-              <option value="all">All Status</option>
-              <option value="draft">Draft</option>
-              <option value="pending_review">Pending Review</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="expired">Expired</option>
-            </select>
-
-            <select
-              value={typeFilter}
-              onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
-              className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-black focus:border-blue-500 focus:outline-none"
-            >
-              <option value="">All Types</option>
-              {evidenceTypes?.map(type => (
-                <option key={type.value} value={type.value}>{type.label}</option>
-              ))}
-            </select>
+            <MultiSelectDropdown
+              title="Status"
+              items={[
+                { value: 'draft', label: 'Draft' },
+                { value: 'pending_review', label: 'Pending Review' },
+                { value: 'approved', label: 'Approved' },
+                { value: 'rejected', label: 'Rejected' },
+                { value: 'expired', label: 'Expired' },
+              ]}
+              selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
+              onApply={(v) => { setStatusFilter((v[0] as StatusFilter) || 'all'); setPage(0); }}
+              multiSelect={false}
+              autoApply
+              placeholder="All Status"
+              size="md"
+            />
+            <MultiSelectDropdown
+              title="Type"
+              items={(evidenceTypes || []).map((t) => ({ value: t.value, label: t.label }))}
+              selectedValues={typeFilter ? [typeFilter] : []}
+              onApply={(v) => { setTypeFilter(v[0] || ''); setPage(0); }}
+              multiSelect={false}
+              autoApply
+              placeholder="All Types"
+              size="md"
+            />
           </div>
 
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
@@ -539,14 +540,6 @@ export default function EvidencePage() {
                 <table className="w-full">
                   <thead className="border-b border-[var(--color-border)] bg-[var(--color-subtle)]">
                     <tr>
-                      <th className="w-12 px-3 py-2 text-left">
-                        <input
-                          type="checkbox"
-                          checked={selectedItems.length === filteredItems.length && filteredItems.length > 0}
-                          onChange={toggleSelectAll}
-                          className="h-4 w-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500"
-                        />
-                      </th>
                       <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">Evidence</th>
                       <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">Type</th>
                       <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">Status</th>
@@ -562,14 +555,6 @@ export default function EvidencePage() {
                       const TypeIcon = TYPE_ICONS[item.evidence_type || 'other'] || FileCheck;
                       return (
                         <tr key={item.id} className={`transition-colors hover:bg-gray-50 ${selectedItems.includes(item.id) ? 'bg-blue-50' : ''}`}>
-                          <td className="px-3 py-2.5">
-                            <input
-                              type="checkbox"
-                              checked={selectedItems.includes(item.id)}
-                              onChange={() => toggleSelectItem(item.id)}
-                              className="h-4 w-4 rounded border-gray-300 bg-white text-blue-600 focus:ring-blue-500"
-                            />
-                          </td>
                           <td className="px-3 py-2.5">
                             <Link href={`/evidence/${item.id}`} className="block">
                               <div className="flex cursor-pointer items-center gap-3 transition-opacity hover:opacity-80">

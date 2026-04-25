@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { rcsaApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Loader2, Upload, Download, AlertTriangle } from 'lucide-react';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 
 interface RCSATemplate {
   id: number;
@@ -13,6 +14,14 @@ interface RCSATemplate {
   source?: string;
   question_count?: number;
 }
+
+const CATEGORY_OPTIONS = [
+  { value: 'operational', label: 'Operational' },
+  { value: 'compliance', label: 'Compliance' },
+  { value: 'technology', label: 'Technology' },
+  { value: 'financial', label: 'Financial' },
+  { value: 'strategic', label: 'Strategic' },
+];
 
 export default function RCSATemplatesPage() {
   const queryClient = useQueryClient();
@@ -82,9 +91,9 @@ export default function RCSATemplatesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div>
-        <h2 className="text-xl font-semibold text-slate-900">RCSA Templates</h2>
+        <h2 className="text-lg sm:text-xl font-semibold text-slate-900">RCSA Templates</h2>
         <p className="text-sm text-slate-600">Upload and download RCSA templates</p>
       </div>
 
@@ -97,17 +106,13 @@ export default function RCSATemplatesPage() {
             placeholder="Template name"
             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
           />
-          <select
-            value={templateCategory}
-            onChange={(e) => setTemplateCategory(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-          >
-            <option value="operational">Operational</option>
-            <option value="compliance">Compliance</option>
-            <option value="technology">Technology</option>
-            <option value="financial">Financial</option>
-            <option value="strategic">Strategic</option>
-          </select>
+          <MultiSelectDropdown
+            title="Category"
+            items={CATEGORY_OPTIONS}
+            selectedValues={[templateCategory]}
+            onApply={(values) => setTemplateCategory(values[0] || 'operational')}
+            multiSelect={false}
+          />
           <div className="flex gap-2">
             <input
               ref={fileInputRef}

@@ -12,7 +12,6 @@ import {
   ArrowRight,
   ArrowLeft,
   Loader2,
-  ChevronDown,
   Zap,
   ShieldCheck,
   ShieldAlert,
@@ -20,6 +19,7 @@ import {
   Sparkles,
   Brain,
 } from 'lucide-react';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 
 export default function BowTieAnalysisPage() {
   const [selectedRiskId, setSelectedRiskId] = useState<number | null>(null);
@@ -61,8 +61,8 @@ export default function BowTieAnalysisPage() {
     : 0;
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <Link
             href="/erm/analytics"
@@ -72,7 +72,7 @@ export default function BowTieAnalysisPage() {
             Back to Analytics
           </Link>
           <div>
-            <h1 className="text-xl font-semibold text-slate-900 flex items-center gap-2.5">
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900 flex items-center gap-2.5">
               <GitBranch className="h-6 w-6 text-blue-400" />
               Bow-Tie Risk Analysis
             </h1>
@@ -85,22 +85,21 @@ export default function BowTieAnalysisPage() {
 
       <div className="rounded-xl border border-slate-200 bg-white p-3.5">
         <label className="block text-sm font-medium text-slate-600 mb-2">Select a Risk to Analyze</label>
-        <div className="relative">
-          <select
-            value={selectedRiskId ?? ''}
-            onChange={(e) => { setSelectedRiskId(e.target.value ? Number(e.target.value) : null); setAiNarrative(null); }}
-            className="w-full appearance-none rounded-lg border border-slate-300 bg-slate-100 px-4 py-2.5 pr-10 text-sm text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            disabled={risksLoading}
-          >
-            <option value="">— Choose a risk —</option>
-            {risks?.map((risk: any) => (
-              <option key={risk.id} value={risk.id}>
-                {risk.title} {risk.risk_category ? `(${risk.risk_category})` : ''} — Score: {risk.residual_score ?? 'N/A'}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-600 pointer-events-none" />
-        </div>
+        <MultiSelectDropdown
+          title="Choose a risk"
+          items={(risks || []).map((risk: any) => ({
+            value: String(risk.id),
+            label: `${risk.title}${risk.risk_category ? ` (${risk.risk_category})` : ''} — Score: ${risk.residual_score ?? 'N/A'}`,
+          }))}
+          selectedValues={selectedRiskId ? [String(selectedRiskId)] : []}
+          onApply={(values) => {
+            setSelectedRiskId(values[0] ? Number(values[0]) : null);
+            setAiNarrative(null);
+          }}
+          multiSelect={false}
+          forceSearch
+          triggerVariant="input"
+        />
       </div>
 
       {!selectedRiskId && (

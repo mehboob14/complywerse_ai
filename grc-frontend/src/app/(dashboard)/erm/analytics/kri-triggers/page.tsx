@@ -18,6 +18,7 @@ import {
   ShieldAlert,
   BarChart3,
 } from 'lucide-react';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 
 interface KRIAlert {
   id: number;
@@ -83,8 +84,8 @@ export default function KRITriggersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <Link
             href="/erm/analytics"
@@ -93,7 +94,7 @@ export default function KRITriggersPage() {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Automated KRI Triggers</h1>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Automated KRI Triggers</h1>
             <p className="text-sm text-slate-600">Real-time alerts for Key Risk Indicator threshold breaches</p>
           </div>
         </div>
@@ -184,15 +185,17 @@ export default function KRITriggersPage() {
       <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
         <BarChart3 className="h-5 w-5 text-slate-600" />
         <label className="text-sm text-slate-600">Severity:</label>
-        <select
-          value={severityFilter}
-          onChange={(e) => setSeverityFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
-        >
-          <option value="all">All Severities</option>
-          <option value="critical">Critical</option>
-          <option value="warning">Warning</option>
-        </select>
+        <MultiSelectDropdown
+          title="Severity"
+          items={[
+            { value: 'all', label: 'All Severities' },
+            { value: 'critical', label: 'Critical' },
+            { value: 'warning', label: 'Warning' },
+          ]}
+          selectedValues={[severityFilter]}
+          onApply={(values) => setSeverityFilter(values[0] || 'all')}
+          multiSelect={false}
+        />
       </div>
 
       {alerts.length === 0 ? (

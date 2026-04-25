@@ -1,15 +1,14 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import { adminApi, assetsApi, ermApi } from '@/lib/api';
 import { ITAsset, Risk, RiskCategory, RiskStatus, RiskDashboard, HeatmapCell } from '@/types';
-import { 
-  AlertTriangle, 
-  Loader2, 
-  AlertCircle, 
-  Search, 
+import {
+  AlertTriangle,
+  Loader2,
+  AlertCircle,
   Plus,
   X,
   TrendingUp,
@@ -31,6 +30,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRef } from 'react';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 type ScoreFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
 const UBL_TEMPLATE_REGISTER_TYPE = 'UBL Template';
@@ -626,6 +628,7 @@ export default function ERMRisksPage() {
       const response = await ermApi.risks.getAll();
       return response.data;
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: dashboard } = useQuery({
@@ -924,7 +927,7 @@ export default function ERMRisksPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       {uploadResult && (
         <div className={`rounded-xl border p-4 ${uploadResult.errors.length > 0 ? 'border-red-500/50 bg-white' : 'border-green-500/50 bg-white'}`}>
           <div className="flex items-start justify-between">
@@ -1011,7 +1014,7 @@ export default function ERMRisksPage() {
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">Risk Heatmap</h2>
+            <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Heatmap</h2>
             <div className="flex gap-1">
               <button
                 onClick={() => {
@@ -1100,61 +1103,43 @@ export default function ERMRisksPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3 ">
-           <div className="relative w-[20%]  xl:flex-none">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search risks..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
-            />
-          </div>
+        <div className="w-full sm:w-72">
+          <SearchInput
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder="Search risks..."
+            size="md"
+          />
+        </div>
 
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-        >
-          <option value="all">All Categories</option>
-          {availableCategoryOptions.map((cat) => (
-            <option key={cat.value} value={cat.value}>{cat.label}</option>
-          ))}
-        </select>
+        <MultiSelectDropdown
+          title="Category"
+          items={availableCategoryOptions.map((cat) => ({ value: cat.value, label: cat.label }))}
+          selectedValues={categoryFilter === 'all' ? [] : [categoryFilter]}
+          onApply={(values) => setCategoryFilter(values[0] || 'all')}
+          multiSelect={false}
+        />
 
-        <select
-          value={registerTypeFilter}
-          onChange={(e) => setRegisterTypeFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-        >
-          <option value="all">Register Types</option>
-          {availableRegisterTypeOptions.map((type) => (
-            <option key={type.value} value={type.value}>{type.label}</option>
-          ))}
-        </select>
+        <MultiSelectDropdown
+          title="Register Type"
+          items={availableRegisterTypeOptions.map((type) => ({ value: type.value, label: type.label }))}
+          selectedValues={registerTypeFilter === 'all' ? [] : [registerTypeFilter]}
+          onApply={(values) => setRegisterTypeFilter(values[0] || 'all')}
+          multiSelect={false}
+        />
 
-        {/* <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as RiskStatus | 'all')}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-        >
-          <option value="all">All Statuses</option>
-          {RISK_STATUSES.map(status => (
-            <option key={status.value} value={status.value}>{status.label}</option>
-          ))}
-        </select> */}
-
-        <select
-          value={scoreFilter}
-          onChange={(e) => setScoreFilter(e.target.value as ScoreFilter)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-        >
-          <option value="all">All Scores</option>
-          <option value="critical">Critical (â‰¥20)</option>
-          <option value="high">High (12-19)</option>
-          <option value="medium">Medium (6-11)</option>
-          <option value="low">Low (&lt;6)</option>
-        </select>
+        <MultiSelectDropdown
+          title="Score"
+          items={[
+            { value: 'critical', label: 'Critical (>=20)' },
+            { value: 'high', label: 'High (12-19)' },
+            { value: 'medium', label: 'Medium (6-11)' },
+            { value: 'low', label: 'Low (<6)' },
+          ]}
+          selectedValues={scoreFilter === 'all' ? [] : [scoreFilter]}
+          onApply={(values) => setScoreFilter((values[0] as ScoreFilter) || 'all')}
+          multiSelect={false}
+        />
 
         <div className="ml-auto flex gap-2">
           <input
@@ -1412,6 +1397,7 @@ export default function ERMRisksPage() {
 
       {isModalOpen && (
         <RiskModal
+          isOpen={isModalOpen}
           risk={editingRisk}
           onClose={() => {
             setIsModalOpen(false);
@@ -1448,63 +1434,54 @@ export default function ERMRisksPage() {
         />
       )}
 
-      {isUploadModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-900">Upload Risk Register</h2>
-              <button
-                onClick={() => {
-                  setIsUploadModalOpen(false);
-                  setSelectedRegisterType('');
-                }}
-                className="text-slate-600 hover:text-slate-900"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Risk Register Type (Optional)
-                </label>
-                <select
-                  value={selectedRegisterType}
-                  onChange={(e) => setSelectedRegisterType(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-                >
-                  <option value="">None (No Register Type)</option>
-                  {REGISTER_TYPES.map(type => (
-                    <option key={type.value} value={type.value}>{type.label}</option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-slate-500">
-                  Select a register type to categorize all risks in this file
-                </p>
-              </div>
-
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-              >
-                {isUploading ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload size={18} />
-                    Select File to Upload
-                  </>
-                )}
-              </button>
-            </div>
+      <RightSlidePanel
+        isOpen={isUploadModalOpen}
+        onClose={() => {
+          setIsUploadModalOpen(false);
+          setSelectedRegisterType('');
+        }}
+        title="Upload Risk Register"
+        width="w-full max-w-[780px]"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Risk Register Type (Optional)
+            </label>
+            <select
+              value={selectedRegisterType}
+              onChange={(e) => setSelectedRegisterType(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
+            >
+              <option value="">None (No Register Type)</option>
+              {REGISTER_TYPES.map(type => (
+                <option key={type.value} value={type.value}>{type.label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Select a register type to categorize all risks in this file
+            </p>
           </div>
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {isUploading ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload size={18} />
+                Select File to Upload
+              </>
+            )}
+          </button>
         </div>
-      )}
+      </RightSlidePanel>
     </div>
   );
 }
@@ -1537,11 +1514,13 @@ interface RiskModalSubmitPayload {
 }
 
 function RiskModal({
+  isOpen = true,
   risk,
   onClose,
   onSubmit,
   isLoading,
 }: {
+  isOpen?: boolean;
   risk: Risk | null;
   onClose: () => void;
   onSubmit: (payload: RiskModalSubmitPayload) => Promise<void> | void;
@@ -1874,18 +1853,33 @@ function RiskModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50">
-      <button type="button" aria-label="Close risk panel" className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="absolute inset-y-0 right-0 z-10 flex h-full w-full max-w-[1400px] flex-col border-l border-slate-200 bg-white shadow-2xl sm:w-[94vw] lg:w-[86vw] xl:w-[80vw] 2xl:w-[72vw]">
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-base font-semibold text-slate-900">{risk ? 'Edit Risk' : 'Create Risk'}</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title={risk ? 'Edit Risk' : 'Create Risk'}
+      width="w-full max-w-[780px]"
+      footer={
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="risk-modal-form"
+            disabled={isLoading}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
+          >
+            {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {risk ? 'Update' : 'Create'}
           </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+      }
+    >
+      <form id="risk-modal-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-slate-600">Title</label>
             <div className="mt-1 flex gap-2">
@@ -2236,13 +2230,12 @@ function RiskModal({
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600">Linked Assets (Optional)</label>
-            <input
-              type="text"
+            <label className="block text-sm text-slate-600 mb-1">Linked Assets (Optional)</label>
+            <SearchInput
               value={assetSearch}
-              onChange={(e) => setAssetSearch(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+              onChange={setAssetSearch}
               placeholder="Search assets by name..."
+              size="md"
             />
             <div className="mt-2 max-h-36 overflow-y-auto rounded-lg border border-slate-300 bg-white">
               {filteredAssets.length === 0 ? (
@@ -2381,28 +2374,8 @@ function RiskModal({
             />
           </div>
 
-          </div>
-
-          <div className="flex flex-shrink-0 justify-end gap-3 border-t border-slate-200 px-6 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
-            >
-              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {risk ? 'Update' : 'Create'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </RightSlidePanel>
   );
 }
 

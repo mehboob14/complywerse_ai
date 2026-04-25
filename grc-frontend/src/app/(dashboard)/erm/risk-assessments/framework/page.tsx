@@ -7,6 +7,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ClipboardCheck, Loader2, Plus, Sparkles, ListTodo, ChevronRight, Trash2 } from 'lucide-react';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 
 interface FrameworkOption {
   id: number;
@@ -122,10 +123,10 @@ export default function FrameworkRiskAssessmentsPage() {
   }, [assessments]);
 
   return (
-    <div className="space-y-6 text-[var(--color-text)]">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6 text-[var(--color-text)]">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-[var(--color-text)]">Framework Risk Assessments</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-[var(--color-text)]">Framework Risk Assessments</h1>
           <p className="text-sm text-[var(--color-muted)]">Generate framework-specific assessment questions, assign reviewers, and track completion with tenant-scoped ownership.</p>
         </div>
         <Link href="/erm/risk-assessments" className="cw-btn-secondary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium">
@@ -140,19 +141,19 @@ export default function FrameworkRiskAssessmentsPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div>
             <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Framework</label>
-            <select
-              className="cw-field w-full rounded-lg px-3 py-2"
-              value={frameworkId}
-              onChange={(e) => setFrameworkId(e.target.value)}
-              disabled={frameworksLoading}
-            >
-              <option value="">Select a framework</option>
-              {(frameworks || []).map((fw) => (
-                <option key={fw.id} value={fw.id}>
-                  {fw.name}{fw.version ? ` (${fw.version})` : ''}
-                </option>
-              ))}
-            </select>
+            <MultiSelectDropdown
+              title="Framework"
+              triggerVariant="input"
+              multiSelect={false}
+              forceSearch
+              selectedValues={frameworkId ? [frameworkId] : []}
+              onApply={(vals) => setFrameworkId(vals[0] || '')}
+              items={(frameworks || []).map((fw) => ({
+                value: String(fw.id),
+                label: `${fw.name}${fw.version ? ` (${fw.version})` : ''}`,
+              }))}
+              placeholder={frameworksLoading ? 'Loading...' : 'Select a framework'}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Assessment Name</label>
@@ -165,15 +166,17 @@ export default function FrameworkRiskAssessmentsPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Question Count</label>
-            <select
-              className="cw-field w-full rounded-lg px-3 py-2"
-              value={questionCount}
-              onChange={(e) => setQuestionCount(e.target.value)}
-            >
-              {QUESTION_COUNT_OPTIONS.map((count) => (
-                <option key={count} value={count}>{count} questions</option>
-              ))}
-            </select>
+            <MultiSelectDropdown
+              title="Question Count"
+              triggerVariant="input"
+              multiSelect={false}
+              selectedValues={[questionCount]}
+              onApply={(vals) => setQuestionCount(vals[0] || '20')}
+              items={QUESTION_COUNT_OPTIONS.map((count) => ({
+                value: String(count),
+                label: `${count} questions`,
+              }))}
+            />
           </div>
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] px-4 py-3 text-xs text-[var(--color-muted)]">
             Default is 20. AI generation is now framework-grounded and uses the selected framework's control context instead of generic security prompts.
@@ -205,18 +208,26 @@ export default function FrameworkRiskAssessmentsPage() {
       </div>
 
       <div className="cw-card overflow-hidden">
-        <div className="flex gap-1 border-b border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+        <div className="flex gap-1 border-b border-slate-200 bg-white px-2">
           <button
             onClick={() => setActiveTab('assessments')}
-            className={`cw-tab rounded-lg px-4 py-2 text-sm font-medium ${activeTab === 'assessments' ? 'cw-tab-active' : ''}`}
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${
+              activeTab === 'assessments'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
           >
-            <span className="inline-flex items-center gap-2"><ClipboardCheck size={15} /> Saved Assessments</span>
+            <ClipboardCheck size={15} /> Saved Assessments
           </button>
           <button
             onClick={() => setActiveTab('assigned')}
-            className={`cw-tab rounded-lg px-4 py-2 text-sm font-medium ${activeTab === 'assigned' ? 'cw-tab-active' : ''}`}
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${
+              activeTab === 'assigned'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
           >
-            <span className="inline-flex items-center gap-2"><ListTodo size={15} /> Assigned To Me</span>
+            <ListTodo size={15} /> Assigned To Me
           </button>
         </div>
 

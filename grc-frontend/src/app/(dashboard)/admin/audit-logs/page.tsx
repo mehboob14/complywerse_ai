@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
-import { PageHeader, DataTable, MultiSelectDropdown } from '@/components/ui';
+import { DataTable, MultiSelectDropdown } from '@/components/ui';
 import { adminApi } from '@/lib/api';
 
 interface AuditLogEntry {
@@ -231,39 +231,46 @@ export default function AuditLogsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Audit Logs"
-        subtitle="Comprehensive system-wide audit trail of all user and API actions"
-        filters={
-          <>
-            <MultiSelectDropdown
-              title="Action"
-              items={actionItems}
-              selectedValues={actionFilter !== 'all' ? [actionFilter] : []}
-              onApply={handleSingleApply(setActionFilter)}
-              multiSelect={false}
-              size="sm"
-            />
-            <MultiSelectDropdown
-              title="Module"
-              items={moduleItems}
-              selectedValues={moduleFilter !== 'all' ? [moduleFilter] : []}
-              onApply={handleSingleApply(setModuleFilter)}
-              multiSelect={false}
-              size="sm"
-            />
-            <MultiSelectDropdown
-              title="Date"
-              items={dateItems}
-              selectedValues={dateFilter !== 'all' ? [dateFilter] : []}
-              onApply={handleSingleApply(setDateFilter)}
-              multiSelect={false}
-              size="sm"
-            />
-          </>
-        }
-      />
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Audit Logs</h1>
+          <p className="mt-1 text-sm text-slate-600">Comprehensive system-wide audit trail of all user and API actions</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <MultiSelectDropdown
+          title="Action"
+          items={actionItems}
+          selectedValues={actionFilter !== 'all' ? [actionFilter] : []}
+          onApply={handleSingleApply(setActionFilter)}
+          multiSelect={false}
+          autoApply
+          placeholder="All Actions"
+          size="md"
+        />
+        <MultiSelectDropdown
+          title="Module"
+          items={moduleItems}
+          selectedValues={moduleFilter !== 'all' ? [moduleFilter] : []}
+          onApply={handleSingleApply(setModuleFilter)}
+          multiSelect={false}
+          autoApply
+          placeholder="All Modules"
+          size="md"
+        />
+        <MultiSelectDropdown
+          title="Date"
+          items={dateItems}
+          selectedValues={dateFilter !== 'all' ? [dateFilter] : []}
+          onApply={handleSingleApply(setDateFilter)}
+          multiSelect={false}
+          autoApply
+          placeholder="All Dates"
+          size="md"
+        />
+      </div>
 
       {error && (
         <div className="bg-red-50 border border-red-500/50 rounded-lg p-4 text-red-600">

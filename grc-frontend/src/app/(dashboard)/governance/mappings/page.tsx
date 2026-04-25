@@ -1,15 +1,13 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { governanceApi, ermApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   FileText,
-  Search,
   Link2,
   Unlink,
-  X,
   ChevronRight,
   BookOpen,
   FileCheck,
@@ -19,9 +17,9 @@ import {
   Layers,
   Plus,
   AlertCircle,
-  CheckCircle,
   Loader2,
 } from 'lucide-react';
+import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 
 interface DocumentItem {
   id: number;
@@ -124,6 +122,7 @@ export default function GovernanceMappingsPage() {
       const response = await governanceApi.getDocuments(params as any);
       return response.data;
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: mappingsData, isLoading: mappingsLoading } = useQuery({
@@ -256,12 +255,17 @@ export default function GovernanceMappingsPage() {
     );
   }
 
+  const typeFilterItems = useMemo(
+    () => DOCUMENT_TYPES.filter((t) => t.value).map((t) => ({ value: t.value, label: t.label })),
+    [],
+  );
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6 py-3 sm:py-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-black">Policy-Control Mappings</h2>
-          <p className="text-xs text-gray-600">Link governance documents to controls</p>
+          <h2 className="text-lg sm:text-xl font-semibold text-black">Policy-Control Mappings</h2>
+          <p className="text-xs sm:text-sm text-gray-600">Link governance documents to controls</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-xs">
@@ -310,28 +314,23 @@ export default function GovernanceMappingsPage() {
           </div>
 
           <div className="space-y-3 mb-3.5">
-            <div className="flex gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
-                <input
-                  type="text"
-                  placeholder="Search documents..."
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <div className="flex-1">
+                <SearchInput
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  onChange={setSearchTerm}
+                  placeholder="Search documents..."
+                  size="md"
                 />
               </div>
-              <select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-              >
-                {DOCUMENT_TYPES.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
+              <MultiSelectDropdown
+                title="Type"
+                items={typeFilterItems}
+                selectedValues={typeFilter ? [typeFilter] : []}
+                onApply={(values) => setTypeFilter(values[0] || '')}
+                multiSelect={false}
+                placeholder="All Types"
+              />
             </div>
           </div>
 
@@ -457,155 +456,141 @@ export default function GovernanceMappingsPage() {
         </div>
       </div>
 
-      {showLinkModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 backdrop-blur-sm p-4">
-          <div className="w-full max-w-2xl rounded-xl border border-gray-300 bg-white px-5 py-4 shadow-xl mx-4 max-h-[82vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-base font-semibold text-black">Link Control</h3>
-                <p className="text-xs text-gray-600 mt-0.5">
-                  Search and select an internal control to link to &quot;{selectedDocument?.title}&quot;
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowLinkModal(false);
-                  setControlSearchTerm('');
-                  setLinkNotes('');
-                }}
-                className="p-2 text-gray-600 hover:text-black rounded-lg hover:bg-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
+      <RightSlidePanel
+        isOpen={showLinkModal}
+        onClose={() => {
+          setShowLinkModal(false);
+          setControlSearchTerm('');
+          setLinkNotes('');
+          setLinkError(null);
+        }}
+        title="Link Control"
+        widthClassName="w-[640px]"
+      >
+        <div className="space-y-3.5">
+          <p className="text-xs text-gray-600">
+            Search and select an internal control to link to &quot;{selectedDocument?.title}&quot;
+          </p>
+
+          {linkError && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <span>{linkError}</span>
             </div>
+          )}
 
-            <div className="space-y-3.5">
-              {linkError && (
-                <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  <span>{linkError}</span>
-                </div>
-              )}
+          <SearchInput
+            value={controlSearchTerm}
+            onChange={setControlSearchTerm}
+            placeholder="Search internal controls by ID or name..."
+            size="md"
+            autoFocus
+          />
 
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
-                <input
-                  type="text"
-                  placeholder="Search internal controls by ID or name..."
-                  value={controlSearchTerm}
-                  onChange={(e) => setControlSearchTerm(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-4 py-2.5 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  autoFocus
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-800 mb-1">Link Type</label>
-                  <select
-                    value={selectedLinkType}
-                    onChange={(e) => setSelectedLinkType(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  >
-                    {LINK_TYPES.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-800 mb-1">Notes (optional)</label>
-                  <input
-                    type="text"
-                    placeholder="Add notes..."
-                    value={linkNotes}
-                    onChange={(e) => setLinkNotes(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  />
-                </div>
-              </div>
-
-              <div className="border border-gray-300 rounded-lg max-h-64 overflow-y-auto">
-                {controlsLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
-                  </div>
-                ) : filteredControls.length === 0 ? (
-                  <div className="text-center py-6">
-                    <p className="text-gray-600">
-                      {controlSearchTerm ? 'No matching internal controls found' : 'No internal controls available for this document'}
-                    </p>
-                    <p className="text-xs text-gray-700 mt-1">
-                      Controls already linked to the selected document are excluded from this list.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-gray-200">
-                    {filteredControls.slice(0, 50).map((control) => (
-                      <button
-                        key={control.id}
-                        onClick={() => handleLinkControl(control)}
-                        disabled={linkMutation.isPending}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-all disabled:opacity-50"
-                      >
-                        <div className="rounded-lg bg-primary-500/20 p-2">
-                          <Shield className="h-4 w-4 text-primary-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-black">{control.control_id}</p>
-                          <p className="text-sm text-gray-600 truncate">{control.name}</p>
-                          {control.category && (
-                            <p className="text-xs text-gray-700 mt-0.5">
-                              {control.category}{control.sub_category ? ` / ${control.sub_category}` : ''}
-                            </p>
-                          )}
-                          {control.source_document_id && control.source_document_id !== selectedDocumentId && (
-                            <p className="text-xs text-amber-700 mt-1">
-                              Currently linked to {documentTitleById.get(control.source_document_id) || 'another document'}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {control.source_document_id && control.source_document_id !== selectedDocumentId ? (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                              Re-link
-                            </span>
-                          ) : (
-                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                              Link
-                            </span>
-                          )}
-                          <Plus className="h-4 w-4 text-primary-400" />
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {filteredControls.length > 50 && (
-                <p className="text-xs text-gray-700 text-center">
-                  Showing first 50 results. Use search to narrow down.
-                </p>
-              )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Link Type</label>
+              <MultiSelectDropdown
+                title="Link Type"
+                items={LINK_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+                selectedValues={[selectedLinkType]}
+                onApply={(values) => setSelectedLinkType(values[0] || 'implements')}
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+              />
             </div>
-
-              <div className="flex justify-end gap-2.5 mt-4 pt-3.5 border-t border-gray-300">
-              <button
-                onClick={() => {
-                  setShowLinkModal(false);
-                  setControlSearchTerm('');
-                  setLinkNotes('');
-                }}
-                className="px-4 py-2 text-sm font-medium text-gray-800 hover:text-black rounded-lg hover:bg-white transition-all"
-              >
-                Cancel
-              </button>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Notes (optional)</label>
+              <input
+                type="text"
+                placeholder="Add notes..."
+                value={linkNotes}
+                onChange={(e) => setLinkNotes(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              />
             </div>
           </div>
+
+          <div className="border border-gray-300 rounded-lg max-h-64 overflow-y-auto">
+            {controlsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+              </div>
+            ) : filteredControls.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-gray-600">
+                  {controlSearchTerm ? 'No matching internal controls found' : 'No internal controls available for this document'}
+                </p>
+                <p className="text-xs text-gray-700 mt-1">
+                  Controls already linked to the selected document are excluded from this list.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200">
+                {filteredControls.slice(0, 50).map((control) => (
+                  <button
+                    key={control.id}
+                    onClick={() => handleLinkControl(control)}
+                    disabled={linkMutation.isPending}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-all disabled:opacity-50"
+                  >
+                    <div className="rounded-lg bg-primary-500/20 p-2">
+                      <Shield className="h-4 w-4 text-primary-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-black">{control.control_id}</p>
+                      <p className="text-sm text-gray-600 truncate">{control.name}</p>
+                      {control.category && (
+                        <p className="text-xs text-gray-700 mt-0.5">
+                          {control.category}{control.sub_category ? ` / ${control.sub_category}` : ''}
+                        </p>
+                      )}
+                      {control.source_document_id && control.source_document_id !== selectedDocumentId && (
+                        <p className="text-xs text-amber-700 mt-1">
+                          Currently linked to {documentTitleById.get(control.source_document_id) || 'another document'}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {control.source_document_id && control.source_document_id !== selectedDocumentId ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          Re-link
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                          Link
+                        </span>
+                      )}
+                      <Plus className="h-4 w-4 text-primary-400" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {filteredControls.length > 50 && (
+            <p className="text-xs text-gray-700 text-center">
+              Showing first 50 results. Use search to narrow down.
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2.5 pt-3.5 border-t border-gray-300">
+            <button
+              onClick={() => {
+                setShowLinkModal(false);
+                setControlSearchTerm('');
+                setLinkNotes('');
+                setLinkError(null);
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-800 hover:text-black rounded-lg hover:bg-gray-100 transition-all"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
-      )}
+      </RightSlidePanel>
     </div>
   );
 }

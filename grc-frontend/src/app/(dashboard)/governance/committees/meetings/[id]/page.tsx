@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { committeeApi, apiClient } from '@/lib/api';
@@ -13,7 +13,6 @@ import {
   FileText,
   CheckSquare,
   Plus,
-  X,
   ArrowLeft,
   Save,
   ListOrdered,
@@ -24,9 +23,10 @@ import {
   Scale,
   Lightbulb,
   Link as LinkIcon,
-  ChevronRight,
 } from 'lucide-react';
 import Link from 'next/link';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -356,10 +356,20 @@ export default function MeetingDetailPage() {
   const meetingStatusStyle = MEETING_STATUS_STYLES[meeting.status]     ?? MEETING_STATUS_STYLES.scheduled;
   const sortedAgenda = [...agenda].sort((a, b) => a.item_number - b.item_number);
 
+  const userPickerItems = useMemo(
+    () =>
+      normalizedUsers.map((u) => ({
+        value: String(u.id),
+        label: u.name,
+        subLabel: u.name.includes('@') ? u.name : undefined,
+      })),
+    [normalizedUsers],
+  );
+
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
 
       {/* ── Header ── */}
       <div>
@@ -708,260 +718,252 @@ export default function MeetingDetailPage() {
         </div>
       </div>
 
-      {/* ── Modals ── */}
+      {/* ── Panels ── */}
 
-      {/* Auto-Populate Modal */}
-      {isAutoPopulateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-black flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-amber-500" />
-                Auto-Populate Agenda
-              </h2>
-              <button onClick={() => setIsAutoPopulateOpen(false)} className="text-gray-400 hover:text-black">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="px-6 py-5 space-y-4">
-              <p className="text-sm text-gray-600">
-                Automatically add relevant pending items to the agenda. Select which types to include:
-              </p>
-
-              {([
-                { key: 'include_documents'          as const, label: 'Pending Document Approvals', desc: 'Documents awaiting committee approval', Icon: FileCheck, color: 'text-blue-600',   bg: 'bg-blue-50'   },
-                { key: 'include_exceptions'         as const, label: 'Risk Exceptions',             desc: 'Exceptions pending review',             Icon: Shield,    color: 'text-amber-600',  bg: 'bg-amber-50'  },
-                { key: 'include_regulatory_changes' as const, label: 'Regulatory Changes',          desc: 'Updates under assessment',              Icon: Scale,     color: 'text-purple-600', bg: 'bg-purple-50' },
-              ] as const).map(({ key, label, desc, Icon, color, bg }) => (
-                <label key={key}
-                  className="flex items-center gap-4 cursor-pointer rounded-xl border border-gray-200 p-4 hover:border-gray-300 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={autoPopulateOptions[key]}
-                    onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, [key]: e.target.checked })}
-                    className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
-                  />
-                  <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${bg}`}>
-                    <Icon className={`h-5 w-5 ${color}`} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-black">{label}</p>
-                    <p className="text-xs text-gray-500">{desc}</p>
-                  </div>
-                </label>
-              ))}
-            </div>
-
-            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
-              <button
-                onClick={() => setIsAutoPopulateOpen(false)}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => autoPopulateMutation.mutate(autoPopulateOptions)}
-                disabled={
-                  autoPopulateMutation.isPending ||
-                  (!autoPopulateOptions.include_documents && !autoPopulateOptions.include_exceptions && !autoPopulateOptions.include_regulatory_changes)
-                }
-                className="flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
-              >
-                <Sparkles className="h-4 w-4" />
-                {autoPopulateMutation.isPending ? 'Populating…' : 'Populate Agenda'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Agenda Item Modal */}
-      {isAddAgendaOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-black">Add Agenda Item</h2>
-              <button onClick={() => setIsAddAgendaOpen(false)} className="text-gray-400 hover:text-black">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                addAgendaMutation.mutate({
-                  title: newAgendaItem.title,
-                  description: newAgendaItem.description || undefined,
-                  duration_minutes: newAgendaItem.duration_minutes,
-                  item_type: newAgendaItem.item_type,
-                });
-              }}
-              className="px-6 py-5 space-y-4"
+      {/* Auto-Populate Panel */}
+      <RightSlidePanel
+        isOpen={isAutoPopulateOpen}
+        onClose={() => setIsAutoPopulateOpen(false)}
+        title={
+          <span className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-amber-500" />
+            Auto-Populate Agenda
+          </span>
+        }
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setIsAutoPopulateOpen(false)}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
             >
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Title <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  value={newAgendaItem.title}
-                  onChange={(e) => setNewAgendaItem({ ...newAgendaItem, title: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="Agenda item title"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Description</label>
-                <textarea
-                  value={newAgendaItem.description}
-                  onChange={(e) => setNewAgendaItem({ ...newAgendaItem, description: e.target.value })}
-                  rows={3}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-                  placeholder="Optional description"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-black mb-1">Type</label>
-                  <select
-                    value={newAgendaItem.item_type}
-                    onChange={(e) => setNewAgendaItem({ ...newAgendaItem, item_type: e.target.value })}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    {ITEM_TYPES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-black mb-1">Duration (min)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={newAgendaItem.duration_minutes}
-                    onChange={(e) => setNewAgendaItem({ ...newAgendaItem, duration_minutes: parseInt(e.target.value) || 15 })}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddAgendaOpen(false)}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!newAgendaItem.title.trim() || addAgendaMutation.isPending}
-                  className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
-                >
-                  {addAgendaMutation.isPending ? 'Adding…' : 'Add Item'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Create Action Modal */}
-      {isAddActionOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-black">Create Action</h2>
-              <button onClick={() => setIsAddActionOpen(false)} className="text-gray-400 hover:text-black">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                createActionMutation.mutate({
-                  title: newAction.title,
-                  description: newAction.description || undefined,
-                  action_type: newAction.action_type,
-                  due_date: newAction.due_date || undefined,
-                  assigned_to: newAction.assigned_to ? parseInt(newAction.assigned_to as string) : null,
-                });
-              }}
-              className="px-6 py-5 space-y-4"
+              Cancel
+            </button>
+            <button
+              onClick={() => autoPopulateMutation.mutate(autoPopulateOptions)}
+              disabled={
+                autoPopulateMutation.isPending ||
+                (!autoPopulateOptions.include_documents && !autoPopulateOptions.include_exceptions && !autoPopulateOptions.include_regulatory_changes)
+              }
+              className="flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
             >
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Title <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  value={newAction.title}
-                  onChange={(e) => setNewAction({ ...newAction, title: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  placeholder="Action title"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Description</label>
-                <textarea
-                  value={newAction.description}
-                  onChange={(e) => setNewAction({ ...newAction, description: e.target.value })}
-                  rows={2}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-black mb-1">Action Type</label>
-                <select
-                  value={newAction.action_type}
-                  onChange={(e) => setNewAction({ ...newAction, action_type: e.target.value })}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                >
-                  {ACTION_TYPES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-black mb-1">Due Date <span className="text-red-500">*</span></label>
-                  <input
-                    type="date"
-                    value={newAction.due_date}
-                    onChange={(e) => setNewAction({ ...newAction, due_date: e.target.value })}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-black mb-1">Assign To</label>
-                  <select
-                    value={newAction.assigned_to}
-                    onChange={(e) => setNewAction({ ...newAction, assigned_to: e.target.value })}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  >
-                    <option value="">Unassigned</option>
-                    {normalizedUsers.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddActionOpen(false)}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!newAction.title.trim() || !newAction.due_date || createActionMutation.isPending}
-                  className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
-                >
-                  {createActionMutation.isPending ? 'Creating…' : 'Create Action'}
-                </button>
-              </div>
-            </form>
+              <Sparkles className="h-4 w-4" />
+              {autoPopulateMutation.isPending ? 'Populating…' : 'Populate Agenda'}
+            </button>
           </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Automatically add relevant pending items to the agenda. Select which types to include:
+          </p>
+
+          {([
+            { key: 'include_documents'          as const, label: 'Pending Document Approvals', desc: 'Documents awaiting committee approval', Icon: FileCheck, color: 'text-blue-600',   bg: 'bg-blue-50'   },
+            { key: 'include_exceptions'         as const, label: 'Risk Exceptions',             desc: 'Exceptions pending review',             Icon: Shield,    color: 'text-amber-600',  bg: 'bg-amber-50'  },
+            { key: 'include_regulatory_changes' as const, label: 'Regulatory Changes',          desc: 'Updates under assessment',              Icon: Scale,     color: 'text-purple-600', bg: 'bg-purple-50' },
+          ] as const).map(({ key, label, desc, Icon, color, bg }) => (
+            <label key={key}
+              className="flex items-center gap-4 cursor-pointer rounded-xl border border-gray-200 p-4 hover:border-gray-300 transition-colors">
+              <input
+                type="checkbox"
+                checked={autoPopulateOptions[key]}
+                onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, [key]: e.target.checked })}
+                className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+              />
+              <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${bg}`}>
+                <Icon className={`h-5 w-5 ${color}`} />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-black">{label}</p>
+                <p className="text-xs text-gray-500">{desc}</p>
+              </div>
+            </label>
+          ))}
         </div>
-      )}
+      </RightSlidePanel>
+
+      {/* Add Agenda Item Panel */}
+      <RightSlidePanel
+        isOpen={isAddAgendaOpen}
+        onClose={() => setIsAddAgendaOpen(false)}
+        title="Add Agenda Item"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setIsAddAgendaOpen(false)}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="add-agenda-form"
+              disabled={!newAgendaItem.title.trim() || addAgendaMutation.isPending}
+              className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+            >
+              {addAgendaMutation.isPending ? 'Adding…' : 'Add Item'}
+            </button>
+          </div>
+        }
+      >
+        <form
+          id="add-agenda-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            addAgendaMutation.mutate({
+              title: newAgendaItem.title,
+              description: newAgendaItem.description || undefined,
+              duration_minutes: newAgendaItem.duration_minutes,
+              item_type: newAgendaItem.item_type,
+            });
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Title <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={newAgendaItem.title}
+              onChange={(e) => setNewAgendaItem({ ...newAgendaItem, title: e.target.value })}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="Agenda item title"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Description</label>
+            <textarea
+              value={newAgendaItem.description}
+              onChange={(e) => setNewAgendaItem({ ...newAgendaItem, description: e.target.value })}
+              rows={3}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+              placeholder="Optional description"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-black mb-1">Type</label>
+              <MultiSelectDropdown
+                title="Type"
+                items={ITEM_TYPES}
+                selectedValues={[newAgendaItem.item_type]}
+                onApply={(values) => setNewAgendaItem({ ...newAgendaItem, item_type: values[0] || 'discussion' })}
+                multiSelect={false}
+                triggerVariant="input"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-black mb-1">Duration (min)</label>
+              <input
+                type="number"
+                min={1}
+                value={newAgendaItem.duration_minutes}
+                onChange={(e) => setNewAgendaItem({ ...newAgendaItem, duration_minutes: parseInt(e.target.value) || 15 })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        </form>
+      </RightSlidePanel>
+
+      {/* Create Action Panel */}
+      <RightSlidePanel
+        isOpen={isAddActionOpen}
+        onClose={() => setIsAddActionOpen(false)}
+        title="Create Action"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setIsAddActionOpen(false)}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="create-action-form"
+              disabled={!newAction.title.trim() || !newAction.due_date || createActionMutation.isPending}
+              className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+            >
+              {createActionMutation.isPending ? 'Creating…' : 'Create Action'}
+            </button>
+          </div>
+        }
+      >
+        <form
+          id="create-action-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            createActionMutation.mutate({
+              title: newAction.title,
+              description: newAction.description || undefined,
+              action_type: newAction.action_type,
+              due_date: newAction.due_date || undefined,
+              assigned_to: newAction.assigned_to ? parseInt(newAction.assigned_to as string) : null,
+            });
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Title <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={newAction.title}
+              onChange={(e) => setNewAction({ ...newAction, title: e.target.value })}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="Action title"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Description</label>
+            <textarea
+              value={newAction.description}
+              onChange={(e) => setNewAction({ ...newAction, description: e.target.value })}
+              rows={2}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Action Type</label>
+            <MultiSelectDropdown
+              title="Action Type"
+              items={ACTION_TYPES}
+              selectedValues={[newAction.action_type]}
+              onApply={(values) => setNewAction({ ...newAction, action_type: values[0] || 'follow_up' })}
+              multiSelect={false}
+              triggerVariant="input"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-black mb-1">Due Date <span className="text-red-500">*</span></label>
+              <input
+                type="date"
+                value={newAction.due_date}
+                onChange={(e) => setNewAction({ ...newAction, due_date: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-black mb-1">Assign To</label>
+              <MultiSelectDropdown
+                title="Assign To"
+                items={userPickerItems}
+                selectedValues={newAction.assigned_to ? [newAction.assigned_to] : []}
+                onApply={(values) => setNewAction({ ...newAction, assigned_to: values[0] || '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                forceSearch
+                placeholder="Unassigned"
+              />
+            </div>
+          </div>
+        </form>
+      </RightSlidePanel>
     </div>
   );
 }

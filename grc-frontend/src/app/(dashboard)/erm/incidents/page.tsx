@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -15,7 +15,6 @@ import {
   AlertTriangle,
   Loader2,
   Plus,
-  X,
   Edit2,
   Trash2,
   DollarSign,
@@ -30,6 +29,7 @@ import {
   Target,
   TrendingUp,
 } from 'lucide-react';
+import { MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 
 const SEVERITIES: { value: IncidentSeverity; label: string; color: string }[] = [
   { value: 'low', label: 'Low', color: 'bg-green-500/20 text-green-400' },
@@ -102,6 +102,7 @@ export default function IncidentsPage() {
       const response = await ermApi.incidents.getAll(params);
       return response.data;
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: incidentDashboard } = useQuery({
@@ -156,7 +157,7 @@ export default function IncidentsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="grid gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
@@ -207,27 +208,23 @@ export default function IncidentsPage() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex gap-2">
-          <select
-            value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900"
-          >
-            <option value="all">All Severities</option>
-            {SEVERITIES.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900"
-          >
-            <option value="all">All Statuses</option>
-            {INCIDENT_STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
+        <div className="flex flex-wrap gap-2">
+          <MultiSelectDropdown
+            title="Severity"
+            items={SEVERITIES.map((s) => ({ value: s.value, label: s.label }))}
+            selectedValues={severityFilter !== 'all' ? [severityFilter] : []}
+            onApply={(values) => setSeverityFilter(values[0] || 'all')}
+            multiSelect={false}
+            placeholder="All Severities"
+          />
+          <MultiSelectDropdown
+            title="Status"
+            items={INCIDENT_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+            selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
+            onApply={(values) => setStatusFilter(values[0] || 'all')}
+            multiSelect={false}
+            placeholder="All Statuses"
+          />
         </div>
         {canCreate && (
         <button
@@ -366,20 +363,6 @@ function IncidentModal({
   });
   const [status, setStatus] = useState<IncidentStatus>(incident?.status || 'open');
   const [aiSuggestionNote, setAiSuggestionNote] = useState<string | null>(null);
-  const [riskSearch, setRiskSearch] = useState('');
-
-  const filteredRisks = useMemo(() => {
-    const term = riskSearch.trim().toLowerCase();
-    if (!term) return risks;
-    const matches = risks.filter((risk) => {
-      const title = (risk.title || '').toLowerCase();
-      const category = (risk.risk_category || '').toLowerCase();
-      return title.includes(term) || category.includes(term) || String(risk.id).includes(term);
-    });
-    if (matches.some((risk) => risk.id === formData.risk_id)) return matches;
-    const selected = risks.find((risk) => risk.id === formData.risk_id);
-    return selected ? [selected, ...matches] : matches;
-  }, [risks, riskSearch, formData.risk_id]);
 
   const createMutation = useMutation({
     mutationFn: (data: RiskIncidentCreate) => ermApi.incidents.create(data),
@@ -428,16 +411,13 @@ function IncidentModal({
   const isLoading = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">{incident ? 'Edit Incident' : 'Report Incident'}</h2>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+    <RightSlidePanel
+      isOpen
+      onClose={onClose}
+      title={incident ? 'Edit Incident' : 'Report Incident'}
+    >
+      <div className="px-6 py-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-slate-600">Use AI to prefill incident assessment fields</p>
@@ -467,26 +447,22 @@ function IncidentModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-600">Related Risk</label>
-              <input
-                type="text"
-                value={riskSearch}
-                onChange={(e) => setRiskSearch(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-                placeholder="Search risk by title..."
+              <label className="block text-sm text-slate-600 mb-1">Related Risk</label>
+              <MultiSelectDropdown
+                title="Risk"
+                items={risks.map((risk) => ({
+                  value: String(risk.id),
+                  label: risk.title,
+                  subLabel: risk.risk_category,
+                }))}
+                selectedValues={formData.risk_id ? [String(formData.risk_id)] : []}
+                onApply={(values) => setFormData({ ...formData, risk_id: values[0] ? Number(values[0]) : 0 })}
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+                forceSearch
+                searchPlaceholder="Search risk by title..."
               />
-              <select
-                value={formData.risk_id}
-                onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-                className="mt-2 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-                required
-              >
-                {filteredRisks.map((risk) => (
-                  <option key={risk.id} value={risk.id}>
-                    {risk.title}
-                  </option>
-                ))}
-              </select>
             </div>
             <div>
               <label className="block text-sm text-slate-600">Incident Date</label>
@@ -502,33 +478,29 @@ function IncidentModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-600">Severity</label>
-              <select
-                value={formData.severity}
-                onChange={(e) => setFormData({ ...formData, severity: e.target.value as IncidentSeverity })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              >
-                {SEVERITIES.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
+              <label className="block text-sm text-slate-600 mb-1">Severity</label>
+              <MultiSelectDropdown
+                title="Severity"
+                items={SEVERITIES.map((s) => ({ value: s.value, label: s.label }))}
+                selectedValues={formData.severity ? [formData.severity] : []}
+                onApply={(values) => setFormData({ ...formData, severity: (values[0] as IncidentSeverity) || 'medium' })}
+                multiSelect={false}
+                triggerVariant="input"
+                triggerClassName="w-full"
+              />
             </div>
             {incident && (
               <div>
-                <label className="block text-sm text-slate-600">Status</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as IncidentStatus)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-                >
-                  {INCIDENT_STATUSES.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
+                <label className="block text-sm text-slate-600 mb-1">Status</label>
+                <MultiSelectDropdown
+                  title="Status"
+                  items={INCIDENT_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+                  selectedValues={status ? [status] : []}
+                  onApply={(values) => setStatus((values[0] as IncidentStatus) || 'open')}
+                  multiSelect={false}
+                  triggerVariant="input"
+                  triggerClassName="w-full"
+                />
               </div>
             )}
             <div>
@@ -601,7 +573,7 @@ function IncidentModal({
           </div>
         </form>
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
@@ -636,23 +608,23 @@ function AIAnalysisModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20 p-2">
-              <Brain className="h-6 w-6 text-purple-400" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">AI Analysis</h2>
-              <p className="text-sm text-slate-600">{incident.title}</p>
-            </div>
+    <RightSlidePanel
+      isOpen
+      onClose={onClose}
+      width="w-full max-w-3xl"
+      title={
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-gradient-to-br from-purple-500/20 to-blue-500/20 p-2">
+            <Brain className="h-6 w-6 text-purple-400" />
           </div>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
+          <div>
+            <span className="text-lg font-semibold text-slate-900">AI Analysis</span>
+            <p className="text-sm text-slate-600 font-normal">{incident.title}</p>
+          </div>
         </div>
-
+      }
+    >
+      <div className="px-6 py-4">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="relative">
@@ -819,6 +791,6 @@ function AIAnalysisModal({
           </button>
         </div>
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }

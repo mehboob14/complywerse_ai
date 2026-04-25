@@ -1,19 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { attestationApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 import {
   ClipboardCheck,
   Plus,
-  Search,
   Eye,
   Play,
   XCircle,
   Trash2,
-  X,
   Calendar,
   Users,
   CheckCircle,
@@ -66,6 +65,7 @@ export default function AttestationCampaignsPage() {
 
   const { data: campaigns, isLoading } = useQuery({
     queryKey: ['attestation-campaigns', statusFilter],
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       try {
         const response = await attestationApi.getCampaigns({ status: statusFilter || undefined });
@@ -137,33 +137,32 @@ export default function AttestationCampaignsPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="page-header">
         <div>
-          <h1 className="text-lg font-semibold text-black">Attestation Campaigns</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-black">Attestation Campaigns</h1>
           <p className="mt-1 text-gray-600">Manage attestation and certification campaigns</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="input w-auto"
-        >
-          <option value="">All Statuses</option>
-          <option value="draft">Draft</option>
-          <option value="active">Active</option>
-          <option value="closed">Closed</option>
-        </select>
-        <div className="relative flex-1">
-         
-          <input
-            type="text"
-            placeholder="Search campaigns..."
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <MultiSelectDropdown
+          title="Status"
+          items={[
+            { value: 'draft', label: 'Draft' },
+            { value: 'active', label: 'Active' },
+            { value: 'closed', label: 'Closed' },
+          ]}
+          selectedValues={statusFilter ? [statusFilter] : []}
+          onApply={(vals) => setStatusFilter(vals[0] || '')}
+          multiSelect={false}
+        />
+        <div className="flex-1">
+          <SearchInput
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-9 w-full"
+            onChange={setSearchTerm}
+            placeholder="Search campaigns..."
+            size="md"
           />
         </div>
         {canCreate && (
@@ -311,114 +310,110 @@ export default function AttestationCampaignsPage() {
         </div>
       )}
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg border border-gray-300 mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-black">Create New Campaign</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-600 hover:text-black">
-                <X className="h-5 w-5" />
-              </button>
+      <RightSlidePanel
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Create New Campaign"
+        width="w-full max-w-lg"
+      >
+        <form
+          id="create-campaign-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            createMutation.mutate({
+              name: formData.get('name') as string,
+              description: (formData.get('description') as string) || undefined,
+              campaign_type: formData.get('attestation_type') as string,
+              attestation_text: (formData.get('attestation_text') as string) || undefined,
+              start_date: new Date(formData.get('start_date') as string).toISOString(),
+              due_date: new Date(formData.get('end_date') as string).toISOString(),
+              requires_evidence: formData.get('requires_evidence') === 'on',
+              target_type: 'all_users',
+            });
+          }}
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Campaign Name</label>
+              <input
+                type="text"
+                name="name"
+                className="input w-full"
+                required
+                placeholder="e.g., Q1 2026 Policy Attestation"
+              />
             </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                createMutation.mutate({
-                  name: formData.get('name') as string,
-                  description: formData.get('description') as string || undefined,
-                  campaign_type: formData.get('attestation_type') as string,
-                  attestation_text: formData.get('attestation_text') as string || undefined,
-                  start_date: new Date(formData.get('start_date') as string).toISOString(),
-                  due_date: new Date(formData.get('end_date') as string).toISOString(),
-                  requires_evidence: formData.get('requires_evidence') === 'on',
-                  target_type: 'all_users',
-                });
-              }}
-            >
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Campaign Name</label>
-                  <input
-                    type="text"
-                    name="name"
-                    className="input w-full"
-                    required
-                    placeholder="e.g., Q1 2026 Policy Attestation"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <textarea
-                    name="description"
-                    className="input w-full"
-                    rows={2}
-                    placeholder="Brief description of this campaign"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Attestation Type</label>
-                  <select name="attestation_type" className="input w-full" required>
-                    <option value="">Select type</option>
-                    {ATTESTATION_TYPES.map((type) => (
-                      <option key={type.value} value={type.value}>{type.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Attestation Text</label>
-                  <textarea
-                    name="attestation_text"
-                    className="input w-full"
-                    rows={4}
-                    required
-                    placeholder="Enter the attestation statement that users must acknowledge..."
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                    <input
-                      type="date"
-                      name="start_date"
-                      className="input w-full"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                    <input
-                      type="date"
-                      name="end_date"
-                      className="input w-full"
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    name="requires_evidence"
-                    id="requires_evidence"
-                    className="rounded border-gray-300 bg-white text-primary-500 focus:ring-primary-500"
-                  />
-                  <label htmlFor="requires_evidence" className="text-sm text-gray-700">
-                    Require evidence upload
-                  </label>
-                </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                name="description"
+                className="input w-full"
+                rows={2}
+                placeholder="Brief description of this campaign"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Attestation Type</label>
+              <select name="attestation_type" className="input w-full" required>
+                <option value="">Select type</option>
+                {ATTESTATION_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>{type.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Attestation Text</label>
+              <textarea
+                name="attestation_text"
+                className="input w-full"
+                rows={4}
+                required
+                placeholder="Enter the attestation statement that users must acknowledge..."
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <input
+                  type="date"
+                  name="start_date"
+                  className="input w-full"
+                  required
+                />
               </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={createMutation.isPending}>
-                  {createMutation.isPending ? 'Creating...' : 'Create Campaign'}
-                </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                <input
+                  type="date"
+                  name="end_date"
+                  className="input w-full"
+                  required
+                />
               </div>
-            </form>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="requires_evidence"
+                id="requires_evidence"
+                className="rounded border-gray-300 bg-white text-primary-500 focus:ring-primary-500"
+              />
+              <label htmlFor="requires_evidence" className="text-sm text-gray-700">
+                Require evidence upload
+              </label>
+            </div>
           </div>
-        </div>
-      )}
+          <div className="flex justify-end gap-3 mt-6">
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={createMutation.isPending}>
+              {createMutation.isPending ? 'Creating...' : 'Create Campaign'}
+            </button>
+          </div>
+        </form>
+      </RightSlidePanel>
     </div>
   );
 }

@@ -118,13 +118,13 @@ export default function RiskAggregationPage() {
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex items-center gap-4">
         <Link href="/erm/analytics" className="p-2 rounded-lg bg-white border border-slate-200 hover:border-slate-300 transition-colors">
           <ArrowLeft className="h-4 w-4 text-slate-600" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Risk Aggregation</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Aggregation</h1>
           <p className="text-sm text-slate-600 mt-1">Enterprise-wide risk aggregation and analysis</p>
         </div>
       </div>

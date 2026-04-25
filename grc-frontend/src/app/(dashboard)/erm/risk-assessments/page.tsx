@@ -12,7 +12,6 @@ import {
   Users,
   Trash2,
   AlertTriangle,
-  Search,
   X,
   Filter,
   Upload,
@@ -21,6 +20,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 type AssessmentStatus = 'draft' | 'in_progress' | 'under_review' | 'approved' | 'closed';
 type AssessmentType = 'periodic' | 'annual' | 'ad_hoc' | 'triggered';
@@ -326,10 +327,10 @@ export default function RiskAssessmentsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Risk Assessments</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Assessments</h2>
           <p className="text-sm text-slate-600">
             Manage and track risk assessment activities
           </p>
@@ -369,15 +370,15 @@ export default function RiskAssessmentsPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1 rounded-xl bg-white p-1">
+      <div className="flex flex-wrap gap-1 border-b border-slate-200">
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.value}
             onClick={() => setStatusFilter(tab.value)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            className={`border-b-2 px-4 py-2 text-sm font-medium transition-colors -mb-px ${
               statusFilter === tab.value
-                ? 'bg-primary-600 text-white'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
             {tab.label}
@@ -385,24 +386,11 @@ export default function RiskAssessmentsPage() {
         ))}
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
-        <input
-          type="text"
-          placeholder="Search assessments..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
-        />
-        {searchTerm && (
-          <button
-            onClick={() => setSearchTerm('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 hover:text-slate-900"
-          >
-            <X size={16} />
-          </button>
-        )}
-      </div>
+      <SearchInput
+        value={searchTerm}
+        onChange={setSearchTerm}
+        placeholder="Search assessments..."
+      />
 
       {filteredAssessments.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white py-16">
@@ -515,7 +503,7 @@ export default function RiskAssessmentsPage() {
                       </span>
                     </div>
                     <span className="text-xs text-slate-500">
-                      {formatDate(assessment.created_at)}
+                      {formatDate(assessment.created_at || undefined)}
                     </span>
                   </div>
                 </div>
@@ -525,25 +513,19 @@ export default function RiskAssessmentsPage() {
         </div>
       )}
 
-      {isUploadModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100">
-                  <FileSpreadsheet size={18} className="text-blue-600" />
-                </div>
-                <h2 className="text-lg font-semibold text-slate-900">Upload Risk Assessment</h2>
-              </div>
-              <button
-                onClick={() => setIsUploadModalOpen(false)}
-                className="rounded p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-              >
-                <X size={20} />
-              </button>
+      <RightSlidePanel
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        title={
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100">
+              <FileSpreadsheet size={18} className="text-blue-600" />
             </div>
-
-            <div className="space-y-4 max-h-[70vh] overflow-y-auto px-6 py-4">
+            <span>Upload Risk Assessment</span>
+          </div>
+        }
+      >
+            <div className="space-y-4">
               {uploadResult ? (
                 <div className="space-y-4">
                   <div className="flex flex-col items-center gap-3 rounded-lg border border-green-300 bg-green-50 p-6">
@@ -725,24 +707,14 @@ export default function RiskAssessmentsPage() {
                 </>
               )}
             </div>
-          </div>
-        </div>
-      )}
+      </RightSlidePanel>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-semibold text-slate-900">New Risk Assessment</h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="rounded p-1 text-slate-600 hover:bg-white hover:text-slate-900"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreate} className="space-y-4 px-6 py-4 max-h-[70vh] overflow-y-auto">
+      <RightSlidePanel
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="New Risk Assessment"
+      >
+            <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
                   Name <span className="text-red-400">*</span>
@@ -865,9 +837,7 @@ export default function RiskAssessmentsPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </RightSlidePanel>
     </div>
   );
 }

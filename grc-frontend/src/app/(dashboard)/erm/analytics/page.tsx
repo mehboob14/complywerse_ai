@@ -62,11 +62,11 @@ const analyticsModules = [
 
 export default function AnalyticsPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-            <TrendingUp className="h-7 w-7 text-blue-400" />
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900 flex items-center gap-3">
+            <TrendingUp className="h-6 w-6 text-blue-400" />
             Advanced Risk Analytics
           </h1>
           <p className="text-slate-600 mt-1">

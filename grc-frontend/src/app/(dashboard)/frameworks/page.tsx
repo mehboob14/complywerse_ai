@@ -6,9 +6,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import apiClient, { certificationsApi } from '@/lib/api';
 import { CertificationJourney } from '@/types';
-import { 
-  FileStack, 
-  Loader2, 
+import { SearchInput } from '@/components/ui';
+import {
+  FileStack,
+  Loader2,
   AlertCircle,
   Shield,
   Play,
@@ -25,7 +26,6 @@ import {
   Sparkles,
   CheckCircle,
   Eye,
-  Search
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -442,23 +442,19 @@ export default function FrameworksPage() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold cw-text-default">Compliance Frameworks</h1>
-          <p className="cw-text-muted">Manage frameworks and track certification journeys</p>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Compliance Frameworks</h1>
+          <p className="mt-1 text-sm text-slate-600">Manage frameworks and track certification journeys</p>
         </div>
-        <div className="w-full max-w-xs">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={frameworkSearch}
-              onChange={(e) => setFrameworkSearch(e.target.value)}
-              placeholder="Search frameworks..."
-              className="h-9 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
+        <div className="w-full sm:max-w-xs flex-shrink-0">
+          <SearchInput
+            value={frameworkSearch}
+            onChange={setFrameworkSearch}
+            placeholder="Search frameworks..."
+            size="md"
+          />
         </div>
       </div>
 

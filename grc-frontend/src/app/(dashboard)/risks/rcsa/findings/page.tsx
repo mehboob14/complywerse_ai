@@ -6,19 +6,19 @@ import { rcsaApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   AlertTriangle,
-  Search,
   Eye,
-  Link2,
   Plus,
   Loader2,
   AlertCircle,
   Building2,
   Calendar,
-  X,
   Shield,
   Target,
 } from 'lucide-react';
 import Link from 'next/link';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 interface Finding {
   id: number;
@@ -77,8 +77,6 @@ interface LinkModalProps {
 function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalProps) {
   const [entityId, setEntityId] = useState('');
 
-  if (!isOpen) return null;
-
   const handleSubmit = () => {
     if (!entityId) return;
     onConfirm(Number(entityId));
@@ -86,28 +84,11 @@ function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalPro
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">Link to {type === 'risk' ? 'Risk' : 'Control'}</h3>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            {type === 'risk' ? 'Risk' : 'Internal Control'} ID <span className="text-red-400">*</span>
-          </label>
-          <input
-            type="number"
-            value={entityId}
-            onChange={(e) => setEntityId(e.target.value)}
-            placeholder={`Enter ${type} ID...`}
-            className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder-slate-400"
-          />
-        </div>
-
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Link to ${type === 'risk' ? 'Risk' : 'Control'}`}
+      footer={
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
@@ -125,8 +106,21 @@ function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalPro
             Link
           </button>
         </div>
+      }
+    >
+      <div className="mb-4">
+        <label className="mb-1 block text-sm font-medium text-slate-700">
+          {type === 'risk' ? 'Risk' : 'Internal Control'} ID <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="number"
+          value={entityId}
+          onChange={(e) => setEntityId(e.target.value)}
+          placeholder={`Enter ${type} ID...`}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        />
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
@@ -143,8 +137,6 @@ function CreateActionModal({ isOpen, onClose, onConfirm, findingTitle, isLoading
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState('');
 
-  if (!isOpen) return null;
-
   const handleSubmit = () => {
     if (!title) return;
     onConfirm({ title, description, due_date: dueDate || undefined });
@@ -154,50 +146,12 @@ function CreateActionModal({ isOpen, onClose, onConfirm, findingTitle, isLoading
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">Create Mitigation Action</h3>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X size={20} />
-          </button>
-        </div>
-
-        <p className="text-sm text-slate-600 mb-4">For finding: {findingTitle}</p>
-
-        <div className="space-y-4 mb-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Action Title <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter action title..."
-              className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder-slate-400"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe the action..."
-              className="h-24 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder-slate-400"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Due Date</label>
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-            />
-          </div>
-        </div>
-
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Create Mitigation Action"
+      subtitle={`For finding: ${findingTitle}`}
+      footer={
         <div className="flex justify-end gap-3">
           <button onClick={onClose} disabled={isLoading} className="btn-secondary">
             Cancel
@@ -211,8 +165,41 @@ function CreateActionModal({ isOpen, onClose, onConfirm, findingTitle, isLoading
             Create Action
           </button>
         </div>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            Action Title <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Enter action title..."
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe the action..."
+            className="h-32 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Due Date</label>
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          />
+        </div>
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
@@ -313,49 +300,48 @@ export default function RCSAFindingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="page-header">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">RCSA Findings</h1>
-            <p className="text-slate-600 mt-1">Track and manage findings from risk assessments</p>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">RCSA Findings</h1>
+            <p className="text-slate-600 mt-1 text-sm">Track and manage findings from risk assessments</p>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-600" />
-          <input
-            type="text"
-            placeholder="Search findings..."
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-[200px] max-w-md">
+          <SearchInput
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10 w-full"
+            onChange={setSearchTerm}
+            placeholder="Search findings..."
           />
         </div>
-        <select
-          value={severityFilter}
-          onChange={(e) => setSeverityFilter(e.target.value)}
-          className="input"
-        >
-          <option value="">All Severities</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="input"
-        >
-          <option value="">All Statuses</option>
-          <option value="open">Open</option>
-          <option value="in_progress">In Progress</option>
-          <option value="remediated">Remediated</option>
-          <option value="closed">Closed</option>
-        </select>
+        <MultiSelectDropdown
+          title="Severity"
+          items={[
+            { value: 'critical', label: 'Critical' },
+            { value: 'high', label: 'High' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'low', label: 'Low' },
+          ]}
+          selectedValues={severityFilter ? [severityFilter] : []}
+          onApply={(vals) => setSeverityFilter(vals[0] || '')}
+          multiSelect={false}
+        />
+        <MultiSelectDropdown
+          title="Status"
+          items={[
+            { value: 'open', label: 'Open' },
+            { value: 'in_progress', label: 'In Progress' },
+            { value: 'remediated', label: 'Remediated' },
+            { value: 'closed', label: 'Closed' },
+          ]}
+          selectedValues={statusFilter ? [statusFilter] : []}
+          onApply={(vals) => setStatusFilter(vals[0] || '')}
+          multiSelect={false}
+        />
       </div>
 
       <div className="card overflow-hidden">

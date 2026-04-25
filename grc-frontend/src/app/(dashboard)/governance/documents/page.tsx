@@ -4,16 +4,16 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
+import { SearchInput, MultiSelectDropdown } from '@/components/ui';
 import { 
-  FileText, 
-  Loader2, 
-  AlertCircle, 
-  Search, 
+  FileText,
+  Loader2,
+  AlertCircle,
   Plus,
   X,
   Edit2,
@@ -260,10 +260,11 @@ export default function GovernanceDocumentsPage() {
       if (typeFilter) params.doc_type = typeFilter;
       if (statusFilter) params.status = statusFilter;
       if (searchTerm) params.search = searchTerm;
-      
+
       const response = await governanceApi.getDocuments(params as any);
       return response.data as unknown as DocumentListResponse;
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: parentDocumentOptions = [] } = useQuery({
@@ -756,10 +757,10 @@ export default function GovernanceDocumentsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="page-title">Document Library</h1>
+          <h1 className="text-lg sm:text-xl font-semibold cw-text-default">Document Library</h1>
           <p className="page-description">Manage governance documents, policies, and procedures</p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -828,48 +829,50 @@ export default function GovernanceDocumentsPage() {
 
       <div className="cw-card p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative flex-1 max-w-md">
-            {/* <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 cw-text-muted" /> */}
-            <input
-              type="text"
-              placeholder="Search documents..."
+          <div className="flex-1 max-w-md">
+            <SearchInput
               value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
-              className="cw-field w-full pl-10"
+              onChange={(v) => { setSearchTerm(v); setPage(0); }}
+              placeholder="Search documents..."
+              size="md"
             />
           </div>
-          
-          <div className="flex flex-wrap gap-3">
-            <select
-              value={typeFilter}
-              onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
-              className="cw-field"
-            >
-              {DOCUMENT_TYPES.map(type => (
-                <option key={type.value} value={type.value}>{type.label}</option>
-              ))}
-            </select>
-            
-            <select
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
-              className="cw-field"
-            >
-              {DOCUMENT_STATUSES.map(status => (
-                <option key={status.value} value={status.value}>{status.label}</option>
-              ))}
-            </select>
-            
-            <select
-              value={ownerFilter}
-              onChange={(e) => { setOwnerFilter(e.target.value); setPage(0); }}
-              className="cw-field"
-            >
-              <option value="">All Owners</option>
-              {uniqueOwners.map(owner => (
-                <option key={owner} value={owner}>{owner}</option>
-              ))}
-            </select>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <MultiSelectDropdown
+              title="Type"
+              items={DOCUMENT_TYPES.filter(t => t.value).map(t => ({ value: t.value, label: t.label }))}
+              selectedValues={typeFilter ? [typeFilter] : []}
+              onApply={(v) => { setTypeFilter(v[0] || ''); setPage(0); }}
+              multiSelect={false}
+              autoApply
+              placeholder="All Types"
+              size="md"
+            />
+
+            <MultiSelectDropdown
+              title="Status"
+              items={DOCUMENT_STATUSES.filter(s => s.value).map(s => ({ value: s.value, label: s.label }))}
+              selectedValues={statusFilter ? [statusFilter] : []}
+              onApply={(v) => { setStatusFilter(v[0] || ''); setPage(0); }}
+              multiSelect={false}
+              autoApply
+              placeholder="All Statuses"
+              size="md"
+            />
+
+            <MultiSelectDropdown
+              title="Owner"
+              items={uniqueOwners.map(owner => ({ value: owner, label: owner }))}
+              selectedValues={ownerFilter ? [ownerFilter] : []}
+              onApply={(v) => { setOwnerFilter(v[0] || ''); setPage(0); }}
+              multiSelect={false}
+              autoApply
+              forceSearch
+              placeholder="All Owners"
+              searchPlaceholder="Search owners"
+              size="md"
+            />
 
             <div className="inline-flex overflow-hidden rounded-lg border border-[var(--color-border)]">
               <button
@@ -2248,14 +2251,12 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
               </button>
             </div>
             
-            <div className="relative mb-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 cw-text-muted" />
-              <input
-                type="text"
-                placeholder="Search users..."
+            <div className="mb-2">
+              <SearchInput
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full cw-field pl-10"
+                onChange={setSearchTerm}
+                placeholder="Search users..."
+                size="md"
               />
             </div>
 

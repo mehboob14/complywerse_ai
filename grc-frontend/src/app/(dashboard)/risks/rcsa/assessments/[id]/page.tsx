@@ -26,6 +26,7 @@ import {
   Lightbulb,
 } from 'lucide-react';
 import Link from 'next/link';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 interface Question {
   id: number;
@@ -426,7 +427,7 @@ export default function AssessmentDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex items-center gap-4">
         <Link
           href="/risks/rcsa/assessments"
@@ -435,7 +436,7 @@ export default function AssessmentDetailPage() {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-semibold text-slate-900">{assessment.campaign_name}</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{assessment.campaign_name}</h1>
           <div className="flex items-center gap-4 mt-1">
             <span className="flex items-center gap-1.5 text-slate-600">
               <Building2 className="h-4 w-4" />
@@ -493,40 +494,41 @@ export default function AssessmentDetailPage() {
       </div>
 
       {/* Reject Modal */}
-      {showRejectModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4 border border-slate-200">
-            <h3 className="text-lg font-medium text-slate-900 mb-4">Reject Assessment</h3>
-            <p className="text-slate-600 text-sm mb-4">Please provide a reason for rejecting this assessment. This will be shared with the assessor.</p>
-            <textarea
-              value={reviewComments}
-              onChange={(e) => setReviewComments(e.target.value)}
-              placeholder="Enter rejection reason..."
-              className="w-full h-32 bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
-            />
-            <div className="flex justify-end gap-3 mt-4">
-              <button
-                onClick={() => setShowRejectModal(false)}
-                className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  if (reviewComments.trim()) {
-                    rejectMutation.mutate(reviewComments);
-                    setShowRejectModal(false);
-                  }
-                }}
-                disabled={!reviewComments.trim() || rejectMutation.isPending}
-                className="px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-slate-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {rejectMutation.isPending ? 'Rejecting...' : 'Confirm Rejection'}
-              </button>
-            </div>
+      <RightSlidePanel
+        isOpen={showRejectModal}
+        onClose={() => setShowRejectModal(false)}
+        title="Reject Assessment"
+        subtitle="Please provide a reason for rejecting this assessment. This will be shared with the assessor."
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setShowRejectModal(false)}
+              className="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (reviewComments.trim()) {
+                  rejectMutation.mutate(reviewComments);
+                  setShowRejectModal(false);
+                }
+              }}
+              disabled={!reviewComments.trim() || rejectMutation.isPending}
+              className="px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {rejectMutation.isPending ? 'Rejecting...' : 'Confirm Rejection'}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <textarea
+          value={reviewComments}
+          onChange={(e) => setReviewComments(e.target.value)}
+          placeholder="Enter rejection reason..."
+          className="w-full h-32 bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        />
+      </RightSlidePanel>
 
       <div className="card p-4">
         <div className="flex items-center justify-between">
@@ -534,16 +536,16 @@ export default function AssessmentDetailPage() {
             <span className="text-sm text-slate-600">Progress</span>
             <span className="text-sm font-medium text-slate-900">{answeredCount} of {totalQuestions} questions answered ({Math.round((answeredCount / Math.max(totalQuestions, 1)) * 100)}%)</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4 border-b border-slate-200">
             <button
               onClick={() => setViewMode('list')}
-              className={`px-3 py-1.5 text-xs rounded-lg ${viewMode === 'list' ? 'bg-primary-500 text-slate-900' : 'bg-slate-100 text-slate-600'}`}
+              className={`px-1 py-2 text-sm font-medium border-b-2 transition-colors ${viewMode === 'list' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
             >
               List View
             </button>
             <button
               onClick={() => setViewMode('step')}
-              className={`px-3 py-1.5 text-xs rounded-lg ${viewMode === 'step' ? 'bg-primary-500 text-slate-900' : 'bg-slate-100 text-slate-600'}`}
+              className={`px-1 py-2 text-sm font-medium border-b-2 transition-colors ${viewMode === 'step' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
             >
               Step View
             </button>

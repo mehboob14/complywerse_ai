@@ -2,30 +2,24 @@
 
 import { useState, useMemo } from 'react';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { policyExceptionApi, governanceApi, documentsApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Shield,
   Plus,
-  Clock,
   CheckCircle,
-  AlertTriangle,
-  X,
   Loader2,
   AlertCircle,
   Eye,
-  Edit,
+  Edit2,
   Send,
   Check,
   XCircle,
   Ban,
   MessageSquare,
-  Calendar,
-  FileText,
   Sparkles,
   Trash2,
-  Search,
 } from 'lucide-react';
 import {
   PieChart,
@@ -34,7 +28,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { RightSlidePanel } from '@/components/ui';
+import { RightSlidePanel, SearchInput, MultiSelectDropdown } from '@/components/ui';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -166,6 +160,7 @@ export default function PolicyExceptionsPage() {
         return extractItemsArray(fallback.data) as ExceptionItem[];
       }
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: documents, error: documentsError } = useQuery({
@@ -400,12 +395,12 @@ export default function PolicyExceptionsPage() {
   ];
 
   return (
-    <div className="governance-exceptions space-y-3 rounded-md p-6">
+    <div className="governance-exceptions space-y-4 sm:space-y-6 px-3 sm:px-6 py-3 sm:py-4">
       {/* Header row */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-sm font-semibold text-black">Policy Exception Management</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Request, review, and manage policy exceptions</p>
+          <h1 className="text-lg sm:text-xl font-semibold text-black">Policy Exception Management</h1>
+          <p className="text-xs sm:text-sm text-gray-600 mt-0.5">Request, review, and manage policy exceptions</p>
         </div>
       </div>
 
@@ -495,41 +490,37 @@ export default function PolicyExceptionsPage() {
       )}
 
       {/* Search + Filters + Button row */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search exceptions..."
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+        <div className="flex-1 min-w-[180px]">
+          <SearchInput
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded border border-gray-300 bg-white py-1.5 pl-8 pr-3 text-xs text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            onChange={setSearchTerm}
+            placeholder="Search exceptions..."
+            size="md"
           />
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-black focus:border-primary-500 focus:outline-none"
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-        <select
-          value={priorityFilter}
-          onChange={(e) => setPriorityFilter(e.target.value)}
-          className="rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-black focus:border-primary-500 focus:outline-none"
-        >
-          {PRIORITY_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
+        <MultiSelectDropdown
+          title="Status"
+          items={STATUS_OPTIONS.filter((o) => o.value).map((o) => ({ value: o.value, label: o.label }))}
+          selectedValues={statusFilter ? [statusFilter] : []}
+          onApply={(values) => setStatusFilter(values[0] || '')}
+          multiSelect={false}
+          placeholder="All Statuses"
+        />
+        <MultiSelectDropdown
+          title="Priority"
+          items={PRIORITY_OPTIONS.filter((o) => o.value).map((o) => ({ value: o.value, label: o.label }))}
+          selectedValues={priorityFilter ? [priorityFilter] : []}
+          onApply={(values) => setPriorityFilter(values[0] || '')}
+          multiSelect={false}
+          placeholder="All Priorities"
+        />
         {canCreate && (
         <button
           onClick={() => { resetForm(); setShowCreateModal(true); }}
-          className="btn-primary ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs"
+          className="btn-primary sm:ml-auto flex items-center gap-1.5 px-3 py-2 text-sm"
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="h-4 w-4" />
           New Exception
         </button>
         )}
@@ -606,7 +597,7 @@ export default function PolicyExceptionsPage() {
                               className="btn-ghost btn-sm"
                               title="Edit"
                             >
-                              <Edit className="h-4 w-4" />
+                              <Edit2 className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => submitMutation.mutate(exc.id)}
@@ -689,18 +680,21 @@ export default function PolicyExceptionsPage() {
         <div className='w-2/4'>
 
       <label className="label">Policy</label>
-      <select
-        value={formData.document_id}
-        onChange={(e) => setFormData({ ...formData, document_id: e.target.value })}
-        className="appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%2394a3b8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:1.5rem_1.5rem] bg-[right_0.5rem_center] bg-no-repeat pr-10 block rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 w-full"
-      >
-        <option value="">Select a policy...</option>
-        {(documents || []).map((doc: GovernancePolicyOption) => (
-          <option key={doc.id} value={doc.id}>
-            {doc.title} ({doc.document_code || doc.doc_type})
-          </option>
-        ))}
-      </select>
+      <MultiSelectDropdown
+        title="Policy"
+        items={(documents || []).map((doc: GovernancePolicyOption) => ({
+          value: String(doc.id),
+          label: doc.title,
+          subLabel: doc.document_code || doc.doc_type,
+        }))}
+        selectedValues={formData.document_id ? [String(formData.document_id)] : []}
+        onApply={(values) => setFormData({ ...formData, document_id: values[0] || '' })}
+        multiSelect={false}
+        triggerVariant="input"
+        triggerClassName="w-full"
+        placeholder="Select a policy..."
+        forceSearch
+      />
         </div>
     </div>
 
@@ -783,16 +777,20 @@ export default function PolicyExceptionsPage() {
 
     <div>
       <label className="label">Priority</label>
-      <select
-        value={formData.priority}
-        onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-        className="select"
-      >
-        <option value="low">Low</option>
-        <option value="medium">Medium</option>
-        <option value="high">High</option>
-        <option value="critical">Critical</option>
-      </select>
+      <MultiSelectDropdown
+        title="Priority"
+        items={[
+          { value: 'low', label: 'Low' },
+          { value: 'medium', label: 'Medium' },
+          { value: 'high', label: 'High' },
+          { value: 'critical', label: 'Critical' },
+        ]}
+        selectedValues={formData.priority ? [formData.priority] : []}
+        onApply={(values) => setFormData({ ...formData, priority: values[0] || 'medium' })}
+        multiSelect={false}
+        triggerVariant="input"
+        triggerClassName="w-full"
+      />
     </div>
 
     <div className="grid grid-cols-2 gap-3">

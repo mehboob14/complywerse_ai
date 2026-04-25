@@ -335,11 +335,11 @@ export default function RCSADashboardPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">RCSA Dashboard</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">RCSA Dashboard</h1>
           <p className="mt-0.5 text-sm text-slate-500">Risk and control self-assessment overview</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

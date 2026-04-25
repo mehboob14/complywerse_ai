@@ -6,11 +6,12 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { controlsApi, evidenceApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { 
-  Shield, 
-  Loader2, 
-  AlertCircle, 
-  Search, 
+import { SearchInput, MultiSelectDropdown, InlineLinkPicker } from '@/components/ui';
+import {
+  Shield,
+  Loader2,
+  AlertCircle,
+  Search,
   Filter,
   CheckCircle,
   Clock,
@@ -154,13 +155,12 @@ function FrameworkControlEvidenceLinkSection({ controlId }: { controlId: number 
     },
   });
 
-  const { data: allEvidence } = useQuery({
+  const { data: allEvidence, isLoading: evidenceLoading } = useQuery({
     queryKey: ['evidence-all'],
     queryFn: async () => {
       const res = await evidenceApi.getAll();
       return res.data as EvidenceOption[];
     },
-    enabled: showPicker,
   });
 
   const linkMutation = useMutation({
@@ -221,24 +221,31 @@ function FrameworkControlEvidenceLinkSection({ controlId }: { controlId: number 
   });
 
   const linkedIds = new Set((linkedEvidence ?? []).map((l) => l.evidence_id));
-  const filteredAll = (allEvidence ?? []).filter((ev) => {
-    const label = ev.name || ev.title || ev.file_name || '';
-    return label.toLowerCase().includes(searchEv.toLowerCase());
-  });
+  const evidencePickerItems = (allEvidence ?? [])
+    .filter((ev) => !linkedIds.has(ev.id))
+    .map((ev) => ({
+      value: String(ev.id),
+      label: ev.name || ev.title || ev.file_name || `Evidence #${ev.id}`,
+      subLabel: ev.evidence_type,
+    }));
+  void searchEv; void setSearchEv; void showPicker; void setShowPicker;
 
   return (
     <div className="mt-6 border-t border-slate-200 pt-5">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-sm font-semibold text-slate-800">Linked Evidence</h3>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowPicker(!showPicker)}
-            className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
-          >
-            <Link2 className="h-3 w-3" />
-            {showPicker ? 'Close Existing' : 'Link Existing'}
-          </button>
+          <InlineLinkPicker
+            triggerLabel="Link Existing"
+            triggerIcon={<Link2 className="h-3 w-3" />}
+            triggerClassName="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+            items={evidencePickerItems}
+            isLoading={evidenceLoading || linkMutation.isPending}
+            emptyText="No evidence available"
+            searchPlaceholder="Search evidence"
+            popoverWidth={320}
+            onSelect={(value) => linkMutation.mutate(Number(value))}
+          />
           <button
             type="button"
             onClick={() => {
@@ -252,48 +259,6 @@ function FrameworkControlEvidenceLinkSection({ controlId }: { controlId: number 
           </button>
         </div>
       </div>
-
-      {showPicker && (
-        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <input
-            type="text"
-            value={searchEv}
-            onChange={(e) => setSearchEv(e.target.value)}
-            placeholder="Search evidence..."
-            className="mb-2 w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
-          />
-          <div className="max-h-48 space-y-1 overflow-y-auto">
-            {filteredAll.length === 0 && (
-              <p className="py-2 text-center text-xs text-slate-500">No evidence found</p>
-            )}
-            {filteredAll.map((ev) => {
-              const alreadyLinked = linkedIds.has(ev.id);
-              const name = ev.name || ev.title || ev.file_name || `Evidence #${ev.id}`;
-              return (
-                <div
-                  key={ev.id}
-                  className="flex items-center justify-between rounded border border-slate-100 bg-white px-3 py-2"
-                >
-                  <div>
-                    <p className="text-xs font-medium text-slate-800">{name}</p>
-                    {ev.evidence_type && (
-                      <p className="text-[11px] text-slate-500">{ev.evidence_type}</p>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    disabled={alreadyLinked || linkMutation.isPending}
-                    onClick={() => linkMutation.mutate(ev.id)}
-                    className="rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {alreadyLinked ? 'Linked' : 'Link'}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {showUploader && (
         <form
@@ -752,42 +717,39 @@ export default function ControlsPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
-          <input
-            type="text"
-            placeholder="Search controls by ID, title, or description..."
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-[180px] sm:min-w-[280px]">
+          <SearchInput
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            onChange={setSearchInput}
+            placeholder="Search controls by ID, title, or description..."
+            size="md"
           />
         </div>
-
-        <div className="flex items-center gap-3">
-          <div className="flex items-end gap-2 justify-end max-w-[80%] ml-auto">
-            {/* <Filter className="h-4 w-4 text-slate-600" /> */}
-            <select
-              value={frameworkFilter || ''}
-              onChange={(e) => {
-                setFrameworkFilter(e.target.value ? Number(e.target.value) : null);
-                setPage(0);
-              }}
-              className="rounded-lg border  border-slate-300 bg-white px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
-            >
-              <option value="">All Frameworks</option>
-              {/* Fallback option when the URL-specified framework isn't yet in summaryData */}
-              {frameworkFilter && !summaryData?.frameworks.find(f => f.id === frameworkFilter) && effectiveFrameworkName && (
-                <option value={frameworkFilter}>{effectiveFrameworkName}</option>
-              )}
-              {summaryData?.frameworks.map((fw) => (
-                <option key={fw.id} value={fw.id}>
-                  {fw.name} ({fw.control_count})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        <MultiSelectDropdown
+          title="Framework"
+          items={(() => {
+            const list = summaryData?.frameworks?.map((fw) => ({
+              value: String(fw.id),
+              label: `${fw.name} (${fw.control_count})`,
+            })) || [];
+            if (frameworkFilter && !summaryData?.frameworks?.find((f) => f.id === frameworkFilter) && effectiveFrameworkName) {
+              list.unshift({ value: String(frameworkFilter), label: effectiveFrameworkName });
+            }
+            return list;
+          })()}
+          selectedValues={frameworkFilter ? [String(frameworkFilter)] : []}
+          onApply={(v) => {
+            setFrameworkFilter(v[0] ? Number(v[0]) : null);
+            setPage(0);
+          }}
+          multiSelect={false}
+          autoApply
+          forceSearch
+          placeholder="All Frameworks"
+          searchPlaceholder="Search frameworks"
+          size="md"
+        />
       </div>
 
       <div className="overflow-hidden rounded-lg border border-slate-200">

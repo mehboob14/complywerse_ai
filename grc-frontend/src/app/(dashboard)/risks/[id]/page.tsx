@@ -6,14 +6,16 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { risksApi, controlsApi, assetsApi, evidenceApi, governanceApi } from '@/lib/api';
 import { RiskCategory, RiskStatus, NormalizedControl, ITAsset, Evidence, GovernanceObjective } from '@/types';
 import { usePermissions } from '@/hooks/usePermissions';
-import { 
-  ArrowLeft, Loader2, AlertCircle, AlertTriangle, Shield, 
-  Target, TrendingDown, Calendar, User, FileText, Link as LinkIcon,
-  Plus, X, Trash2, Edit, Save, Building2, ClipboardCheck, Search,
+import {
+  ArrowLeft, Loader2, AlertCircle, AlertTriangle, Shield,
+  Target, TrendingDown, Calendar, User, FileText,
+  Plus, Trash2, Edit, Save, Building2, ClipboardCheck,
   Activity, BarChart3, Settings
 } from 'lucide-react';
 import Link from 'next/link';
 import clsx from 'clsx';
+import InlineLinkPicker from '@/components/ui/InlineLinkPicker';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 interface RiskDetailData {
   id: number;
@@ -93,10 +95,7 @@ export default function RiskDetailPage() {
   const [showtitle, setShowTitle] = useState(false);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showLinkControlModal, setShowLinkControlModal] = useState(false);
   const [showLinkFrameworkControlModal, setShowLinkFrameworkControlModal] = useState(false);
-  const [showLinkAssetModal, setShowLinkAssetModal] = useState(false);
-  const [showLinkEvidenceModal, setShowLinkEvidenceModal] = useState(false);
   const [showLinkGovernanceModal, setShowLinkGovernanceModal] = useState(false);
 
   const { data: risk, isLoading, error } = useQuery<RiskDetailData>({
@@ -119,7 +118,16 @@ export default function RiskDetailPage() {
       const response = await controlsApi.getNormalized();
       return response.data;
     },
-    enabled: showLinkControlModal,
+    enabled: activeTab === 'controls',
+  });
+
+  const { data: allFrameworkControls } = useQuery({
+    queryKey: ['all-framework-controls'],
+    queryFn: async () => {
+      const response = await controlsApi.getAll();
+      return response.data;
+    },
+    enabled: activeTab === 'controls' || showLinkFrameworkControlModal,
   });
 
   const { data: allAssets } = useQuery({
@@ -128,7 +136,7 @@ export default function RiskDetailPage() {
       const response = await assetsApi.getAll();
       return response.data;
     },
-    enabled: showLinkAssetModal,
+    enabled: activeTab === 'assets',
   });
 
   const { data: allEvidence } = useQuery({
@@ -137,7 +145,7 @@ export default function RiskDetailPage() {
       const response = await evidenceApi.getAll();
       return response.data;
     },
-    enabled: showLinkEvidenceModal,
+    enabled: activeTab === 'evidence',
   });
 
   const { data: allGovernance } = useQuery({
@@ -146,7 +154,7 @@ export default function RiskDetailPage() {
       const response = await governanceApi.getObjectives();
       return response.data;
     },
-    enabled: showLinkGovernanceModal,
+    enabled: activeTab === 'governance' || showLinkGovernanceModal,
   });
 
   const deleteMutation = useMutation({
@@ -168,7 +176,6 @@ export default function RiskDetailPage() {
     mutationFn: (data: { normalized_control_id: number }) => risksApi.linkControl(riskId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
-      setShowLinkControlModal(false);
     },
   });
 
@@ -199,7 +206,6 @@ export default function RiskDetailPage() {
     mutationFn: (data: { asset_id: number }) => risksApi.linkAsset(riskId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
-      setShowLinkAssetModal(false);
     },
   });
 
@@ -214,7 +220,6 @@ export default function RiskDetailPage() {
     mutationFn: (data: { evidence_id: number }) => risksApi.linkEvidence(riskId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['risk-detail', riskId] });
-      setShowLinkEvidenceModal(false);
     },
   });
 
@@ -326,7 +331,7 @@ export default function RiskDetailPage() {
   const statusStyle = getStatusStyle(risk.status);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex items-center gap-4">
         <Link
           href="/erm/risks"
@@ -335,7 +340,7 @@ export default function RiskDetailPage() {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
-          <h1 className={clsx("text-2xl font-bold text-slate-900 ",
+          <h1 className={clsx("text-lg sm:text-xl font-semibold text-slate-900 ",
             showtitle ? 'line-clamp-none' : 'line-clamp-2',
           )}>{risk.title}</h1>
           <button
@@ -494,7 +499,7 @@ export default function RiskDetailPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
-                    ? 'border-primary-500 text-primary-400'
+                    ? 'border-blue-600 text-blue-600'
                     : 'border-transparent text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -524,7 +529,8 @@ export default function RiskDetailPage() {
         {activeTab === 'controls' && (
           <ControlsTab
             risk={risk}
-            onLinkControl={() => setShowLinkControlModal(true)}
+            allControls={allControls || []}
+            onLinkControl={(controlId) => linkControlMutation.mutate({ normalized_control_id: controlId })}
             onLinkFrameworkControl={() => setShowLinkFrameworkControlModal(true)}
             onUnlinkControl={(linkId) => unlinkControlMutation.mutate(linkId)}
             onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
@@ -536,7 +542,8 @@ export default function RiskDetailPage() {
         {activeTab === 'assets' && (
           <AssetsTab
             risk={risk}
-            onLinkAsset={() => setShowLinkAssetModal(true)}
+            allAssets={allAssets || []}
+            onLinkAsset={(assetId) => linkAssetMutation.mutate({ asset_id: assetId })}
             onUnlinkAsset={(linkId) => unlinkAssetMutation.mutate(linkId)}
             isUnlinking={unlinkAssetMutation.isPending}
             canEdit={canEdit}
@@ -546,7 +553,8 @@ export default function RiskDetailPage() {
         {activeTab === 'evidence' && (
           <EvidenceTab
             risk={risk}
-            onLinkEvidence={() => setShowLinkEvidenceModal(true)}
+            allEvidence={allEvidence || []}
+            onLinkEvidence={(evidenceId) => linkEvidenceMutation.mutate({ evidence_id: evidenceId })}
             onUnlinkEvidence={(linkId) => unlinkEvidenceMutation.mutate(linkId)}
             isUnlinking={unlinkEvidenceMutation.isPending}
             canEdit={canEdit}
@@ -574,62 +582,31 @@ export default function RiskDetailPage() {
         />
       )}
 
-      {showLinkControlModal && (
-        <LinkControlModal
-          onClose={() => setShowLinkControlModal(false)}
-          onLink={(controlId) => linkControlMutation.mutate({ normalized_control_id: controlId })}
-          isLinking={linkControlMutation.isPending}
-          linkedControlIds={risk.linked_controls?.map(c => c.control_id) || []}
-          allControls={allControls || []}
-        />
-      )}
+      <LinkFrameworkControlModal
+        isOpen={showLinkFrameworkControlModal}
+        onClose={() => setShowLinkFrameworkControlModal(false)}
+        onLink={(controlId, effectiveness, notes) => {
+          linkFrameworkControlMutation.mutate({
+            framework_control_id: controlId,
+            mitigation_effectiveness: effectiveness,
+            notes,
+          });
+        }}
+        isLinking={linkFrameworkControlMutation.isPending}
+        linkedControlIds={risk.linked_framework_controls?.map(c => c.framework_control_id) || []}
+        allFrameworkControls={allFrameworkControls || []}
+      />
 
-      {showLinkFrameworkControlModal && (
-        <LinkFrameworkControlModal
-          onClose={() => setShowLinkFrameworkControlModal(false)}
-          onLink={(controlId, effectiveness, notes) => 
-            linkFrameworkControlMutation.mutate({ 
-              framework_control_id: controlId, 
-              mitigation_effectiveness: effectiveness,
-              notes 
-            })
-          }
-          isLinking={linkFrameworkControlMutation.isPending}
-          linkedControlIds={risk.linked_framework_controls?.map(c => c.framework_control_id) || []}
-        />
-      )}
-
-      {showLinkAssetModal && (
-        <LinkAssetModal
-          onClose={() => setShowLinkAssetModal(false)}
-          onLink={(assetId) => linkAssetMutation.mutate({ asset_id: assetId })}
-          isLinking={linkAssetMutation.isPending}
-          linkedAssetIds={risk.linked_assets?.map(a => a.asset_id) || []}
-          allAssets={allAssets || []}
-        />
-      )}
-
-      {showLinkEvidenceModal && (
-        <LinkEvidenceModal
-          onClose={() => setShowLinkEvidenceModal(false)}
-          onLink={(evidenceId) => linkEvidenceMutation.mutate({ evidence_id: evidenceId })}
-          isLinking={linkEvidenceMutation.isPending}
-          linkedEvidenceIds={risk.linked_evidence?.map(e => e.evidence_id) || []}
-          allEvidence={allEvidence || []}
-        />
-      )}
-
-      {showLinkGovernanceModal && (
-        <LinkGovernanceModal
-          onClose={() => setShowLinkGovernanceModal(false)}
-          onLink={(objectiveId, impactLevel) => 
-            linkGovernanceMutation.mutate({ governance_objective_id: objectiveId, impact_level: impactLevel })
-          }
-          isLinking={linkGovernanceMutation.isPending}
-          linkedGovernanceIds={risk.linked_governance?.map(g => g.governance_objective_id) || []}
-          allGovernance={allGovernance || []}
-        />
-      )}
+      <LinkGovernanceModal
+        isOpen={showLinkGovernanceModal}
+        onClose={() => setShowLinkGovernanceModal(false)}
+        onLink={(objectiveId, impactLevel) =>
+          linkGovernanceMutation.mutate({ governance_objective_id: objectiveId, impact_level: impactLevel })
+        }
+        isLinking={linkGovernanceMutation.isPending}
+        linkedGovernanceIds={risk.linked_governance?.map(g => g.governance_objective_id) || []}
+        allGovernance={allGovernance || []}
+      />
     </div>
   );
 }
@@ -759,6 +736,7 @@ function TreatmentTab({
 
 function ControlsTab({
   risk,
+  allControls,
   onLinkControl,
   onLinkFrameworkControl,
   onUnlinkControl,
@@ -768,7 +746,8 @@ function ControlsTab({
   canDelete,
 }: {
   risk: RiskDetailData;
-  onLinkControl: () => void;
+  allControls: NormalizedControl[];
+  onLinkControl: (controlId: number) => void;
   onLinkFrameworkControl: () => void;
   onUnlinkControl: (linkId: number) => void;
   onUnlinkFrameworkControl: (linkId: number) => void;
@@ -781,6 +760,15 @@ function ControlsTab({
     return item?.color || 'text-slate-600';
   };
 
+  const linkedControlIds = risk.linked_controls?.map(c => c.control_id) || [];
+  const availableNormalizedControls = allControls
+    .filter(c => !linkedControlIds.includes(Number(c.id)))
+    .map(c => ({
+      value: String(c.id),
+      label: c.name,
+      subLabel: c.internal_id || undefined,
+    }));
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -790,13 +778,14 @@ function ControlsTab({
         </h3>
         <div className="flex gap-2">
           {canEdit && (
-          <button
-            onClick={onLinkControl}
-            className="flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-900 hover:bg-slate-200"
-          >
-            <Plus className="h-4 w-4" />
-            Link Normalized Control
-          </button>
+            <InlineLinkPicker
+              triggerLabel="Link Normalized Control"
+              triggerClassName="flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-900 hover:bg-slate-200"
+              items={availableNormalizedControls}
+              onSelect={(value) => onLinkControl(Number(value))}
+              searchPlaceholder="Search controls..."
+              emptyText="No controls available"
+            />
           )}
           {canEdit && (
           <button
@@ -885,6 +874,7 @@ function ControlsTab({
 
 function AssetsTab({
   risk,
+  allAssets,
   onLinkAsset,
   onUnlinkAsset,
   isUnlinking,
@@ -892,12 +882,22 @@ function AssetsTab({
   canDelete,
 }: {
   risk: RiskDetailData;
-  onLinkAsset: () => void;
+  allAssets: ITAsset[];
+  onLinkAsset: (assetId: number) => void;
   onUnlinkAsset: (linkId: number) => void;
   isUnlinking: boolean;
   canEdit: boolean;
   canDelete: boolean;
 }) {
+  const linkedAssetIds = risk.linked_assets?.map(a => a.asset_id) || [];
+  const availableAssets = allAssets
+    .filter(a => !linkedAssetIds.includes(a.id))
+    .map(a => ({
+      value: String(a.id),
+      label: a.name,
+      subLabel: a.asset_type || undefined,
+    }));
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -906,13 +906,13 @@ function AssetsTab({
           Linked IT Assets ({risk.linked_assets?.length || 0})
         </h3>
         {canEdit && (
-        <button
-          onClick={onLinkAsset}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
-        >
-          <Plus className="h-4 w-4" />
-          Link Asset
-        </button>
+          <InlineLinkPicker
+            triggerLabel="Link Asset"
+            items={availableAssets}
+            onSelect={(value) => onLinkAsset(Number(value))}
+            searchPlaceholder="Search assets..."
+            emptyText="No assets available"
+          />
         )}
       </div>
 
@@ -952,6 +952,7 @@ function AssetsTab({
 
 function EvidenceTab({
   risk,
+  allEvidence,
   onLinkEvidence,
   onUnlinkEvidence,
   isUnlinking,
@@ -959,7 +960,8 @@ function EvidenceTab({
   canDelete,
 }: {
   risk: RiskDetailData;
-  onLinkEvidence: () => void;
+  allEvidence: Evidence[];
+  onLinkEvidence: (evidenceId: number) => void;
   onUnlinkEvidence: (linkId: number) => void;
   isUnlinking: boolean;
   canEdit: boolean;
@@ -974,6 +976,15 @@ function EvidenceTab({
     }
   };
 
+  const linkedEvidenceIds = risk.linked_evidence?.map(e => e.evidence_id) || [];
+  const availableEvidence = allEvidence
+    .filter(e => !linkedEvidenceIds.includes(Number(e.id)))
+    .map(e => ({
+      value: String(e.id),
+      label: e.title,
+      subLabel: e.evidence_type || undefined,
+    }));
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -982,13 +993,13 @@ function EvidenceTab({
           Linked Evidence ({risk.linked_evidence?.length || 0})
         </h3>
         {canEdit && (
-        <button
-          onClick={onLinkEvidence}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
-        >
-          <Plus className="h-4 w-4" />
-          Link Evidence
-        </button>
+          <InlineLinkPicker
+            triggerLabel="Link Evidence"
+            items={availableEvidence}
+            onSelect={(value) => onLinkEvidence(Number(value))}
+            searchPlaceholder="Search evidence..."
+            emptyText="No evidence available"
+          />
         )}
       </div>
 
@@ -1142,99 +1153,27 @@ function DeleteConfirmModal({
   );
 }
 
-function LinkControlModal({
-  onClose,
-  onLink,
-  isLinking,
-  linkedControlIds,
-  allControls,
-}: {
-  onClose: () => void;
-  onLink: (controlId: number) => void;
-  isLinking: boolean;
-  linkedControlIds: number[];
-  allControls: NormalizedControl[];
-}) {
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const filteredControls = allControls.filter(
-    (control) =>
-      !linkedControlIds.includes(Number(control.id)) &&
-      (control.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        control.internal_id?.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h3 className="text-lg font-semibold text-slate-900">Link Normalized Control</h3>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="p-4">
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
-            <input
-              type="text"
-              placeholder="Search controls..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
-            />
-          </div>
-          <div className="max-h-64 space-y-2 overflow-y-auto">
-            {filteredControls.length === 0 ? (
-              <p className="py-4 text-center text-slate-600">No controls found</p>
-            ) : (
-              filteredControls.map((control) => (
-                <button
-                  key={control.id}
-                  onClick={() => onLink(Number(control.id))}
-                  disabled={isLinking}
-                  className="flex w-full items-center justify-between rounded-lg bg-white p-3 text-left hover:bg-slate-100 disabled:opacity-50"
-                >
-                  <div>
-                    <span className="text-sm font-medium text-primary-400">{control.internal_id}</span>
-                    <p className="text-slate-900">{control.name}</p>
-                  </div>
-                  <Plus className="h-4 w-4 text-slate-600" />
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function LinkFrameworkControlModal({
+  isOpen,
   onClose,
   onLink,
   isLinking,
   linkedControlIds,
+  allFrameworkControls,
 }: {
+  isOpen: boolean;
   onClose: () => void;
   onLink: (controlId: number, effectiveness: string, notes?: string) => void;
   isLinking: boolean;
   linkedControlIds: number[];
+  allFrameworkControls: { id: number | string; name: string; reference_code?: string }[];
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedControlId, setSelectedControlId] = useState<number | null>(null);
   const [effectiveness, setEffectiveness] = useState('partial');
   const [notes, setNotes] = useState('');
 
-  const { data: frameworkControls } = useQuery({
-    queryKey: ['all-framework-controls'],
-    queryFn: async () => {
-      const response = await controlsApi.getAll();
-      return response.data;
-    },
-  });
-
-  const filteredControls = (frameworkControls || []).filter(
+  const filteredControls = allFrameworkControls.filter(
     (control) =>
       !linkedControlIds.includes(Number(control.id)) &&
       (control.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1248,241 +1187,101 @@ function LinkFrameworkControlModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h3 className="text-lg font-semibold text-slate-900">Link Framework Control</h3>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="p-4">
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
-            <input
-              type="text"
-              placeholder="Search framework controls..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
-            />
-          </div>
-          
-          <div className="mb-4 max-h-48 space-y-2 overflow-y-auto">
-            {filteredControls.length === 0 ? (
-              <p className="py-4 text-center text-slate-600">No controls found</p>
-            ) : (
-              filteredControls.map((control) => (
-                <button
-                  key={control.id}
-                  onClick={() => setSelectedControlId(Number(control.id))}
-                  className={`flex w-full items-center justify-between rounded-lg p-3 text-left ${
-                    selectedControlId === Number(control.id)
-                      ? 'bg-primary-600/30 border border-primary-500'
-                      : 'bg-white hover:bg-slate-100'
-                  }`}
-                >
-                  <div>
-                    <span className="text-sm font-medium text-blue-400">{control.reference_code}</span>
-                    <p className="text-slate-900">{control.name}</p>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Link Framework Control"
+    >
+      <div className="space-y-4">
+        <input
+          type="text"
+          placeholder="Search framework controls..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full rounded-lg border border-slate-300 bg-white py-2 px-3 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+        />
 
-          {selectedControlId && (
-            <>
-              <div className="mb-4">
-                <label className="mb-2 block text-sm text-slate-600">Mitigation Effectiveness</label>
-                <select
-                  value={effectiveness}
-                  onChange={(e) => setEffectiveness(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
-                >
-                  {MITIGATION_EFFECTIVENESS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="mb-4">
-                <label className="mb-2 block text-sm text-slate-600">Notes (optional)</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add notes about this control..."
-                  className="h-20 w-full rounded-lg border border-slate-300 bg-white p-3 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
-                />
-              </div>
-            </>
+        <div className="max-h-64 space-y-2 overflow-y-auto">
+          {filteredControls.length === 0 ? (
+            <p className="py-4 text-center text-slate-600">No controls found</p>
+          ) : (
+            filteredControls.map((control) => (
+              <button
+                key={control.id}
+                onClick={() => setSelectedControlId(Number(control.id))}
+                className={`flex w-full items-center justify-between rounded-lg p-3 text-left ${
+                  selectedControlId === Number(control.id)
+                    ? 'bg-primary-600/30 border border-primary-500'
+                    : 'bg-white hover:bg-slate-100'
+                }`}
+              >
+                <div>
+                  <span className="text-sm font-medium text-blue-400">{control.reference_code}</span>
+                  <p className="text-slate-900">{control.name}</p>
+                </div>
+              </button>
+            ))
           )}
-
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={onClose}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-slate-900 hover:bg-slate-200"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleLink}
-              disabled={!selectedControlId || isLinking}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {isLinking ? <Loader2 className="h-4 w-4 animate-spin" /> : <LinkIcon className="h-4 w-4" />}
-              Link Control
-            </button>
-          </div>
         </div>
-      </div>
-    </div>
-  );
-}
 
-function LinkAssetModal({
-  onClose,
-  onLink,
-  isLinking,
-  linkedAssetIds,
-  allAssets,
-}: {
-  onClose: () => void;
-  onLink: (assetId: number) => void;
-  isLinking: boolean;
-  linkedAssetIds: number[];
-  allAssets: ITAsset[];
-}) {
-  const [searchTerm, setSearchTerm] = useState('');
+        {selectedControlId && (
+          <>
+            <div>
+              <label className="mb-2 block text-sm text-slate-600">Mitigation Effectiveness</label>
+              <select
+                value={effectiveness}
+                onChange={(e) => setEffectiveness(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
+              >
+                {MITIGATION_EFFECTIVENESS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm text-slate-600">Notes (optional)</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add notes about this control..."
+                className="h-20 w-full rounded-lg border border-slate-300 bg-white p-3 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+              />
+            </div>
+          </>
+        )}
 
-  const filteredAssets = allAssets.filter(
-    (asset) =>
-      !linkedAssetIds.includes(asset.id) &&
-      (asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        asset.asset_type?.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h3 className="text-lg font-semibold text-slate-900">Link IT Asset</h3>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            onClick={onClose}
+            className="rounded-lg bg-slate-100 px-4 py-2 text-slate-900 hover:bg-slate-200"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleLink}
+            disabled={!selectedControlId || isLinking}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {isLinking && <Loader2 className="h-4 w-4 animate-spin" />}
+            Link Control
           </button>
         </div>
-        <div className="p-4">
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
-            <input
-              type="text"
-              placeholder="Search assets..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
-            />
-          </div>
-          <div className="max-h-64 space-y-2 overflow-y-auto">
-            {filteredAssets.length === 0 ? (
-              <p className="py-4 text-center text-slate-600">No assets found</p>
-            ) : (
-              filteredAssets.map((asset) => (
-                <button
-                  key={asset.id}
-                  onClick={() => onLink(asset.id)}
-                  disabled={isLinking}
-                  className="flex w-full items-center justify-between rounded-lg bg-white p-3 text-left hover:bg-slate-100 disabled:opacity-50"
-                >
-                  <div>
-                    <p className="text-slate-900">{asset.name}</p>
-                    <span className="text-sm text-slate-600">{asset.asset_type}</span>
-                  </div>
-                  <Plus className="h-4 w-4 text-slate-600" />
-                </button>
-              ))
-            )}
-          </div>
-        </div>
       </div>
-    </div>
-  );
-}
-
-function LinkEvidenceModal({
-  onClose,
-  onLink,
-  isLinking,
-  linkedEvidenceIds,
-  allEvidence,
-}: {
-  onClose: () => void;
-  onLink: (evidenceId: number) => void;
-  isLinking: boolean;
-  linkedEvidenceIds: number[];
-  allEvidence: Evidence[];
-}) {
-  const [searchTerm, setSearchTerm] = useState('');
-
-  const filteredEvidence = allEvidence.filter(
-    (evidence) =>
-      !linkedEvidenceIds.includes(Number(evidence.id)) &&
-      evidence.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h3 className="text-lg font-semibold text-slate-900">Link Evidence</h3>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="p-4">
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
-            <input
-              type="text"
-              placeholder="Search evidence..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
-            />
-          </div>
-          <div className="max-h-64 space-y-2 overflow-y-auto">
-            {filteredEvidence.length === 0 ? (
-              <p className="py-4 text-center text-slate-600">No evidence found</p>
-            ) : (
-              filteredEvidence.map((evidence) => (
-                <button
-                  key={evidence.id}
-                  onClick={() => onLink(Number(evidence.id))}
-                  disabled={isLinking}
-                  className="flex w-full items-center justify-between rounded-lg bg-white p-3 text-left hover:bg-slate-100 disabled:opacity-50"
-                >
-                  <div>
-                    <p className="text-slate-900">{evidence.title}</p>
-                    <span className="text-sm text-slate-600">{evidence.evidence_type}</span>
-                  </div>
-                  <Plus className="h-4 w-4 text-slate-600" />
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
 function LinkGovernanceModal({
+  isOpen,
   onClose,
   onLink,
   isLinking,
   linkedGovernanceIds,
   allGovernance,
 }: {
+  isOpen: boolean;
   onClose: () => void;
   onLink: (objectiveId: number, impactLevel: string) => void;
   isLinking: boolean;
@@ -1506,84 +1305,77 @@ function LinkGovernanceModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-lg border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-200 p-4">
-          <h3 className="text-lg font-semibold text-slate-900">Link Governance Objective</h3>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X className="h-5 w-5" />
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Link Governance Objective"
+    >
+      <div className="space-y-4">
+        <input
+          type="text"
+          placeholder="Search governance objectives..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full rounded-lg border border-slate-300 bg-white py-2 px-3 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+        />
+
+        <div className="max-h-64 space-y-2 overflow-y-auto">
+          {filteredGovernance.length === 0 ? (
+            <p className="py-4 text-center text-slate-600">No governance objectives found</p>
+          ) : (
+            filteredGovernance.map((objective) => (
+              <button
+                key={objective.id}
+                onClick={() => setSelectedObjectiveId(Number(objective.id))}
+                className={`flex w-full items-center justify-between rounded-lg p-3 text-left ${
+                  selectedObjectiveId === Number(objective.id)
+                    ? 'bg-primary-600/30 border border-primary-500'
+                    : 'bg-white hover:bg-slate-100'
+                }`}
+              >
+                <div>
+                  <p className="text-slate-900">{objective.title}</p>
+                  <span className="text-sm text-slate-600">{objective.category}</span>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+
+        {selectedObjectiveId && (
+          <div>
+            <label className="mb-2 block text-sm text-slate-600">Impact Level</label>
+            <select
+              value={impactLevel}
+              onChange={(e) => setImpactLevel(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
+            >
+              {IMPACT_LEVELS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            onClick={onClose}
+            className="rounded-lg bg-slate-100 px-4 py-2 text-slate-900 hover:bg-slate-200"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleLink}
+            disabled={!selectedObjectiveId || isLinking}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {isLinking && <Loader2 className="h-4 w-4 animate-spin" />}
+            Link Objective
           </button>
         </div>
-        <div className="p-4">
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
-            <input
-              type="text"
-              placeholder="Search governance objectives..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
-            />
-          </div>
-          
-          <div className="mb-4 max-h-48 space-y-2 overflow-y-auto">
-            {filteredGovernance.length === 0 ? (
-              <p className="py-4 text-center text-slate-600">No governance objectives found</p>
-            ) : (
-              filteredGovernance.map((objective) => (
-                <button
-                  key={objective.id}
-                  onClick={() => setSelectedObjectiveId(Number(objective.id))}
-                  className={`flex w-full items-center justify-between rounded-lg p-3 text-left ${
-                    selectedObjectiveId === Number(objective.id)
-                      ? 'bg-primary-600/30 border border-primary-500'
-                      : 'bg-white hover:bg-slate-100'
-                  }`}
-                >
-                  <div>
-                    <p className="text-slate-900">{objective.title}</p>
-                    <span className="text-sm text-slate-600">{objective.category}</span>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-
-          {selectedObjectiveId && (
-            <div className="mb-4">
-              <label className="mb-2 block text-sm text-slate-600">Impact Level</label>
-              <select
-                value={impactLevel}
-                onChange={(e) => setImpactLevel(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none"
-              >
-                {IMPACT_LEVELS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={onClose}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-slate-900 hover:bg-slate-200"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleLink}
-              disabled={!selectedObjectiveId || isLinking}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {isLinking ? <Loader2 className="h-4 w-4 animate-spin" /> : <LinkIcon className="h-4 w-4" />}
-              Link Objective
-            </button>
-          </div>
-        </div>
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }

@@ -228,11 +228,11 @@ export default function AttestationsPage() {
   const unlinkedCompletedCount = completedAttestations.filter(a => !a.linked_to_evidence).length;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-sm font-semibold text-black">Attestations & Certifications</h1>
+            <h1 className="text-lg sm:text-xl font-semibold text-black">Attestations & Certifications</h1>
             <p className="mt-0.5 text-xs text-gray-500">Manage attestation campaigns and track compliance certifications</p>
           </div>
           <div className="flex items-center gap-3">

@@ -22,6 +22,8 @@ import {
   Plus,
 } from 'lucide-react';
 import Link from 'next/link';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 type AppetiteLevel = 'averse' | 'minimal' | 'cautious' | 'moderate' | 'open' | 'hungry';
 
@@ -342,7 +344,7 @@ export default function RiskAppetitePage() {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Risk Appetite Management</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Appetite Management</h2>
           <p className="text-sm text-slate-600">Configure risk appetite levels and monitor tolerance breaches</p>
         </div>
 
@@ -374,10 +376,10 @@ export default function RiskAppetitePage() {
   const toleranceBreaches = breachesData?.breaches || [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Risk Appetite Management</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Appetite Management</h2>
           <p className="text-sm text-slate-600">Configure risk appetite levels and monitor tolerance breaches</p>
         </div>
         <div className="flex items-center gap-3">
@@ -488,15 +490,13 @@ export default function RiskAppetitePage() {
                   <>
                     <div>
                       <label className="text-xs text-slate-600 mb-1 block">Appetite Level</label>
-                      <select
-                        value={editForm.appetite_level as string}
-                        onChange={(e) => setEditForm(prev => ({ ...prev, appetite_level: e.target.value }))}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-                      >
-                        {APPETITE_LEVELS.map(level => (
-                          <option key={level.value} value={level.value}>{level.label}</option>
-                        ))}
-                      </select>
+                      <MultiSelectDropdown
+                        title="Appetite Level"
+                        items={APPETITE_LEVELS.map(level => ({ value: level.value, label: level.label }))}
+                        selectedValues={editForm.appetite_level ? [editForm.appetite_level as string] : []}
+                        onApply={(values) => setEditForm(prev => ({ ...prev, appetite_level: values[0] || 'moderate' }))}
+                        multiSelect={false}
+                      />
                     </div>
                     <div>
                       <label className="text-xs text-slate-600 mb-1 block">Tolerance Threshold</label>
@@ -715,15 +715,13 @@ export default function RiskAppetitePage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <select
-                        value={getConfigValue(config, 'appetite_level') as string}
-                        onChange={(e) => handleConfigChange(config.id, 'appetite_level', e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-                      >
-                        {APPETITE_LEVELS.map(level => (
-                          <option key={level.value} value={level.value}>{level.label}</option>
-                        ))}
-                      </select>
+                      <MultiSelectDropdown
+                        title="Appetite Level"
+                        items={APPETITE_LEVELS.map(level => ({ value: level.value, label: level.label }))}
+                        selectedValues={[getConfigValue(config, 'appetite_level') as string]}
+                        onApply={(values) => handleConfigChange(config.id, 'appetite_level', values[0] || 'moderate')}
+                        multiSelect={false}
+                      />
                     </td>
                     <td className="px-6 py-4">
                       <input
@@ -762,98 +760,90 @@ export default function RiskAppetitePage() {
         </div>
       </div>
 
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-              <h3 className="text-lg font-semibold text-slate-900">New Appetite Configuration</h3>
-              <button onClick={() => setShowCreateModal(false)} className="rounded p-1 hover:bg-slate-100 text-slate-500">
-                <X className="h-5 w-5" />
-              </button>
+      <RightSlidePanel
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="New Appetite Configuration"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button onClick={() => setShowCreateModal(false)} className="btn-secondary btn-sm">Cancel</button>
+            <button
+              onClick={() => createMutation.mutate(createForm)}
+              disabled={createMutation.isPending}
+              className="btn-primary btn-sm"
+            >
+              {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create'}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="label">Category</label>
+            <MultiSelectDropdown
+              title="Category"
+              items={RISK_CATEGORIES.map(c => ({ value: c.value, label: c.label }))}
+              selectedValues={[createForm.category]}
+              onApply={(values) => setCreateForm(prev => ({ ...prev, category: (values[0] as RiskCategory) || 'strategic' }))}
+              multiSelect={false}
+            />
+          </div>
+          <div>
+            <label className="label">Appetite Level</label>
+            <MultiSelectDropdown
+              title="Appetite Level"
+              items={APPETITE_LEVELS.map(l => ({ value: l.value, label: l.label }))}
+              selectedValues={[createForm.appetite_level]}
+              onApply={(values) => setCreateForm(prev => ({ ...prev, appetite_level: (values[0] as AppetiteLevel) || 'moderate' }))}
+              multiSelect={false}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Tolerance Threshold</label>
+              <input
+                type="number" min="1" max="25"
+                value={createForm.tolerance_threshold}
+                onChange={(e) => setCreateForm(prev => ({ ...prev, tolerance_threshold: parseFloat(e.target.value) || 0 }))}
+                className="input w-full"
+              />
             </div>
-            <div className="space-y-4 p-6">
-              <div>
-                <label className="label">Category</label>
-                <select
-                  value={createForm.category}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, category: e.target.value as RiskCategory }))}
-                  className="select w-full"
-                >
-                  {RISK_CATEGORIES.map(c => (
-                    <option key={c.value} value={c.value}>{c.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="label">Appetite Level</label>
-                <select
-                  value={createForm.appetite_level}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, appetite_level: e.target.value as AppetiteLevel }))}
-                  className="select w-full"
-                >
-                  {APPETITE_LEVELS.map(l => (
-                    <option key={l.value} value={l.value}>{l.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Tolerance Threshold</label>
-                  <input
-                    type="number" min="1" max="25"
-                    value={createForm.tolerance_threshold}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, tolerance_threshold: parseFloat(e.target.value) || 0 }))}
-                    className="input w-full"
-                  />
-                </div>
-                <div>
-                  <label className="label">Max Acceptable Score</label>
-                  <input
-                    type="number" min="1" max="25"
-                    value={createForm.max_acceptable_score}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, max_acceptable_score: parseFloat(e.target.value) || 0 }))}
-                    className="input w-full"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="label">Description</label>
-                <textarea
-                  value={createForm.description}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
-                  rows={3}
-                  className="input w-full resize-none"
-                  placeholder="Optional description..."
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-700">Enable Breach Alerts</span>
-                <button
-                  type="button"
-                  onClick={() => setCreateForm(prev => ({ ...prev, alert_enabled: !prev.alert_enabled }))}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    createForm.alert_enabled ? 'bg-primary-600' : 'bg-slate-200'
-                  }`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    createForm.alert_enabled ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
-                </button>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
-              <button onClick={() => setShowCreateModal(false)} className="btn-secondary btn-sm">Cancel</button>
-              <button
-                onClick={() => createMutation.mutate(createForm)}
-                disabled={createMutation.isPending}
-                className="btn-primary btn-sm"
-              >
-                {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create'}
-              </button>
+            <div>
+              <label className="label">Max Acceptable Score</label>
+              <input
+                type="number" min="1" max="25"
+                value={createForm.max_acceptable_score}
+                onChange={(e) => setCreateForm(prev => ({ ...prev, max_acceptable_score: parseFloat(e.target.value) || 0 }))}
+                className="input w-full"
+              />
             </div>
           </div>
+          <div>
+            <label className="label">Description</label>
+            <textarea
+              value={createForm.description}
+              onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
+              rows={3}
+              className="input w-full resize-none"
+              placeholder="Optional description..."
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-slate-700">Enable Breach Alerts</span>
+            <button
+              type="button"
+              onClick={() => setCreateForm(prev => ({ ...prev, alert_enabled: !prev.alert_enabled }))}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                createForm.alert_enabled ? 'bg-primary-600' : 'bg-slate-200'
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                createForm.alert_enabled ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
         </div>
-      )}
+      </RightSlidePanel>
     </div>
   );
 }

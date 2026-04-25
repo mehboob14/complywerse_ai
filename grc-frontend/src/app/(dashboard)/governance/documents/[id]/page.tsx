@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useToast } from '@/components/ui/ToastProvider';
+import { SearchInput, MultiSelectDropdown } from '@/components/ui';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -26,7 +27,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowUpDown,
-  Search,
   ExternalLink,
   Wand2,
   CheckCircle,
@@ -261,6 +261,7 @@ export default function PolicyDetailPage() {
     },
     enabled: !!id && activeTab === 'gap-analysis',
     refetchInterval: hasRunningAnalysis ? 3000 : false, // Poll every 3 seconds when analysis is running
+    placeholderData: keepPreviousData,
   });
 
   const { data: uploadedFrameworks } = useQuery({
@@ -608,7 +609,7 @@ export default function PolicyDetailPage() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-4">
@@ -860,49 +861,50 @@ export default function PolicyDetailPage() {
             </div>
 
             {/* Filters */}
-            <div className="flex flex-wrap gap-3 p-4 border-b border-gray-300 bg-white/30">
-              <select
-                value={gapFilters.framework_name}
-                onChange={(e) => setGapFilters(prev => ({ ...prev, framework_name: e.target.value, skip: 0 }))}
-                className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-black focus:border-primary-500 focus:outline-none"
-              >
-                <option value="">All Frameworks</option>
-                {(complianceSummary?.frameworks || complianceSummary?.framework_summaries || []).map((fw: any) => (
-                  <option key={fw.framework_id || fw.framework_name} value={fw.framework_name || fw.name}>
-                    {fw.framework_name || fw.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={gapFilters.compliance_status}
-                onChange={(e) => setGapFilters(prev => ({ ...prev, compliance_status: e.target.value, skip: 0 }))}
-                className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-black focus:border-primary-500 focus:outline-none"
-              >
-                <option value="">All Compliance Status</option>
-                {Object.entries(COMPLIANCE_STATUS_STYLES).map(([val, s]) => (
-                  <option key={val} value={val}>{s.label}</option>
-                ))}
-              </select>
-              <select
-                value={gapFilters.risk_severity}
-                onChange={(e) => setGapFilters(prev => ({ ...prev, risk_severity: e.target.value, skip: 0 }))}
-                className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-black focus:border-primary-500 focus:outline-none"
-              >
-                <option value="">All Risk Severity</option>
-                {Object.entries(RISK_SEVERITY_STYLES).map(([val, s]) => (
-                  <option key={val} value={val}>{s.label}</option>
-                ))}
-              </select>
-              <select
-                value={gapFilters.remediation_status}
-                onChange={(e) => setGapFilters(prev => ({ ...prev, remediation_status: e.target.value, skip: 0 }))}
-                className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-black focus:border-primary-500 focus:outline-none"
-              >
-                <option value="">All Remediation Status</option>
-                {Object.entries(REMEDIATION_STATUS_STYLES).map(([val, s]) => (
-                  <option key={val} value={val}>{s.label}</option>
-                ))}
-              </select>
+            <div className="flex flex-wrap items-center gap-2 p-4 border-b border-gray-300 bg-white/30">
+              <MultiSelectDropdown
+                title="Framework"
+                items={(complianceSummary?.frameworks || complianceSummary?.framework_summaries || []).map((fw: any) => ({
+                  value: String(fw.framework_name || fw.name),
+                  label: String(fw.framework_name || fw.name),
+                }))}
+                selectedValues={gapFilters.framework_name ? [gapFilters.framework_name] : []}
+                onApply={(v) => setGapFilters(prev => ({ ...prev, framework_name: v[0] || '', skip: 0 }))}
+                multiSelect={false}
+                autoApply
+                placeholder="All Frameworks"
+                size="md"
+              />
+              <MultiSelectDropdown
+                title="Compliance"
+                items={Object.entries(COMPLIANCE_STATUS_STYLES).map(([val, s]) => ({ value: val, label: s.label }))}
+                selectedValues={gapFilters.compliance_status ? [gapFilters.compliance_status] : []}
+                onApply={(v) => setGapFilters(prev => ({ ...prev, compliance_status: v[0] || '', skip: 0 }))}
+                multiSelect={false}
+                autoApply
+                placeholder="All Compliance Status"
+                size="md"
+              />
+              <MultiSelectDropdown
+                title="Risk Severity"
+                items={Object.entries(RISK_SEVERITY_STYLES).map(([val, s]) => ({ value: val, label: s.label }))}
+                selectedValues={gapFilters.risk_severity ? [gapFilters.risk_severity] : []}
+                onApply={(v) => setGapFilters(prev => ({ ...prev, risk_severity: v[0] || '', skip: 0 }))}
+                multiSelect={false}
+                autoApply
+                placeholder="All Risk Severity"
+                size="md"
+              />
+              <MultiSelectDropdown
+                title="Remediation"
+                items={Object.entries(REMEDIATION_STATUS_STYLES).map(([val, s]) => ({ value: val, label: s.label }))}
+                selectedValues={gapFilters.remediation_status ? [gapFilters.remediation_status] : []}
+                onApply={(v) => setGapFilters(prev => ({ ...prev, remediation_status: v[0] || '', skip: 0 }))}
+                multiSelect={false}
+                autoApply
+                placeholder="All Remediation Status"
+                size="md"
+              />
             </div>
 
             {findingsLoading ? (

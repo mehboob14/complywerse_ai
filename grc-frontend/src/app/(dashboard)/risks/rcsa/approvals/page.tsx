@@ -12,13 +12,13 @@ import {
   Building2,
   User,
   Calendar,
-  Search,
   Clock,
-  Filter,
-  ChevronRight,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 interface PendingApproval {
   id: number;
@@ -60,8 +60,6 @@ interface ActionModalProps {
 function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, actionType, isLoading }: ActionModalProps) {
   const [comments, setComments] = useState('');
 
-  if (!isOpen) return null;
-
   const handleSubmit = () => {
     if (actionType === 'reject' && !comments.trim()) return;
     onConfirm(comments);
@@ -69,36 +67,16 @@ function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, action
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
-            <X size={20} />
-          </button>
-        </div>
-
-        <p className="mb-4 text-sm text-slate-700">
-          {actionType === 'approve'
-            ? `You are about to approve the assessment for "${assessmentName}".`
-            : `You are about to reject the assessment for "${assessmentName}". Please provide a reason.`}
-        </p>
-
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-slate-700">
-            Comments {actionType === 'reject' && <span className="text-red-400">*</span>}
-          </label>
-          <textarea
-            value={comments}
-            onChange={(e) => setComments(e.target.value)}
-            placeholder={actionType === 'approve' ? 'Optional comments...' : 'Reason for rejection...'}
-            className="h-24 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          />
-          {actionType === 'reject' && !comments.trim() && (
-            <p className="mt-1 text-xs text-red-400">Comments are required when rejecting</p>
-          )}
-        </div>
-
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      subtitle={
+        actionType === 'approve'
+          ? `You are about to approve the assessment for "${assessmentName}".`
+          : `You are about to reject the assessment for "${assessmentName}". Please provide a reason.`
+      }
+      footer={
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
@@ -110,7 +88,7 @@ function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, action
           <button
             onClick={handleSubmit}
             disabled={isLoading || (actionType === 'reject' && !comments.trim())}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-slate-900 disabled:opacity-50 ${
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-white disabled:opacity-50 ${
               actionType === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
             }`}
           >
@@ -118,8 +96,23 @@ function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, action
             {actionType === 'approve' ? 'Approve' : 'Reject'}
           </button>
         </div>
+      }
+    >
+      <div className="mb-4">
+        <label className="mb-1 block text-sm font-medium text-slate-700">
+          Comments {actionType === 'reject' && <span className="text-red-400">*</span>}
+        </label>
+        <textarea
+          value={comments}
+          onChange={(e) => setComments(e.target.value)}
+          placeholder={actionType === 'approve' ? 'Optional comments...' : 'Reason for rejection...'}
+          className="h-32 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        />
+        {actionType === 'reject' && !comments.trim() && (
+          <p className="mt-1 text-xs text-red-500">Comments are required when rejecting</p>
+        )}
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
@@ -216,38 +209,37 @@ export default function RCSAApprovalsPage() {
     );
   }
 
+  const campaignItems = useMemo(
+    () => (campaigns || []).map((c) => ({ value: String(c.id), label: c.name })),
+    [campaigns]
+  );
+
   return (
-    <div className="space-y-6">
-      <div className="page-header">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">RCSA Approvals</h1>
-            <p className="text-slate-600 mt-1">Review and approve submitted risk assessments</p>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">RCSA Approvals</h1>
+            <p className="text-slate-600 mt-1 text-sm">Review and approve submitted risk assessments</p>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-600" />
-          <input
-            type="text"
-            placeholder="Search approvals..."
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-[200px] max-w-md">
+          <SearchInput
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10 w-full"
+            onChange={setSearchTerm}
+            placeholder="Search approvals..."
           />
         </div>
-        <select
-          value={campaignFilter}
-          onChange={(e) => setCampaignFilter(e.target.value)}
-          className="input"
-        >
-          <option value="">All Campaigns</option>
-          {(campaigns || []).map((campaign) => (
-            <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
-          ))}
-        </select>
+        <MultiSelectDropdown
+          title="Campaign"
+          items={campaignItems}
+          selectedValues={campaignFilter ? [campaignFilter] : []}
+          onApply={(vals) => setCampaignFilter(vals[0] || '')}
+          multiSelect={false}
+        />
       </div>
 
       <div className="grid gap-4">
@@ -306,21 +298,21 @@ export default function RCSAApprovalsPage() {
                 <div className="flex items-center gap-2">
                   <Link
                     href={`/risks/rcsa/approvals/${approval.id}`}
-                    className="p-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900"
+                    className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                     title="Review Details"
                   >
                     <Eye className="h-4 w-4" />
                   </Link>
                   <button
                     onClick={() => handleAction(approval, 'approve')}
-                    className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30"
+                    className="p-2 rounded-lg text-emerald-600 hover:bg-emerald-50"
                     title="Approve"
                   >
                     <CheckCircle className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => handleAction(approval, 'reject')}
-                    className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                    className="p-2 rounded-lg text-red-600 hover:bg-red-50"
                     title="Reject"
                   >
                     <XCircle className="h-4 w-4" />

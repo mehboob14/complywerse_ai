@@ -1,24 +1,22 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { assetsApi, committeeApi } from '@/lib/api';
 import {
   Users,
   Plus,
-  Search,
   Eye,
   Calendar,
   CheckSquare,
   AlertCircle,
-  Clock,
-  FileText,
-  Building2,
-  X,
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePermissions } from '@/hooks/usePermissions';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 interface Committee {
   id: number;
@@ -98,6 +96,7 @@ export default function CommitteesPage() {
       const data = response.data as { items: Committee[]; total: number };
       return data.items || [];
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: tenantUsers = [], isLoading: usersLoading } = useQuery({
@@ -175,11 +174,25 @@ export default function CommitteesPage() {
     );
   }
 
+  const typeItems = useMemo(
+    () => Object.entries(COMMITTEE_TYPE_LABELS).map(([value, { label }]) => ({ value, label })),
+    [],
+  );
+  const userItems = useMemo(
+    () =>
+      tenantUsers.map((user) => ({
+        value: String(user.id),
+        label: user.display_name || user.email || `User ${user.id}`,
+        subLabel: user.email,
+      })),
+    [tenantUsers],
+  );
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="page-header">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900">Board & Committee Management</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Board & Committee Management</h1>
           <p className="mt-1 text-slate-600">Manage committees, meetings, and oversight actions</p>
         </div>
       </div>
@@ -234,26 +247,22 @@ export default function CommitteesPage() {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="relative w-[80%] flex-1">
-          <input
-            type="text"
-            placeholder="Search committees..."
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-[200px]">
+          <SearchInput
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-9 w-full"
+            onChange={setSearchTerm}
+            placeholder="Search committees..."
+            size="md"
           />
         </div>
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20; max-w-[20%]!"
-        >
-          <option value="">All Types</option>
-          {Object.entries(COMMITTEE_TYPE_LABELS).map(([value, { label }]) => (
-            <option key={value} value={value}>{label}</option>
-          ))}
-        </select>
+        <MultiSelectDropdown
+          title="Type"
+          items={typeItems}
+          selectedValues={typeFilter ? [typeFilter] : []}
+          onApply={(values) => setTypeFilter(values[0] || '')}
+          multiSelect={false}
+        />
         <div className="ml-auto flex items-center gap-2">
           <Link href="/governance/committees/actions" className="btn-secondary flex items-center gap-2">
             <CheckSquare className="h-4 w-4" />
@@ -353,120 +362,106 @@ export default function CommitteesPage() {
         </div>
       )}
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 border border-slate-200">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-slate-900">Create New Committee</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-600 hover:text-slate-900">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Committee Name *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="input w-full"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="input w-full"
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Committee Type *</label>
-                <select
-                  value={formData.committee_type}
-                  onChange={(e) => setFormData({ ...formData, committee_type: e.target.value })}
-                  className="input w-full"
-                  required
-                >
-                  {Object.entries(COMMITTEE_TYPE_LABELS).map(([value, { label }]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Chair</label>
-                  <select
-                    value={formData.chair_id}
-                    onChange={(e) => setFormData({ ...formData, chair_id: e.target.value })}
-                    className="input w-full"
-                    disabled={usersLoading}
-                  >
-                    <option value="">{usersLoading ? 'Loading users...' : 'Select chair'}</option>
-                    {tenantUsers.map((user) => (
-                      <option key={user.id} value={String(user.id)}>
-                        {(user.display_name || user.email || `User ${user.id}`) + (user.email && user.display_name ? ` (${user.email})` : '')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Secretary</label>
-                  <select
-                    value={formData.secretary_id}
-                    onChange={(e) => setFormData({ ...formData, secretary_id: e.target.value })}
-                    className="input w-full"
-                    disabled={usersLoading}
-                  >
-                    <option value="">{usersLoading ? 'Loading users...' : 'Select secretary'}</option>
-                    {tenantUsers.map((user) => (
-                      <option key={user.id} value={String(user.id)}>
-                        {(user.display_name || user.email || `User ${user.id}`) + (user.email && user.display_name ? ` (${user.email})` : '')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Meeting Frequency</label>
-                <select
-                  value={formData.meeting_frequency}
-                  onChange={(e) => setFormData({ ...formData, meeting_frequency: e.target.value })}
-                  className="input w-full"
-                >
-                  {FREQUENCY_OPTIONS.map(({ value, label }) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending}
-                  className="btn-primary"
-                >
-                  {createMutation.isPending ? 'Creating...' : 'Create Committee'}
-                </button>
-              </div>
-            </form>
+      <RightSlidePanel
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Create New Committee"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="create-committee-form"
+              disabled={createMutation.isPending}
+              className="btn-primary"
+            >
+              {createMutation.isPending ? 'Creating...' : 'Create Committee'}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form id="create-committee-form" onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Committee Name *</label>
+            <input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              className="input w-full"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="input w-full"
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Committee Type *</label>
+            <MultiSelectDropdown
+              title="Committee Type"
+              items={typeItems}
+              selectedValues={formData.committee_type ? [formData.committee_type] : []}
+              onApply={(values) => setFormData({ ...formData, committee_type: values[0] || 'custom' })}
+              multiSelect={false}
+              triggerVariant="input"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Chair</label>
+              <MultiSelectDropdown
+                title="Chair"
+                items={userItems}
+                selectedValues={formData.chair_id ? [formData.chair_id] : []}
+                onApply={(values) => setFormData({ ...formData, chair_id: values[0] || '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                forceSearch
+                placeholder={usersLoading ? 'Loading users...' : 'Select chair'}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Secretary</label>
+              <MultiSelectDropdown
+                title="Secretary"
+                items={userItems}
+                selectedValues={formData.secretary_id ? [formData.secretary_id] : []}
+                onApply={(values) => setFormData({ ...formData, secretary_id: values[0] || '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                forceSearch
+                placeholder={usersLoading ? 'Loading users...' : 'Select secretary'}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Meeting Frequency</label>
+            <MultiSelectDropdown
+              title="Meeting Frequency"
+              items={FREQUENCY_OPTIONS}
+              selectedValues={formData.meeting_frequency ? [formData.meeting_frequency] : []}
+              onApply={(values) => setFormData({ ...formData, meeting_frequency: values[0] || 'monthly' })}
+              multiSelect={false}
+              triggerVariant="input"
+            />
+          </div>
+        </form>
+      </RightSlidePanel>
     </div>
   );
 }

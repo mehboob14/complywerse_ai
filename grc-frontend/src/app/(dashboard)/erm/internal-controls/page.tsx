@@ -7,25 +7,25 @@ import { usePermissions } from '@/hooks/usePermissions';
 import {
   Shield,
   Loader2,
-  Search,
   Plus,
   Upload,
   X,
   Edit2,
   Trash2,
   Key,
-  CheckCircle,
-  Clock,
   AlertCircle,
   XCircle,
   Sparkles,
-  Link2,
   Link2Off,
   FileText,
   ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { InlineLinkPicker } from '@/components/ui/InlineLinkPicker';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 const { ResponsiveContainer, PieChart, Pie, Tooltip } = {
   ResponsiveContainer: dynamic(
@@ -162,8 +162,6 @@ function getOverallEffectiveness(design?: string, operating?: string): string {
 
 function EvidenceLinkSection({ controlId }: { controlId: number }) {
   const queryClient = useQueryClient();
-  const [showPicker, setShowPicker] = useState(false);
-  const [searchEv, setSearchEv] = useState('');
 
   const { data: linkedEvidence, isLoading: loadingLinked } = useQuery({
     queryKey: ['ic-evidence', controlId],
@@ -184,13 +182,12 @@ function EvidenceLinkSection({ controlId }: { controlId: number }) {
     },
   });
 
-  const { data: allEvidence } = useQuery({
+  const { data: allEvidence, isLoading: loadingAll } = useQuery({
     queryKey: ['evidence-all'],
     queryFn: async () => {
       const res = await evidenceApi.getAll();
-      return res.data as Array<{ id: number; title?: string; file_name?: string; evidence_type?: string; status?: string }>;
+      return res.data as unknown as Array<{ id: number; title?: string; file_name?: string; evidence_type?: string; status?: string }>;
     },
-    enabled: showPicker,
   });
 
   const linkMutation = useMutation({
@@ -198,8 +195,6 @@ function EvidenceLinkSection({ controlId }: { controlId: number }) {
       ermApi.internalControls.linkEvidence(controlId, { evidence_id: evidenceId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ic-evidence', controlId] });
-      setShowPicker(false);
-      setSearchEv('');
     },
   });
 
@@ -209,67 +204,27 @@ function EvidenceLinkSection({ controlId }: { controlId: number }) {
   });
 
   const linkedIds = new Set(linkedEvidence?.map((l) => l.evidence_id) ?? []);
-  const filteredAll = (allEvidence ?? []).filter((ev) => {
-    const name = ev.title || ev.file_name || '';
-    return name.toLowerCase().includes(searchEv.toLowerCase());
-  });
+  const pickerItems = (allEvidence ?? [])
+    .filter((ev) => !linkedIds.has(ev.id))
+    .map((ev) => ({
+      value: String(ev.id),
+      label: ev.title || ev.file_name || `Evidence #${ev.id}`,
+      subLabel: ev.evidence_type || undefined,
+    }));
 
   return (
     <div className="mt-6 border-t border-slate-200 pt-5">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-800">Linked Evidence</h3>
-        <button
-          type="button"
-          onClick={() => setShowPicker(!showPicker)}
-          className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
-        >
-          <Link2 className="h-3 w-3" />
-          {showPicker ? 'Close' : 'Link Evidence'}
-        </button>
+        <InlineLinkPicker
+          triggerLabel="Link Evidence"
+          items={pickerItems}
+          isLoading={loadingAll}
+          onSelect={(val) => linkMutation.mutate(Number(val))}
+          searchPlaceholder="Search evidence..."
+          emptyText="No evidence found"
+        />
       </div>
-
-      {/* Evidence picker */}
-      {showPicker && (
-        <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <input
-            type="text"
-            value={searchEv}
-            onChange={(e) => setSearchEv(e.target.value)}
-            placeholder="Search evidence..."
-            className="mb-2 w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
-          />
-          <div className="max-h-48 overflow-y-auto space-y-1">
-            {filteredAll.length === 0 && (
-              <p className="py-2 text-center text-xs text-slate-500">No evidence found</p>
-            )}
-            {filteredAll.map((ev) => {
-              const alreadyLinked = linkedIds.has(ev.id);
-              const name = ev.title || ev.file_name || `Evidence #${ev.id}`;
-              return (
-                <div
-                  key={ev.id}
-                  className="flex items-center justify-between rounded bg-white px-3 py-2 border border-slate-100"
-                >
-                  <div>
-                    <p className="text-xs font-medium text-slate-800">{name}</p>
-                    {ev.evidence_type && (
-                      <p className="text-[11px] text-slate-500">{ev.evidence_type}</p>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    disabled={alreadyLinked || linkMutation.isPending}
-                    onClick={() => linkMutation.mutate(ev.id)}
-                    className="rounded border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-600 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {alreadyLinked ? 'Linked' : 'Link'}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Linked evidence list */}
       {loadingLinked ? (
@@ -583,7 +538,7 @@ export default function InternalControlsPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       {/* Visual Overview Cards */}
       <div className="grid gap-4 sm:grid-cols-4">
         {/* Card 1: Total vs Key */}
@@ -745,49 +700,46 @@ export default function InternalControlsPage() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" />
-            <input
-              type="text"
-              placeholder="Search controls..."
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-full sm:w-72">
+            <SearchInput
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-slate-100 py-2 pl-10 pr-3 text-sm text-slate-900 placeholder:text-slate-600 focus:border-primary-500 focus:outline-none"
+              onChange={setSearchTerm}
+              placeholder="Search controls..."
             />
           </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-          >
-            <option value="all">All Statuses</option>
-            <option value="draft">Draft</option>
-            <option value="pending_approval">Pending Approval</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-          >
-            <option value="all">All Categories</option>
-            {CONTROL_CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-          <select
-            value={keyControlFilter}
-            onChange={(e) => setKeyControlFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-          >
-            <option value="all">All Controls</option>
-            <option value="yes">Key Controls Only</option>
-            <option value="no">Non-Key Controls</option>
-          </select>
+          <MultiSelectDropdown
+            title="Status"
+            multiSelect={false}
+            selectedValues={statusFilter === 'all' ? [] : [statusFilter]}
+            onApply={(vals) => setStatusFilter(vals[0] || 'all')}
+            items={[
+              { value: 'draft', label: 'Draft' },
+              { value: 'pending_approval', label: 'Pending Approval' },
+              { value: 'active', label: 'Active' },
+              { value: 'inactive', label: 'Inactive' },
+            ]}
+            placeholder="All Statuses"
+          />
+          <MultiSelectDropdown
+            title="Category"
+            multiSelect={false}
+            selectedValues={categoryFilter === 'all' ? [] : [categoryFilter]}
+            onApply={(vals) => setCategoryFilter(vals[0] || 'all')}
+            items={CONTROL_CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+            placeholder="All Categories"
+          />
+          <MultiSelectDropdown
+            title="Key Control"
+            multiSelect={false}
+            selectedValues={keyControlFilter === 'all' ? [] : [keyControlFilter]}
+            onApply={(vals) => setKeyControlFilter(vals[0] || 'all')}
+            items={[
+              { value: 'yes', label: 'Key Controls Only' },
+              { value: 'no', label: 'Non-Key Controls' },
+            ]}
+            placeholder="All Controls"
+          />
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -940,58 +892,63 @@ export default function InternalControlsPage() {
         </div>
       )}
 
-      {isModalOpen && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-40 bg-black/30"
-            onClick={() => {
-              setIsModalOpen(false);
-              setEditingControl(null);
-            }}
-          />
-          {/* Slide-in panel */}
-          <div className="fixed inset-y-0 right-0 z-50 flex w-[680px] flex-col bg-white shadow-2xl border-l border-slate-200">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <h2 className="text-sm font-semibold text-slate-900">
-                  {editingControl ? 'Edit Control' : 'Add New Control'}
-                </h2>
-                {!editingControl && (
-                  <button
-                    type="button"
-                    onClick={() => aiSuggestControlMutation.mutate({ name: modalName, description: modalDescription || undefined })}
-                    disabled={aiSuggestControlMutation.isPending || !modalName}
-                    className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100 disabled:opacity-50"
-                  >
-                    {aiSuggestControlMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                    AI Suggest
-                  </button>
-                )}
-              </div>
+      <RightSlidePanel
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingControl(null);
+        }}
+        width="w-full max-w-2xl"
+        title={
+          <div className="flex items-center gap-3">
+            <span>{editingControl ? 'Edit Control' : 'Add New Control'}</span>
+            {!editingControl && (
               <button
                 type="button"
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setEditingControl(null);
-                }}
-                className="text-slate-500 hover:text-slate-900"
+                onClick={() => aiSuggestControlMutation.mutate({ name: modalName, description: modalDescription || undefined })}
+                disabled={aiSuggestControlMutation.isPending || !modalName}
+                className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
               >
-                <X size={20} />
+                {aiSuggestControlMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                AI Suggest
               </button>
-            </div>
-
-            {/* Scrollable body */}
-            <div className="flex-1 overflow-y-auto px-6 py-5">
-              <form
-                id="control-form"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSubmit(new FormData(e.currentTarget));
-                }}
-                className="space-y-4"
-              >
+            )}
+          </div>
+        }
+        footer={
+          <div className="flex items-center justify-end gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                setIsModalOpen(false);
+                setEditingControl(null);
+              }}
+              className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="control-form"
+              disabled={createMutation.isPending || updateMutation.isPending}
+              className="flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+            >
+              {(createMutation.isPending || updateMutation.isPending) && (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              )}
+              {editingControl ? 'Update' : 'Create'}
+            </button>
+          </div>
+        }
+      >
+        <form
+          id="control-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit(new FormData(e.currentTarget));
+          }}
+          className="space-y-4"
+        >
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-xs font-medium text-slate-600">
@@ -1228,41 +1185,13 @@ export default function InternalControlsPage() {
                   />
                   <label className="text-xs font-medium text-slate-700">Key Control</label>
                 </div>
-              </form>
+        </form>
 
-              {/* Evidence Linking Section */}
-              {editingControl && (
-                <EvidenceLinkSection controlId={editingControl.id} />
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-end gap-2.5 border-t border-slate-200 px-6 py-4 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setEditingControl(null);
-                }}
-                className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                form="control-form"
-                disabled={createMutation.isPending || updateMutation.isPending}
-                className="flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
-              >
-                {(createMutation.isPending || updateMutation.isPending) && (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                )}
-                {editingControl ? 'Update' : 'Create'}
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+        {/* Evidence Linking Section */}
+        {editingControl && (
+          <EvidenceLinkSection controlId={editingControl.id} />
+        )}
+      </RightSlidePanel>
 
       {showUploadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

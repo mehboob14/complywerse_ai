@@ -7,7 +7,6 @@ import { usePermissions } from '@/hooks/usePermissions';
 import {
   FileText,
   Plus,
-  Search,
   Upload,
   Download,
   Eye,
@@ -22,6 +21,9 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 import Link from 'next/link';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 
 interface Template {
   id: number;
@@ -166,12 +168,12 @@ export default function RCSATemplatesPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="page-header">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <div>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900">RCSA Templates</h1>
-            <p className="text-slate-600 mt-1">Manage Risk & Control Self-Assessment templates</p>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">RCSA Templates</h1>
+            <p className="text-slate-600 mt-1 text-sm">Manage Risk & Control Self-Assessment templates</p>
           </div>
           <div className="flex items-center gap-3">
             {canCreate && (
@@ -210,26 +212,25 @@ export default function RCSATemplatesPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-slate-600" />
-          <input
-            type="text"
-            placeholder="Search templates..."
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex-1 max-w-md min-w-[200px]">
+          <SearchInput
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10 w-full"
+            onChange={setSearchTerm}
+            placeholder="Search templates..."
           />
         </div>
-        <select
-          value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value)}
-          className="input"
-        >
-          <option value="all">All Sources</option>
-          <option value="system">System Templates</option>
-          <option value="custom">Custom Templates</option>
-        </select>
+        <MultiSelectDropdown
+          title="Source"
+          items={[
+            { value: 'all', label: 'All Sources' },
+            { value: 'system', label: 'System Templates' },
+            { value: 'custom', label: 'Custom Templates' },
+          ]}
+          selectedValues={sourceFilter && sourceFilter !== 'all' ? [sourceFilter] : []}
+          onApply={(vals) => setSourceFilter(vals[0] || 'all')}
+          multiSelect={false}
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -318,216 +319,212 @@ export default function RCSATemplatesPage() {
         ))}
       </div>
 
-      {isCloneModalOpen && selectedTemplate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md border border-slate-200">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-slate-900">Clone Template</h3>
-              <button onClick={() => setIsCloneModalOpen(false)} className="text-slate-600 hover:text-slate-900">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                cloneMutation.mutate({
-                  id: selectedTemplate.id,
-                  data: {
-                    name: formData.get('name') as string,
-                    description: formData.get('description') as string,
-                  },
-                });
-              }}
-            >
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">New Template Name</label>
-                  <input
-                    type="text"
-                    name="name"
-                    defaultValue={`${selectedTemplate.name} (Copy)`}
-                    className="input w-full"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                  <textarea
-                    name="description"
-                    defaultValue={selectedTemplate.description}
-                    className="input w-full"
-                    rows={3}
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setIsCloneModalOpen(false)} className="btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={cloneMutation.isPending}>
-                  {cloneMutation.isPending ? 'Cloning...' : 'Clone Template'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {isUploadModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md border border-slate-200">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-slate-900">Upload Template</h3>
-              <button onClick={() => { setIsUploadModalOpen(false); setUploadFile(null); setUploadName(''); }} className="text-slate-600 hover:text-slate-900">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+      {selectedTemplate && (
+        <RightSlidePanel
+          isOpen={isCloneModalOpen}
+          onClose={() => setIsCloneModalOpen(false)}
+          title="Clone Template"
+        >
+          <form
+            id="clone-template-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              cloneMutation.mutate({
+                id: selectedTemplate.id,
+                data: {
+                  name: formData.get('name') as string,
+                  description: formData.get('description') as string,
+                },
+              });
+            }}
+          >
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Template Name *</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">New Template Name</label>
                 <input
                   type="text"
-                  value={uploadName}
-                  onChange={(e) => setUploadName(e.target.value)}
+                  name="name"
+                  defaultValue={`${selectedTemplate.name} (Copy)`}
                   className="input w-full"
-                  placeholder="Enter template name"
+                  required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Category *</label>
-                <select value={uploadCategory} onChange={(e) => setUploadCategory(e.target.value)} className="input w-full">
-                  <option value="Cybersecurity">Cybersecurity</option>
-                  <option value="Operational Risk">Operational Risk</option>
-                  <option value="Compliance">Compliance</option>
-                  <option value="IT Risk">IT Risk</option>
-                  <option value="Financial Risk">Financial Risk</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">File (Excel or CSV) *</label>
-                <div
-                  className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${uploadFile ? 'border-blue-500/50 bg-blue-500/10' : 'border-slate-300 hover:border-slate-500'}`}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                    accept=".xlsx,.xls,.csv"
-                    className="hidden"
-                  />
-                  {uploadFile ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <FileSpreadsheet className="h-5 w-5 text-blue-400" />
-                      <span className="text-blue-300 text-sm">{uploadFile.name}</span>
-                    </div>
-                  ) : (
-                    <div>
-                      <Upload className="h-8 w-8 text-slate-500 mx-auto mb-2" />
-                      <p className="text-sm text-slate-600">Click to select a file</p>
-                      <p className="text-xs text-slate-500 mt-1">Supports .xlsx, .xls, .csv</p>
-                    </div>
-                  )}
-                </div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                <textarea
+                  name="description"
+                  defaultValue={selectedTemplate.description}
+                  className="input w-full"
+                  rows={3}
+                />
               </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => { setIsUploadModalOpen(false); setUploadFile(null); setUploadName(''); }} className="btn-secondary">
+              <button type="button" onClick={() => setIsCloneModalOpen(false)} className="btn-secondary">
                 Cancel
               </button>
-              <button
-                onClick={handleUploadSubmit}
-                className="btn-primary"
-                disabled={!uploadFile || !uploadName.trim()}
-              >
-                Upload Template
+              <button type="submit" className="btn-primary" disabled={cloneMutation.isPending}>
+                {cloneMutation.isPending ? 'Cloning...' : 'Clone Template'}
               </button>
             </div>
-          </div>
-        </div>
+          </form>
+        </RightSlidePanel>
       )}
 
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md border border-slate-200">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-slate-900">Create New Template</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-600 hover:text-slate-900">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                try {
-                  await rcsaApi.createTemplate({
-                    name: formData.get('name') as string,
-                    description: formData.get('description') as string,
-                    category: formData.get('category') as string,
-                    framework_type: formData.get('framework_type') as string,
-                  });
-                  queryClient.invalidateQueries({ queryKey: ['rcsa-templates'] });
-                  setIsModalOpen(false);
-                } catch {
-                  console.error('Failed to create template');
-                }
-              }}
+      <RightSlidePanel
+        isOpen={isUploadModalOpen}
+        onClose={() => { setIsUploadModalOpen(false); setUploadFile(null); setUploadName(''); }}
+        title="Upload Template"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button onClick={() => { setIsUploadModalOpen(false); setUploadFile(null); setUploadName(''); }} className="btn-secondary">
+              Cancel
+            </button>
+            <button
+              onClick={handleUploadSubmit}
+              className="btn-primary"
+              disabled={!uploadFile || !uploadName.trim()}
             >
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Template Name</label>
-                  <input
-                    type="text"
-                    name="name"
-                    className="input w-full"
-                    required
-                    placeholder="Enter template name"
-                  />
+              Upload Template
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Template Name *</label>
+            <input
+              type="text"
+              value={uploadName}
+              onChange={(e) => setUploadName(e.target.value)}
+              className="input w-full"
+              placeholder="Enter template name"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Category *</label>
+            <MultiSelectDropdown
+              title="Category"
+              items={[
+                { value: 'Cybersecurity', label: 'Cybersecurity' },
+                { value: 'Operational Risk', label: 'Operational Risk' },
+                { value: 'Compliance', label: 'Compliance' },
+                { value: 'IT Risk', label: 'IT Risk' },
+                { value: 'Financial Risk', label: 'Financial Risk' },
+              ]}
+              selectedValues={[uploadCategory]}
+              onApply={(vals) => setUploadCategory(vals[0] || 'Operational Risk')}
+              multiSelect={false}
+              triggerVariant="input"
+              className="w-full"
+              triggerClassName="w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">File (Excel or CSV) *</label>
+            <div
+              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${uploadFile ? 'border-blue-500/50 bg-blue-500/10' : 'border-slate-300 hover:border-slate-500'}`}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+              />
+              {uploadFile ? (
+                <div className="flex items-center justify-center gap-2">
+                  <FileSpreadsheet className="h-5 w-5 text-blue-400" />
+                  <span className="text-blue-700 text-sm">{uploadFile.name}</span>
                 </div>
+              ) : (
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-                  <textarea
-                    name="description"
-                    className="input w-full"
-                    rows={3}
-                    placeholder="Enter template description"
-                  />
+                  <Upload className="h-8 w-8 text-slate-500 mx-auto mb-2" />
+                  <p className="text-sm text-slate-600">Click to select a file</p>
+                  <p className="text-xs text-slate-500 mt-1">Supports .xlsx, .xls, .csv</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                  <select name="category" className="input w-full" required>
-                    <option value="">Select category</option>
-                    <option value="Cybersecurity">Cybersecurity</option>
-                    <option value="Operational Risk">Operational Risk</option>
-                    <option value="Compliance">Compliance</option>
-                    <option value="IT Risk">IT Risk</option>
-                    <option value="Financial Risk">Financial Risk</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Framework Type</label>
-                  <input
-                    type="text"
-                    name="framework_type"
-                    className="input w-full"
-                    placeholder="e.g., Custom, SAMA, SBP"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 mt-6">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary">
-                  Create Template
-                </button>
-              </div>
-            </form>
+              )}
+            </div>
           </div>
         </div>
-      )}
+      </RightSlidePanel>
+
+      <RightSlidePanel
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Create New Template"
+      >
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            try {
+              await rcsaApi.createTemplate({
+                name: formData.get('name') as string,
+                description: formData.get('description') as string,
+                category: formData.get('category') as string,
+                framework_type: formData.get('framework_type') as string,
+              });
+              queryClient.invalidateQueries({ queryKey: ['rcsa-templates'] });
+              setIsModalOpen(false);
+            } catch {
+              console.error('Failed to create template');
+            }
+          }}
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Template Name</label>
+              <input
+                type="text"
+                name="name"
+                className="input w-full"
+                required
+                placeholder="Enter template name"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+              <textarea
+                name="description"
+                className="input w-full"
+                rows={3}
+                placeholder="Enter template description"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+              <select name="category" className="input w-full" required>
+                <option value="">Select category</option>
+                <option value="Cybersecurity">Cybersecurity</option>
+                <option value="Operational Risk">Operational Risk</option>
+                <option value="Compliance">Compliance</option>
+                <option value="IT Risk">IT Risk</option>
+                <option value="Financial Risk">Financial Risk</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Framework Type</label>
+              <input
+                type="text"
+                name="framework_type"
+                className="input w-full"
+                placeholder="e.g., Custom, SAMA, SBP"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-6">
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary">
+              Create Template
+            </button>
+          </div>
+        </form>
+      </RightSlidePanel>
     </div>
   );
 }

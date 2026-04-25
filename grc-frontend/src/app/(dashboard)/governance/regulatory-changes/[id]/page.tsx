@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { regulatoryApi } from '@/lib/api';
+import { RightSlidePanel } from '@/components/ui';
 import {
   FileWarning,
   Loader2,
@@ -16,7 +17,6 @@ import {
   Building2,
   Calendar,
   Plus,
-  X,
   Trash2,
   Sparkles,
   ClipboardList,
@@ -384,14 +384,14 @@ export default function RegulatoryChangeDetailPage() {
   const StatusIcon = statusStyle.icon;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex items-center gap-4">
         <Link href="/governance/regulatory-changes" className="text-gray-600 hover:text-black transition-colors">
           <ArrowLeft size={20} />
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-lg font-semibold text-black">{change.title}</h1>
+            <h1 className="text-lg sm:text-xl font-semibold text-black">{change.title}</h1>
             <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
               <StatusIcon className="h-3 w-3" />
               {change.status.replace(/_/g, ' ')}
@@ -899,60 +899,45 @@ export default function RegulatoryChangeDetailPage() {
         </div>
       )}
 
-      {showStatusModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-gray-300 bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-black">Update Status</h2>
+      <RightSlidePanel
+        isOpen={showStatusModal}
+        onClose={() => setShowStatusModal(false)}
+        title="Update Status"
+        width="w-full max-w-md"
+      >
+        <div className="space-y-3">
+          {STATUS_OPTIONS.map((option) => {
+            const style = getStatusStyle(option.value);
+            const Icon = style.icon;
+            return (
               <button
-                onClick={() => setShowStatusModal(false)}
-                className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-black transition-colors"
+                key={option.value}
+                onClick={() => updateStatusMutation.mutate(option.value)}
+                disabled={updateStatusMutation.isPending}
+                className={`w-full flex items-center gap-3 rounded-lg border border-gray-300 px-4 py-3 text-left transition-colors ${
+                  change.status === option.value
+                    ? `${style.bg} border-primary-500`
+                    : 'bg-white hover:bg-gray-50'
+                } disabled:opacity-50`}
               >
-                <X className="h-5 w-5" />
+                <Icon className={`h-5 w-5 ${style.text}`} />
+                <span className="text-black font-medium">{option.label}</span>
+                {change.status === option.value && (
+                  <CheckCircle className="ml-auto h-5 w-5 text-primary-400" />
+                )}
               </button>
-            </div>
-            <div className="space-y-3">
-              {STATUS_OPTIONS.map((option) => {
-                const style = getStatusStyle(option.value);
-                const Icon = style.icon;
-                return (
-                  <button
-                    key={option.value}
-                    onClick={() => updateStatusMutation.mutate(option.value)}
-                    disabled={updateStatusMutation.isPending}
-                    className={`w-full flex items-center gap-3 rounded-lg border border-gray-300 px-4 py-3 text-left transition-colors ${
-                      change.status === option.value
-                        ? `${style.bg} border-primary-500`
-                        : 'bg-white hover:bg-gray-50'
-                    } disabled:opacity-50`}
-                  >
-                    <Icon className={`h-5 w-5 ${style.text}`} />
-                    <span className="text-black font-medium">{option.label}</span>
-                    {change.status === option.value && (
-                      <CheckCircle className="ml-auto h-5 w-5 text-primary-400" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+            );
+          })}
         </div>
-      )}
+      </RightSlidePanel>
 
-      {showAssessmentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border border-gray-300 bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-black">Add Impact Assessment</h2>
-              <button
-                onClick={() => setShowAssessmentModal(false)}
-                className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-black transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={(e) => { e.preventDefault(); createAssessmentMutation.mutate(assessmentForm); }} className="space-y-4">
+      <RightSlidePanel
+        isOpen={showAssessmentModal}
+        onClose={() => setShowAssessmentModal(false)}
+        title="Add Impact Assessment"
+        width="w-full max-w-lg"
+      >
+        <form onSubmit={(e) => { e.preventDefault(); createAssessmentMutation.mutate(assessmentForm); }} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Impact Level *</label>
                 <select
@@ -1021,25 +1006,16 @@ export default function RegulatoryChangeDetailPage() {
                   Add Assessment
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </RightSlidePanel>
 
-      {showTaskModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl border border-gray-300 bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-black">Add Implementation Task</h2>
-              <button
-                onClick={() => setShowTaskModal(false)}
-                className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-black transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={(e) => { e.preventDefault(); createTaskMutation.mutate(taskForm); }} className="space-y-4">
+      <RightSlidePanel
+        isOpen={showTaskModal}
+        onClose={() => setShowTaskModal(false)}
+        title="Add Implementation Task"
+        width="w-full max-w-lg"
+      >
+        <form onSubmit={(e) => { e.preventDefault(); createTaskMutation.mutate(taskForm); }} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
                 <input
@@ -1122,10 +1098,8 @@ export default function RegulatoryChangeDetailPage() {
                   Add Task
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+        </form>
+      </RightSlidePanel>
     </div>
   );
 }

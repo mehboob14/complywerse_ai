@@ -12,7 +12,6 @@ import {
   TrendingDown,
   Play,
   Check,
-  Search,
   Minus,
   ChevronRight,
   Zap,
@@ -24,6 +23,7 @@ import {
   Scale,
   Sparkles,
 } from 'lucide-react';
+import { SearchInput } from '@/components/ui/SearchInput';
 
 interface ScenarioPreset {
   id: number;
@@ -247,8 +247,8 @@ export default function ScenarioAnalysisPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <Link
             href="/erm/analytics"
@@ -258,7 +258,7 @@ export default function ScenarioAnalysisPage() {
             Back
           </Link>
           <div>
-            <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+            <h2 className="text-lg sm:text-xl font-semibold text-slate-900 flex items-center gap-2">
               <Target className="h-5 w-5 text-primary-400" />
               Scenario Analysis
             </h2>
@@ -295,14 +295,11 @@ export default function ScenarioAnalysisPage() {
           Select Risks
         </h3>
         <div className="flex items-center gap-3 mb-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search risks..."
+          <div className="flex-1">
+            <SearchInput
               value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-slate-100 pl-10 pr-3 py-2 text-sm text-slate-900 placeholder-slate-400"
+              onChange={setSearchFilter}
+              placeholder="Search risks..."
             />
           </div>
           <button

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
 import { GovernanceActionReviewItem } from '@/types';
+import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 import {
   CheckCircle,
   XCircle,
@@ -11,32 +12,14 @@ import {
   AlertTriangle,
   FileText,
   Loader2,
-  X,
   Forward,
   Eye,
-  Filter,
-  Search,
   Calendar,
   User,
   ChevronRight,
 } from 'lucide-react';
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
-
-const DOC_TYPE_STYLES: Record<string, { label: string; color: string; bgColor: string }> = {
-  policy: { label: 'Policy', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  procedure: { label: 'Procedure', color: 'text-green-400', bgColor: 'bg-green-500/20' },
-  standard: { label: 'Standard', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
-  guideline: { label: 'Guideline', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20' },
-  template: { label: 'Template', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
-  charter: { label: 'Charter', color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
-  framework: { label: 'Framework', color: 'text-rose-400', bgColor: 'bg-rose-500/20' },
-  other: { label: 'Other', color: 'text-gray-600', bgColor: 'bg-slate-500/20' },
-};
-
-const getDocTypeStyle = (docType: string) => {
-  return DOC_TYPE_STYLES[docType] || DOC_TYPE_STYLES.other;
-};
 
 const formatDate = (dateString?: string) => {
   if (!dateString) return '-';
@@ -73,8 +56,6 @@ interface ActionModalProps {
 function ActionModal({ isOpen, onClose, onConfirm, title, documentTitle, actionType, isLoading }: ActionModalProps) {
   const [comments, setComments] = useState('');
 
-  if (!isOpen) return null;
-
   const handleSubmit = () => {
     if (actionType === 'reject' && !comments.trim()) {
       return;
@@ -84,36 +65,12 @@ function ActionModal({ isOpen, onClose, onConfirm, title, documentTitle, actionT
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-gray-300 bg-white p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-black">{title}</h3>
-          <button onClick={onClose} className="text-gray-600 hover:text-black">
-            <X size={20} />
-          </button>
-        </div>
-
-        <p className="mb-4 text-sm text-gray-800">
-          {actionType === 'approve'
-            ? `You are about to approve "${documentTitle}".`
-            : `You are about to reject "${documentTitle}". Please provide a reason.`}
-        </p>
-
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-gray-800">
-            Comments {actionType === 'reject' && <span className="text-red-400">*</span>}
-          </label>
-          <textarea
-            value={comments}
-            onChange={(e) => setComments(e.target.value)}
-            placeholder={actionType === 'approve' ? 'Optional comments...' : 'Reason for rejection...'}
-            className="h-24 w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          />
-          {actionType === 'reject' && !comments.trim() && (
-            <p className="mt-1 text-xs text-red-400">Comments are required when rejecting</p>
-          )}
-        </div>
-
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title={title}
+      width="w-full max-w-md"
+      footer={
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
@@ -125,7 +82,7 @@ function ActionModal({ isOpen, onClose, onConfirm, title, documentTitle, actionT
           <button
             onClick={handleSubmit}
             disabled={isLoading || (actionType === 'reject' && !comments.trim())}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-black disabled:opacity-50 ${
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-white disabled:opacity-50 ${
               actionType === 'approve'
                 ? 'bg-green-600 hover:bg-green-700'
                 : 'bg-red-600 hover:bg-red-700'
@@ -135,8 +92,29 @@ function ActionModal({ isOpen, onClose, onConfirm, title, documentTitle, actionT
             {actionType === 'approve' ? 'Approve' : 'Reject'}
           </button>
         </div>
+      }
+    >
+      <p className="mb-4 text-sm text-gray-800">
+        {actionType === 'approve'
+          ? `You are about to approve "${documentTitle}".`
+          : `You are about to reject "${documentTitle}". Please provide a reason.`}
+      </p>
+
+      <div className="mb-4">
+        <label className="mb-1 block text-sm font-medium text-gray-800">
+          Comments {actionType === 'reject' && <span className="text-red-400">*</span>}
+        </label>
+        <textarea
+          value={comments}
+          onChange={(e) => setComments(e.target.value)}
+          placeholder={actionType === 'approve' ? 'Optional comments...' : 'Reason for rejection...'}
+          className="h-24 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        />
+        {actionType === 'reject' && !comments.trim() && (
+          <p className="mt-1 text-xs text-red-400">Comments are required when rejecting</p>
+        )}
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }
 
@@ -152,8 +130,6 @@ function DelegateModal({ isOpen, onClose, onConfirm, documentTitle, isLoading }:
   const [userId, setUserId] = useState('');
   const [reason, setReason] = useState('');
 
-  if (!isOpen) return null;
-
   const handleSubmit = () => {
     if (!userId) return;
     onConfirm(parseInt(userId), reason);
@@ -162,42 +138,12 @@ function DelegateModal({ isOpen, onClose, onConfirm, documentTitle, isLoading }:
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-xl border border-gray-300 bg-white p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-black">Delegate Approval</h3>
-          <button onClick={onClose} className="text-gray-600 hover:text-black">
-            <X size={20} />
-          </button>
-        </div>
-
-        <p className="mb-4 text-sm text-gray-800">
-          Forward the approval of &ldquo;{documentTitle}&rdquo; to another user.
-        </p>
-
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-gray-800">
-            Delegate to User ID <span className="text-red-400">*</span>
-          </label>
-          <input
-            type="number"
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            placeholder="Enter user ID..."
-            className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-gray-800">Reason</label>
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Optional reason for delegation..."
-            className="h-20 w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          />
-        </div>
-
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Delegate Approval"
+      width="w-full max-w-md"
+      footer={
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
@@ -209,14 +155,41 @@ function DelegateModal({ isOpen, onClose, onConfirm, documentTitle, isLoading }:
           <button
             onClick={handleSubmit}
             disabled={isLoading || !userId}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 disabled:opacity-50"
           >
             {isLoading && <Loader2 size={16} className="animate-spin" />}
             Delegate
           </button>
         </div>
+      }
+    >
+      <p className="mb-4 text-sm text-gray-800">
+        Forward the approval of &ldquo;{documentTitle}&rdquo; to another user.
+      </p>
+
+      <div className="mb-4">
+        <label className="mb-1 block text-sm font-medium text-gray-800">
+          Delegate to User ID <span className="text-red-400">*</span>
+        </label>
+        <input
+          type="number"
+          value={userId}
+          onChange={(e) => setUserId(e.target.value)}
+          placeholder="Enter user ID..."
+          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        />
       </div>
-    </div>
+
+      <div className="mb-4">
+        <label className="mb-1 block text-sm font-medium text-gray-800">Reason</label>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Optional reason for delegation..."
+          className="h-20 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        />
+      </div>
+    </RightSlidePanel>
   );
 }
 
@@ -230,61 +203,17 @@ interface DocumentPreviewModalProps {
 }
 
 function DocumentPreviewModal({ isOpen, onClose, item, onApprove, onReject, onDelegate }: DocumentPreviewModalProps) {
-  if (!isOpen || !item) return null;
-
-  const docTypeStyle = getDocTypeStyle(item.doc_type || 'other');
+  if (!item) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-2xl rounded-xl border border-gray-300 bg-white p-6 max-h-[90vh] overflow-y-auto">
-        <div className="mb-6 flex items-start justify-between">
-          <div>
-            <h3 className="text-xl font-semibold text-black">{item.document_title || item.action_description}</h3>
-            <p className="text-sm text-gray-600 mt-1">{item.document_code || `Action #${item.id}`}</p>
-          </div>
-          <button onClick={onClose} className="text-gray-600 hover:text-black">
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="rounded-lg border border-gray-300 bg-white/50 p-4">
-            <p className="text-xs text-gray-600 mb-1">Action Type</p>
-            <span className="text-sm text-black capitalize">{item.action_type.replace(/_/g, ' ')}</span>
-          </div>
-          <div className="rounded-lg border border-gray-300 bg-white/50 p-4">
-            <p className="text-xs text-gray-600 mb-1">Submitted By</p>
-            <div className="flex items-center gap-2">
-              <User size={14} className="text-gray-600" />
-              <span className="text-sm text-black">{item.action_user_name || 'Unknown'}</span>
-            </div>
-          </div>
-          <div className="rounded-lg border border-gray-300 bg-white/50 p-4">
-            <p className="text-xs text-gray-600 mb-1">Submitted At</p>
-            <div className="flex items-center gap-2">
-              <Calendar size={14} className="text-gray-600" />
-              <span className="text-sm text-black">{formatDateTime(item.action_date)}</span>
-            </div>
-          </div>
-          <div className="rounded-lg border border-gray-300 bg-white/50 p-4">
-            <p className="text-xs text-gray-600 mb-1">Status</p>
-            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-              item.review_status === 'pending_review' ? 'bg-amber-500/20 text-amber-400' :
-              item.review_status === 'approved' ? 'bg-green-500/20 text-green-400' :
-              item.review_status === 'rejected' ? 'bg-red-500/20 text-red-400' :
-              'bg-gray-500/20 text-gray-400'
-            }`}>
-              {item.review_status.replace(/_/g, ' ').toUpperCase()}
-            </span>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-gray-300 bg-white/50 p-4 mb-6">
-          <p className="text-xs text-gray-600 mb-2">Description</p>
-          <p className="text-sm text-black">{item.action_description}</p>
-        </div>
-
-        <div className="flex justify-end gap-3 pt-4 border-t border-gray-300">
+    <RightSlidePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      title={item.document_title || item.action_description}
+      subtitle={item.document_code || `Action #${item.id}`}
+      width="w-full max-w-2xl"
+      footer={
+        <div className="flex justify-end gap-3">
           <button
             onClick={onDelegate}
             className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-800 hover:bg-gray-100"
@@ -296,21 +225,58 @@ function DocumentPreviewModal({ isOpen, onClose, item, onApprove, onReject, onDe
           </button>
           <button
             onClick={onReject}
-            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 font-medium text-black hover:bg-red-700"
+            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700"
           >
             <XCircle size={16} />
             Reject
           </button>
           <button
             onClick={onApprove}
-            className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 font-medium text-black hover:bg-green-700"
+            className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 font-medium text-white hover:bg-green-700"
           >
             <CheckCircle size={16} />
             Approve
           </button>
         </div>
+      }
+    >
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="rounded-lg border border-gray-300 bg-white/50 p-4">
+          <p className="text-xs text-gray-600 mb-1">Action Type</p>
+          <span className="text-sm text-black capitalize">{item.action_type.replace(/_/g, ' ')}</span>
+        </div>
+        <div className="rounded-lg border border-gray-300 bg-white/50 p-4">
+          <p className="text-xs text-gray-600 mb-1">Submitted By</p>
+          <div className="flex items-center gap-2">
+            <User size={14} className="text-gray-600" />
+            <span className="text-sm text-black">{item.action_user_name || 'Unknown'}</span>
+          </div>
+        </div>
+        <div className="rounded-lg border border-gray-300 bg-white/50 p-4">
+          <p className="text-xs text-gray-600 mb-1">Submitted At</p>
+          <div className="flex items-center gap-2">
+            <Calendar size={14} className="text-gray-600" />
+            <span className="text-sm text-black">{formatDateTime(item.action_date)}</span>
+          </div>
+        </div>
+        <div className="rounded-lg border border-gray-300 bg-white/50 p-4">
+          <p className="text-xs text-gray-600 mb-1">Status</p>
+          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+            item.review_status === 'pending_review' ? 'bg-amber-500/20 text-amber-400' :
+            item.review_status === 'approved' ? 'bg-green-500/20 text-green-400' :
+            item.review_status === 'rejected' ? 'bg-red-500/20 text-red-400' :
+            'bg-gray-500/20 text-gray-400'
+          }`}>
+            {item.review_status.replace(/_/g, ' ').toUpperCase()}
+          </span>
+        </div>
       </div>
-    </div>
+
+      <div className="rounded-lg border border-gray-300 bg-white/50 p-4 mb-6">
+        <p className="text-xs text-gray-600 mb-2">Description</p>
+        <p className="text-sm text-black">{item.action_description}</p>
+      </div>
+    </RightSlidePanel>
   );
 }
 
@@ -337,6 +303,7 @@ export default function ApprovalsPage() {
       const response = await governanceApi.getMyPendingApprovals({});
       return response.data;
     },
+    placeholderData: keepPreviousData,
   });
 
   const approveMutation = useMutation({
@@ -429,10 +396,10 @@ export default function ApprovalsPage() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-black">My Approvals</h2>
+          <h2 className="text-lg sm:text-xl font-semibold text-black">My Approvals</h2>
           <p className="text-xs text-gray-600">Documents waiting for your approval</p>
         </div>
         <div className="flex items-center gap-2">
@@ -444,28 +411,27 @@ export default function ApprovalsPage() {
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
-          <input
-            type="text"
-            placeholder="Search documents..."
+        <div className="flex-1">
+          <SearchInput
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded border border-gray-300 bg-white py-1.5 pl-8 pr-3 text-xs text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            onChange={setSearchQuery}
+            placeholder="Search documents..."
+            size="md"
           />
         </div>
-        <div className="flex items-center gap-1.5">
-          <Filter size={13} className="text-gray-500" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded border border-gray-300 bg-white px-2 py-1.5 text-xs text-black focus:border-primary-500 focus:outline-none"
-          >
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="all">All</option>
-          </select>
+        <div className="flex items-center gap-2">
+          <MultiSelectDropdown
+            title="Status"
+            items={[
+              { value: 'pending', label: 'Pending' },
+              { value: 'approved', label: 'Approved' },
+              { value: 'rejected', label: 'Rejected' },
+              { value: 'all', label: 'All' },
+            ]}
+            selectedValues={[statusFilter]}
+            onApply={(vals) => setStatusFilter((vals[0] as StatusFilter) || 'pending')}
+            multiSelect={false}
+          />
         </div>
       </div>
 
@@ -511,7 +477,6 @@ export default function ApprovalsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredItems.map((item: GovernanceActionReviewItem) => {
-                  const docTypeStyle = getDocTypeStyle(item.doc_type || 'other');
                   const actionDate = new Date(item.action_date);
                   const isRecent = (Date.now() - actionDate.getTime()) / (1000 * 60 * 60 * 24) < 7; // Less than 7 days
                   
@@ -559,26 +524,33 @@ export default function ApprovalsPage() {
                       <td className="px-3 py-2">
                         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                           <button
+                            onClick={() => handleRowClick(item)}
+                            className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-black transition-colors"
+                            title="View"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button
                             onClick={() => handleDelegate(item)}
                             className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-black transition-colors"
                             title="Delegate"
                             disabled
                           >
-                            <Forward size={13} />
+                            <Forward className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleReject(item)}
                             className="rounded p-1 text-red-500 hover:bg-red-50 transition-colors"
                             title="Reject"
                           >
-                            <XCircle size={13} />
+                            <XCircle className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleApprove(item)}
                             className="rounded p-1 text-green-600 hover:bg-green-50 transition-colors"
                             title="Approve"
                           >
-                            <CheckCircle size={13} />
+                            <CheckCircle className="h-4 w-4" />
                           </button>
                           <ChevronRight size={13} className="text-gray-400" />
                         </div>

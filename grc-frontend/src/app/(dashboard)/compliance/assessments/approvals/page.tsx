@@ -221,17 +221,17 @@ export default function PendingApprovalsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-center gap-3">
         <Link
           href="/compliance/assessments"
-          className="rounded-lg p-2 text-gray-600 hover:bg-gray-50 hover:text-black"
+          className="rounded-lg p-2 text-gray-600 hover:bg-gray-50 hover:text-black flex-shrink-0"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-black">Pending Approvals</h1>
-          <p className="text-gray-600">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Pending Approvals</h1>
+          <p className="mt-1 text-sm text-slate-600">
             Evidence submissions awaiting your review
           </p>
         </div>

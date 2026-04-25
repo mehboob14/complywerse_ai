@@ -310,7 +310,7 @@ export default function ReviewCalendarPage() {
     : [];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6 py-3 sm:py-4">
       <div className="flex items-center justify-between">
         <div>
           <div className="mb-1 flex items-center gap-3">
@@ -322,8 +322,8 @@ export default function ReviewCalendarPage() {
               <span className="text-sm">Back to Reviews</span>
             </Link>
           </div>
-          <h1 className="text-lg font-semibold text-black">Review Calendar</h1>
-          <p className="text-gray-600">Visual overview of upcoming document reviews</p>
+          <h1 className="text-lg sm:text-xl font-semibold text-black">Review Calendar</h1>
+          <p className="text-xs sm:text-sm text-gray-600">Visual overview of upcoming document reviews</p>
         </div>
       </div>
 
