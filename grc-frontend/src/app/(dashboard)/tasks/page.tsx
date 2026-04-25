@@ -7,10 +7,12 @@ import { criticalTasksApi, risksApi, ermApi, vulnManagementApi } from '@/lib/api
 import Link from 'next/link';
 import MyTasksPage from './my-tasks/page';
 import TaskReportsPage from './reports/page';
+import { RightSlidePanel, MultiSelectDropdown, SearchInput } from '@/components/ui';
 import {
-  Plus, X, Search, Filter,
+  Plus, X,
   ArrowUpDown, MoreHorizontal, Target, Loader2,
   LayoutList, Columns3, Sparkles, Copy, RefreshCw,
+  ListTodo, ClipboardList, BarChart3,
 } from 'lucide-react';
 
 interface TaskUser {
@@ -105,7 +107,6 @@ export default function TaskBoardPage() {
   const canDelete = hasPermission('critical_tasks:tasks:delete');
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [showFilters, setShowFilters] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState<number[]>([]);
   const [showBulkMenu, setShowBulkMenu] = useState(false);
@@ -116,9 +117,9 @@ export default function TaskBoardPage() {
   const [users, setUsers] = useState<TaskUser[]>([]);
   const [activeTab, setActiveTab] = useState<'board' | 'my-tasks' | 'reports'>('board');
   const taskTabs = [
-    { id: 'board' as const, label: 'Task Board' },
-    { id: 'my-tasks' as const, label: 'My Tasks' },
-    { id: 'reports' as const, label: 'Reports' },
+    { id: 'board' as const, label: 'Task Board', icon: ListTodo },
+    { id: 'my-tasks' as const, label: 'My Tasks', icon: ClipboardList },
+    { id: 'reports' as const, label: 'Reports', icon: BarChart3 },
   ];
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showAiResult, setShowAiResult] = useState(false);
@@ -339,164 +340,196 @@ export default function TaskBoardPage() {
     if (kanbanColumns[t.status]) kanbanColumns[t.status].push(t);
   });
 
+  const setSingleFilter = (key: string, value: string) => {
+    setFilters((f) => {
+      const n = { ...f };
+      if (value) n[key] = value;
+      else delete n[key];
+      return n;
+    });
+  };
+
+  const userItems = users.map((u) => ({
+    value: String(u.id),
+    label: u.display_name || u.username || u.email || `User #${u.id}`,
+    subLabel: u.email,
+  }));
+
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
-        <div className="flex flex-wrap gap-2">
-          {taskTabs.map((tab) => {
-            const isActive = activeTab === tab.id;
+    <div className="-m-4 lg:-m-5 text-[var(--color-text)]">
+      <div className="border-b border-gray-200 px-3 sm:px-6 pt-3 overflow-x-auto">
+        <div className="flex items-center gap-0 min-w-max">
+          {taskTabs.map(({ id, label, icon: Icon }) => {
+            const isActive = activeTab === id;
             return (
               <button
-                key={tab.id}
+                key={id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                onClick={() => setActiveTab(id)}
+                className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
                   isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                {tab.label}
+                <Icon size={14} />
+                {label}
               </button>
             );
           })}
         </div>
       </div>
 
+      <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-6">
       {activeTab === 'board' && (
         <>
-          <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-[var(--color-text)]">Task Board</h1>
-          <p className="text-sm text-[var(--color-muted)] mt-1">Centralized critical task management — {total} tasks</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-0.5">
-            <button onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'table' ? 'bg-blue-600 text-white' : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-subtle)]'}`}>
-              <LayoutList size={14} /> Table
-            </button>
-            <button onClick={() => setViewMode('kanban')}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'kanban' ? 'bg-blue-600 text-white' : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-subtle)]'}`}>
-              <Columns3 size={14} /> Kanban
-            </button>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Task Board</h1>
+              <p className="mt-1 text-sm text-slate-600">Centralized critical task management — {total} tasks</p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center rounded-full border border-[var(--color-border)] bg-white overflow-hidden">
+                <button onClick={() => setViewMode('table')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'table' ? 'bg-blue-600 text-white' : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-slate-50'}`}>
+                  <LayoutList size={14} /> <span className="hidden sm:inline">Table</span>
+                </button>
+                <button onClick={() => setViewMode('kanban')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'kanban' ? 'bg-blue-600 text-white' : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-slate-50'}`}>
+                  <Columns3 size={14} /> <span className="hidden sm:inline">Kanban</span>
+                </button>
+              </div>
+              <button onClick={handleAiReprioritize} disabled={aiLoading}
+                className="flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50 px-2.5 sm:px-3 py-2 text-xs sm:text-sm font-medium text-purple-700 hover:bg-purple-100 transition-colors disabled:opacity-50">
+                {aiLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />}
+                <span className="hidden md:inline">AI Reprioritize</span>
+                <span className="md:hidden">AI</span>
+              </button>
+              <button onClick={() => setShowTemplateModal(true)}
+                className="cw-btn-secondary flex items-center gap-1.5 rounded-lg px-2.5 sm:px-3 py-2 text-xs sm:text-sm font-medium">
+                <Copy size={14} />
+                <span className="hidden md:inline">From Template</span>
+                <span className="md:hidden">Template</span>
+              </button>
+              {canCreate && (
+                <button onClick={() => setShowCreate(true)}
+                  className="cw-btn-primary flex items-center gap-1.5 rounded-lg px-3 sm:px-4 py-2 text-sm font-medium">
+                  <Plus size={16} />
+                  <span className="hidden sm:inline">New Task</span>
+                  <span className="sm:hidden">New</span>
+                </button>
+              )}
+            </div>
           </div>
-          <button onClick={handleAiReprioritize} disabled={aiLoading}
-            className="flex items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100 transition-colors disabled:opacity-50">
-            {aiLoading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} AI Reprioritize
-          </button>
-          <button onClick={() => setShowTemplateModal(true)}
-            className="cw-btn-secondary flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium">
-            <Copy size={14} /> From Template
-          </button>
-          {canCreate && (
-            <button onClick={() => setShowCreate(true)}
-              className="cw-btn-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium">
-              <Plus size={16} /> New Task
-            </button>
-          )}
-        </div>
-      </div>
 
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" size={16} />
-          <input type="text" placeholder="Search tasks..." value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="cw-field w-full py-2 pl-10 pr-4 text-sm" />
-        </div>
-        <button onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${showFilters ? 'cw-btn-primary text-white' : 'cw-btn-secondary'}`}>
-          <Filter size={16} /> Filters
-          {Object.keys(filters).length > 0 && (
-            <span className="ml-1 rounded-full bg-blue-500 px-1.5 py-0.5 text-xs text-white">{Object.keys(filters).length}</span>
-          )}
-        </button>
-        {selectedTasks.length > 0 && (
-          <div className="relative">
-            <button onClick={() => setShowBulkMenu(!showBulkMenu)}
-              className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-              <MoreHorizontal size={16} /> Bulk ({selectedTasks.length})
-            </button>
-            {showBulkMenu && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-56 cw-card p-1 shadow-xl">
-                <div className="px-3 py-1.5 text-xs font-medium text-[var(--color-muted)] uppercase">Priority</div>
-                {PRIORITIES.map(p => (
-                  <button key={p} onClick={() => bulkMutation.mutate({ task_ids: selectedTasks, action: 'change_priority', value: p })}
-                    className="w-full rounded px-3 py-1.5 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-subtle)]">
-                    Set → {p}
-                  </button>
-                ))}
-                <hr className="my-1 border-[var(--color-border)]" />
-                <div className="px-3 py-1.5 text-xs font-medium text-[var(--color-muted)] uppercase">Status</div>
-                {['In Progress', 'Completed'].map(s => (
-                  <button key={s} onClick={() => bulkMutation.mutate({ task_ids: selectedTasks, action: 'change_status', value: s })}
-                    className="w-full rounded px-3 py-1.5 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-subtle)]">
-                    Set → {s}
-                  </button>
-                ))}
-                <hr className="my-1 border-[var(--color-border)]" />
-                <div className="px-3 py-1.5 text-xs font-medium text-[var(--color-muted)] uppercase">Assign</div>
-                <div className="flex items-center gap-1 px-2 py-1">
-                  <select value={bulkAssignId} onChange={e => setBulkAssignId(e.target.value)}
-                    className="cw-field flex-1 px-2 py-1 text-xs">
-                    <option value="">Select user</option>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.display_name || u.username}</option>)}
-                  </select>
-                  <button disabled={!bulkAssignId}
-                    onClick={() => bulkMutation.mutate({ task_ids: selectedTasks, action: 'assign', assigned_owner_id: Number(bulkAssignId) })}
-                    className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-40">
-                    Go
-                  </button>
-                </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex-1 min-w-[180px] sm:min-w-[260px] max-w-md">
+              <SearchInput
+                value={search}
+                onChange={setSearch}
+                placeholder="Search tasks..."
+                size="md"
+              />
+            </div>
+
+            <MultiSelectDropdown
+              title="Source"
+              items={SOURCES.map((s) => ({ value: s, label: s }))}
+              selectedValues={filters.source ? [filters.source] : []}
+              onApply={(v) => setSingleFilter('source', v[0] || '')}
+              multiSelect={false}
+              autoApply
+              placeholder="All Sources"
+              size="md"
+            />
+            <MultiSelectDropdown
+              title="Priority"
+              items={PRIORITIES.map((p) => ({ value: p, label: p }))}
+              selectedValues={filters.priority ? [filters.priority] : []}
+              onApply={(v) => setSingleFilter('priority', v[0] || '')}
+              multiSelect={false}
+              autoApply
+              placeholder="All Priorities"
+              size="md"
+            />
+            <MultiSelectDropdown
+              title="Status"
+              items={STATUSES.map((s) => ({ value: s, label: s }))}
+              selectedValues={filters.status ? [filters.status] : []}
+              onApply={(v) => setSingleFilter('status', v[0] || '')}
+              multiSelect={false}
+              autoApply
+              placeholder="All Statuses"
+              size="md"
+            />
+            <MultiSelectDropdown
+              title="Category"
+              items={CATEGORIES.map((c) => ({ value: c, label: c }))}
+              selectedValues={filters.category ? [filters.category] : []}
+              onApply={(v) => setSingleFilter('category', v[0] || '')}
+              multiSelect={false}
+              autoApply
+              placeholder="All Categories"
+              size="md"
+            />
+            <MultiSelectDropdown
+              title="Owner"
+              items={userItems}
+              selectedValues={filters.assigned_owner_id ? [filters.assigned_owner_id] : []}
+              onApply={(v) => setSingleFilter('assigned_owner_id', v[0] || '')}
+              multiSelect={false}
+              autoApply
+              forceSearch
+              placeholder="All Owners"
+              searchPlaceholder="Search users"
+              size="md"
+            />
+            {Object.keys(filters).length > 0 && (
+              <button onClick={() => setFilters({})} className="text-sm text-red-600 hover:text-red-700 ml-1">Clear</button>
+            )}
+
+            {selectedTasks.length > 0 && (
+              <div className="relative ml-auto">
+                <button onClick={() => setShowBulkMenu(!showBulkMenu)}
+                  className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                  <MoreHorizontal size={16} /> Bulk ({selectedTasks.length})
+                </button>
+                {showBulkMenu && (
+                  <div className="absolute right-0 top-full mt-1 z-50 w-56 cw-card p-1 shadow-xl">
+                    <div className="px-3 py-1.5 text-xs font-medium text-[var(--color-muted)] uppercase">Priority</div>
+                    {PRIORITIES.map(p => (
+                      <button key={p} onClick={() => bulkMutation.mutate({ task_ids: selectedTasks, action: 'change_priority', value: p })}
+                        className="w-full rounded px-3 py-1.5 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-subtle)]">
+                        Set → {p}
+                      </button>
+                    ))}
+                    <hr className="my-1 border-[var(--color-border)]" />
+                    <div className="px-3 py-1.5 text-xs font-medium text-[var(--color-muted)] uppercase">Status</div>
+                    {['In Progress', 'Completed'].map(s => (
+                      <button key={s} onClick={() => bulkMutation.mutate({ task_ids: selectedTasks, action: 'change_status', value: s })}
+                        className="w-full rounded px-3 py-1.5 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-subtle)]">
+                        Set → {s}
+                      </button>
+                    ))}
+                    <hr className="my-1 border-[var(--color-border)]" />
+                    <div className="px-3 py-1.5 text-xs font-medium text-[var(--color-muted)] uppercase">Assign</div>
+                    <div className="flex items-center gap-1 px-2 py-1">
+                      <select value={bulkAssignId} onChange={e => setBulkAssignId(e.target.value)}
+                        className="cw-field flex-1 px-2 py-1 text-xs">
+                        <option value="">Select user</option>
+                        {users.map(u => <option key={u.id} value={u.id}>{u.display_name || u.username}</option>)}
+                      </select>
+                      <button disabled={!bulkAssignId}
+                        onClick={() => bulkMutation.mutate({ task_ids: selectedTasks, action: 'assign', assigned_owner_id: Number(bulkAssignId) })}
+                        className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700 disabled:opacity-40">
+                        Go
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
-      </div>
-
-      {showFilters && (
-        <div className="cw-card p-4 flex flex-wrap gap-3">
-          <select value={filters.source || ''} onChange={e => { const v = e.target.value; setFilters(f => { const n = { ...f }; if (v) n.source = v; else delete n.source; return n; }); }}
-            className="cw-field px-3 py-1.5 text-sm">
-            <option value="">All Sources</option>
-            {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select value={filters.priority || ''} onChange={e => { const v = e.target.value; setFilters(f => { const n = { ...f }; if (v) n.priority = v; else delete n.priority; return n; }); }}
-            className="cw-field px-3 py-1.5 text-sm">
-            <option value="">All Priorities</option>
-            {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <select value={filters.status || ''} onChange={e => { const v = e.target.value; setFilters(f => { const n = { ...f }; if (v) n.status = v; else delete n.status; return n; }); }}
-            className="cw-field px-3 py-1.5 text-sm">
-            <option value="">All Statuses</option>
-            {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select value={filters.category || ''} onChange={e => { const v = e.target.value; setFilters(f => { const n = { ...f }; if (v) n.category = v; else delete n.category; return n; }); }}
-            className="cw-field px-3 py-1.5 text-sm">
-            <option value="">All Categories</option>
-            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select value={filters.assigned_owner_id || ''} onChange={e => { const v = e.target.value; setFilters(f => { const n = { ...f }; if (v) n.assigned_owner_id = v; else delete n.assigned_owner_id; return n; }); }}
-            className="cw-field px-3 py-1.5 text-sm">
-            <option value="">All Owners</option>
-            {users.map(u => <option key={u.id} value={u.id}>{u.display_name || u.username}</option>)}
-          </select>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-[var(--color-muted)]">Due After</label>
-            <input type="date" value={filters.due_after || ''} onChange={e => { const v = e.target.value; setFilters(f => { const n = { ...f }; if (v) n.due_after = v; else delete n.due_after; return n; }); }}
-              className="cw-field px-2 py-1.5 text-sm" />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-[var(--color-muted)]">Due Before</label>
-            <input type="date" value={filters.due_before || ''} onChange={e => { const v = e.target.value; setFilters(f => { const n = { ...f }; if (v) n.due_before = v; else delete n.due_before; return n; }); }}
-              className="cw-field px-2 py-1.5 text-sm" />
-          </div>
-          {Object.keys(filters).length > 0 && (
-            <button onClick={() => setFilters({})} className="text-sm text-red-600 hover:text-red-700">Clear All</button>
-          )}
-        </div>
-      )}
 
       {viewMode === 'table' ? (
         <div className="cw-card overflow-hidden">
@@ -633,187 +666,282 @@ export default function TaskBoardPage() {
         </div>
       )}
 
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center cw-overlay p-4">
-          <div className="cw-modal-panel rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-[var(--color-text)]">Create New Task</h2>
-              <button onClick={() => setShowCreate(false)} className="text-[var(--color-muted)] hover:text-[var(--color-text)]"><X size={20} /></button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Title <span className="cw-required">*</span></label>
-                <input type="text" value={newTask.title} onChange={e => setNewTask(f => ({ ...f, title: e.target.value }))}
-                  className="cw-field w-full px-3 py-2 text-sm"
-                  placeholder="Task title" />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-sm font-medium text-[var(--color-text)]">Description</label>
-                  <button type="button" onClick={handleAiGenerateDescription} disabled={aiDescLoading || !newTask.title.trim()}
-                    className="flex items-center gap-1 text-xs text-purple-700 hover:text-purple-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                    {aiDescLoading ? <Loader2 className="animate-spin" size={12} /> : <Sparkles size={12} />} AI Generate
-                  </button>
-                </div>
-                <textarea value={newTask.description} onChange={e => setNewTask(f => ({ ...f, description: e.target.value }))}
-                  className="cw-field w-full px-3 py-2 text-sm"
-                  rows={3} placeholder="Task description" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Source</label>
-                  <select value={newTask.source} onChange={e => setNewTask(f => ({ ...f, source: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm">
-                    {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Priority</label>
-                  <select value={newTask.priority} onChange={e => setNewTask(f => ({ ...f, priority: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm">
-                    {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Category</label>
-                  <select value={newTask.category} onChange={e => setNewTask(f => ({ ...f, category: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm">
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Severity</label>
-                  <select value={newTask.severity} onChange={e => setNewTask(f => ({ ...f, severity: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm">
-                    <option value="">None</option>
-                    <option value="Critical">Critical</option><option value="High">High</option>
-                    <option value="Medium">Medium</option><option value="Low">Low</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Source Module</label>
-                  <select value={newTask.source_module} onChange={e => setNewTask(f => ({ ...f, source_module: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm">
-                    <option value="">None (Manual)</option>
-                    {SOURCE_MODULES.map(m => <option key={m} value={m}>{m}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Source Entity Type</label>
-                  <select value={newTask.source_entity_type} onChange={e => setNewTask(f => ({ ...f, source_entity_type: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm">
-                    <option value="">None</option>
-                    <option value="risk">Risk</option><option value="control">Control</option>
-                    <option value="finding">Audit Finding</option><option value="vulnerability">Vulnerability</option>
-                    <option value="compliance_gap">Compliance Gap</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Assigned Owner</label>
-                  <select value={newTask.assigned_owner_id} onChange={e => setNewTask(f => ({ ...f, assigned_owner_id: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm">
-                    <option value="">Unassigned</option>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.display_name || u.username}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Reviewer</label>
-                  <select value={newTask.reviewer_id} onChange={e => setNewTask(f => ({ ...f, reviewer_id: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm">
-                    <option value="">None</option>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.display_name || u.username}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Due Date</label>
-                  <input type="date" value={newTask.due_date} onChange={e => setNewTask(f => ({ ...f, due_date: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">SLA Days</label>
-                  <input type="number" value={newTask.sla_days} onChange={e => setNewTask(f => ({ ...f, sla_days: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm"
-                    placeholder="Auto-sets due date if empty" />
-                </div>
-              </div>
-              <div className="border-t border-[var(--color-border)] pt-4 mt-4">
-                <h3 className="text-xs font-semibold text-[var(--color-muted)] uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <RefreshCw size={12} /> Recurrence & Approval
-                </h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Recurrence</label>
-                    <select value={newTask.recurrence_pattern} onChange={e => setNewTask(f => ({ ...f, recurrence_pattern: e.target.value }))}
-                      className="cw-field w-full px-3 py-2 text-sm">
-                      <option value="">None</option>
-                      <option value="daily">Daily</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="quarterly">Quarterly</option>
-                    </select>
-                  </div>
-                  {newTask.recurrence_pattern && (
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Interval</label>
-                      <input type="number" min="1" value={newTask.recurrence_interval} onChange={e => setNewTask(f => ({ ...f, recurrence_interval: e.target.value }))}
-                        className="cw-field w-full px-3 py-2 text-sm"
-                        placeholder="Every N periods" />
-                    </div>
-                  )}
-                  <div className="flex items-end">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={newTask.approval_required}
-                        onChange={e => setNewTask(f => ({ ...f, approval_required: e.target.checked }))}
-                        className="rounded border-[var(--color-border)]" />
-                      <span className="text-xs text-[var(--color-muted)]">Requires Approval</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Evidence / Notes</label>
-                <textarea value={newTask.evidence_notes} onChange={e => setNewTask(f => ({ ...f, evidence_notes: e.target.value }))}
-                  className="cw-field w-full px-3 py-2 text-sm"
-                  rows={2} placeholder="Supporting evidence or notes" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Risk</label>
-                  <select value={newTask.linked_risk_id} onChange={e => setNewTask(f => ({ ...f, linked_risk_id: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm">
-                    <option value="">None</option>
-                    {riskOptions.map((risk) => <option key={risk.id} value={risk.id}>{risk.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Internal Control</label>
-                  <select value={newTask.linked_control_id} onChange={e => setNewTask(f => ({ ...f, linked_control_id: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm">
-                    <option value="">None</option>
-                    {controlOptions.map((control) => <option key={control.id} value={control.id}>{control.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Vulnerability</label>
-                  <select value={newTask.linked_vulnerability_id} onChange={e => setNewTask(f => ({ ...f, linked_vulnerability_id: e.target.value }))}
-                    className="cw-field w-full px-3 py-2 text-sm">
-                    <option value="">None</option>
-                    {vulnOptions.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button onClick={() => setShowCreate(false)} className="cw-btn-secondary px-4 py-2 text-sm">Cancel</button>
-              <button onClick={handleCreate} disabled={!newTask.title || createMutation.isPending}
-                className="cw-btn-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50">
-                {createMutation.isPending && <Loader2 className="animate-spin" size={14} />}
-                Create Task
+      <RightSlidePanel
+        isOpen={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="Create New Task"
+        widthClassName="w-[780px]"
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setShowCreate(false)}
+              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={!newTask.title || createMutation.isPending}
+              className="cw-btn-primary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+            >
+              {createMutation.isPending && <Loader2 className="animate-spin" size={14} />}
+              Create Task
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-0.5">Title *</label>
+            <input
+              type="text"
+              value={newTask.title}
+              onChange={e => setNewTask(f => ({ ...f, title: e.target.value }))}
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              placeholder="Task title"
+              required
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-0.5">
+              <label className="block text-xs font-medium text-slate-600">Description</label>
+              <button
+                type="button"
+                onClick={handleAiGenerateDescription}
+                disabled={aiDescLoading || !newTask.title.trim()}
+                className="flex items-center gap-1 text-xs text-purple-700 hover:text-purple-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {aiDescLoading ? <Loader2 className="animate-spin" size={12} /> : <Sparkles size={12} />} AI Generate
               </button>
+            </div>
+            <textarea
+              value={newTask.description}
+              onChange={e => setNewTask(f => ({ ...f, description: e.target.value }))}
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              rows={3}
+              placeholder="Task description"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Source</label>
+              <select
+                value={newTask.source}
+                onChange={e => setNewTask(f => ({ ...f, source: e.target.value }))}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Priority</label>
+              <select
+                value={newTask.priority}
+                onChange={e => setNewTask(f => ({ ...f, priority: e.target.value }))}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Category</label>
+              <select
+                value={newTask.category}
+                onChange={e => setNewTask(f => ({ ...f, category: e.target.value }))}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Severity</label>
+              <select
+                value={newTask.severity}
+                onChange={e => setNewTask(f => ({ ...f, severity: e.target.value }))}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">None</option>
+                <option value="Critical">Critical</option><option value="High">High</option>
+                <option value="Medium">Medium</option><option value="Low">Low</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Source Module</label>
+              <select
+                value={newTask.source_module}
+                onChange={e => setNewTask(f => ({ ...f, source_module: e.target.value }))}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">None (Manual)</option>
+                {SOURCE_MODULES.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Source Entity Type</label>
+              <select
+                value={newTask.source_entity_type}
+                onChange={e => setNewTask(f => ({ ...f, source_entity_type: e.target.value }))}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">None</option>
+                <option value="risk">Risk</option><option value="control">Control</option>
+                <option value="finding">Audit Finding</option><option value="vulnerability">Vulnerability</option>
+                <option value="compliance_gap">Compliance Gap</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Assigned Owner</label>
+              <MultiSelectDropdown
+                title="Owner"
+                items={userItems}
+                selectedValues={newTask.assigned_owner_id ? [newTask.assigned_owner_id] : []}
+                onApply={(v) => setNewTask(f => ({ ...f, assigned_owner_id: v[0] || '' }))}
+                multiSelect={false}
+                autoApply
+                forceSearch
+                triggerVariant="input"
+                placeholder="Unassigned"
+                searchPlaceholder="Search users"
+                size="sm"
+                triggerClassName="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Reviewer</label>
+              <MultiSelectDropdown
+                title="Reviewer"
+                items={userItems}
+                selectedValues={newTask.reviewer_id ? [newTask.reviewer_id] : []}
+                onApply={(v) => setNewTask(f => ({ ...f, reviewer_id: v[0] || '' }))}
+                multiSelect={false}
+                autoApply
+                forceSearch
+                triggerVariant="input"
+                placeholder="None"
+                searchPlaceholder="Search users"
+                size="sm"
+                triggerClassName="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Due Date</label>
+              <input
+                type="date"
+                value={newTask.due_date}
+                onChange={e => setNewTask(f => ({ ...f, due_date: e.target.value }))}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">SLA Days</label>
+              <input
+                type="number"
+                value={newTask.sla_days}
+                onChange={e => setNewTask(f => ({ ...f, sla_days: e.target.value }))}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                placeholder="Auto-sets due date if empty"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 pt-3 mt-1">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+              <RefreshCw size={12} /> Recurrence & Approval
+            </h3>
+            <div className="grid grid-cols-3 gap-x-4 gap-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Recurrence</label>
+                <select
+                  value={newTask.recurrence_pattern}
+                  onChange={e => setNewTask(f => ({ ...f, recurrence_pattern: e.target.value }))}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">None</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                </select>
+              </div>
+              {newTask.recurrence_pattern && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Interval</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newTask.recurrence_interval}
+                    onChange={e => setNewTask(f => ({ ...f, recurrence_interval: e.target.value }))}
+                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    placeholder="Every N periods"
+                  />
+                </div>
+              )}
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 cursor-pointer pb-1">
+                  <input
+                    type="checkbox"
+                    checked={newTask.approval_required}
+                    onChange={e => setNewTask(f => ({ ...f, approval_required: e.target.checked }))}
+                    className="rounded border-slate-300"
+                  />
+                  <span className="text-xs text-slate-600">Requires Approval</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-0.5">Evidence / Notes</label>
+            <textarea
+              value={newTask.evidence_notes}
+              onChange={e => setNewTask(f => ({ ...f, evidence_notes: e.target.value }))}
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              rows={2}
+              placeholder="Supporting evidence or notes"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Risk</label>
+              <select
+                value={newTask.linked_risk_id}
+                onChange={e => setNewTask(f => ({ ...f, linked_risk_id: e.target.value }))}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">None</option>
+                {riskOptions.map((risk) => <option key={risk.id} value={risk.id}>{risk.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Internal Control</label>
+              <select
+                value={newTask.linked_control_id}
+                onChange={e => setNewTask(f => ({ ...f, linked_control_id: e.target.value }))}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">None</option>
+                {controlOptions.map((control) => <option key={control.id} value={control.id}>{control.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Vulnerability</label>
+              <select
+                value={newTask.linked_vulnerability_id}
+                onChange={e => setNewTask(f => ({ ...f, linked_vulnerability_id: e.target.value }))}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">None</option>
+                {vulnOptions.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+              </select>
             </div>
           </div>
         </div>
-      )}
+      </RightSlidePanel>
 
       {showTemplateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center cw-overlay p-4">
@@ -914,6 +1042,7 @@ export default function TaskBoardPage() {
 
       {activeTab === 'my-tasks' && <MyTasksPage />}
       {activeTab === 'reports' && <TaskReportsPage />}
+      </div>
     </div>
   );
 }

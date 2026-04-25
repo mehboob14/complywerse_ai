@@ -11,6 +11,8 @@ export interface PageHeaderProps {
   icon?: LucideIcon;
   iconColor?: 'primary' | 'success' | 'warning' | 'danger' | 'info';
   actions?: ReactNode;
+  /** Filter row rendered below the title (typical use: a row of MultiSelectDropdown chips) */
+  filters?: ReactNode;
   breadcrumbs?: BreadcrumbItem[];
   showBreadcrumb?: boolean;
   className?: string;
@@ -30,6 +32,7 @@ export function PageHeader({
   icon: Icon,
   iconColor = 'primary',
   actions,
+  filters,
   breadcrumbs,
   showBreadcrumb = true,
   className,
@@ -70,6 +73,12 @@ export function PageHeader({
           </div>
         )}
       </div>
+
+      {filters && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {filters}
+        </div>
+      )}
     </div>
   );
 }

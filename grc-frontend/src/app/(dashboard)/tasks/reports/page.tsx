@@ -114,15 +114,15 @@ export default function TaskReportsPage() {
   const activeCount = report.total - (report.by_status?.Completed || 0) - (report.by_status?.Verified || 0);
 
   return (
-    <div className="space-y-6 text-[var(--color-text)]">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-[var(--color-text)]">Task Reports</h1>
-          <p className="text-sm text-[var(--color-muted)] mt-1">
+    <div className="space-y-4 sm:space-y-6 text-[var(--color-text)]">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Task Reports</h1>
+          <p className="mt-1 text-sm text-slate-600">
             Analytics and insights for critical task management
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handlePredictEscalations}
             disabled={aiLoading === 'escalations'}

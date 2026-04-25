@@ -49,6 +49,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
   '/integrations/exceptions': { title: 'Integration Exceptions', subtitle: 'Review and manage integration exceptions.' },
   '/tasks': { title: 'Task Board' },
   '/admin': { title: 'Administration' },
+  '/is-projects': { title: 'IS Projects', subtitle: 'Track and manage information security projects across the organization' },
 };
 
 export default function Header() {

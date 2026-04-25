@@ -7,11 +7,13 @@ import { clsx } from 'clsx';
 export interface RightSlidePanelProps {
   isOpen: boolean;
   onClose: () => void;
-  title: string;
+  title: React.ReactNode;
   subtitle?: string;
   children: React.ReactNode;
   /** Width class, defaults to 'w-full max-w-xl' */
   width?: string;
+  /** Deprecated alias for width; kept for backward compatibility */
+  widthClassName?: string;
   /** Footer slot rendered at the bottom of the panel */
   footer?: React.ReactNode;
 }
@@ -23,6 +25,7 @@ export function RightSlidePanel({
   subtitle,
   children,
   width = 'w-full max-w-xl',
+  widthClassName,
   footer,
 }: RightSlidePanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -59,12 +62,12 @@ export function RightSlidePanel({
         ref={panelRef}
         className={clsx(
           'relative ml-auto flex h-full flex-col bg-white shadow-2xl transition-transform duration-300',
-          width,
+          widthClassName || width,
           isOpen ? 'translate-x-0' : 'translate-x-full'
         )}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-label={typeof title === 'string' ? title : undefined}
       >
         {/* Header */}
         <div className="flex items-start justify-between border-b border-gray-200 px-6 py-4">

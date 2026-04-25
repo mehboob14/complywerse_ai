@@ -53,7 +53,6 @@ interface NavItem {
 
 interface NavGroup {
   name: string;
-  icon: LucideIcon;
   items: NavItem[];
   defaultOpen?: boolean;
   requiredModules?: string[];
@@ -86,16 +85,15 @@ const extractModuleFromPerm = (perm: string): string => {
 };
 
 const navigation: NavEntry[] = [
-  { 
-    name: 'Dashboard', 
-    href: '/dashboard', 
+  {
+    name: 'Dashboard',
+    href: '/dashboard',
     icon: LayoutDashboard,
     requiredModules: ['dashboard'],
     requiredPermissions: ['dashboard:overview:*']
   },
   {
     name: 'Governance',
-    icon: Shield,
     defaultOpen: true,
     requiredModules: ['governance'],
     items: [
@@ -108,7 +106,6 @@ const navigation: NavEntry[] = [
   },
   {
     name: 'Risk Management',
-    icon: AlertTriangle,
     requiredModules: ['risks', 'erm'],
     items: [
       { name: 'ERM Overview', href: '/erm', icon: BarChart3, requiredPermissions: ['erm:risks:*'] },
@@ -124,7 +121,6 @@ const navigation: NavEntry[] = [
   },
   {
     name: 'Compliance',
-    icon: Shield,
     requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
     items: [
       { name: 'Frameworks', href: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
@@ -139,7 +135,6 @@ const navigation: NavEntry[] = [
   },
   {
     name: 'Vulnerability Mgmt',
-    icon: Bug,
     requiredModules: ['vulnerabilities'],
     items: [
       { name: 'Overview', href: '/vulnerabilities/dashboard', icon: BarChart3, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
@@ -190,16 +185,16 @@ function isGroup(item: NavEntry): item is NavGroup {
 
 function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   const pathname = usePathname();
-  const isActive = pathname === item.href || 
+  const isActive = pathname === item.href ||
     (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'));
 
   return (
     <Link
       href={item.href}
       className={clsx(
-        'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[11px] tracking-[0.01em] transition-all duration-150',
-        isActive 
-          ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm font-semibold' 
+        'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[12px] md:text-[13px] tracking-[0.01em] transition-all duration-150',
+        isActive
+          ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm font-medium'
           : 'border-transparent text-[var(--sidebar-text)] font-medium hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
         collapsed && 'justify-center px-2'
       )}
@@ -210,7 +205,7 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
         className={clsx(
           'flex-shrink-0 transition-colors duration-150',
           isActive ? 'text-[var(--color-on-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
-        )} 
+        )}
       />
       {!collapsed && <span className="truncate">{item.name}</span>}
     </Link>
@@ -223,7 +218,6 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
     .filter((item) => pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/')))
     .sort((a, b) => b.href.length - a.href.length)[0];
   const activeChildHref = activeChild?.href;
-  const isAnyChildActive = !!activeChildHref;
   const [isOpen, setIsOpen] = useState(group.defaultOpen !== false);
 
   if (collapsed) {
@@ -232,16 +226,15 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
         <button
           className={clsx(
             'flex items-center justify-center w-full rounded-[var(--radius-md)] border-l-[3px] p-2 transition-all duration-150',
-            isAnyChildActive 
-              ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)]'
-              : 'border-transparent text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
+            'border-transparent text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
           )}
+          title={group.name}
         >
-          <group.icon {...navIconProps} className="text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em]">{group.name.charAt(0)}</span>
         </button>
         <div className="absolute left-full top-0 ml-2 hidden group-hover/nav:block z-50">
           <div className="min-w-[200px] rounded-[var(--radius-lg)] border border-slate-200 bg-white shadow-elevated py-1.5">
-            <div className="px-3 py-1 text-[9px] font-normal uppercase tracking-[0.12em] text-[var(--sidebar-text-section)]">
+            <div className="px-3 py-1 text-[10px] md:text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--sidebar-text-section)]">
               {group.name}
             </div>
             {group.items.map(item => (
@@ -249,7 +242,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
                 key={item.href}
                 href={item.href}
                 className={clsx(
-                  'flex items-center gap-2 border-l-[3px] px-3 py-1.5 text-[12px] font-semibold tracking-[0.01em] transition-colors',
+                  'flex items-center gap-2 border-l-[3px] px-3 py-1.5 text-[12px] md:text-[13px] font-medium tracking-[0.01em] transition-colors',
                   activeChildHref === item.href
                     ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm'
                     : 'border-transparent text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
@@ -270,23 +263,14 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
       <button
         onClick={() => setIsOpen(prev => !prev)}
         className={clsx(
-          'group flex w-full items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] transition-all duration-150',
-          isAnyChildActive
-            ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm'
-            : 'border-transparent text-[var(--sidebar-text-section)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
+          'group flex w-full items-center rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[10px] md:text-[11px] font-bold uppercase tracking-[0.12em] transition-all duration-150',
+          'border-transparent text-[var(--sidebar-text-section)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
         )}
       >
-        <group.icon
-          {...navIconProps}
-          className={clsx(
-            'flex-shrink-0 transition-colors duration-150',
-            isAnyChildActive ? 'text-[var(--color-on-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
-          )} 
-        />
         <span className="flex-1 text-left truncate">{group.name}</span>
         {isOpen
-          ? <ChevronDown size={11} className="flex-shrink-0 opacity-60" />
-          : <ChevronRight size={11} className="flex-shrink-0 opacity-60" />
+          ? <ChevronDown size={13} className="flex-shrink-0 opacity-60" />
+          : <ChevronRight size={13} className="flex-shrink-0 opacity-60" />
         }
       </button>
       {isOpen && (
@@ -296,7 +280,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
               key={item.href}
               href={item.href}
               className={clsx(
-                'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[11px] font-semibold tracking-[0.01em] transition-all duration-150',
+                'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[12px] md:text-[13px] font-medium tracking-[0.01em] transition-all duration-150',
                 activeChildHref === item.href
                   ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm'
                   : 'border-transparent text-[var(--sidebar-text-subitem)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
@@ -307,9 +291,9 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
                 className={clsx(
                   'flex-shrink-0',
                   activeChildHref === item.href
-                    ? 'text-[var(--color-on-base)]' 
+                    ? 'text-[var(--color-on-base)]'
                     : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
-                )} 
+                )}
               />
               <span className="truncate">{item.name}</span>
             </Link>
@@ -365,7 +349,7 @@ export default function Sidebar() {
         setAllowedPermissions(permissions);
         const adminStatus = data.user.is_admin || false;
         setIsAdmin(adminStatus);
-        
+
         // If admin but no modules/permissions set, initialize with all modules
         if (adminStatus && resolvedModules.length === 0) {
           setAllowedModules(ADMIN_DEFAULT_MODULES);
@@ -387,29 +371,29 @@ export default function Sidebar() {
 
     // Admin bypass
     if (allowedPermissions.includes('*:*:*')) return true;
-    
+
     // Exact match
     if (allowedPermissions.includes(required)) return true;
-    
+
     // If required permission is a wildcard like "risks:risk_register:*"
     if (required.endsWith(':*')) {
       const prefix = required.slice(0, -2); // "risks:risk_register"
       // Check if user has ANY permission starting with this prefix
       return allowedPermissions.some((perm) => perm.startsWith(prefix + ':'));
     }
-    
+
     // If required permission is specific like "risks:risk_register:view"
     // Check if user has a wildcard that covers it
     const parts = required.split(':');
     if (parts.length === 3) {
       const wildcardPerm = `${parts[0]}:${parts[1]}:*`;
       if (allowedPermissions.includes(wildcardPerm)) return true;
-      
+
       // Also check module-level wildcard
       const moduleWildcard = `${parts[0]}:*:*`;
       if (allowedPermissions.includes(moduleWildcard)) return true;
     }
-    
+
     return false;
   };
 

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi, assetsApi, ermApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { InlineLinkPicker } from '@/components/ui';
 import {
   Bug,
   Loader2,
@@ -285,10 +286,6 @@ export default function VulnerabilityDetailPage() {
 
   const [activeTab, setActiveTab] = useState('overview');
   const [showMitigationModal, setShowMitigationModal] = useState(false);
-  const [showAssetModal, setShowAssetModal] = useState(false);
-  const [showControlModal, setShowControlModal] = useState(false);
-  const [controlSearch, setControlSearch] = useState('');
-  const [selectedControlId, setSelectedControlId] = useState<number | null>(null);
   const [showRetestModal, setShowRetestModal] = useState(false);
   const [showExceptionModal, setShowExceptionModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -397,22 +394,22 @@ export default function VulnerabilityDetailPage() {
     enabled: activeTab === 'escalations',
   });
 
-  const { data: assets } = useQuery({
+  const { data: assets, isLoading: assetsLoading } = useQuery({
     queryKey: ['assets-list'],
     queryFn: async () => {
       const response = await assetsApi.getAll();
       return response.data;
     },
-    enabled: showAssetModal,
+    enabled: activeTab === 'assets',
   });
 
-  const { data: internalControls } = useQuery({
+  const { data: internalControls, isLoading: internalControlsLoading } = useQuery({
     queryKey: ['internal-controls-list'],
     queryFn: async () => {
       const response = await ermApi.internalControls.getAll();
       return response.data;
     },
-    enabled: showControlModal,
+    enabled: activeTab === 'controls',
   });
 
   const changeStatusMutation = useMutation({
@@ -445,7 +442,6 @@ export default function VulnerabilityDetailPage() {
       vulnManagementApi.assetLinks.create(vulnId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vuln-assets', vulnId] });
-      setShowAssetModal(false);
     },
   });
 
@@ -461,9 +457,6 @@ export default function VulnerabilityDetailPage() {
       vulnManagementApi.controlLinks.create(vulnId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vuln-controls', vulnId] });
-      setShowControlModal(false);
-      setControlSearch('');
-      setSelectedControlId(null);
     },
   });
 
@@ -724,10 +717,22 @@ export default function VulnerabilityDetailPage() {
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-semibold cw-text">Linked Assets</h2>
             {canEdit && (
-            <button onClick={() => setShowAssetModal(true)} className="btn-primary flex items-center gap-1.5 text-sm py-1 px-3">
-              <Plus size={14} />
-              Link Asset
-            </button>
+              <InlineLinkPicker
+                triggerLabel="Link Asset"
+                triggerClassName="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                items={(assets || []).filter((a: { id: number }) => !assetLinks?.some((l) => l.asset_id === a.id)).map((a: { id: number; name: string; asset_type?: string }) => ({
+                  value: String(a.id),
+                  label: a.name,
+                  subLabel: a.asset_type,
+                }))}
+                isLoading={assetsLoading || createAssetLinkMutation.isPending}
+                emptyText="No assets available"
+                searchPlaceholder="Search assets"
+                onSelect={(value) => createAssetLinkMutation.mutate({
+                  asset_id: Number(value),
+                  relationship_type: 'affected',
+                })}
+              />
             )}
           </div>
           <div className="cw-card overflow-hidden">
@@ -773,10 +778,22 @@ export default function VulnerabilityDetailPage() {
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-semibold cw-text">Linked Controls</h2>
             {canEdit && (
-            <button onClick={() => setShowControlModal(true)} className="btn-primary flex items-center gap-1.5 text-sm py-1 px-3">
-              <Plus size={14} />
-              Link Control
-            </button>
+              <InlineLinkPicker
+                triggerLabel="Link Control"
+                triggerClassName="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                items={(internalControls || []).filter((c: { id: number }) => !controlLinks?.some((l) => l.internal_control_id === c.id)).map((c: { id: number; control_id?: string; name: string; category?: string }) => ({
+                  value: String(c.id),
+                  label: c.control_id ? `${c.control_id} — ${c.name}` : c.name,
+                  subLabel: c.category,
+                }))}
+                isLoading={internalControlsLoading || createControlLinkMutation.isPending}
+                emptyText="No controls available"
+                searchPlaceholder="Search controls"
+                onSelect={(value) => createControlLinkMutation.mutate({
+                  control_type: 'internal',
+                  internal_control_id: Number(value),
+                })}
+              />
             )}
           </div>
           <div className="cw-card overflow-hidden">
@@ -1207,138 +1224,6 @@ export default function VulnerabilityDetailPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {showAssetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="cw-card w-full max-w-md p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold cw-text">Link Asset</h2>
-              <button onClick={() => setShowAssetModal(false)} className="text-slate-600 hover:text-slate-900">
-                <X size={20} />
-              </button>
-            </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                createAssetLinkMutation.mutate({
-                  asset_id: parseInt(formData.get('asset_id') as string),
-                  relationship_type: formData.get('relationship_type') as string || undefined,
-                });
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Asset *</label>
-                <select name="asset_id" required className="input-field w-full">
-                  <option value="">Select an asset</option>
-                  {assets?.map((asset: { id: number; name: string }) => (
-                    <option key={asset.id} value={asset.id}>{asset.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Relationship Type</label>
-                <select name="relationship_type" className="input-field w-full">
-                  <option value="affected">Affected</option>
-                  <option value="related">Related</option>
-                  <option value="hosting">Hosting</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-3">
-                <button type="button" onClick={() => setShowAssetModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" disabled={createAssetLinkMutation.isPending} className="btn-primary">
-                  {createAssetLinkMutation.isPending ? 'Linking...' : 'Link Asset'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showControlModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="cw-card w-full max-w-md p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold cw-text">Link Internal Control</h2>
-              <button onClick={() => { setShowControlModal(false); setControlSearch(''); setSelectedControlId(null); }} className="text-slate-600 hover:text-slate-900">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Search Controls</label>
-                <input
-                  type="text"
-                  value={controlSearch}
-                  onChange={(e) => { setControlSearch(e.target.value); setSelectedControlId(null); }}
-                  placeholder="Type to filter controls..."
-                  className="input-field w-full"
-                  autoFocus
-                />
-              </div>
-              <div className="border border-slate-200 rounded-md overflow-hidden">
-                <div className="max-h-56 overflow-y-auto">
-                  {!internalControls ? (
-                    <div className="px-3 py-4 text-sm text-slate-500 text-center">Loading controls...</div>
-                  ) : (() => {
-                    const filtered = internalControls.filter((ctrl: { id: number; control_id?: string; name: string }) => {
-                      const q = controlSearch.toLowerCase();
-                      return !q || ctrl.name.toLowerCase().includes(q) || (ctrl.control_id || '').toLowerCase().includes(q);
-                    });
-                    if (filtered.length === 0) return (
-                      <div className="px-3 py-4 text-sm text-slate-500 text-center">No controls found</div>
-                    );
-                    return filtered.map((ctrl: { id: number; control_id?: string; name: string }) => (
-                      <button
-                        key={ctrl.id}
-                        type="button"
-                        onClick={() => setSelectedControlId(ctrl.id)}
-                        className={`w-full flex items-start gap-2 px-3 py-2.5 text-left text-sm border-b border-slate-100 last:border-b-0 transition-colors ${
-                          selectedControlId === ctrl.id
-                            ? 'bg-primary-50 text-primary-700'
-                            : 'hover:bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        {ctrl.control_id && (
-                          <span className="flex-shrink-0 font-mono text-xs text-slate-400 mt-0.5 w-16">{ctrl.control_id}</span>
-                        )}
-                        <span className="flex-1">{ctrl.name}</span>
-                        {selectedControlId === ctrl.id && (
-                          <CheckCircle size={14} className="flex-shrink-0 mt-0.5 text-primary-600" />
-                        )}
-                      </button>
-                    ));
-                  })()}
-                </div>
-              </div>
-              {selectedControlId && (() => {
-                const sel = internalControls?.find((c: { id: number; name: string; control_id?: string }) => c.id === selectedControlId);
-                return sel ? (
-                  <p className="text-xs text-slate-500">Selected: <span className="font-medium text-slate-700">{sel.name}</span></p>
-                ) : null;
-              })()}
-              <div className="flex justify-end gap-3 pt-1">
-                <button type="button" onClick={() => { setShowControlModal(false); setControlSearch(''); setSelectedControlId(null); }} className="btn-secondary">Cancel</button>
-                <button
-                  type="button"
-                  disabled={!selectedControlId || createControlLinkMutation.isPending}
-                  onClick={() => {
-                    if (!selectedControlId) return;
-                    createControlLinkMutation.mutate({
-                      control_type: 'internal',
-                      internal_control_id: selectedControlId,
-                    });
-                  }}
-                  className="btn-primary"
-                >
-                  {createControlLinkMutation.isPending ? 'Linking...' : 'Link Control'}
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}

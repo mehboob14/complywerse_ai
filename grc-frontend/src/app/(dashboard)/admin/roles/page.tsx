@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { PageHeader, DataTable, IfPermission } from '@/components/ui';
+import { useState, useEffect, useMemo } from 'react';
+import { DataTable, IfPermission, SearchInput } from '@/components/ui';
+import { Edit2, Eye, Plus, Trash2 } from 'lucide-react';
 import { adminApi, AdminRole, PermissionModule } from '@/lib/api';
 
 async function ensureTenantContext(): Promise<boolean> {
@@ -34,6 +35,7 @@ export default function RolesManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingRole, setEditingRole] = useState<AdminRole | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -234,22 +236,26 @@ export default function RolesManagementPage() {
       id: 'actions',
       header: 'Actions',
       accessor: (role: AdminRole) => (
-        <div className="flex space-x-2">
+        <div className="flex items-center gap-1">
           <IfPermission required={["admin:roles:edit", "admin:roles:view"]}>
             <button
               onClick={() => handleEdit(role)}
-              className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-black rounded text-sm"
+              className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary-600 transition-colors"
+              title={role.is_system_role ? 'View role' : 'Edit role'}
+              aria-label={role.is_system_role ? 'View role' : 'Edit role'}
             >
-              {role.is_system_role ? 'View' : 'Edit'}
+              {role.is_system_role ? <Eye size={16} /> : <Edit2 size={16} />}
             </button>
           </IfPermission>
           {!role.is_system_role && (
             <IfPermission required="admin:roles:delete">
               <button
                 onClick={() => handleDelete(role)}
-                className="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-600 rounded text-sm"
+                className="rounded p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+                title="Delete role"
+                aria-label="Delete role"
               >
-                Delete
+                <Trash2 size={16} />
               </button>
             </IfPermission>
           )}
@@ -257,6 +263,15 @@ export default function RolesManagementPage() {
       ),
     },
   ];
+
+  const filteredRoles = useMemo(() => {
+    if (!searchTerm.trim()) return roles;
+    const q = searchTerm.toLowerCase();
+    return roles.filter((r) =>
+      r.name?.toLowerCase().includes(q) ||
+      r.description?.toLowerCase().includes(q)
+    );
+  }, [roles, searchTerm]);
 
   if (loading) {
     return (
@@ -267,11 +282,23 @@ export default function RolesManagementPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Role Management"
-        subtitle="Create and manage roles with granular permissions"
-      />
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Role Management</h1>
+          <p className="mt-1 text-sm text-slate-600">Create and manage roles with granular permissions</p>
+        </div>
+        <IfPermission required="admin:roles:create">
+          <button
+            onClick={handleCreate}
+            className="cw-btn-primary flex items-center gap-1.5 rounded-lg px-3 sm:px-4 py-2 text-sm font-medium flex-shrink-0"
+          >
+            <Plus size={16} />
+            <span className="hidden sm:inline">Create Role</span>
+            <span className="sm:hidden">New</span>
+          </button>
+        </IfPermission>
+      </div>
 
       {error && (
         <div className="bg-red-50 border border-red-500/50 rounded-lg p-4 text-red-600">
@@ -282,19 +309,19 @@ export default function RolesManagementPage() {
         </div>
       )}
 
-      <div className="flex justify-end">
-        <IfPermission required="admin:roles:create">
-          <button
-            onClick={handleCreate}
-            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm transition-colors"
-          >
-            + Create Role
-          </button>
-        </IfPermission>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-[180px] sm:max-w-md">
+          <SearchInput
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder="Search roles..."
+            size="md"
+          />
+        </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-        <DataTable data={roles} columns={columns} />
+        <DataTable data={filteredRoles} columns={columns} />
       </div>
 
       {showModal && (

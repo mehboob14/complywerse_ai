@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
-import { PageHeader, DataTable } from '@/components/ui';
+import { PageHeader, DataTable, MultiSelectDropdown } from '@/components/ui';
 import { adminApi } from '@/lib/api';
 
 interface AuditLogEntry {
@@ -215,56 +215,55 @@ export default function AuditLogsPage() {
     );
   }
 
+  const actionItems = availableActions.map((action) => ({ value: action, label: action }));
+  const moduleItems = availableModules.map((module) => ({ value: module, label: module }));
+  const dateItems = [
+    { value: 'today', label: 'Today' },
+    { value: 'last_7_days', label: 'Last 7 Days' },
+    { value: 'last_30_days', label: 'Last 30 Days' },
+  ];
+
+  const handleSingleApply = (
+    setter: (v: string) => void
+  ) => (values: string[]) => {
+    setPage(0);
+    setter(values[0] || 'all');
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Audit Logs"
         subtitle="Comprehensive system-wide audit trail of all user and API actions"
+        filters={
+          <>
+            <MultiSelectDropdown
+              title="Action"
+              items={actionItems}
+              selectedValues={actionFilter !== 'all' ? [actionFilter] : []}
+              onApply={handleSingleApply(setActionFilter)}
+              multiSelect={false}
+              size="sm"
+            />
+            <MultiSelectDropdown
+              title="Module"
+              items={moduleItems}
+              selectedValues={moduleFilter !== 'all' ? [moduleFilter] : []}
+              onApply={handleSingleApply(setModuleFilter)}
+              multiSelect={false}
+              size="sm"
+            />
+            <MultiSelectDropdown
+              title="Date"
+              items={dateItems}
+              selectedValues={dateFilter !== 'all' ? [dateFilter] : []}
+              onApply={handleSingleApply(setDateFilter)}
+              multiSelect={false}
+              size="sm"
+            />
+          </>
+        }
       />
-
-      <div className="bg-white border border-slate-200 rounded-lg p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <select
-            value={actionFilter}
-            onChange={(e) => {
-              setPage(0);
-              setActionFilter(e.target.value);
-            }}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-black"
-          >
-            <option value="all">All Actions</option>
-            {availableActions.map((action) => (
-              <option key={action} value={action}>{action}</option>
-            ))}
-          </select>
-          <select
-            value={moduleFilter}
-            onChange={(e) => {
-              setPage(0);
-              setModuleFilter(e.target.value);
-            }}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-black"
-          >
-            <option value="all">All Modules</option>
-            {availableModules.map((module) => (
-              <option key={module} value={module}>{module}</option>
-            ))}
-          </select>
-          <select
-            value={dateFilter}
-            onChange={(e) => {
-              setPage(0);
-              setDateFilter(e.target.value);
-            }}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-black"
-          >
-            <option value="all">All Dates</option>
-            <option value="today">Today</option>
-            <option value="last_7_days">Last 7 Days</option>
-            <option value="last_30_days">Last 30 Days</option>
-          </select>
-        </div>
-      </div>
 
       {error && (
         <div className="bg-red-50 border border-red-500/50 rounded-lg p-4 text-red-600">

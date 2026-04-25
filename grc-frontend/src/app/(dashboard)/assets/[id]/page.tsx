@@ -8,12 +8,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import { assetsApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
 import type { ITAsset } from '@/types';
-import { 
-  ArrowLeft, Loader2, AlertCircle, Shield, DollarSign, 
-  Target, TrendingUp, Link as LinkIcon, FileCheck, AlertTriangle,
+import { SearchInput, InlineLinkPicker } from '@/components/ui';
+import {
+  ArrowLeft, Loader2, AlertCircle, Shield, DollarSign,
+  Target, TrendingUp, FileCheck, AlertTriangle,
   ClipboardList, Plus, X, Trash2, Edit, RefreshCw,
   AppWindow, HardDrive, Database, Cloud, Building2,
-  Lock, ShieldCheck, MapPin, User, Search, Bug
+  Lock, ShieldCheck, MapPin, User, Bug
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -167,9 +168,6 @@ export default function AssetDetailPage() {
   const canEdit = hasPermission('assets:asset_inventory:edit');
   const canDelete = hasPermission('assets:asset_inventory:delete');
   const [activeTab, setActiveTab] = useState<TabType>('details');
-  const [showLinkControlModal, setShowLinkControlModal] = useState(false);
-  const [showLinkEvidenceModal, setShowLinkEvidenceModal] = useState(false);
-  const [showLinkVulnerabilityModal, setShowLinkVulnerabilityModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
@@ -195,25 +193,25 @@ export default function AssetDetailPage() {
       const response = await ermApi.internalControls.getAll();
       return response.data as Array<{ id: number; control_id?: string; name: string; category?: string }>;
     },
-    enabled: showLinkControlModal,
+    enabled: activeTab === 'controls',
   });
 
-  const { data: allEvidence } = useQuery({
+  const { data: allEvidence, isLoading: evidenceLoading } = useQuery({
     queryKey: ['all-evidence'],
     queryFn: async () => {
       const response = await evidenceApi.getAll();
       return response.data;
     },
-    enabled: showLinkEvidenceModal,
+    enabled: activeTab === 'evidence',
   });
 
-  const { data: allVulnerabilities } = useQuery({
+  const { data: allVulnerabilities, isLoading: vulnsLoading } = useQuery({
     queryKey: ['all-vulnerabilities'],
     queryFn: async () => {
       const response = await vulnManagementApi.vulnerabilities.getAll();
       return response.data as Array<{ id: number; vuln_id?: string; title?: string; severity?: string; status?: string }>;
     },
-    enabled: showLinkVulnerabilityModal,
+    enabled: activeTab === 'vulnerabilities',
   });
 
   const assessRiskMutation = useMutation({
@@ -255,21 +253,19 @@ export default function AssetDetailPage() {
   });
 
   const linkControlMutation = useMutation({
-    mutationFn: (data: { internal_control_id: number; coverage_status?: string }) => 
+    mutationFn: (data: { internal_control_id: number; coverage_status?: string }) =>
       assetsApi.linkInternalControl(assetId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
       queryClient.invalidateQueries({ queryKey: ['asset-coverage', assetId] });
-      setShowLinkControlModal(false);
     },
   });
 
   const linkEvidenceMutation = useMutation({
-    mutationFn: (data: { evidence_id: number; relationship_type?: string }) => 
+    mutationFn: (data: { evidence_id: number; relationship_type?: string }) =>
       assetsApi.linkEvidence(assetId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
-      setShowLinkEvidenceModal(false);
     },
   });
 
@@ -278,7 +274,6 @@ export default function AssetDetailPage() {
       vulnManagementApi.assetLinks.create(vulnId, { asset_id: assetId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
-      setShowLinkVulnerabilityModal(false);
     },
   });
 
@@ -412,7 +407,7 @@ export default function AssetDetailPage() {
   ];
 
   return (
-    <div className="assets-light min-h-full space-y-4 bg-slate-50 p-4 md:p-6">
+    <div className="assets-light space-y-4">
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
           <div className="flex items-center gap-4">
@@ -577,7 +572,18 @@ export default function AssetDetailPage() {
         {activeTab === 'controls' && (
           <ControlsTab
             asset={asset}
-            onLinkControl={() => setShowLinkControlModal(true)}
+            allControls={(allControls || []).map((c) => ({
+              id: c.id,
+              internal_id: c.control_id,
+              name: c.name,
+              category: c.category,
+            }))}
+            controlsLoading={controlsLoading}
+            onLinkControl={(controlId) => linkControlMutation.mutate({
+              internal_control_id: controlId,
+              coverage_status: 'partial',
+            })}
+            isLinkingControl={linkControlMutation.isPending}
             onUnlinkInternalControl={(linkId) => unlinkInternalControlMutation.mutate(linkId)}
             onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
             isUnlinkingInternal={unlinkInternalControlMutation.isPending}
@@ -587,7 +593,13 @@ export default function AssetDetailPage() {
         {activeTab === 'evidence' && (
           <EvidenceTab
             asset={asset}
-            onLinkEvidence={() => setShowLinkEvidenceModal(true)}
+            allEvidence={allEvidence || []}
+            evidenceLoading={evidenceLoading}
+            onLinkEvidence={(evidenceId) => linkEvidenceMutation.mutate({
+              evidence_id: evidenceId,
+              relationship_type: 'supports',
+            })}
+            isLinking={linkEvidenceMutation.isPending}
             onUnlinkEvidence={(linkId) => unlinkEvidenceMutation.mutate(linkId)}
             isUnlinking={unlinkEvidenceMutation.isPending}
           />
@@ -595,7 +607,10 @@ export default function AssetDetailPage() {
         {activeTab === 'vulnerabilities' && (
           <VulnerabilitiesTab
             asset={asset}
-            onLinkVulnerability={() => setShowLinkVulnerabilityModal(true)}
+            allVulnerabilities={allVulnerabilities || []}
+            vulnsLoading={vulnsLoading}
+            onLinkVulnerability={(vulnId) => linkVulnerabilityMutation.mutate(vulnId)}
+            isLinking={linkVulnerabilityMutation.isPending}
             onUnlinkVulnerability={(vulnId) => unlinkVulnerabilityMutation.mutate(vulnId)}
             isUnlinking={unlinkVulnerabilityMutation.isPending}
           />
@@ -607,48 +622,6 @@ export default function AssetDetailPage() {
           <SecurityComplianceTab assetId={assetId} />
         )}
       </div>
-
-      {showLinkControlModal && (
-        <LinkControlModal
-          onClose={() => setShowLinkControlModal(false)}
-          onLink={(controlId, coverageStatus) => linkControlMutation.mutate({ 
-            internal_control_id: controlId, 
-            coverage_status: coverageStatus 
-          })}
-          isLinking={linkControlMutation.isPending}
-          isLoading={controlsLoading}
-          linkedControlIds={asset.linked_internal_controls?.map((c) => c.internal_control_id) || []}
-          allControls={(allControls || []).map((c) => ({
-            id: c.id,
-            internal_id: (c as any).control_id,
-            name: c.name,
-            category: (c as any).category,
-          }))}
-        />
-      )}
-
-      {showLinkEvidenceModal && (
-        <LinkEvidenceModal
-          onClose={() => setShowLinkEvidenceModal(false)}
-          onLink={(evidenceId, relationshipType) => linkEvidenceMutation.mutate({ 
-            evidence_id: evidenceId, 
-            relationship_type: relationshipType 
-          })}
-          isLinking={linkEvidenceMutation.isPending}
-          linkedEvidenceIds={asset.linked_evidence?.map(e => e.evidence_id) || []}
-          allEvidence={allEvidence || []}
-        />
-      )}
-
-      {showLinkVulnerabilityModal && (
-        <LinkVulnerabilityModal
-          onClose={() => setShowLinkVulnerabilityModal(false)}
-          onLink={(vulnId) => linkVulnerabilityMutation.mutate(vulnId)}
-          isLinking={linkVulnerabilityMutation.isPending}
-          linkedVulnerabilityIds={asset.linked_vulnerabilities?.map((v) => v.vulnerability_id) || []}
-          allVulnerabilities={allVulnerabilities || []}
-        />
-      )}
 
       {showDeleteConfirm && (
         <DeleteConfirmModal
@@ -972,21 +945,35 @@ function DetailsTab({ asset }: { asset: AssetDetailData }) {
   );
 }
 
-function ControlsTab({ 
-  asset, 
+function ControlsTab({
+  asset,
+  allControls,
+  controlsLoading,
   onLinkControl,
+  isLinkingControl,
   onUnlinkInternalControl,
   onUnlinkFrameworkControl,
   isUnlinkingInternal,
   isUnlinkingFramework,
-}: { 
-  asset: AssetDetailData; 
-  onLinkControl: () => void;
+}: {
+  asset: AssetDetailData;
+  allControls: Array<{ id: number | string; internal_id?: string; name: string; category?: string }>;
+  controlsLoading: boolean;
+  onLinkControl: (controlId: number) => void;
+  isLinkingControl: boolean;
   onUnlinkInternalControl: (linkId: number) => void;
   onUnlinkFrameworkControl: (linkId: number) => void;
   isUnlinkingInternal: boolean;
   isUnlinkingFramework: boolean;
 }) {
+  const linkedControlIds = asset.linked_internal_controls?.map((c) => c.internal_control_id) || [];
+  const controlPickerItems = allControls
+    .filter((c) => !linkedControlIds.includes(Number(c.id)))
+    .map((c) => ({
+      value: String(c.id),
+      label: c.internal_id ? `${c.internal_id} — ${c.name}` : c.name,
+      subLabel: c.category,
+    }));
   const totalControls =
     (asset.linked_controls?.length || 0) +
     (asset.linked_internal_controls?.length || 0) +
@@ -1005,13 +992,14 @@ function ControlsTab({
           <Shield className="h-4 w-4 text-blue-600" />
           Linked Controls ({totalControls})
         </h3>
-        <button
-          onClick={onLinkControl}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4" />
-          Link Control
-        </button>
+        <InlineLinkPicker
+          triggerLabel="Link Control"
+          items={controlPickerItems}
+          isLoading={controlsLoading || isLinkingControl}
+          emptyText="No controls available"
+          searchPlaceholder="Search controls"
+          onSelect={(value) => onLinkControl(Number(value))}
+        />
       </div>
 
       {asset.linked_internal_controls && asset.linked_internal_controls.length > 0 && (
@@ -1101,27 +1089,37 @@ function ControlsTab({
           <Shield className="mb-4 h-12 w-12 text-slate-400" />
           <h4 className="text-base font-medium text-slate-900">No Controls Linked</h4>
           <p className="mt-1 text-sm text-slate-600">Link controls to this asset for compliance tracking</p>
-          <button
-            onClick={onLinkControl}
-            className="mt-4 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" />
-            Link First Control
-          </button>
+          <div className="mt-4">
+            <InlineLinkPicker
+              triggerLabel="Link First Control"
+              triggerClassName="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+              items={controlPickerItems}
+              isLoading={controlsLoading || isLinkingControl}
+              emptyText="No controls available"
+              searchPlaceholder="Search controls"
+              onSelect={(value) => onLinkControl(Number(value))}
+            />
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-function EvidenceTab({ 
-  asset, 
-  onLinkEvidence, 
+function EvidenceTab({
+  asset,
+  allEvidence,
+  evidenceLoading,
+  onLinkEvidence,
+  isLinking,
   onUnlinkEvidence,
-  isUnlinking 
-}: { 
-  asset: AssetDetailData; 
-  onLinkEvidence: () => void;
+  isUnlinking,
+}: {
+  asset: AssetDetailData;
+  allEvidence: Array<{ id: number | string; title?: string; name?: string; evidence_type?: string }>;
+  evidenceLoading: boolean;
+  onLinkEvidence: (evidenceId: number) => void;
+  isLinking: boolean;
   onUnlinkEvidence: (linkId: number) => void;
   isUnlinking: boolean;
 }) {
@@ -1130,7 +1128,16 @@ function EvidenceTab({
     validates: 'border-blue-200 bg-blue-50 text-blue-700',
     documents: 'border-purple-200 bg-purple-50 text-purple-700',
   };
-  
+
+  const linkedEvidenceIds = asset.linked_evidence?.map((e) => e.evidence_id) || [];
+  const evidencePickerItems = allEvidence
+    .filter((e) => !linkedEvidenceIds.includes(Number(e.id)))
+    .map((e) => ({
+      value: String(e.id),
+      label: e.title || e.name || `Evidence #${e.id}`,
+      subLabel: e.evidence_type,
+    }));
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1138,13 +1145,14 @@ function EvidenceTab({
           <FileCheck className="h-4 w-4 text-blue-600" />
           Linked Evidence ({asset.linked_evidence?.length || 0})
         </h3>
-        <button
-          onClick={onLinkEvidence}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4" />
-          Link Evidence
-        </button>
+        <InlineLinkPicker
+          triggerLabel="Link Evidence"
+          items={evidencePickerItems}
+          isLoading={evidenceLoading || isLinking}
+          emptyText="No evidence available"
+          searchPlaceholder="Search evidence"
+          onSelect={(value) => onLinkEvidence(Number(value))}
+        />
       </div>
 
       {asset.linked_evidence && asset.linked_evidence.length > 0 ? (
@@ -1176,13 +1184,17 @@ function EvidenceTab({
           <FileCheck className="mb-4 h-12 w-12 text-slate-400" />
           <h4 className="text-base font-medium text-slate-900">No Evidence Linked</h4>
           <p className="mt-1 text-sm text-slate-600">Link evidence items to document this asset</p>
-          <button
-            onClick={onLinkEvidence}
-            className="mt-4 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" />
-            Link First Evidence
-          </button>
+          <div className="mt-4">
+            <InlineLinkPicker
+              triggerLabel="Link First Evidence"
+              triggerClassName="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+              items={evidencePickerItems}
+              isLoading={evidenceLoading || isLinking}
+              emptyText="No evidence available"
+              searchPlaceholder="Search evidence"
+              onSelect={(value) => onLinkEvidence(Number(value))}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -1191,15 +1203,34 @@ function EvidenceTab({
 
 function VulnerabilitiesTab({
   asset,
+  allVulnerabilities,
+  vulnsLoading,
   onLinkVulnerability,
+  isLinking,
   onUnlinkVulnerability,
   isUnlinking,
 }: {
   asset: AssetDetailData;
-  onLinkVulnerability: () => void;
+  allVulnerabilities: Array<{ id: number; vuln_id?: string; title?: string; severity?: string; status?: string }>;
+  vulnsLoading: boolean;
+  onLinkVulnerability: (vulnId: number) => void;
+  isLinking: boolean;
   onUnlinkVulnerability: (vulnId: number) => void;
   isUnlinking: boolean;
 }) {
+  const linkedVulnIds = asset.linked_vulnerabilities?.map((v) => v.vulnerability_id) || [];
+  const vulnPickerItems = allVulnerabilities
+    .filter((v) => !linkedVulnIds.includes(v.id))
+    .map((v) => {
+      const code = v.vuln_id || `VULN-${v.id}`;
+      const title = v.title || 'Untitled vulnerability';
+      const sev = v.severity ? ` · ${v.severity}` : '';
+      return {
+        value: String(v.id),
+        label: `${code} — ${title}`,
+        subLabel: `${(v.status || '').replace(/_/g, ' ')}${sev}`.trim() || undefined,
+      };
+    });
   const severityColors: Record<string, string> = {
     critical: 'border-red-200 bg-red-50 text-red-600',
     high: 'border-orange-200 bg-orange-50 text-orange-600',
@@ -1223,13 +1254,16 @@ function VulnerabilitiesTab({
           <Bug className="h-5 w-5 text-blue-600" />
           Linked Vulnerabilities ({asset.linked_vulnerabilities?.length || 0})
         </h3>
-        <button
-          onClick={onLinkVulnerability}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4" />
-          Link Vulnerability
-        </button>
+        <InlineLinkPicker
+          triggerLabel="Link Vulnerability"
+          triggerClassName="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+          items={vulnPickerItems}
+          isLoading={vulnsLoading || isLinking}
+          emptyText="No vulnerabilities available"
+          searchPlaceholder="Search vulnerabilities"
+          onSelect={(value) => onLinkVulnerability(Number(value))}
+          popoverWidth={380}
+        />
       </div>
 
       {asset.linked_vulnerabilities && asset.linked_vulnerabilities.length > 0 ? (
@@ -1277,13 +1311,18 @@ function VulnerabilitiesTab({
           <Bug className="mb-4 h-12 w-12 text-slate-400" />
           <h4 className="text-base font-medium text-slate-900">No Vulnerabilities Linked</h4>
           <p className="mt-1 text-sm text-slate-600">Link vulnerabilities to track asset exposure</p>
-          <button
-            onClick={onLinkVulnerability}
-            className="mt-4 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" />
-            Link First Vulnerability
-          </button>
+          <div className="mt-4">
+            <InlineLinkPicker
+              triggerLabel="Link First Vulnerability"
+              triggerClassName="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+              items={vulnPickerItems}
+              isLoading={vulnsLoading || isLinking}
+              emptyText="No vulnerabilities available"
+              searchPlaceholder="Search vulnerabilities"
+              onSelect={(value) => onLinkVulnerability(Number(value))}
+              popoverWidth={380}
+            />
+          </div>
         </div>
       )}
     </div>
@@ -1409,14 +1448,12 @@ function SecurityComplianceTab({ assetId }: { assetId: number }) {
       </div>
 
       <div className="flex flex-col gap-3 md:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
+        <div className="flex-1">
+          <SearchInput
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={setSearchInput}
             placeholder="Search control ID, title, level, section..."
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none"
+            size="md"
           />
         </div>
         <select
@@ -1542,342 +1579,6 @@ function SecurityComplianceTab({ assetId }: { assetId: number }) {
   );
 }
 
-function LinkControlModal({
-  onClose,
-  onLink,
-  isLinking,
-  isLoading,
-  linkedControlIds,
-  allControls,
-}: {
-  onClose: () => void;
-  onLink: (controlId: number, coverageStatus: string) => void;
-  isLinking: boolean;
-  isLoading?: boolean;
-  linkedControlIds: number[];
-  allControls: Array<{ id: number | string; internal_id?: string; name: string; category?: string }>;
-}) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedControl, setSelectedControl] = useState<number | null>(null);
-  const [coverageStatus, setCoverageStatus] = useState('partial');
-
-  const filteredControls = allControls.filter((control) => {
-    const matchesSearch = 
-      control.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (control.internal_id && control.internal_id.toLowerCase().includes(searchTerm.toLowerCase()));
-    const notLinked = !linkedControlIds.includes(Number(control.id));
-    return matchesSearch && notLinked;
-  });
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
-      <div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">Link Internal Control</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search internal controls..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none"
-          />
-        </div>
-
-        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-200">
-          {filteredControls.length > 0 ? (
-            filteredControls.map((control) => (
-              <button
-                key={control.id}
-                onClick={() => setSelectedControl(Number(control.id))}
-                className={`flex w-full items-center gap-3 border-b border-slate-200 p-3 text-left last:border-0 ${
-                  selectedControl === Number(control.id) ? 'bg-blue-50' : 'hover:bg-slate-50'
-                }`}
-              >
-                <Shield className={`h-5 w-5 ${selectedControl === Number(control.id) ? 'text-blue-600' : 'text-slate-400'}`} />
-                <div>
-                  <span className="text-xs font-medium text-blue-600">{control.internal_id || control.id}</span>
-                  <p className="text-sm font-medium text-slate-900">{control.name}</p>
-                  {control.category && (
-                    <span className="text-xs text-slate-500">{control.category}</span>
-                  )}
-                </div>
-              </button>
-            ))
-          ) : (
-            <div className="p-4 text-center text-sm text-slate-500">
-              {isLoading ? (
-                <span className="flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading controls...</span>
-              ) : allControls.length === 0 ? 'No controls available' : 'No controls found'}
-            </div>
-          )}
-        </div>
-
-        {selectedControl && (
-          <div className="mb-4">
-            <label className="mb-2 block text-xs font-medium text-slate-600">Coverage Status</label>
-            <select
-              value={coverageStatus}
-              onChange={(e) => setCoverageStatus(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-            >
-              <option value="full">Full Coverage</option>
-              <option value="partial">Partial Coverage</option>
-              <option value="planned">Planned</option>
-            </select>
-          </div>
-        )}
-
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => selectedControl && onLink(selectedControl, coverageStatus)}
-            disabled={!selectedControl || isLinking}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {isLinking ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <LinkIcon className="h-4 w-4" />
-            )}
-            Link Control
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LinkEvidenceModal({
-  onClose,
-  onLink,
-  isLinking,
-  linkedEvidenceIds,
-  allEvidence,
-}: {
-  onClose: () => void;
-  onLink: (evidenceId: number, relationshipType: string) => void;
-  isLinking: boolean;
-  linkedEvidenceIds: number[];
-  allEvidence: Array<{ id: number | string; title?: string; name?: string; evidence_type?: string }>;
-}) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
-  const [relationshipType, setRelationshipType] = useState('supports');
-
-  const filteredEvidence = allEvidence.filter((evidence) => {
-    const name = evidence.title || evidence.name || '';
-    const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase());
-    const notLinked = !linkedEvidenceIds.includes(Number(evidence.id));
-    return matchesSearch && notLinked;
-  });
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
-      <div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">Link Evidence</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search evidence..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none"
-          />
-        </div>
-
-        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-200">
-          {filteredEvidence.length > 0 ? (
-            filteredEvidence.map((evidence) => (
-              <button
-                key={evidence.id}
-                onClick={() => setSelectedEvidence(Number(evidence.id))}
-                className={`flex w-full items-center gap-3 border-b border-slate-200 p-3 text-left last:border-0 ${
-                  selectedEvidence === Number(evidence.id) ? 'bg-blue-50' : 'hover:bg-slate-50'
-                }`}
-              >
-                <FileCheck className={`h-5 w-5 ${selectedEvidence === Number(evidence.id) ? 'text-blue-600' : 'text-slate-400'}`} />
-                <div>
-                  <p className="text-sm font-medium text-slate-900">{evidence.title || evidence.name}</p>
-                  {evidence.evidence_type && (
-                    <span className="text-xs text-slate-500">{evidence.evidence_type}</span>
-                  )}
-                </div>
-              </button>
-            ))
-          ) : (
-            <div className="p-4 text-center text-sm text-slate-500">
-              {allEvidence.length === 0 ? 'Loading evidence...' : 'No evidence found'}
-            </div>
-          )}
-        </div>
-
-        {selectedEvidence && (
-          <div className="mb-4">
-            <label className="mb-2 block text-xs font-medium text-slate-600">Relationship Type</label>
-            <select
-              value={relationshipType}
-              onChange={(e) => setRelationshipType(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-            >
-              <option value="supports">Supports</option>
-              <option value="validates">Validates</option>
-              <option value="documents">Documents</option>
-            </select>
-          </div>
-        )}
-
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => selectedEvidence && onLink(selectedEvidence, relationshipType)}
-            disabled={!selectedEvidence || isLinking}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {isLinking ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <LinkIcon className="h-4 w-4" />
-            )}
-            Link Evidence
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LinkVulnerabilityModal({
-  onClose,
-  onLink,
-  isLinking,
-  linkedVulnerabilityIds,
-  allVulnerabilities,
-}: {
-  onClose: () => void;
-  onLink: (vulnId: number) => void;
-  isLinking: boolean;
-  linkedVulnerabilityIds: number[];
-  allVulnerabilities: Array<{ id: number; vuln_id?: string; title?: string; severity?: string; status?: string }>;
-}) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedVulnId, setSelectedVulnId] = useState<number | null>(null);
-
-  const filteredVulns = allVulnerabilities.filter((vuln) => {
-    const name = `${vuln.vuln_id || ''} ${vuln.title || ''}`.toLowerCase();
-    const matchesSearch = name.includes(searchTerm.toLowerCase());
-    const notLinked = !linkedVulnerabilityIds.includes(vuln.id);
-    return matchesSearch && notLinked;
-  });
-
-  const severityColors: Record<string, string> = {
-    critical: 'text-red-400',
-    high: 'text-orange-400',
-    medium: 'text-yellow-400',
-    low: 'text-green-400',
-    info: 'text-slate-400',
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
-      <div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">Link Vulnerability</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search vulnerabilities..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none"
-          />
-        </div>
-
-        <div className="mb-4 max-h-64 overflow-y-auto rounded-lg border border-slate-200">
-          {filteredVulns.length > 0 ? (
-            filteredVulns.map((vuln) => (
-              <button
-                key={vuln.id}
-                onClick={() => setSelectedVulnId(vuln.id)}
-                className={`flex w-full items-center gap-3 border-b border-slate-200 p-3 text-left last:border-0 ${
-                  selectedVulnId === vuln.id ? 'bg-blue-50' : 'hover:bg-slate-50'
-                }`}
-              >
-                <Bug className={`h-5 w-5 ${selectedVulnId === vuln.id ? 'text-blue-600' : 'text-slate-400'}`} />
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-blue-600">{vuln.vuln_id || `VULN-${vuln.id}`}</span>
-                    <span className={`text-xs ${severityColors[(vuln.severity || '').toLowerCase()] || 'text-slate-500'}`}>
-                      {vuln.severity || 'unknown'}
-                    </span>
-                  </div>
-                  <p className="text-sm font-medium text-slate-900">{vuln.title || 'Untitled vulnerability'}</p>
-                  {vuln.status && (
-                    <span className="text-xs text-slate-500">{vuln.status.replace(/_/g, ' ')}</span>
-                  )}
-                </div>
-              </button>
-            ))
-          ) : (
-            <div className="p-4 text-center text-sm text-slate-500">
-              {allVulnerabilities.length === 0 ? 'Loading vulnerabilities...' : 'No vulnerabilities found'}
-            </div>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => selectedVulnId && onLink(selectedVulnId)}
-            disabled={!selectedVulnId || isLinking}
-            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {isLinking ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <LinkIcon className="h-4 w-4" />
-            )}
-            Link Vulnerability
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function DeleteConfirmModal({
   assetName,

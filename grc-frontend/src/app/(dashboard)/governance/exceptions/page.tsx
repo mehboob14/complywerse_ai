@@ -34,7 +34,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import RightSlidePanel from '@/components/RightSlidePanel';
+import { RightSlidePanel } from '@/components/ui';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -672,7 +672,6 @@ export default function PolicyExceptionsPage() {
   onClose={() => { setShowCreateModal(false); setEditingException(null); resetForm(); }}
   title={editingException ? 'Edit Exception Request' : 'New Exception Request'}
   widthClassName="w-[780px]"
-  showBackdrop
 >
   <div className="space-y-3.5">
     <div className='flex items-center w-full gap-2'>
@@ -865,7 +864,6 @@ export default function PolicyExceptionsPage() {
     ) : ''
   }
   widthClassName="w-[780px]"
-  showBackdrop
 >
   {viewingException && (
     <div className="space-y-4">

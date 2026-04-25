@@ -4,7 +4,17 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { isProjectsApi } from '@/lib/api';
-import PageHeader from '@/components/ui/PageHeader';
+import {
+  PieChart as RPieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import {
   Loader2,
   AlertCircle,
@@ -88,14 +98,13 @@ export default function PortfolioDashboardPage() {
   const formatDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   return (
-    <div className="space-y-6 text-[var(--color-text)]">
-      <PageHeader
-        title="Portfolio Dashboard"
-        subtitle="Executive overview of all information security projects"
-        icon={TrendingUp}
-      />
+    <div className="space-y-4 sm:space-y-6 text-[var(--color-text)]">
+      <div className="min-w-0">
+        <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Overview</h1>
+        <p className="mt-1 text-sm text-slate-600">Executive overview of all information security projects</p>
+      </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <div className="cw-card p-4">
           <div className="flex items-center gap-2 text-[var(--color-muted)] mb-2">
             <FolderKanban size={16} />
@@ -132,15 +141,33 @@ export default function PortfolioDashboardPage() {
           {statusDist.length === 0 ? (
             <p className="text-sm text-[var(--color-muted)] text-center py-8">No data</p>
           ) : (
-            <div className="space-y-3">
-              {statusDist.map((item, i) => (
-                <div key={item.name} className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                  <span className="text-sm text-[var(--color-text)] flex-1">{item.name}</span>
-                  <span className="text-sm font-medium text-[var(--color-text)]">{item.value}</span>
-                  <span className="text-xs text-[var(--color-muted)] w-10 text-right">{totalStatusCount > 0 ? Math.round(item.value / totalStatusCount * 100) : 0}%</span>
+            <div className="flex items-center gap-4">
+              <div className="relative h-[140px] w-[140px] flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RPieChart>
+                    <Pie data={statusDist} cx="50%" cy="50%" innerRadius={40} outerRadius={64} dataKey="value" paddingAngle={2}>
+                      {statusDist.map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v) => [`${v} project${Number(v) === 1 ? '' : 's'}`, 'Count']} />
+                  </RPieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-xl font-bold text-[var(--color-text)]">{totalStatusCount}</span>
+                  <span className="text-[10px] text-[var(--color-muted)]">total</span>
                 </div>
-              ))}
+              </div>
+              <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                {statusDist.map((item, i) => (
+                  <div key={item.name} className="flex items-center gap-2 text-xs">
+                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                    <span className="text-[var(--color-muted)] truncate">{item.name}</span>
+                    <span className="font-semibold text-[var(--color-text)] ml-auto">{item.value}</span>
+                    <span className="text-[10px] text-[var(--color-muted)] w-9 text-right">{totalStatusCount > 0 ? Math.round(item.value / totalStatusCount * 100) : 0}%</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -150,19 +177,18 @@ export default function PortfolioDashboardPage() {
           {categoryDist.length === 0 ? (
             <p className="text-sm text-[var(--color-muted)] text-center py-8">No data</p>
           ) : (
-            <div className="space-y-3">
-              {categoryDist.map((item, i) => (
-                <div key={item.name}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-[var(--color-text)]">{item.name}</span>
-                    <span className="text-xs font-medium text-[var(--color-text)]">{item.value}</span>
-                  </div>
-                  <div className="cw-progress-track w-full rounded-full h-2">
-                    <div className="h-2 rounded-full transition-all" style={{ width: `${(item.value / maxCategoryVal) * 100}%`, backgroundColor: COLORS[i % COLORS.length] }} />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ResponsiveContainer width="100%" height={Math.max(140, categoryDist.length * 28)}>
+              <BarChart data={categoryDist} layout="vertical" margin={{ left: 0, right: 12, top: 4, bottom: 4 }}>
+                <XAxis type="number" hide domain={[0, maxCategoryVal]} />
+                <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11, fill: 'var(--color-muted)' }} />
+                <Tooltip formatter={(v) => [`${v} project${Number(v) === 1 ? '' : 's'}`, 'Count']} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                  {categoryDist.map((_, i) => (
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           )}
         </div>
 

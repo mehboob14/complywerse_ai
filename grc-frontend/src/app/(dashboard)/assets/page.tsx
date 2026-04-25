@@ -35,12 +35,11 @@ import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import { assetsApi } from '@/lib/api';
 import { ITAsset, AssetType } from '@/types';
-import { 
-  Server, 
-  Loader2, 
-  AlertCircle, 
-  Search, 
-  Filter,
+import { SearchInput, MultiSelectDropdown } from '@/components/ui';
+import {
+  Server,
+  Loader2,
+  AlertCircle,
   Plus,
   X,
   AppWindow,
@@ -350,9 +349,9 @@ export default function AssetsPage() {
   }
 
   return (
-    <div className="assets-light space-y-5">
+    <div className="assets-light space-y-4 sm:space-y-5 px-1 sm:px-2 pt-1">
       {/* Visual overview — 3 chart panels */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
 
         {/* Panel 1 — Asset type donut */}
         <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -466,42 +465,45 @@ export default function AssetsPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 sm:max-w-xs">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search assets..."
+        <div className="flex-1 min-w-[180px] sm:max-w-xs">
+          <SearchInput
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none"
+            onChange={setSearchTerm}
+            placeholder="Search assets..."
+            size="md"
           />
         </div>
 
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-slate-400" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-          >
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="decommissioned">Decommissioned</option>
-          </select>
-        </div>
+        <MultiSelectDropdown
+          title="Status"
+          items={[
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+            { value: 'decommissioned', label: 'Decommissioned' },
+          ]}
+          selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
+          onApply={(v) => setStatusFilter((v[0] as StatusFilter) || 'all')}
+          multiSelect={false}
+          autoApply
+          placeholder="All Status"
+          size="md"
+        />
 
-        <select
-          value={criticalityFilter}
-          onChange={(e) => setCriticalityFilter(e.target.value as CriticalityFilter)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
-        >
-          <option value="all">All Criticality</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
+        <MultiSelectDropdown
+          title="Criticality"
+          items={[
+            { value: 'critical', label: 'Critical' },
+            { value: 'high', label: 'High' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'low', label: 'Low' },
+          ]}
+          selectedValues={criticalityFilter !== 'all' ? [criticalityFilter] : []}
+          onApply={(v) => setCriticalityFilter((v[0] as CriticalityFilter) || 'all')}
+          multiSelect={false}
+          autoApply
+          placeholder="All Criticality"
+          size="md"
+        />
 
         <div className="ml-auto flex items-center gap-2">
           <button

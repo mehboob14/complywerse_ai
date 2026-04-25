@@ -303,25 +303,25 @@ export default function VulnerabilityDashboardPage() {
 
   // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
-    <div className="px-6 py-3 space-y-4 bg-white min-h-screen">
+    <div className="space-y-4 sm:space-y-5 px-1 sm:px-2 pt-1">
 
       {/* -- Header -- */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Security Overview</h2>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900">Security Overview</h2>
           <p className="text-xs text-gray-500">Real-time vulnerability posture across your organisation</p>
         </div>
         <button
           onClick={() => refetch()}
-          className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+          className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors flex-shrink-0"
           title="Refresh"
         >
           <RefreshCw size={14} />
         </button>
       </div>
 
-      {/* â”€â”€ KPI Cards â”€â”€ */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-white border border-gray-200 rounded-xl p-3 border-l-4 border-l-blue-500">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Total</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{total}</p>

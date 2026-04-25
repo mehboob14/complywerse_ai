@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PageHeader } from '@/components/ui';
 import { adminApi, OrganizationProfile } from '@/lib/api';
 
 async function ensureTenantContext(): Promise<boolean> {
@@ -91,11 +90,11 @@ export default function OrganizationProfilePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Company Profile"
-        subtitle="View and manage your company settings"
-      />
+    <div className="space-y-4 sm:space-y-6">
+      <div className="min-w-0">
+        <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Company Profile</h1>
+        <p className="mt-1 text-sm text-slate-600">View and manage your company settings</p>
+      </div>
 
       {error && (
         <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 text-rose-700">

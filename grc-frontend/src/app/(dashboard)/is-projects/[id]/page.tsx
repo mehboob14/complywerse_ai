@@ -661,15 +661,15 @@ export default function ProjectDetailPage() {
   const budgetUtil = project.budget_estimated > 0 ? Math.round((project.budget_actual / project.budget_estimated) * 100) : 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/is-projects')} className="cw-btn-secondary rounded-lg p-2 transition-colors">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <button onClick={() => router.push('/is-projects')} className="cw-btn-secondary rounded-lg p-2 transition-colors flex-shrink-0">
             <ArrowLeft size={18} className="text-[var(--color-text)]" />
           </button>
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--color-text)]">{project.name}</h1>
-            <div className="flex items-center gap-2 mt-1">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-2xl font-bold text-[var(--color-text)] truncate">{project.name}</h1>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <span className={`px-2 py-0.5 rounded text-xs font-medium border ${statusBadge(project.status)}`}>{project.status}</span>
               <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border ${healthColor(project.health)}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${healthDot(project.health)}`} />{project.health}
@@ -679,7 +679,7 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <button onClick={() => { setEditingProject(true); setEditForm({ name: project.name, description: project.description || '', status: project.status, health: project.health, priority: project.priority, category: project.category, project_owner_name: project.project_owner_name || '', sponsor: project.sponsor || '', department: project.department || '', budget_estimated: project.budget_estimated || 0, budget_actual: project.budget_actual || 0, completion_percentage: project.completion_percentage || 0, business_justification: project.business_justification || '', start_date: project.start_date ? project.start_date.split('T')[0] : '', target_end_date: project.target_end_date ? project.target_end_date.split('T')[0] : '', linked_risks_text: (project.linked_risks || []).join('\n'), linked_controls_text: (project.linked_controls || []).join('\n'), linked_frameworks_text: (project.linked_frameworks || []).join('\n') }); }} className="cw-btn-secondary flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors">
             <Edit size={14} /> Edit
           </button>

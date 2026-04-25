@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { PageHeader } from '@/components/ui';
+import { LayoutDashboard, Building2, Users as UsersIcon, ShieldCheck, ScrollText } from 'lucide-react';
 import OrganizationProfilePage from './organization/page';
 import UsersManagementPage from './users/page';
 import RolesManagementPage from './roles/page';
@@ -11,11 +12,11 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'company' | 'users' | 'roles' | 'audit'>('overview');
 
   const adminTabs = [
-    { id: 'overview' as const, label: 'Overview' },
-    { id: 'company' as const, label: 'Company' },
-    { id: 'users' as const, label: 'User Management' },
-    { id: 'roles' as const, label: 'Role Management' },
-    { id: 'audit' as const, label: 'Audit Logs' },
+    { id: 'overview' as const, label: 'Overview', icon: LayoutDashboard },
+    { id: 'company' as const, label: 'Company', icon: Building2 },
+    { id: 'users' as const, label: 'User Management', icon: UsersIcon },
+    { id: 'roles' as const, label: 'Role Management', icon: ShieldCheck },
+    { id: 'audit' as const, label: 'Audit Logs', icon: ScrollText },
   ];
 
   const adminSections = [
@@ -62,67 +63,70 @@ export default function AdminPage() {
   ];
 
   return (
-    <div className="space-y-4 text-slate-900">
-      <div className="border-b border-slate-200 bg-white rounded-xl px-2 py-1.5 shadow-sm">
-        <div className="flex flex-wrap gap-2">
-          {adminTabs.map((tab) => {
-            const isActive = activeTab === tab.id;
+    <div className="-m-4 lg:-m-5 text-slate-900">
+      <div className="border-b border-gray-200 px-3 sm:px-6 pt-3 overflow-x-auto">
+        <div className="flex items-center gap-0 min-w-max">
+          {adminTabs.map(({ id, label, icon: Icon }) => {
+            const isActive = activeTab === id;
             return (
               <button
-                key={tab.id}
+                key={id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                onClick={() => setActiveTab(id)}
+                className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
                   isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                {tab.label}
+                <Icon size={14} />
+                {label}
               </button>
             );
           })}
         </div>
       </div>
 
-      {activeTab === 'overview' && (
-        <div className="space-y-4">
-          <PageHeader
-            title="Administration"
-            subtitle="Manage your company, users, roles, and permissions"
-          />
+      <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-6">
+        {activeTab === 'overview' && (
+          <div className="space-y-4">
+            <PageHeader
+              title="Administration"
+              subtitle="Manage your company, users, roles, and permissions"
+            />
 
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {adminSections.map((section) => (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => setActiveTab(section.id)}
-                className="group rounded-xl border border-slate-200 bg-white p-4 text-left shadow-card transition-all hover:border-primary-300 hover:shadow-card-hover"
-              >
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {adminSections.map((section) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => setActiveTab(section.id)}
+                  className="group rounded-xl border border-slate-200 bg-white p-4 text-left shadow-card transition-all hover:border-primary-300 hover:shadow-card-hover"
+                >
                   <div className="flex items-start space-x-3">
-                  <div className="text-primary-600 transition-colors group-hover:text-primary-700">
-                    {section.icon}
+                    <div className="text-primary-600 transition-colors group-hover:text-primary-700">
+                      {section.icon}
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold text-black transition-colors group-hover:text-primary-700">
+                        {section.title}
+                      </h3>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {section.description}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-black transition-colors group-hover:text-primary-700">
-                      {section.title}
-                    </h3>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {section.description}
-                    </p>
-                  </div>
-                </div>
-              </button>
-            ))}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {activeTab === 'company' && <OrganizationProfilePage />}
-      {activeTab === 'users' && <UsersManagementPage />}
-      {activeTab === 'roles' && <RolesManagementPage />}
-      {activeTab === 'audit' && <AuditLogsPage />}
+        {activeTab === 'company' && <OrganizationProfilePage />}
+        {activeTab === 'users' && <UsersManagementPage />}
+        {activeTab === 'roles' && <RolesManagementPage />}
+        {activeTab === 'audit' && <AuditLogsPage />}
+      </div>
     </div>
   );
 }

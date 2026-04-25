@@ -1,18 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
-import { isProjectsApi } from '@/lib/api';
-import PageHeader from '@/components/ui/PageHeader';
+import { isProjectsApi, tenantApi } from '@/lib/api';
+import { RightSlidePanel, MultiSelectDropdown, SearchInput } from '@/components/ui';
 import {
   FolderKanban,
   Loader2,
   AlertCircle,
-  Search,
   Plus,
-  X,
   LayoutGrid,
   List,
   Calendar,
@@ -22,11 +20,17 @@ import {
   ChevronRight,
   Milestone,
   CheckCircle2,
-  Clock,
+  TrendingUp,
   AlertTriangle,
 } from 'lucide-react';
 import PortfolioDashboardPage from './dashboard/page';
 import MyProjectsPage from './my-projects/page';
+
+interface TenantUserOption {
+  id: number;
+  display_name: string;
+  email: string;
+}
 
 const STATUSES = ['Planning', 'In Progress', 'On Hold', 'Completed', 'Cancelled'];
 const CATEGORIES = ['Infrastructure', 'Application Security', 'Compliance', 'Risk Remediation', 'Training', 'DR/BCP', 'Other'];
@@ -102,27 +106,47 @@ export default function ISProjectsPage() {
   const [priorityFilter, setPriorityFilter] = useState('');
   const [healthFilter, setHealthFilter] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'projects' | 'dashboard' | 'my-projects'>('projects');
+  const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'my-projects'>('overview');
 
   const projectTabs = [
-    { id: 'projects' as const, label: 'Projects' },
-    { id: 'dashboard' as const, label: 'Portfolio Dashboard' },
-    { id: 'my-projects' as const, label: 'My Projects' },
+    { id: 'overview' as const, label: 'Overview', icon: TrendingUp },
+    { id: 'projects' as const, label: 'Projects', icon: FolderKanban },
+    { id: 'my-projects' as const, label: 'My Projects', icon: Users },
   ];
 
   const [form, setForm] = useState({
-    name: '', description: '', category: 'Other', priority: 'Medium',
-    project_owner_name: '', sponsor: '', department: '',
-    start_date: '', target_end_date: '', budget_estimated: '',
+    name: '',
+    description: '',
+    category: 'Other',
+    priority: 'Medium',
+    project_owner_id: null as number | null,
+    project_owner_name: '',
+    sponsor_id: null as number | null,
+    sponsor: '',
+    department: '',
+    start_date: '',
+    target_end_date: '',
+    budget_estimated: '',
     business_justification: '',
   });
 
+  const { data: tenantUsers = [] } = useQuery({
+    queryKey: ['is-projects-tenant-users'],
+    queryFn: async () => {
+      const res = await tenantApi.getTenantUsers();
+      return (res.data || []) as TenantUserOption[];
+    },
+  });
+
+  const tenantUserItems = useMemo(
+    () => tenantUsers.map((u) => ({ value: String(u.id), label: u.display_name, subLabel: u.email })),
+    [tenantUsers]
+  );
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['is-projects', statusFilter, categoryFilter, priorityFilter, healthFilter, ownerFilter, search, dateFrom, dateTo],
+    queryKey: ['is-projects', statusFilter, categoryFilter, priorityFilter, healthFilter, ownerFilter, search],
     queryFn: async () => {
       const params: Record<string, string> = {};
       if (statusFilter) params.status = statusFilter;
@@ -131,8 +155,6 @@ export default function ISProjectsPage() {
       if (healthFilter) params.health = healthFilter;
       if (search) params.search = search;
       if (ownerFilter) params.owner_name = ownerFilter;
-      if (dateFrom) params.start_date_from = dateFrom;
-      if (dateTo) params.end_date_to = dateTo;
       const res = await isProjectsApi.getAll(params);
       return res.data;
     },
@@ -143,15 +165,40 @@ export default function ISProjectsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['is-projects'] });
       setShowCreateModal(false);
-      setForm({ name: '', description: '', category: 'Other', priority: 'Medium', project_owner_name: '', sponsor: '', department: '', start_date: '', target_end_date: '', budget_estimated: '', business_justification: '' });
+      setForm({
+        name: '',
+        description: '',
+        category: 'Other',
+        priority: 'Medium',
+        project_owner_id: null,
+        project_owner_name: '',
+        sponsor_id: null,
+        sponsor: '',
+        department: '',
+        start_date: '',
+        target_end_date: '',
+        budget_estimated: '',
+        business_justification: '',
+      });
     },
   });
 
   const handleCreate = () => {
-    createMutation.mutate({
-      ...form,
+    const payload: Record<string, unknown> = {
+      name: form.name,
+      description: form.description,
+      category: form.category,
+      priority: form.priority,
+      project_owner_name: form.project_owner_name,
+      sponsor: form.sponsor,
+      department: form.department,
+      start_date: form.start_date,
+      target_end_date: form.target_end_date,
+      business_justification: form.business_justification,
       budget_estimated: form.budget_estimated ? parseFloat(form.budget_estimated) : 0,
-    });
+    };
+    if (form.project_owner_id) payload.project_owner_id = form.project_owner_id;
+    createMutation.mutate(payload);
   };
 
   const projects: ISProject[] = data?.items || [];
@@ -162,84 +209,139 @@ export default function ISProjectsPage() {
   };
 
   return (
-    <div className="space-y-6 text-[var(--color-text)]">
-      <div className="rounded-xl border border-slate-200 bg-white px-2 py-2 shadow-sm">
-        <div className="flex flex-wrap gap-2">
-          {projectTabs.map((tab) => {
-            const isActive = activeTab === tab.id;
+    <div className="-m-4 lg:-m-5 text-[var(--color-text)]">
+      <div className="border-b border-gray-200 px-3 sm:px-6 pt-3 overflow-x-auto">
+        <div className="flex items-center gap-0 min-w-max">
+          {projectTabs.map(({ id, label, icon: Icon }) => {
+            const isActive = activeTab === id;
             return (
               <button
-                key={tab.id}
+                key={id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                onClick={() => setActiveTab(id)}
+                className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
                   isActive
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                {tab.label}
+                <Icon size={14} />
+                {label}
               </button>
             );
           })}
         </div>
       </div>
 
+      <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-6">
+      {activeTab === 'overview' && <PortfolioDashboardPage />}
+
       {activeTab === 'projects' && (
         <>
-          <PageHeader
-            title="IS Projects"
-            subtitle="Track and manage information security projects across the organization"
-            icon={FolderKanban}
-            actions={canCreate ? (
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Projects</h1>
+              <p className="mt-1 text-sm text-slate-600">Browse, filter and create information security projects</p>
+            </div>
+            {canCreate && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="cw-btn-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
+                className="cw-btn-primary flex items-center gap-2 rounded-lg px-3 sm:px-4 py-2 text-sm font-medium flex-shrink-0"
               >
-                <Plus size={16} /> New Project
+                <Plus size={16} /> <span className="hidden sm:inline">New Project</span><span className="sm:hidden">New</span>
               </button>
-            ) : undefined}
-          />
+            )}
+          </div>
 
-      <div className="cw-card p-4">
-        <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
-          <input
-            type="text"
-            placeholder="Search projects..."
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-[180px] sm:min-w-[260px]">
+          <SearchInput
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="cw-field w-full pl-9 pr-3 py-2 text-sm"
+            onChange={setSearch}
+            placeholder="Search projects..."
+            size="md"
           />
         </div>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="cw-field px-3 py-2 text-sm">
-          <option value="">All Statuses</option>
-          {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="cw-field px-3 py-2 text-sm">
-          <option value="">All Categories</option>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="cw-field px-3 py-2 text-sm">
-          <option value="">All Priorities</option>
-          {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <select value={healthFilter} onChange={(e) => setHealthFilter(e.target.value)} className="cw-field px-3 py-2 text-sm">
-          <option value="">All Health</option>
-          {HEALTH_OPTIONS.map(h => <option key={h} value={h}>{h}</option>)}
-        </select>
-        <input type="text" value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} placeholder="Filter by owner..." className="cw-field px-3 py-2 text-sm w-40" />
-        <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} title="Start date from" placeholder="From" className="cw-field px-3 py-2 text-sm" />
-        <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} title="End date to" placeholder="To" className="cw-field px-3 py-2 text-sm" />
-        <div className="flex items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
-          <button onClick={() => setViewMode('card')} className={`p-2 ${viewMode === 'card' ? 'cw-btn-primary text-white' : 'text-[var(--color-muted)]'}`}>
+
+        <MultiSelectDropdown
+          title="Status"
+          items={STATUSES.map((s) => ({ value: s, label: s }))}
+          selectedValues={statusFilter ? [statusFilter] : []}
+          onApply={(v) => setStatusFilter(v[0] || '')}
+          multiSelect={false}
+          autoApply
+          placeholder="All Statuses"
+          size="md"
+        />
+        <MultiSelectDropdown
+          title="Category"
+          items={CATEGORIES.map((c) => ({ value: c, label: c }))}
+          selectedValues={categoryFilter ? [categoryFilter] : []}
+          onApply={(v) => setCategoryFilter(v[0] || '')}
+          multiSelect={false}
+          autoApply
+          placeholder="All Categories"
+          size="md"
+        />
+        <MultiSelectDropdown
+          title="Priority"
+          items={PRIORITIES.map((p) => ({ value: p, label: p }))}
+          selectedValues={priorityFilter ? [priorityFilter] : []}
+          onApply={(v) => setPriorityFilter(v[0] || '')}
+          multiSelect={false}
+          autoApply
+          placeholder="All Priorities"
+          size="md"
+        />
+        <MultiSelectDropdown
+          title="Health"
+          items={HEALTH_OPTIONS.map((h) => ({ value: h, label: h }))}
+          selectedValues={healthFilter ? [healthFilter] : []}
+          onApply={(v) => setHealthFilter(v[0] || '')}
+          multiSelect={false}
+          autoApply
+          placeholder="All Health"
+          size="md"
+        />
+        <MultiSelectDropdown
+          title="Owner"
+          items={tenantUserItems}
+          selectedValues={
+            ownerFilter
+              ? (() => {
+                  const match = tenantUsers.find((u) => u.display_name === ownerFilter);
+                  return match ? [String(match.id)] : [];
+                })()
+              : []
+          }
+          onApply={(v) => {
+            const id = v[0] ? Number(v[0]) : null;
+            const user = id ? tenantUsers.find((u) => u.id === id) : null;
+            setOwnerFilter(user?.display_name || '');
+          }}
+          multiSelect={false}
+          autoApply
+          forceSearch
+          placeholder="All Owners"
+          searchPlaceholder="Search users"
+          size="md"
+        />
+
+        <div className="flex items-center rounded-full border border-[var(--color-border)] bg-white overflow-hidden ml-auto">
+          <button
+            onClick={() => setViewMode('card')}
+            className={`p-2 transition-colors ${viewMode === 'card' ? 'bg-primary-600 text-white' : 'text-[var(--color-muted)] hover:bg-slate-50'}`}
+            aria-label="Card view"
+          >
             <LayoutGrid size={16} />
           </button>
-          <button onClick={() => setViewMode('table')} className={`p-2 ${viewMode === 'table' ? 'cw-btn-primary text-white' : 'text-[var(--color-muted)]'}`}>
+          <button
+            onClick={() => setViewMode('table')}
+            className={`p-2 transition-colors ${viewMode === 'table' ? 'bg-primary-600 text-white' : 'text-[var(--color-muted)] hover:bg-slate-50'}`}
+            aria-label="Table view"
+          >
             <List size={16} />
           </button>
-        </div>
         </div>
       </div>
 
@@ -360,87 +462,196 @@ export default function ISProjectsPage() {
         </div>
       )}
 
-          {showCreateModal && (
-            <div className="fixed inset-0 cw-overlay flex items-center justify-center z-50 p-4" onClick={() => setShowCreateModal(false)}>
-              <div className="cw-modal-panel rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between p-6 border-b border-[var(--color-border)]">
-                  <h2 className="text-lg font-semibold text-[var(--color-text)]">Create IS Project</h2>
-                  <button onClick={() => setShowCreateModal(false)} className="p-1 rounded hover:bg-[var(--color-subtle)]"><X size={18} /></button>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Project Name <span className="cw-required">*</span></label>
-                    <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="e.g., SIEM Platform Upgrade" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Description</label>
-                    <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} className="cw-field w-full px-3 py-2 text-sm" placeholder="Describe the project objectives..." />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Category</label>
-                      <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="cw-field w-full px-3 py-2 text-sm">
-                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Priority</label>
-                      <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} className="cw-field w-full px-3 py-2 text-sm">
-                        {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Project Owner</label>
-                      <input type="text" value={form.project_owner_name} onChange={(e) => setForm({ ...form, project_owner_name: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="Owner name" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Sponsor</label>
-                      <input type="text" value={form.sponsor} onChange={(e) => setForm({ ...form, sponsor: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="Executive sponsor" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Department</label>
-                    <input type="text" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" placeholder="e.g., Information Security" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Start Date</label>
-                      <input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Target End Date</label>
-                      <input type="date" value={form.target_end_date} onChange={(e) => setForm({ ...form, target_end_date: e.target.value })} className="cw-field w-full px-3 py-2 text-sm" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Estimated Budget</label>
-                    <div className="relative">
-                      <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted)]" />
-                      <input type="number" value={form.budget_estimated} onChange={(e) => setForm({ ...form, budget_estimated: e.target.value })} className="cw-field w-full pl-8 pr-3 py-2 text-sm" placeholder="0.00" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Business Justification</label>
-                    <textarea value={form.business_justification} onChange={(e) => setForm({ ...form, business_justification: e.target.value })} rows={3} className="cw-field w-full px-3 py-2 text-sm" placeholder="Why is this project needed?" />
-                  </div>
-                </div>
-                <div className="flex items-center justify-end gap-3 p-6 border-t border-[var(--color-border)]">
-                  <button onClick={() => setShowCreateModal(false)} className="cw-btn-secondary px-4 py-2 rounded-lg text-sm">Cancel</button>
-                  <button onClick={handleCreate} disabled={!form.name || createMutation.isPending} className="cw-btn-primary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2">
-                    {createMutation.isPending && <Loader2 size={14} className="animate-spin" />}
-                    Create Project
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </>
       )}
 
-      {activeTab === 'dashboard' && <PortfolioDashboardPage />}
       {activeTab === 'my-projects' && <MyProjectsPage />}
+      </div>
+
+      <RightSlidePanel
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Create IS Project"
+        widthClassName="w-[780px]"
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(false)}
+              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={!form.name || createMutation.isPending}
+              className="cw-btn-primary px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+            >
+              {createMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+              Create Project
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-0.5">Project Name *</label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              placeholder="e.g., SIEM Platform Upgrade"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-0.5">Description</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              rows={3}
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              placeholder="Describe the project objectives..."
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Category</label>
+              <select
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Priority</label>
+              <select
+                value={form.priority}
+                onChange={(e) => setForm({ ...form, priority: e.target.value })}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Project Owner</label>
+              <MultiSelectDropdown
+                title="Owner"
+                items={tenantUserItems}
+                selectedValues={form.project_owner_id ? [String(form.project_owner_id)] : []}
+                onApply={(values) => {
+                  const id = values[0] ? Number(values[0]) : null;
+                  const user = id ? tenantUsers.find((u) => u.id === id) : null;
+                  setForm({
+                    ...form,
+                    project_owner_id: id,
+                    project_owner_name: user?.display_name || '',
+                  });
+                }}
+                multiSelect={false}
+                autoApply
+                forceSearch
+                triggerVariant="input"
+                placeholder="Select owner"
+                searchPlaceholder="Search users"
+                size="sm"
+                triggerClassName="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Sponsor</label>
+              <MultiSelectDropdown
+                title="Sponsor"
+                items={tenantUserItems}
+                selectedValues={form.sponsor_id ? [String(form.sponsor_id)] : []}
+                onApply={(values) => {
+                  const id = values[0] ? Number(values[0]) : null;
+                  const user = id ? tenantUsers.find((u) => u.id === id) : null;
+                  setForm({
+                    ...form,
+                    sponsor_id: id,
+                    sponsor: user?.display_name || '',
+                  });
+                }}
+                multiSelect={false}
+                autoApply
+                forceSearch
+                triggerVariant="input"
+                placeholder="Select sponsor"
+                searchPlaceholder="Search users"
+                size="sm"
+                triggerClassName="w-full"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-0.5">Department</label>
+            <input
+              type="text"
+              value={form.department}
+              onChange={(e) => setForm({ ...form, department: e.target.value })}
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              placeholder="e.g., Information Security"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Start Date</label>
+              <input
+                type="date"
+                value={form.start_date}
+                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Target End Date</label>
+              <input
+                type="date"
+                value={form.target_end_date}
+                onChange={(e) => setForm({ ...form, target_end_date: e.target.value })}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-0.5">Estimated Budget</label>
+            <div className="relative">
+              <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="number"
+                value={form.budget_estimated}
+                onChange={(e) => setForm({ ...form, budget_estimated: e.target.value })}
+                className="w-full rounded border border-slate-200 bg-white pl-8 pr-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-0.5">Business Justification</label>
+            <textarea
+              value={form.business_justification}
+              onChange={(e) => setForm({ ...form, business_justification: e.target.value })}
+              rows={3}
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              placeholder="Why is this project needed?"
+            />
+          </div>
+        </div>
+      </RightSlidePanel>
     </div>
   );
 }

@@ -86,13 +86,13 @@ export default function MyTasksPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-[var(--color-text)]">My Tasks</h1>
-        <p className="text-sm text-[var(--color-muted)] mt-1">Your personal task dashboard — {activeTasks.length} active, {completedTasks.length} completed</p>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="min-w-0">
+        <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">My Tasks</h1>
+        <p className="mt-1 text-sm text-slate-600">Your personal task dashboard — {activeTasks.length} active, {completedTasks.length} completed</p>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <div className="cw-card p-4">
           <div className="flex items-center gap-2 text-[var(--color-muted)] mb-2">
             <Target size={16} />

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { PageHeader, DataTable, IfPermission } from '@/components/ui';
+import { useState, useEffect, useMemo } from 'react';
+import { DataTable, IfPermission, SearchInput } from '@/components/ui';
+import { Edit2, Plus, Trash2 } from 'lucide-react';
 import { adminApi, AdminUser, AdminRole } from '@/lib/api';
 
 async function ensureTenantContext(): Promise<boolean> {
@@ -34,6 +35,7 @@ export default function UsersManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     username: '',
     email: '',
@@ -227,27 +229,41 @@ export default function UsersManagementPage() {
       id: 'actions',
       header: 'Actions',
       accessor: (user: AdminUser) => (
-        <div className="flex space-x-2">
+        <div className="flex items-center gap-1">
           <IfPermission required="admin:users:edit">
             <button
               onClick={() => handleEdit(user)}
-              className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-black rounded text-sm"
+              className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary-600 transition-colors"
+              title="Edit user"
+              aria-label="Edit user"
             >
-              Edit
+              <Edit2 size={16} />
             </button>
           </IfPermission>
           <IfPermission required="admin:users:delete">
             <button
               onClick={() => handleDelete(user)}
-              className="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-600 rounded text-sm"
+              className="rounded p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+              title="Delete user"
+              aria-label="Delete user"
             >
-              Delete
+              <Trash2 size={16} />
             </button>
           </IfPermission>
         </div>
       ),
     },
   ];
+
+  const filteredUsers = useMemo(() => {
+    if (!searchTerm.trim()) return users;
+    const q = searchTerm.toLowerCase();
+    return users.filter((u) =>
+      u.display_name?.toLowerCase().includes(q) ||
+      u.username?.toLowerCase().includes(q) ||
+      u.email?.toLowerCase().includes(q)
+    );
+  }, [users, searchTerm]);
 
   if (loading) {
     return (
@@ -258,11 +274,23 @@ export default function UsersManagementPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="User Management"
-        subtitle="Create and manage user accounts"
-      />
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">User Management</h1>
+          <p className="mt-1 text-sm text-slate-600">Create and manage user accounts</p>
+        </div>
+        <IfPermission required="admin:users:create">
+          <button
+            onClick={handleCreate}
+            className="cw-btn-primary flex items-center gap-1.5 rounded-lg px-3 sm:px-4 py-2 text-sm font-medium flex-shrink-0"
+          >
+            <Plus size={16} />
+            <span className="hidden sm:inline">Create User</span>
+            <span className="sm:hidden">New</span>
+          </button>
+        </IfPermission>
+      </div>
 
       {error && (
         <div className="bg-red-50 border border-red-500/50 rounded-lg p-4 text-red-600">
@@ -273,19 +301,19 @@ export default function UsersManagementPage() {
         </div>
       )}
 
-      <div className="flex justify-end">
-        <IfPermission required="admin:users:create">
-          <button
-            onClick={handleCreate}
-            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm transition-colors"
-          >
-            + Create User
-          </button>
-        </IfPermission>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex-1 min-w-[180px] sm:max-w-md">
+          <SearchInput
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder="Search users by name, email, username..."
+            size="md"
+          />
+        </div>
       </div>
 
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-        <DataTable data={users} columns={columns} />
+        <DataTable data={filteredUsers} columns={columns} />
       </div>
 
       {showModal && (

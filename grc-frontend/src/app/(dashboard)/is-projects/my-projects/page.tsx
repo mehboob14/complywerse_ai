@@ -4,7 +4,6 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { isProjectsApi } from '@/lib/api';
-import PageHeader from '@/components/ui/PageHeader';
 import {
   FolderKanban,
   Loader2,
@@ -117,12 +116,11 @@ export default function MyProjectsPage() {
   const memberOf: ISProject[] = data?.member_of || [];
 
   return (
-    <div className="space-y-6 text-[var(--color-text)]">
-      <PageHeader
-        title="My Projects"
-        subtitle="Projects you own or are a team member of"
-        icon={FolderKanban}
-      />
+    <div className="space-y-4 sm:space-y-6 text-[var(--color-text)]">
+      <div className="min-w-0">
+        <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">My Projects</h1>
+        <p className="mt-1 text-sm text-slate-600">Projects you own or are a team member of</p>
+      </div>
 
       {isLoading && (
         <div className="flex items-center justify-center py-20">
