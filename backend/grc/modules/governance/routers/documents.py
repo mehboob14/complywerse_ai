@@ -1505,10 +1505,12 @@ class PolicyAIDraftRequest(BaseModel):
     regulatory_scope: Optional[List[str]] = None
     description: Optional[str] = None
     include_sections: Optional[List[str]] = None
+    parent_document_id: Optional[int] = None
 
 
 class PolicySuggestRequest(BaseModel):
     framework_ids: List[int]
+    doc_type: Optional[str] = None
 
 
 def infer_governance_domain(control: ParsedFrameworkControl) -> str:
@@ -1692,7 +1694,8 @@ def generate_policy_with_openai(
     domain_context: List[str],
     regulatory_scope: List[str],
     description: Optional[str],
-    include_sections: Optional[List[str]]
+    include_sections: Optional[List[str]],
+    parent_document_context: Optional[str],
 ) -> dict:
     if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
         raise HTTPException(
@@ -1732,10 +1735,36 @@ def generate_policy_with_openai(
     description_context = ""
     if description:
         description_context = f"\n\nAdditional requirements: {description}"
+
+    parent_context = ""
+    if parent_document_context:
+        parent_context = (
+            "\n\nParent document context (mandatory reference baseline):\n"
+            f"{parent_document_context}\n"
+            "- Reuse the parent document's intent, terminology, and control objectives.\n"
+            "- Keep this new document subordinate and implementation-focused relative to the parent.\n"
+        )
+
+    framework_option_context = ""
+    if controls_context:
+        framework_option_context = (
+            "\n\nFramework-based drafting mode:\n"
+            "- Maintain explicit traceability to cited control references where feasible.\n"
+            "- Reflect domain obligations from framework context in structure and clause wording."
+        )
+    else:
+        framework_option_context = (
+            "\n\nBest-practice drafting mode (no framework references selected):\n"
+            "- Produce a comprehensive document using banking/financial-institution security governance best practices.\n"
+            "- Include practical and auditable controls suitable for regulated banks.\n"
+            "- Use risk-based language, segregation of duties, approval governance, monitoring, evidence retention, and exception handling."
+        )
     
-    prompt = f"""You are an expert governance and compliance consultant. Generate a professional, mature, enterprise-grade {doc_label} document titled "{title}".
+    prompt = f"""You are an expert governance and compliance consultant for banking and financial institutions. Generate a professional, mature, enterprise-grade {doc_label} document titled "{title}".
 
 {controls_context}
+{parent_context}
+{framework_option_context}
 {regulatory_context}
 {domain_summary_context}
 {description_context}
@@ -1772,6 +1801,8 @@ Required section outline:
 Document quality requirements:
 - Policy and standard clauses must be prescriptive and auditable.
 - Procedure content must include roles, step sequence, inputs, outputs, records, and escalation points.
+- If this is a Procedure and a parent Policy exists, map procedure steps clearly to policy intent and control obligations.
+- If this is a Guideline, include practical implementation examples and explicit placeholders for screenshots where helpful, e.g., "[Screenshot: Admin console setting path]".
 - When a topic requires hierarchy, break it into clauses, sub-clauses, and bullet lists.
 - If frameworks imply multiple domains, reflect that in the structure rather than collapsing everything into generic text.
 - Suggested section content must be substantial; avoid one-line summaries.
@@ -1858,6 +1889,24 @@ def suggest_policies_for_framework(
     )
     
     framework_names = ", ".join([f.name for f in frameworks])
+    requested_doc_type = (request.doc_type or "").strip().lower() or None
+    allowed_doc_types = {"policy", "standard", "procedure", "guideline", "charter", "framework"}
+    if requested_doc_type and requested_doc_type not in allowed_doc_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported doc_type '{request.doc_type}'. Allowed values: {', '.join(sorted(allowed_doc_types))}"
+        )
+
+    doc_type_instruction = (
+        f"Suggest only {requested_doc_type} documents. Do not include any other document types."
+        if requested_doc_type
+        else "Cover policy, standard, procedure, and guideline needs systematically."
+    )
+    suggestion_count_instruction = (
+        "Provide 12-20 suggestions, ordered by priority (high first)."
+        if requested_doc_type
+        else "Provide 18-30 suggestions covering policies, procedures, standards, and guidelines. Order by priority (high first) and ensure the list covers the major domains implied by the controls. The output must be domain-balanced rather than over-indexed on generic information security titles."
+    )
     
     prompt = f"""You are an expert governance and compliance consultant. Based on the following regulatory framework controls, suggest the governance documents an organization should create to achieve domain-specific compliance coverage.
 
@@ -1867,7 +1916,7 @@ Analysis requirements:
 - Cluster the controls into governance domains before suggesting documents.
 - Suggest documents only when they are justified by the control themes.
 - Prefer specific domain-aware titles over generic titles.
-- Cover policy, standard, procedure, and guideline needs systematically.
+- {doc_type_instruction}
 - Avoid duplicate or overlapping suggestions unless one is clearly a parent policy and another is a detailed procedure.
 - Keep the suggested document titles general and reusable. Do not make them company-specific.
 - Make procedures and standards domain-specific and operationally meaningful, not generic supporting documents.
@@ -1901,7 +1950,7 @@ Return a JSON object with this structure:
   "total_suggestions": 0
 }}
 
-Provide 18-30 suggestions covering policies, procedures, standards, and guidelines. Order by priority (high first) and ensure the list covers the major domains implied by the controls. The output must be domain-balanced rather than over-indexed on generic information security titles.
+{suggestion_count_instruction}
 """
 
     try:
@@ -1918,6 +1967,13 @@ Provide 18-30 suggestions covering policies, procedures, standards, and guidelin
         result_text = response.choices[0].message.content or "{}"
         result = json.loads(result_text)
         if isinstance(result, dict) and isinstance(result.get("suggestions"), list):
+            if requested_doc_type:
+                result["suggestions"] = [
+                    suggestion
+                    for suggestion in result.get("suggestions", [])
+                    if str(suggestion.get("doc_type", "")).strip().lower() == requested_doc_type
+                ]
+                result["total_suggestions"] = len(result["suggestions"])
             result["framework_alignment"] = framework_alignment
             result["domains_covered"] = domain_context
         return result
@@ -1950,6 +2006,7 @@ def generate_policy_ai_draft(
     controls_context = ""
     framework_controls = []
     domain_context: List[str] = []
+    parent_document_context: Optional[str] = None
     
     if request.framework_ids:
         frameworks = db.query(UploadedFramework).filter(
@@ -1976,6 +2033,31 @@ def generate_policy_ai_draft(
                         for domain in extra_domains:
                             if domain not in domain_context:
                                 domain_context.append(domain)
+
+    if request.parent_document_id:
+        user_tenants = get_user_tenants(current_user, db)
+        parent_document = db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == request.parent_document_id,
+            GovernanceDocument.tenant_id.in_(user_tenants)
+        ).first()
+        if not parent_document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Parent document not found"
+            )
+
+        parent_excerpt = (parent_document.content or "").strip()
+        if len(parent_excerpt) > 6000:
+            parent_excerpt = parent_excerpt[:6000] + "\n...[truncated]"
+        if not parent_excerpt:
+            parent_excerpt = "(No parent content available. Use title, type, and description as baseline intent.)"
+
+        parent_document_context = (
+            f"Parent Document Title: {parent_document.title}\n"
+            f"Parent Document Type: {parent_document.doc_type}\n"
+            f"Parent Document Description: {parent_document.description or ''}\n"
+            f"Parent Document Content Excerpt:\n{parent_excerpt}"
+        )
     
     result = generate_policy_with_openai(
         doc_type=request.doc_type,
@@ -1984,7 +2066,8 @@ def generate_policy_ai_draft(
         domain_context=domain_context,
         regulatory_scope=request.regulatory_scope or [],
         description=request.description,
-        include_sections=request.include_sections
+        include_sections=request.include_sections,
+        parent_document_context=parent_document_context,
     )
     
     generated_content = result.get("generated_content", "")

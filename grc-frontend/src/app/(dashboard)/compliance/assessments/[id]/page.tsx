@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import apiClient from '@/lib/api';
+import apiClient, { tenantApi } from '@/lib/api';
 import XlsxMaturityViewer from './XlsxMaturityViewer';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
@@ -77,6 +77,15 @@ interface AIRecommendation {
   summary: string;
 }
 
+interface EvidenceLibraryOption {
+  id: number;
+  name: string;
+  file_name: string | null;
+  file_type: string | null;
+  status: string;
+  uploaded_at: string | null;
+}
+
 interface AssessmentItem {
   id: number;
   item_number: string;
@@ -121,9 +130,15 @@ interface Assessment {
   items_by_domain: Record<string, AssessmentItem[]>;
 }
 
+interface TenantUserOption {
+  id: number;
+  label: string;
+  email: string | null;
+}
+
 const STATUS_OPTIONS = [
   { value: 'complied', label: 'Complied' },
-  { value: 'partially_complied', label: 'Partially Complied' },
+  { value: 'partially_complied', label: 'Partially Compliant' },
   { value: 'not_complied', label: 'Not Complied' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'na', label: 'N/A' },
@@ -185,6 +200,42 @@ function getDomainDisplayName(domain: string): string {
   return domain;
 }
 
+const STATUS_ORDER = ['complied', 'partially_complied', 'not_complied', 'in_progress', 'na'] as const;
+
+const STATUS_COLORS: Record<(typeof STATUS_ORDER)[number], string> = {
+  complied: '#22c55e',
+  partially_complied: '#f59e0b',
+  not_complied: '#ef4444',
+  in_progress: '#60a5fa',
+  na: '#64748b',
+};
+
+const DRAFT_REMAINDER_COLOR = '#d1d5db';
+
+function normalizeComplianceStatus(value: string | null | undefined): (typeof STATUS_ORDER)[number] {
+  const status = (value || '').trim().toLowerCase();
+  if (status === 'complied') return 'complied';
+  if (status === 'partially_complied' || status === 'partially compliant') return 'partially_complied';
+  if (status === 'not_complied' || status === 'not complied') return 'not_complied';
+  if (status === 'na' || status === 'n/a') return 'na';
+  return 'in_progress';
+}
+
+function deriveCategoryFromDomain(domain: string): string {
+  const cleaned = (domain || '').trim();
+  if (!cleaned) return 'Uncategorized';
+  return cleaned.split(/[-/:|]/)[0].trim() || 'Uncategorized';
+}
+
+function getAuditMasterDomainGroup(domain: string): string {
+  const value = (domain || '').trim();
+  if (!value) return 'Uncategorized';
+  const separatorIndex = value.indexOf(' - ');
+  if (separatorIndex <= 0) return value;
+  const prefix = value.slice(0, separatorIndex).trim();
+  return prefix || value;
+}
+
 export default function AssessmentDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -194,14 +245,23 @@ export default function AssessmentDetailPage() {
   const canEdit = hasPermission('compliance:assessments:edit');
 
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
+  const [expandedAuditItems, setExpandedAuditItems] = useState<Set<number>>(new Set());
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   const [editingStatus, setEditingStatus] = useState<string>('');
+  const [editingResponsibleParty, setEditingResponsibleParty] = useState<string>('');
+  const [editingTimeline, setEditingTimeline] = useState<string>('');
+  const [editingTimelineRaw, setEditingTimelineRaw] = useState<string>('');
+  const [editingTimelineTouched, setEditingTimelineTouched] = useState<boolean>(false);
+  const [editingRemarks, setEditingRemarks] = useState<string>('');
   const [expandedEvidence, setExpandedEvidence] = useState<Set<number>>(new Set());
   const [uploadingItemId, setUploadingItemId] = useState<number | null>(null);
   const [generatingAIForItem, setGeneratingAIForItem] = useState<number | null>(null);
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [evidenceName, setEvidenceName] = useState('');
   const [evidenceDescription, setEvidenceDescription] = useState('');
+  const [existingEvidenceSearch, setExistingEvidenceSearch] = useState<Record<number, string>>({});
+  const [selectedExistingEvidence, setSelectedExistingEvidence] = useState<Record<number, number | null>>({});
+  const [linkingExistingEvidenceItemId, setLinkingExistingEvidenceItemId] = useState<number | null>(null);
   const [approvalComments, setApprovalComments] = useState<Record<number, string>>({});
   const [aiError, setAiError] = useState<string | null>(null);
 
@@ -211,6 +271,37 @@ export default function AssessmentDetailPage() {
       const response = await apiClient.get(`/compliance/assessments/${assessmentId}`);
       return response.data;
     },
+  });
+
+  const isAuditMasterAssessment = assessment?.assessment_format === 'ubl_audit_master_tracking';
+
+  const { data: tenantUsers = [] } = useQuery<TenantUserOption[]>({
+    queryKey: ['compliance-assessment-tenant-users', assessment?.tenant_id],
+    queryFn: async () => {
+      const response = await tenantApi.getTenantUsers(assessment!.tenant_id);
+      const rows = Array.isArray(response.data) ? response.data : [];
+      return rows
+        .map((entry: any) => {
+          const user = entry?.user || {};
+          const userId = Number(entry?.user_id ?? user?.id);
+          if (!Number.isFinite(userId) || userId <= 0) return null;
+          const label = String(
+            user?.display_name ||
+            user?.username ||
+            user?.email ||
+            `User ${userId}`
+          ).trim();
+          if (!label) return null;
+          return {
+            id: userId,
+            label,
+            email: user?.email ? String(user.email) : null,
+          } as TenantUserOption;
+        })
+        .filter((entry: TenantUserOption | null): entry is TenantUserOption => !!entry);
+    },
+    enabled: Boolean(assessment?.tenant_id) && isAuditMasterAssessment,
+    staleTime: 60 * 1000,
   });
 
   const { data: itemEvidence, refetch: refetchEvidence } = useQuery({
@@ -254,10 +345,49 @@ export default function AssessmentDetailPage() {
     enabled: expandedEvidence.size > 0,
   });
 
+  const { data: evidenceLibraryOptions = [], isLoading: isEvidenceLibraryLoading } = useQuery<EvidenceLibraryOption[]>({
+    queryKey: ['assessment-evidence-library-options', assessmentId],
+    queryFn: async () => {
+      const response = await apiClient.get('/evidence-mgmt/items', {
+        params: { skip: 0, limit: 2000 },
+      });
+      const rows = Array.isArray(response.data?.items) ? response.data.items : [];
+      return rows
+        .map((row: any) => ({
+          id: Number(row?.id),
+          name: String(row?.name || '').trim(),
+          file_name: row?.file_name ?? null,
+          file_type: row?.file_type ?? null,
+          status: String(row?.status || 'draft'),
+          uploaded_at: row?.uploaded_at ?? null,
+        }))
+        .filter((row: EvidenceLibraryOption) => Number.isFinite(row.id) && row.id > 0 && !!row.name);
+    },
+    enabled: expandedEvidence.size > 0,
+    staleTime: 60 * 1000,
+  });
+
   const updateItemMutation = useMutation({
-    mutationFn: async ({ itemId, status }: { itemId: number; status: string }) => {
+    mutationFn: async ({
+      itemId,
+      complianceStatus,
+      responsibleParty,
+      timeline,
+      remarks,
+    }: {
+      itemId: number;
+      complianceStatus?: string;
+      responsibleParty?: string;
+      timeline?: string;
+      remarks?: string;
+    }) => {
+      const params: Record<string, string> = {};
+      if (complianceStatus !== undefined) params.compliance_status = complianceStatus;
+      if (responsibleParty !== undefined) params.responsible_party = responsibleParty;
+      if (timeline !== undefined) params.timeline = timeline;
+      if (remarks !== undefined) params.remarks = remarks;
       const response = await apiClient.put(`/compliance/assessments/items/${itemId}`, null, {
-        params: { compliance_status: status },
+        params,
       });
       return response.data;
     },
@@ -265,6 +395,11 @@ export default function AssessmentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['compliance-assessment-detail', assessmentId] });
       setEditingItemId(null);
       setEditingStatus('');
+      setEditingResponsibleParty('');
+      setEditingTimeline('');
+      setEditingTimelineRaw('');
+      setEditingTimelineTouched(false);
+      setEditingRemarks('');
     },
   });
 
@@ -284,6 +419,28 @@ export default function AssessmentDetailPage() {
       setEvidenceFile(null);
       setEvidenceName('');
       setEvidenceDescription('');
+    },
+  });
+
+  const linkExistingEvidenceMutation = useMutation({
+    mutationFn: async ({ itemId, evidenceId }: { itemId: number; evidenceId: number }) => {
+      const response = await apiClient.post(
+        `/compliance/assessments/${assessmentId}/items/${itemId}/evidence/link`,
+        { evidence_id: evidenceId }
+      );
+      return response.data;
+    },
+    onMutate: ({ itemId }) => {
+      setLinkingExistingEvidenceItemId(itemId);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['compliance-assessment-detail', assessmentId] });
+      refetchEvidence();
+      setSelectedExistingEvidence((prev) => ({ ...prev, [variables.itemId]: null }));
+      setExistingEvidenceSearch((prev) => ({ ...prev, [variables.itemId]: '' }));
+    },
+    onSettled: () => {
+      setLinkingExistingEvidenceItemId(null);
     },
   });
 
@@ -351,6 +508,15 @@ export default function AssessmentDetailPage() {
     setExpandedDomains(newExpanded);
   };
 
+  const toggleAuditItem = (itemId: number) => {
+    setExpandedAuditItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
   const toggleEvidencePanel = (itemId: number) => {
     const newExpanded = new Set(expandedEvidence);
     if (newExpanded.has(itemId)) {
@@ -359,12 +525,24 @@ export default function AssessmentDetailPage() {
       newExpanded.add(itemId);
     }
     setExpandedEvidence(newExpanded);
+    if (isAuditMasterAssessment) {
+      setExpandedAuditItems((prev) => {
+        const next = new Set(prev);
+        next.add(itemId);
+        return next;
+      });
+    }
   };
 
   const expandAll = () => {
-    if (assessment?.items_by_domain) {
-      setExpandedDomains(new Set(Object.keys(assessment.items_by_domain)));
+    if (!assessment?.items_by_domain) return;
+    const rawDomains = Object.keys(assessment.items_by_domain);
+    if (!isAuditMasterAssessment) {
+      setExpandedDomains(new Set(rawDomains));
+      return;
     }
+    const groupedDomains = Array.from(new Set(rawDomains.map((domain) => getAuditMasterDomainGroup(domain))));
+    setExpandedDomains(new Set(groupedDomains));
   };
 
   const collapseAll = () => {
@@ -374,16 +552,45 @@ export default function AssessmentDetailPage() {
   const startEditing = (item: AssessmentItem) => {
     setEditingItemId(item.id);
     setEditingStatus(item.compliance_status);
+    setEditingResponsibleParty(item.responsible_party || '');
+    const timelineInputValue = toDateInputValue(item.timeline);
+    setEditingTimeline(timelineInputValue);
+    setEditingTimelineRaw(item.timeline || '');
+    setEditingTimelineTouched(false);
+    setEditingRemarks(item.remarks || '');
+    if (isAuditMasterAssessment) {
+      setExpandedAuditItems((prev) => {
+        const next = new Set(prev);
+        next.add(item.id);
+        return next;
+      });
+    }
   };
 
   const cancelEditing = () => {
     setEditingItemId(null);
     setEditingStatus('');
+    setEditingResponsibleParty('');
+    setEditingTimeline('');
+    setEditingTimelineRaw('');
+    setEditingTimelineTouched(false);
+    setEditingRemarks('');
   };
 
   const saveEditing = () => {
     if (editingItemId && editingStatus) {
-      updateItemMutation.mutate({ itemId: editingItemId, status: editingStatus });
+      if (isAuditMasterAssessment) {
+        const timelineForSave = editingTimelineTouched ? editingTimeline : editingTimelineRaw;
+        updateItemMutation.mutate({
+          itemId: editingItemId,
+          complianceStatus: editingStatus,
+          responsibleParty: editingResponsibleParty,
+          timeline: timelineForSave,
+          remarks: editingRemarks,
+        });
+        return;
+      }
+      updateItemMutation.mutate({ itemId: editingItemId, complianceStatus: editingStatus });
     }
   };
 
@@ -401,6 +608,12 @@ export default function AssessmentDetailPage() {
       formData.append('description', evidenceDescription);
     }
     uploadEvidenceMutation.mutate({ itemId, formData });
+  };
+
+  const handleLinkExistingEvidence = (itemId: number) => {
+    const evidenceId = selectedExistingEvidence[itemId];
+    if (!evidenceId) return;
+    linkExistingEvidenceMutation.mutate({ itemId, evidenceId });
   };
 
   const handleApprovalAction = (evidenceLinkId: number, action: string) => {
@@ -431,6 +644,27 @@ export default function AssessmentDetailPage() {
     });
   };
 
+  const toDateInputValue = (value: string | null): string => {
+    if (!value) return '';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatTimelineDisplay = (timeline: string | null): string => {
+    if (!timeline) return '-';
+    const parsed = new Date(timeline);
+    if (Number.isNaN(parsed.getTime())) return timeline;
+    return parsed.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -455,10 +689,157 @@ export default function AssessmentDetailPage() {
 
   const statusStyle = ASSESSMENT_STATUS_STYLES[assessment.status] || ASSESSMENT_STATUS_STYLES.draft;
   const scoreColor = getScoreColor(assessment.overall_score);
-  const domains = Object.keys(assessment.items_by_domain || {});
+  const rawDomains = Object.keys(assessment.items_by_domain || {});
+  const domainEntries = (() => {
+    if (!isAuditMasterAssessment) {
+      return rawDomains.map((domain) => ({
+        key: domain,
+        name: getDomainDisplayName(domain),
+        items: assessment.items_by_domain[domain] || [],
+      }));
+    }
+
+    const grouped: Record<string, AssessmentItem[]> = {};
+    for (const domain of rawDomains) {
+      const groupKey = getAuditMasterDomainGroup(domain);
+      if (!grouped[groupKey]) grouped[groupKey] = [];
+      grouped[groupKey].push(...(assessment.items_by_domain[domain] || []));
+    }
+
+    return Object.entries(grouped).map(([groupKey, items]) => ({
+      key: groupKey,
+      name: getDomainDisplayName(groupKey),
+      items,
+    }));
+  })();
+  const domains = domainEntries.map((entry) => entry.key);
+  const allItems = assessment.items || [];
+  const fallbackStatusCounts = allItems.reduce(
+    (acc, item) => {
+      const normalized = normalizeComplianceStatus(item.compliance_status);
+      acc[normalized] += 1;
+      return acc;
+    },
+    {
+      complied: 0,
+      partially_complied: 0,
+      not_complied: 0,
+      in_progress: 0,
+      na: 0,
+    } as Record<(typeof STATUS_ORDER)[number], number>,
+  );
+  const statusCounts: Record<(typeof STATUS_ORDER)[number], number> = {
+    complied: assessment.complied_count ?? fallbackStatusCounts.complied,
+    partially_complied: assessment.partially_complied_count ?? fallbackStatusCounts.partially_complied,
+    not_complied: assessment.not_complied_count ?? fallbackStatusCounts.not_complied,
+    in_progress: assessment.in_progress_count ?? fallbackStatusCounts.in_progress,
+    na: assessment.na_count ?? fallbackStatusCounts.na,
+  };
+  const totalItems = Math.max(assessment.total_items ?? allItems.length, 0);
+  const accountedItems = STATUS_ORDER.reduce((sum, key) => sum + (statusCounts[key] || 0), 0);
+  const normalizedTotal = Math.max(totalItems, accountedItems);
+  const remainingDraftCount = Math.max(normalizedTotal - accountedItems, 0);
+  const statusSegments = STATUS_ORDER.map((key) => ({
+    key,
+    label: COMPLIANCE_STATUS_STYLES[key]?.label || key,
+    count: statusCounts[key] || 0,
+    color: STATUS_COLORS[key],
+    percent: normalizedTotal > 0 ? ((statusCounts[key] || 0) / normalizedTotal) * 100 : 0,
+  })).filter((segment) => segment.count > 0 && segment.percent > 0);
+  const ringMetrics = [
+    { key: 'complied', label: 'Complied', icon: CheckCircle },
+    { key: 'partially_complied', label: 'Partial', icon: AlertTriangle },
+    { key: 'not_complied', label: 'Not Complied', icon: XCircle },
+    { key: 'in_progress', label: 'In Progress', icon: Clock },
+  ].map((metric) => {
+    const key = metric.key as (typeof STATUS_ORDER)[number];
+    const count = statusCounts[key] || 0;
+    const percent = normalizedTotal > 0 ? (count / normalizedTotal) * 100 : 0;
+    return {
+      ...metric,
+      count,
+      percent,
+      color: STATUS_COLORS[key],
+    };
+  });
+  const domainCoverageRows = domainEntries
+    .map((entry) => {
+      const items = entry.items;
+      const counts = items.reduce(
+        (acc, item) => {
+          const normalized = normalizeComplianceStatus(item.compliance_status);
+          acc[normalized] += 1;
+          return acc;
+        },
+        {
+          complied: 0,
+          partially_complied: 0,
+          not_complied: 0,
+          in_progress: 0,
+          na: 0,
+        } as Record<(typeof STATUS_ORDER)[number], number>,
+      );
+      const total = items.length;
+      const segments = STATUS_ORDER.map((key) => ({
+        key,
+        count: counts[key],
+        color: STATUS_COLORS[key],
+        percent: total > 0 ? (counts[key] / total) * 100 : 0,
+      })).filter((segment) => segment.count > 0 && segment.percent > 0);
+      const completedPercent = total > 0 ? Math.round((counts.complied / total) * 100) : 0;
+      const totalSegmentPercent = segments.reduce((sum, segment) => sum + segment.percent, 0);
+      const remainderPercent = Math.max(100 - totalSegmentPercent, 0);
+
+      return {
+        name: entry.name,
+        total,
+        completedPercent,
+        segments,
+        remainderPercent,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+  const categoryCoverageRows = Object.entries(
+    allItems.reduce((acc, item) => {
+      const category = deriveCategoryFromDomain(item.area_domain || 'Uncategorized');
+      const normalized = normalizeComplianceStatus(item.compliance_status);
+      if (!acc[category]) {
+        acc[category] = {
+          total: 0,
+          complied: 0,
+          partially_complied: 0,
+          not_complied: 0,
+          in_progress: 0,
+          na: 0,
+        };
+      }
+      acc[category].total += 1;
+      acc[category][normalized] += 1;
+      return acc;
+    }, {} as Record<string, { total: number } & Record<(typeof STATUS_ORDER)[number], number>>),
+  )
+    .map(([name, values]) => ({
+      name,
+      total: values.total,
+      completion: values.total > 0 ? Math.round((values.complied / values.total) * 100) : 0,
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 6);
+
+  const responsiblePartyOptions = (() => {
+    const names = new Set<string>();
+    for (const user of tenantUsers) {
+      const trimmed = user.label.trim();
+      if (trimmed) names.add(trimmed);
+    }
+    if (editingResponsibleParty.trim()) {
+      names.add(editingResponsibleParty.trim());
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  })();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {aiError && (
         <div className="fixed top-4 right-4 z-50 bg-rose-50 border border-rose-200 text-rose-900 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 max-w-md animate-in slide-in-from-top-2">
           <AlertTriangle className="h-5 w-5 text-rose-600 flex-shrink-0" />
@@ -471,123 +852,96 @@ export default function AssessmentDetailPage() {
           </button>
         </div>
       )}
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-3">
         <Link
           href="/compliance/assessments"
-          className="mt-1 rounded-lg p-2 text-gray-600 hover:bg-gray-100 hover:text-black transition-colors"
+          className="mt-0.5 rounded-lg p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black transition-colors"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-              <FileText className="h-6 w-6" />
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+              <FileText className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-black">{assessment.name}</h1>
-              <p className="text-gray-600">
+              <h1 className="text-xl font-semibold text-black">{assessment.name}</h1>
+              <p className="text-sm text-gray-600">
                 {assessment.assessment_type.replace(/_/g, ' ')} • {assessment.file_name}
               </p>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <span className={`px-3 py-1 text-sm font-medium rounded-lg ${statusStyle.bg} ${statusStyle.text}`}>
+        <div className="flex items-center gap-2.5">
+          <span className={`px-2.5 py-1 text-xs font-medium rounded-lg ${statusStyle.bg} ${statusStyle.text}`}>
             {statusStyle.label}
           </span>
-          <button onClick={handleExport} className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
-            <Download className="h-4 w-4" />
+          <button onClick={handleExport} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
+            <Download className="h-3.5 w-3.5" />
             Export Excel
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="flex items-start justify-between mb-2">
-            <div className="rounded-xl bg-emerald-50 p-3">
-              <CheckCircle className="h-5 w-5 text-emerald-600" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-emerald-600">{assessment.complied_count || 0}</p>
-          <p className="text-sm text-gray-600 mt-1">Complied</p>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="flex items-start justify-between mb-2">
-            <div className="rounded-xl bg-amber-50 p-3">
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-amber-600">{assessment.partially_complied_count || 0}</p>
-          <p className="text-sm text-gray-600 mt-1">Partially Complied</p>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="flex items-start justify-between mb-2">
-            <div className="rounded-xl bg-rose-50 p-3">
-              <XCircle className="h-5 w-5 text-rose-600" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-rose-600">{assessment.not_complied_count || 0}</p>
-          <p className="text-sm text-gray-600 mt-1">Not Complied</p>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="flex items-start justify-between mb-2">
-            <div className="rounded-xl bg-blue-50 p-3">
-              <Clock className="h-5 w-5 text-blue-600" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-blue-600">{assessment.in_progress_count || 0}</p>
-          <p className="text-sm text-gray-600 mt-1">In Progress</p>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="flex items-start justify-between mb-2">
-            <div className="rounded-xl bg-gray-50 p-3">
-              <Minus className="h-5 w-5 text-gray-600" />
-            </div>
-          </div>
-          <p className="text-3xl font-bold text-gray-600">{assessment.na_count || 0}</p>
-          <p className="text-sm text-gray-600 mt-1">N/A</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <div className="mb-4">
-              <div>
-                <h2 className="text-lg font-semibold text-black">Overall Compliance Score</h2>
-                <p className="text-sm text-gray-600">Based on {assessment.total_items || 0} items</p>
-              </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+            <div className="mb-2">
+              <h2 className="text-sm font-semibold text-black">Overall Compliance Score</h2>
+              <p className="text-xs text-gray-500">Based on {normalizedTotal} items</p>
             </div>
-            <div className="space-y-4">
-              <div className="flex items-center gap-4">
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-3">
                 <div className="flex-1">
-                  <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${getScoreBarColor(assessment.overall_score)} transition-all`}
-                      style={{ width: `${assessment.overall_score || 0}%` }}
-                    />
+                  <div className="h-2.5 bg-gray-200 rounded-full overflow-hidden flex">
+                    {statusSegments.map((segment) => (
+                      <div
+                        key={segment.key}
+                        className="h-full transition-all"
+                        style={{
+                          width: `${segment.percent}%`,
+                          backgroundColor: segment.color,
+                        }}
+                      />
+                    ))}
+                    {remainingDraftCount > 0 && (
+                      <div
+                        className="h-full"
+                        style={{
+                          width: `${normalizedTotal > 0 ? (remainingDraftCount / normalizedTotal) * 100 : 0}%`,
+                          backgroundColor: DRAFT_REMAINDER_COLOR,
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
-                <span className={`text-2xl font-bold ${scoreColor.text}`}>
-                  {assessment.overall_score !== null
-                    ? `${Math.round(assessment.overall_score)}%`
-                    : '-'}
+                <span className={`text-lg font-semibold ${scoreColor.text}`}>
+                  {assessment.overall_score !== null ? `${Math.round(assessment.overall_score)}%` : '-'}
                 </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-600">
+                {statusSegments.map((segment) => (
+                  <span key={segment.key} className="inline-flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: segment.color }} />
+                    {segment.label}: {segment.count}
+                  </span>
+                ))}
+                {remainingDraftCount > 0 && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: DRAFT_REMAINDER_COLOR }} />
+                    Draft: {remainingDraftCount}
+                  </span>
+                )}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-black">Assessment Details</h2>
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold text-black">Assessment Details</h2>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2.5 text-sm">
             {assessment.source && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-600">Source</span>
@@ -598,7 +952,7 @@ export default function AssessmentDetailPage() {
               <div className="flex items-center justify-between">
                 <span className="text-gray-600">Assessor</span>
                 <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-gray-400" />
+                  <User className="h-3.5 w-3.5 text-gray-400" />
                   <span className="text-black">{assessment.assessor}</span>
                 </div>
               </div>
@@ -607,7 +961,7 @@ export default function AssessmentDetailPage() {
               <div className="flex items-center justify-between">
                 <span className="text-gray-600">Due Date</span>
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-gray-400" />
+                  <Calendar className="h-3.5 w-3.5 text-gray-400" />
                   <span className="text-black">{formatDate(assessment.due_date)}</span>
                 </div>
               </div>
@@ -620,22 +974,104 @@ export default function AssessmentDetailPage() {
         </div>
       </div>
 
-      {assessment.assessment_format === 'xlsx_maturity' ? (
-        <XlsxMaturityViewer assessmentId={assessmentId} />
-      ) : (
-      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-6">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm xl:col-span-4">
+          <h3 className="text-sm font-semibold text-black mb-3">Status Coverage</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {ringMetrics.map((metric) => {
+              const Icon = metric.icon;
+              return (
+                <div key={metric.key} className="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+                  <div className="mx-auto relative h-16 w-16">
+                    <div
+                      className="absolute inset-0 rounded-full"
+                      style={{
+                        background: `conic-gradient(${metric.color} ${Math.max(metric.percent * 3.6, 2)}deg, #e5e7eb ${Math.max(metric.percent * 3.6, 2)}deg 360deg)`,
+                      }}
+                    />
+                    <div className="absolute inset-[6px] rounded-full bg-white flex items-center justify-center">
+                      <Icon className="h-4 w-4" style={{ color: metric.color }} />
+                    </div>
+                  </div>
+                  <p className="mt-2 text-base font-semibold text-center text-black">{metric.percent.toFixed(1)}%</p>
+                  <p className="text-[11px] text-center text-gray-600">{metric.label}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm xl:col-span-8">
+          <h3 className="text-sm font-semibold text-black mb-3">Domain Coverage</h3>
+          <div className="space-y-2.5">
+            {domainCoverageRows.length === 0 ? (
+              <p className="text-sm text-gray-500">No domain data available.</p>
+            ) : (
+              domainCoverageRows.slice(0, 8).map((row, idx) => (
+                <div key={`${row.name}-${idx}`} className="grid grid-cols-12 items-center gap-2">
+                  <div className="col-span-5 truncate text-sm text-gray-800">{row.name}</div>
+                  <div className="col-span-1 text-xs text-gray-500 text-right">{row.total}</div>
+                  <div className="col-span-5 h-2 rounded-full bg-gray-200 overflow-hidden flex">
+                    {row.segments.map((segment) => (
+                      <div
+                        key={`${row.name}-${String(segment.key)}`}
+                        className="h-full"
+                        style={{ width: `${segment.percent}%`, backgroundColor: segment.color }}
+                      />
+                    ))}
+                    {row.remainderPercent > 0 && (
+                      <div
+                        className="h-full"
+                        style={{ width: `${row.remainderPercent}%`, backgroundColor: DRAFT_REMAINDER_COLOR }}
+                      />
+                    )}
+                  </div>
+                  <div className="col-span-1 text-xs font-medium text-gray-700 text-right">{row.completedPercent}%</div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+        <h3 className="text-sm font-semibold text-black mb-3">Category Coverage</h3>
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          {categoryCoverageRows.length === 0 ? (
+            <p className="text-sm text-gray-500">No category data available.</p>
+          ) : (
+            categoryCoverageRows.map((row) => (
+              <div key={row.name} className="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-sm text-gray-800 truncate pr-2">{row.name}</span>
+                  <span className="text-xs text-gray-600">{row.total}</span>
+                </div>
+                <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
+                  <div className="h-full bg-emerald-500" style={{ width: `${row.completion}%` }} />
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {assessment.assessment_format === 'xlsx_maturity' && (
+        <XlsxMaturityViewer assessmentId={assessmentId} assessmentItems={assessment.items || []} />
+      )}
+
+      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-lg font-semibold text-black">Assessment Items</h2>
-            <p className="text-sm text-gray-600">
-              {domains.length} domain{domains.length !== 1 ? 's' : ''} • {assessment.total_items} items
+            <h2 className="text-sm font-semibold text-black">Assessment Items</h2>
+            <p className="text-xs text-gray-500">
+              {domains.length} domain{domains.length !== 1 ? 's' : ''} • {normalizedTotal} items
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={expandAll} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            <button onClick={expandAll} className="px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors">
               Expand All
             </button>
-            <button onClick={collapseAll} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            <button onClick={collapseAll} className="px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors">
               Collapse All
             </button>
           </div>
@@ -648,8 +1084,9 @@ export default function AssessmentDetailPage() {
               <p className="text-gray-600">No assessment items found</p>
             </div>
           ) : (
-            domains.map((domain) => {
-              const items = assessment.items_by_domain[domain] || [];
+            domainEntries.map((domainEntry) => {
+              const domain = domainEntry.key;
+              const items = domainEntry.items;
               const isExpanded = expandedDomains.has(domain);
               const domainComplied = items.filter((i) => i.compliance_status === 'complied').length;
               const domainPercentage = items.length > 0 ? Math.round((domainComplied / items.length) * 100) : 0;
@@ -659,23 +1096,23 @@ export default function AssessmentDetailPage() {
                   key={domain}
                   className="border border-gray-200 rounded-lg overflow-hidden"
                 >
-                  <div className="w-full flex items-center justify-between p-4 bg-gray-50">
+                  <div className="w-full flex items-center justify-between p-3 bg-gray-50">
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
                         onClick={() => toggleDomain(domain)}
                         aria-expanded={isExpanded}
-                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${getDomainDisplayName(domain)}`}
-                        className="flex h-8 w-8 items-center justify-center rounded-md text-gray-600 hover:bg-gray-200 hover:text-black transition-colors"
+                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${domainEntry.name}`}
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-gray-600 hover:bg-gray-200 hover:text-black transition-colors"
                       >
                         {isExpanded ? (
-                          <ChevronDown className="h-5 w-5" />
+                          <ChevronDown className="h-4 w-4" />
                         ) : (
-                          <ChevronRight className="h-5 w-5" />
+                          <ChevronRight className="h-4 w-4" />
                         )}
                       </button>
-                      <span className="font-medium text-black">{getDomainDisplayName(domain)}</span>
-                      <span className="text-sm text-gray-500">({items.length} items)</span>
+                      <span className="text-sm font-medium text-black">{domainEntry.name}</span>
+                      <span className="text-xs text-gray-500">({items.length} items)</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 min-w-[100px]">
@@ -701,55 +1138,181 @@ export default function AssessmentDetailPage() {
                         const isEvidenceExpanded = expandedEvidence.has(item.id);
                         const currentItemEvidence = itemEvidence?.[item.id] || [];
                         const aiRecommendation = parseAIRecommendation(item.ai_evidence_recommendation);
+                        const linkedEvidenceIds = new Set(
+                          currentItemEvidence
+                            .map((ev) => ev.evidence_id)
+                            .filter((evId): evId is number => typeof evId === 'number' && Number.isFinite(evId) && evId > 0)
+                        );
+                        const currentSearchTerm = (existingEvidenceSearch[item.id] || '').trim().toLowerCase();
+                        const availableEvidenceOptions = evidenceLibraryOptions.filter((ev) => {
+                          if (linkedEvidenceIds.has(ev.id)) return false;
+                          if (!currentSearchTerm) return true;
+                          return (
+                            ev.name.toLowerCase().includes(currentSearchTerm) ||
+                            (ev.file_name || '').toLowerCase().includes(currentSearchTerm) ||
+                            String(ev.id).includes(currentSearchTerm)
+                          );
+                        });
+                        const isAuditItemExpanded = !isAuditMasterAssessment || expandedAuditItems.has(item.id);
 
                         return (
                           <div key={item.id} className="bg-white">
                             <div className="p-4">
-                              <div className="flex items-start gap-4">
-                                <span className="text-sm font-mono text-gray-500 mt-1">
+                              <div className="flex items-start gap-3">
+                                <span className="text-sm font-mono text-gray-500 mt-1 shrink-0">
                                   {item.item_number}
                                 </span>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-black mb-2">{item.control_description}</p>
+                                  <p className={`text-black ${isAuditMasterAssessment ? 'text-sm font-medium' : 'mb-2'}`}>
+                                    {item.control_description}
+                                  </p>
 
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
-                                    {item.gaps_identified && (
-                                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                        <p className="text-xs text-gray-600 mb-1">Gaps Identified</p>
-                                        <p className="text-sm text-gray-700">{item.gaps_identified}</p>
-                                      </div>
-                                    )}
-                                    {item.proposed_solution && (
-                                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                        <p className="text-xs text-gray-600 mb-1">Proposed Solution</p>
-                                        <p className="text-sm text-gray-700">{item.proposed_solution}</p>
-                                      </div>
-                                    )}
-                                    {item.responsible_party && (
-                                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                        <p className="text-xs text-gray-600 mb-1">Responsible Party</p>
-                                        <p className="text-sm text-gray-700">{item.responsible_party}</p>
-                                      </div>
-                                    )}
-                                    {item.timeline && (
-                                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                        <p className="text-xs text-gray-600 mb-1">Timeline</p>
-                                        <p className="text-sm text-gray-700">{item.timeline}</p>
-                                      </div>
-                                    )}
-                                    {item.priority && (
-                                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                        <p className="text-xs text-gray-600 mb-1">Priority</p>
-                                        <p className="text-sm text-gray-700 capitalize">{item.priority}</p>
-                                      </div>
-                                    )}
-                                    {item.remarks && (
-                                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                        <p className="text-xs text-gray-600 mb-1">Remarks</p>
-                                        <p className="text-sm text-gray-700">{item.remarks}</p>
-                                      </div>
-                                    )}
-                                  </div>
+                                  {isAuditMasterAssessment && !isAuditItemExpanded && (
+                                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
+                                      <span className="rounded bg-gray-100 px-2 py-0.5">
+                                        Responsible: {item.responsible_party || 'Unassigned'}
+                                      </span>
+                                      <span className="rounded bg-gray-100 px-2 py-0.5">
+                                        Timeline: {formatTimelineDisplay(item.timeline)}
+                                      </span>
+                                      <span className="rounded bg-gray-100 px-2 py-0.5">
+                                        Remarks: {item.remarks ? 'Available' : 'None'}
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  {isAuditItemExpanded && (
+                                    <>
+                                      {isAuditMasterAssessment ? (
+                                        <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/30 p-4">
+                                          <div className="mb-3 flex items-center justify-between">
+                                            <h4 className="text-sm font-semibold text-black">Control Information</h4>
+                                            <span className="text-xs text-gray-500">
+                                              {isEditing ? 'Editing' : 'Read Only'}
+                                            </span>
+                                          </div>
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div>
+                                              <p className="mb-1 text-xs text-gray-600">Responsible Party</p>
+                                              {isEditing && canEdit ? (
+                                                <select
+                                                  value={editingResponsibleParty}
+                                                  onChange={(e) => setEditingResponsibleParty(e.target.value)}
+                                                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                  <option value="">Unassigned</option>
+                                                  {responsiblePartyOptions.map((option) => (
+                                                    <option key={option} value={option}>
+                                                      {option}
+                                                    </option>
+                                                  ))}
+                                                </select>
+                                              ) : (
+                                                <p className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+                                                  {item.responsible_party || '-'}
+                                                </p>
+                                              )}
+                                            </div>
+                                            <div>
+                                              <p className="mb-1 text-xs text-gray-600">Timeline</p>
+                                              {isEditing && canEdit ? (
+                                                <input
+                                                  type="date"
+                                                  value={editingTimeline}
+                                                  onChange={(e) => {
+                                                    setEditingTimeline(e.target.value);
+                                                    setEditingTimelineTouched(true);
+                                                  }}
+                                                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                              ) : (
+                                                <p className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+                                                  {formatTimelineDisplay(item.timeline)}
+                                                </p>
+                                              )}
+                                            </div>
+                                            <div className="md:col-span-2">
+                                              <p className="mb-1 text-xs text-gray-600">Remarks</p>
+                                              {isEditing && canEdit ? (
+                                                <textarea
+                                                  value={editingRemarks}
+                                                  onChange={(e) => setEditingRemarks(e.target.value)}
+                                                  rows={3}
+                                                  placeholder="Add comments or remediation remarks"
+                                                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                              ) : (
+                                                <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+                                                  {item.remarks ? item.remarks : '-'}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                          {(item.gaps_identified || item.proposed_solution || item.priority) && (
+                                            <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                                              {item.gaps_identified && (
+                                                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                                  <p className="text-xs text-gray-600 mb-1">Gaps Identified</p>
+                                                  <p className="text-sm text-gray-700">{item.gaps_identified}</p>
+                                                </div>
+                                              )}
+                                              {item.proposed_solution && (
+                                                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                                  <p className="text-xs text-gray-600 mb-1">Proposed Solution</p>
+                                                  <p className="text-sm text-gray-700">{item.proposed_solution}</p>
+                                                </div>
+                                              )}
+                                              {item.priority && (
+                                                <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                                  <p className="text-xs text-gray-600 mb-1">Priority</p>
+                                                  <p className="text-sm text-gray-700 capitalize">{item.priority}</p>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+                                          {item.gaps_identified && (
+                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                              <p className="text-xs text-gray-600 mb-1">Gaps Identified</p>
+                                              <p className="text-sm text-gray-700">{item.gaps_identified}</p>
+                                            </div>
+                                          )}
+                                          {item.proposed_solution && (
+                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                              <p className="text-xs text-gray-600 mb-1">Proposed Solution</p>
+                                              <p className="text-sm text-gray-700">{item.proposed_solution}</p>
+                                            </div>
+                                          )}
+                                          {item.responsible_party && (
+                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                              <p className="text-xs text-gray-600 mb-1">Responsible Party</p>
+                                              <p className="text-sm text-gray-700">{item.responsible_party}</p>
+                                            </div>
+                                          )}
+                                          {item.timeline && (
+                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                              <p className="text-xs text-gray-600 mb-1">Timeline</p>
+                                              <p className="text-sm text-gray-700">{item.timeline}</p>
+                                            </div>
+                                          )}
+                                          {item.priority && (
+                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                              <p className="text-xs text-gray-600 mb-1">Priority</p>
+                                              <p className="text-sm text-gray-700 capitalize">{item.priority}</p>
+                                            </div>
+                                          )}
+                                          {item.remarks && (
+                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                              <p className="text-xs text-gray-600 mb-1">Remarks</p>
+                                              <p className="text-sm text-gray-700">{item.remarks}</p>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
                                 </div>
 
                                 <div className="flex items-center gap-2">
@@ -793,7 +1356,7 @@ export default function AssessmentDetailPage() {
                                       <button
                                         onClick={() => startEditing(item)}
                                         className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                        title="Edit Status"
+                                        title={isAuditMasterAssessment ? 'Edit control fields' : 'Edit status'}
                                       >
                                         <Edit2 className="h-4 w-4" />
                                       </button>
@@ -819,16 +1382,27 @@ export default function AssessmentDetailPage() {
                                         {generatingAIForItem === item.id ? (
                                           <Loader2 className="h-4 w-4 animate-spin" />
                                         ) : (
-                                          <Sparkles className="h-4 w-4" />
-                                        )}
-                                      </button>
+                                        <Sparkles className="h-4 w-4" />
+                                      )}
+                                    </button>
+                                      {isAuditMasterAssessment && (
+                                        <button
+                                          onClick={() => toggleAuditItem(item.id)}
+                                          className={`p-2 rounded-lg transition-colors ${
+                                            isAuditItemExpanded ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
+                                          }`}
+                                          title={isAuditItemExpanded ? 'Collapse control' : 'Expand control'}
+                                        >
+                                          {isAuditItemExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                        </button>
+                                      )}
                                     </>
                                   )}
                                 </div>
                               </div>
                             </div>
 
-                            {isEvidenceExpanded && (
+                            {isEvidenceExpanded && isAuditItemExpanded && (
                               <div className="mx-4 mb-4 bg-white border border-gray-200 rounded-lg p-4 space-y-4">
                                 {aiRecommendation && (
                                   <div className="space-y-3">
@@ -890,7 +1464,7 @@ export default function AssessmentDetailPage() {
                                   <div className="space-y-3">
                                     <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
                                       <Paperclip className="h-4 w-4" />
-                                      Uploaded Evidence ({currentItemEvidence.length})
+                                      Linked Evidence ({currentItemEvidence.length})
                                     </h4>
                                     <div className="space-y-2">
                                       {currentItemEvidence.map((ev) => {
@@ -1018,6 +1592,69 @@ export default function AssessmentDetailPage() {
 
                                 <div className="space-y-3 pt-2 border-t border-gray-200">
                                   <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                                    <Paperclip className="h-4 w-4" />
+                                    Link Existing Evidence
+                                  </h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div className="md:col-span-1">
+                                      <label className="block text-xs text-gray-600 mb-1">Search</label>
+                                      <input
+                                        type="text"
+                                        value={existingEvidenceSearch[item.id] || ''}
+                                        onChange={(e) =>
+                                          setExistingEvidenceSearch((prev) => ({
+                                            ...prev,
+                                            [item.id]: e.target.value,
+                                          }))
+                                        }
+                                        placeholder="Search evidence by name or file"
+                                        className="input text-sm"
+                                      />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                      <label className="block text-xs text-gray-600 mb-1">Evidence Library</label>
+                                      <select
+                                        value={selectedExistingEvidence[item.id] ?? ''}
+                                        onChange={(e) =>
+                                          setSelectedExistingEvidence((prev) => ({
+                                            ...prev,
+                                            [item.id]: e.target.value ? Number(e.target.value) : null,
+                                          }))
+                                        }
+                                        className="input text-sm"
+                                      >
+                                        <option value="">
+                                          {isEvidenceLibraryLoading ? 'Loading evidence...' : 'Select evidence to link'}
+                                        </option>
+                                        {availableEvidenceOptions.map((ev) => (
+                                          <option key={ev.id} value={ev.id}>
+                                            {ev.name} ({ev.file_name || `Evidence #${ev.id}`})
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => handleLinkExistingEvidence(item.id)}
+                                    disabled={!selectedExistingEvidence[item.id] || linkingExistingEvidenceItemId === item.id}
+                                    className="btn-secondary btn-sm flex items-center gap-2"
+                                  >
+                                    {linkingExistingEvidenceItemId === item.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Paperclip className="h-4 w-4" />
+                                    )}
+                                    Link Selected Evidence
+                                  </button>
+                                  {availableEvidenceOptions.length === 0 && (
+                                    <p className="text-xs text-gray-500">
+                                      No unmatched evidence found for this search.
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div className="space-y-3 pt-2 border-t border-gray-200">
+                                  <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
                                     <FileUp className="h-4 w-4" />
                                     Upload New Evidence
                                   </h4>
@@ -1026,10 +1663,11 @@ export default function AssessmentDetailPage() {
                                       <label className="block text-xs text-gray-600 mb-1">File</label>
                                       <input
                                         type="file"
-                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                                        accept="*/*"
                                         onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
                                         className="input text-sm py-1"
                                       />
+                                      <p className="mt-1 text-[11px] text-gray-500">Any file type is supported.</p>
                                     </div>
                                     <div>
                                       <label className="block text-xs text-gray-600 mb-1">Evidence Name</label>
@@ -1078,7 +1716,8 @@ export default function AssessmentDetailPage() {
           )}
         </div>
       </div>
-      )}
     </div>
   );
 }
+
+

@@ -34,8 +34,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-// ─── Types ──────────────────────────────────────────────────────
-
 interface Assessment {
   id: number;
   tenant_id: number;

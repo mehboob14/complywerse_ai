@@ -158,10 +158,15 @@ function shortenFrameworkLabel(value?: string, max = 22) {
   return value.length > max ? `${value.slice(0, max)}…` : value;
 }
 
+function frameworkSelectionKey(frameworkId: number, frameworkType?: string | null) {
+  return `${frameworkType || 'legacy'}:${frameworkId}`;
+}
+
 export default function GapAnalysisDashboardPage() {
   const [activeTab, setActiveTab] = useState('unmapped');
   const [selectedFrameworkId, setSelectedFrameworkId] = useState<number | null>(null);
   const [selectedFrameworkType, setSelectedFrameworkType] = useState<string | null>(null);
+  const [coverageFrameworkSelection, setCoverageFrameworkSelection] = useState<string>('all');
   const [showFrameworkDrillDown, setShowFrameworkDrillDown] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
 
@@ -219,30 +224,59 @@ export default function GapAnalysisDashboardPage() {
     return dedupeFrameworkCoverage(dashboard?.coverage_by_framework || []);
   }, [dashboard]);
 
-  const gapSeverityData = useMemo(() => {
-    if (!dashboard?.critical_gaps) return [];
-    const counts = { critical: 0, high: 0, medium: 0, low: 0 };
-    dashboard.critical_gaps.forEach(gap => {
-      const priority = gap.priority.toLowerCase() as keyof typeof counts;
-      if (priority in counts) counts[priority]++;
-    });
+  const mappingHealthData = useMemo(() => {
     return [
-      { name: 'Critical', value: counts.critical, color: COLORS.critical },
-      { name: 'High', value: counts.high, color: COLORS.high },
-      { name: 'Medium', value: counts.medium, color: COLORS.medium },
-      { name: 'Low', value: counts.low, color: COLORS.low },
-    ].filter(d => d.value > 0);
+      { name: 'Mapped', value: dashboard?.mapped_controls || 0, color: COLORS.green },
+      { name: 'Unmapped', value: dashboard?.unmapped_controls || 0, color: COLORS.critical },
+    ].filter((entry) => entry.value > 0);
+  }, [dashboard]);
+
+  const evidenceHealthData = useMemo(() => {
+    return [
+      { name: 'With Evidence', value: dashboard?.controls_with_evidence || 0, color: COLORS.green },
+      { name: 'Without Evidence', value: dashboard?.controls_without_evidence || 0, color: COLORS.high },
+    ].filter((entry) => entry.value > 0);
   }, [dashboard]);
 
   const frameworkChartData = useMemo(() => {
     if (!uniqueFrameworkCoverage.length) return [];
     return uniqueFrameworkCoverage.map(fw => ({
       name: fw.framework_name || fw.framework_code,
+      frameworkCode: fw.framework_code,
+      frameworkKey: frameworkSelectionKey(fw.framework_id, fw.framework_type),
       fullName: fw.framework_name,
       covered: fw.controls_with_evidence,
       uncovered: fw.controls_without_evidence,
       coverage: fw.coverage_percentage,
     }));
+  }, [uniqueFrameworkCoverage]);
+
+  const selectedCoverageFramework = useMemo(() => {
+    if (coverageFrameworkSelection === 'all') return null;
+    return uniqueFrameworkCoverage.find(
+      (framework) => frameworkSelectionKey(framework.framework_id, framework.framework_type) === coverageFrameworkSelection
+    ) || null;
+  }, [coverageFrameworkSelection, uniqueFrameworkCoverage]);
+
+  const selectedFrameworkEvidenceSplit = useMemo(() => {
+    if (!selectedCoverageFramework) return [];
+    return [
+      { name: 'With Evidence', value: selectedCoverageFramework.controls_with_evidence, color: COLORS.green },
+      { name: 'Without Evidence', value: selectedCoverageFramework.controls_without_evidence, color: COLORS.critical },
+    ];
+  }, [selectedCoverageFramework]);
+
+  const topFrameworkGapsData = useMemo(() => {
+    return [...uniqueFrameworkCoverage]
+      .sort((a, b) => b.controls_without_evidence - a.controls_without_evidence)
+      .slice(0, 8)
+      .map((framework) => ({
+        key: frameworkSelectionKey(framework.framework_id, framework.framework_type),
+        name: framework.framework_code || framework.framework_name,
+        fullName: framework.framework_name || framework.framework_code,
+        uncovered: framework.controls_without_evidence,
+        total: framework.total_controls,
+      }));
   }, [uniqueFrameworkCoverage]);
 
   const exportMutation = useMutation({
@@ -283,37 +317,23 @@ export default function GapAnalysisDashboardPage() {
     setShowFrameworkDrillDown(true);
   };
 
-  const getCoverageColor = (percentage: number) => {
-    if (percentage >= 80) return 'bg-green-500';
-    if (percentage >= 50) return 'bg-yellow-500';
-    if (percentage >= 20) return 'bg-orange-500';
-    return 'bg-red-500';
-  };
-
-  const getCoverageTextColor = (percentage: number) => {
-    if (percentage >= 80) return 'text-green-400';
-    if (percentage >= 50) return 'text-yellow-400';
-    if (percentage >= 20) return 'text-orange-400';
-    return 'text-red-400';
-  };
-
   if (dashboardLoading) {
     return (
-      <div className="space-y-8">
-        <div className="page-header">
+      <div className="assets-light min-h-full space-y-4 bg-slate-50 p-4 md:p-6">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="skeleton h-8 w-64 mb-2" />
           <div className="skeleton h-5 w-96" />
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="stat-card">
+            <div key={i} className="rounded-xl border border-slate-200 bg-white p-3.5">
               <div className="skeleton h-12 w-12 rounded-xl mb-4" />
               <div className="skeleton h-8 w-20 mb-2" />
               <div className="skeleton h-4 w-32" />
             </div>
           ))}
         </div>
-        <div className="card">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="skeleton h-6 w-48 mb-4" />
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
@@ -329,44 +349,46 @@ export default function GapAnalysisDashboardPage() {
   const highCount = dashboard?.critical_gaps?.filter(g => g.priority === 'high').length || 0;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-black sm:text-2xl">Gap Analysis Dashboard</h1>
-          <p className="text-sm text-gray-600">Identify and address control mapping and evidence gaps</p>
-        </div>
-        <div className="relative">
-          <button
-            onClick={() => setShowExportMenu(!showExportMenu)}
-            className="btn-primary flex items-center gap-2"
-            disabled={exportMutation.isPending}
-          >
-            {exportMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
+    <div className="assets-light min-h-full space-y-4 bg-slate-50 p-4 md:p-6">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-lg font-semibold text-slate-900 sm:text-xl">Gap Analysis Dashboard</h1>
+            <p className="text-sm text-slate-600">Identify and address control mapping and evidence gaps</p>
+          </div>
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              disabled={exportMutation.isPending}
+            >
+              {exportMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              Export Report
+              <ChevronDown className="h-4 w-4" />
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 top-full z-10 mt-2 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                <button
+                  onClick={() => exportMutation.mutate('json')}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                >
+                  <FileText className="h-4 w-4" />
+                  Export as JSON
+                </button>
+                <button
+                  onClick={() => exportMutation.mutate('csv')}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                >
+                  <FileText className="h-4 w-4" />
+                  Export as CSV
+                </button>
+              </div>
             )}
-            Export Report
-            <ChevronDown className="h-4 w-4" />
-          </button>
-          {showExportMenu && (
-            <div className="absolute right-0 top-full z-10 mt-2 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-              <button
-                onClick={() => exportMutation.mutate('json')}
-                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <FileText className="h-4 w-4" />
-                Export as JSON
-              </button>
-              <button
-                onClick={() => exportMutation.mutate('csv')}
-                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <FileText className="h-4 w-4" />
-                Export as CSV
-              </button>
-            </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -399,7 +421,7 @@ export default function GapAnalysisDashboardPage() {
           variant="warning"
           subtitle="Needs action soon"
         />
-        <div className="rounded-xl border border-gray-200 bg-white p-4 flex items-center justify-center">
+        <div className="flex items-center justify-center rounded-xl border border-slate-200 bg-white p-4">
           <ProgressRing
             percentage={dashboard?.evidence_coverage_percentage || 0}
             size={80}
@@ -409,44 +431,76 @@ export default function GapAnalysisDashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <DataCard
-          title="Gap Severity Breakdown"
-          subtitle="Distribution of gaps by priority"
+          title="Mapping Health"
+          subtitle="Mapped vs. unmapped controls"
           icon={PieChartIcon}
-          empty={gapSeverityData.length === 0}
-          emptyMessage="No gaps detected"
+          empty={mappingHealthData.length === 0}
+          emptyMessage="No mapping data"
         >
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={gapSeverityData}
+                  data={mappingHealthData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
+                  innerRadius={48}
+                  outerRadius={84}
                   paddingAngle={2}
                   dataKey="value"
-                  label={({ name, value }) => `${name}: ${value}`}
-                  labelLine={{ stroke: '#64748b' }}
                 >
-                  {gapSeverityData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  {mappingHealthData.map((entry, index) => (
+                    <Cell key={`mapping-cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
                 <Tooltip
-                  contentStyle={{ 
-                    backgroundColor: '#ffffff', 
-                    border: '1px solid #e5e7eb',
+                  contentStyle={{
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
                     borderRadius: '8px',
-                    color: '#111827'
+                    color: '#0f172a',
                   }}
                 />
-                <Legend 
-                  wrapperStyle={{ color: '#374151' }}
-                  formatter={(value) => <span style={{ color: '#374151' }}>{value}</span>}
+                <Legend wrapperStyle={{ color: '#334155' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </DataCard>
+
+        <DataCard
+          title="Evidence Health"
+          subtitle="Controls with and without evidence"
+          icon={Target}
+          empty={evidenceHealthData.length === 0}
+          emptyMessage="No evidence data"
+        >
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={evidenceHealthData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={48}
+                  outerRadius={84}
+                  paddingAngle={2}
+                  dataKey="value"
+                >
+                  {evidenceHealthData.map((entry, index) => (
+                    <Cell key={`evidence-cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    color: '#0f172a',
+                  }}
                 />
+                <Legend wrapperStyle={{ color: '#334155' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -454,175 +508,186 @@ export default function GapAnalysisDashboardPage() {
 
         <DataCard
           title="Framework Coverage"
-          subtitle="Evidence coverage by framework"
+          subtitle="Select a framework to inspect coverage"
           icon={BarChart3}
           empty={frameworkChartData.length === 0}
           emptyMessage="No framework data"
         >
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={frameworkChartData} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 4 }}>
-                <XAxis type="number" domain={[0, 100]} tick={{ fill: '#6b7280', fontSize: 11 }} />
-                <YAxis dataKey="name" type="category" tick={{ fill: '#374151', fontSize: 11 }} width={150} interval={0} tickFormatter={(value) => shortenFrameworkLabel(String(value), 20)} />
-                <Tooltip
-                  contentStyle={{ 
-                    backgroundColor: '#ffffff', 
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '8px',
-                    color: '#111827'
-                  }}
-                  formatter={(value) => {
-                    const numericValue = typeof value === 'number' ? value : Number(value ?? 0);
-                    return [`${numericValue}%`, 'Coverage'];
-                  }}
-                />
-                <Bar dataKey="coverage" radius={[0, 4, 4, 0]}>
-                  {frameworkChartData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={entry.coverage >= 80 ? COLORS.green : entry.coverage >= 50 ? COLORS.medium : COLORS.critical} 
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="mb-3">
+            <select
+              value={coverageFrameworkSelection}
+              onChange={(event) => setCoverageFrameworkSelection(event.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="all">All Frameworks</option>
+              {uniqueFrameworkCoverage.map((framework) => (
+                <option
+                  key={frameworkSelectionKey(framework.framework_id, framework.framework_type)}
+                  value={frameworkSelectionKey(framework.framework_id, framework.framework_type)}
+                >
+                  {framework.framework_code} - {framework.framework_name}
+                </option>
+              ))}
+            </select>
           </div>
+
+          {selectedCoverageFramework ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">With Evidence</p>
+                  <p className="mt-1 text-lg font-semibold text-green-600">{selectedCoverageFramework.controls_with_evidence}</p>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Without Evidence</p>
+                  <p className="mt-1 text-lg font-semibold text-red-600">{selectedCoverageFramework.controls_without_evidence}</p>
+                </div>
+              </div>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={selectedFrameworkEvidenceSplit} margin={{ top: 6, right: 6, left: 0, bottom: 6 }}>
+                    <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        color: '#0f172a',
+                      }}
+                    />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                      {selectedFrameworkEvidenceSplit.map((entry, index) => (
+                        <Cell key={`split-cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                <p className="text-xs text-slate-500">
+                  Coverage: <span className="font-semibold text-slate-900">{selectedCoverageFramework.coverage_percentage}%</span> ({selectedCoverageFramework.framework_code})
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={frameworkChartData} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 4 }}>
+                  <XAxis type="number" domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 11 }} />
+                  <YAxis dataKey="name" type="category" tick={{ fill: '#334155', fontSize: 11 }} width={145} interval={0} tickFormatter={(value) => shortenFrameworkLabel(String(value), 18)} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      color: '#0f172a',
+                    }}
+                    formatter={(value) => {
+                      const numericValue = typeof value === 'number' ? value : Number(value ?? 0);
+                      return [`${numericValue}%`, 'Coverage'];
+                    }}
+                  />
+                  <Bar dataKey="coverage" radius={[0, 4, 4, 0]}>
+                    {frameworkChartData.map((entry, index) => (
+                      <Cell
+                        key={`coverage-cell-${index}`}
+                        fill={entry.coverage >= 80 ? COLORS.green : entry.coverage >= 50 ? COLORS.medium : COLORS.critical}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </DataCard>
       </div>
 
-      {/* {dashboard?.critical_gaps && dashboard.critical_gaps.length > 0 && (
-        <DataCard
-          title="Priority Gaps"
-          subtitle="Issues requiring immediate attention"
-          icon={Target}
-        >
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {dashboard.critical_gaps
-              .sort((a, b) => {
-                const priority = { critical: 0, high: 1, medium: 2, low: 3 };
-                return (priority[a.priority.toLowerCase() as keyof typeof priority] || 4) - 
-                       (priority[b.priority.toLowerCase() as keyof typeof priority] || 4);
-              })
-              .map((gap, index) => (
-              <div
-                key={index}
-                className={`flex items-start gap-4 rounded-lg border p-4 transition-all ${
-                  gap.priority === 'critical'
-                    ? 'border-red-500/30 bg-red-500/10 hover:border-red-500/50'
-                    : gap.priority === 'high'
-                    ? 'border-amber-500/30 bg-amber-500/10 hover:border-amber-500/50'
-                    : 'border-gray-200 bg-gray-50 hover:border-gray-300'
-                }`}
-              >
-                <div className={`rounded-lg p-2 ${
-                  gap.priority === 'critical' ? 'bg-red-500/20' :
-                  gap.priority === 'high' ? 'bg-amber-500/20' : 'bg-gray-100'
-                }`}>
-                  <AlertTriangle className={`h-5 w-5 ${
-                    gap.priority === 'critical' ? 'text-red-400' :
-                    gap.priority === 'high' ? 'text-amber-400' : 'text-gray-600'
-                  }`} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <SeverityBadge severity={gap.priority.toLowerCase() as any} size="sm" />
-                    <span className="text-xs text-gray-500 capitalize">
-                      {gap.type.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                  <p className="text-black">{gap.description}</p>
-                  {gap.details && (
-                    <p className="mt-1 text-sm text-gray-600">
-                      {gap.details.controls_without_evidence !== undefined && (
-                        <span>{gap.details.controls_without_evidence} of {gap.details.total_controls} controls without evidence</span>
-                      )}
-                      {gap.details.evidence_type && (
-                        <span>Missing: {gap.details.evidence_type}</span>
-                      )}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {gap.framework_id && (
-                    <button
-                      onClick={() => {
-                        const fw = dashboard?.coverage_by_framework?.find(f => f.framework_id === gap.framework_id);
-                        handleFrameworkClick(gap.framework_id!, fw?.framework_type);
-                      }}
-                      className="btn-ghost btn-sm"
-                    >
-                      View
-                    </button>
-                  )}
-                  <Link
-                    href={gap.framework_id ? `/evidence?framework=${gap.framework_id}` : '/evidence'}
-                    className="btn-primary btn-sm flex items-center gap-1"
-                  >
-                    <Plus className="h-3 w-3" />
-                    Fix Gap
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        </DataCard>
-      )} */}
+      <DataCard
+        title="Top Framework Gaps"
+        subtitle="Frameworks with highest controls missing evidence"
+        icon={AlertCircle}
+        empty={topFrameworkGapsData.length === 0}
+        emptyMessage="No framework gaps detected"
+      >
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={topFrameworkGapsData} margin={{ top: 6, right: 8, left: 8, bottom: 6 }}>
+              <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={55} />
+              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  color: '#0f172a',
+                }}
+                formatter={(value, _name, payload) => {
+                  const uncovered = typeof value === 'number' ? value : Number(value ?? 0);
+                  return [`${uncovered} missing evidence`, payload?.payload?.fullName || 'Framework'];
+                }}
+              />
+              <Bar dataKey="uncovered" fill={COLORS.high} radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </DataCard>
 
-      <div className="card">
-        <div className="card-header">
+      <div className="rounded-lg border border-slate-200 bg-white">
+        <div className="border-b border-slate-200 px-4 py-3">
           <div>
-            <h2 className="card-title">Framework Coverage</h2>
-            <p className="card-description">Evidence coverage by compliance framework</p>
+            <h2 className="text-sm font-semibold text-slate-900">Framework Coverage</h2>
+            <p className="text-xs text-slate-500">Evidence coverage by compliance framework</p>
           </div>
         </div>
         
         {!dashboard?.coverage_by_framework?.length ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <BarChart3 className="mb-4 h-12 w-12 text-gray-400" />
-            <h3 className="text-lg font-medium text-black">No framework data available</h3>
-            <p className="mt-1 text-gray-600">Add frameworks and controls to see coverage</p>
+            <BarChart3 className="mb-4 h-12 w-12 text-slate-400" />
+            <h3 className="text-lg font-medium text-slate-900">No framework data available</h3>
+            <p className="mt-1 text-slate-600">Add frameworks and controls to see coverage</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-600">Framework</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-600">Total Controls</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-600">With Evidence</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-600">Without Evidence</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-600">Coverage</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-600">Action</th>
+                <tr className="border-b border-slate-200">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase text-slate-500">Framework</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-500">Total Controls</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-500">With Evidence</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-500">Without Evidence</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium uppercase text-slate-500">Coverage</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase text-slate-500">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-slate-200">
                 {uniqueFrameworkCoverage.map((fw) => (
                   <tr
                     key={`${fw.framework_type || 'legacy'}-${fw.framework_id}`}
-                    className="hover:bg-gray-100 cursor-pointer transition-colors"
+                    className="cursor-pointer transition-colors hover:bg-slate-50"
                     onClick={() => handleFrameworkClick(fw.framework_id, fw.framework_type)}
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100">
-                          <Shield className="h-4 w-4 text-gray-600" />
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
+                          <Shield className="h-4 w-4 text-slate-600" />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <p className="font-medium text-black">{fw.framework_code}</p>
+                            <p className="font-medium text-slate-900">{fw.framework_code}</p>
                             {fw.framework_type === 'uploaded' ? (
                               <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-cyan-100 text-cyan-700">uploaded</span>
                             ) : (
                               <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400">legacy</span>
                             )}
                           </div>
-                          <p className="text-xs text-gray-600 truncate max-w-xs">{fw.framework_name}</p>
+                          <p className="max-w-xs truncate text-xs text-slate-600">{fw.framework_name}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center text-black">{fw.total_controls}</td>
-                    <td className="px-4 py-3 text-center text-green-400">{fw.controls_with_evidence}</td>
-                    <td className="px-4 py-3 text-center text-red-400">{fw.controls_without_evidence}</td>
+                    <td className="px-4 py-3 text-center text-slate-900">{fw.total_controls}</td>
+                    <td className="px-4 py-3 text-center text-green-600">{fw.controls_with_evidence}</td>
+                    <td className="px-4 py-3 text-center text-red-600">{fw.controls_without_evidence}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
                         <ProgressRing
@@ -647,8 +712,8 @@ export default function GapAnalysisDashboardPage() {
         )}
       </div>
 
-      <div className="card">
-        <div className="border-b border-gray-200">
+      <div className="rounded-lg border border-slate-200 bg-white">
+        <div className="border-b border-slate-200">
           <div className="flex flex-wrap items-center gap-1 px-4">
             {TABS.map((tab) => (
               <button
@@ -657,18 +722,18 @@ export default function GapAnalysisDashboardPage() {
                 className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
                     ? 'border-primary-500 text-blue-600'
-                    : 'border-transparent text-gray-600 hover:text-black'
+                    : 'border-transparent text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <tab.icon className="h-4 w-4" />
                 {tab.label}
                 {tab.id === 'unmapped' && unmappedControls?.total ? (
-                  <span className="ml-1 rounded-full bg-orange-500/20 px-2 py-0.5 text-xs text-orange-400">
+                  <span className="ml-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-700">
                     {unmappedControls.total}
                   </span>
                 ) : null}
                 {tab.id === 'no-evidence' && controlsWithoutEvidence?.total ? (
-                  <span className="ml-1 rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-400">
+                  <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">
                     {controlsWithoutEvidence.total}
                   </span>
                 ) : null}
@@ -680,7 +745,7 @@ export default function GapAnalysisDashboardPage() {
         <div className="p-4">
           <div className="mb-4 flex items-center gap-3">
             <div className="relative">
-              <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
+              <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
               <select
                 value={selectedFrameworkId ? `${selectedFrameworkType || 'legacy'}:${selectedFrameworkId}` : ''}
                 onChange={(e) => {
@@ -693,7 +758,7 @@ export default function GapAnalysisDashboardPage() {
                     setSelectedFrameworkType(type);
                   }
                 }}
-                className="appearance-none rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-10 text-black focus:border-primary-500 focus:outline-none"
+                className="appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-10 text-slate-900 focus:border-blue-500 focus:outline-none"
               >
                 <option value="">All Frameworks</option>
                 {uniqueFrameworkCoverage.filter(fw => fw.framework_type === 'uploaded').length ? (
@@ -715,7 +780,7 @@ export default function GapAnalysisDashboardPage() {
                   </optgroup>
                 ) : null}
               </select>
-              <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600 pointer-events-none" />
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             </div>
           </div>
 

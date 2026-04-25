@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -366,6 +366,20 @@ function IncidentModal({
   });
   const [status, setStatus] = useState<IncidentStatus>(incident?.status || 'open');
   const [aiSuggestionNote, setAiSuggestionNote] = useState<string | null>(null);
+  const [riskSearch, setRiskSearch] = useState('');
+
+  const filteredRisks = useMemo(() => {
+    const term = riskSearch.trim().toLowerCase();
+    if (!term) return risks;
+    const matches = risks.filter((risk) => {
+      const title = (risk.title || '').toLowerCase();
+      const category = (risk.risk_category || '').toLowerCase();
+      return title.includes(term) || category.includes(term) || String(risk.id).includes(term);
+    });
+    if (matches.some((risk) => risk.id === formData.risk_id)) return matches;
+    const selected = risks.find((risk) => risk.id === formData.risk_id);
+    return selected ? [selected, ...matches] : matches;
+  }, [risks, riskSearch, formData.risk_id]);
 
   const createMutation = useMutation({
     mutationFn: (data: RiskIncidentCreate) => ermApi.incidents.create(data),
@@ -454,13 +468,20 @@ function IncidentModal({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-slate-600">Related Risk</label>
+              <input
+                type="text"
+                value={riskSearch}
+                onChange={(e) => setRiskSearch(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                placeholder="Search risk by title..."
+              />
               <select
                 value={formData.risk_id}
                 onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="mt-2 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
                 required
               >
-                {risks.map((risk) => (
+                {filteredRisks.map((risk) => (
                   <option key={risk.id} value={risk.id}>
                     {risk.title}
                   </option>

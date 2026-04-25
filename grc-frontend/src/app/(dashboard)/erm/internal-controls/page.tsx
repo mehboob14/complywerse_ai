@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ermApi } from '@/lib/api';
+import { evidenceApi, ermApi, frameworksApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Shield,
@@ -25,7 +25,6 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
-import { evidenceApi } from '@/lib/api';
 import dynamic from 'next/dynamic';
 
 const { ResponsiveContainer, PieChart, Pie, Tooltip } = {
@@ -352,6 +351,7 @@ export default function InternalControlsPage() {
   const [modalStatus, setModalStatus] = useState('');
   const [modalDesignEff, setModalDesignEff] = useState('');
   const [modalOperatingEff, setModalOperatingEff] = useState('');
+  const [modalRegulatorySource, setModalRegulatorySource] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -384,6 +384,23 @@ export default function InternalControlsPage() {
       return response.data;
     },
   });
+
+  const { data: frameworks } = useQuery({
+    queryKey: ['regulatory-source-frameworks'],
+    queryFn: async () => {
+      const response = await frameworksApi.getAll();
+      return response.data as Array<{ id: string; name: string }>;
+    },
+  });
+
+  const regulatorySourceOptions = useMemo(() => {
+    const values = new Set<string>();
+    (frameworks || []).forEach((framework) => {
+      const name = (framework?.name || '').trim();
+      if (name) values.add(name);
+    });
+    return Array.from(values).sort((left, right) => left.localeCompare(right));
+  }, [frameworks]);
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => ermApi.internalControls.create(data),
@@ -799,6 +816,7 @@ export default function InternalControlsPage() {
               setModalStatus('');
               setModalDesignEff('');
               setModalOperatingEff('');
+              setModalRegulatorySource('');
               setIsModalOpen(true);
             }}
             className="flex items-center gap-2 rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-500"
@@ -896,6 +914,7 @@ export default function InternalControlsPage() {
                             setModalStatus(control.status || '');
                             setModalDesignEff(control.design_effectiveness || '');
                             setModalOperatingEff(control.operating_effectiveness || '');
+                            setModalRegulatorySource(control.regulatory_source || '');
                             setIsModalOpen(true);
                           }}
                           className="rounded p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
@@ -1165,10 +1184,17 @@ export default function InternalControlsPage() {
                   <input
                     name="regulatory_source"
                     type="text"
-                    defaultValue={editingControl?.regulatory_source || ''}
+                    value={modalRegulatorySource}
+                    onChange={(e) => setModalRegulatorySource(e.target.value)}
+                    list="regulatory-framework-options"
                     className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
-                    placeholder="e.g., SOX, PCI-DSS, ISO 27001"
+                    placeholder="Search framework or enter source"
                   />
+                  <datalist id="regulatory-framework-options">
+                    {regulatorySourceOptions.map((option) => (
+                      <option key={option} value={option} />
+                    ))}
+                  </datalist>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">

@@ -440,6 +440,20 @@ function ActionModal({
   }>>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [riskSearch, setRiskSearch] = useState('');
+
+  const filteredRisks = useMemo(() => {
+    const term = riskSearch.trim().toLowerCase();
+    if (!term) return risks;
+    const matches = risks.filter((risk) => {
+      const title = (risk.title || '').toLowerCase();
+      const category = (risk.risk_category || '').toLowerCase();
+      return title.includes(term) || category.includes(term) || String(risk.id).includes(term);
+    });
+    if (matches.some((risk) => risk.id === formData.risk_id)) return matches;
+    const selected = risks.find((risk) => risk.id === formData.risk_id);
+    return selected ? [selected, ...matches] : matches;
+  }, [risks, riskSearch, formData.risk_id]);
 
   const handleAiSuggest = async () => {
     if (!formData.risk_id && !formData.title) return;
@@ -516,14 +530,23 @@ function ActionModal({
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
             <label className="block text-sm text-slate-600">Risk *</label>
+            {!action && (
+              <input
+                type="text"
+                value={riskSearch}
+                onChange={(e) => setRiskSearch(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
+                placeholder="Search risk by title..."
+              />
+            )}
             <select
               value={formData.risk_id}
               onChange={(e) => setFormData({ ...formData, risk_id: Number(e.target.value) })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
+              className={`${action ? 'mt-1' : 'mt-2'} w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900`}
               required
               disabled={!!action}
             >
-              {risks.map((risk) => (
+              {filteredRisks.map((risk) => (
                 <option key={risk.id} value={risk.id}>
                   {risk.title}
                 </option>

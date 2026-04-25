@@ -11,6 +11,8 @@ import {
   Search,
   Plus,
   X,
+  Trash2,
+  ExternalLink,
   Shield,
   ShieldAlert,
   Lock,
@@ -18,7 +20,6 @@ import {
   Scale,
   RefreshCw,
   ClipboardCheck,
-  Info,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -81,6 +82,14 @@ const ASSESSMENT_TYPES = [
     color: 'text-cyan-600 bg-cyan-50 border-cyan-200',
     category: 'Review',
   },
+  {
+    id: 'custom',
+    label: 'Custom Assessment Type',
+    description: 'Define your own assessment type for vendor-specific, regional, or internal review workflows.',
+    icon: Plus,
+    color: 'text-gray-700 bg-gray-50 border-gray-300',
+    category: 'Custom',
+  },
 ];
 
 const ASSESSMENT_TYPE_MAP = Object.fromEntries(ASSESSMENT_TYPES.map((t) => [t.id, t]));
@@ -136,6 +145,9 @@ const getRiskBadge = (rating: string | null) => {
   return styles[rating.toLowerCase()] || 'bg-gray-100 text-gray-700';
 };
 
+const formatAssessmentType = (value: string) =>
+  value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
 const STATUS_OPTIONS = ['draft', 'in_progress', 'reviewed', 'approved', 'completed', 'overdue'];
 
 export default function VendorAssessmentsPage() {
@@ -143,12 +155,17 @@ export default function VendorAssessmentsPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('vendor_risk:assessments:create');
+  const canDelete =
+    hasPermission('vendor_risk:assessments:delete') ||
+    hasPermission('vendor_risk:assessments:edit');
   const [showModal, setShowModal] = useState(false);
   const [modalStep, setModalStep] = useState<'select_type' | 'details'>('select_type');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [vendorFilter, setVendorFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [customAssessmentType, setCustomAssessmentType] = useState('');
+  const [deletingAssessmentId, setDeletingAssessmentId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     vendor_id: '',
     assessment_type: '',
@@ -156,7 +173,6 @@ export default function VendorAssessmentsPage() {
     assessed_by: '',
   });
   const [mutationError, setMutationError] = useState('');
-  const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
 
   const { data: assessments, isLoading } = useQuery({
     queryKey: ['vendor-assessments-all'],
@@ -199,10 +215,27 @@ export default function VendorAssessmentsPage() {
       setShowModal(false);
       setModalStep('select_type');
       setFormData({ vendor_id: '', assessment_type: '', due_date: '', assessed_by: '' });
+      setCustomAssessmentType('');
       setMutationError('');
     },
     onError: (err: any) => {
       setMutationError(err?.response?.data?.detail || err?.message || 'Failed to create assessment');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (assessmentId: number) => {
+      await vendorRiskApi.deleteAssessment(assessmentId);
+    },
+    onMutate: (assessmentId) => {
+      setDeletingAssessmentId(assessmentId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vendor-assessments-all'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-dashboard'] });
+    },
+    onSettled: () => {
+      setDeletingAssessmentId(null);
     },
   });
 
@@ -214,9 +247,18 @@ export default function VendorAssessmentsPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setMutationError('');
+    const selectedType = formData.assessment_type === 'custom'
+      ? customAssessmentType.trim().toLowerCase().replace(/\s+/g, '_')
+      : formData.assessment_type;
+
+    if (!selectedType) {
+      setMutationError('Assessment type is required');
+      return;
+    }
+
     const payload: Record<string, unknown> = {
       vendor_id: Number(formData.vendor_id),
-      assessment_type: formData.assessment_type,
+      assessment_type: selectedType,
     };
     if (formData.due_date) payload.due_date = formData.due_date;
     if (formData.assessed_by) payload.assessed_by = Number(formData.assessed_by);
@@ -227,6 +269,7 @@ export default function VendorAssessmentsPage() {
     setShowModal(true);
     setModalStep('select_type');
     setFormData({ vendor_id: '', assessment_type: '', due_date: '', assessed_by: '' });
+    setCustomAssessmentType('');
     setMutationError('');
   };
 
@@ -235,6 +278,19 @@ export default function VendorAssessmentsPage() {
     const map = new Map<number, string>();
     assessments.forEach((a) => { if (a.vendor_id && a.vendor_name) map.set(a.vendor_id, a.vendor_name); });
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [assessments]);
+
+  const availableTypeOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    ASSESSMENT_TYPES.filter((type) => type.id !== 'custom').forEach((type) => {
+      map.set(type.id, type.label);
+    });
+    (assessments || []).forEach((assessment) => {
+      if (!map.has(assessment.assessment_type)) {
+        map.set(assessment.assessment_type, formatAssessmentType(assessment.assessment_type));
+      }
+    });
+    return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
   }, [assessments]);
 
   const filtered = useMemo(() => {
@@ -250,6 +306,14 @@ export default function VendorAssessmentsPage() {
       return matchSearch && matchStatus && matchVendor && matchType;
     });
   }, [assessments, searchTerm, statusFilter, vendorFilter, typeFilter]);
+
+  const handleDeleteAssessment = (assessment: Assessment) => {
+    const confirmed = window.confirm(
+      `Delete assessment #${assessment.id} for ${assessment.vendor_name}? Linked questionnaire responses will be detached but kept.`
+    );
+    if (!confirmed) return;
+    deleteMutation.mutate(assessment.id);
+  };
 
   if (isLoading) {
     return (
@@ -267,15 +331,29 @@ export default function VendorAssessmentsPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Vendor Assessments</h1>
           <p className="text-sm text-gray-500 mt-1">Track and manage third-party risk assessments</p>
         </div>
-        {canCreate && (
-          <button
-            onClick={openModal}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+        <div className="flex items-center gap-2">
+          <Link
+            href="/vendor-risk/vendors"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            <Plus className="h-4 w-4" />
-            Create Assessment
-          </button>
-        )}
+            Vendors
+          </Link>
+          <Link
+            href="/vendor-risk/questionnaires"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Questionnaires
+          </Link>
+          {canCreate && (
+            <button
+              onClick={openModal}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create Assessment
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stat Cards */}
@@ -314,7 +392,7 @@ export default function VendorAssessmentsPage() {
         </div>
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="all">All Types</option>
-          {ASSESSMENT_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          {availableTypeOptions.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
         </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="all">All Statuses</option>
@@ -344,12 +422,13 @@ export default function VendorAssessmentsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Score</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Due Date</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assessor</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={9} className="px-4 py-12 text-center text-sm text-gray-500">
                     <FileCheck className="h-10 w-10 mx-auto mb-3 text-gray-300" />
                     <p className="font-medium text-gray-600">No assessments found</p>
                     <p className="text-xs mt-1">Create your first vendor assessment to get started</p>
@@ -361,17 +440,21 @@ export default function VendorAssessmentsPage() {
                   const TypeIcon = typeInfo?.icon || FileCheck;
                   const assessorName = typeof a.assessor === 'object' ? a.assessor?.full_name : a.assessor;
                   return (
-                    <tr key={a.id} className={`hover:bg-gray-50 cursor-pointer ${selectedAssessment?.id === a.id ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : ''}`} onClick={() => router.push(`/vendor-risk/assessments/${a.id}`)}>
+                    <tr key={a.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/vendor-risk/assessments/${a.id}`)}>
                       <td className="px-4 py-3 text-sm text-gray-500 font-mono">#{a.id}</td>
                       <td className="px-4 py-3">
-                        <Link href={`/vendor-risk/vendors/${a.vendor_id}`} className="text-sm font-medium text-blue-600 hover:text-blue-800">
+                        <Link
+                          href={`/vendor-risk/vendors/${a.vendor_id}`}
+                          onClick={(event) => event.stopPropagation()}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                        >
                           {a.vendor_name}
                         </Link>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <TypeIcon className="h-4 w-4 text-gray-400" />
-                          <span className="text-sm text-gray-700">{typeInfo?.label || a.assessment_type?.replace(/_/g, ' ')}</span>
+                          <span className="text-sm text-gray-700">{typeInfo?.label || formatAssessmentType(a.assessment_type)}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -391,6 +474,37 @@ export default function VendorAssessmentsPage() {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500">{a.due_date ? new Date(a.due_date).toLocaleDateString() : '-'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">{assessorName ?? '-'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              router.push(`/vendor-risk/assessments/${a.id}`);
+                            }}
+                            className="p-1.5 text-blue-600 hover:text-blue-800 rounded"
+                            title="Open assessment"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </button>
+                          {canDelete && (
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleDeleteAssessment(a);
+                              }}
+                              disabled={deleteMutation.isPending && deletingAssessmentId === a.id}
+                              className="p-1.5 text-red-500 hover:text-red-700 rounded disabled:opacity-50"
+                              title="Delete assessment"
+                            >
+                              {deleteMutation.isPending && deletingAssessmentId === a.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -414,7 +528,9 @@ export default function VendorAssessmentsPage() {
                 )}
                 {modalStep === 'details' && (
                   <p className="text-sm text-gray-500 mt-0.5">
-                    {ASSESSMENT_TYPE_MAP[formData.assessment_type]?.label}
+                    {formData.assessment_type === 'custom'
+                      ? (customAssessmentType.trim() ? formatAssessmentType(customAssessmentType.trim()) : 'Custom Assessment Type')
+                      : ASSESSMENT_TYPE_MAP[formData.assessment_type]?.label}
                   </p>
                 )}
               </div>
@@ -457,12 +573,32 @@ export default function VendorAssessmentsPage() {
                   <div className={`flex items-center gap-3 p-3 rounded-lg border md:col-span-2 ${ASSESSMENT_TYPE_MAP[formData.assessment_type].color}`}>
                     {(() => { const Icon = ASSESSMENT_TYPE_MAP[formData.assessment_type].icon; return <Icon className="h-5 w-5" />; })()}
                     <div>
-                      <span className="text-sm font-medium text-gray-900">{ASSESSMENT_TYPE_MAP[formData.assessment_type].label}</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {formData.assessment_type === 'custom'
+                          ? (customAssessmentType.trim() ? formatAssessmentType(customAssessmentType.trim()) : ASSESSMENT_TYPE_MAP.custom.label)
+                          : ASSESSMENT_TYPE_MAP[formData.assessment_type].label}
+                      </span>
                       <p className="text-xs text-gray-500">{ASSESSMENT_TYPE_MAP[formData.assessment_type].description}</p>
                     </div>
                     <button type="button" onClick={() => setModalStep('select_type')} className="ml-auto text-xs text-blue-600 hover:text-blue-800 font-medium">
                       Change
                     </button>
+                  </div>
+                )}
+
+                {formData.assessment_type === 'custom' && (
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Custom Assessment Type <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={customAssessmentType}
+                      onChange={(event) => setCustomAssessmentType(event.target.value)}
+                      placeholder="e.g., Saudi NCA Annual Compliance Review"
+                      className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
                 )}
 
@@ -534,7 +670,12 @@ export default function VendorAssessmentsPage() {
                     </button>
                     <button
                       type="submit"
-                      disabled={createMutation.isPending || !formData.vendor_id}
+                      disabled={
+                        createMutation.isPending ||
+                        !formData.vendor_id ||
+                        !formData.assessment_type ||
+                        (formData.assessment_type === 'custom' && !customAssessmentType.trim())
+                      }
                       className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
                     >
                       {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}

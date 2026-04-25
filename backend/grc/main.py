@@ -23,6 +23,8 @@ from .routers import (
     critical_tasks_router,
     is_projects_router,
 )
+
+
 from .routers.admin_router import router as admin_router
 from .modules.erm import erm_router
 from .modules.governance import governance_module_router
@@ -31,7 +33,11 @@ from .modules.compliance import compliance_router
 from .modules.evidence import evidence_module_router
 from .modules.control_library import control_library_router
 from .modules.vuln_management import vuln_management_router
-from .modules.chatbot import chatbot_router
+from .modules.chatbot import (
+    chatbot_router,
+    start_complychat_embedding_worker,
+    stop_complychat_embedding_worker,
+)
 from .modules.vendor_risk import vendor_risk_router
 from .modules.workflow_engine import (
     workflow_engine_router,
@@ -128,10 +134,16 @@ def on_startup():
     if _disable_embedded not in ("1", "true", "yes", "on"):
         start_workflow_engine_runtime()
 
+    _disable_complychat_embedding_worker = os.getenv("DISABLE_COMPLYCHAT_EMBED_WORKER", "").strip().lower()
+    _embed_worker_autostart = os.getenv("COMPLYCHAT_EMBED_WORKER_AUTOSTART", "true").strip().lower()
+    if _disable_complychat_embedding_worker not in ("1", "true", "yes", "on") and _embed_worker_autostart in ("1", "true", "yes", "on"):
+        start_complychat_embedding_worker()
+
 
 @app.on_event("shutdown")
 def on_shutdown():
     stop_workflow_engine_runtime()
+    stop_complychat_embedding_worker()
 
 
 @app.get("/")

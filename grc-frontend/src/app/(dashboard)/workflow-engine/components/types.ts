@@ -177,7 +177,7 @@ export const EMPTY_NODE_CONFIG_OPTIONS: NodeConfigOptions = {
   risk_statuses: [],
   risk_levels: [],
   risk_treatment_types: [],
-  risk_register_types: ['operational', 'strategic', 'financial', 'technology', 'compliance', 'third_party', 'project_change'],
+  risk_register_types: ['operational', 'strategic', 'financial', 'technology', 'compliance', 'third_party', 'project_change', 'ubl_template'],
   risk_sub_categories: ['cybersecurity', 'data_privacy', 'business_continuity', 'fraud', 'regulatory', 'reputational', 'supply_chain', 'human_error', 'natural_disaster', 'financial_reporting', 'market', 'credit', 'liquidity', 'it_infrastructure', 'change_management'],
   compliance_statuses: [],
   vulnerability_severities: [],

@@ -86,7 +86,7 @@ def get_node_config_options(
         "risk_treatment_types": ["mitigate", "accept", "transfer", "avoid"],
         "risk_register_types": [
             "operational", "strategic", "financial", "technology",
-            "compliance", "third_party", "project_change",
+            "compliance", "third_party", "project_change", "ubl_template",
         ],
         "risk_sub_categories": [
             "cybersecurity", "data_privacy", "business_continuity", "fraud",

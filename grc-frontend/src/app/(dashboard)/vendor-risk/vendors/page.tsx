@@ -12,6 +12,7 @@ import {
   Plus,
   X,
   Eye,
+  Trash2,
   Shield,
   Filter,
   Calendar,
@@ -86,10 +87,14 @@ export default function VendorListPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('vendor_risk:vendors:create');
+  const canDelete =
+    hasPermission('vendor_risk:vendors:delete') ||
+    hasPermission('vendor_risk:vendors:edit');
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [tierFilter, setTierFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [deletingVendorId, setDeletingVendorId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -139,6 +144,24 @@ export default function VendorListPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (vendorId: number) => {
+      await vendorRiskApi.deleteVendor(vendorId);
+    },
+    onMutate: (vendorId) => {
+      setDeletingVendorId(vendorId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['vendors-select'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-assessments-all'] });
+    },
+    onSettled: () => {
+      setDeletingVendorId(null);
+    },
+  });
+
   const resetForm = () => {
     setFormData({
       name: '', description: '', tier: 'medium', status: 'active',
@@ -181,6 +204,14 @@ export default function VendorListPage() {
     });
   }, [vendors, searchTerm, tierFilter, statusFilter]);
 
+  const handleDeleteVendor = (vendor: Vendor) => {
+    const confirmed = window.confirm(
+      `Delete vendor "${vendor.name}"? This removes related assessments, questionnaire responses, SLA records, and incidents.`
+    );
+    if (!confirmed) return;
+    deleteMutation.mutate(vendor.id);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -197,15 +228,29 @@ export default function VendorListPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Vendors</h1>
           <p className="text-sm text-gray-500 mt-1">Manage your third-party vendor inventory</p>
         </div>
-        {canCreate && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+        <div className="flex items-center gap-2">
+          <Link
+            href="/vendor-risk/assessments"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            <Plus className="h-4 w-4" />
-            Add Vendor
-          </button>
-        )}
+            Assessments
+          </Link>
+          <Link
+            href="/vendor-risk/questionnaires"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Questionnaires
+          </Link>
+          {canCreate && (
+            <button
+              onClick={() => setShowModal(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Vendor
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -303,9 +348,25 @@ export default function VendorListPage() {
                       {vendor.owner ? (typeof vendor.owner === 'object' ? vendor.owner.full_name : String(vendor.owner)) : '-'}
                     </td>
                     <td className="px-4 py-3">
-                      <Link href={`/vendor-risk/vendors/${vendor.id}`} className="text-blue-600 hover:text-blue-800">
-                        <Eye className="h-4 w-4" />
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/vendor-risk/vendors/${vendor.id}`} className="text-blue-600 hover:text-blue-800">
+                          <Eye className="h-4 w-4" />
+                        </Link>
+                        {canDelete && (
+                          <button
+                            onClick={() => handleDeleteVendor(vendor)}
+                            disabled={deleteMutation.isPending && deletingVendorId === vendor.id}
+                            className="text-red-500 hover:text-red-700 disabled:opacity-50"
+                            title="Delete vendor"
+                          >
+                            {deleteMutation.isPending && deletingVendorId === vendor.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

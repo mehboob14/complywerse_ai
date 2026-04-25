@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import Link from 'next/link';
-import apiClient from '@/lib/api';
+import apiClient, { AdminUser, adminApi } from '@/lib/api';
 import {
   FileText,
   Search,
@@ -14,20 +14,36 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
-  Calendar,
   User,
-  CheckCircle,
-  XCircle,
-  Clock,
   Eye,
   Trash2,
   Sparkles,
+  Filter,
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  RadialBarChart,
+  RadialBar,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  AreaChart,
+  Area,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Legend,
+  BarChart,
+  Bar,
+  Sankey,
+} from 'recharts';
 
 interface Assessment {
   id: number;
   name: string;
   assessment_type: string;
+  assessment_format?: string;
   source: string | null;
   file_name: string | null;
   status: string;
@@ -51,8 +67,23 @@ interface AssessmentsResponse {
     total_assessments: number;
     total_items: number;
     total_complied: number;
+    total_partial?: number;
     total_not_complied: number;
+    total_in_progress?: number;
+    total_na?: number;
+    average_overall_score?: number | null;
+    overdue_count?: number;
+    due_soon_count?: number;
+    by_type?: Record<string, number>;
+    by_status?: Record<string, number>;
+    by_format?: Record<string, number>;
   };
+}
+
+interface TenantUserOption {
+  id: number;
+  display_name: string;
+  email: string;
 }
 
 const STATUS_OPTIONS = [
@@ -75,36 +106,98 @@ const TYPE_OPTIONS = [
 ];
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-[var(--color-subtle)]', text: 'text-[var(--color-status-draft)]', label: 'Draft' },
-  in_progress: { bg: 'bg-[var(--color-base-soft)]', text: 'text-[var(--color-status-review)]', label: 'In Progress' },
-  completed: { bg: 'bg-[var(--color-success-soft)]', text: 'text-[var(--color-status-published)]', label: 'Completed' },
-  archived: { bg: 'bg-[var(--color-subtle)]', text: 'text-[var(--color-status-archived)]', label: 'Archived' },
+  draft: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Draft' },
+  in_progress: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'In Progress' },
+  completed: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Completed' },
+  archived: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Archived' },
+};
+
+const REQUIREMENT_STATUS_COLORS: Record<string, string> = {
+  not_started: '#64748b',
+  not_compliant: '#ef4444',
+  partial_compliant: '#f59e0b',
+  fully_compliant: '#22c55e',
+  out_of_scope: '#cbd5e1',
+};
+
+const ASSESSMENT_TYPE_COLORS = [
+  '#0284c7',
+  '#7c3aed',
+  '#0d9488',
+  '#ea580c',
+  '#db2777',
+  '#059669',
+  '#4f46e5',
+];
+
+const ASSESSMENT_STATUS_COLORS: Record<string, string> = {
+  draft: '#94a3b8',
+  in_progress: '#3b82f6',
+  completed: '#22c55e',
+  archived: '#64748b',
+};
+
+const chartTooltipStyle = {
+  borderRadius: '0.5rem',
+  border: '1px solid #e2e8f0',
+  fontSize: '12px',
+  color: '#0f172a',
 };
 
 function getScoreColor(score: number | null): { bg: string; text: string } {
-  if (score === null) return { bg: 'bg-[var(--color-subtle)]', text: 'text-[var(--color-muted)]' };
-  if (score >= 80) return { bg: 'bg-[var(--color-success-soft)]', text: 'text-[var(--color-success)]' };
-  if (score >= 50) return { bg: 'bg-[var(--color-warning-soft)]', text: 'text-[var(--color-warning)]' };
-  return { bg: 'bg-[var(--color-danger-soft)]', text: 'text-[var(--color-danger)]' };
+  if (score === null) return { bg: 'bg-slate-100', text: 'text-slate-600' };
+  if (score >= 80) return { bg: 'bg-emerald-100', text: 'text-emerald-700' };
+  if (score >= 50) return { bg: 'bg-amber-100', text: 'text-amber-700' };
+  return { bg: 'bg-rose-100', text: 'text-rose-700' };
 }
 
 function getScoreBarColor(score: number | null): string {
-  if (score === null) return 'bg-[var(--color-border)]';
-  if (score >= 80) return 'bg-[var(--color-success)]';
-  if (score >= 50) return 'bg-[var(--color-warning)]';
-  return 'bg-[var(--color-danger)]';
+  if (score === null) return 'bg-slate-300';
+  if (score >= 80) return 'bg-emerald-500';
+  if (score >= 50) return 'bg-amber-500';
+  return 'bg-rose-500';
+}
+
+function formatAssessmentType(value: string): string {
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function formatDate(dateString: string | null) {
+  if (!dateString) return '-';
+  return new Date(dateString).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function getDueDateStatus(dueDate: string | null) {
+  if (!dueDate) return null;
+  const due = new Date(dueDate);
+  const now = new Date();
+  const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return { text: 'Overdue', color: 'text-rose-600' };
+  if (diffDays <= 7) return { text: 'Due Soon', color: 'text-amber-600' };
+  return null;
+}
+
+function shortMonthLabel(dateString: string) {
+  const d = new Date(dateString);
+  if (Number.isNaN(d.getTime())) return dateString;
+  return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 }
 
 export default function AssessmentsPage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('compliance:assessments:create');
   const canDelete = hasPermission('compliance:assessments:delete');
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
   const [page, setPage] = useState(0);
-  const [pageSize] = useState(10);
+  const [pageSize] = useState(12);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [uploadForm, setUploadForm] = useState({
     name: '',
@@ -125,8 +218,14 @@ export default function AssessmentsPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [assessmentToDelete, setAssessmentToDelete] = useState<Assessment | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [chartsReady, setChartsReady] = useState(false);
+  const [activeView, setActiveView] = useState<'overview' | 'assessment'>('overview');
 
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    setChartsReady(true);
+  }, []);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['compliance-assessments', statusFilter, typeFilter, sourceFilter, page, pageSize],
@@ -142,6 +241,39 @@ export default function AssessmentsPage() {
       const response = await apiClient.get('/compliance/assessments', { params });
       return response.data as AssessmentsResponse;
     },
+  });
+
+  const { data: assessorUsers = [] } = useQuery<TenantUserOption[]>({
+    queryKey: ['compliance-assessment-assessor-users'],
+    queryFn: async () => {
+      try {
+        const response = await apiClient.get('/assets/tenant-users');
+        const users = Array.isArray(response.data) ? response.data : [];
+        return users
+          .map((user: any) => ({
+            id: Number(user?.id),
+            display_name: String(user?.display_name || user?.username || '').trim(),
+            email: String(user?.email || '').trim(),
+          }))
+          .filter((user: TenantUserOption) => Number.isFinite(user.id) && user.id > 0 && !!user.display_name);
+      } catch {
+        try {
+          const fallback = await adminApi.getUsers();
+          const users = Array.isArray(fallback.data) ? fallback.data : [];
+          return users
+            .map((user: AdminUser) => ({
+              id: Number(user.id),
+              display_name: String(user.display_name || user.username || '').trim(),
+              email: String(user.email || '').trim(),
+            }))
+            .filter((user: TenantUserOption) => Number.isFinite(user.id) && user.id > 0 && !!user.display_name);
+        } catch {
+          return [];
+        }
+      }
+    },
+    enabled: isUploadModalOpen && canCreate,
+    staleTime: 5 * 60 * 1000,
   });
 
   const uploadMutation = useMutation({
@@ -162,8 +294,8 @@ export default function AssessmentsPage() {
       setIsUploadModalOpen(false);
       resetUploadForm();
     },
-    onError: (error: any) => {
-      setUploadError(error.message || 'Failed to upload assessment');
+    onError: (err: any) => {
+      setUploadError(err.message || 'Failed to upload assessment');
     },
   });
 
@@ -177,8 +309,8 @@ export default function AssessmentsPage() {
       setAssessmentToDelete(null);
       setDeleteError(null);
     },
-    onError: (error: any) => {
-      setDeleteError(error.response?.data?.detail || 'Failed to delete assessment');
+    onError: (err: any) => {
+      setDeleteError(err.response?.data?.detail || 'Failed to delete assessment');
     },
   });
 
@@ -197,25 +329,13 @@ export default function AssessmentsPage() {
         generated_by?: string;
       };
     },
-    onSuccess: (data) => {
-      setAiContext(data);
+    onSuccess: (responseData) => {
+      setAiContext(responseData);
     },
     onError: () => {
       setUploadError('Failed to generate AI context. Please try again.');
     },
   });
-
-  const handleDeleteClick = (assessment: Assessment) => {
-    setAssessmentToDelete(assessment);
-    setDeleteModalOpen(true);
-    setDeleteError(null);
-  };
-
-  const confirmDelete = () => {
-    if (assessmentToDelete) {
-      deleteMutation.mutate(assessmentToDelete.id);
-    }
-  };
 
   const resetUploadForm = () => {
     setUploadForm({
@@ -236,7 +356,6 @@ export default function AssessmentsPage() {
       setUploadError('Please provide a name and select a file');
       return;
     }
-
     const formData = new FormData();
     formData.append('file', uploadFile);
     formData.append('name', uploadForm.name);
@@ -245,48 +364,272 @@ export default function AssessmentsPage() {
     if (uploadForm.due_date) formData.append('due_date', uploadForm.due_date);
     if (uploadForm.assessor) formData.append('assessor', uploadForm.assessor);
     if (uploadForm.notes) formData.append('notes', uploadForm.notes);
-
     uploadMutation.mutate(formData);
+  };
+
+  const handleDeleteClick = (assessment: Assessment) => {
+    setAssessmentToDelete(assessment);
+    setDeleteModalOpen(true);
+    setDeleteError(null);
+  };
+
+  const confirmDelete = () => {
+    if (assessmentToDelete) {
+      deleteMutation.mutate(assessmentToDelete.id);
+    }
   };
 
   const assessments = data?.assessments || [];
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / pageSize);
 
-  const filteredAssessments = searchTerm
-    ? assessments.filter(
-        (a) =>
-          a.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          a.source?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          a.assessor?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : assessments;
+  const filteredAssessments = useMemo(() => {
+    if (!searchTerm.trim()) return assessments;
+    const q = searchTerm.toLowerCase();
+    return assessments.filter(
+      (a) =>
+        a.name.toLowerCase().includes(q) ||
+        (a.source || '').toLowerCase().includes(q) ||
+        (a.assessor || '').toLowerCase().includes(q) ||
+      (a.file_name || '').toLowerCase().includes(q),
+    );
+  }, [assessments, searchTerm]);
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
+  const recentAssessments = useMemo(() => {
+    return [...assessments]
+      .sort((a, b) => {
+        const aTime = new Date(a.created_at).getTime();
+        const bTime = new Date(b.created_at).getTime();
+        return bTime - aTime;
+      })
+      .slice(0, 4);
+  }, [assessments]);
+
+  const summary = data?.summary;
+
+  const sourceOptions = useMemo(() => {
+    const uniq = new Set<string>();
+    assessments.forEach((a) => {
+      if (a.source && a.source.trim()) uniq.add(a.source.trim());
     });
-  };
+    return Array.from(uniq).sort((a, b) => a.localeCompare(b));
+  }, [assessments]);
 
-  const getDueDateStatus = (dueDate: string | null) => {
-    if (!dueDate) return null;
-    const due = new Date(dueDate);
+  const requirementStatusData = useMemo(() => {
+    const fromSummary = {
+      not_started: summary?.total_in_progress || 0,
+      not_compliant: summary?.total_not_complied || 0,
+      partial_compliant: summary?.total_partial || 0,
+      fully_compliant: summary?.total_complied || 0,
+      out_of_scope: summary?.total_na || 0,
+    };
+    const summaryTotal = Object.values(fromSummary).reduce((acc, value) => acc + value, 0);
+    if (summaryTotal > 0) return fromSummary;
+
+    return filteredAssessments.reduce(
+      (acc, assessment) => {
+        acc.not_started += assessment.in_progress_count || 0;
+        acc.not_compliant += assessment.not_complied_count || 0;
+        acc.partial_compliant += assessment.partially_complied_count || 0;
+        acc.fully_compliant += assessment.complied_count || 0;
+        acc.out_of_scope += assessment.na_count || 0;
+        return acc;
+      },
+      { not_started: 0, not_compliant: 0, partial_compliant: 0, fully_compliant: 0, out_of_scope: 0 },
+    );
+  }, [summary, filteredAssessments]);
+
+  const statusRingData = useMemo(() => {
+    const rows = [
+      { key: 'not_started', label: 'Not Started', value: requirementStatusData.not_started },
+      { key: 'not_compliant', label: 'Not Compliant', value: requirementStatusData.not_compliant },
+      { key: 'partial_compliant', label: 'Partial Compliant', value: requirementStatusData.partial_compliant },
+      { key: 'fully_compliant', label: 'Fully Compliant', value: requirementStatusData.fully_compliant },
+      { key: 'out_of_scope', label: 'Out of Scope', value: requirementStatusData.out_of_scope },
+    ];
+    return rows.map((row) => ({
+      ...row,
+      color: REQUIREMENT_STATUS_COLORS[row.key] || '#94a3b8',
+    }));
+  }, [requirementStatusData]);
+
+  const totalRequirements = useMemo(
+    () => statusRingData.reduce((acc, row) => acc + row.value, 0),
+    [statusRingData],
+  );
+
+  const complianceHealthPercent = useMemo(() => {
+    if (totalRequirements <= 0) return 0;
+    const weightedCompliant =
+      requirementStatusData.fully_compliant + requirementStatusData.partial_compliant * 0.5;
+    return Math.round((weightedCompliant / totalRequirements) * 100);
+  }, [totalRequirements, requirementStatusData]);
+
+  const passedRequirementsPercent = useMemo(() => {
+    if (totalRequirements <= 0) return 0;
+    return Math.round((requirementStatusData.fully_compliant / totalRequirements) * 100);
+  }, [totalRequirements, requirementStatusData.fully_compliant]);
+
+  const assessedRequirementsPercent = useMemo(() => {
+    if (totalRequirements <= 0) return 0;
+    const assessed =
+      requirementStatusData.fully_compliant +
+      requirementStatusData.partial_compliant +
+      requirementStatusData.not_compliant +
+      requirementStatusData.out_of_scope;
+    return Math.round((assessed / totalRequirements) * 100);
+  }, [totalRequirements, requirementStatusData]);
+
+  const healthEquivalentCount = useMemo(() => {
+    if (totalRequirements <= 0) return 0;
+    return Math.round((complianceHealthPercent / 100) * totalRequirements);
+  }, [complianceHealthPercent, totalRequirements]);
+
+  const monthlyTrendData = useMemo(() => {
+    const buckets = new Map<
+      string,
+      { key: string; month: string; total: number; completed: number; in_progress: number; draft: number; archived: number }
+    >();
+
+    filteredAssessments.forEach((assessment) => {
+      const created = new Date(assessment.created_at);
+      if (Number.isNaN(created.getTime())) return;
+      const key = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, '0')}`;
+      if (!buckets.has(key)) {
+        buckets.set(key, {
+          key,
+          month: shortMonthLabel(created.toISOString()),
+          total: 0,
+          completed: 0,
+          in_progress: 0,
+          draft: 0,
+          archived: 0,
+        });
+      }
+      const bucket = buckets.get(key)!;
+      bucket.total += 1;
+      const statusKey = assessment.status as 'draft' | 'in_progress' | 'completed' | 'archived';
+      if (statusKey in bucket) {
+        bucket[statusKey] += 1;
+      }
+    });
+
+    return Array.from(buckets.values())
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .slice(-8)
+      .map(({ key, ...row }) => row);
+  }, [filteredAssessments]);
+
+  const typeStatusMatrix = useMemo(() => {
+    const matrix: Record<string, Record<string, number>> = {};
+    filteredAssessments.forEach((assessment) => {
+      const typeLabel = formatAssessmentType(assessment.assessment_type || 'other');
+      const statusKey = assessment.status || 'draft';
+      if (!matrix[typeLabel]) {
+        matrix[typeLabel] = { draft: 0, in_progress: 0, completed: 0, archived: 0 };
+      }
+      matrix[typeLabel][statusKey] = (matrix[typeLabel][statusKey] || 0) + 1;
+    });
+    return matrix;
+  }, [filteredAssessments]);
+
+  const sankeyFlowData = useMemo(() => {
+    const typeLabels = Object.keys(typeStatusMatrix);
+    const statusLabels = ['draft', 'in_progress', 'completed', 'archived']
+      .filter((statusKey) => typeLabels.some((type) => (typeStatusMatrix[type]?.[statusKey] || 0) > 0))
+      .map((statusKey) => ({ key: statusKey, name: STATUS_STYLES[statusKey]?.label || statusKey }));
+
+    const nodes = [
+      ...typeLabels.map((type) => ({ name: type })),
+      ...statusLabels.map((status) => ({ name: status.name })),
+    ];
+
+    const links: Array<{ source: number; target: number; value: number }> = [];
+    typeLabels.forEach((type, typeIndex) => {
+      statusLabels.forEach((status, statusIndex) => {
+        const value = typeStatusMatrix[type]?.[status.key] || 0;
+        if (value > 0) {
+          links.push({
+            source: typeIndex,
+            target: typeLabels.length + statusIndex,
+            value,
+          });
+        }
+      });
+    });
+
+    return { nodes, links };
+  }, [typeStatusMatrix]);
+
+  const timelineData = useMemo(() => {
     const now = new Date();
-    const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays < 0) return { text: 'Overdue', color: 'text-rose-600' };
-    if (diffDays <= 7) return { text: 'Due Soon', color: 'text-amber-600' };
-    return null;
+    const dayMs = 1000 * 60 * 60 * 24;
+
+    return filteredAssessments
+      .filter((assessment) => !!assessment.due_date)
+      .map((assessment) => {
+        const created = new Date(assessment.created_at);
+        const due = new Date(assessment.due_date as string);
+        const totalDays = Math.max(Math.round((due.getTime() - created.getTime()) / dayMs), 1);
+        const elapsed = Math.min(Math.max(Math.round((now.getTime() - created.getTime()) / dayMs), 0), totalDays);
+        const remaining = Math.max(Math.round((due.getTime() - now.getTime()) / dayMs), 0);
+        const overdue = Math.max(Math.round((now.getTime() - due.getTime()) / dayMs), 0);
+        return {
+          name: assessment.name.length > 24 ? `${assessment.name.slice(0, 24)}...` : assessment.name,
+          elapsed: Math.max(elapsed, 0),
+          remaining: Math.max(remaining, 0),
+          overdue: Math.max(overdue, 0),
+          due: formatDate(assessment.due_date),
+        };
+      })
+      .sort((a, b) => a.remaining - b.remaining)
+      .slice(0, 8);
+  }, [filteredAssessments]);
+
+  const sunburstInnerData = useMemo(() => {
+    const byType: Record<string, number> = {};
+    filteredAssessments.forEach((assessment) => {
+      const typeLabel = formatAssessmentType(assessment.assessment_type || 'other');
+      byType[typeLabel] = (byType[typeLabel] || 0) + 1;
+    });
+    return Object.entries(byType).map(([name, value], index) => ({
+      name,
+      value,
+      color: ASSESSMENT_TYPE_COLORS[index % ASSESSMENT_TYPE_COLORS.length],
+    }));
+  }, [filteredAssessments]);
+
+  const sunburstOuterData = useMemo(() => {
+    const rows: Array<{ name: string; value: number; color: string }> = [];
+    Object.entries(typeStatusMatrix).forEach(([type, statusMap]) => {
+      Object.entries(statusMap).forEach(([status, value]) => {
+        if (value > 0) {
+          rows.push({
+            name: `${type} • ${STATUS_STYLES[status]?.label || status}`,
+            value,
+            color: ASSESSMENT_STATUS_COLORS[status] || '#94a3b8',
+          });
+        }
+      });
+    });
+    return rows;
+  }, [typeStatusMatrix]);
+
+  const renderChart = (chart: ReactNode) => {
+    if (chartsReady) return chart;
+    return (
+      <div className="flex h-full items-center justify-center text-xs text-slate-400">
+        Loading chart...
+      </div>
+    );
   };
 
   if (error) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <div className="flex flex-col items-center justify-center py-12">
-          <AlertCircle className="h-12 w-12 text-rose-600 mb-4" />
-          <p className="text-gray-600">Failed to load assessments</p>
+      <div className="rounded-xl border border-slate-200 bg-white p-8">
+        <div className="flex flex-col items-center justify-center py-10">
+          <AlertCircle className="mb-3 h-10 w-10 text-rose-600" />
+          <p className="text-sm text-slate-600">Failed to load compliance assessments.</p>
         </div>
       </div>
     );
@@ -294,293 +637,390 @@ export default function AssessmentsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 sm:max-w-xs">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search assessments..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black placeholder-slate-400 text-sm"
-          />
+      <section className="rounded-xl border border-slate-200 bg-white p-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveView('overview')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              activeView === 'overview'
+                ? 'bg-blue-600 text-white'
+                : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            Overview
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('assessment')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+              activeView === 'assessment'
+                ? 'bg-blue-600 text-white'
+                : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            Assessment
+          </button>
         </div>
-        <div className="flex flex-wrap gap-2 ml-auto">
-          <select
-            value={typeFilter}
-            onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-          >
-            {TYPE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <Link
-            href="/compliance/assessments/approvals"
-            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-          >
-            <Clock className="h-4 w-4" />
-            Pending Approvals
-          </Link>
-          {canCreate && (
-            <button
-              onClick={() => setIsUploadModalOpen(true)}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+      </section>
+
+      {activeView === 'assessment' && (
+        <section className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+            <div className="relative w-full xl:flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by name, source, assessor, file..."
+                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
+            <select
+              value={typeFilter}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                setPage(0);
+              }}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none xl:w-[180px]"
             >
-              <Upload className="h-4 w-4" />
-              Upload Assessment
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Compact stat row — assets-style */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-blue-50">
-              <FileText className="h-4 w-4 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xl font-bold text-black">{data?.summary?.total_assessments || 0}</p>
-              <p className="text-xs text-slate-500">Total Assessments</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-purple-50">
-              <Clock className="h-4 w-4 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-xl font-bold text-black">{data?.summary?.total_items || 0}</p>
-              <p className="text-xs text-slate-500">Total Items</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50">
-              <CheckCircle className="h-4 w-4 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-xl font-bold text-black">{data?.summary?.total_complied || 0}</p>
-              <p className="text-xs text-slate-500">Complied</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-rose-50">
-              <XCircle className="h-4 w-4 text-rose-600" />
-            </div>
-            <div>
-              <p className="text-xl font-bold text-black">{data?.summary?.total_not_complied || 0}</p>
-              <p className="text-xs text-slate-500">Non-Complied</p>
+              {TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(0);
+              }}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none xl:w-[160px]"
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <div className="flex w-full items-center gap-2 xl:w-auto xl:ml-auto">
+              <Filter className="h-3.5 w-3.5 text-slate-400" />
+              <select
+                value={sourceFilter}
+                onChange={(e) => {
+                  setSourceFilter(e.target.value);
+                  setPage(0);
+                }}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-700 focus:border-blue-500 focus:outline-none xl:w-[220px]"
+              >
+                <option value="">All Sources</option>
+                {sourceOptions.map((sourceOption) => (
+                  <option key={sourceOption} value={sourceOption}>
+                    {sourceOption}
+                  </option>
+                ))}
+              </select>
+              {canCreate && (
+                <button
+                  onClick={() => setIsUploadModalOpen(true)}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload Assessment
+                </button>
+              )}
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Items per assessment — stacked bar chart */}
-      {filteredAssessments.some((a) => (a.total_items || 0) > 0) && (
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Items per Assessment</p>
-          <div className="space-y-3">
-            {filteredAssessments
-              .filter((a) => (a.total_items || 0) > 0)
-              .map((assessment) => {
-                const total = assessment.total_items || 1;
-                const complied = assessment.complied_count || 0;
-                const partial = assessment.partially_complied_count || 0;
-                const notComplied = assessment.not_complied_count || 0;
-                const inProgress = assessment.in_progress_count || 0;
-                const na = assessment.na_count || 0;
-                return (
-                  <div key={assessment.id}>
-                    <div className="flex items-center justify-between mb-1">
-                      <Link
-                        href={`/compliance/assessments/${assessment.id}`}
-                        className="text-xs font-medium text-slate-700 hover:text-blue-600 transition-colors truncate max-w-[55%]"
-                      >
-                        {assessment.name}
-                      </Link>
-                      <span className="text-[11px] text-slate-400 flex-shrink-0">{total} items</span>
-                    </div>
-                    <div className="flex h-4 w-full overflow-hidden rounded-full bg-slate-100">
-                      {complied > 0 && (
-                        <div
-                          className="bg-emerald-500 transition-all"
-                          style={{ width: `${(complied / total) * 100}%` }}
-                          title={`Complied: ${complied}`}
-                        />
-                      )}
-                      {partial > 0 && (
-                        <div
-                          className="bg-amber-400 transition-all"
-                          style={{ width: `${(partial / total) * 100}%` }}
-                          title={`Partial: ${partial}`}
-                        />
-                      )}
-                      {inProgress > 0 && (
-                        <div
-                          className="bg-blue-400 transition-all"
-                          style={{ width: `${(inProgress / total) * 100}%` }}
-                          title={`In Progress: ${inProgress}`}
-                        />
-                      )}
-                      {na > 0 && (
-                        <div
-                          className="bg-slate-300 transition-all"
-                          style={{ width: `${(na / total) * 100}%` }}
-                          title={`N/A: ${na}`}
-                        />
-                      )}
-                      {notComplied > 0 && (
-                        <div
-                          className="bg-rose-400 transition-all"
-                          style={{ width: `${(notComplied / total) * 100}%` }}
-                          title={`Not Complied: ${notComplied}`}
-                        />
-                      )}
-                    </div>
-                    <div className="flex gap-3 mt-1 flex-wrap">
-                      {complied > 0 && <span className="text-[10px] text-emerald-600">✓ {complied} complied</span>}
-                      {partial > 0 && <span className="text-[10px] text-amber-600">~ {partial} partial</span>}
-                      {inProgress > 0 && <span className="text-[10px] text-blue-500">● {inProgress} in progress</span>}
-                      {notComplied > 0 && <span className="text-[10px] text-rose-500">✗ {notComplied} not complied</span>}
-                      {na > 0 && <span className="text-[10px] text-slate-400">— {na} N/A</span>}
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
+        </section>
       )}
 
-      {/* REMOVED: Assessment Status Distribution chart */}
-      {/* REMOVED: Average Progress by Status chart */}
+      {activeView === 'overview' && (
+        <>
+        <section className="grid grid-cols-1 gap-3 xl:grid-cols-12">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 xl:col-span-3">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Compliance Health</p>
+          <div className="relative h-52">
+            {renderChart(
+              <ResponsiveContainer width="100%" height="100%">
+                <RadialBarChart
+                  data={[{ name: 'health', value: complianceHealthPercent, fill: 'url(#complianceHealthGradient)' }]}
+                  startAngle={180}
+                  endAngle={0}
+                  innerRadius="65%"
+                  outerRadius="95%"
+                  barSize={16}
+                >
+                  <defs>
+                    <linearGradient id="complianceHealthGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#ef4444" />
+                      <stop offset="52%" stopColor="#f59e0b" />
+                      <stop offset="100%" stopColor="#22c55e" />
+                    </linearGradient>
+                  </defs>
+                  <RadialBar
+                    dataKey="value"
+                    cornerRadius={12}
+                    fill="url(#complianceHealthGradient)"
+                    background={{ fill: '#e2e8f0' }}
+                  />
+                  <Tooltip contentStyle={chartTooltipStyle} />
+                </RadialBarChart>
+              </ResponsiveContainer>,
+            )}
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <p className="text-4xl font-semibold text-slate-900">{complianceHealthPercent}%</p>
+              <p className="text-sm text-slate-600">
+                {healthEquivalentCount} out of {totalRequirements} total
+              </p>
+            </div>
+          </div>
+        </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 xl:col-span-6">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Requirement Status Mix</p>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="h-56">
+              {renderChart(
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusRingData.filter((row) => row.value > 0)}
+                      dataKey="value"
+                      nameKey="label"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={68}
+                      outerRadius={92}
+                      paddingAngle={2}
+                      stroke="#ffffff"
+                      strokeWidth={2}
+                    >
+                      {statusRingData
+                        .filter((row) => row.value > 0)
+                        .map((row) => (
+                          <Cell key={row.key} fill={row.color} />
+                        ))}
+                    </Pie>
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                  </PieChart>
+                </ResponsiveContainer>,
+              )}
+            </div>
+            <div className="flex flex-col justify-center">
+              <div className="space-y-2">
+                {statusRingData.map((row) => (
+                  <div key={row.key} className="flex items-center justify-between rounded-lg border border-slate-100 px-2 py-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.color }} />
+                      <span className="text-sm text-slate-700">{row.label}</span>
+                    </div>
+                    <span className="text-sm font-semibold text-slate-900">{row.value}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 border-t border-slate-200 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-semibold text-slate-800">Total</span>
+                  <span className="text-2xl font-bold text-slate-900">{totalRequirements}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 xl:col-span-3">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Stats</p>
+          <div className="h-52">
+            {renderChart(
+              <ResponsiveContainer width="100%" height="100%">
+                <RadialBarChart
+                  data={[
+                    {
+                      name: 'stats',
+                      assessed: assessedRequirementsPercent,
+                      passed: passedRequirementsPercent,
+                    },
+                  ]}
+                  startAngle={90}
+                  endAngle={-270}
+                  innerRadius="28%"
+                  outerRadius="96%"
+                  barSize={10}
+                >
+                  <RadialBar
+                    dataKey="assessed"
+                    cornerRadius={10}
+                    fill="#3b82f6"
+                    background={{ fill: '#e2e8f0' }}
+                  />
+                  <RadialBar
+                    dataKey="passed"
+                    cornerRadius={10}
+                    fill="#22c55e"
+                    background={{ fill: '#e2e8f0' }}
+                  />
+                  <Tooltip contentStyle={chartTooltipStyle} />
+                </RadialBarChart>
+              </ResponsiveContainer>,
+            )}
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between rounded-lg border border-slate-100 px-2 py-1.5">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                <span className="text-sm text-slate-700">Total Requirements Assessed</span>
+              </div>
+              <span className="text-sm font-semibold text-slate-900">{assessedRequirementsPercent}%</span>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-slate-100 px-2 py-1.5">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
+                <span className="text-sm text-slate-700">Total Passed Requirements</span>
+              </div>
+              <span className="text-sm font-semibold text-slate-900">{passedRequirementsPercent}%</span>
+            </div>
+          </div>
+        </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Recent Assessments</p>
+              <p className="text-xs text-slate-500">Last 4 uploaded assessments</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveView('assessment')}
+              className="text-xs font-medium text-blue-600 hover:text-blue-700"
+            >
+              View all
+            </button>
+          </div>
+          {recentAssessments.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+              No assessments available yet.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {recentAssessments.map((assessment) => {
+                const statusStyle = STATUS_STYLES[assessment.status] || STATUS_STYLES.draft;
+                return (
+                  <Link
+                    key={assessment.id}
+                    href={`/compliance/assessments/${assessment.id}`}
+                    className="rounded-lg border border-slate-200 bg-white p-3 transition hover:border-blue-300 hover:shadow-sm"
+                  >
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <p className="line-clamp-2 text-sm font-medium text-slate-900">{assessment.name}</p>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusStyle.bg} ${statusStyle.text}`}>
+                        {statusStyle.label}
+                      </span>
+                    </div>
+                    <p className="mb-1 text-xs text-slate-600">{formatAssessmentType(assessment.assessment_type)}</p>
+                    <p className="text-[11px] text-slate-500">Created {formatDate(assessment.created_at)}</p>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </section>
+        </>
+      )}
+
+      {activeView === 'assessment' && (
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[980px]">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Name</th>
-                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Type</th>
-                <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 md:table-cell">Source</th>
-                <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
-                <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">Progress</th>
-                <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 md:table-cell">Due Date</th>
-                <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">Assessor</th>
-                <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Actions</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Assessment</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Type</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Progress</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Due Date</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Assessor</th>
+                <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-600" />
+                  <td colSpan={7} className="py-8 text-center">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-blue-600" />
                   </td>
                 </tr>
               ) : filteredAssessments.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-8">
-                    <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-                    <p className="text-slate-500">No assessments found</p>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Upload an Excel or CSV file to create a new assessment
+                  <td colSpan={7} className="py-10 text-center">
+                    <FileText className="mx-auto mb-2 h-10 w-10 text-slate-300" />
+                    <p className="text-sm text-slate-600">No assessments found.</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Upload Excel/CSV, CIS or Saudi NCA PDF, or UBL Audit Master Tracking workbook.
                     </p>
                   </td>
                 </tr>
               ) : (
                 filteredAssessments.map((assessment) => {
                   const statusStyle = STATUS_STYLES[assessment.status] || STATUS_STYLES.draft;
-                  const scoreColor = getScoreColor(assessment.overall_score);
                   const dueDateStatus = getDueDateStatus(assessment.due_date);
-
+                  const scoreColor = getScoreColor(assessment.overall_score);
                   return (
-                    <tr key={assessment.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-3 py-2.5">
-                        <Link
-                          href={`/compliance/assessments/${assessment.id}`}
-                          className="font-medium text-blue-600 hover:text-blue-700 transition-colors text-sm"
-                        >
+                    <tr key={assessment.id} className="hover:bg-slate-50">
+                      <td className="px-3 py-2 align-top">
+                        <Link href={`/compliance/assessments/${assessment.id}`} className="text-sm font-medium text-blue-600 hover:text-blue-700">
                           {assessment.name}
                         </Link>
-                        <p className="text-xs text-slate-400">{assessment.file_name}</p>
+                        <p className="text-xs text-slate-500">{assessment.file_name || '-'}</p>
                       </td>
-                      <td className="px-3 py-2.5">
-                        <span className="text-xs capitalize text-slate-600">
-                          {assessment.assessment_type.replace(/_/g, ' ')}
-                        </span>
+                      <td className="px-3 py-2 align-top">
+                        <p className="text-xs text-slate-700">{formatAssessmentType(assessment.assessment_type)}</p>
+                        <p className="text-[11px] text-slate-500">{(assessment.assessment_format || 'standard').replace(/_/g, ' ')}</p>
                       </td>
-                      <td className="hidden px-3 py-2.5 md:table-cell">
-                        <span className="text-xs text-slate-500">
-                          {assessment.source || '-'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2 align-top">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
                           {statusStyle.label}
                         </span>
                       </td>
-                      <td className="hidden px-3 py-2.5 lg:table-cell">
-                        <div className="flex items-center gap-2 min-w-[100px]">
-                          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <td className="px-3 py-2 align-top">
+                        <div className="flex min-w-[120px] items-center gap-2">
+                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
                             <div
                               className={`h-full ${getScoreBarColor(assessment.overall_score)} transition-all`}
                               style={{ width: `${assessment.overall_score || 0}%` }}
                             />
                           </div>
                           <span className={`text-xs font-medium ${scoreColor.text}`}>
-                            {assessment.overall_score !== null
-                              ? `${Math.round(assessment.overall_score)}%`
-                              : '-'}
+                            {assessment.overall_score !== null ? `${Math.round(assessment.overall_score)}%` : '-'}
                           </span>
                         </div>
                       </td>
-                      <td className="hidden px-3 py-2.5 md:table-cell">
-                        <div className="flex flex-col">
-                          <span className="text-xs text-slate-600">{formatDate(assessment.due_date)}</span>
-                          {dueDateStatus && (
-                            <span className={`text-[10px] font-medium ${dueDateStatus.color}`}>
-                              {dueDateStatus.text}
-                            </span>
-                          )}
-                        </div>
+                      <td className="px-3 py-2 align-top">
+                        <p className="text-xs text-slate-700">{formatDate(assessment.due_date)}</p>
+                        {dueDateStatus && <p className={`text-[11px] font-medium ${dueDateStatus.color}`}>{dueDateStatus.text}</p>}
                       </td>
-                      <td className="hidden px-3 py-2.5 lg:table-cell">
+                      <td className="px-3 py-2 align-top">
                         <div className="flex items-center gap-1.5">
                           <User className="h-3 w-3 text-slate-400" />
-                          <span className="text-xs text-slate-500">
-                            {assessment.assessor || '-'}
-                          </span>
+                          <span className="text-xs text-slate-600">{assessment.assessor || '-'}</span>
                         </div>
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2 align-top">
                         <div className="flex items-center justify-end gap-1">
                           <Link
                             href={`/compliance/assessments/${assessment.id}`}
-                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="View Assessment"
+                            className="rounded-lg p-1.5 text-slate-500 hover:bg-blue-50 hover:text-blue-600"
+                            title="View"
                           >
                             <Eye className="h-3.5 w-3.5" />
                           </Link>
                           {canDelete && (
                             <button
                               onClick={() => handleDeleteClick(assessment)}
-                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                              title="Delete Assessment"
+                              className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
+                              title="Delete"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
@@ -594,28 +1034,29 @@ export default function AssessmentsPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
+      )}
 
-      {totalPages > 1 && (
+      {activeView === 'assessment' && totalPages > 1 && (
         <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
           <p className="text-xs text-slate-500">
-            Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)} of {total} assessments
+            Showing {page * pageSize + 1}-{Math.min((page + 1) * pageSize, total)} of {total} assessments
           </p>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage(Math.max(0, page - 1))}
               disabled={page === 0}
-              className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="text-sm text-gray-700 font-medium">
+            <span className="text-xs font-medium text-slate-700">
               Page {page + 1} of {totalPages}
             </span>
             <button
               onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
               disabled={page >= totalPages - 1}
-              className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -624,120 +1065,123 @@ export default function AssessmentsPage() {
       )}
 
       {isUploadModalOpen && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="fixed inset-0 z-50">
+          <button
+            type="button"
+            aria-label="Close upload panel"
+            className="absolute inset-0 bg-black/40"
+            onClick={() => {
+              setIsUploadModalOpen(false);
+              resetUploadForm();
+            }}
+          />
+          <div className="absolute inset-y-0 right-0 z-10 flex h-full w-full max-w-2xl flex-col border-l border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
-                <h2 className="text-lg font-semibold text-black">Upload Assessment</h2>
-                <p className="text-sm text-gray-600">
-                  Upload an Excel or CSV file with assessment data
-                </p>
+                <h2 className="text-base font-semibold text-slate-900">Upload Assessment</h2>
+                <p className="text-xs text-slate-500">Excel/CSV/CIS or Saudi NCA PDF + UBL Audit Master Tracking supported</p>
               </div>
               <button
                 onClick={() => {
                   setIsUploadModalOpen(false);
                   resetUploadForm();
                 }}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
               {uploadError && (
-                <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 flex items-center gap-2">
+                <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3">
                   <AlertCircle className="h-4 w-4 text-rose-600" />
                   <p className="text-sm text-rose-700">{uploadError}</p>
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assessment Name *</label>
-                <input
-                  type="text"
-                  value={uploadForm.name}
-                  onChange={(e) => setUploadForm({ ...uploadForm, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., Q1 2026 Security Assessment"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assessment Type *</label>
-                <select
-                  value={uploadForm.assessment_type}
-                  onChange={(e) =>
-                    setUploadForm({ ...uploadForm, assessment_type: e.target.value })
-                  }
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  {TYPE_OPTIONS.filter((o) => o.value).map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
-                <input
-                  type="text"
-                  value={uploadForm.source}
-                  onChange={(e) => setUploadForm({ ...uploadForm, source: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., External Auditor, Internal Team"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Assessment Name *</label>
+                  <input
+                    type="text"
+                    value={uploadForm.name}
+                    onChange={(e) => setUploadForm({ ...uploadForm, name: e.target.value })}
+                    placeholder="e.g., Q2 2026 Internal Audit Tracking"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Assessment Type *</label>
+                  <select
+                    value={uploadForm.assessment_type}
+                    onChange={(e) => setUploadForm({ ...uploadForm, assessment_type: e.target.value })}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  >
+                    {TYPE_OPTIONS.filter((o) => o.value).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Source</label>
+                  <input
+                    type="text"
+                    value={uploadForm.source}
+                    onChange={(e) => setUploadForm({ ...uploadForm, source: e.target.value })}
+                    placeholder="e.g., External Auditor"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Due Date</label>
                   <input
                     type="date"
                     value={uploadForm.due_date}
-                    onChange={(e) =>
-                      setUploadForm({ ...uploadForm, due_date: e.target.value })
-                    }
-                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    onChange={(e) => setUploadForm({ ...uploadForm, due_date: e.target.value })}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Assessor</label>
-                  <input
-                    type="text"
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Assessor</label>
+                  <select
                     value={uploadForm.assessor}
-                    onChange={(e) =>
-                      setUploadForm({ ...uploadForm, assessor: e.target.value })
-                    }
-                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Assessor name"
+                    onChange={(e) => setUploadForm({ ...uploadForm, assessor: e.target.value })}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">Select assessor</option>
+                    {assessorUsers.map((user) => (
+                      <option key={user.id} value={user.display_name}>
+                        {user.display_name}
+                        {user.email ? ` (${user.email})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Notes</label>
+                  <textarea
+                    value={uploadForm.notes}
+                    onChange={(e) => setUploadForm({ ...uploadForm, notes: e.target.value })}
+                    placeholder="Additional context for this upload"
+                    className="min-h-[84px] w-full resize-none rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <textarea
-                  value={uploadForm.notes}
-                  onChange={(e) => setUploadForm({ ...uploadForm, notes: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[80px] resize-none"
-                  placeholder="Additional notes about this assessment"
-                />
-              </div>
-
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-blue-700">AI Assessment Context</p>
-                    <p className="text-xs text-gray-600 mt-0.5">Generate what this assessment covers and how it helps risk and compliance outcomes.</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">AI Context</p>
+                    <p className="mt-1 text-xs text-slate-600">Generate an executive summary and risk/compliance perspective for this upload.</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => aiContextMutation.mutate()}
                     disabled={aiContextMutation.isPending || !uploadForm.name.trim()}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                   >
                     {aiContextMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                     Generate
@@ -746,39 +1190,41 @@ export default function AssessmentsPage() {
                 {aiContext && (
                   <div className="mt-3 space-y-2 rounded-lg border border-blue-200 bg-white p-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Assessment Summary</p>
-                      <p className="text-sm text-gray-700">{aiContext.summary}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Summary</p>
+                      <p className="text-sm text-slate-700">{aiContext.summary}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Risk Perspective</p>
-                      <p className="text-sm text-gray-700">{aiContext.risk_perspective}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Risk Perspective</p>
+                      <p className="text-sm text-slate-700">{aiContext.risk_perspective}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Compliance Perspective</p>
-                      <p className="text-sm text-gray-700">{aiContext.compliance_perspective}</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Compliance Perspective</p>
+                      <p className="text-sm text-slate-700">{aiContext.compliance_perspective}</p>
                     </div>
                   </div>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assessment File *</label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors bg-gray-50">
+                <label className="mb-1 block text-xs font-medium text-slate-700">Assessment File *</label>
+                <div className="rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-6 text-center hover:border-slate-400">
                   <input
+                    id="assessment-upload-file"
                     type="file"
-                    accept=".xlsx,.xls,.csv"
+                    accept=".xlsx,.xls,.csv,.pdf"
                     onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                     className="hidden"
-                    id="file-upload"
                   />
-                  <label htmlFor="file-upload" className="cursor-pointer">
-                    <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                  <label htmlFor="assessment-upload-file" className="cursor-pointer">
+                    <Upload className="mx-auto mb-2 h-7 w-7 text-slate-400" />
                     {uploadFile ? (
-                      <p className="text-black font-medium">{uploadFile.name}</p>
+                      <p className="text-sm font-medium text-slate-800">{uploadFile.name}</p>
                     ) : (
                       <>
-                        <p className="text-gray-600">Click to upload or drag and drop</p>
-                        <p className="text-sm text-gray-500">Excel (.xlsx, .xls) or CSV</p>
+                        <p className="text-sm text-slate-700">Click to upload file</p>
+                        <p className="text-xs text-slate-500">
+                          Excel (.xlsx/.xls), CSV, CIS/Saudi NCA PDF, UBL Audit Master Tracking Sheet
+                        </p>
                       </>
                     )}
                   </label>
@@ -786,26 +1232,22 @@ export default function AssessmentsPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
               <button
                 onClick={() => {
                   setIsUploadModalOpen(false);
                   resetUploadForm();
                 }}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleUploadSubmit}
                 disabled={uploadMutation.isPending || !uploadFile || !uploadForm.name}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {uploadMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4" />
-                )}
+                {uploadMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 Upload Assessment
               </button>
             </div>
@@ -814,70 +1256,63 @@ export default function AssessmentsPage() {
       )}
 
       {deleteModalOpen && assessmentToDelete && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-black">Delete Assessment</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <h2 className="text-base font-semibold text-slate-900">Delete Assessment</h2>
               <button
                 onClick={() => {
                   setDeleteModalOpen(false);
                   setAssessmentToDelete(null);
                 }}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="p-6">
+            <div className="space-y-3 px-5 py-4">
               {deleteError && (
-                <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 flex items-center gap-2 mb-4">
-                  <AlertCircle className="h-4 w-4 text-rose-600 flex-shrink-0" />
+                <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3">
+                  <AlertCircle className="h-4 w-4 text-rose-600" />
                   <p className="text-sm text-rose-700">{deleteError}</p>
                 </div>
               )}
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex-shrink-0 w-10 h-10 bg-rose-50 rounded-full flex items-center justify-center">
-                  <AlertCircle className="h-5 w-5 text-rose-600" />
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-rose-50 p-2.5">
+                  <AlertCircle className="h-4 w-4 text-rose-600" />
                 </div>
                 <div>
-                  <p className="text-black">Are you sure you want to delete this assessment?</p>
-                  <p className="text-sm text-gray-600 mt-1">
-                    <strong>{assessmentToDelete.name}</strong>
-                  </p>
+                  <p className="text-sm text-slate-800">Delete this assessment permanently?</p>
+                  <p className="mt-1 text-sm font-medium text-slate-900">{assessmentToDelete.name}</p>
+                  <p className="mt-2 text-xs text-slate-500">This will remove all associated assessment items and cannot be undone.</p>
                 </div>
               </div>
-              <p className="text-sm text-gray-600">
-                This will permanently delete the assessment and all its items. This action cannot be undone.
-              </p>
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
               <button
                 onClick={() => {
                   setDeleteModalOpen(false);
                   setAssessmentToDelete(null);
                 }}
-                className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDelete}
                 disabled={deleteMutation.isPending}
-                className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {deleteMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-                Delete Assessment
+                {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Delete
               </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

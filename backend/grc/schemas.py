@@ -452,6 +452,7 @@ class RiskBase(BaseModel):
     risk_category: Optional[str] = None
     risk_sub_category: Optional[str] = None
     register_type: Optional[str] = None  # PCI-DSS, ISO 27001, SOX, Internal, etc.
+    ubl_fields: Optional[Dict[str, Any]] = None
     owner_id: Optional[int] = None
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = []
@@ -477,6 +478,7 @@ class RiskUpdate(BaseModel):
     risk_category: Optional[str] = None
     risk_sub_category: Optional[str] = None
     register_type: Optional[str] = None
+    ubl_fields: Optional[Dict[str, Any]] = None
     owner_id: Optional[int] = None
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = None
@@ -493,6 +495,7 @@ class RiskResponse(BaseModel):
     category: str
     risk_sub_category: Optional[str] = None
     register_type: Optional[str] = None
+    ubl_fields: Optional[Dict[str, Any]] = None
     owner_id: Optional[int]
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = []
@@ -575,6 +578,8 @@ class RiskDetailResponse(BaseModel):
     description: Optional[str]
     risk_category: str
     risk_sub_category: Optional[str] = None
+    register_type: Optional[str] = None
+    ubl_fields: Optional[Dict[str, Any]] = None
     inherent_likelihood: Optional[int]
     inherent_impact: Optional[int]
     inherent_score: Optional[float]

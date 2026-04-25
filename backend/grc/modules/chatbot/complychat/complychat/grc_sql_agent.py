@@ -50,6 +50,9 @@ logger.info("="*80)
 # =================================================================================
 CACHED_DB_SCHEMA = {}  # {table_name: [column_names]}
 SCHEMA_LOADED = False
+DETERMINISTIC_RESULT_FORMATTING = str(
+    os.getenv("COMPLYCHAT_DETERMINISTIC_RESULT_FORMATTING", "true")
+).strip().lower() in {"1", "true", "yes", "on"}
 
 def load_full_database_schema():
     """
@@ -181,6 +184,50 @@ def validate_columns_in_sql(sql: str) -> dict:
         "errors": errors,
         "fixed_sql": None  # Could implement auto-fix in future
     }
+
+
+def _deterministic_format_query_results(results: list, question: str) -> str:
+    if not results:
+        return "## No Results Found\n\nNo data matches your query criteria."
+
+    # Keep non-technical columns only; never invent values.
+    technical_keys = {
+        "id",
+        "tenant_id",
+        "created_at",
+        "updated_at",
+        "created_by",
+        "updated_by",
+        "file_path",
+    }
+    first_row = results[0] if results else {}
+    preferred_columns = [col for col in first_row.keys() if str(col).lower() not in technical_keys]
+    columns = preferred_columns or list(first_row.keys())
+    columns = columns[:8]
+
+    total = len(results)
+    shown = results[:20]
+    summary = (
+        "## Executive Summary\n\n"
+        f"Found **{total}** item(s) for: \"{question.strip()}\".\n\n"
+    )
+
+    table = "| " + " | ".join(columns) + " |\n"
+    table += "|" + "|".join(["---" for _ in columns]) + "|\n"
+    for row in shown:
+        values = []
+        for col in columns:
+            value = row.get(col, "-")
+            if value is None or value == "":
+                values.append("-")
+            else:
+                values.append(str(value).replace("\n", " ").strip())
+        table += "| " + " | ".join(values) + " |\n"
+
+    if total > len(shown):
+        table += f"\n*Showing {len(shown)} of {total} total items.*\n"
+
+    return summary + "## Data\n\n" + table
 
 
 def get_fallback_data_for_question(question: str, db_session=None) -> dict:
@@ -2903,6 +2950,10 @@ This query joined tables incorrectly or queried relationships that don't have da
     
     # If we get here, show the data (even if some fields are NULL)
     logger.info("[YES] Data validation passed - proceeding with formatting")
+
+    if DETERMINISTIC_RESULT_FORMATTING:
+        logger.info("[SAFE] Deterministic result formatting is enabled")
+        return _deterministic_format_query_results(results, question)
     
     try:
         # Limit data sent to LLM (first 100 rows for formatting)

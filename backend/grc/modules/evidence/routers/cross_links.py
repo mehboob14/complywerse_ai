@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from ....models import (
     Evidence, Risk, ITAsset, RiskIncident, PolicyStatement,
     RiskEvidenceLink, AssetEvidenceLink, EvidenceIncidentLink, EvidencePolicyLink,
+    AssessmentItemEvidence, ComplianceAssessmentDocumentItem,
     GRCUser, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants
@@ -586,6 +587,12 @@ def get_all_evidence_links(
     policy_links = db.query(EvidencePolicyLink).options(
         joinedload(EvidencePolicyLink.policy_statement)
     ).filter(EvidencePolicyLink.evidence_id == evidence_id).all()
+
+    assessment_links = db.query(AssessmentItemEvidence).options(
+        joinedload(AssessmentItemEvidence.assessment_item).joinedload(ComplianceAssessmentDocumentItem.assessment)
+    ).filter(
+        AssessmentItemEvidence.evidence_id == evidence_id
+    ).all()
     
     return {
         "evidence_id": evidence_id,
@@ -637,6 +644,25 @@ def get_all_evidence_links(
                     "policy_statement": serialize_policy_statement(link.policy_statement) if link.policy_statement else None
                 }
                 for link in policy_links
+            ]
+        },
+        "assessments": {
+            "total": len(assessment_links),
+            "links": [
+                {
+                    "id": link.id,
+                    "assessment_item_id": link.assessment_item_id,
+                    "assessment_id": link.assessment_item.assessment.id if link.assessment_item and link.assessment_item.assessment else None,
+                    "assessment_name": link.assessment_item.assessment.name if link.assessment_item and link.assessment_item.assessment else None,
+                    "assessment_type": link.assessment_item.assessment.assessment_type if link.assessment_item and link.assessment_item.assessment else None,
+                    "assessment_status": link.assessment_item.assessment.status if link.assessment_item and link.assessment_item.assessment else None,
+                    "item_number": link.assessment_item.item_number if link.assessment_item else None,
+                    "area_domain": link.assessment_item.area_domain if link.assessment_item else None,
+                    "control_description": link.assessment_item.control_description if link.assessment_item else None,
+                    "link_status": link.status,
+                    "created_at": link.created_at.isoformat() if link.created_at else None
+                }
+                for link in assessment_links
             ]
         },
         "total_links": len(risk_links) + len(asset_links) + len(incident_links) + len(policy_links)

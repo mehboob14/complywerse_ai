@@ -26,8 +26,8 @@ import {
   Eye,
   ExternalLink,
 } from 'lucide-react';
+import Link from 'next/link';
 
-// ─── Types ──────────────────────────────────────────────────────
 
 interface Question {
   id: string;
@@ -56,7 +56,29 @@ interface VendorOption {
   primary_contact_name: string | null;
 }
 
-// ─── Constants ──────────────────────────────────────────────────
+interface AssessmentOption {
+  id: number;
+  vendor_id: number;
+  vendor_name?: string;
+  assessment_type: string;
+  status: string;
+}
+
+interface QuestionnaireResponseRecord {
+  id: number;
+  vendor_id: number;
+  assessment_id: number | null;
+  template_id: number | null;
+  respondent_name: string | null;
+  respondent_email: string | null;
+  responses: Record<string, unknown>;
+  status: string;
+  token: string;
+  expires_at: string | null;
+  submitted_at: string | null;
+  created_at: string | null;
+}
+
 
 const CATEGORIES = ['security', 'privacy', 'compliance', 'operational', 'financial', 'general'];
 
@@ -84,7 +106,19 @@ const getCategoryIcon = (category: string) => {
   return icons[category?.toLowerCase()] || ClipboardList;
 };
 
-// ─── Default Question Sets ──────────────────────────────────────
+const getResponseStatusBadge = (status: string) => {
+  const styles: Record<string, string> = {
+    pending: 'bg-amber-100 text-amber-700',
+    in_progress: 'bg-blue-100 text-blue-700',
+    submitted: 'bg-emerald-100 text-emerald-700',
+    expired: 'bg-gray-100 text-gray-600',
+  };
+  return styles[status?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+};
+
+const formatAssessmentType = (value: string) =>
+  value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
 
 const DEFAULT_QUESTIONS: Record<string, Question[]> = {
   security: [
@@ -134,7 +168,6 @@ const DEFAULT_QUESTIONS: Record<string, Question[]> = {
   ],
 };
 
-// ─── Component ──────────────────────────────────────────────────
 
 export default function VendorQuestionnairesPage() {
   const queryClient = useQueryClient();
@@ -147,6 +180,7 @@ export default function VendorQuestionnairesPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sendSuccess, setSendSuccess] = useState<{ token: string } | null>(null);
+  const [selectedResponse, setSelectedResponse] = useState<QuestionnaireResponseRecord | null>(null);
 
   const emptyQuestion = (): Question => ({
     id: crypto.randomUUID?.() || String(Date.now()),
@@ -167,11 +201,11 @@ export default function VendorQuestionnairesPage() {
 
   const [sendForm, setSendForm] = useState({
     vendor_id: '',
+    assessment_id: '',
     respondent_email: '',
     respondent_name: '',
   });
 
-  // ── Queries ─────────────────────────────────────────────────
 
   const { data: templates, isLoading } = useQuery({
     queryKey: ['questionnaire-templates'],
@@ -191,7 +225,24 @@ export default function VendorQuestionnairesPage() {
     },
   });
 
-  // ── Mutations ───────────────────────────────────────────────
+  const { data: assessments } = useQuery({
+    queryKey: ['vendor-assessments-for-questionnaires'],
+    queryFn: async () => {
+      const res = await vendorRiskApi.getAssessments({ limit: 1000 });
+      const data = res.data;
+      return (Array.isArray(data) ? data : data.items ?? []) as AssessmentOption[];
+    },
+  });
+
+  const { data: questionnaireResponses } = useQuery({
+    queryKey: ['questionnaire-responses'],
+    queryFn: async () => {
+      const res = await vendorRiskApi.getQuestionnaireResponses();
+      const data = res.data;
+      return (Array.isArray(data) ? data : []) as QuestionnaireResponseRecord[];
+    },
+  });
+
 
   const createMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
@@ -221,10 +272,10 @@ export default function VendorQuestionnairesPage() {
     },
     onSuccess: (data: any) => {
       setSendSuccess({ token: data.token });
+      queryClient.invalidateQueries({ queryKey: ['questionnaire-responses'] });
     },
   });
 
-  // ── Handlers ────────────────────────────────────────────────
 
   const addQuestion = () => {
     setTemplateForm((prev) => ({
@@ -301,6 +352,7 @@ export default function VendorQuestionnairesPage() {
     sendMutation.mutate({
       template_id: selectedTemplateId,
       vendor_id: Number(sendForm.vendor_id),
+      assessment_id: sendForm.assessment_id ? Number(sendForm.assessment_id) : undefined,
       respondent_email: sendForm.respondent_email || undefined,
       respondent_name: sendForm.respondent_name || undefined,
     });
@@ -315,7 +367,57 @@ export default function VendorQuestionnairesPage() {
     );
   }, [templates, searchTerm]);
 
-  // ── Render ──────────────────────────────────────────────────
+  const templatesById = useMemo(() => {
+    const map = new Map<number, QuestionnaireTemplate>();
+    (templates || []).forEach((template) => map.set(template.id, template));
+    return map;
+  }, [templates]);
+
+  const vendorsById = useMemo(() => {
+    const map = new Map<number, VendorOption>();
+    (vendors || []).forEach((vendor) => map.set(vendor.id, vendor));
+    return map;
+  }, [vendors]);
+
+  const assessmentsById = useMemo(() => {
+    const map = new Map<number, AssessmentOption>();
+    (assessments || []).forEach((assessment) => map.set(assessment.id, assessment));
+    return map;
+  }, [assessments]);
+
+  const sendAssessmentOptions = useMemo(() => {
+    const vendorId = Number(sendForm.vendor_id);
+    if (!vendorId || Number.isNaN(vendorId)) return [];
+    return (assessments || []).filter((assessment) => assessment.vendor_id === vendorId);
+  }, [assessments, sendForm.vendor_id]);
+
+  const buildQuestionnaireLink = (token: string) =>
+    typeof window === 'undefined'
+      ? `/vendor-risk/questionnaires/${token}`
+      : `${window.location.origin}/vendor-risk/questionnaires/${token}`;
+
+  const formatAnswer = (answer: unknown) => {
+    if (answer === null || answer === undefined || answer === '') {
+      return 'No answer provided';
+    }
+    if (typeof answer === 'string' || typeof answer === 'number' || typeof answer === 'boolean') {
+      return String(answer);
+    }
+    if (typeof answer === 'object' && answer !== null && 'answer' in (answer as Record<string, unknown>)) {
+      const nested = (answer as Record<string, unknown>).answer;
+      if (nested === null || nested === undefined || nested === '') return 'No answer provided';
+      return typeof nested === 'object' ? JSON.stringify(nested) : String(nested);
+    }
+    return JSON.stringify(answer);
+  };
+
+  const selectedResponseTemplate = selectedResponse?.template_id
+    ? templatesById.get(selectedResponse.template_id)
+    : undefined;
+  const selectedResponseAssessment = selectedResponse?.assessment_id
+    ? assessmentsById.get(selectedResponse.assessment_id)
+    : undefined;
+
 
   if (isLoading) {
     return (
@@ -333,15 +435,29 @@ export default function VendorQuestionnairesPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Questionnaire Templates</h1>
           <p className="text-sm text-gray-500 mt-1">Create and manage vendor assessment questionnaires with evidence requirements</p>
         </div>
-        {canCreate && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+        <div className="flex items-center gap-2">
+          <Link
+            href="/vendor-risk/vendors"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            <Plus className="h-4 w-4" />
-            Create Template
-          </button>
-        )}
+            Vendors
+          </Link>
+          <Link
+            href="/vendor-risk/assessments"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Assessments
+          </Link>
+          {canCreate && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create Template
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search */}
@@ -438,6 +554,7 @@ export default function VendorQuestionnairesPage() {
                     onClick={() => {
                       setSelectedTemplateId(template.id);
                       setSendSuccess(null);
+                      setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' });
                       setShowSendModal(true);
                     }}
                     className="w-full px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 flex items-center justify-center gap-2"
@@ -452,7 +569,200 @@ export default function VendorQuestionnairesPage() {
         )}
       </div>
 
-      {/* ═══ Create Template Modal ═══ */}
+      {/* Sent Questionnaire Tracking */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-900">Sent Questionnaires</h2>
+          <p className="text-xs text-gray-500 mt-1">
+            Track sent links, response status, and review questions/answers for each vendor submission.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Template</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assessment</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Questions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {(questionnaireResponses || []).length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
+                    No sent questionnaires yet.
+                  </td>
+                </tr>
+              ) : (
+                (questionnaireResponses || [])
+                  .slice()
+                  .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+                  .map((response) => {
+                    const template = response.template_id ? templatesById.get(response.template_id) : undefined;
+                    const vendor = vendorsById.get(response.vendor_id);
+                    const assessment = response.assessment_id ? assessmentsById.get(response.assessment_id) : undefined;
+                    const answeredCount = Object.keys(response.responses || {}).length;
+                    const questionCount = template?.questions?.length || answeredCount;
+                    const responseLink = buildQuestionnaireLink(response.token);
+
+                    return (
+                      <tr key={response.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm text-gray-500 font-mono">#{response.id}</td>
+                        <td className="px-4 py-3 text-sm text-gray-800">
+                          {vendor ? (
+                            <Link href={`/vendor-risk/vendors/${vendor.id}`} className="text-blue-600 hover:text-blue-800">
+                              {vendor.name}
+                            </Link>
+                          ) : (
+                            `Vendor #${response.vendor_id}`
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {template?.name || (response.template_id ? `Template #${response.template_id}` : 'No template')}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {assessment ? (
+                            <Link href={`/vendor-risk/assessments/${assessment.id}`} className="text-blue-600 hover:text-blue-800">
+                              #{assessment.id} {formatAssessmentType(assessment.assessment_type)}
+                            </Link>
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getResponseStatusBadge(response.status)}`}>
+                            {response.status?.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {questionCount > 0 ? `${answeredCount}/${questionCount}` : `${answeredCount}`}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {response.submitted_at ? new Date(response.submitted_at).toLocaleString() : '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setSelectedResponse(response)}
+                              className="p-1.5 text-gray-500 hover:text-blue-700 rounded"
+                              title="View questions and answers"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => navigator.clipboard.writeText(responseLink)}
+                              className="p-1.5 text-gray-500 hover:text-gray-700 rounded"
+                              title="Copy response link"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </button>
+                            <a
+                              href={responseLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 text-gray-500 hover:text-blue-700 rounded"
+                              title="Open response link"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {selectedResponse && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="flex h-[75vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Questionnaire Response #{selectedResponse.id}</h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  {selectedResponseTemplate?.name || 'Template unavailable'}
+                </p>
+              </div>
+              <button onClick={() => setSelectedResponse(null)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                  <p className="text-xs text-gray-500">Vendor</p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {vendorsById.get(selectedResponse.vendor_id)?.name || `Vendor #${selectedResponse.vendor_id}`}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                  <p className="text-xs text-gray-500">Respondent</p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {selectedResponse.respondent_name || selectedResponse.respondent_email || 'Not provided'}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                  <p className="text-xs text-gray-500">Status</p>
+                  <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getResponseStatusBadge(selectedResponse.status)}`}>
+                    {selectedResponse.status?.replace(/_/g, ' ')}
+                  </span>
+                </div>
+                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                  <p className="text-xs text-gray-500">Submitted</p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {selectedResponse.submitted_at ? new Date(selectedResponse.submitted_at).toLocaleString() : '-'}
+                  </p>
+                </div>
+              </div>
+
+              {selectedResponseTemplate?.questions?.length ? (
+                <div className="space-y-3">
+                  {selectedResponseTemplate.questions.map((question, index) => {
+                    const answer = (selectedResponse.responses || {})[String(question.id)];
+                    return (
+                      <div key={`${question.id}-${index}`} className="rounded-lg border border-gray-200 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-medium text-gray-900 flex-1">
+                            <span className="text-gray-400 font-mono mr-2">Q{index + 1}.</span>
+                            {question.text}
+                          </p>
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 capitalize">
+                            {question.type.replace(/_/g, '/')}
+                          </span>
+                        </div>
+                        <div className="mt-2 rounded bg-gray-50 border border-gray-200 p-2 text-sm text-gray-800">
+                          {formatAnswer(answer)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-gray-200 p-3">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Raw Responses</p>
+                  {Object.keys(selectedResponse.responses || {}).length === 0 ? (
+                    <p className="text-sm text-gray-400">No responses submitted yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {Object.entries(selectedResponse.responses || {}).map(([questionId, answer]) => (
+                        <div key={questionId} className="text-sm text-gray-800 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                          <p className="text-xs text-gray-500 mb-1">{questionId}</p>
+                          <p>{formatAnswer(answer)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="flex h-[70vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
@@ -638,7 +948,6 @@ export default function VendorQuestionnairesPage() {
         </div>
       )}
 
-      {/* ═══ Preview Modal ═══ */}
       {showPreviewModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="flex h-[70vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
@@ -694,13 +1003,12 @@ export default function VendorQuestionnairesPage() {
         </div>
       )}
 
-      {/* ═══ Send Modal ═══ */}
       {showSendModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="flex h-[70vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">Send Questionnaire</h2>
-              <button onClick={() => { setShowSendModal(false); setSendSuccess(null); setSendForm({ vendor_id: '', respondent_email: '', respondent_name: '' }); }} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+              <button onClick={() => { setShowSendModal(false); setSendSuccess(null); setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' }); }} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
             </div>
 
             {sendSuccess ? (
@@ -716,11 +1024,11 @@ export default function VendorQuestionnairesPage() {
                     <input
                       type="text"
                       readOnly
-                      value={`${window.location.origin}/vendor-risk/questionnaires/${sendSuccess.token}`}
+                      value={buildQuestionnaireLink(sendSuccess.token)}
                       className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-700"
                     />
                     <button
-                      onClick={() => navigator.clipboard.writeText(`${window.location.origin}/vendor-risk/questionnaires/${sendSuccess.token}`)}
+                      onClick={() => navigator.clipboard.writeText(buildQuestionnaireLink(sendSuccess.token))}
                       className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 flex items-center gap-1"
                     >
                       <Copy className="h-4 w-4" /> Copy
@@ -729,7 +1037,7 @@ export default function VendorQuestionnairesPage() {
                 </div>
                 <div className="flex justify-end">
                   <button
-                    onClick={() => { setShowSendModal(false); setSendSuccess(null); setSendForm({ vendor_id: '', respondent_email: '', respondent_name: '' }); }}
+                    onClick={() => { setShowSendModal(false); setSendSuccess(null); setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' }); }}
                     className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200"
                   >
                     Done
@@ -745,10 +1053,13 @@ export default function VendorQuestionnairesPage() {
                     required
                     value={sendForm.vendor_id}
                     onChange={(e) => {
+                      const vendorId = e.target.value;
                       const v = (vendors ?? []).find((x) => String(x.id) === e.target.value);
+                      const vendorAssessments = (assessments || []).filter((item) => String(item.vendor_id) === vendorId);
                       setSendForm({
                         ...sendForm,
-                        vendor_id: e.target.value,
+                        vendor_id: vendorId,
+                        assessment_id: vendorAssessments[0] ? String(vendorAssessments[0].id) : '',
                         respondent_email: v?.primary_contact_email || sendForm.respondent_email,
                         respondent_name: v?.primary_contact_name || sendForm.respondent_name,
                       });
@@ -758,6 +1069,22 @@ export default function VendorQuestionnairesPage() {
                     <option value="">Select vendor...</option>
                     {(vendors ?? []).map((v) => (
                       <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Link to Assessment (optional)</label>
+                  <select
+                    value={sendForm.assessment_id}
+                    onChange={(e) => setSendForm({ ...sendForm, assessment_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={!sendForm.vendor_id}
+                  >
+                    <option value="">No linked assessment</option>
+                    {sendAssessmentOptions.map((assessment) => (
+                      <option key={assessment.id} value={assessment.id}>
+                        #{assessment.id} - {formatAssessmentType(assessment.assessment_type)} ({assessment.status.replace(/_/g, ' ')})
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -788,7 +1115,7 @@ export default function VendorQuestionnairesPage() {
                 )}
                 </div>
                 <div className="flex justify-end gap-3 border-t border-gray-200 p-6 pt-4">
-                  <button type="button" onClick={() => { setShowSendModal(false); setSendSuccess(null); }} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+                  <button type="button" onClick={() => { setShowSendModal(false); setSendSuccess(null); setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' }); }} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
                   <button type="submit" disabled={sendMutation.isPending} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
                     {sendMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                     <Send className="h-4 w-4" /> Send Questionnaire
@@ -802,3 +1129,5 @@ export default function VendorQuestionnairesPage() {
     </div>
   );
 }
+
+

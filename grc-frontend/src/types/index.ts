@@ -165,7 +165,18 @@ export interface EvidenceAIAssessment {
   created_at: string;
 }
 
-export type RiskCategory = 'strategic' | 'operational' | 'financial' | 'compliance' | 'technology' | 'third_party' | 'project_change' | 'internal';
+export type RiskCategory =
+  | 'strategic'
+  | 'operational'
+  | 'financial'
+  | 'compliance'
+  | 'technology'
+  | 'third_party'
+  | 'project_change'
+  | 'internal'
+  | 'isms'
+  | 'process'
+  | 'other';
 export type RiskStatus = 'open' | 'in_treatment' | 'mitigated' | 'accepted' | 'closed';
 
 export interface RiskMitigationAction {
@@ -233,6 +244,7 @@ export interface Risk {
   risk_category: RiskCategory;
   risk_sub_category?: string;
   register_type?: string;
+  ubl_fields?: Record<string, unknown>;
   business_owner_id?: number;
   business_owner?: { id: number; email: string; full_name?: string };
   affected_department_ids?: number[];

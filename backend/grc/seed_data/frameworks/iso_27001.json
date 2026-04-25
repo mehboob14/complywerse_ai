@@ -21,9 +21,33 @@
     "target_audience": "CISOs, Information Security Managers, IT Governance Teams, Risk Managers, Compliance Officers, Internal Auditors, and Senior Management responsible for information security",
     "certification_body": "Accredited Certification Bodies (e.g., BSI, Bureau Veritas, TÜV, DNV, SGS, Schellman)",
     "certification_validity_period": "3 years (with annual surveillance audits)",
-    "certification_levels": ["Stage 1 Audit (Documentation Review)", "Stage 2 Audit (Implementation Assessment)", "Surveillance Audit (Annual)", "Recertification Audit (Triennial)"],
-    "certification_lifecycle": ["Gap Analysis", "ISMS Design & Implementation", "Internal Audit", "Management Review", "Stage 1 Audit", "Stage 2 Audit", "Surveillance Audits", "Continual Improvement", "Recertification"],
-    "required_artifacts": ["Statement of Applicability (SoA)", "Risk Assessment Report", "Risk Treatment Plan", "ISMS Scope Document", "Information Security Policy", "Internal Audit Reports", "Management Review Minutes", "Corrective Action Records"],
+    "certification_levels": [
+      "Stage 1 Audit (Documentation Review)",
+      "Stage 2 Audit (Implementation Assessment)",
+      "Surveillance Audit (Annual)",
+      "Recertification Audit (Triennial)"
+    ],
+    "certification_lifecycle": [
+      "Gap Analysis",
+      "ISMS Design & Implementation",
+      "Internal Audit",
+      "Management Review",
+      "Stage 1 Audit",
+      "Stage 2 Audit",
+      "Surveillance Audits",
+      "Continual Improvement",
+      "Recertification"
+    ],
+    "required_artifacts": [
+      "Statement of Applicability (SoA)",
+      "Risk Assessment Report",
+      "Risk Treatment Plan",
+      "ISMS Scope Document",
+      "Information Security Policy",
+      "Internal Audit Reports",
+      "Management Review Minutes",
+      "Corrective Action Records"
+    ],
     "regulatory_authority": null,
     "compliance_deadline": null,
     "penalty_for_non_compliance": "Loss of certification, reputational damage, potential loss of business contracts requiring ISO 27001 certification, and inability to demonstrate due diligence in information security management.",
@@ -38,7 +62,10 @@
       "Maintain through surveillance audits and continual improvement"
     ],
     "hierarchy_structure": {
-      "levels": ["Theme", "Control"],
+      "levels": [
+        "Theme",
+        "Control"
+      ],
       "numbering_pattern": "A.N.N"
     },
     "document_structure": {
@@ -51,15 +78,28 @@
       "control_patterns": {
         "primary_pattern": "A.N.N",
         "secondary_patterns": [],
-        "examples": ["A.5.1", "A.6.1", "A.7.1", "A.8.1"]
+        "examples": [
+          "A.5.1",
+          "A.6.1",
+          "A.7.1",
+          "A.8.1"
+        ]
       },
       "requirement_indicators": {
-        "mandatory_keywords": ["shall", "must", "required"],
-        "advisory_keywords": ["should", "may", "recommended"]
+        "mandatory_keywords": [
+          "shall",
+          "must",
+          "required"
+        ],
+        "advisory_keywords": [
+          "should",
+          "may",
+          "recommended"
+        ]
       },
       "total_expected_controls": 93
     },
-    "exported_at": "2026-01-28T14:00:00.000000",
+    "exported_at": "2026-04-23T00:00:00.000000",
     "source_framework_id": null,
     "total_controls": 93
   },
@@ -76,7 +116,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Information security policy document", "Policy approval records", "Policy communication and acknowledgment records", "Policy review meeting minutes"]
+      "evidence_requirements": [
+        {
+          "name": "Information Security Policy",
+          "description": "Master ISMS policy document signed and dated by top management, stating objectives, scope, and commitments.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Topic-Specific Policies Register",
+          "description": "Index of all subordinate policies (access control, crypto, backup, etc.) with owners, version numbers, and review dates.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Policy Approval Record",
+          "description": "Board or management meeting minutes or e-signature record approving issuance of each policy version.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Policy Acknowledgement Log",
+          "description": "HR or LMS export showing each employee acknowledged the current policy, with timestamps.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Policy Communication Evidence",
+          "description": "Intranet screenshot, email announcement, or town hall deck confirming communication to staff and interested parties.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Annual Policy Review Minutes",
+          "description": "Minutes of the scheduled policy review showing changes considered, approval, and next review date.",
+          "filetype": "DOCX"
+        }
+      ]
     },
     {
       "control_id": "A.5.2",
@@ -90,7 +161,33 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["RACI matrix for information security", "Role descriptions with security responsibilities", "Organizational chart showing security function"]
+      "evidence_requirements": [
+        {
+          "name": "Information Security RACI Matrix",
+          "description": "Matrix mapping security activities (risk mgmt, incident response, audit, etc.) to roles marked R/A/C/I.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Security Role Job Descriptions",
+          "description": "Job descriptions for CISO, ISMS Manager, Security Analysts and asset owners explicitly listing security duties.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Organisational Chart with Security Function",
+          "description": "Org chart showing reporting lines for the security function and independence from IT operations.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Residual Risk Acceptance Records",
+          "description": "Signed acceptance forms showing named risk owners have formally accepted residual risks.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Security Responsibilities Appointment Letters",
+          "description": "Letters or e-appointments formally assigning security roles (e.g., CISO, DPO, ISO).",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.3",
@@ -104,7 +201,33 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Segregation of duties matrix", "Access control configurations showing SoD enforcement", "Compensating controls documentation where SoD cannot be achieved"]
+      "evidence_requirements": [
+        {
+          "name": "Segregation of Duties Matrix",
+          "description": "Matrix of conflicting activities (e.g., request vs approve, develop vs deploy) with enforcement approach per system.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "SoD Ruleset Configuration Export",
+          "description": "Export from ERP/IAM (e.g., SAP GRC, SailPoint) showing configured SoD rules and violations.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "SoD Violation and Remediation Report",
+          "description": "Periodic report listing detected SoD conflicts, owners, mitigation status and sign-off.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Compensating Controls Documentation",
+          "description": "Documented compensating controls where full SoD is not feasible (e.g., independent review of sensitive transactions).",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Privileged Action Review Log",
+          "description": "Evidence of dual-control or four-eyes approval for high-risk operational changes.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.4",
@@ -118,7 +241,33 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Management commitment statements", "Employee information security briefing records", "Terms and conditions of employment with security clauses"]
+      "evidence_requirements": [
+        {
+          "name": "Management Commitment Statement",
+          "description": "Signed leadership statement committing to enforce security policies and providing resources.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "New Joiner Security Briefing Record",
+          "description": "Induction attendance or checklist signed by new hires confirming security briefing before access.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Employment Contract Security Clauses",
+          "description": "Sample redacted contract showing security and confidentiality clauses in T&Cs of employment.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Manager Security Expectations Guidelines",
+          "description": "Guidance document issued to line managers outlining how to enforce policies in their teams.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Management Review Meeting Minutes",
+          "description": "Minutes demonstrating management review of ISMS performance and directives to staff.",
+          "filetype": "DOCX"
+        }
+      ]
     },
     {
       "control_id": "A.5.5",
@@ -132,7 +281,33 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Contact list of relevant authorities", "Escalation procedures involving authorities", "Records of communications with authorities"]
+      "evidence_requirements": [
+        {
+          "name": "Authorities Contact Register",
+          "description": "Register of relevant authorities (CERT, police, data protection regulator, fire service) with phone, email and named contacts.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Authority Escalation Procedure",
+          "description": "Procedure stating triggers, timings and approvers for contacting each authority.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Regulatory Breach Notification Template",
+          "description": "Pre-drafted notification template aligned with statutory reporting windows (e.g., 72 hours).",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Records of Authority Communications",
+          "description": "Evidence of past or tabletop communications with authorities, e.g., incident reports filed with CERT.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Annual Contact Verification Record",
+          "description": "Annual confirmation that contact details remain current (call/email verification log).",
+          "filetype": "CSV"
+        }
+      ]
     },
     {
       "control_id": "A.5.6",
@@ -146,7 +321,33 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["List of relevant special interest groups and forums", "Membership records", "Intelligence sharing arrangements documentation"]
+      "evidence_requirements": [
+        {
+          "name": "Special Interest Groups Register",
+          "description": "List of memberships in ISACs, CERTs, vendor security forums, ISACA, (ISC)², OWASP chapters, etc.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Membership Invoices/Certificates",
+          "description": "Proof of active membership and dues payment for current period.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Threat Advisory Distribution Log",
+          "description": "Evidence that advisories received from SIGs are disseminated to relevant internal teams.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Conference/Forum Attendance Records",
+          "description": "Certificates or attendance logs from security conferences and specialist forums.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Intelligence Sharing MoU",
+          "description": "Memorandum of Understanding or NDA signed with intelligence sharing partners.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.7",
@@ -160,7 +361,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Threat intelligence sources and feeds documentation", "Threat analysis reports", "Threat intelligence integration into risk assessments", "Threat briefing records"]
+      "evidence_requirements": [
+        {
+          "name": "Threat Intelligence Procedure",
+          "description": "Documented process for collecting, analysing, disseminating and retiring threat intel.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Threat Intelligence Sources Inventory",
+          "description": "Register of TI feeds (commercial, OSINT, ISAC, government) with coverage, frequency and cost.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Threat Landscape Report",
+          "description": "Periodic analyst-produced report on threats relevant to the organisation's sector and assets.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "TI Platform Dashboard Screenshot",
+          "description": "Screenshot of TIP/SIEM (e.g., MISP, Anomali, ThreatConnect) showing active indicators and feeds.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "IOC Ingestion Log",
+          "description": "Log of indicators pushed to SIEM, EDR, firewalls, with correlation results.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Threat Brief Distribution Record",
+          "description": "Evidence of regular threat briefings delivered to leadership and SOC teams.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.8",
@@ -174,7 +406,33 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Project management methodology with security integration", "Security requirements in project charters", "Project security risk assessments"]
+      "evidence_requirements": [
+        {
+          "name": "Project Management Methodology with Security Gates",
+          "description": "PM methodology (e.g., PRINCE2/Agile) explicitly integrating security checkpoints and gate criteria.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Project Security Risk Assessment Template",
+          "description": "Template used at project initiation to assess information security risks.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Sample Project Charter with Security Requirements",
+          "description": "Redacted charter from a real project showing security objectives and owners captured upfront.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Project Security Sign-off Records",
+          "description": "Gate review sign-offs (design, go-live) confirming security reviews completed.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Project Portfolio Security Tracker",
+          "description": "Register of active projects with security assessment status and outstanding actions.",
+          "filetype": "XLSX"
+        }
+      ]
     },
     {
       "control_id": "A.5.9",
@@ -188,7 +446,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Information asset inventory/register", "Asset ownership assignments", "Asset classification records", "Inventory review and update logs"]
+      "evidence_requirements": [
+        {
+          "name": "Information Asset Register",
+          "description": "Master inventory of information assets with owner, classification, location, custodian and retention.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Hardware and Software Asset Inventory",
+          "description": "CMDB export or asset management tool report listing all ICT assets with tags and owners.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Asset Discovery Scan Report",
+          "description": "Automated asset discovery scan output (e.g., Lansweeper, Axonius) reconciled against CMDB.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Asset Owner Assignment Record",
+          "description": "Evidence of formal asset ownership assignments and acknowledgements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Inventory Review and Reconciliation Log",
+          "description": "Periodic review log showing assets added, retired and verified.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Cloud Resource Inventory",
+          "description": "Export from cloud CSPM tool (AWS Config, Azure Resource Graph) listing cloud assets.",
+          "filetype": "JSON"
+        }
+      ]
     },
     {
       "control_id": "A.5.10",
@@ -202,7 +491,33 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Acceptable use policy", "User acknowledgment records", "Monitoring records for policy compliance"]
+      "evidence_requirements": [
+        {
+          "name": "Acceptable Use Policy (AUP)",
+          "description": "Policy defining permitted and prohibited uses of IT resources, email, internet and data.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AUP Acknowledgement Records",
+          "description": "Signed or e-acknowledged AUP records from employees and contractors.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "User Warning/Violation Records",
+          "description": "Records of AUP violations detected and actions taken (redacted).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AUP Training Module Completion Report",
+          "description": "LMS report showing AUP training module completion by staff.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "System Login Banner Screenshot",
+          "description": "Screenshot of login banner reminding users of acceptable use obligations.",
+          "filetype": "PNG"
+        }
+      ]
     },
     {
       "control_id": "A.5.11",
@@ -216,7 +531,33 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Asset return checklists", "Exit interview records confirming asset return", "Asset return acknowledgment forms"]
+      "evidence_requirements": [
+        {
+          "name": "Asset Return Checklist",
+          "description": "Standard checklist for leavers listing all asset types to be returned (laptop, badge, tokens, mobile).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Completed Leaver Asset Return Forms",
+          "description": "Signed return forms from recent leavers showing each asset returned and confirmed.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Offboarding Workflow Screenshot",
+          "description": "Ticket/workflow evidence (e.g., ServiceNow) of offboarding tasks including asset recovery.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Leavers vs Returns Reconciliation Report",
+          "description": "Periodic reconciliation between HR leavers list and assets recovered.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "BYOD Data Wipe Certificate",
+          "description": "MDM-issued certificate of selective wipe for personal devices used for work.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.12",
@@ -230,7 +571,33 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Information classification policy", "Classification scheme documentation", "Classified information inventory"]
+      "evidence_requirements": [
+        {
+          "name": "Information Classification Policy",
+          "description": "Policy defining classification levels (e.g., Public, Internal, Confidential, Restricted) and handling rules.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Classification Scheme and Handling Matrix",
+          "description": "Matrix mapping each classification level to storage, transmission, retention and disposal rules.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Classified Asset Inventory Extract",
+          "description": "Sample extract from asset register showing classification values assigned.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Classification Training Materials",
+          "description": "Training deck used to teach staff how to classify information correctly.",
+          "filetype": "PPTX"
+        },
+        {
+          "name": "Reclassification Review Log",
+          "description": "Log of periodic reviews where classifications were reassessed and adjusted.",
+          "filetype": "XLSX"
+        }
+      ]
     },
     {
       "control_id": "A.5.13",
@@ -244,7 +611,33 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Information labelling procedures", "Labelling templates and examples", "Automated labelling tool configuration"]
+      "evidence_requirements": [
+        {
+          "name": "Information Labelling Procedure",
+          "description": "Procedure specifying how to label electronic and physical information per classification.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Document Label Templates",
+          "description": "Templates (Word/PowerPoint headers-footers, watermarks) used to apply classification labels.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "MIP/Labelling Tool Configuration",
+          "description": "Screenshot of Microsoft Purview / Titus / Boldon James sensitivity labels and auto-labelling rules.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Physical Label Examples",
+          "description": "Photos of physical media (folders, tapes, removable drives) with applied classification labels.",
+          "filetype": "JPG"
+        },
+        {
+          "name": "Label Coverage Report",
+          "description": "Report showing percentage of documents/emails labelled correctly over time.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.14",
@@ -258,7 +651,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Information transfer policy", "Secure transfer procedures", "Transfer agreements with third parties", "Transfer logging mechanisms"]
+      "evidence_requirements": [
+        {
+          "name": "Information Transfer Policy",
+          "description": "Policy defining authorised transfer methods, encryption requirements and approvals.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Secure Transfer Procedures",
+          "description": "Procedures for specific methods: SFTP, secure email, encrypted USB, managed file transfer.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Data Transfer Agreement Templates",
+          "description": "Standard transfer agreement / data sharing agreement templates used with third parties.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "MFT Platform Transfer Log",
+          "description": "Log export from managed file transfer platform showing encrypted transfers and recipients.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Email Encryption Configuration",
+          "description": "Screenshot of TLS/S-MIME/PGP configuration enforcing encrypted external mail flows.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Courier Chain-of-Custody Receipts",
+          "description": "Signed receipts for physical media transfers via approved couriers.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.15",
@@ -272,7 +696,33 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Access control policy", "Access control rules documentation", "Access rights matrix", "Access review records"]
+      "evidence_requirements": [
+        {
+          "name": "Access Control Policy",
+          "description": "Topic-specific policy defining principles (least privilege, need-to-know) and scope.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Logical Access Rules Standard",
+          "description": "Standard defining authentication, authorisation and session rules for each system type.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Role-Based Access Matrix",
+          "description": "Matrix mapping roles to permitted functions in key business applications.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Physical Access Rules Documentation",
+          "description": "Rules and zoning document for physical areas (offices, data centre, restricted labs).",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Access Review Evidence",
+          "description": "Quarterly access review results signed off by data/system owners.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.16",
@@ -286,7 +736,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Identity management procedures", "User registration and provisioning records", "Identity lifecycle management logs", "Deprovisioning records"]
+      "evidence_requirements": [
+        {
+          "name": "Identity Lifecycle Procedure",
+          "description": "Procedure for joiner-mover-leaver (JML) handling of identities end-to-end.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "IAM System Configuration Screenshot",
+          "description": "Screenshot of IdP (Entra ID, Okta) showing unique ID policy and lifecycle rules.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "User Provisioning Ticket Samples",
+          "description": "Sample tickets showing approval, provisioning and closure for recent onboardings.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Deprovisioning Log",
+          "description": "Log showing timely disablement of accounts within SLA after termination.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Shared Account Register",
+          "description": "Register of approved shared/service accounts with justification and owner.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Dormant Account Report",
+          "description": "Periodic report identifying inactive accounts and remediation taken.",
+          "filetype": "CSV"
+        }
+      ]
     },
     {
       "control_id": "A.5.17",
@@ -300,7 +781,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Authentication information management procedures", "Password policy configuration", "MFA implementation records"]
+      "evidence_requirements": [
+        {
+          "name": "Authentication and Password Policy",
+          "description": "Policy specifying password complexity, length, rotation, MFA scope and storage rules.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Password Policy Configuration Export",
+          "description": "GPO / Entra ID / Okta export showing enforced password and lockout settings.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "MFA Enrolment Report",
+          "description": "Report of MFA enrolment coverage across users, including privileged accounts.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Temporary Credentials Issuance Log",
+          "description": "Log of temporary/initial credentials issued, delivered securely and forced-changed on first use.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Default Credentials Change Evidence",
+          "description": "Checklist and sign-off confirming vendor defaults changed on new systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Password Vault Configuration",
+          "description": "Screenshot of password manager / PAM vault configuration and access controls.",
+          "filetype": "PNG"
+        }
+      ]
     },
     {
       "control_id": "A.5.18",
@@ -314,7 +826,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Access provisioning workflow records", "Periodic access review results", "Access modification and removal logs", "Privileged access management records"]
+      "evidence_requirements": [
+        {
+          "name": "Access Provisioning Workflow Screenshots",
+          "description": "ServiceNow/Jira workflow screenshots showing request-approve-provision steps.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Periodic Access Review Report",
+          "description": "Evidence of completed access recertification (quarterly/bi-annual) signed by managers.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Access Modification Log",
+          "description": "Audit log showing role changes processed for movers with approvals.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Access Removal SLA Report",
+          "description": "Metrics showing access removed within target SLA for leavers.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Privileged Access Request Records",
+          "description": "PAM platform records showing just-in-time privileged access requests and approvals.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Exception Register for Access",
+          "description": "Register of approved access exceptions with expiry and compensating controls.",
+          "filetype": "XLSX"
+        }
+      ]
     },
     {
       "control_id": "A.5.19",
@@ -328,7 +871,33 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Supplier information security policy", "Supplier risk assessment procedures", "Supplier security requirements documentation"]
+      "evidence_requirements": [
+        {
+          "name": "Supplier Information Security Policy",
+          "description": "Policy setting security expectations for all supplier categories.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Supplier Risk Assessment Procedure",
+          "description": "Procedure for onboarding due diligence based on supplier tier and data access.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Supplier Register",
+          "description": "Register of suppliers with tier, data accessed, last assessment date and risk rating.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Supplier Security Questionnaire Responses",
+          "description": "Completed due diligence questionnaires (e.g., SIG Lite, CAIQ) from critical suppliers.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Supplier Certifications Collected",
+          "description": "SOC 2, ISO 27001 or equivalent certificates collected from key suppliers.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.20",
@@ -342,7 +911,33 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Supplier agreements with security clauses", "Security requirements specifications for suppliers", "NDA and confidentiality agreements"]
+      "evidence_requirements": [
+        {
+          "name": "Supplier Contract Security Clause Library",
+          "description": "Library of standard security clauses and DPA templates used in supplier contracts.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Signed Supplier Agreements",
+          "description": "Executed supplier contracts (redacted) showing information security and incident reporting clauses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Supplier NDAs",
+          "description": "Signed non-disclosure agreements with suppliers having access to confidential information.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Right-to-Audit Clause Evidence",
+          "description": "Extracts showing right-to-audit and subprocessor approval rights included in agreements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Contract Compliance Tracker",
+          "description": "Tracker showing which suppliers have updated contracts with current security clauses.",
+          "filetype": "XLSX"
+        }
+      ]
     },
     {
       "control_id": "A.5.21",
@@ -356,7 +951,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["ICT supply chain risk management policy", "Supplier due diligence records", "Supply chain security assessments"]
+      "evidence_requirements": [
+        {
+          "name": "ICT Supply Chain Risk Management Policy",
+          "description": "Policy addressing risks from hardware, software and cloud vendors across the supply chain.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Vendor Due Diligence Reports",
+          "description": "Completed due diligence assessments for ICT vendors, including financial and security review.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SBOM Request and Review Records",
+          "description": "Software Bill of Materials received from vendors and analysis of components.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Supply Chain Risk Register",
+          "description": "Risk register tracking supply chain risks (4th-party, geo-political, single points of failure).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Supplier Security Audit Reports",
+          "description": "Audit or assurance reports (SOC 2 Type II, penetration test summaries) from ICT suppliers.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Critical Vendor Contingency Plan",
+          "description": "Plans for replacing or mitigating loss of critical ICT suppliers.",
+          "filetype": "DOCX"
+        }
+      ]
     },
     {
       "control_id": "A.5.22",
@@ -370,7 +996,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Supplier performance monitoring reports", "Supplier audit reports", "Service level agreement (SLA) review records", "Change management records for supplier services"]
+      "evidence_requirements": [
+        {
+          "name": "Supplier Performance Review Reports",
+          "description": "Periodic supplier review reports covering SLA, security KPIs and incidents.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SLA Compliance Dashboard",
+          "description": "Dashboard or report showing SLA attainment across key suppliers.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Supplier Audit Reports",
+          "description": "On-site or remote supplier audit reports and management responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Supplier Change Notification Records",
+          "description": "Emails or portal notifications of material changes to supplier services and impact assessment.",
+          "filetype": "EML"
+        },
+        {
+          "name": "Supplier Meeting Minutes",
+          "description": "Minutes of regular governance/service review meetings with suppliers.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Supplier Scorecard",
+          "description": "Balanced scorecard rating suppliers across security, performance and compliance.",
+          "filetype": "XLSX"
+        }
+      ]
     },
     {
       "control_id": "A.5.23",
@@ -384,7 +1041,43 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Cloud security policy", "Cloud service provider risk assessments", "Cloud shared responsibility matrix", "Cloud exit strategy documentation"]
+      "evidence_requirements": [
+        {
+          "name": "Cloud Security Policy",
+          "description": "Policy covering cloud acquisition, use, data location, encryption and exit requirements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cloud Service Provider Risk Assessment",
+          "description": "Assessment of each major CSP including data residency, certifications and shared responsibility.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Shared Responsibility Matrix",
+          "description": "Matrix mapping security control ownership between the organisation and the CSP (IaaS/PaaS/SaaS).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Cloud Exit Strategy",
+          "description": "Documented plan to migrate data and workloads out of each CSP if required.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Cloud Configuration Baseline",
+          "description": "CIS Benchmark / CSP hardening standard applied (e.g., AWS/Azure/GCP CIS).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CSPM Scan Results",
+          "description": "Cloud Security Posture Management scan showing misconfigurations and remediation status.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Cloud Tenant Admin Access Review",
+          "description": "Review report of cloud console admin users and privileged roles.",
+          "filetype": "CSV"
+        }
+      ]
     },
     {
       "control_id": "A.5.24",
@@ -398,7 +1091,43 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Incident management plan", "Incident response team charter and roster", "Incident classification criteria", "Communication and escalation procedures"]
+      "evidence_requirements": [
+        {
+          "name": "Incident Response Plan",
+          "description": "Documented IRP with phases, roles, escalation paths and communication templates.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident Response Team Charter and Roster",
+          "description": "Charter defining the IR team, contact list and on-call rota.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Incident Classification Taxonomy",
+          "description": "Severity/category matrix used to triage and classify incidents.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Incident Communication Templates",
+          "description": "Pre-approved templates for internal, customer, regulator and media communications.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "IR Playbooks",
+          "description": "Playbooks for common scenarios (ransomware, phishing, data exfiltration, DDoS).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "IR Tabletop Exercise Report",
+          "description": "Report from most recent tabletop exercise including participants, scenarios and lessons.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Forensic Readiness Procedure",
+          "description": "Procedure for evidence collection, chain of custody and forensic tooling.",
+          "filetype": "DOCX"
+        }
+      ]
     },
     {
       "control_id": "A.5.25",
@@ -412,7 +1141,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Event triage procedures", "Incident classification records", "Event assessment logs"]
+      "evidence_requirements": [
+        {
+          "name": "Event Triage Procedure",
+          "description": "SOC procedure for triaging raw events into categorised incidents.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Incident Classification Records",
+          "description": "Sample ticket records showing event-to-incident decisions with justification.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SOC Runbook Extract",
+          "description": "Extract from SOC runbook covering triage decision trees.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SIEM Use-Case Catalogue",
+          "description": "Catalogue of SIEM use cases with severity mapping for triage.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Event Assessment Log",
+          "description": "Log export showing events assessed, closed as non-incidents or escalated.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Incident Correlation Report",
+          "description": "Report showing correlation of related events into single incidents.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.26",
@@ -426,7 +1186,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Incident response procedures", "Incident response logs and tickets", "Evidence preservation records", "Post-incident reports"]
+      "evidence_requirements": [
+        {
+          "name": "Incident Response Procedures",
+          "description": "Detailed step-by-step procedures for containment, eradication, recovery and closure.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Incident Ticket Records",
+          "description": "Redacted recent incident tickets showing full response lifecycle with timestamps.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident War-Room Minutes",
+          "description": "Minutes or recordings of incident coordination calls for major incidents.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Evidence Preservation Records",
+          "description": "Chain-of-custody forms and forensic imaging records for recent incidents.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Regulator/Customer Notification Records",
+          "description": "Sent notifications to regulators/customers for breaches, with timestamps vs. SLA.",
+          "filetype": "EML"
+        },
+        {
+          "name": "Post-Incident Report",
+          "description": "Formal post-incident report covering root cause, impact, timeline and remediation.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.27",
@@ -440,7 +1231,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Lessons learned reports", "Incident trend analysis", "Control improvement recommendations from incidents", "Updated risk assessments based on incidents"]
+      "evidence_requirements": [
+        {
+          "name": "Lessons Learned Report Template",
+          "description": "Standard template for capturing lessons learned after each significant incident.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Completed Lessons Learned Reports",
+          "description": "Recent lessons learned reports showing identified improvements and owners.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident Metrics and Trends Report",
+          "description": "Quarterly metrics: incident volume, MTTD, MTTR, root cause categories and cost.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Control Improvement Tracker",
+          "description": "Tracker linking incident lessons to control changes, status and closure evidence.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Updated Risk Assessment Entries",
+          "description": "Risk register entries updated as a direct result of incidents.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Awareness Content Updates",
+          "description": "Evidence that awareness/training was updated based on incident themes.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.28",
@@ -454,7 +1276,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Evidence collection procedures", "Chain of custody documentation", "Forensic tools and procedures documentation"]
+      "evidence_requirements": [
+        {
+          "name": "Evidence Collection Procedure",
+          "description": "Procedure covering identification, acquisition, preservation, and handling of digital evidence.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Chain of Custody Form Template",
+          "description": "Standard form for recording custody transfers with timestamps and signatures.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Forensic Toolkit Inventory",
+          "description": "Inventory of forensic tools in use (EnCase, FTK, Autopsy, Velociraptor) and licence status.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Completed Chain of Custody Records",
+          "description": "Example completed chain of custody forms from prior incidents.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Forensic Image Hash Register",
+          "description": "Register of forensic images taken with cryptographic hashes for integrity.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Forensic Analyst Qualifications",
+          "description": "Certifications (GCFA, GCFE, CCE) of staff or retainer agreement with forensic firm.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.29",
@@ -468,7 +1321,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Information security continuity plan", "BCP/DRP with security considerations", "Continuity test results"]
+      "evidence_requirements": [
+        {
+          "name": "Information Security Continuity Plan",
+          "description": "Plan defining how security controls are maintained during disruption.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Business Continuity Plan with Security Section",
+          "description": "BCP document including explicit information security considerations.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "BIA Including Security Requirements",
+          "description": "Business Impact Analysis identifying security requirements during disruption.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "BCP Test Report",
+          "description": "Most recent BCP test report demonstrating security controls maintained during exercise.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Alternate Site Security Assessment",
+          "description": "Security assessment of hot/warm/cold alternate recovery sites.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Continuity Training Records",
+          "description": "Training records for staff with continuity-related security responsibilities.",
+          "filetype": "CSV"
+        }
+      ]
     },
     {
       "control_id": "A.5.30",
@@ -482,7 +1366,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["ICT continuity plans", "Recovery time and point objectives", "ICT continuity test reports", "Critical ICT services inventory"]
+      "evidence_requirements": [
+        {
+          "name": "ICT Continuity Plan",
+          "description": "Plan for restoring ICT services within RTO/RPO objectives.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "RTO/RPO Register",
+          "description": "Register of critical ICT services with agreed RTO, RPO and dependencies.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "DR Runbooks",
+          "description": "Technical runbooks for DR failover of each critical system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "DR Test Results",
+          "description": "Most recent DR test report showing achievement of RTO/RPO targets.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Critical ICT Services Inventory",
+          "description": "Inventory of critical systems with owners and recovery tiers.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Failover Architecture Diagram",
+          "description": "Architecture diagram showing redundancy and failover paths.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.31",
@@ -496,7 +1411,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Legal and regulatory requirements register", "Compliance obligations matrix", "Compliance monitoring records"]
+      "evidence_requirements": [
+        {
+          "name": "Legal and Regulatory Obligations Register",
+          "description": "Register of all applicable laws, regulations and contractual obligations with requirements mapped to controls.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Compliance Obligations Matrix",
+          "description": "Matrix mapping each obligation to responsible owner, controls and evidence.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Legal Counsel Advisory Records",
+          "description": "Advisory notes from internal/external counsel on new or changed requirements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Horizon Scanning Report",
+          "description": "Report of upcoming legislative/regulatory changes and readiness status.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cryptographic Controls Legal Review",
+          "description": "Legal review of cryptographic use across jurisdictions (e.g., export controls).",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Compliance Monitoring Reports",
+          "description": "Periodic reports confirming compliance with each major obligation.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.32",
@@ -510,7 +1456,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Software license inventory", "Intellectual property policy", "License compliance audit records"]
+      "evidence_requirements": [
+        {
+          "name": "Software License Inventory",
+          "description": "Inventory of all licensed software with counts, allocation and renewal dates.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Intellectual Property Policy",
+          "description": "Policy on acquisition, use and protection of IP and proprietary software.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "License Compliance Audit Report",
+          "description": "Internal or vendor-led software asset management audit report.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Software Acquisition Approval Records",
+          "description": "Evidence that software is procured through approved channels with license verification.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Open Source License Register",
+          "description": "Register of OSS components in use with licenses (MIT, GPL, Apache) and compliance notes.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Anti-Piracy Awareness Record",
+          "description": "Awareness communications reminding staff of IP obligations.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.33",
@@ -524,7 +1501,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Records management policy", "Records retention schedule", "Records protection controls documentation"]
+      "evidence_requirements": [
+        {
+          "name": "Records Management Policy",
+          "description": "Policy on creation, storage, retrieval, protection and disposal of records.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Records Retention Schedule",
+          "description": "Schedule listing record types, retention period, legal basis and disposal method.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Records Protection Controls Documentation",
+          "description": "Documentation of storage, encryption and access controls for protected records.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Records Destruction Log",
+          "description": "Log of records destroyed at end of retention with method and witness.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Archive Access Logs",
+          "description": "Logs of access to archived records for audit traceability.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Retention Automation Configuration",
+          "description": "Configuration of retention policies in ECM/email (e.g., Purview retention labels).",
+          "filetype": "PNG"
+        }
+      ]
     },
     {
       "control_id": "A.5.34",
@@ -538,7 +1546,43 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Privacy policy", "Data processing inventory/records of processing activities", "Privacy impact assessments", "Data subject rights procedures"]
+      "evidence_requirements": [
+        {
+          "name": "Privacy Policy",
+          "description": "Privacy policy describing processing of personal data, rights and contact points.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Records of Processing Activities (ROPA)",
+          "description": "ROPA documenting purposes, legal basis, categories, retention and transfers.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Data Protection Impact Assessments",
+          "description": "Completed DPIAs for high-risk processing activities.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Subject Rights Procedure",
+          "description": "Procedure for handling access, rectification, erasure and portability requests.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "DPO Appointment Letter",
+          "description": "Appointment of Data Protection Officer or equivalent function.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cross-Border Transfer Mechanisms",
+          "description": "SCCs, BCRs or adequacy decisions evidencing lawful international transfers.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Consent Management Records",
+          "description": "Records from consent management platform showing valid consent capture.",
+          "filetype": "CSV"
+        }
+      ]
     },
     {
       "control_id": "A.5.35",
@@ -552,7 +1596,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Independent review reports", "Internal audit schedule and results", "Management review of audit findings", "Corrective action tracking"]
+      "evidence_requirements": [
+        {
+          "name": "Internal Audit Programme",
+          "description": "Multi-year internal audit plan covering all ISMS areas with frequency.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Internal Audit Reports",
+          "description": "Completed internal audit reports with findings, evidence and recommendations.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Auditor Independence and Competence Evidence",
+          "description": "Qualifications and independence declaration for internal auditors.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Management Review of Audit Findings",
+          "description": "Management review minutes reviewing audit results and directing corrective actions.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Corrective Action Register",
+          "description": "Register of audit-driven corrective actions with owners, due dates and status.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "External Review Reports",
+          "description": "Reports from external advisors or previous CB audits used as independent review.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.36",
@@ -566,7 +1641,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Compliance review schedule", "Compliance assessment results", "Non-compliance reports and corrective actions"]
+      "evidence_requirements": [
+        {
+          "name": "Compliance Review Schedule",
+          "description": "Schedule of manager-led compliance reviews by area (quarterly/semi-annual).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Compliance Self-Assessment Forms",
+          "description": "Completed self-assessment forms from department managers.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Non-Compliance Report",
+          "description": "Log of non-compliances detected with root cause and corrective action.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Compliance Monitoring Dashboard",
+          "description": "Dashboard showing compliance KPI trends across control families.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Technical Compliance Scan Results",
+          "description": "Automated compliance scan output against internal standards (e.g., Prowler, Chef InSpec).",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Corrective Action Evidence",
+          "description": "Evidence of actions taken to address non-compliances.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.5.37",
@@ -580,7 +1686,38 @@
       "parent_section": "A.5",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Documented operating procedures", "Procedure distribution and acknowledgment records", "Procedure review and update history"]
+      "evidence_requirements": [
+        {
+          "name": "Operating Procedures Library",
+          "description": "Central library of operating procedures (SOPs) for IT operations activities.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Procedure Version Control Log",
+          "description": "Version history and review dates for each SOP.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Procedure Distribution/Acknowledgement Records",
+          "description": "Records showing procedures distributed and acknowledged by operators.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Runbook Examples",
+          "description": "Operational runbooks for routine activities (backup, patching, restart).",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "On-Call Handover Procedure",
+          "description": "Procedure for shift handover and on-call rotation.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Procedure Review Record",
+          "description": "Evidence of periodic review and update of operating procedures.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.6.1",
@@ -594,7 +1731,38 @@
       "parent_section": "A.6",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Screening policy and procedures", "Background check records", "Screening completion records for all personnel"]
+      "evidence_requirements": [
+        {
+          "name": "Background Screening Policy",
+          "description": "Policy defining screening scope by role and jurisdiction, in line with privacy law.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Background Check Records",
+          "description": "Completed screening reports (criminal, credit, reference, qualification) for new hires.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Screening Vendor Agreement",
+          "description": "Agreement with background check provider including data protection clauses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Screening Tracker",
+          "description": "Tracker of screening status for all hires with completion dates and sign-offs.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Role-Based Screening Matrix",
+          "description": "Matrix specifying required checks per role tier (standard, elevated, privileged).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Periodic Re-Screening Records",
+          "description": "Records of periodic re-screening for high-risk roles where legally permitted.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.6.2",
@@ -608,7 +1776,38 @@
       "parent_section": "A.6",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Employment contracts with security clauses", "Confidentiality/NDA agreements", "Acceptable use acknowledgments"]
+      "evidence_requirements": [
+        {
+          "name": "Standard Employment Contract Template",
+          "description": "Standard contract with security, confidentiality and IP clauses baked in.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Signed Employee Contracts",
+          "description": "Sample redacted signed contracts showing security obligations.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Contractor/Third-Party Agreement Template",
+          "description": "Agreement template used for contractors and agency staff with equivalent obligations.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Confidentiality Agreement (NDA)",
+          "description": "Employee NDA separate from or attached to the employment contract.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Acceptable Use Acknowledgement",
+          "description": "Employee acknowledgement of AUP captured at onboarding.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Contract Clause Review Record",
+          "description": "Annual legal review of security clauses in employment documents.",
+          "filetype": "DOCX"
+        }
+      ]
     },
     {
       "control_id": "A.6.3",
@@ -622,7 +1821,43 @@
       "parent_section": "A.6",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Security awareness training plan", "Training attendance and completion records", "Training materials and content", "Awareness campaign records"]
+      "evidence_requirements": [
+        {
+          "name": "Security Awareness Training Plan",
+          "description": "Annual plan covering target audiences, topics, delivery methods and frequency.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "LMS Completion Report",
+          "description": "LMS export showing per-user completion of mandatory training modules.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Training Content Library",
+          "description": "Training materials (decks, videos, quizzes) used in the awareness programme.",
+          "filetype": "PPTX"
+        },
+        {
+          "name": "Phishing Simulation Results",
+          "description": "Reports from phishing simulation tool showing click rates and repeat offenders.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Role-Based Training Records",
+          "description": "Records for specialised training (developers secure coding, admins PAM, execs exec protection).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Awareness Campaign Collateral",
+          "description": "Posters, newsletters and intranet articles used in ongoing campaigns.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Training Effectiveness Metrics",
+          "description": "Metrics showing behavioural change (e.g., incident reporting up, phish clicks down).",
+          "filetype": "XLSX"
+        }
+      ]
     },
     {
       "control_id": "A.6.4",
@@ -636,7 +1871,38 @@
       "parent_section": "A.6",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Disciplinary policy for security violations", "Disciplinary process documentation", "Records of disciplinary actions taken"]
+      "evidence_requirements": [
+        {
+          "name": "Disciplinary Policy",
+          "description": "Formal disciplinary policy including security violations, fair process and sanctions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Disciplinary Process Flowchart",
+          "description": "Flowchart showing stages from investigation to hearing to outcome.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "HR-Security Coordination Procedure",
+          "description": "Procedure describing how Security investigations feed into HR disciplinary action.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Redacted Disciplinary Case Records",
+          "description": "Redacted case records showing application of the process for security breaches.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Disciplinary Awareness Communication",
+          "description": "Communication to staff explaining the disciplinary consequences of security breaches.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Employee Handbook Extract",
+          "description": "Handbook section covering disciplinary process and acknowledgement records.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.6.5",
@@ -650,7 +1916,38 @@
       "parent_section": "A.6",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Post-employment confidentiality agreements", "Offboarding checklists", "Access revocation confirmation records"]
+      "evidence_requirements": [
+        {
+          "name": "Offboarding Checklist",
+          "description": "Comprehensive leaver checklist covering access revocation, asset return and exit briefing.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Post-Employment Confidentiality Clause",
+          "description": "Contract clauses surviving termination (confidentiality, non-compete where lawful).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Exit Interview Records",
+          "description": "Exit interview forms covering reminders of continuing obligations.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Access Revocation Confirmation Log",
+          "description": "Timestamped log confirming access removed from each system on termination.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Role Change Offboarding Records",
+          "description": "Records showing access rights reviewed/adjusted when staff change roles internally.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Leaver Reminder Letter Template",
+          "description": "Standard letter sent to leavers reminding of ongoing obligations.",
+          "filetype": "DOCX"
+        }
+      ]
     },
     {
       "control_id": "A.6.6",
@@ -664,7 +1961,38 @@
       "parent_section": "A.6",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["NDA templates", "Signed NDA records for all personnel and third parties", "NDA review and renewal records"]
+      "evidence_requirements": [
+        {
+          "name": "NDA Master Template",
+          "description": "Standard NDA template covering duration, scope, breach consequences.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Signed Employee NDAs",
+          "description": "Repository of signed NDAs from all personnel.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Third-Party NDA Register",
+          "description": "Register of NDAs signed with contractors, consultants and business partners.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "NDA Legal Review Record",
+          "description": "Annual legal review confirming NDA templates remain enforceable.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "NDA Renewal/Reissue Log",
+          "description": "Log showing NDAs renewed or reissued as scopes or terms change.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "NDA Variant Library",
+          "description": "Variants for specific contexts (mutual, one-way, project-specific).",
+          "filetype": "DOCX"
+        }
+      ]
     },
     {
       "control_id": "A.6.7",
@@ -678,7 +2006,43 @@
       "parent_section": "A.6",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Remote working policy", "Remote access security configurations", "Remote working risk assessment", "Home office security guidelines"]
+      "evidence_requirements": [
+        {
+          "name": "Remote Working Policy",
+          "description": "Policy defining remote working conditions, approvals and security requirements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Remote Working Risk Assessment",
+          "description": "Risk assessment covering threats, controls and residual risks for remote working.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Home Office Security Guidelines",
+          "description": "Guidance issued to staff on securing home work environments.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "VPN/ZTNA Configuration Records",
+          "description": "Secure remote access configuration (VPN, ZTNA) with MFA and encryption evidence.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Remote Device Configuration Baseline",
+          "description": "Hardening baseline applied to devices used remotely (encryption, endpoint protection).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Remote Working Agreements",
+          "description": "Signed agreements between employee and organisation covering remote working terms.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Remote Access Audit Log",
+          "description": "Log of remote access sessions with source IPs, durations and anomaly alerts.",
+          "filetype": "CSV"
+        }
+      ]
     },
     {
       "control_id": "A.6.8",
@@ -692,7 +2056,38 @@
       "parent_section": "A.6",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Security event reporting procedures", "Reporting channel documentation", "Security event report logs", "Awareness materials on reporting obligations"]
+      "evidence_requirements": [
+        {
+          "name": "Security Event Reporting Procedure",
+          "description": "Procedure telling staff what, how, when and to whom to report security events.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Reporting Channel Documentation",
+          "description": "Documentation of reporting channels: hotline, portal, email, chat bot.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Reporting Channel Screenshot",
+          "description": "Screenshot of internal reporting tool (e.g., phish button, ticket portal).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Event Reporting Awareness Material",
+          "description": "Posters, intranet articles and training content encouraging reporting.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Event Report Log",
+          "description": "Log of events reported by staff with triage outcomes and metrics on volume.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Whistleblower / Anonymous Reporting Channel",
+          "description": "Anonymous channel configuration (e.g., third-party hotline) with usage metrics.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.7.1",
@@ -706,7 +2101,38 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Physical security perimeter definitions", "Building floor plans showing security zones", "Physical barrier specifications"]
+      "evidence_requirements": [
+        {
+          "name": "Physical Security Policy",
+          "description": "Policy defining security perimeters and zoning principles across facilities.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Facility Site Plan with Perimeters",
+          "description": "Site/floor plans marked with security zones (public, reception, office, restricted, DC).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Physical Barrier Specification",
+          "description": "Technical specs for walls, doors, fences, bollards and reception design.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Perimeter Risk Assessment",
+          "description": "Risk assessment for each perimeter type and residual risk determination.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Physical Security Survey Report",
+          "description": "Third-party or internal physical security survey of key sites.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Perimeter Maintenance Records",
+          "description": "Maintenance and inspection records for physical barriers.",
+          "filetype": "CSV"
+        }
+      ]
     },
     {
       "control_id": "A.7.2",
@@ -720,7 +2146,43 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Physical access control system records", "Visitor log books", "Access badge management procedures", "Physical access review records"]
+      "evidence_requirements": [
+        {
+          "name": "Physical Access Control Procedure",
+          "description": "Procedure for granting, modifying, revoking physical access rights.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Access Control System Configuration",
+          "description": "Screenshot of PACS (badge system) configuration with zones and schedules.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Badge Access Log",
+          "description": "PACS log export showing entries/exits with names, timestamps, readers.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Visitor Management Records",
+          "description": "Visitor log showing registration, escort assignment, badge issue and return.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Physical Access Review Report",
+          "description": "Periodic review of badge holders confirming continued need.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Tailgating Awareness Evidence",
+          "description": "Posters, signage and reminders about tailgating/piggybacking.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Lost/Stolen Badge Report",
+          "description": "Log of lost/stolen badges with deactivation timestamps.",
+          "filetype": "CSV"
+        }
+      ]
     },
     {
       "control_id": "A.7.3",
@@ -734,7 +2196,38 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Facility security design documentation", "Office and room security specifications", "Physical security assessment reports"]
+      "evidence_requirements": [
+        {
+          "name": "Secure Room Design Specification",
+          "description": "Design spec for secure rooms (walls to deck, no external windows, sound attenuation).",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Facility Signage Audit",
+          "description": "Audit confirming no public-facing signage reveals location of sensitive areas.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Office Layout Privacy Assessment",
+          "description": "Assessment of screen visibility and confidential conversation risk in open offices.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Key and Combination Management Log",
+          "description": "Log of physical keys and combinations issued, returned and changed.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Internal Directory Access Restriction",
+          "description": "Evidence that internal phone/floor directories do not expose sensitive locations.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Secure Area Inspection Report",
+          "description": "Inspection reports of secure office areas for security weaknesses.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.7.4",
@@ -748,7 +2241,43 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["CCTV and monitoring system documentation", "Monitoring coverage maps", "Alarm and intrusion detection system records", "Monitoring review logs"]
+      "evidence_requirements": [
+        {
+          "name": "CCTV System Design Documentation",
+          "description": "Design doc covering camera coverage, resolution, retention and monitoring.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "CCTV Coverage Map",
+          "description": "Map showing camera locations and fields of view across facilities.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Intrusion Detection System Configuration",
+          "description": "IDS/alarm configuration including sensors, zones and response actions.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Monitoring Alarm Log",
+          "description": "Log of alarms raised, response actions and false-positive analysis.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Guard Shift Log",
+          "description": "Security guard patrol and incident log entries.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Monitoring Footage Retention Records",
+          "description": "Evidence of retention period compliance and secure storage of footage.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Privacy Notice for Monitoring",
+          "description": "Notice informing employees/visitors that areas are monitored, as required by law.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.7.5",
@@ -762,7 +2291,43 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Environmental threat risk assessment", "Fire suppression system certificates", "Flood/environmental protection measures documentation"]
+      "evidence_requirements": [
+        {
+          "name": "Environmental Threat Risk Assessment",
+          "description": "Assessment covering fire, flood, earthquake, power, civil unrest relevant to sites.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Fire Detection and Suppression Certificates",
+          "description": "Commissioning and annual inspection certificates for fire systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Fire Drill Records",
+          "description": "Records of periodic fire drills with attendance and evaluation.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Environmental Monitoring Configuration",
+          "description": "BMS configuration for temperature, humidity, leak and smoke monitoring.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Flood Protection Measures Documentation",
+          "description": "Documentation of flood protection for below-ground or at-risk facilities.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Environmental Incident Log",
+          "description": "Log of environmental events (alarms, near-misses, actual events) and response.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Insurance Coverage Evidence",
+          "description": "Certificates of insurance covering environmental risks.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.7.6",
@@ -776,7 +2341,38 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Secure area working procedures", "Secure area access logs", "Inspection records for secure areas"]
+      "evidence_requirements": [
+        {
+          "name": "Secure Area Working Procedure",
+          "description": "Procedure for personnel working in secure areas (no devices, dual-working, etc.).",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Secure Area Access Register",
+          "description": "Register of personnel authorised to access secure areas with expiry dates.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Secure Area Entry/Exit Log",
+          "description": "Log entries showing supervised and time-bound access.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Periodic Inspection Records",
+          "description": "Inspection records showing vacant secure areas are locked and verified.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Visitor Escort Records",
+          "description": "Records of escorts assigned for visits into secure areas.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Camera/Photography Prohibition Signage",
+          "description": "Photos of signage prohibiting photography/recording in secure areas.",
+          "filetype": "JPG"
+        }
+      ]
     },
     {
       "control_id": "A.7.7",
@@ -790,7 +2386,38 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Clear desk and clear screen policy", "Screen lock configuration settings", "Physical security walkthrough audit results"]
+      "evidence_requirements": [
+        {
+          "name": "Clear Desk and Clear Screen Policy",
+          "description": "Policy with requirements, timing rules and enforcement mechanisms.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Screen Lock Policy Configuration",
+          "description": "GPO/MDM configuration enforcing auto-lock and screen timeout.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Clear Desk Walkthrough Audit Results",
+          "description": "Results of periodic walkthrough audits showing compliance rate and findings.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Lockable Storage Provision Evidence",
+          "description": "Evidence that all staff have access to lockable drawers/cabinets.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Secure Disposal Bin Placement Map",
+          "description": "Map showing confidential waste bin locations throughout facilities.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Awareness Material - Clear Desk",
+          "description": "Posters, signage and training content on clear desk/screen rules.",
+          "filetype": "PNG"
+        }
+      ]
     },
     {
       "control_id": "A.7.8",
@@ -804,7 +2431,38 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Equipment placement documentation", "Data center layout and environmental controls", "Equipment protection measures documentation"]
+      "evidence_requirements": [
+        {
+          "name": "Equipment Siting Standards",
+          "description": "Standards for positioning critical equipment away from entrances, windows, water sources.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Data Center Layout Diagram",
+          "description": "Data centre rack layout with cooling, power, access paths documented.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Screen Privacy Measures",
+          "description": "Evidence of privacy filters, partitions or room layout preventing shoulder surfing.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Equipment Environmental Controls",
+          "description": "Documentation of cooling, humidity and dust controls for equipment.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Rack Security Documentation",
+          "description": "Evidence of locked racks, rack-level access controls and seals.",
+          "filetype": "JPG"
+        },
+        {
+          "name": "Equipment Protection Risk Assessment",
+          "description": "Risk assessment driving protection choices for specific equipment locations.",
+          "filetype": "XLSX"
+        }
+      ]
     },
     {
       "control_id": "A.7.9",
@@ -818,7 +2476,38 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Off-premises asset management policy", "Equipment checkout and tracking records", "Off-site asset protection guidelines"]
+      "evidence_requirements": [
+        {
+          "name": "Off-Premises Asset Policy",
+          "description": "Policy governing use of assets outside organisation premises.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Asset Checkout Log",
+          "description": "Log of assets checked out for off-site use with expected return.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Management Authorisation Records",
+          "description": "Records showing management approval for off-site equipment use.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Off-Site Equipment Insurance",
+          "description": "Insurance policy covering equipment used off-premises.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Travel Security Guidelines",
+          "description": "Guidance for staff travelling with devices, including country-specific advice.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Loss/Theft Incident Log",
+          "description": "Log of off-site asset loss/theft incidents and response actions.",
+          "filetype": "CSV"
+        }
+      ]
     },
     {
       "control_id": "A.7.10",
@@ -832,7 +2521,38 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Media management procedures", "Media inventory and tracking records", "Media disposal and destruction records", "Media transportation security procedures"]
+      "evidence_requirements": [
+        {
+          "name": "Removable Media Policy",
+          "description": "Policy on approved media types, encryption, registration and disposal.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Media Inventory Register",
+          "description": "Register of all managed removable media with owner, classification and status.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Media Transportation Procedure",
+          "description": "Procedure for secure transport of media (tamper-evident, courier, chain of custody).",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Media Encryption Configuration",
+          "description": "DLP/endpoint configuration enforcing encryption on removable media.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Media Disposal Records",
+          "description": "Records of secure media destruction including certificates from disposal vendor.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Removable Media Restriction Evidence",
+          "description": "Endpoint policy evidence restricting USB use to approved devices only.",
+          "filetype": "CSV"
+        }
+      ]
     },
     {
       "control_id": "A.7.11",
@@ -846,7 +2566,38 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["UPS and generator maintenance records", "Utility redundancy documentation", "Power supply monitoring records"]
+      "evidence_requirements": [
+        {
+          "name": "Utility Support Risk Assessment",
+          "description": "Assessment of dependencies on power, telecoms, HVAC and water.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "UPS Maintenance Records",
+          "description": "Maintenance, battery replacement and load test records for UPS systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Generator Test and Fuel Log",
+          "description": "Records of generator test runs, fuel levels and refueling contracts.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Dual-Feed Power Documentation",
+          "description": "Evidence of diverse utility feeds or PDU redundancy in critical facilities.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "HVAC and Environmental Controls Records",
+          "description": "HVAC maintenance records and environmental monitoring logs.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Utility SLA and Contracts",
+          "description": "Service level agreements with utility providers.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.7.12",
@@ -860,7 +2611,38 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Cabling diagrams and documentation", "Cable protection measures documentation", "Cable infrastructure inspection records"]
+      "evidence_requirements": [
+        {
+          "name": "Cabling Infrastructure Diagram",
+          "description": "Diagrams of power, data and telco cabling paths and patch panels.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cable Protection Specifications",
+          "description": "Specs for conduits, armoured cables, separation of power and data.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Cable Pathway Inspection Report",
+          "description": "Inspection report of cable pathways for damage, interception risk and housekeeping.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Structured Cabling Certification",
+          "description": "Installer certification of structured cabling installation and testing.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cable Labelling Photos",
+          "description": "Photos showing proper cable labelling and documentation at patch panels.",
+          "filetype": "JPG"
+        },
+        {
+          "name": "Cable Access Point Security",
+          "description": "Evidence that cable access points (risers, closets) are locked and monitored.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.7.13",
@@ -874,7 +2656,38 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Equipment maintenance schedule", "Maintenance records and logs", "Authorized maintenance personnel list"]
+      "evidence_requirements": [
+        {
+          "name": "Equipment Maintenance Schedule",
+          "description": "Planned maintenance schedule covering all critical equipment with intervals.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Maintenance Work Order History",
+          "description": "History of work orders showing preventive and corrective maintenance performed.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Authorised Maintenance Personnel List",
+          "description": "List of approved internal and vendor engineers permitted to maintain equipment.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Maintenance Supervision Records",
+          "description": "Records showing vendor engineers supervised while on site.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Warranty and Support Contracts",
+          "description": "Active support agreements with OEMs for critical equipment.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Sanitisation Before Maintenance Records",
+          "description": "Records showing sensitive data removed or protected before equipment leaves for repair.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.7.14",
@@ -888,7 +2701,43 @@
       "parent_section": "A.7",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Equipment disposal procedures", "Data sanitization records", "Certificates of destruction", "Disposal vendor agreements"]
+      "evidence_requirements": [
+        {
+          "name": "Equipment Disposal Procedure",
+          "description": "Procedure for secure disposal, reuse and destruction of equipment with storage.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Data Sanitisation Records",
+          "description": "Records showing method used (overwrite/degauss/destroy) per device.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Certificates of Destruction",
+          "description": "Certificates from disposal vendors confirming secure destruction.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Disposal Vendor Due Diligence",
+          "description": "Assessment of disposal vendor's certifications (e.g., NAID AAA, R2).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Asset Retirement Workflow Screenshot",
+          "description": "Screenshot of ITAM workflow showing retirement steps and approvals.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Reuse Approval Records",
+          "description": "Records approving internal reuse after wipe with verification.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Software License Reclamation Log",
+          "description": "Log of software licenses reclaimed from decommissioned equipment.",
+          "filetype": "XLSX"
+        }
+      ]
     },
     {
       "control_id": "A.8.1",
@@ -902,7 +2751,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Endpoint device policy", "MDM configuration and enrollment records", "Endpoint encryption status reports", "Endpoint security configuration standards"]
+      "evidence_requirements": [
+        {
+          "name": "Endpoint Security Policy",
+          "description": "Policy covering configuration, encryption, malware protection and remote wipe for endpoints.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "MDM/UEM Enrolment Report",
+          "description": "Report from Intune/Workspace ONE/Jamf showing enrolled devices vs workforce count.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Endpoint Encryption Status Report",
+          "description": "BitLocker/FileVault encryption coverage report for all managed endpoints.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Endpoint Hardening Baseline",
+          "description": "CIS/organisation baseline applied to Windows/macOS/Linux endpoints.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "EDR Deployment Evidence",
+          "description": "EDR (CrowdStrike, Defender, SentinelOne) coverage and policy screenshots.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Mobile Device Policy Configuration",
+          "description": "MDM compliance policies (passcode, jailbreak detection, app restrictions).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Lost Device Wipe Log",
+          "description": "Log of remote wipe actions performed on lost/stolen devices.",
+          "filetype": "CSV"
+        }
+      ]
     },
     {
       "control_id": "A.8.2",
@@ -916,7 +2801,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Privileged access management policy", "Privileged account inventory", "Privileged access request and approval records", "Privileged access review logs"]
+      "evidence_requirements": [
+        {
+          "name": "Privileged Access Management Policy",
+          "description": "Policy defining privileged access definitions, provisioning and oversight.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Privileged Account Inventory",
+          "description": "Inventory of all privileged accounts with owner, purpose and review date.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "PAM Vault Configuration Screenshot",
+          "description": "CyberArk/BeyondTrust/Delinea configuration showing safes, policies and approvers.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Privileged Access Request Log",
+          "description": "JIT/approval log for privileged session requests with approvers and durations.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Privileged Session Recordings",
+          "description": "Evidence of session recording enabled on privileged sessions (sample thumbnails).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Privileged Access Review Records",
+          "description": "Quarterly reviews of privileged accounts with sign-off by system owners.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Break-Glass Account Procedure",
+          "description": "Documented emergency access procedure with usage monitoring.",
+          "filetype": "DOCX"
+        }
+      ]
     },
     {
       "control_id": "A.8.3",
@@ -930,7 +2851,38 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Access control configurations", "Application-level access controls documentation", "Data access restriction implementation records"]
+      "evidence_requirements": [
+        {
+          "name": "Application Access Control Matrix",
+          "description": "Matrix of permissions per role in each business application.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Data Access Restriction Configuration",
+          "description": "Evidence of row/column-level security in databases or data platforms.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Least Privilege Assessment",
+          "description": "Periodic assessment identifying over-privileged accounts with remediation actions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Application Access Review Records",
+          "description": "User access review outputs per application signed off by business owners.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Access Decision Audit Log",
+          "description": "Log from access management system showing granted/denied decisions.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Attribute-Based Access Control Configuration",
+          "description": "ABAC policy configuration (e.g., in cloud IAM) with attributes and rules.",
+          "filetype": "JSON"
+        }
+      ]
     },
     {
       "control_id": "A.8.4",
@@ -944,7 +2896,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Source code repository access controls", "Code repository audit logs", "Source code access review records"]
+      "evidence_requirements": [
+        {
+          "name": "Source Code Access Policy",
+          "description": "Policy governing read/write access to repositories and build systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Repository Access Report",
+          "description": "GitHub/GitLab/Bitbucket export showing repo members and permissions.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Branch Protection Configuration",
+          "description": "Screenshots of branch protection rules (required reviews, status checks).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Repository Audit Log",
+          "description": "Audit log showing access, pushes, merges and setting changes.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Code Signing Certificate Management",
+          "description": "Evidence of code signing certificates in HSM with restricted access.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Secrets Scanning Configuration",
+          "description": "Configuration of secrets scanning in repos (e.g., GitHub Advanced Security, TruffleHog).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Developer Onboarding/Offboarding Log",
+          "description": "Log of developer account creation and removal aligned to employment status.",
+          "filetype": "CSV"
+        }
+      ]
     },
     {
       "control_id": "A.8.5",
@@ -958,7 +2946,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Authentication technology specifications", "MFA implementation records", "Authentication policy configuration", "Authentication mechanism review records"]
+      "evidence_requirements": [
+        {
+          "name": "Authentication Policy",
+          "description": "Policy specifying authentication strengths per risk tier and use cases.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "MFA Coverage Report",
+          "description": "Report showing MFA enforcement across applications and user groups.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Conditional Access Policy Export",
+          "description": "Export of conditional/step-up access policies from IdP.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Authentication Protocol Configuration",
+          "description": "Evidence of secure protocols (SAML, OIDC, FIDO2) and deprecated protocols disabled.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Failed Authentication Monitoring",
+          "description": "SIEM dashboard or report showing failed authentication anomaly alerts.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Biometric/Passwordless Rollout Evidence",
+          "description": "Rollout metrics for FIDO2/WebAuthn/biometric authentication where applicable.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Authentication Mechanism Review Report",
+          "description": "Periodic review of authentication strength vs. threat landscape.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.8.6",
@@ -972,7 +2996,38 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Capacity monitoring reports", "Capacity planning documentation", "Resource utilization trends and alerts"]
+      "evidence_requirements": [
+        {
+          "name": "Capacity Management Plan",
+          "description": "Plan covering current and forecast capacity for critical resources.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Capacity Monitoring Dashboard",
+          "description": "Screenshot of monitoring dashboard (Grafana/Datadog) tracking CPU, memory, storage, bandwidth.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Capacity Trend Report",
+          "description": "Trend report showing utilisation over time and projected breach points.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Capacity Alert Configuration",
+          "description": "Alert thresholds configured for capacity metrics with escalation paths.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Capacity Incident Log",
+          "description": "Log of capacity-related incidents and mitigation actions taken.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Scaling Test Results",
+          "description": "Evidence of load/scaling tests demonstrating ability to meet forecast demand.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.8.7",
@@ -986,7 +3041,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Anti-malware deployment records", "Malware detection and response logs", "Anti-malware update and scan reports"]
+      "evidence_requirements": [
+        {
+          "name": "Malware Protection Policy",
+          "description": "Policy covering anti-malware controls across endpoints, servers, email and web.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Anti-Malware/EDR Coverage Report",
+          "description": "Report showing anti-malware agent installed on all managed devices.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Signature/Definition Update Status",
+          "description": "Status showing all endpoints have current definitions/engine versions.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Malware Detection and Response Log",
+          "description": "Log of malware detected, quarantined and incidents opened.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Email Anti-Malware Scanning Report",
+          "description": "Report from email security gateway showing malware blocked.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "User Awareness Training - Malware Module",
+          "description": "Training records on recognising and avoiding malware.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Removable Media AV Scan Configuration",
+          "description": "Endpoint configuration enforcing AV scan on USB insert.",
+          "filetype": "PNG"
+        }
+      ]
     },
     {
       "control_id": "A.8.8",
@@ -1000,7 +3091,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Vulnerability scanning reports", "Patch management records", "Vulnerability remediation tracking", "Vulnerability assessment procedures"]
+      "evidence_requirements": [
+        {
+          "name": "Vulnerability Management Policy",
+          "description": "Policy covering scanning cadence, SLAs, prioritisation and exception handling.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Vulnerability Scanning Reports",
+          "description": "Periodic scan reports from Tenable/Qualys/Rapid7 covering internal and external assets.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Patch Management Records",
+          "description": "Records of patches deployed per system with success/failure and rollback.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Vulnerability Remediation Tracker",
+          "description": "Tracker showing open vulnerabilities, owners, SLAs and closure status.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Penetration Test Reports",
+          "description": "Annual penetration test reports with findings and remediation evidence.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Vulnerability SLA Compliance Report",
+          "description": "Metrics showing remediation performance against SLA by severity.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Risk Acceptance Records",
+          "description": "Documented acceptance of vulnerabilities that cannot be remediated immediately.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.8.9",
@@ -1014,7 +3141,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Configuration baseline documentation", "Configuration monitoring reports", "Configuration change records", "Configuration compliance scan results"]
+      "evidence_requirements": [
+        {
+          "name": "Configuration Management Policy",
+          "description": "Policy defining configuration standards, baselines and change controls.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Configuration Baseline Documentation",
+          "description": "Baseline configurations (CIS, STIG, internal) for each platform in use.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Configuration Compliance Scan Report",
+          "description": "Compliance scan results vs. baselines (e.g., Tenable.sc, Chef InSpec, AWS Config).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Infrastructure-as-Code Repositories",
+          "description": "Evidence of IaC repos (Terraform, Ansible) enforcing configuration consistency.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Configuration Drift Alerts",
+          "description": "Alert configuration and examples of drift detected and remediated.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Hardening Sign-off Records",
+          "description": "Sign-off records for systems before production deployment confirming baseline applied.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Golden Image Documentation",
+          "description": "Documentation of approved golden images for servers and workstations.",
+          "filetype": "DOCX"
+        }
+      ]
     },
     {
       "control_id": "A.8.10",
@@ -1028,7 +3191,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Information deletion procedures", "Deletion records and certificates", "Retention schedule compliance records"]
+      "evidence_requirements": [
+        {
+          "name": "Information Deletion Policy",
+          "description": "Policy defining when and how information must be deleted from systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Retention and Deletion Schedule",
+          "description": "Schedule defining retention periods by data category and deletion triggers.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Deletion Procedure Documentation",
+          "description": "Procedures for secure deletion across different systems (DB, file, cloud, backup).",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Data Deletion Records",
+          "description": "Log of deletions executed per retention schedule with verification.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Cloud Provider Deletion Attestations",
+          "description": "Attestations from cloud providers confirming data deletion on termination.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Backup Deletion Records",
+          "description": "Records showing expired backups have been purged from media.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Right to Erasure Fulfilment Log",
+          "description": "Log of GDPR/privacy erasure requests fulfilled and verified.",
+          "filetype": "XLSX"
+        }
+      ]
     },
     {
       "control_id": "A.8.11",
@@ -1042,7 +3241,38 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Data masking policy and procedures", "Data masking implementation records", "Masked data validation reports"]
+      "evidence_requirements": [
+        {
+          "name": "Data Masking Policy",
+          "description": "Policy defining when anonymisation, pseudonymisation, tokenisation or redaction are required.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Masking Rules Specification",
+          "description": "Masking rules specifying fields, techniques and environments.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Masking Tool Configuration",
+          "description": "Screenshot of configuration for masking tools (Delphix, Informatica, custom).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Non-Production Data Extract Verification",
+          "description": "Sample extract from non-prod confirming sensitive data is masked.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Tokenisation Vault Configuration",
+          "description": "Configuration of tokenisation vault for payment or PII data.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Masking Review and Sign-off",
+          "description": "Review by data owner confirming masking is adequate for intended use.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.8.12",
@@ -1056,7 +3286,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["DLP policy and procedures", "DLP tool configuration and rules", "DLP incident and alert reports"]
+      "evidence_requirements": [
+        {
+          "name": "Data Leakage Prevention Policy",
+          "description": "Policy defining scope, detection strategy and response for DLP.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "DLP Tool Ruleset Export",
+          "description": "Export of DLP rules covering email, endpoint, web and cloud channels.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "DLP Alert and Investigation Log",
+          "description": "Log of DLP alerts triggered, triaged and investigated.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "DLP Dashboard Screenshot",
+          "description": "DLP platform dashboard (e.g., Purview, Symantec, Forcepoint) showing coverage.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "USB/Removable Media Control Configuration",
+          "description": "Endpoint control preventing/monitoring data transfers to removable media.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Cloud DLP Configuration",
+          "description": "Configuration of DLP for cloud storage (Google Drive, OneDrive, Box).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "DLP Incident Response Playbook",
+          "description": "Playbook defining response steps for confirmed data leakage events.",
+          "filetype": "DOCX"
+        }
+      ]
     },
     {
       "control_id": "A.8.13",
@@ -1070,7 +3336,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Backup policy", "Backup schedule and execution logs", "Backup restoration test results", "Offsite backup storage documentation"]
+      "evidence_requirements": [
+        {
+          "name": "Backup Policy",
+          "description": "Policy defining scope, frequency, retention, encryption and testing for backups.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Backup Schedule and Configuration",
+          "description": "Configuration from backup tool (Veeam, Commvault, native cloud) showing jobs and retention.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Backup Success/Failure Report",
+          "description": "Periodic report showing backup job status and failure remediation.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Backup Restoration Test Results",
+          "description": "Evidence of periodic restore tests with success criteria and outcomes.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Offsite/Immutable Backup Evidence",
+          "description": "Evidence of offsite replication or immutable/object-lock backup copies (3-2-1 rule).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Backup Encryption Configuration",
+          "description": "Configuration showing backups encrypted at rest and in transit.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Backup Inventory and Catalogue",
+          "description": "Catalogue of backup sets and media with verification hashes.",
+          "filetype": "XLSX"
+        }
+      ]
     },
     {
       "control_id": "A.8.14",
@@ -1084,7 +3386,38 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Redundancy architecture documentation", "Failover test results", "High availability configuration records"]
+      "evidence_requirements": [
+        {
+          "name": "Availability Requirements Register",
+          "description": "Register of services and their availability targets (e.g., 99.9%, tier class).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Redundant Architecture Documentation",
+          "description": "Architecture diagrams showing redundancy (clusters, load balancers, multi-AZ/region).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "High Availability Configuration Screenshots",
+          "description": "Screenshots of HA configurations (database clusters, F5, cloud ASGs).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Failover Test Results",
+          "description": "Results of failover tests showing RTO attainment.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Uptime/SLA Report",
+          "description": "Monthly report of service uptime against SLA commitments.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Single Points of Failure Analysis",
+          "description": "Analysis of SPOFs with mitigation plans.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.8.15",
@@ -1098,7 +3431,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Logging policy and standards", "Log collection and storage configuration", "Log review procedures and records", "Log protection mechanisms documentation"]
+      "evidence_requirements": [
+        {
+          "name": "Logging Policy and Standards",
+          "description": "Policy defining what to log, retention, protection and review requirements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Log Source Inventory",
+          "description": "Inventory of log sources covered, frequency and retention per source.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "SIEM Ingestion Dashboard",
+          "description": "SIEM dashboard (Splunk, Sentinel, Elastic) showing log ingestion health.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Log Protection Configuration",
+          "description": "Configuration showing log tamper protection, append-only and access controls.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Privileged Activity Log Review Records",
+          "description": "Evidence of periodic review of admin/privileged activity logs.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Log Retention Configuration",
+          "description": "Retention rules configured in log archive (e.g., cold storage, immutable).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Log Anomaly Alerting Configuration",
+          "description": "Configuration of alerts on log gaps or logging service disruption.",
+          "filetype": "JSON"
+        }
+      ]
     },
     {
       "control_id": "A.8.16",
@@ -1112,7 +3481,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Monitoring tools and SIEM configuration", "Monitoring alert rules and thresholds", "Monitoring review and response records", "Anomaly detection reports"]
+      "evidence_requirements": [
+        {
+          "name": "Security Monitoring Strategy",
+          "description": "Strategy document defining SOC scope, coverage and detection goals.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SIEM Use-Case Library",
+          "description": "Catalogue of detection use cases mapped to MITRE ATT&CK.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "SOC Runbook/Playbooks",
+          "description": "Playbooks for responding to specific alert types.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Detection Alert Tuning Log",
+          "description": "Log of detection rule changes and tuning actions over time.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Monitoring Coverage Report",
+          "description": "Report showing monitoring coverage across environments and assets.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "SOC Shift Handover Records",
+          "description": "Shift handover documentation showing continuous monitoring.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Threat Hunting Reports",
+          "description": "Proactive threat hunting engagement reports with findings.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.8.17",
@@ -1126,7 +3531,38 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["NTP configuration documentation", "Time synchronization verification records", "Approved time source documentation"]
+      "evidence_requirements": [
+        {
+          "name": "Time Synchronisation Policy",
+          "description": "Policy mandating NTP and approved time sources across all systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "NTP Configuration Export",
+          "description": "NTP configuration export from domain controllers, servers and network devices.",
+          "filetype": "TXT"
+        },
+        {
+          "name": "Time Source Authority Documentation",
+          "description": "Documentation of primary and secondary NTP sources used (e.g., stratum 1 servers).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Time Drift Monitoring Report",
+          "description": "Monitoring report showing clock offset across systems stays within tolerance.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Time Sync Verification Script Output",
+          "description": "Output from verification script showing time alignment across sample hosts.",
+          "filetype": "LOG"
+        },
+        {
+          "name": "Time Source Redundancy Design",
+          "description": "Design showing redundant time sources to prevent single point of failure.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.8.18",
@@ -1140,7 +3576,38 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Privileged utility program inventory", "Utility program access controls", "Utility program usage logs"]
+      "evidence_requirements": [
+        {
+          "name": "Privileged Utility Program Inventory",
+          "description": "Inventory of utilities capable of bypassing controls with approval status.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Utility Access Control Configuration",
+          "description": "Configuration restricting access to utilities to authorised administrators.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Utility Usage Log",
+          "description": "Log of utility program executions with user, host, command and timestamp.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Unnecessary Utility Removal Evidence",
+          "description": "Evidence that unnecessary utilities have been removed from production systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Utility Approval Workflow",
+          "description": "Workflow requiring approval before sensitive utility use.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Application Allow-List Configuration",
+          "description": "App allow-list (e.g., AppLocker, WDAC) configuration restricting utility execution.",
+          "filetype": "PNG"
+        }
+      ]
     },
     {
       "control_id": "A.8.19",
@@ -1154,7 +3621,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Software installation policy", "Approved software list", "Software installation and change records"]
+      "evidence_requirements": [
+        {
+          "name": "Software Installation Policy",
+          "description": "Policy on permitted software, installation rights and approval process.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Approved Software Catalogue",
+          "description": "Catalogue of approved software available via self-service or deployment tools.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Software Deployment Tool Configuration",
+          "description": "Configuration of SCCM/Intune/Jamf controlling software distribution.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Non-Admin User Configuration",
+          "description": "Evidence that standard users lack rights to install arbitrary software.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Installed Software Inventory",
+          "description": "Report comparing installed software against approved catalogue.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Software Installation Approval Records",
+          "description": "Approval records for non-standard software installation requests.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Shadow IT Discovery Report",
+          "description": "Report from CASB or discovery tool identifying unauthorised applications.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.8.20",
@@ -1168,7 +3671,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Network security architecture documentation", "Network device configuration standards", "Network access control implementation records"]
+      "evidence_requirements": [
+        {
+          "name": "Network Security Policy",
+          "description": "Policy covering network security architecture, controls and operations.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Network Architecture Diagram",
+          "description": "Current network architecture diagram including security zones and controls.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Firewall Rule Base Export",
+          "description": "Export of firewall rules for review (source, dest, port, service, description).",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Firewall Ruleset Review Records",
+          "description": "Periodic firewall ruleset review records with justification and cleanup actions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Network Device Hardening Standards",
+          "description": "Hardening standards applied to routers, switches, firewalls, WAPs.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "IDS/IPS Configuration and Alerts",
+          "description": "IDS/IPS rule configuration and sample alerts investigated.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Wireless Network Security Configuration",
+          "description": "WPA3/Enterprise configuration, rogue AP detection and guest network isolation.",
+          "filetype": "PNG"
+        }
+      ]
     },
     {
       "control_id": "A.8.21",
@@ -1182,7 +3721,38 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Network service agreements with security requirements", "Network service monitoring records", "Network service audit reports"]
+      "evidence_requirements": [
+        {
+          "name": "Network Service Agreements",
+          "description": "Contracts with ISPs, MPLS and cloud interconnect providers with security terms.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Network Service Security Specifications",
+          "description": "Documented security features required of each network service (DDoS, MACsec, encryption).",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Service Monitoring Reports",
+          "description": "Monitoring reports showing adherence to agreed service levels and security.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Provider Audit Reports",
+          "description": "Audit reports or assurance reports received from network service providers.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "VPN/Circuit Encryption Evidence",
+          "description": "Evidence of encryption on inter-site circuits and VPNs (IPsec, MACsec).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Network Service Change Log",
+          "description": "Log of changes to network services and security impact assessments.",
+          "filetype": "CSV"
+        }
+      ]
     },
     {
       "control_id": "A.8.22",
@@ -1196,7 +3766,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Network segmentation diagrams", "VLAN and subnet documentation", "Firewall rules between network segments", "Network segregation test results"]
+      "evidence_requirements": [
+        {
+          "name": "Network Segmentation Design",
+          "description": "Segmentation design document with VLANs, subnets, zones and trust levels.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "VLAN and Subnet Register",
+          "description": "Register of VLANs/subnets with purpose, owners and allowed traffic.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Inter-Zone Firewall Rules",
+          "description": "Firewall rules governing traffic between network zones.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Segmentation Test Results",
+          "description": "Results of segmentation penetration tests verifying isolation effectiveness.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Microsegmentation Configuration",
+          "description": "Microsegmentation configuration (NSX, Illumio, cloud security groups).",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Wireless Segregation Evidence",
+          "description": "Evidence that guest and corporate wireless networks are segregated.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "OT/IT Segmentation Documentation",
+          "description": "Documentation of segmentation between OT/ICS and corporate networks where applicable.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.8.23",
@@ -1210,7 +3816,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Web filtering policy and configuration", "Web filtering category rules", "Web access logs and monitoring reports"]
+      "evidence_requirements": [
+        {
+          "name": "Web Filtering Policy",
+          "description": "Policy defining prohibited categories and enforcement points.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Web Filtering Rule Configuration",
+          "description": "Configuration of category-based blocking from proxy/SSE (e.g., Zscaler, Netskope, Umbrella).",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Web Access Log Sample",
+          "description": "Web proxy log showing allowed/blocked requests for sample periods.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Blocked Site Investigation Records",
+          "description": "Records of investigations into blocked-site hits suggesting malicious activity.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Web Filter Exception Register",
+          "description": "Register of approved exceptions with expiry and justification.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "DNS Filtering Configuration",
+          "description": "DNS filtering configuration blocking known malicious domains.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Safe Browsing Awareness Material",
+          "description": "Training content teaching staff safe browsing practices.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.8.24",
@@ -1224,7 +3866,48 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Cryptography policy", "Encryption standards and algorithms documentation", "Key management procedures", "Cryptographic implementation inventory"]
+      "evidence_requirements": [
+        {
+          "name": "Cryptography Policy",
+          "description": "Policy defining approved algorithms, key lengths, protocols and use cases.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Cryptographic Standards Document",
+          "description": "Technical standards (e.g., AES-256, TLS 1.3, SHA-256) with deprecation plans.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Key Management Procedures",
+          "description": "Procedures for key generation, distribution, rotation, escrow and destruction.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "HSM Configuration Documentation",
+          "description": "HSM setup, FIPS certification and operator roles documentation.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Certificate Inventory",
+          "description": "Inventory of TLS and code-signing certificates with expiry and owners.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Encryption Coverage Assessment",
+          "description": "Assessment confirming data at rest/in transit encryption across critical systems.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Key Rotation Log",
+          "description": "Log of cryptographic key rotations performed per schedule.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Crypto-Agility Plan",
+          "description": "Plan for migration to post-quantum or alternative algorithms.",
+          "filetype": "DOCX"
+        }
+      ]
     },
     {
       "control_id": "A.8.25",
@@ -1238,7 +3921,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Secure SDLC policy and procedures", "Security requirements in development projects", "Security testing results during development"]
+      "evidence_requirements": [
+        {
+          "name": "Secure SDLC Policy",
+          "description": "Policy embedding security activities throughout the development lifecycle.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SDLC Process Documentation",
+          "description": "Documentation of each SDLC phase with security gates and deliverables.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Security Requirements Template",
+          "description": "Template used to capture security requirements in user stories/specs.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Threat Modelling Artifacts",
+          "description": "Threat models (e.g., STRIDE) created during design phase for sample projects.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Security Review Gate Records",
+          "description": "Records of security gate approvals before release.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Developer Security Training Records",
+          "description": "Training records for secure coding completion by developers.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Pipeline Security Configuration",
+          "description": "CI/CD pipeline configuration with embedded security scans (SAST, DAST, SCA).",
+          "filetype": "YAML"
+        }
+      ]
     },
     {
       "control_id": "A.8.26",
@@ -1252,7 +3971,38 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Application security requirements specifications", "Security requirements sign-off records", "Application risk assessments"]
+      "evidence_requirements": [
+        {
+          "name": "Application Security Requirements Catalogue",
+          "description": "Catalogue of reusable security requirements (ASVS-based) applied to applications.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Sample Project Security Requirements",
+          "description": "Redacted security requirements specifications from real projects.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Requirements Sign-off Records",
+          "description": "Records showing security requirements approved by security/architecture.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Application Risk Assessment",
+          "description": "Risk assessment for each application driving security requirement selection.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Acquired Software Security Evaluation",
+          "description": "Security evaluation of COTS/SaaS applications before acquisition.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "API Security Requirements Standard",
+          "description": "Standard for API authentication, authorisation, validation and rate limiting.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.8.27",
@@ -1266,7 +4016,38 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Secure architecture principles documentation", "Security architecture review records", "System design documents with security considerations"]
+      "evidence_requirements": [
+        {
+          "name": "Secure Architecture Principles Document",
+          "description": "Documented principles (defence in depth, least privilege, zero trust, etc.).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Architecture Review Board Records",
+          "description": "ARB minutes showing security review of architectures.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Reference Architectures",
+          "description": "Reference architectures for common solution patterns with security baked in.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "System Design Documents",
+          "description": "Design documents for sample systems showing application of principles.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Security Pattern Library",
+          "description": "Library of approved security patterns (auth flows, data protection patterns).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Architecture Deviation Register",
+          "description": "Register of approved deviations from reference architectures.",
+          "filetype": "XLSX"
+        }
+      ]
     },
     {
       "control_id": "A.8.28",
@@ -1280,7 +4061,48 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Secure coding guidelines", "Code review records", "SAST and DAST scan results", "Developer secure coding training records"]
+      "evidence_requirements": [
+        {
+          "name": "Secure Coding Standards",
+          "description": "Organisation secure coding standards by language (e.g., OWASP, CERT).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Code Review Checklist",
+          "description": "Checklist used in peer code reviews covering security items.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "SAST Scan Reports",
+          "description": "Static application security testing reports per release.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "DAST Scan Reports",
+          "description": "Dynamic application security testing reports for web applications.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "SCA/Dependency Scan Reports",
+          "description": "Software composition analysis reports showing vulnerable dependencies.",
+          "filetype": "JSON"
+        },
+        {
+          "name": "Pull Request Review Evidence",
+          "description": "Sample PRs showing security-related review comments and resolutions.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Secure Coding Training Records",
+          "description": "Developer training completion records for secure coding modules.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Build Pipeline Security Gates",
+          "description": "Pipeline configuration breaking builds on critical security findings.",
+          "filetype": "YAML"
+        }
+      ]
     },
     {
       "control_id": "A.8.29",
@@ -1294,7 +4116,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Security testing plans and procedures", "Penetration test reports", "Security acceptance test results", "Vulnerability scan results from testing"]
+      "evidence_requirements": [
+        {
+          "name": "Security Testing Strategy",
+          "description": "Strategy defining testing types and coverage across release cycle.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Security Test Plans",
+          "description": "Test plans for each release including security test cases.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Penetration Test Reports",
+          "description": "Penetration test reports prior to major releases with retest verification.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Security Acceptance Test Results",
+          "description": "Evidence of security acceptance testing prior to go-live.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "UAT/Test Environment Documentation",
+          "description": "Documentation of isolated test environments used for security testing.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Bug Bounty Programme Reports",
+          "description": "Reports from bug bounty platforms (HackerOne, Bugcrowd) with valid findings.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Retest/Closure Evidence",
+          "description": "Evidence of retesting after remediation of security findings.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.8.30",
@@ -1308,7 +4166,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Outsourced development agreements with security requirements", "Outsourced code security review records", "Vendor development quality assurance reports"]
+      "evidence_requirements": [
+        {
+          "name": "Outsourced Development Agreement",
+          "description": "Contracts with development suppliers including security, IP and testing obligations.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Vendor Secure SDLC Assessment",
+          "description": "Assessment of supplier's SDLC maturity and security practices.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Code Review of Vendor Deliverables",
+          "description": "Evidence of organisation-side code review of vendor-delivered code.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Vendor Security Test Results",
+          "description": "Security test results from vendor deliverables (SAST, DAST, penetration).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Source Code Escrow Agreement",
+          "description": "Source code escrow arrangement for critical outsourced software.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Vendor Quality Reports",
+          "description": "Periodic quality and security reports from development vendors.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "IP and Confidentiality Clauses",
+          "description": "Contract clauses covering IP ownership and confidentiality.",
+          "filetype": "PDF"
+        }
+      ]
     },
     {
       "control_id": "A.8.31",
@@ -1322,7 +4216,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Environment separation documentation", "Environment access control configurations", "Deployment procedures between environments"]
+      "evidence_requirements": [
+        {
+          "name": "Environment Separation Standard",
+          "description": "Standard defining required separation between dev, test and production.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Environment Access Control Matrix",
+          "description": "Matrix showing who has access to each environment and for what purpose.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Deployment Pipeline Configuration",
+          "description": "CI/CD pipeline configuration enforcing environment promotion controls.",
+          "filetype": "YAML"
+        },
+        {
+          "name": "Environment Network Segmentation Evidence",
+          "description": "Firewall rules or cloud security group configurations enforcing separation.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Production Change Approval Records",
+          "description": "Change approval records required before promoting code to production.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Environment Data Separation Evidence",
+          "description": "Evidence that production data is not used in dev/test without masking.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Developer Production Access Review",
+          "description": "Review of any developer access to production with justification and expiry.",
+          "filetype": "XLSX"
+        }
+      ]
     },
     {
       "control_id": "A.8.32",
@@ -1336,7 +4266,48 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "high",
-      "evidence_requirements": ["Change management policy and procedures", "Change request and approval records", "Change implementation logs", "Post-implementation review records"]
+      "evidence_requirements": [
+        {
+          "name": "Change Management Policy",
+          "description": "Policy covering change categories, approval paths and documentation.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Change Management Procedure",
+          "description": "Procedure detailing how changes are requested, assessed, approved, implemented and reviewed.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "CAB Meeting Minutes",
+          "description": "Change Advisory Board minutes showing change review and approval.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Change Ticket Sample",
+          "description": "Sample change tickets (ServiceNow/Jira) showing full lifecycle and approvals.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Change Impact Assessment Records",
+          "description": "Impact assessments including security considerations for sample changes.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Emergency Change Log",
+          "description": "Log of emergency changes with post-implementation review evidence.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Rollback/Back-out Plans",
+          "description": "Documented rollback plans for significant changes.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Change Success Metrics",
+          "description": "Metrics showing change success rate and failed change analysis.",
+          "filetype": "XLSX"
+        }
+      ]
     },
     {
       "control_id": "A.8.33",
@@ -1350,7 +4321,38 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Test data management policy", "Test data sanitization procedures", "Test data access controls documentation"]
+      "evidence_requirements": [
+        {
+          "name": "Test Data Management Policy",
+          "description": "Policy on sourcing, protecting and disposing of test data.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Test Data Masking Configuration",
+          "description": "Configuration of masking tools for producing safe test data.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Test Data Usage Approval Records",
+          "description": "Approval records required before using any data copied from production.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Test Data Access Controls",
+          "description": "Access controls applied to test data stores equivalent to production sensitivity.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Test Data Deletion Records",
+          "description": "Records of test data deletion after testing completes.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Synthetic Data Generation Procedure",
+          "description": "Procedure for generating synthetic data where real data is unsuitable.",
+          "filetype": "DOCX"
+        }
+      ]
     },
     {
       "control_id": "A.8.34",
@@ -1364,7 +4366,43 @@
       "parent_section": "A.8",
       "is_mandatory": true,
       "priority": "medium",
-      "evidence_requirements": ["Audit testing procedures and scope documentation", "Audit test plans and schedules", "Audit testing impact assessments"]
+      "evidence_requirements": [
+        {
+          "name": "Audit Testing Procedure",
+          "description": "Procedure governing audit tests on production systems.",
+          "filetype": "DOCX"
+        },
+        {
+          "name": "Audit Engagement Letter",
+          "description": "Engagement letter defining scope, timing and access for each audit.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Audit Access Request Records",
+          "description": "Records of audit-specific access rights granted with expiry.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Audit Impact Assessment",
+          "description": "Impact assessment for audit activities on operational systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Read-Only Audit Account Configuration",
+          "description": "Configuration of read-only accounts used for audit testing.",
+          "filetype": "PNG"
+        },
+        {
+          "name": "Audit Activity Log",
+          "description": "Log of audit queries and actions performed against operational systems.",
+          "filetype": "CSV"
+        },
+        {
+          "name": "Audit Management Sign-off",
+          "description": "Management sign-off on audit scope, timing and risk acceptance.",
+          "filetype": "PDF"
+        }
+      ]
     }
   ]
 }

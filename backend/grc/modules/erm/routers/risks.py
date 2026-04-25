@@ -1,5 +1,5 @@
-from typing import List, Optional
-from datetime import datetime
+from typing import Any, Dict, List, Optional
+from datetime import datetime, date
 from io import BytesIO
 import os
 import json
@@ -20,7 +20,8 @@ from ....models import (
     RiskFrameworkControlLink, RiskGovernanceLink, RiskAuditFindingLink,
     NormalizedControl, FrameworkControl, ITAsset, Evidence,
     GovernanceObjective, Issue, GRCUser, Tenant, get_db,
-    ParsedFrameworkControl, UploadedFramework, RiskMitigationAction
+    ParsedFrameworkControl, UploadedFramework, RiskMitigationAction,
+    Vulnerability, VulnerabilityAssetLink,
 )
 from ....schemas import (
     RiskCreate, RiskUpdate, RiskResponse,
@@ -34,6 +35,855 @@ from ....schemas import (
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/risks", tags=["ERM - Risk Register"])
+
+UBL_TEMPLATE_REGISTER_TYPE = "UBL Template"
+UBL_REGISTER_TYPE_ALIASES = {
+    "ubl",
+    "ubltemplate",
+    "ublriskregister",
+    "ublriskregistertemplate",
+}
+UBL_ALLOWED_CATEGORIES = {"technology", "third_party", "isms", "process", "other"}
+UBL_LOCATION_OPTIONS = ("Bahrain", "International", "Pakistan", "Qatar", "UAE")
+UBL_NON_EDITABLE_KEYS = {"risk_id", "source_sheet"}
+UBL_PLATFORM_MAPPED_KEYS = {
+    "likelihood_raw",
+    "impact_raw",
+    "risk_value_raw",
+    "risk_level_raw",
+    "residual_risk_raw",
+    "status_raw",
+    "mapped_category",
+    "mapped_status",
+    "inherent_score",
+    "residual_score",
+}
+UBL_SUPPRESSED_EXTRA_KEYS = {
+    "likelihood",
+    "likelihood_of_vulnerability_exploitation",
+    "impact",
+    "impact_level",
+    "risk_value",
+    "risk_level",
+    "risk_score",
+    "inherent_risk_rating",
+    "residual_risk",
+    "residual_risk_if_controls_are_implemented",
+    "residual_risks_after_implementation_of_controls",
+    "status",
+    "inherent_score",
+    "residual_score",
+}
+_UBL_RISK_ID_PATTERN = re.compile(r"^\s*r\s*[-_ ]?\s*0*(\d+)\s*$", re.IGNORECASE)
+_VULN_ID_PATTERN = re.compile(r"^\s*VULN-(\d+)\s*$", re.IGNORECASE)
+
+
+def normalize_key(value: Optional[str]) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+def is_ubl_template_register_type(value: Optional[str]) -> bool:
+    return normalize_key(value) in UBL_REGISTER_TYPE_ALIASES
+
+
+def normalize_header(value: object) -> str:
+    return " ".join("".join(ch if ch.isalnum() else " " for ch in str(value).lower()).split())
+
+
+def parse_scale_1_to_5(val, default: Optional[int] = None) -> Optional[int]:
+    if val is None:
+        return default
+    if isinstance(val, (int, float)):
+        return max(1, min(5, int(val)))
+
+    text = str(val).strip().lower()
+    if not text:
+        return default
+
+    num_match = re.search(r"([1-5])", text)
+    if num_match:
+        return int(num_match.group(1))
+
+    keyword_map = [
+        ("almost certain", 5),
+        ("critical", 5),
+        ("major", 4),
+        ("likely", 4),
+        ("high", 4),
+        ("moderate", 3),
+        ("medium", 3),
+        ("possible", 3),
+        ("minor", 2),
+        ("unlikely", 2),
+        ("low", 2),
+        ("insignificant", 1),
+        ("rare", 1),
+    ]
+    for keyword, score in keyword_map:
+        if keyword in text:
+            return score
+    return default
+
+
+def parse_numeric_score(val) -> Optional[float]:
+    if val is None:
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+
+    text = str(val).strip()
+    if not text or text.startswith("="):
+        return None
+
+    cleaned = text.replace(",", "")
+    number_match = re.search(r"-?\d+(?:\.\d+)?", cleaned)
+    if number_match:
+        try:
+            return float(number_match.group(0))
+        except Exception:
+            return None
+    return None
+
+
+def parse_risk_level_to_score(val) -> Optional[float]:
+    if val is None:
+        return None
+    text = str(val).strip().lower()
+    if not text:
+        return None
+    if "critical" in text:
+        return 20.0
+    if "high" in text:
+        return 15.0
+    if "moderate" in text or "medium" in text:
+        return 10.0
+    if "low" in text:
+        return 5.0
+    return None
+
+
+def parse_excel_date(val) -> Optional[datetime]:
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val
+    if isinstance(val, date):
+        return datetime.combine(val, datetime.min.time())
+
+    text = str(val).strip()
+    if not text:
+        return None
+
+    known_formats = [
+        "%Y-%m-%d",
+        "%d-%m-%Y",
+        "%d/%m/%Y",
+        "%m/%d/%Y",
+        "%d-%b-%Y",
+        "%d-%B-%Y",
+    ]
+    for fmt in known_formats:
+        try:
+            return datetime.strptime(text, fmt)
+        except Exception:
+            continue
+    return None
+
+
+def parse_ubl_risk_sequence(value: Optional[object]) -> Optional[int]:
+    match = _UBL_RISK_ID_PATTERN.match(str(value or ""))
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except Exception:
+        return None
+
+
+def format_ubl_risk_id(seq: int) -> str:
+    width = max(2, len(str(seq)))
+    return f"R-{seq:0{width}d}"
+
+
+def get_next_ubl_risk_sequence(tenant_id: int, db: Session) -> int:
+    max_seq = 0
+    rows = db.query(Risk.register_type, Risk.ubl_fields).filter(Risk.tenant_id == tenant_id).all()
+    for register_type, ubl_fields in rows:
+        if not is_ubl_template_register_type(register_type):
+            continue
+        payload: Dict[str, Any] = {}
+        if isinstance(ubl_fields, dict):
+            payload = ubl_fields
+        elif isinstance(ubl_fields, str):
+            try:
+                parsed = json.loads(ubl_fields)
+                if isinstance(parsed, dict):
+                    payload = parsed
+            except Exception:
+                payload = {}
+        seq = parse_ubl_risk_sequence(payload.get("risk_id"))
+        if seq and seq > max_seq:
+            max_seq = seq
+    return max_seq + 1
+
+
+def get_next_vulnerability_sequence(tenant_id: int, db: Session) -> int:
+    max_seq = 0
+    rows = db.query(Vulnerability.vuln_id).filter(Vulnerability.tenant_id == tenant_id).all()
+    for (vuln_id,) in rows:
+        match = _VULN_ID_PATTERN.match(str(vuln_id or ""))
+        if not match:
+            continue
+        try:
+            seq = int(match.group(1))
+        except Exception:
+            continue
+        if seq > max_seq:
+            max_seq = seq
+    return max_seq + 1
+
+
+def normalize_ubl_location(value: Optional[object]) -> Optional[str]:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    normalized = normalize_key(text)
+    for allowed in UBL_LOCATION_OPTIONS:
+        if normalize_key(allowed) == normalized:
+            return allowed
+    return text
+
+
+def normalize_asset_criticality(value: Optional[object]) -> str:
+    text = str(value or "").strip().lower()
+    if "critical" in text:
+        return "critical"
+    if "high" in text:
+        return "high"
+    if "low" in text:
+        return "low"
+    return "medium"
+
+
+def infer_vulnerability_severity(risk_level: Optional[object], score: Optional[float]) -> str:
+    text = str(risk_level or "").strip().lower()
+    if "critical" in text:
+        return "critical"
+    if "high" in text:
+        return "high"
+    if "moderate" in text or "medium" in text:
+        return "medium"
+    if "low" in text:
+        return "low"
+    if score is not None:
+        if score >= 20:
+            return "critical"
+        if score >= 12:
+            return "high"
+        if score >= 6:
+            return "medium"
+        return "low"
+    return "medium"
+
+
+def sanitize_ubl_fields(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    cleaned: Dict[str, Any] = {}
+    for key, value in payload.items():
+        if key in UBL_NON_EDITABLE_KEYS or key in UBL_PLATFORM_MAPPED_KEYS:
+            continue
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                continue
+        if value is None:
+            continue
+        cleaned[key] = value
+    return cleaned
+
+
+def resolve_ubl_category(
+    requested_category: Optional[str],
+    ubl_fields: Optional[Dict[str, Any]],
+    default_category: str = "technology",
+) -> str:
+    base = (requested_category or "").strip().lower()
+    if base not in UBL_ALLOWED_CATEGORIES:
+        base = default_category
+    raw_category = (ubl_fields or {}).get("risk_category_raw")
+    mapped = map_ubl_category(raw_category, base)
+    return mapped if mapped in UBL_ALLOWED_CATEGORIES else default_category
+
+
+def map_ubl_category(raw_category: Optional[object], sheet_default_category: str) -> str:
+    text = str(raw_category or "").strip().lower()
+    if not text:
+        return sheet_default_category
+
+    if "third party" in text or "3rd party" in text or "vendor" in text or "supplier" in text or "outsourc" in text:
+        return "third_party"
+    if "process" in text:
+        return "process"
+    if "isms" in text:
+        return "isms"
+    if "technology" in text:
+        return "technology"
+    if "other" in text:
+        return "other"
+    return sheet_default_category
+
+
+def map_uploaded_status(raw_status, implementation_status, mitigation_option, residual_score: Optional[float]) -> str:
+    def _status_from_text(value: Optional[object]) -> Optional[str]:
+        text = str(value or "").strip().lower()
+        if not text:
+            return None
+        if "accept" in text:
+            return "accepted"
+        if "close" in text or "resolved" in text:
+            return "closed"
+        if any(k in text for k in ["implemented", "complete", "fixed", "mitigated"]):
+            return "mitigated"
+        if any(k in text for k in ["in progress", "ongoing", "treat", "mitigat", "transfer", "reduce"]):
+            return "in_treatment"
+        if any(k in text for k in ["open", "not implemented", "not started", "pending"]):
+            return "open"
+        return None
+
+    for candidate in (raw_status, implementation_status, mitigation_option):
+        mapped = _status_from_text(candidate)
+        if mapped:
+            return mapped
+
+    if residual_score is not None and residual_score < 10:
+        return "mitigated"
+    return "open"
+
+
+def find_header_row(ws, header_keywords: List[str], max_scan_rows: int = 30) -> int:
+    scan_until = min(max_scan_rows, ws.max_row)
+    for row_num in range(1, scan_until + 1):
+        row_values = [cell.value for cell in ws[row_num]]
+        row_text = " ".join(str(v).lower() for v in row_values if v is not None)
+        matches = sum(1 for kw in header_keywords if kw in row_text)
+        if matches >= 3:
+            return row_num
+    return 1
+
+
+def import_ubl_risk_register(
+    wb,
+    tenant_id: int,
+    register_type: Optional[str],
+    db: Session,
+    current_user: GRCUser,
+):
+    sheet_configs = [
+        {"match": ["technology risk register"], "category": "technology"},
+        {"match": ["3rdparty risk assessment", "3rd party risk assessment", "third party risk assessment"], "category": "third_party"},
+        {"match": ["process risk register"], "category": "process"},
+        {"match": ["isms"], "category": "isms"},
+    ]
+
+    available_sheets = [(sheet_name, normalize_header(sheet_name)) for sheet_name in wb.sheetnames]
+    target_sheets = []
+    for cfg in sheet_configs:
+        for sheet_name, normalized_sheet in available_sheets:
+            if any(pattern in normalized_sheet for pattern in cfg["match"]):
+                target_sheets.append((sheet_name, cfg["category"]))
+                break
+
+    if not target_sheets:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="UBL template sheets not found. Expected sheets like Technology Risk Register, 3rdParty Risk Assessment, Process Risk Register, or ISMS.",
+        )
+
+    final_register_type = (register_type or "").strip() or UBL_TEMPLATE_REGISTER_TYPE
+    next_ubl_risk_sequence = get_next_ubl_risk_sequence(tenant_id, db)
+    next_vuln_sequence = get_next_vulnerability_sequence(tenant_id, db)
+    created_count = 0
+    auto_assets_count = 0
+    auto_vulnerabilities_count = 0
+    skipped_count = 0
+    errors: List[str] = []
+    asset_cache: Dict[str, ITAsset] = {}
+    vulnerability_cache: Dict[str, Vulnerability] = {}
+
+    def _json_value(val):
+        if val is None:
+            return None
+        if isinstance(val, datetime):
+            return val.isoformat()
+        if isinstance(val, date):
+            return datetime.combine(val, datetime.min.time()).isoformat()
+        if isinstance(val, (int, float, bool)):
+            return val
+        text = str(val).strip()
+        return text or None
+
+    def _put(target: dict, key: str, val):
+        parsed = _json_value(val)
+        if parsed is not None:
+            target[key] = parsed
+
+    def get_or_create_asset(
+        *,
+        category: str,
+        asset_name: Optional[object],
+        ip_or_url: Optional[object],
+        location: Optional[object],
+        criticality: Optional[object],
+        externally_exposed: Optional[object],
+    ) -> Optional[ITAsset]:
+        nonlocal auto_assets_count
+
+        asset_name_text = str(asset_name or "").strip()
+        ip_or_url_text = str(ip_or_url or "").strip()
+        if not asset_name_text and not ip_or_url_text:
+            return None
+
+        cache_key = f"{normalize_key(asset_name_text)}|{normalize_key(ip_or_url_text)}|{normalize_key(location)}"
+        if cache_key in asset_cache:
+            return asset_cache[cache_key]
+
+        existing: Optional[ITAsset] = None
+        if asset_name_text:
+            existing = db.query(ITAsset).filter(
+                ITAsset.tenant_id == tenant_id,
+                func.lower(func.coalesce(ITAsset.name, "")) == asset_name_text.lower(),
+            ).first()
+        if not existing and ip_or_url_text:
+            existing = db.query(ITAsset).filter(
+                ITAsset.tenant_id == tenant_id,
+                func.lower(func.coalesce(ITAsset.ip_address, "")) == ip_or_url_text.lower(),
+            ).first()
+        if existing:
+            asset_cache[cache_key] = existing
+            return existing
+
+        inferred_type = "third_party" if category == "third_party" else "application"
+        created_asset = ITAsset(
+            tenant_id=tenant_id,
+            name=(asset_name_text or ip_or_url_text)[:255],
+            description="Auto-created from UBL Template risk register upload",
+            asset_type=inferred_type,
+            owner_id=current_user.id,
+            owner_name=(current_user.display_name or current_user.email),
+            host_name=asset_name_text[:255] if asset_name_text else None,
+            ip_address=ip_or_url_text[:50] if ip_or_url_text else None,
+            criticality=normalize_asset_criticality(criticality),
+            location=normalize_ubl_location(location),
+            status="active",
+            cde_environment=("yes" in str(externally_exposed or "").strip().lower()),
+        )
+        db.add(created_asset)
+        asset_cache[cache_key] = created_asset
+        auto_assets_count += 1
+        return created_asset
+
+    def get_or_create_vulnerability(
+        *,
+        vulnerability_text: Optional[object],
+        threat_text: Optional[object],
+        associated_risks_text: Optional[object],
+        scenario_text: Optional[object],
+        asset_name_text: Optional[object],
+        ip_or_url_text: Optional[object],
+        recommended_controls_text: Optional[object],
+        risk_level_text: Optional[object],
+        inherent_score_value: Optional[float],
+        discovered_at: Optional[datetime],
+        due_date: Optional[datetime],
+    ) -> Optional[Vulnerability]:
+        nonlocal next_vuln_sequence, auto_vulnerabilities_count
+
+        title_source = vulnerability_text or threat_text or associated_risks_text or scenario_text
+        title = str(title_source or "").strip()
+        if not title:
+            return None
+
+        component_text = str(asset_name_text or "").strip()
+        cache_key = f"{normalize_key(title)}|{normalize_key(component_text)}"
+        if cache_key in vulnerability_cache:
+            return vulnerability_cache[cache_key]
+
+        existing = db.query(Vulnerability).filter(
+            Vulnerability.tenant_id == tenant_id,
+            func.lower(func.coalesce(Vulnerability.title, "")) == title.lower(),
+            func.lower(func.coalesce(Vulnerability.affected_component, "")) == component_text.lower(),
+        ).first()
+        if existing:
+            vulnerability_cache[cache_key] = existing
+            return existing
+
+        vuln_id = f"VULN-{next_vuln_sequence:05d}"
+        next_vuln_sequence += 1
+
+        description_parts = []
+        if vulnerability_text:
+            description_parts.append(f"Vulnerability: {vulnerability_text}")
+        if threat_text:
+            description_parts.append(f"Threat: {threat_text}")
+        if scenario_text:
+            description_parts.append(f"Scenario: {scenario_text}")
+        if associated_risks_text:
+            description_parts.append(f"Associated Risk: {associated_risks_text}")
+        vuln_description = "\n\n".join(description_parts)[:8000] if description_parts else None
+
+        ip_or_url = str(ip_or_url_text or "").strip()
+        affected_url = ip_or_url if ip_or_url.lower().startswith(("http://", "https://")) else None
+
+        created_vulnerability = Vulnerability(
+            tenant_id=tenant_id,
+            vuln_id=vuln_id,
+            title=title[:500],
+            description=vuln_description,
+            severity=infer_vulnerability_severity(risk_level_text, inherent_score_value),
+            cvss_score=None,
+            affected_component=component_text[:255] if component_text else None,
+            affected_host=component_text[:255] if component_text else None,
+            affected_url=affected_url[:500] if affected_url else None,
+            recommendation=(str(recommended_controls_text).strip()[:8000] if recommended_controls_text else None),
+            status="open",
+            discovered_at=discovered_at or datetime.utcnow(),
+            due_date=due_date,
+        )
+        db.add(created_vulnerability)
+        vulnerability_cache[cache_key] = created_vulnerability
+        auto_vulnerabilities_count += 1
+        return created_vulnerability
+
+    header_keywords = [
+        "risk id",
+        "risk category",
+        "likelihood",
+        "impact",
+        "risk value",
+        "risk level",
+        "status",
+    ]
+
+    for sheet_name, sheet_default_category in target_sheets:
+        ws = wb[sheet_name]
+        header_row = find_header_row(ws, header_keywords)
+        headers = [cell.value for cell in ws[header_row]]
+        header_map = {
+            normalize_header(header): idx
+            for idx, header in enumerate(headers)
+            if header is not None and str(header).strip()
+        }
+
+        def get_value(row, *aliases):
+            for alias in aliases:
+                idx = header_map.get(normalize_header(alias))
+                if idx is None or idx >= len(row):
+                    continue
+                value = row[idx]
+                if value is None:
+                    continue
+                if isinstance(value, str) and not value.strip():
+                    continue
+                return value
+            return None
+
+        for row_num, row in enumerate(
+            ws.iter_rows(min_row=header_row + 1, values_only=True),
+            start=header_row + 1,
+        ):
+            if not any(row):
+                continue
+
+            source_risk_id = get_value(row, "Risk ID#", "Risk ID", "Risk Id", "Risk ID ")
+            risk_category_raw = get_value(row, "Risk Category", "Category")
+            source = get_value(row, "Source", "Threat Source")
+            sub_source = get_value(row, "Sub-Source  Activity", "Sub-Source Activity", "Activity", "Sub Source")
+            location = normalize_ubl_location(get_value(row, "Location"))
+            asset_name = get_value(row, "Application Name / Hostname / URL", "Assets", "Asset Name", "Application Name", "Asset")
+            ip_or_url = get_value(row, "IP Address / URL", "IP Address", "URL")
+            asset_criticality = get_value(row, "Asset Criticality")
+            external_exposure = get_value(row, "Externally Exposed")
+            vulnerability_count = get_value(row, "Count of Vulnerabilities")
+            vulnerability = get_value(
+                row,
+                "Vulnerabilities Identified via Vulnerability Assessment",
+                "Vulnerability",
+                "Vulnerabilities",
+            )
+            threat = get_value(
+                row,
+                "Threat Due to Identified Vulnerability",
+                "Threats Due to Identified Vulnerabilities",
+                "Threats Due to Identified Vulnerabilities2",
+                "Threat Source",
+            )
+            associated_risks = get_value(row, "Associated Risks")
+            scenario = get_value(
+                row,
+                "Risk Description (Scenario-Based)",
+                "Associated Risks",
+                "Risk Description",
+                "Key Risk Description",
+            )
+            business_impact = get_value(row, "Impact (Business / Regulatory / Financial)")
+            recommended_controls = get_value(row, "Recommended Controls")
+            mitigation_option = get_value(row, "Mitigation Option", "Risk Treatment Option")
+            fixed_vulnerability_count = get_value(row, "Count of Fixed Vulnerabilities")
+            frequency = get_value(row, "Frequancy", "Frequency")
+            business_justification = get_value(row, "Business Justification")
+            timelines = get_value(row, "Timelines")
+            compensating_controls = get_value(row, "Compensating Controls")
+            implementation_status = get_value(row, "Implementation Status")
+            residual_risk = get_value(
+                row,
+                "Residual Risks (after implementation of controls)",
+                "Residual Risk (If Controls are Implemented)",
+                "Residual Risk",
+            )
+            row_status = get_value(row, "Status")
+            mitigation_date = get_value(row, "Mitigation Date", "Date")
+            reported_date = get_value(row, "Reported Date", "Date")
+            likelihood_raw = get_value(row, "Likelihood of Vulnerability Exploitation", "Likelihood")
+            impact_raw = get_value(row, "Impact Level", "Impact")
+            risk_value_raw = get_value(row, "Risk Value", "Inherent Risk Rating", "Risk Score", "Inherent Risk Rating")
+            risk_level_raw = get_value(row, "Risk Level", "Inherent Risk Rating")
+            risk_owner = get_value(row, "Risk Owner", "Responsibility", "Owner")
+            type_value = get_value(row, "Type", "Security Triad")
+            cia_impacted = get_value(row, "CIA Impacted")
+            annex_a = get_value(row, "Annex A")
+
+            has_minimum_data = any(
+                [
+                    source_risk_id,
+                    scenario,
+                    threat,
+                    vulnerability,
+                    asset_name,
+                    recommended_controls,
+                    risk_category_raw,
+                ]
+            )
+            if not has_minimum_data:
+                skipped_count += 1
+                continue
+
+            raw_header_values: dict = {}
+            for raw_header, idx in header_map.items():
+                if idx >= len(row):
+                    continue
+                value = _json_value(row[idx])
+                if value is None:
+                    continue
+                raw_header_values[raw_header] = value
+
+            generated_risk_id = format_ubl_risk_id(next_ubl_risk_sequence)
+
+            title_source = associated_risks or scenario or threat or vulnerability or asset_name or generated_risk_id or "Imported UBL Risk"
+            title = str(title_source).replace("\n", " ").strip()
+            if asset_name and title and str(asset_name).strip().lower() not in title.lower():
+                title = f"{str(asset_name).strip()} - {title}"
+            title = title[:200] if title else "Imported UBL Risk"
+
+            description_lines = []
+            description_lines.append(f"Risk ID: {generated_risk_id}")
+            if source_risk_id:
+                description_lines.append(f"Source Risk ID: {source_risk_id}")
+            if source:
+                description_lines.append(f"Source: {source}")
+            if sub_source:
+                description_lines.append(f"Activity/Sub-Source: {sub_source}")
+            if location:
+                description_lines.append(f"Location: {location}")
+            if asset_name:
+                description_lines.append(f"Asset/Application: {asset_name}")
+            if ip_or_url:
+                description_lines.append(f"IP/URL: {ip_or_url}")
+            if asset_criticality:
+                description_lines.append(f"Asset Criticality: {asset_criticality}")
+            if external_exposure:
+                description_lines.append(f"Externally Exposed: {external_exposure}")
+            if type_value:
+                description_lines.append(f"Type/Security Triad: {type_value}")
+            if vulnerability:
+                description_lines.append(f"Vulnerability: {vulnerability}")
+            if threat:
+                description_lines.append(f"Threat: {threat}")
+            if scenario:
+                description_lines.append(f"Scenario: {scenario}")
+            if business_impact:
+                description_lines.append(f"Business Impact: {business_impact}")
+            if cia_impacted:
+                description_lines.append(f"CIA Impacted: {cia_impacted}")
+            if annex_a:
+                description_lines.append(f"Annex A: {annex_a}")
+            if risk_owner:
+                description_lines.append(f"Risk Owner: {risk_owner}")
+            description = "\n".join(description_lines)[:8000]
+
+            inherent_likelihood = parse_scale_1_to_5(likelihood_raw, default=3) or 3
+            inherent_impact = parse_scale_1_to_5(impact_raw, default=3) or 3
+            inherent_score = parse_numeric_score(risk_value_raw)
+            if inherent_score is None:
+                inherent_score = parse_risk_level_to_score(risk_level_raw)
+            if inherent_score is None:
+                inherent_score = float(inherent_likelihood * inherent_impact)
+
+            residual_score = parse_numeric_score(residual_risk)
+            if residual_score is None:
+                residual_score = parse_risk_level_to_score(residual_risk)
+
+            category = map_ubl_category(risk_category_raw, sheet_default_category)
+            if category not in UBL_ALLOWED_CATEGORIES:
+                category = "other"
+
+            status_value = map_uploaded_status(
+                raw_status=row_status,
+                implementation_status=implementation_status,
+                mitigation_option=mitigation_option,
+                residual_score=residual_score,
+            )
+
+            treatment_plan_parts = []
+            if recommended_controls:
+                treatment_plan_parts.append(f"Recommended Controls: {recommended_controls}")
+            if mitigation_option:
+                treatment_plan_parts.append(f"Mitigation Option: {mitigation_option}")
+            if compensating_controls:
+                treatment_plan_parts.append(f"Compensating Controls: {compensating_controls}")
+            if business_justification:
+                treatment_plan_parts.append(f"Business Justification: {business_justification}")
+            if timelines:
+                treatment_plan_parts.append(f"Timeline: {timelines}")
+            treatment_plan = "\n\n".join(treatment_plan_parts) if treatment_plan_parts else None
+
+            due_date = parse_excel_date(mitigation_date) or parse_excel_date(timelines)
+            review_date = parse_excel_date(reported_date)
+
+            risk_sub_category = str(sub_source).strip() if sub_source else None
+            if risk_sub_category and len(risk_sub_category) > 100:
+                risk_sub_category = risk_sub_category[:100]
+
+            ubl_fields: dict = {"source_sheet": sheet_name, "risk_id": generated_risk_id}
+            _put(ubl_fields, "source_risk_id", source_risk_id)
+            _put(ubl_fields, "risk_category_raw", risk_category_raw)
+            _put(ubl_fields, "source", source)
+            _put(ubl_fields, "sub_source_activity", sub_source)
+            _put(ubl_fields, "location", location)
+            _put(ubl_fields, "type_or_security_triad", type_value)
+            _put(ubl_fields, "application_name_or_asset", asset_name)
+            _put(ubl_fields, "ip_or_url", ip_or_url)
+            _put(ubl_fields, "asset_criticality", asset_criticality)
+            _put(ubl_fields, "externally_exposed", external_exposure)
+            _put(ubl_fields, "vulnerability_count", vulnerability_count)
+            _put(ubl_fields, "vulnerabilities_identified", vulnerability)
+            _put(ubl_fields, "threat_due_to_vulnerability", threat)
+            _put(ubl_fields, "associated_risks", associated_risks)
+            _put(ubl_fields, "risk_description_scenario", scenario)
+            _put(ubl_fields, "impact_business_regulatory_financial", business_impact)
+            _put(ubl_fields, "recommended_controls", recommended_controls)
+            _put(ubl_fields, "reported_date", reported_date)
+            _put(ubl_fields, "mitigation_option", mitigation_option)
+            _put(ubl_fields, "fixed_vulnerability_count", fixed_vulnerability_count)
+            _put(ubl_fields, "frequency", frequency)
+            _put(ubl_fields, "business_justification", business_justification)
+            _put(ubl_fields, "timeline", timelines)
+            _put(ubl_fields, "compensating_controls", compensating_controls)
+            _put(ubl_fields, "implementation_status", implementation_status)
+            _put(ubl_fields, "mitigation_date", mitigation_date)
+            _put(ubl_fields, "risk_owner", risk_owner)
+            _put(ubl_fields, "cia_impacted", cia_impacted)
+            _put(ubl_fields, "annex_a", annex_a)
+            for raw_key, raw_value in raw_header_values.items():
+                safe_key = re.sub(r"[^a-z0-9]+", "_", raw_key.lower()).strip("_")
+                if (
+                    not safe_key
+                    or safe_key in ubl_fields
+                    or safe_key in UBL_PLATFORM_MAPPED_KEYS
+                    or safe_key in UBL_SUPPRESSED_EXTRA_KEYS
+                ):
+                    continue
+                _put(ubl_fields, safe_key, raw_value)
+
+            try:
+                db_risk = Risk(
+                    tenant_id=tenant_id,
+                    title=title or "Imported UBL Risk",
+                    description=description,
+                    category=category,
+                    risk_category=category,
+                    risk_sub_category=risk_sub_category,
+                    register_type=final_register_type,
+                    ubl_fields=ubl_fields,
+                    inherent_likelihood=inherent_likelihood,
+                    inherent_impact=inherent_impact,
+                    inherent_score=inherent_score,
+                    residual_score=residual_score,
+                    treatment_plan=treatment_plan,
+                    status=status_value,
+                    due_date=due_date,
+                    review_date=review_date,
+                    owner_id=current_user.id,
+                )
+                db.add(db_risk)
+
+                asset = get_or_create_asset(
+                    category=category,
+                    asset_name=asset_name,
+                    ip_or_url=ip_or_url,
+                    location=location,
+                    criticality=asset_criticality,
+                    externally_exposed=external_exposure,
+                )
+                if asset:
+                    db_risk.asset_links.append(RiskAssetLink(asset=asset))
+                    _put(ubl_fields, "linked_asset_name", getattr(asset, "name", None))
+
+                vulnerability_entry = get_or_create_vulnerability(
+                    vulnerability_text=vulnerability,
+                    threat_text=threat,
+                    associated_risks_text=associated_risks,
+                    scenario_text=scenario,
+                    asset_name_text=asset_name,
+                    ip_or_url_text=ip_or_url,
+                    recommended_controls_text=recommended_controls,
+                    risk_level_text=risk_level_raw,
+                    inherent_score_value=inherent_score,
+                    discovered_at=review_date,
+                    due_date=due_date,
+                )
+                if vulnerability_entry and asset:
+                    has_link = False
+                    if getattr(vulnerability_entry, "id", None) and getattr(asset, "id", None):
+                        has_link = db.query(VulnerabilityAssetLink).filter(
+                            VulnerabilityAssetLink.vulnerability_id == vulnerability_entry.id,
+                            VulnerabilityAssetLink.asset_id == asset.id,
+                        ).first() is not None
+                    if not has_link:
+                        vulnerability_entry.asset_links.append(
+                            VulnerabilityAssetLink(
+                                asset=asset,
+                                notes="Linked from UBL Template risk register import",
+                                created_by=current_user.id,
+                            )
+                        )
+                if vulnerability_entry:
+                    _put(ubl_fields, "linked_vulnerability_id", getattr(vulnerability_entry, "vuln_id", None))
+
+                next_ubl_risk_sequence += 1
+                created_count += 1
+            except Exception as e:
+                errors.append(f"{sheet_name} row {row_num}: {str(e)}")
+
+    db.commit()
+    return {
+        "message": f"Successfully imported {created_count} risks",
+        "created": created_count,
+        "skipped": skipped_count,
+        "assets_created": auto_assets_count,
+        "vulnerabilities_created": auto_vulnerabilities_count,
+        "errors": errors[:10] if errors else [],
+    }
 
 
 def resolve_risk_category(category: Optional[str], risk_category: Optional[str]) -> str:
@@ -154,7 +1004,32 @@ def create_risk(
             detail="Tenant not found"
         )
     
+    is_ubl_register = is_ubl_template_register_type(risk.register_type)
+    sanitized_ubl_fields = sanitize_ubl_fields(risk.ubl_fields if isinstance(risk.ubl_fields, dict) else None) if is_ubl_register else (
+        risk.ubl_fields if isinstance(risk.ubl_fields, dict) else None
+    )
+
     resolved_category = resolve_risk_category(risk.category, getattr(risk, 'risk_category', None))
+    if is_ubl_register:
+        resolved_category = resolve_ubl_category(
+            requested_category=resolved_category,
+            ubl_fields=sanitized_ubl_fields if isinstance(sanitized_ubl_fields, dict) else None,
+            default_category="technology",
+        )
+    inherent_score = risk.inherent_score
+    if inherent_score is None and risk.inherent_likelihood and risk.inherent_impact:
+        inherent_score = calculate_risk_score(risk.inherent_likelihood, risk.inherent_impact)
+
+    residual_score = risk.residual_score
+    if residual_score is None and risk.residual_likelihood and risk.residual_impact:
+        residual_score = calculate_risk_score(risk.residual_likelihood, risk.residual_impact)
+
+    risk_sub_category = risk.risk_sub_category
+    if is_ubl_register and isinstance(sanitized_ubl_fields, dict):
+        ubl_sub_source = str(sanitized_ubl_fields.get("sub_source_activity") or "").strip()
+        if ubl_sub_source:
+            risk_sub_category = ubl_sub_source[:100]
+        sanitized_ubl_fields["risk_id"] = format_ubl_risk_id(get_next_ubl_risk_sequence(tenant_id, db))
 
     db_risk = Risk(
         tenant_id=tenant_id,
@@ -162,7 +1037,22 @@ def create_risk(
         description=risk.description,
         category=resolved_category,
         risk_category=resolved_category,
-        owner_id=risk.owner_id
+        risk_sub_category=risk_sub_category,
+        register_type=risk.register_type,
+        ubl_fields=sanitized_ubl_fields if isinstance(sanitized_ubl_fields, dict) else None,
+        owner_id=risk.owner_id,
+        business_owner_id=risk.business_owner_id,
+        affected_department_ids=risk.affected_department_ids or [],
+        inherent_likelihood=risk.inherent_likelihood,
+        inherent_impact=risk.inherent_impact,
+        inherent_score=inherent_score,
+        residual_likelihood=risk.residual_likelihood,
+        residual_impact=risk.residual_impact,
+        residual_score=residual_score,
+        risk_appetite=risk.risk_appetite,
+        status=risk.status or "open",
+        treatment_plan=risk.treatment_plan,
+        closure_status=risk.closure_status,
     )
     db.add(db_risk)
     db.commit()
@@ -364,6 +1254,9 @@ def get_risk_detail(
         "description": risk.description,
         "category": risk.category,
         "risk_category": risk.risk_category,
+        "risk_sub_category": risk.risk_sub_category,
+        "register_type": risk.register_type,
+        "ubl_fields": risk.ubl_fields,
         "owner_id": risk.owner_id,
         "owner_name": risk.owner.display_name if risk.owner else None,
         "inherent_likelihood": risk.inherent_likelihood,
@@ -417,6 +1310,9 @@ def get_risk(
         "description": risk.description,
         "category": risk.category,
         "risk_category": risk.risk_category,
+        "risk_sub_category": risk.risk_sub_category,
+        "register_type": risk.register_type,
+        "ubl_fields": risk.ubl_fields,
         "owner_id": risk.owner_id,
         "inherent_likelihood": risk.inherent_likelihood,
         "inherent_impact": risk.inherent_impact,
@@ -455,7 +1351,38 @@ def update_risk(
         )
     
     update_data = risk_update.model_dump(exclude_unset=True)
-    if "category" in update_data or "risk_category" in update_data:
+    target_register_type = update_data.get("register_type", risk.register_type)
+    is_target_ubl = is_ubl_template_register_type(target_register_type)
+
+    if is_target_ubl:
+        existing_ubl_fields = risk.ubl_fields if isinstance(risk.ubl_fields, dict) else {}
+        incoming_ubl_fields = update_data.get("ubl_fields") if "ubl_fields" in update_data else existing_ubl_fields
+        sanitized_ubl_fields = sanitize_ubl_fields(incoming_ubl_fields if isinstance(incoming_ubl_fields, dict) else None)
+
+        existing_risk_id = (existing_ubl_fields or {}).get("risk_id")
+        if parse_ubl_risk_sequence(existing_risk_id) is None:
+            existing_risk_id = format_ubl_risk_id(get_next_ubl_risk_sequence(risk.tenant_id, db))
+        sanitized_ubl_fields["risk_id"] = str(existing_risk_id)
+        if existing_ubl_fields.get("source_sheet"):
+            sanitized_ubl_fields["source_sheet"] = existing_ubl_fields.get("source_sheet")
+        update_data["ubl_fields"] = sanitized_ubl_fields
+
+        mapped_category = resolve_ubl_category(
+            requested_category=resolve_risk_category(
+                update_data.get("category", risk.category),
+                update_data.get("risk_category", risk.risk_category),
+            ),
+            ubl_fields=sanitized_ubl_fields,
+            default_category="technology",
+        )
+        update_data["category"] = mapped_category
+        update_data["risk_category"] = mapped_category
+
+        if "risk_sub_category" not in update_data:
+            ubl_sub_source = str(sanitized_ubl_fields.get("sub_source_activity") or "").strip()
+            if ubl_sub_source:
+                update_data["risk_sub_category"] = ubl_sub_source[:100]
+    elif "category" in update_data or "risk_category" in update_data:
         update_data["category"] = resolve_risk_category(
             update_data.get("category", risk.category),
             update_data.get("risk_category", risk.risk_category)
@@ -1070,6 +1997,15 @@ async def upload_risk_register(
     try:
         contents = await file.read()
         wb = openpyxl.load_workbook(BytesIO(contents))
+
+        if is_ubl_template_register_type(register_type):
+            return import_ubl_risk_register(
+                wb=wb,
+                tenant_id=tenant_id,
+                register_type=register_type,
+                db=db,
+                current_user=current_user,
+            )
         
         ws = None
         for sheet_name in ['Risk Assessment', 'Risks', 'Risk Register', 'Sheet1']:

@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -11,9 +11,9 @@ import type { ITAsset } from '@/types';
 import { 
   ArrowLeft, Loader2, AlertCircle, Shield, DollarSign, 
   Target, TrendingUp, Link as LinkIcon, FileCheck, AlertTriangle,
-  ClipboardList, History, Plus, X, Trash2, Edit, RefreshCw,
+  ClipboardList, Plus, X, Trash2, Edit, RefreshCw,
   AppWindow, HardDrive, Database, Cloud, Building2,
-  Lock, ShieldCheck, Zap, Calendar, MapPin, User, Building, Search, Bug
+  Lock, ShieldCheck, MapPin, User, Search, Bug
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -33,7 +33,7 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   third_party: 'Third-Party System',
 };
 
-type TabType = 'details' | 'controls' | 'evidence' | 'risks' | 'assessments' | 'vulnerabilities';
+type TabType = 'details' | 'controls' | 'evidence' | 'risks' | 'security-compliance' | 'vulnerabilities';
 
 interface LinkedControl {
   id: number;
@@ -115,6 +115,29 @@ interface AssetDetailData {
   linked_vulnerabilities: LinkedVulnerability[];
   risk_assessments: RiskAssessment[];
   coverage_percentage: number;
+}
+
+interface SecurityComplianceControl {
+  control_id: string;
+  ControlID?: string;
+  Title?: string;
+  Level?: string;
+  Section?: string;
+  Assessment?: string;
+  selected: boolean;
+  [key: string]: unknown;
+}
+
+interface SecurityComplianceControlsResponse {
+  benchmark: string;
+  version?: string;
+  published?: string;
+  total_controls_in_source: number;
+  total: number;
+  skip: number;
+  limit: number;
+  selected_count: number;
+  controls: SecurityComplianceControl[];
 }
 
 type AssetUpdatePayload = Partial<
@@ -385,7 +408,7 @@ export default function AssetDetailPage() {
     { id: 'evidence', label: 'Evidence', icon: FileCheck },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
     { id: 'risks', label: 'Risks', icon: AlertTriangle },
-    { id: 'assessments', label: 'Assessments', icon: History },
+    { id: 'security-compliance', label: 'Security Compliance', icon: ShieldCheck },
   ];
 
   return (
@@ -580,12 +603,8 @@ export default function AssetDetailPage() {
         {activeTab === 'risks' && (
           <RisksTab asset={asset} />
         )}
-        {activeTab === 'assessments' && (
-          <AssessmentsTab 
-            asset={asset} 
-            onAssess={() => assessRiskMutation.mutate()}
-            isAssessing={assessRiskMutation.isPending}
-          />
+        {activeTab === 'security-compliance' && (
+          <SecurityComplianceTab assetId={assetId} />
         )}
       </div>
 
@@ -1312,109 +1331,213 @@ function RisksTab({ asset }: { asset: AssetDetailData }) {
   );
 }
 
-function AssessmentsTab({ 
-  asset, 
-  onAssess,
-  isAssessing 
-}: { 
-  asset: AssetDetailData; 
-  onAssess: () => void;
-  isAssessing: boolean;
-}) {
+function SecurityComplianceTab({ assetId }: { assetId: number }) {
+  const queryClient = useQueryClient();
+  const [searchInput, setSearchInput] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<'control_id' | 'title' | 'level' | 'section'>('control_id');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearchTerm(searchInput.trim());
+      setPage(1);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  const { data, isLoading, isFetching, error } = useQuery<SecurityComplianceControlsResponse>({
+    queryKey: ['asset-security-compliance-controls', assetId, searchTerm, sortBy, sortOrder, page],
+    queryFn: async () => {
+      const response = await assetsApi.getSecurityComplianceControls(assetId, {
+        search: searchTerm || undefined,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        skip: (page - 1) * pageSize,
+        limit: pageSize,
+      });
+      return response.data;
+    },
+    enabled: Number.isFinite(assetId) && assetId > 0,
+  });
+
+  const addSelectionsMutation = useMutation({
+    mutationFn: (controlIds: string[]) => assetsApi.addSecurityComplianceSelections(assetId, controlIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-security-compliance-controls', assetId] });
+    },
+  });
+
+  const removeSelectionMutation = useMutation({
+    mutationFn: (controlId: string) => assetsApi.removeSecurityComplianceSelection(assetId, controlId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-security-compliance-controls', assetId] });
+    },
+  });
+
+  const controls = data?.controls || [];
+  const total = data?.total || 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const selectedVisible = controls.filter((item) => item.selected).map((item) => item.control_id);
+  const unselectedVisible = controls.filter((item) => !item.selected).map((item) => item.control_id);
+
+  const toggleSelection = (control: SecurityComplianceControl) => {
+    if (control.selected) {
+      removeSelectionMutation.mutate(control.control_id);
+      return;
+    }
+    addSelectionsMutation.mutate([control.control_id]);
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-          <History className="h-5 w-5 text-blue-600" />
-          Risk Assessment History ({asset.risk_assessments?.length || 0})
-        </h3>
-        <button
-          onClick={onAssess}
-          disabled={isAssessing}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+    <div className="space-y-4">
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Security Compliance Plugin</h3>
+            <p className="text-xs text-slate-600">
+              {data?.benchmark || 'CIS_WS2012R2'} {data?.version ? `v${data.version}` : ''} | Selected: {data?.selected_count || 0}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            {isFetching && <Loader2 className="h-4 w-4 animate-spin" />}
+            <span>{total} controls</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 md:flex-row">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search control ID, title, level, section..."
+            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none"
+          />
+        </div>
+        <select
+          value={sortBy}
+          onChange={(e) => {
+            setSortBy(e.target.value as 'control_id' | 'title' | 'level' | 'section');
+            setPage(1);
+          }}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
         >
-          {isAssessing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
-          New Assessment
+          <option value="control_id">Sort: Control ID</option>
+          <option value="title">Sort: Title</option>
+          <option value="level">Sort: Level</option>
+          <option value="section">Sort: Section</option>
+        </select>
+        <select
+          value={sortOrder}
+          onChange={(e) => {
+            setSortOrder(e.target.value as 'asc' | 'desc');
+            setPage(1);
+          }}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+        >
+          <option value="asc">Ascending</option>
+          <option value="desc">Descending</option>
+        </select>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={unselectedVisible.length === 0 || addSelectionsMutation.isPending}
+          onClick={() => addSelectionsMutation.mutate(unselectedVisible)}
+          className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+        >
+          Select Visible ({unselectedVisible.length})
+        </button>
+        <button
+          type="button"
+          disabled={selectedVisible.length === 0 || removeSelectionMutation.isPending}
+          onClick={() => selectedVisible.forEach((controlId) => removeSelectionMutation.mutate(controlId))}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        >
+          Unselect Visible ({selectedVisible.length})
         </button>
       </div>
 
-      {asset.risk_assessments && asset.risk_assessments.length > 0 ? (
-        <div className="space-y-3">
-          {asset.risk_assessments
-            .sort((a, b) => new Date(b.assessment_date).getTime() - new Date(a.assessment_date).getTime())
-            .map((assessment) => (
-              <div key={assessment.id} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${
-                      assessment.risk_score >= 7 ? 'bg-red-50 text-red-600' :
-                      assessment.risk_score >= 4 ? 'bg-yellow-50 text-yellow-700' : 
-                      'bg-green-50 text-green-600'
-                    }`}>
-                      <span className="text-lg font-bold">{assessment.risk_score.toFixed(1)}</span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-slate-900">
-                        {new Date(assessment.assessment_date).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </p>
-                      <p className="text-sm text-slate-500">
-                        Coverage: {assessment.coverage_percentage.toFixed(0)}%
-                      </p>
-                    </div>
-                  </div>
-                  {assessment.gaps && (
-                    <div className="text-right">
-                      <p className="text-sm text-slate-500">
-                        Missing Controls: {(assessment.gaps as Record<string, number>).missing_controls || 0}
-                      </p>
-                    </div>
-                  )}
-                </div>
-                {assessment.gaps && (assessment.gaps as Record<string, string[]>).recommendations?.length > 0 && (
-                  <div className="mt-3 border-t border-slate-200 pt-3">
-                    <p className="mb-2 text-sm font-medium text-slate-600">Recommendations</p>
-                    <ul className="space-y-1">
-                      {((assessment.gaps as Record<string, string[]>).recommendations || []).map((rec: string, idx: number) => (
-                        <li key={idx} className="flex items-center gap-2 text-sm text-slate-700">
-                          <Zap className="h-3 w-3 text-yellow-500" />
-                          {rec}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ))}
+      {isLoading ? (
+        <div className="flex items-center justify-center rounded-lg border border-slate-200 bg-white py-10">
+          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        </div>
+      ) : error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Failed to load security compliance controls.
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-12 text-center">
-          <History className="mb-4 h-12 w-12 text-slate-400" />
-          <h4 className="text-base font-medium text-slate-900">No Assessments Yet</h4>
-          <p className="mt-1 text-sm text-slate-600">Run a risk assessment to evaluate this asset</p>
-          <button
-            onClick={onAssess}
-            disabled={isAssessing}
-            className="mt-4 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {isAssessing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Run First Assessment
-          </button>
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="min-w-full divide-y divide-slate-200 bg-white text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold text-slate-700">Select</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-700">Control ID</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-700">Title</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-700">Level</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-700">Section</th>
+                <th className="px-3 py-2 text-left font-semibold text-slate-700">Assessment</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {controls.length > 0 ? controls.map((control) => (
+                <tr key={control.control_id} className={control.selected ? 'bg-blue-50/40' : 'bg-white'}>
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={control.selected}
+                      onChange={() => toggleSelection(control)}
+                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </td>
+                  <td className="px-3 py-2 font-medium text-slate-900">{control.ControlID || control.control_id}</td>
+                  <td className="px-3 py-2 text-slate-700">{String(control.Title || '-')}</td>
+                  <td className="px-3 py-2 text-slate-700">{String(control.Level || '-')}</td>
+                  <td className="px-3 py-2 text-slate-700">{String(control.Section || '-')}</td>
+                  <td className="px-3 py-2 text-slate-600">{String(control.Assessment || '-')}</td>
+                </tr>
+              )) : (
+                <tr>
+                  <td className="px-3 py-6 text-center text-slate-500" colSpan={6}>
+                    No controls found for the current filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       )}
+
+      <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+        <span>
+          Showing {controls.length === 0 ? 0 : (page - 1) * pageSize + 1}-{(page - 1) * pageSize + controls.length} of {total}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            disabled={page <= 1}
+            className="rounded border border-slate-300 px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span>Page {page} / {totalPages}</span>
+          <button
+            type="button"
+            onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+            disabled={page >= totalPages}
+            className="rounded border border-slate-300 px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

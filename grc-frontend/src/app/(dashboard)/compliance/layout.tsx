@@ -1,8 +1,19 @@
+'use client';
+
+import { usePathname } from 'next/navigation';
+
 export default function ComplianceLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname() || '';
+  const hideModuleHeader = pathname.startsWith('/compliance/assessments');
+
+  if (hideModuleHeader) {
+    return <div>{children}</div>;
+  }
+
   return (
     <div className="space-y-5">
       <div>

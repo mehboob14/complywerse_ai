@@ -40,7 +40,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
   '/erm/analytics/aggregation': { title: 'Risk Aggregation', subtitle: 'Enterprise-wide risk aggregation and analysis' },
   '/erm/analytics/kri-triggers': { title: 'Automated KRI Triggers', subtitle: 'Real-time alerts for Key Risk Indicator threshold breaches' },
   '/risks/rcsa': { title: 'RCSA Dashboard', subtitle: 'Risk and control self-assessment overview' },
-  '/compliance/assessments': { title: 'Compliance Assessments' },
+  '/compliance/assessments': { title: 'Assessment Control Center' },
   '/compliance/assessments/approvals': { title: 'Pending Approvals', subtitle: 'Compliance assessments awaiting review' },
   '/control-library': { title: 'Control Library' },
   '/assets': { title: 'IT Asset Inventory & Valuation', subtitle: 'Manage and track IT assets with CIA ratings and valuations.' },

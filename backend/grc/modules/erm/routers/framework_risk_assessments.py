@@ -15,7 +15,7 @@ from openai import OpenAI
 from ....models import (
     Framework, FrameworkControl, FrameworkDomain, ControlObjective,
     FrameworkRiskAssessment, FrameworkRiskQuestion, FrameworkRiskQuestionEvidence,
-    GRCUser, TenantUser, Evidence, get_db, UploadedFramework, ParsedFrameworkControl
+    GRCUser, TenantUser, Evidence, Risk, get_db, UploadedFramework, ParsedFrameworkControl
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -55,11 +55,24 @@ class FrameworkRiskQuestionUpdate(BaseModel):
     question_text: Optional[str] = None
     assigned_user_id: Optional[int] = None
     status: Optional[str] = None
+    inherent_likelihood: Optional[int] = None
+    inherent_impact: Optional[int] = None
+    residual_likelihood: Optional[int] = None
+    residual_impact: Optional[int] = None
+    is_risk_accepted: Optional[bool] = None
+    acceptance_notes: Optional[str] = None
 
 
 class GenerateQuestionsRequest(BaseModel):
     count: Optional[int] = DEFAULT_QUESTION_COUNT
     replace_existing: Optional[bool] = True
+
+
+class MoveQuestionToRiskRegisterRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    owner_id: Optional[int] = None
+    treatment_plan: Optional[str] = None
 
 
 def _iter_openai_client_candidates() -> List[OpenAI]:
@@ -159,6 +172,16 @@ def _serialize_question(q: FrameworkRiskQuestion) -> dict:
         "status": q.status,
         "assigned_user_id": q.assigned_user_id,
         "assigned_user_name": q.assignee.display_name if q.assignee else None,
+        "inherent_likelihood": q.inherent_likelihood,
+        "inherent_impact": q.inherent_impact,
+        "inherent_score": q.inherent_score,
+        "residual_likelihood": q.residual_likelihood,
+        "residual_impact": q.residual_impact,
+        "residual_score": q.residual_score,
+        "is_risk_accepted": q.is_risk_accepted,
+        "acceptance_notes": q.acceptance_notes,
+        "linked_risk_id": q.linked_risk_id,
+        "moved_to_risk_register_at": q.moved_to_risk_register_at.isoformat() if q.moved_to_risk_register_at else None,
         "order_index": q.order_index,
         "created_by": q.created_by,
         "created_at": q.created_at.isoformat() if q.created_at else None,
@@ -446,6 +469,28 @@ def _validate_assigned_user_for_tenant(tenant_id: int, assigned_user_id: Optiona
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Assigned user must belong to the same tenant as the assessment"
         )
+
+
+def _validate_risk_scale_value(field_name: str, value: Optional[int]) -> None:
+    if value is None:
+        return
+    if value < 1 or value > 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{field_name} must be between 1 and 5"
+        )
+
+
+def _recalculate_question_scores(question: FrameworkRiskQuestion) -> None:
+    if question.inherent_likelihood and question.inherent_impact:
+        question.inherent_score = float(question.inherent_likelihood * question.inherent_impact)
+    else:
+        question.inherent_score = None
+
+    if question.residual_likelihood and question.residual_impact:
+        question.residual_score = float(question.residual_likelihood * question.residual_impact)
+    else:
+        question.residual_score = None
 
 
 def _resolve_framework_id_for_assessment(uploaded_fw: UploadedFramework, db: Session) -> int:
@@ -887,11 +932,22 @@ def update_framework_question(
     if "status" in update_data and update_data["status"] not in VALID_QUESTION_STATUSES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid question status")
 
+    if "inherent_likelihood" in update_data:
+        _validate_risk_scale_value("inherent_likelihood", update_data["inherent_likelihood"])
+    if "inherent_impact" in update_data:
+        _validate_risk_scale_value("inherent_impact", update_data["inherent_impact"])
+    if "residual_likelihood" in update_data:
+        _validate_risk_scale_value("residual_likelihood", update_data["residual_likelihood"])
+    if "residual_impact" in update_data:
+        _validate_risk_scale_value("residual_impact", update_data["residual_impact"])
+
     if "assigned_user_id" in update_data:
         _validate_assigned_user_for_tenant(assessment.tenant_id, update_data["assigned_user_id"], db)
 
     for key, value in update_data.items():
         setattr(question, key, value)
+
+    _recalculate_question_scores(question)
 
     question.updated_at = datetime.utcnow()
     db.commit()
@@ -903,6 +959,112 @@ def update_framework_question(
     ).filter(FrameworkRiskQuestion.id == question.id).first()
 
     return _serialize_question(question)
+
+
+@router.post("/{assessment_id}/questions/{question_id}/move-to-risk-register")
+def move_framework_question_to_risk_register(
+    assessment_id: int,
+    question_id: int,
+    data: MoveQuestionToRiskRegisterRequest = MoveQuestionToRiskRegisterRequest(),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+    assessment = _get_assessment_or_404(assessment_id, user_tenants, db)
+    question = _get_question_or_404(assessment_id, question_id, db)
+
+    if question.linked_risk_id:
+        existing_risk = db.query(Risk).filter(
+            Risk.id == question.linked_risk_id,
+            Risk.tenant_id == assessment.tenant_id
+        ).first()
+        return {
+            "message": "Question already moved to risk register",
+            "risk_id": question.linked_risk_id,
+            "risk_title": existing_risk.title if existing_risk else None,
+            "question": _serialize_question(question),
+        }
+
+    if not question.is_risk_accepted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Set 'Accept Risk' before moving this question to the risk register"
+        )
+
+    owner_id = data.owner_id or question.assigned_user_id
+    if owner_id:
+        _validate_assigned_user_for_tenant(assessment.tenant_id, owner_id, db)
+    else:
+        creator_tenant_link = db.query(TenantUser.id).filter(
+            TenantUser.tenant_id == assessment.tenant_id,
+            TenantUser.user_id == assessment.created_by
+        ).first()
+        if creator_tenant_link:
+            owner_id = assessment.created_by
+
+    framework_name = None
+    if assessment.uploaded_framework:
+        framework_name = assessment.uploaded_framework.name
+    elif assessment.framework:
+        framework_name = assessment.framework.name
+
+    default_title = f"[Framework Assessment #{assessment.id}] Q{question.order_index or question.id} Risk"
+    risk_title = (data.title or default_title).strip()
+    risk_description_parts = [
+        f"Source: Framework Risk Assessment '{assessment.name}'",
+        f"Framework: {framework_name or 'N/A'}",
+        f"Question: {question.question_text}",
+    ]
+    if question.acceptance_notes:
+        risk_description_parts.append(f"Acceptance Notes: {question.acceptance_notes}")
+    if data.description:
+        risk_description_parts.append(f"Additional Context: {data.description}")
+
+    category_value = "framework_assessment"
+    register_type_value = f"Framework Assessment #{assessment.id}"
+
+    risk = Risk(
+        tenant_id=assessment.tenant_id,
+        title=risk_title,
+        description="\n".join(risk_description_parts),
+        category=category_value,
+        risk_category=category_value,
+        risk_sub_category=assessment.name,
+        register_type=register_type_value,
+        owner_id=owner_id,
+        inherent_likelihood=question.inherent_likelihood,
+        inherent_impact=question.inherent_impact,
+        inherent_score=question.inherent_score,
+        residual_likelihood=question.residual_likelihood,
+        residual_impact=question.residual_impact,
+        residual_score=question.residual_score,
+        treatment_plan=(data.treatment_plan or question.acceptance_notes),
+        status="accepted",
+    )
+    db.add(risk)
+    db.flush()
+
+    question.linked_risk_id = risk.id
+    question.moved_to_risk_register_at = datetime.utcnow()
+    if question.status == "not_started":
+        question.status = "completed"
+    question.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(question)
+
+    question = db.query(FrameworkRiskQuestion).options(
+        joinedload(FrameworkRiskQuestion.assignee),
+        joinedload(FrameworkRiskQuestion.evidence_uploads).joinedload(FrameworkRiskQuestionEvidence.uploader)
+    ).filter(FrameworkRiskQuestion.id == question.id).first()
+
+    return {
+        "message": "Risk moved to risk register successfully",
+        "risk_id": risk.id,
+        "risk_title": risk.title,
+        "register_type": register_type_value,
+        "question": _serialize_question(question),
+    }
 
 
 @router.delete("/{assessment_id}/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -163,6 +163,7 @@ interface AllLinksResponse {
   assets: { total: number; links: Array<{ id: number; asset_id: number; link_type: string; asset: { id: number; name: string; asset_type: string; criticality: string; status: string } | null }> };
   incidents: { total: number; links: Array<{ id: number; incident_id: number; link_type: string | null; incident: { id: number; title: string; severity: string; status: string } | null }> };
   policy_statements: { total: number; links: Array<{ id: number; policy_statement_id: number; link_type: string | null; policy_statement: { id: number; statement_code: string; statement_summary: string | null; status: string } | null }> };
+  assessments?: { total: number; links: Array<{ id: number; assessment_item_id: number; assessment_id: number | null; assessment_name: string | null; assessment_type: string | null; assessment_status: string | null; item_number: string | null; area_domain: string | null; control_description: string | null; link_status: string; created_at: string | null }> };
   total_links: number;
 }
 
@@ -225,7 +226,6 @@ export default function EvidenceDetailPage() {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [selectedFrameworkId, setSelectedFrameworkId] = useState<number | null>(null);
   const [selectedControlId, setSelectedControlId] = useState<number | null>(null);
-  const [selectedNormalizedId, setSelectedNormalizedId] = useState<number | null>(null);
   const [showRiskModal, setShowRiskModal] = useState(false);
   const [showAssetModal, setShowAssetModal] = useState(false);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
@@ -291,7 +291,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get(`/evidence-mgmt/cross-links/${evidenceId}/all-links`);
       return response.data;
     },
-    enabled: activeTab === 'cross-links' || activeTab === 'assessment',
+    enabled: activeTab === 'cross-links' || activeTab === 'assessment' || activeTab === 'controls',
   });
 
   const { data: controlsData } = useQuery<ControlsResponse>({
@@ -501,11 +501,6 @@ export default function EvidenceDetailPage() {
 
   const linkControlMutation = useMutation({
     mutationFn: () => {
-      if (selectedNormalizedId) {
-        return apiClient.post(`/evidence-mgmt/links/${evidenceId}/controls`, {
-          control_links: [{ normalized_control_id: selectedNormalizedId }],
-        });
-      }
       if (selectedFrameworkId && selectedControlId) {
         return apiClient.post(`/evidence-mgmt/links/${evidenceId}/controls`, {
           control_links: [{ parsed_control_id: selectedControlId, uploaded_framework_id: selectedFrameworkId }],
@@ -517,7 +512,6 @@ export default function EvidenceDetailPage() {
       setShowLinkModal(false);
       setSelectedControlId(null);
       setSelectedFrameworkId(null);
-      setSelectedNormalizedId(null);
       queryClient.invalidateQueries({ queryKey: ['evidence-controls', evidenceId] });
       queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
     },
@@ -1036,6 +1030,7 @@ export default function EvidenceDetailPage() {
         {activeTab === 'controls' && (
           <ControlsTab 
             controlsData={controlsData}
+            usageData={allLinks}
             onUnlink={(mappingId) => unlinkControlMutation.mutate(mappingId)}
             isUnlinking={unlinkControlMutation.isPending}
             onOpenLinkModal={() => setShowLinkModal(true)}
@@ -1069,27 +1064,6 @@ export default function EvidenceDetailPage() {
                 <button onClick={() => setShowLinkModal(false)} className="text-gray-500 hover:text-black"><X className="h-5 w-5" /></button>
               </div>
               <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Normalized Control (optional)</label>
-                  <select
-                    className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                    value={selectedNormalizedId ?? ''}
-                    onChange={(e) => {
-                      const val = e.target.value ? Number(e.target.value) : null;
-                      setSelectedNormalizedId(val);
-                      if (val) {
-                        setSelectedControlId(null);
-                        setSelectedFrameworkId(null);
-                      }
-                    }}
-                  >
-                    <option value="">Select normalized control</option>
-                    {availableControls?.normalized_controls.map((nc) => (
-                      <option key={nc.id} value={nc.id}>{nc.code} - {nc.name}</option>
-                    ))}
-                  </select>
-                </div>
-
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm font-medium text-gray-700">Framework</label>
@@ -1100,9 +1074,6 @@ export default function EvidenceDetailPage() {
                         const val = e.target.value ? Number(e.target.value) : null;
                         setSelectedFrameworkId(val);
                         setSelectedControlId(null);
-                        if (val) {
-                          setSelectedNormalizedId(null);
-                        }
                       }}
                     >
                       <option value="">Select framework</option>
@@ -1138,7 +1109,7 @@ export default function EvidenceDetailPage() {
                   <button
                     onClick={() => linkControlMutation.mutate()}
                     className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
-                    disabled={linkControlMutation.isPending}
+                    disabled={linkControlMutation.isPending || !selectedFrameworkId || !selectedControlId}
                   >
                     {linkControlMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Link'}
                   </button>
@@ -1878,11 +1849,13 @@ function AssessmentTab({
 
 function ControlsTab({ 
   controlsData,
+  usageData,
   onUnlink,
   isUnlinking,
   onOpenLinkModal
 }: { 
   controlsData?: ControlsResponse;
+  usageData?: AllLinksResponse;
   onUnlink: (mappingId: number) => void;
   isUnlinking: boolean;
   onOpenLinkModal: () => void;
@@ -1896,6 +1869,15 @@ function ControlsTab({
   }
 
   const totalControls = controlsData.total_mappings;
+  const assessmentUsageTotal = usageData?.assessments?.total ?? 0;
+  const assessmentUsageLinks = usageData?.assessments?.links ?? [];
+  const totalUsage = usageData
+    ? assessmentUsageTotal +
+      usageData.assets.total +
+      usageData.risks.total +
+      usageData.incidents.total +
+      usageData.policy_statements.total
+    : 0;
 
   return (
     <div className="space-y-6">
@@ -1913,73 +1895,137 @@ function ControlsTab({
         </button>
       </div>
 
-      {totalControls === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Shield className="mb-4 h-12 w-12 text-gray-400" />
-          <p className="text-lg font-medium text-black">No Linked Controls</p>
-          <p className="text-gray-600">Link this evidence to compliance controls</p>
-        </div>
-      ) : (
-        <>
-          {controlsData.normalized_controls.length > 0 && (
-            <div>
-              <h4 className="mb-3 text-sm font-medium text-gray-600">Normalized Controls</h4>
-              <div className="space-y-2">
-                {controlsData.normalized_controls.map((mapping) => (
-                  <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
-                    <div className="flex items-center gap-3">
-                      <ShieldCheck className="h-5 w-5 text-blue-600" />
-                      <div>
-                        <span className="text-sm font-medium text-blue-600">{mapping.normalized_control?.code}</span>
-                        <p className="text-black">{mapping.normalized_control?.name}</p>
+      <div className="grid gap-6 xl:grid-cols-[2fr,1fr]">
+        <div>
+          {totalControls === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 py-12 text-center">
+              <Shield className="mb-4 h-12 w-12 text-gray-400" />
+              <p className="text-lg font-medium text-black">No Linked Controls</p>
+              <p className="text-gray-600">Link this evidence to compliance controls</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {controlsData.normalized_controls.length > 0 && (
+                <div>
+                  <h4 className="mb-3 text-sm font-medium text-gray-600">Normalized Controls</h4>
+                  <div className="space-y-2">
+                    {controlsData.normalized_controls.map((mapping) => (
+                      <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
+                        <div className="flex items-center gap-3">
+                          <ShieldCheck className="h-5 w-5 text-blue-600" />
+                          <div>
+                            <span className="text-sm font-medium text-blue-600">{mapping.normalized_control?.code}</span>
+                            <p className="text-black">{mapping.normalized_control?.name}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => onUnlink(mapping.id)}
+                          disabled={isUnlinking}
+                          className="rounded p-2 text-gray-600 hover:bg-gray-100 hover:text-red-400"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
-                    </div>
-                    <button
-                      onClick={() => onUnlink(mapping.id)}
-                      disabled={isUnlinking}
-                      className="rounded p-2 text-gray-600 hover:bg-gray-100 hover:text-red-400"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
+
+              {controlsData.by_framework.map((framework) => (
+                <div key={framework.framework_id}>
+                  <h4 className="mb-3 text-sm font-medium text-gray-600">
+                    {framework.framework_name} ({framework.framework_code})
+                  </h4>
+                  <div className="space-y-2">
+                    {framework.controls.map((mapping) => (
+                      <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
+                        <div className="flex items-center gap-3">
+                          <Shield className="h-5 w-5 text-blue-400" />
+                          <div>
+                            <span className="text-sm font-medium text-blue-400">
+                              {mapping.framework_control?.code || mapping.parsed_control?.control_id}
+                            </span>
+                            <p className="text-black">
+                              {mapping.framework_control?.name || mapping.parsed_control?.title}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => onUnlink(mapping.id)}
+                          disabled={isUnlinking}
+                          className="rounded p-2 text-gray-600 hover:bg-gray-100 hover:text-red-400"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
+        </div>
 
-          {controlsData.by_framework.map((framework) => (
-            <div key={framework.framework_id}>
-              <h4 className="mb-3 text-sm font-medium text-gray-600">
-                {framework.framework_name} ({framework.framework_code})
-              </h4>
-              <div className="space-y-2">
-                {framework.controls.map((mapping) => (
-                  <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
-                    <div className="flex items-center gap-3">
-                      <Shield className="h-5 w-5 text-blue-400" />
-                      <div>
-                        <span className="text-sm font-medium text-blue-400">
-                          {mapping.framework_control?.code || mapping.parsed_control?.control_id}
-                        </span>
-                        <p className="text-black">
-                          {mapping.framework_control?.name || mapping.parsed_control?.title}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => onUnlink(mapping.id)}
-                      disabled={isUnlinking}
-                      className="rounded p-2 text-gray-600 hover:bg-gray-100 hover:text-red-400"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-700">
+            <Link2 className="h-4 w-4 text-blue-600" />
+            Linked In ({totalUsage})
+          </h4>
+          {!usageData ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
             </div>
-          ))}
-        </>
-      )}
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm text-gray-700">
+                <span>Assessments</span>
+                <span className="font-medium text-black">{assessmentUsageTotal}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm text-gray-700">
+                <span>Assets</span>
+                <span className="font-medium text-black">{usageData.assets.total}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm text-gray-700">
+                <span>Risks</span>
+                <span className="font-medium text-black">{usageData.risks.total}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm text-gray-700">
+                <span>Incidents</span>
+                <span className="font-medium text-black">{usageData.incidents.total}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm text-gray-700">
+                <span>Policy Statements</span>
+                <span className="font-medium text-black">{usageData.policy_statements.total}</span>
+              </div>
+
+              {assessmentUsageLinks.length > 0 && (
+                <div className="pt-2 border-t border-gray-200">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Assessment Usage</p>
+                  <div className="space-y-1.5">
+                    {assessmentUsageLinks.slice(0, 5).map((link) => (
+                      <Link
+                        key={link.id}
+                        href={link.assessment_id ? `/compliance/assessments/${link.assessment_id}` : '#'}
+                        className={`block rounded bg-white px-2 py-1.5 text-xs ${link.assessment_id ? 'text-blue-600 hover:text-blue-700' : 'text-gray-600'}`}
+                      >
+                        {link.assessment_name || `Assessment Item #${link.assessment_item_id}`}
+                        {link.item_number ? ` • Item ${link.item_number}` : ''}
+                      </Link>
+                    ))}
+                    {assessmentUsageLinks.length > 5 && (
+                      <p className="text-xs text-gray-500">+{assessmentUsageLinks.length - 5} more assessment links</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {totalUsage === 0 && (
+                <p className="text-sm text-gray-500">This evidence is not linked to other modules yet.</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

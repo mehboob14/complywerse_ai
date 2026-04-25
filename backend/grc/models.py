@@ -909,6 +909,7 @@ class Risk(Base):
     risk_category = Column(String(50), default="operational")  # strategic, operational, financial, compliance, technology, third_party, project_change
     risk_sub_category = Column(String(100), nullable=True)
     register_type = Column(String(100), nullable=True)  # PCI-DSS, ISO 27001, SOX, Internal, NIST, GDPR, etc.
+    ubl_fields = Column(JSON, nullable=True)  # UBL template-specific structured fields
     owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     business_owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     affected_department_ids = Column(JSON, default=[])
@@ -1488,6 +1489,16 @@ class FrameworkRiskQuestion(Base):
     question_text = Column(Text, nullable=False)
     status = Column(String(50), default="not_started")  # not_started, in_progress, completed, blocked
     assigned_user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    inherent_likelihood = Column(Integer, nullable=True)
+    inherent_impact = Column(Integer, nullable=True)
+    inherent_score = Column(Float, nullable=True)
+    residual_likelihood = Column(Integer, nullable=True)
+    residual_impact = Column(Integer, nullable=True)
+    residual_score = Column(Float, nullable=True)
+    is_risk_accepted = Column(Boolean, default=False)
+    acceptance_notes = Column(Text, nullable=True)
+    linked_risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=True, index=True)
+    moved_to_risk_register_at = Column(DateTime, nullable=True)
     order_index = Column(Integer, default=0)
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -1496,6 +1507,7 @@ class FrameworkRiskQuestion(Base):
     assessment = relationship("FrameworkRiskAssessment", back_populates="questions")
     assignee = relationship("GRCUser", foreign_keys=[assigned_user_id])
     creator = relationship("GRCUser", foreign_keys=[created_by])
+    linked_risk = relationship("Risk", foreign_keys=[linked_risk_id])
     evidence_uploads = relationship("FrameworkRiskQuestionEvidence", back_populates="question", cascade="all, delete-orphan")
 
     __table_args__ = (
@@ -2179,6 +2191,11 @@ class ITAsset(Base):
     risk_assessments = relationship("AssetRiskAssessment", back_populates="asset", cascade="all, delete-orphan")
     framework_control_links = relationship("AssetFrameworkControlLink", back_populates="asset", cascade="all, delete-orphan")
     evidence_links = relationship("AssetEvidenceLink", back_populates="asset", cascade="all, delete-orphan")
+    security_compliance_selections = relationship(
+        "AssetSecurityComplianceSelection",
+        back_populates="asset",
+        cascade="all, delete-orphan",
+    )
     
     __table_args__ = (
         Index("ix_it_asset_tenant_type", "tenant_id", "asset_type"),
@@ -2266,6 +2283,27 @@ class AssetRiskAssessment(Base):
     
     asset = relationship("ITAsset", back_populates="risk_assessments")
     assessor = relationship("GRCUser", back_populates="asset_assessments")
+
+
+class AssetSecurityComplianceSelection(Base):
+    """Stores selected security compliance controls for an asset."""
+    __tablename__ = "grc_asset_security_compliance_selections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
+    benchmark = Column(String(100), nullable=False, default="CIS_WS2012R2")
+    control_id = Column(String(128), nullable=False)
+    selected_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    asset = relationship("ITAsset", back_populates="security_compliance_selections")
+    selector = relationship("GRCUser")
+
+    __table_args__ = (
+        UniqueConstraint("asset_id", "benchmark", "control_id", name="uq_asset_security_compliance_selection"),
+        Index("ix_asset_security_compliance_asset_benchmark", "asset_id", "benchmark"),
+    )
 
 
 # =============================================================================
@@ -7508,6 +7546,53 @@ def _add_missing_columns():
             logger.debug("grc_vulnerability_sla_config table not found - will be created")
         else:
             logger.error(f"Error checking/adding SLA columns: {e}")
+
+    # Ensure framework risk questions include risk assessment scoring and acceptance columns
+    try:
+        frq_columns = {col['name'] for col in inspector.get_columns('grc_framework_risk_questions')}
+        with engine.begin() as conn:
+            if 'inherent_likelihood' not in frq_columns:
+                conn.execute(text("ALTER TABLE grc_framework_risk_questions ADD COLUMN inherent_likelihood INTEGER"))
+            if 'inherent_impact' not in frq_columns:
+                conn.execute(text("ALTER TABLE grc_framework_risk_questions ADD COLUMN inherent_impact INTEGER"))
+            if 'inherent_score' not in frq_columns:
+                conn.execute(text("ALTER TABLE grc_framework_risk_questions ADD COLUMN inherent_score FLOAT"))
+            if 'residual_likelihood' not in frq_columns:
+                conn.execute(text("ALTER TABLE grc_framework_risk_questions ADD COLUMN residual_likelihood INTEGER"))
+            if 'residual_impact' not in frq_columns:
+                conn.execute(text("ALTER TABLE grc_framework_risk_questions ADD COLUMN residual_impact INTEGER"))
+            if 'residual_score' not in frq_columns:
+                conn.execute(text("ALTER TABLE grc_framework_risk_questions ADD COLUMN residual_score FLOAT"))
+            if 'is_risk_accepted' not in frq_columns:
+                conn.execute(text("ALTER TABLE grc_framework_risk_questions ADD COLUMN is_risk_accepted BOOLEAN"))
+            if 'acceptance_notes' not in frq_columns:
+                conn.execute(text("ALTER TABLE grc_framework_risk_questions ADD COLUMN acceptance_notes TEXT"))
+            if 'linked_risk_id' not in frq_columns:
+                conn.execute(text("ALTER TABLE grc_framework_risk_questions ADD COLUMN linked_risk_id INTEGER"))
+            if 'moved_to_risk_register_at' not in frq_columns:
+                conn.execute(text("ALTER TABLE grc_framework_risk_questions ADD COLUMN moved_to_risk_register_at DATETIME"))
+    except Exception as e:
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            logger.debug("grc_framework_risk_questions table not found - will be created")
+        else:
+            logger.error(f"Error checking/adding framework risk question columns: {e}")
+
+    # Ensure grc_risks has ubl_fields column for UBL template-specific fields
+    try:
+        risk_columns = {col['name'] for col in inspector.get_columns('grc_risks')}
+        if 'ubl_fields' not in risk_columns:
+            logger.warning("Adding missing 'ubl_fields' column to grc_risks...")
+            with engine.begin() as conn:
+                if DATABASE_URL.startswith('sqlite'):
+                    conn.execute(text("ALTER TABLE grc_risks ADD COLUMN ubl_fields TEXT"))
+                else:
+                    conn.execute(text("ALTER TABLE grc_risks ADD COLUMN ubl_fields JSON"))
+            logger.info("✓ Successfully added ubl_fields column")
+    except Exception as e:
+        if "does not exist" in str(e).lower() or "no such table" in str(e).lower():
+            logger.debug("grc_risks table not found - will be created")
+        else:
+            logger.error(f"Error checking/adding grc_risks.ubl_fields: {e}")
 
 
 def init_grc_db():

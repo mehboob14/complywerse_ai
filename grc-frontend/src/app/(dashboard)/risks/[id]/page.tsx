@@ -13,6 +13,7 @@ import {
   Activity, BarChart3, Settings
 } from 'lucide-react';
 import Link from 'next/link';
+import clsx from 'clsx';
 
 interface RiskDetailData {
   id: number;
@@ -89,6 +90,8 @@ export default function RiskDetailPage() {
   const [activeTab, setActiveTab] = useState<TabType>('details');
   const [isEditingTreatment, setIsEditingTreatment] = useState(false);
   const [treatmentPlan, setTreatmentPlan] = useState('');
+  const [showtitle, setShowTitle] = useState(false);
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showLinkControlModal, setShowLinkControlModal] = useState(false);
   const [showLinkFrameworkControlModal, setShowLinkFrameworkControlModal] = useState(false);
@@ -326,14 +329,23 @@ export default function RiskDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Link
-          href="/risks"
+          href="/erm/risks"
           className="rounded-lg p-2 text-slate-600 hover:bg-white hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-slate-900">{risk.title}</h1>
-          <p className="text-slate-600">{risk.description || 'No description'}</p>
+          <h1 className={clsx("text-2xl font-bold text-slate-900 ",
+            showtitle ? 'line-clamp-none' : 'line-clamp-2',
+          )}>{risk.title}</h1>
+          <button
+            onClick={() => setShowTitle(!showtitle)}
+            className="text-sm text-primary-400 hover:underline"
+          >
+            {showtitle ? 'Show Less' : 'Show More'}
+          </button>
+
+          {/* <p className="text-slate-600">{risk.description || 'No description'}</p> */}
         </div>
         <div className="flex items-center gap-3">
           <span className={`rounded-full border px-3 py-1 text-sm ${categoryStyle.color}`}>

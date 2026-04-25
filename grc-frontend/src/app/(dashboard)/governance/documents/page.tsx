@@ -102,6 +102,10 @@ interface DocumentListResponse {
   limit: number;
 }
 
+interface DocumentHierarchyItem extends DocumentItem {
+  children?: DocumentHierarchyItem[];
+}
+
 const DOCUMENT_TYPES = [
   { value: '', label: 'All Types' },
   { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-[var(--color-base)]', bgColor: 'bg-[var(--color-base-soft)]' },
@@ -172,6 +176,9 @@ const getFileTypeColor = (fileType: string | null): string => {
   return 'text-[var(--color-muted)]';
 };
 
+const normalizeDocType = (value: string | null | undefined): string =>
+  String(value || '').trim().toLowerCase();
+
 const dedupeFrameworkOptions = (items: any[] = []) => {
   const statusRank: Record<string, number> = { published: 4, completed: 3, classified: 2, parsed: 1 };
   const deduped = new Map<string, any>();
@@ -208,6 +215,8 @@ export default function GovernanceDocumentsPage() {
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'hierarchy'>('list');
+  const [expandedNodeIds, setExpandedNodeIds] = useState<number[]>([]);
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [page, setPage] = useState(0);
@@ -233,6 +242,12 @@ export default function GovernanceDocumentsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const invalidateDocumentQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+    queryClient.invalidateQueries({ queryKey: ['governance-documents-hierarchy'] });
+    queryClient.invalidateQueries({ queryKey: ['governance-documents-parent-options'] });
+  };
+
   const { data, isLoading, error } = useQuery({
     queryKey: ['governance-documents', typeFilter, statusFilter, searchTerm, sortField, sortOrder, page, pageSize],
     queryFn: async () => {
@@ -251,6 +266,31 @@ export default function GovernanceDocumentsPage() {
     },
   });
 
+  const { data: parentDocumentOptions = [] } = useQuery({
+    queryKey: ['governance-documents-parent-options'],
+    queryFn: async () => {
+      const response = await governanceApi.getDocuments({
+        skip: 0,
+        limit: 1000,
+        sort_by: 'title',
+        sort_order: 'asc',
+      } as any);
+      const payload = response.data as unknown as DocumentListResponse;
+      return payload.items || [];
+    },
+    staleTime: 60 * 1000,
+  });
+
+  const { data: hierarchyDocuments = [], isLoading: isHierarchyLoading } = useQuery({
+    queryKey: ['governance-documents-hierarchy'],
+    queryFn: async () => {
+      const response = await governanceApi.getDocumentHierarchy();
+      return (response.data || []) as DocumentHierarchyItem[];
+    },
+    enabled: viewMode === 'hierarchy',
+    staleTime: 60 * 1000,
+  });
+
   const createMutation = useMutation({
     mutationFn: (data: Partial<DocumentItem>) => {
       const payload = {
@@ -259,6 +299,7 @@ export default function GovernanceDocumentsPage() {
         content: data.content,
         doc_type: data.doc_type,
         classification: data.classification || 'internal',
+        parent_document_id: data.parent_document_id || null,
         owner_id: data.owner_id,
         review_cycle_months: data.review_cycle_months || 12,
         effective_date: data.effective_date,
@@ -267,7 +308,7 @@ export default function GovernanceDocumentsPage() {
       return governanceApi.createDocument(payload as any);
     },
     onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+      invalidateDocumentQueries();
       if (autoParseAfterCreate) {
         const createdDocumentId = (response.data as { id?: number } | undefined)?.id;
         if (createdDocumentId) {
@@ -288,6 +329,7 @@ export default function GovernanceDocumentsPage() {
         content: data.content,
         doc_type: data.doc_type,
         classification: data.classification,
+        parent_document_id: data.parent_document_id || null,
         owner_id: data.owner_id,
         review_cycle_months: data.review_cycle_months,
         effective_date: data.effective_date,
@@ -296,7 +338,7 @@ export default function GovernanceDocumentsPage() {
       return governanceApi.updateDocument(id, payload as any);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+      invalidateDocumentQueries();
       setIsModalOpen(false);
       setEditingDocument(null);
     },
@@ -305,14 +347,14 @@ export default function GovernanceDocumentsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => governanceApi.deleteDocument(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+      invalidateDocumentQueries();
     },
   });
 
   const uploadWithFileMutation = useMutation({
     mutationFn: (formData: FormData) => governanceApi.uploadDocumentWithFile(formData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+      invalidateDocumentQueries();
       setIsUploadModalOpen(false);
     },
   });
@@ -321,7 +363,7 @@ export default function GovernanceDocumentsPage() {
     mutationFn: ({ documentId, formData }: { documentId: number; formData: FormData }) => 
       governanceApi.uploadFileToDocument(documentId, formData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+      invalidateDocumentQueries();
       setUploadingToDocumentId(null);
     },
   });
@@ -334,7 +376,7 @@ export default function GovernanceDocumentsPage() {
     onSuccess: (response, documentId) => {
       const data = response.data as { total_statements: number };
       setParseResult({ documentId, count: data.total_statements });
-      queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+      invalidateDocumentQueries();
       setParsingDocumentId(null);
       setTimeout(() => setParseResult(null), 10000);
     },
@@ -346,7 +388,7 @@ export default function GovernanceDocumentsPage() {
   const publishMutation = useMutation({
     mutationFn: (documentId: number) => governanceApi.publishDocument(documentId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+      invalidateDocumentQueries();
       toast({
         type: 'success',
         title: 'Document Published',
@@ -366,7 +408,7 @@ export default function GovernanceDocumentsPage() {
     mutationFn: ({ documentId, userIds, dueDate }: { documentId: number; userIds: number[]; dueDate?: string }) => 
       governanceApi.requestAttestation(documentId, { user_ids: userIds, due_date: dueDate }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
+      invalidateDocumentQueries();
       setAttestationTargetDocument(null);
       toast({
         type: 'success',
@@ -384,7 +426,7 @@ export default function GovernanceDocumentsPage() {
   });
 
   const aiDraftMutation = useMutation({
-    mutationFn: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string }) =>
+    mutationFn: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; parent_document_id?: number }) =>
       governanceApi.generatePolicyDraft(data),
     onSuccess: (response) => {
       setAIDraftResult(response.data as typeof aiDraftResult);
@@ -439,11 +481,12 @@ export default function GovernanceDocumentsPage() {
 
   const uniqueOwners = useMemo(() => {
     const owners = new Set<string>();
-    documents.forEach(doc => {
+    const ownerSource = parentDocumentOptions.length > 0 ? parentDocumentOptions : documents;
+    ownerSource.forEach(doc => {
       if (doc.owner_name) owners.add(doc.owner_name);
     });
     return Array.from(owners);
-  }, [documents]);
+  }, [documents, parentDocumentOptions]);
 
   const filteredDocuments = useMemo(() => {
     let filtered = documents;
@@ -454,6 +497,66 @@ export default function GovernanceDocumentsPage() {
     
     return filtered;
   }, [documents, ownerFilter]);
+
+  const filteredHierarchyDocuments = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    const applyHierarchyFilters = (nodes: DocumentHierarchyItem[]): DocumentHierarchyItem[] => {
+      return nodes
+        .map((node) => {
+          const children = applyHierarchyFilters(node.children || []);
+          const matchesType = !typeFilter || node.doc_type === typeFilter;
+          const matchesStatus = !statusFilter || node.status === statusFilter;
+          const matchesOwner = !ownerFilter || node.owner_name === ownerFilter;
+          const matchesSearch = !normalizedSearch || [
+            node.title,
+            node.description || '',
+            node.document_code || '',
+            node.owner_name || '',
+          ].some((value) => value.toLowerCase().includes(normalizedSearch));
+          const matchesCurrentNode = matchesType && matchesStatus && matchesOwner && matchesSearch;
+
+          if (matchesCurrentNode || children.length > 0) {
+            return {
+              ...node,
+              children,
+            };
+          }
+          return null;
+        })
+        .filter((node): node is DocumentHierarchyItem => node !== null);
+    };
+
+    return applyHierarchyFilters(hierarchyDocuments);
+  }, [hierarchyDocuments, searchTerm, typeFilter, statusFilter, ownerFilter]);
+
+  const allHierarchyNodeIds = useMemo(() => {
+    const ids: number[] = [];
+    const walk = (nodes: DocumentHierarchyItem[]) => {
+      nodes.forEach((node) => {
+        ids.push(node.id);
+        if (node.children?.length) walk(node.children);
+      });
+    };
+    walk(filteredHierarchyDocuments);
+    return ids;
+  }, [filteredHierarchyDocuments]);
+
+  const toggleNodeExpanded = (documentId: number) => {
+    setExpandedNodeIds((prev) =>
+      prev.includes(documentId)
+        ? prev.filter((id) => id !== documentId)
+        : [...prev, documentId]
+    );
+  };
+
+  const expandAllHierarchyNodes = () => {
+    setExpandedNodeIds(allHierarchyNodeIds);
+  };
+
+  const collapseAllHierarchyNodes = () => {
+    setExpandedNodeIds([]);
+  };
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -497,6 +600,151 @@ export default function GovernanceDocumentsPage() {
       </div>
     </th>
   );
+
+  const renderHierarchyNode = (doc: DocumentHierarchyItem, depth = 0): React.ReactNode => {
+    const hasChildren = Boolean(doc.children && doc.children.length > 0);
+    const isExpanded = expandedNodeIds.includes(doc.id);
+    const typeStyle = getTypeStyle(doc.doc_type);
+    const statusStyle = getStatusStyle(doc.status);
+
+    return (
+      <div key={doc.id}>
+        <div className="grid grid-cols-[minmax(0,1fr)_140px_80px_140px_140px_auto] items-center gap-3 border-b border-[var(--color-border)] px-4 py-3 hover:bg-[var(--color-hover)] transition-colors">
+          <div className="flex min-w-0 items-center gap-1" style={{ paddingLeft: `${depth * 24}px` }}>
+            {hasChildren ? (
+              <button
+                onClick={() => toggleNodeExpanded(doc.id)}
+                className="rounded p-1 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
+                title={isExpanded ? 'Collapse' : 'Expand'}
+              >
+                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </button>
+            ) : (
+              <span className="inline-block h-6 w-6" />
+            )}
+            <button
+              onClick={() => router.push(`/governance/documents/${doc.id}`)}
+              className="min-w-0 flex-1 truncate text-left text-sm font-medium cw-text-default hover:text-[var(--color-base)]"
+              title={doc.title}
+            >
+              {doc.title}
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 text-sm cw-text-default">
+            <span className={`inline-block h-2 w-2 rounded-full ${(statusStyle.bgColor || 'bg-[var(--color-muted)]').replace('/20', '')}`} />
+            <span className="truncate">{statusStyle.label}</span>
+          </div>
+
+          <div className="text-sm cw-text-default">
+            {doc.current_version || '1.0'}
+          </div>
+
+          <div className="text-sm cw-text-default truncate" title={typeStyle.label}>
+            {typeStyle.label}
+          </div>
+
+          <div className="text-sm cw-text-muted truncate" title={doc.owner_name || '-'}>
+            {doc.owner_name || '-'}
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => router.push(`/governance/documents/${doc.id}`)}
+              className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
+              title="View Details"
+            >
+              <Eye className="h-4 w-4" />
+            </button>
+            {canEdit && (
+              <button
+                onClick={() => handleEdit(doc)}
+                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
+                title="Edit"
+              >
+                <Edit2 className="h-4 w-4" />
+              </button>
+            )}
+            <button
+              onClick={() => handleDownload(doc)}
+              className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
+              title={doc.file_name ? 'Download File' : 'Download Draft as HTML'}
+            >
+              <Download className="h-4 w-4" />
+            </button>
+            {doc.file_name ? (
+              <button
+                onClick={() => parsePolicyMutation.mutate(doc.id)}
+                className={`rounded p-1.5 transition-colors ${
+                  doc.policy_statement_count && doc.policy_statement_count > 0
+                    ? 'text-[var(--color-success)] hover:bg-[var(--color-success-soft)]'
+                    : 'text-[var(--color-base)] hover:bg-[var(--color-base-soft)]'
+                }`}
+                title={doc.policy_statement_count && doc.policy_statement_count > 0
+                  ? `${doc.policy_statement_count} statements extracted - Click to re-parse`
+                  : 'Parse Policy Statements'
+                }
+                disabled={parsingDocumentId === doc.id}
+              >
+                {parsingDocumentId === doc.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Wand2 className="h-4 w-4" />
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={() => setUploadingToDocumentId(doc.id)}
+                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-base-soft)] hover:text-[var(--color-base)] transition-colors"
+                title="Upload File"
+              >
+                <Upload className="h-4 w-4" />
+              </button>
+            )}
+            {doc.status === 'approved' && (
+              <button
+                onClick={() => publishMutation.mutate(doc.id)}
+                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
+                title="Publish Document"
+                disabled={publishMutation.isPending}
+              >
+                {publishMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Globe className="h-4 w-4" />
+                )}
+              </button>
+            )}
+            {doc.status === 'published' && (
+              <button
+                onClick={() => setAttestationTargetDocument(doc)}
+                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-base-soft)] hover:text-[var(--color-base)] transition-colors"
+                title="Request Attestation"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            )}
+            {canDelete && (
+              <button
+                onClick={() => handleDelete(doc)}
+                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] transition-colors"
+                title="Delete"
+                disabled={deleteMutation.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {hasChildren && isExpanded && (
+          <div>
+            {(doc.children || []).map((child) => renderHierarchyNode(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   if (error) {
     return (
@@ -622,12 +870,78 @@ export default function GovernanceDocumentsPage() {
                 <option key={owner} value={owner}>{owner}</option>
               ))}
             </select>
+
+            <div className="inline-flex overflow-hidden rounded-lg border border-[var(--color-border)]">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-2 text-sm font-medium transition-colors ${viewMode === 'list' ? 'bg-[var(--color-base-soft)] text-[var(--color-base)]' : 'bg-[var(--color-subtle)] cw-text-muted hover:bg-[var(--color-hover)]'}`}
+                type="button"
+              >
+                List
+              </button>
+              <button
+                onClick={() => setViewMode('hierarchy')}
+                className={`border-l border-[var(--color-border)] px-3 py-2 text-sm font-medium transition-colors ${viewMode === 'hierarchy' ? 'bg-[var(--color-base-soft)] text-[var(--color-base)]' : 'bg-[var(--color-subtle)] cw-text-muted hover:bg-[var(--color-hover)]'}`}
+                type="button"
+              >
+                Hierarchy
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="cw-card overflow-hidden">
-        {isLoading ? (
+        {viewMode === 'hierarchy' ? (
+          isHierarchyLoading ? (
+            <div className="flex h-64 items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-[var(--color-base)]" />
+            </div>
+          ) : filteredHierarchyDocuments.length === 0 ? (
+            <div className="empty-state h-64">
+              <div className="empty-state-icon">
+                <FileText className="h-12 w-12 cw-text-muted" />
+              </div>
+              <p className="empty-state-title">No documents found in hierarchy</p>
+              <p className="text-sm cw-text-muted">Create documents or adjust filters to view parent-child structure.</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+                <p className="text-sm cw-text-muted">
+                  Showing {allHierarchyNodeIds.length} document{allHierarchyNodeIds.length !== 1 ? 's' : ''} in hierarchy view
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={expandAllHierarchyNodes}
+                    type="button"
+                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] px-3 py-1.5 text-xs font-medium cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
+                  >
+                    Expand All
+                  </button>
+                  <button
+                    onClick={collapseAllHierarchyNodes}
+                    type="button"
+                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] px-3 py-1.5 text-xs font-medium cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
+                  >
+                    Collapse All
+                  </button>
+                </div>
+              </div>
+              <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_140px_80px_140px_140px_auto] items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-xs font-medium uppercase tracking-wider cw-text-muted">
+                <div>Document</div>
+                <div>Status</div>
+                <div>Version</div>
+                <div>Type</div>
+                <div>Owner</div>
+                <div className="text-right">Actions</div>
+              </div>
+              <div>
+                {filteredHierarchyDocuments.map((doc) => renderHierarchyNode(doc))}
+              </div>
+            </>
+          )
+        ) : isLoading ? (
           <div className="flex h-64 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-[var(--color-base)]" />
           </div>
@@ -974,6 +1288,7 @@ export default function GovernanceDocumentsPage() {
       {isModalOpen && (
         <DocumentModal
           document={editingDocument}
+          parentDocuments={parentDocumentOptions}
           onClose={() => {
             setIsModalOpen(false);
             setEditingDocument(null);
@@ -1036,12 +1351,13 @@ export default function GovernanceDocumentsPage() {
 
       {isAIDraftModalOpen && (
         <AIDraftPolicyModal
+          parentDocuments={parentDocumentOptions}
           onClose={() => {
             setIsAIDraftModalOpen(false);
             setAIDraftResult(null);
           }}
           onGenerate={(data) => aiDraftMutation.mutate(data)}
-          onUseContent={(content: string, title: string, docType?: string, description?: string) => {
+          onUseContent={(content: string, title: string, docType?: string, description?: string, parentDocumentId?: number) => {
             setIsAIDraftModalOpen(false);
             setAIDraftResult(null);
             setAutoParseAfterCreate(true);
@@ -1050,6 +1366,7 @@ export default function GovernanceDocumentsPage() {
               content,
               doc_type: docType || 'policy',
               description: description || '',
+              parent_document_id: parentDocumentId || null,
             } as any);
             setIsModalOpen(true);
           }}
@@ -1506,17 +1823,19 @@ function UploadFileToDocumentModal({ documentId, onClose, onSubmit, isLoading }:
 
 interface DocumentModalProps {
   document: DocumentItem | null;
+  parentDocuments: DocumentItem[];
   onClose: () => void;
   onSubmit: (data: Partial<DocumentItem>) => void;
   isLoading: boolean;
 }
 
-function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModalProps) {
+function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading }: DocumentModalProps) {
   const [formData, setFormData] = useState({
     title: document?.title || '',
     description: document?.description || '',
     doc_type: document?.doc_type || 'policy',
     classification: document?.classification || 'internal',
+    parent_document_id: document?.parent_document_id || null,
     owner_id: document?.owner_id || null,
     content: document?.content || '',
     review_cycle_months: document?.review_cycle_months || 12,
@@ -1524,10 +1843,13 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
     expiry_date: document?.expiry_date?.split('T')[0] || '',
   });
 
+  const availableParentDocuments = parentDocuments.filter((docOption) => docOption.id !== document?.id);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
       ...formData,
+      parent_document_id: formData.parent_document_id || null,
       effective_date: formData.effective_date || null,
       expiry_date: formData.expiry_date || null,
     } as any);
@@ -1599,6 +1921,27 @@ function DocumentModal({ document, onClose, onSubmit, isLoading }: DocumentModal
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Select Parent Document</label>
+            <select
+              value={formData.parent_document_id ?? ''}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  parent_document_id: e.target.value ? Number(e.target.value) : null,
+                }))
+              }
+              className="w-full cw-field"
+            >
+              <option value="">None (Top-level document)</option>
+              {availableParentDocuments.map((docOption) => (
+                <option key={docOption.id} value={docOption.id}>
+                  {docOption.title} ({docOption.doc_type})
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -1989,9 +2332,10 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
 }
 
 interface AIDraftPolicyModalProps {
+  parentDocuments: DocumentItem[];
   onClose: () => void;
-  onGenerate: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string }) => void;
-  onUseContent: (content: string, title: string, docType?: string, description?: string) => void;
+  onGenerate: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; parent_document_id?: number }) => void;
+  onUseContent: (content: string, title: string, docType?: string, description?: string, parentDocumentId?: number) => void;
   isLoading: boolean;
   result: {
     generated_content: string;
@@ -2003,13 +2347,14 @@ interface AIDraftPolicyModalProps {
   } | null;
 }
 
-function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, result }: AIDraftPolicyModalProps) {
+function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent, isLoading, result }: AIDraftPolicyModalProps) {
   const [formData, setFormData] = useState({
     doc_type: 'policy',
     title: '',
     description: '',
   });
   const [selectedFrameworkIds, setSelectedFrameworkIds] = useState<number[]>([]);
+  const [selectedParentDocumentId, setSelectedParentDocumentId] = useState<number | null>(null);
   const [showFrameworkDropdown, setShowFrameworkDropdown] = useState(false);
   const [suggestions, setSuggestions] = useState<any[] | null>(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
@@ -2048,13 +2393,21 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
   };
 
   const selectedFrameworks = (frameworks || []).filter((f: any) => selectedFrameworkIds.includes(f.id));
+  const filteredSuggestions = useMemo(() => {
+    if (!suggestions) return null;
+    const selectedDocType = normalizeDocType(formData.doc_type);
+    return suggestions.filter((suggestion: any) => normalizeDocType(suggestion?.doc_type) === selectedDocType);
+  }, [suggestions, formData.doc_type]);
 
   const handleSuggestDocuments = async () => {
     if (selectedFrameworkIds.length === 0) return;
     setSuggestionsLoading(true);
     setShowSuggestions(true);
     try {
-      const response = await governanceApi.suggestPoliciesForFramework({ framework_ids: selectedFrameworkIds });
+      const response = await governanceApi.suggestPoliciesForFramework({
+        framework_ids: selectedFrameworkIds,
+        doc_type: formData.doc_type,
+      });
       setSuggestions((response.data as any)?.suggestions || []);
     } catch (error: any) {
       toast({
@@ -2070,7 +2423,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
 
   const handleSelectSuggestion = (suggestion: any) => {
     setFormData({
-      doc_type: suggestion.doc_type || 'policy',
+      doc_type: formData.doc_type,
       title: suggestion.title || '',
       description: suggestion.description || '',
     });
@@ -2091,6 +2444,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
       title: formData.title,
       framework_ids: selectedFrameworkIds.length > 0 ? selectedFrameworkIds : undefined,
       description: formData.description || undefined,
+      parent_document_id: selectedParentDocumentId || undefined,
     });
   };
 
@@ -2147,7 +2501,11 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                   <label className="block text-sm font-medium cw-text mb-1">Document Type *</label>
                   <select
                     value={formData.doc_type}
-                    onChange={(e) => setFormData(prev => ({ ...prev, doc_type: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, doc_type: e.target.value }));
+                      setSuggestions(null);
+                      setShowSuggestions(false);
+                    }}
                     className="w-full cw-field"
                   >
                     <option value="policy">Policy</option>
@@ -2157,7 +2515,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                   </select>
                 </div>
                 <div ref={dropdownRef} className="relative">
-                  <label className="block text-sm font-medium cw-text mb-1">Regulatory Frameworks</label>
+                  <label className="block text-sm font-medium cw-text mb-1">Regulatory Frameworks (Optional)</label>
                   <button
                     type="button"
                     onClick={() => setShowFrameworkDropdown(!showFrameworkDropdown)}
@@ -2193,6 +2551,25 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                     </div>
                   )}
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium cw-text mb-1">Select Parent Document (Optional)</label>
+                <select
+                  value={selectedParentDocumentId ?? ''}
+                  onChange={(e) => setSelectedParentDocumentId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full cw-field"
+                >
+                  <option value="">None</option>
+                  {parentDocuments.map((docOption) => (
+                    <option key={docOption.id} value={docOption.id}>
+                      {docOption.title} ({docOption.doc_type})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs cw-text-muted">
+                  Framework references are optional. You can generate a comprehensive document with or without frameworks.
+                </p>
               </div>
 
               {selectedFrameworks.length > 0 && (
@@ -2244,7 +2621,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                       <Wand2 className="h-4 w-4 text-blue-700" />
                       <span className="text-sm font-medium text-blue-700">
                         AI-Suggested Documents
-                        {suggestions && <span className="ml-1 text-blue-600">({suggestions.length})</span>}
+                        {filteredSuggestions && <span className="ml-1 text-blue-600">({filteredSuggestions.length})</span>}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -2272,8 +2649,8 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <p>Analyzing framework controls and requirements...</p>
                       </div>
-                    ) : suggestions && suggestions.length > 0 ? (
-                      suggestions.map((suggestion: any, idx: number) => (
+                    ) : filteredSuggestions && filteredSuggestions.length > 0 ? (
+                      filteredSuggestions.map((suggestion: any, idx: number) => (
                         <button
                           key={idx}
                           type="button"
@@ -2315,7 +2692,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                       ))
                     ) : (
                       <div className="text-center py-4 text-sm cw-text-muted">
-                        No suggestions available. Try selecting different frameworks.
+                        No {formData.doc_type} suggestions available. Try selecting different frameworks.
                       </div>
                     )}
                   </div>
@@ -2436,6 +2813,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                       title: formData.title,
                       framework_ids: selectedFrameworkIds.length > 0 ? selectedFrameworkIds : undefined,
                       description: formData.description || undefined,
+                      parent_document_id: selectedParentDocumentId || undefined,
                     });
                   }}
                   disabled={isLoading}
@@ -2445,7 +2823,7 @@ function AIDraftPolicyModal({ onClose, onGenerate, onUseContent, isLoading, resu
                   Regenerate
                 </button>
                 <button
-                  onClick={() => onUseContent(result.generated_content, result.suggested_title, formData.doc_type, formData.description)}
+                  onClick={() => onUseContent(result.generated_content, result.suggested_title, formData.doc_type, formData.description, selectedParentDocumentId || undefined)}
                   className="cw-btn-primary flex items-center gap-2"
                 >
                   <CheckCircle className="h-4 w-4" />

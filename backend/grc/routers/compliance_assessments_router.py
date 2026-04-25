@@ -2,9 +2,10 @@ import os
 import uuid
 import io
 import json
+import re
 import logging
 import traceback
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 from fastapi.responses import StreamingResponse
@@ -38,6 +39,16 @@ AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_UR
 
 EVIDENCE_UPLOAD_DIR = "backend/grc/uploads/assessment_evidence"
 os.makedirs(EVIDENCE_UPLOAD_DIR, exist_ok=True)
+
+CIS_WS2012R2_CONTROLS_JSON = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "seed_data",
+        "CIS",
+        "CIS_WS2012R2_Controls.json",
+    )
+)
 
 EVIDENCE_RECOMMENDATION_PROMPT = """Analyze this assessment item/control requirement and recommend what specific evidence would demonstrate compliance or completion.
 
@@ -86,6 +97,11 @@ class ApprovalActionRequest(BaseModel):
     delegated_to: Optional[int] = None
 
 
+class LinkExistingEvidenceRequest(BaseModel):
+    evidence_id: int
+    workflow_id: Optional[int] = None
+
+
 class AssessmentContextRequest(BaseModel):
     name: str
     assessment_type: str
@@ -132,11 +148,15 @@ COLUMN_KEYWORDS_PRIORITY = [
 
 STATUS_MAPPINGS = {
     "complied": ["complied", "yes", "y", "complete", "completed", "done", "met", "satisfied", "in place", "implemented", "fully complied", "fully implemented", "pass", "passed", "conform", "conforms", "conforming"],
-    "partially_complied": ["partial", "partially", "partially complied", "partial compliance", "in progress", "wip", "work in progress", "partially met", "partially implemented", "partially done", "some"],
+    "partially_complied": ["partial", "partially", "partially complied", "partially compliant", "partially_compliant", "partial compliant", "partial_compliant", "partial compliance", "in progress", "wip", "work in progress", "partially met", "partially implemented", "partially done", "some"],
     "not_complied": ["not complied", "no", "n", "not met", "not satisfied", "not implemented", "non-compliant", "non compliant", "fail", "failed", "missing", "absent", "not in place", "gap", "not done"],
     "in_progress": ["in progress", "ongoing", "pending", "wip", "work in progress", "under development", "being implemented"],
     "na": ["na", "n/a", "not applicable", "not relevant", "n.a.", "n.a", "-", "none"]
 }
+
+
+def _normalize_status_token(value: str) -> str:
+    return re.sub(r"[\s\-_]+", " ", str(value).lower()).strip()
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -152,9 +172,12 @@ def normalize_status(value: str) -> str:
     if not value:
         return "in_progress"
     value_lower = str(value).lower().strip()
+    value_token = _normalize_status_token(value_lower)
     for status_key, variants in STATUS_MAPPINGS.items():
-        if value_lower in variants:
+        if value_lower in variants or value_token in {_normalize_status_token(v) for v in variants}:
             return status_key
+    if value_token == "partially compliant":
+        return "partially_complied"
     return "in_progress"
 
 
@@ -648,6 +671,999 @@ def parse_xlsx_maturity_tool(file_content: bytes) -> dict:
     return result
 
 
+def _normalized_header(value: object) -> str:
+    return ''.join(ch.lower() for ch in str(value or "").strip() if ch.isalnum())
+
+
+def _status_from_asvs_valid(value: object) -> str:
+    if value is None:
+        return "in_progress"
+    if isinstance(value, bool):
+        return "complied" if value else "not_complied"
+    if isinstance(value, (int, float)):
+        return "complied" if float(value) > 0 else "not_complied"
+
+    text = str(value).strip().lower()
+    if not text:
+        return "in_progress"
+    if text in {"yes", "y", "valid", "true", "pass", "passed", "done", "implemented", "complied"}:
+        return "complied"
+    if text in {"partial", "partially", "partially complied"}:
+        return "partially_complied"
+    if text in {"no", "n", "invalid", "false", "fail", "failed", "not valid", "not complied"}:
+        return "not_complied"
+    if text in {"na", "n/a", "not applicable"}:
+        return "na"
+    if text in {"not started", "pending", "todo", "to do"}:
+        return "in_progress"
+    return normalize_status(text)
+
+
+def detect_asvs_checklist_format(wb) -> bool:
+    if "ASVS Results" not in wb.sheetnames:
+        return False
+    for sheet_name in wb.sheetnames:
+        if sheet_name == "ASVS Results":
+            continue
+        ws = wb[sheet_name]
+        headers = [_normalized_header(cell.value) for cell in ws[1]]
+        if "verificationrequirement" in headers and "#" in [str(cell.value).strip() for cell in ws[1] if cell.value is not None]:
+            return True
+    return False
+
+
+def parse_asvs_checklist_workbook(wb) -> tuple[List[dict], dict]:
+    items: List[dict] = []
+    parsed_sheets: List[str] = []
+
+    for sheet_name in wb.sheetnames:
+        if sheet_name == "ASVS Results":
+            continue
+        ws = wb[sheet_name]
+        raw_headers = [cell.value for cell in ws[1]]
+        normalized_headers = [_normalized_header(v) for v in raw_headers]
+
+        try:
+            id_idx = next(i for i, val in enumerate(raw_headers) if str(val or "").strip() == "#")
+        except StopIteration:
+            id_idx = -1
+
+        index_map = {
+            "area": normalized_headers.index("area") if "area" in normalized_headers else -1,
+            "requirement": normalized_headers.index("verificationrequirement") if "verificationrequirement" in normalized_headers else -1,
+            "valid": normalized_headers.index("valid") if "valid" in normalized_headers else -1,
+            "source": normalized_headers.index("sourcecodereference") if "sourcecodereference" in normalized_headers else -1,
+            "comment": normalized_headers.index("comment") if "comment" in normalized_headers else -1,
+            "tool": normalized_headers.index("toolused") if "toolused" in normalized_headers else -1,
+            "level": normalized_headers.index("asvslevel") if "asvslevel" in normalized_headers else -1,
+            "cwe": normalized_headers.index("cwe") if "cwe" in normalized_headers else -1,
+            "nist": normalized_headers.index("nist") if "nist" in normalized_headers else -1,
+        }
+        if id_idx < 0 or index_map["requirement"] < 0:
+            continue
+
+        current_area = sheet_name
+        parsed_sheets.append(sheet_name)
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            if not row or not any(cell not in (None, "") for cell in row):
+                continue
+
+            control_id_raw = row[id_idx] if id_idx < len(row) else None
+            requirement_raw = row[index_map["requirement"]] if index_map["requirement"] < len(row) else None
+            area_raw = row[index_map["area"]] if index_map["area"] >= 0 and index_map["area"] < len(row) else None
+
+            if area_raw:
+                current_area = str(area_raw).strip()
+
+            control_id = str(control_id_raw or "").strip()
+            requirement = str(requirement_raw or "").strip()
+            if not control_id and not requirement:
+                continue
+            if not requirement:
+                continue
+
+            level_val = str(row[index_map["level"]] or "").strip() if index_map["level"] >= 0 and index_map["level"] < len(row) else ""
+            cwe_val = str(row[index_map["cwe"]] or "").strip() if index_map["cwe"] >= 0 and index_map["cwe"] < len(row) else ""
+            nist_val = str(row[index_map["nist"]] or "").strip() if index_map["nist"] >= 0 and index_map["nist"] < len(row) else ""
+            source_ref = str(row[index_map["source"]] or "").strip() if index_map["source"] >= 0 and index_map["source"] < len(row) else ""
+            comment_val = str(row[index_map["comment"]] or "").strip() if index_map["comment"] >= 0 and index_map["comment"] < len(row) else ""
+            tool_val = str(row[index_map["tool"]] or "").strip() if index_map["tool"] >= 0 and index_map["tool"] < len(row) else ""
+
+            remark_parts = []
+            if level_val:
+                remark_parts.append(f"ASVS Level: {level_val}")
+            if cwe_val:
+                remark_parts.append(f"CWE: {cwe_val}")
+            if nist_val:
+                remark_parts.append(f"NIST: {nist_val}")
+            if comment_val:
+                remark_parts.append(f"Comment: {comment_val}")
+            if tool_val:
+                remark_parts.append(f"Tool Used: {tool_val}")
+
+            level_num = None
+            try:
+                level_num = int(float(level_val))
+            except Exception:
+                level_num = None
+
+            priority = None
+            if level_num is not None:
+                if level_num >= 3:
+                    priority = "high"
+                elif level_num == 2:
+                    priority = "medium"
+                elif level_num == 1:
+                    priority = "low"
+
+            valid_raw = row[index_map["valid"]] if index_map["valid"] >= 0 and index_map["valid"] < len(row) else None
+            status_val = _status_from_asvs_valid(valid_raw)
+            items.append({
+                "item_number": control_id or str(len(items) + 1),
+                "area_domain": current_area or sheet_name,
+                "control_description": requirement,
+                "compliance_status": status_val,
+                "evidence_reference": source_ref or None,
+                "remarks": " | ".join(remark_parts) if remark_parts else None,
+                "priority": priority,
+            })
+
+    metadata = {
+        "assessment_format": "asvs_checklist",
+        "detected_format": "asvs_checklist",
+        "sheets_parsed": parsed_sheets,
+        "columns_detected": [
+            "item_number",
+            "area_domain",
+            "control_description",
+            "compliance_status",
+            "evidence_reference",
+            "remarks",
+            "priority",
+        ],
+    }
+    return items, metadata
+
+
+def _status_from_owasp_result(value: object) -> str:
+    if value is None:
+        return "in_progress"
+    text = str(value).strip().lower()
+    if not text:
+        return "in_progress"
+    if text in {"pass", "passed", "complete", "completed", "done", "ok", "success"}:
+        return "complied"
+    if text in {"partial", "partially complete", "partially completed", "partially"}:
+        return "partially_complied"
+    if text in {"fail", "failed", "non-compliant", "not complied", "not compliant"}:
+        return "not_complied"
+    if text in {"na", "n/a", "not applicable"}:
+        return "na"
+    if text in {"not started", "in progress", "pending", "open", "under test", "testing"}:
+        return "in_progress"
+    return normalize_status(text)
+
+
+def _status_from_ubl_audit_tracking(value: object) -> str:
+    if value is None:
+        return "in_progress"
+    text = str(value).strip().lower()
+    if not text:
+        return "in_progress"
+    if any(token in text for token in ["closed", "complete", "completed", "done", "resolved"]):
+        return "complied"
+    if any(token in text for token in ["in-progress", "in progress", "ongoing", "open", "started"]):
+        return "in_progress"
+    if any(token in text for token in ["to be started", "not started", "pending"]):
+        return "in_progress"
+    if any(token in text for token in ["rejected", "failed", "not complied", "non-compliant"]):
+        return "not_complied"
+    if text in {"na", "n/a", "not applicable"}:
+        return "na"
+    return normalize_status(text)
+
+
+def _cell_to_text(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    text = str(value).strip()
+    return text or None
+
+
+def _find_header_row_with_keys(ws, expected_keys: List[str], max_scan_rows: int = 12) -> Optional[int]:
+    expected = {_normalized_header(key) for key in expected_keys if key}
+    if not expected:
+        return None
+    max_row = min(ws.max_row, max_scan_rows)
+    for row_idx in range(1, max_row + 1):
+        row_norm = {_normalized_header(cell.value) for cell in ws[row_idx] if cell.value is not None}
+        if len(expected.intersection(row_norm)) >= max(2, min(3, len(expected))):
+            return row_idx
+    return None
+
+
+def detect_ubl_audit_master_tracking_format(wb) -> bool:
+    normalized_sheets = {_normalize_sheet_label(s) for s in wb.sheetnames}
+    signal_sheets = {"auditospoints", "internalaudit", "mlintl", "mldomestic", "sbp"}
+    matches = len(signal_sheets.intersection(normalized_sheets))
+    return matches >= 3 or (matches >= 2 and "dashboard" in normalized_sheets)
+
+
+def parse_ubl_audit_master_tracking_workbook(wb) -> tuple[List[dict], dict]:
+    items: List[dict] = []
+    parsed_sheets: List[str] = []
+
+    def _add_item(
+        *,
+        sheet: str,
+        item_number: Optional[str],
+        area_domain: Optional[str],
+        control_description: Optional[str],
+        compliance_status: Optional[str],
+        gaps_identified: Optional[str] = None,
+        proposed_solution: Optional[str] = None,
+        responsible_party: Optional[str] = None,
+        timeline: Optional[str] = None,
+        priority: Optional[str] = None,
+        evidence_reference: Optional[str] = None,
+        remarks: Optional[str] = None,
+    ) -> None:
+        description = (control_description or "").strip()
+        if not description:
+            return
+        item = {
+            "item_number": (item_number or str(len(items) + 1))[:50],
+            "area_domain": (area_domain or sheet)[:255],
+            "control_description": description[:8000],
+            "compliance_status": compliance_status or "in_progress",
+            "gaps_identified": gaps_identified[:5000] if gaps_identified else None,
+            "proposed_solution": proposed_solution[:5000] if proposed_solution else None,
+            "responsible_party": responsible_party[:255] if responsible_party else None,
+            "timeline": timeline[:255] if timeline else None,
+            "priority": priority[:100].lower() if priority else None,
+            "evidence_reference": evidence_reference[:255] if evidence_reference else None,
+            "remarks": remarks[:5000] if remarks else None,
+        }
+        items.append(item)
+
+    for sheet_name in wb.sheetnames:
+        normalized_name = _normalize_sheet_label(sheet_name)
+        if normalized_name in {"dashboard", "sheet1"}:
+            continue
+        ws = wb[sheet_name]
+
+        # -------------------------------------------------------------- #
+        # Audit OS Points
+        # -------------------------------------------------------------- #
+        if normalized_name == "auditospoints":
+            header_row_idx = _find_header_row_with_keys(
+                ws, ["S#", "Description", "Source", "Raised By:", "Responsible", "Target Completion date", "Status"]
+            )
+            if not header_row_idx:
+                continue
+            headers = [cell.value for cell in ws[header_row_idx]]
+            header_map = {_normalized_header(h): idx for idx, h in enumerate(headers) if h is not None}
+
+            def g(row, key: str) -> Optional[str]:
+                idx = header_map.get(_normalized_header(key))
+                if idx is None or idx >= len(row):
+                    return None
+                return _cell_to_text(row[idx])
+
+            parsed_sheets.append(sheet_name)
+            for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
+                description = g(row, "Description")
+                if not description:
+                    continue
+                status_raw = g(row, "Status")
+                _add_item(
+                    sheet=sheet_name,
+                    item_number=g(row, "S#"),
+                    area_domain=f"{sheet_name} - {(g(row, 'Raised By:') or 'Audit')}",
+                    control_description=description,
+                    compliance_status=_status_from_ubl_audit_tracking(status_raw),
+                    proposed_solution=g(row, "Next action Item"),
+                    responsible_party=g(row, "Responsible"),
+                    timeline=g(row, "Target Completion date"),
+                    evidence_reference=g(row, "Source"),
+                    remarks=f"Raised By: {g(row, 'Raised By:')}" if g(row, "Raised By:") else None,
+                )
+            continue
+
+        # -------------------------------------------------------------- #
+        # Internal Audit
+        # -------------------------------------------------------------- #
+        if normalized_name == "internalaudit":
+            header_row_idx = _find_header_row_with_keys(
+                ws, ["Year", "Branch / Unit", "Brief Detail of Exception", "Management Response", "Revised Target Date", "Status"]
+            )
+            if not header_row_idx:
+                continue
+            headers = [cell.value for cell in ws[header_row_idx]]
+            header_map = {_normalized_header(h): idx for idx, h in enumerate(headers) if h is not None}
+
+            def g(row, key: str) -> Optional[str]:
+                idx = header_map.get(_normalized_header(key))
+                if idx is None or idx >= len(row):
+                    return None
+                return _cell_to_text(row[idx])
+
+            parsed_sheets.append(sheet_name)
+            for row_idx, row in enumerate(ws.iter_rows(min_row=header_row_idx + 1, values_only=True), start=1):
+                exception_text = g(row, "Brief Detail of Exception")
+                if not exception_text:
+                    continue
+                branch = g(row, "Branch / Unit") or "Internal Audit"
+                year = g(row, "Year")
+                status_raw = g(row, "Status")
+                area = branch
+                if year:
+                    area = f"{branch} ({year})"
+                remarks_parts = []
+                intl_domestic = g(row, "International / Domestic")
+                tagged = g(row, "Tagged")
+                if intl_domestic:
+                    remarks_parts.append(f"Scope: {intl_domestic}")
+                if tagged:
+                    remarks_parts.append(f"Tagged: {tagged}")
+                _add_item(
+                    sheet=sheet_name,
+                    item_number=f"IA-{row_idx}",
+                    area_domain=area,
+                    control_description=exception_text,
+                    compliance_status=_status_from_ubl_audit_tracking(status_raw),
+                    gaps_identified=exception_text,
+                    proposed_solution=g(row, "Management Response"),
+                    responsible_party=tagged or branch,
+                    timeline=g(row, "Revised Target Date"),
+                    priority=g(row, "Risk"),
+                    remarks=" | ".join(remarks_parts) if remarks_parts else None,
+                )
+            continue
+
+        # -------------------------------------------------------------- #
+        # ML International / Domestic
+        # -------------------------------------------------------------- #
+        if normalized_name in {"mlintl", "mldomestic"}:
+            header_row_idx = _find_header_row_with_keys(
+                ws, ["Point No.", "Title", "Observation", "Recommendation", "Rating", "Status"]
+            )
+            if not header_row_idx:
+                continue
+            headers = [cell.value for cell in ws[header_row_idx]]
+            header_map = {_normalized_header(h): idx for idx, h in enumerate(headers) if h is not None}
+
+            def g(row, key: str) -> Optional[str]:
+                idx = header_map.get(_normalized_header(key))
+                if idx is None or idx >= len(row):
+                    return None
+                return _cell_to_text(row[idx])
+
+            parsed_sheets.append(sheet_name)
+            for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
+                title = g(row, "Title")
+                observation = g(row, "Observation")
+                recommendation = g(row, "Recommendation")
+                if not title and not observation:
+                    continue
+                description = title or "Audit Observation"
+                if observation:
+                    description = f"{description}. {observation}" if title else observation
+                owner = g(row, "Owner/Action") or g(row, "Owner")
+                mgmt_resp = g(row, "Management Response - Sep'22")
+                proposed_solution = recommendation
+                if mgmt_resp:
+                    proposed_solution = f"{recommendation}\n\nManagement Response: {mgmt_resp}" if recommendation else mgmt_resp
+                _add_item(
+                    sheet=sheet_name,
+                    item_number=g(row, "Point No."),
+                    area_domain=sheet_name,
+                    control_description=description,
+                    compliance_status=_status_from_ubl_audit_tracking(g(row, "Status")),
+                    gaps_identified=observation,
+                    proposed_solution=proposed_solution,
+                    responsible_party=owner,
+                    timeline=g(row, "Revised Target Date"),
+                    priority=g(row, "Rating"),
+                    remarks=f"Year: {g(row, 'Year')}" if g(row, "Year") else None,
+                )
+            continue
+
+        # -------------------------------------------------------------- #
+        # SBP observations
+        # -------------------------------------------------------------- #
+        if normalized_name == "sbp":
+            header_row_idx = _find_header_row_with_keys(
+                ws, ["S. No", "CG Ref. No.", "SBP Observation", "Pertain to", "Management Response", "Target Date", "Status 1"]
+            )
+            if not header_row_idx:
+                continue
+            headers = [cell.value for cell in ws[header_row_idx]]
+            header_map = {_normalized_header(h): idx for idx, h in enumerate(headers) if h is not None}
+
+            def g(row, key: str) -> Optional[str]:
+                idx = header_map.get(_normalized_header(key))
+                if idx is None or idx >= len(row):
+                    return None
+                return _cell_to_text(row[idx])
+
+            parsed_sheets.append(sheet_name)
+            for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
+                observation = g(row, "SBP Observation")
+                if not observation:
+                    continue
+                report_name = g(row, "Report Name") or "SBP"
+                pertain_to = g(row, "Pertain to")
+                area = report_name
+                if pertain_to:
+                    area = f"{report_name} - {pertain_to}"
+                remarks_parts = []
+                cg_ref = g(row, "CG Ref. No.")
+                ia_comments = g(row, "IA Comments (14-Sep-2022)")
+                initial_timeline = g(row, "Initial Timeline")
+                groups_revised = g(row, "Groups Revised")
+                if cg_ref:
+                    remarks_parts.append(f"CG Ref: {cg_ref}")
+                if groups_revised:
+                    remarks_parts.append(f"Groups Revised: {groups_revised}")
+                if initial_timeline:
+                    remarks_parts.append(f"Initial Timeline: {initial_timeline}")
+                if ia_comments:
+                    remarks_parts.append(f"IA Comments: {ia_comments}")
+                _add_item(
+                    sheet=sheet_name,
+                    item_number=g(row, "S. No") or cg_ref,
+                    area_domain=area,
+                    control_description=observation,
+                    compliance_status=_status_from_ubl_audit_tracking(g(row, "Status 1")),
+                    proposed_solution=g(row, "Management Response"),
+                    responsible_party=pertain_to or g(row, "Group"),
+                    timeline=g(row, "Target Date") or initial_timeline,
+                    remarks=" | ".join(remarks_parts) if remarks_parts else None,
+                )
+            continue
+
+    metadata = {
+        "assessment_format": "ubl_audit_master_tracking",
+        "detected_format": "ubl_audit_master_tracking",
+        "sheets_parsed": parsed_sheets,
+        "columns_detected": [
+            "item_number",
+            "area_domain",
+            "control_description",
+            "compliance_status",
+            "gaps_identified",
+            "proposed_solution",
+            "responsible_party",
+            "timeline",
+            "priority",
+            "evidence_reference",
+            "remarks",
+        ],
+    }
+    return items, metadata
+
+
+def detect_owasp_v4_checklist_format(wb) -> bool:
+    if "Testing Checklist" not in wb.sheetnames:
+        return False
+    ws = wb["Testing Checklist"]
+    for row in ws.iter_rows(min_row=1, max_row=min(20, ws.max_row), values_only=True):
+        normalized = [_normalized_header(v) for v in row]
+        if "testname" in normalized and "result" in normalized and "description" in normalized:
+            return True
+    return False
+
+
+def parse_owasp_v4_checklist_workbook(wb) -> tuple[List[dict], dict]:
+    ws = wb["Testing Checklist"]
+    header_row_idx = None
+    header_values = None
+
+    for row_idx in range(1, min(25, ws.max_row + 1)):
+        values = [ws.cell(row=row_idx, column=col).value for col in range(1, ws.max_column + 1)]
+        normalized = [_normalized_header(v) for v in values]
+        if "testname" in normalized and "result" in normalized and "description" in normalized:
+            header_row_idx = row_idx
+            header_values = values
+            break
+
+    if header_row_idx is None or header_values is None:
+        return [], {
+            "assessment_format": "owasp_v4_testing_checklist",
+            "detected_format": "owasp_v4_testing_checklist",
+            "columns_detected": [],
+        }
+
+    normalized_headers = [_normalized_header(v) for v in header_values]
+    name_idx = normalized_headers.index("testname") if "testname" in normalized_headers else 1
+    desc_idx = normalized_headers.index("description") if "description" in normalized_headers else 2
+    tools_idx = normalized_headers.index("tools") if "tools" in normalized_headers else 3
+    result_idx = normalized_headers.index("result") if "result" in normalized_headers else 4
+    remark_idx = normalized_headers.index("remark") if "remark" in normalized_headers else 5
+    code_idx = 0
+
+    items: List[dict] = []
+    current_area = "OWASP Testing"
+    code_pattern = re.compile(r"^OTG-[A-Z0-9-]+$", re.IGNORECASE)
+
+    for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
+        if not row or not any(cell not in (None, "") for cell in row):
+            continue
+
+        code_val = str(row[code_idx] or "").strip() if code_idx < len(row) else ""
+        test_name = str(row[name_idx] or "").strip() if name_idx < len(row) else ""
+        description = str(row[desc_idx] or "").strip() if desc_idx < len(row) else ""
+        tools = str(row[tools_idx] or "").strip() if tools_idx < len(row) else ""
+        result = row[result_idx] if result_idx < len(row) else None
+        remark = str(row[remark_idx] or "").strip() if remark_idx < len(row) else ""
+
+        if code_val and not code_pattern.match(code_val) and not test_name and not description:
+            current_area = code_val
+            continue
+        if not test_name and not description:
+            continue
+
+        control_description = test_name
+        if description:
+            control_description = f"{test_name}. {description}" if test_name else description
+
+        items.append({
+            "item_number": code_val if code_pattern.match(code_val) else str(len(items) + 1),
+            "area_domain": current_area,
+            "control_description": control_description,
+            "compliance_status": _status_from_owasp_result(result),
+            "evidence_reference": tools or None,
+            "remarks": remark or None,
+        })
+
+    metadata = {
+        "assessment_format": "owasp_v4_testing_checklist",
+        "detected_format": "owasp_v4_testing_checklist",
+        "columns_detected": [
+            "item_number",
+            "area_domain",
+            "control_description",
+            "compliance_status",
+            "evidence_reference",
+            "remarks",
+        ],
+    }
+    return items, metadata
+
+
+def _normalize_pdf_signature_text(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
+
+
+def _contains_pdf_signature(probe: str, signatures: List[str]) -> bool:
+    normalized_probe = _normalize_pdf_signature_text(probe)
+    return any(_normalize_pdf_signature_text(signature) in normalized_probe for signature in signatures)
+
+
+def _extract_cloud_controls_from_lines(lines: List[str]) -> List[dict]:
+    control_pattern = re.compile(r"^\s*(\d{1,2}-\d{1,2}-[PT]-\d{1,2}(?:-\d{1,2})?)\s*(.*)$", re.IGNORECASE)
+    provider_tenant_map = {"P": "CSP", "T": "CST"}
+    domain_map = {
+        "1": "Cybersecurity Governance",
+        "2": "Cybersecurity Defense",
+        "3": "Cybersecurity Resilience",
+        "4": "Third-Party Cybersecurity",
+    }
+
+    controls: List[dict] = []
+    seen_ids = set()
+    current_id: Optional[str] = None
+    current_desc_parts: List[str] = []
+
+    def flush_current() -> None:
+        nonlocal current_id, current_desc_parts
+        if not current_id or current_id in seen_ids:
+            current_id = None
+            current_desc_parts = []
+            return
+
+        parts = [part.strip() for part in current_desc_parts if part and part.strip()]
+        merged_description = " ".join(parts).strip()
+        if not merged_description:
+            merged_description = f"Control requirement for {current_id}"
+
+        id_parts = current_id.split("-")
+        main_domain_no = id_parts[0] if id_parts else ""
+        party_code = id_parts[2].upper() if len(id_parts) >= 3 else ""
+        party_label = provider_tenant_map.get(party_code)
+        domain_label = domain_map.get(main_domain_no, f"Domain {main_domain_no}" if main_domain_no else "Cloud Cybersecurity Controls")
+        if party_label:
+            domain_label = f"{domain_label} ({party_label})"
+
+        controls.append({
+            "item_number": current_id,
+            "area_domain": domain_label,
+            "control_description": merged_description,
+            "compliance_status": "in_progress",
+            "priority": "medium",
+            "remarks": "Framework: Saudi NCA Cloud Cybersecurity Controls (CCC-2:2024)",
+        })
+        seen_ids.add(current_id)
+        current_id = None
+        current_desc_parts = []
+
+    for raw_line in lines:
+        line = re.sub(r"\s+", " ", (raw_line or "")).strip()
+        if not line:
+            continue
+        if len(line) <= 2:
+            continue
+        if line.lower().startswith(("document classification", "table of contents", "list of ", "figure ", "table ")):
+            continue
+
+        match = control_pattern.match(line)
+        if match:
+            flush_current()
+            current_id = match.group(1).upper()
+            tail = (match.group(2) or "").strip(" :-")
+            if tail:
+                current_desc_parts.append(tail)
+            continue
+
+        if current_id:
+            # Keep short continuation lines for wrapped control text.
+            if len(line) < 220:
+                current_desc_parts.append(line)
+
+    flush_current()
+    return controls
+
+
+DCC_DOMAIN_LABELS: Dict[int, str] = {
+    1: "Cybersecurity Governance",
+    2: "Cybersecurity Defense",
+    3: "Third-Party and Cloud Computing Cybersecurity",
+}
+
+
+def _dcc_code_sort_key(code: str) -> Tuple[int, int, int, int]:
+    parts = [int(part) for part in code.split("-")]
+    while len(parts) < 4:
+        parts.append(0)
+    return tuple(parts[:4])
+
+
+def _build_dcc_expected_code_catalog() -> List[Tuple[str, int]]:
+    entries: List[Tuple[str, int]] = []
+
+    def add_control(domain: int, subdomain: int, control: int, max_subcontrols: Optional[int] = None) -> None:
+        entries.append((f"{domain}-{subdomain}-{control}", domain))
+        if max_subcontrols:
+            for subcontrol in range(1, max_subcontrols + 1):
+                entries.append((f"{domain}-{subdomain}-{control}-{subcontrol}", domain))
+
+    # Domain 1: Cybersecurity Governance
+    add_control(1, 1, 1)
+    add_control(1, 1, 2)
+    add_control(1, 2, 1, 2)
+    add_control(1, 3, 1, 7)
+
+    # Domain 2: Cybersecurity Defense
+    add_control(2, 1, 1, 2)
+    add_control(2, 1, 2)
+    add_control(2, 1, 3)
+    add_control(2, 2, 1, 4)
+    add_control(2, 3, 1, 2)
+    add_control(2, 4, 1, 4)
+    add_control(2, 5, 1, 2)
+    add_control(2, 6, 1, 5)
+    add_control(2, 6, 2)
+    add_control(2, 7, 1)
+    add_control(2, 7, 2)
+    add_control(2, 7, 3, 5)
+    add_control(2, 7, 4)
+
+    # Domain 3: Third-Party and Cloud Computing Cybersecurity
+    add_control(3, 1, 1, 6)
+    add_control(3, 1, 2, 8)
+    add_control(3, 2, 1, 7)
+
+    return sorted(entries, key=lambda item: _dcc_code_sort_key(item[0]))
+
+
+def _resolve_tesseract_cmd() -> Optional[str]:
+    candidates = [
+        os.environ.get("TESSERACT_CMD"),
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+    ]
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            return candidate
+    return None
+
+
+def _clean_dcc_ocr_fragment(value: str) -> str:
+    text = re.sub(r"[\|\u2013\u2014]+", " ", value or "")
+    text = re.sub(r"\b[vV](?:\s*[vV])+\b", " ", text)
+    text = re.sub(r"\s{2,}", " ", text).strip(" -:;,.")
+    if not text:
+        return ""
+    if re.fullmatch(r"[vV\W\d_]+", text):
+        return ""
+    return text
+
+
+def _extract_dcc_control_descriptions_from_ocr(file_content: bytes) -> Dict[str, str]:
+    try:
+        import fitz
+        from PIL import Image, ImageOps
+        import pytesseract
+    except Exception:
+        return {}
+
+    tesseract_cmd = _resolve_tesseract_cmd()
+    if tesseract_cmd:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+
+    expected_codes = {code for code, _ in _build_dcc_expected_code_catalog()}
+    descriptions: Dict[str, List[str]] = {}
+    line_pattern = re.compile(r"^\s*[^0-9]{0,4}(?P<code>[1-3]-\d{1,2}-\d{1,2}(?:-\d{1,2})?)\b(?P<tail>.*)$")
+
+    try:
+        doc = fitz.open(stream=file_content, filetype="pdf")
+    except Exception:
+        return {}
+
+    # DCC controls are in the middle pages of the provided template.
+    start_page = 10 if doc.page_count > 15 else 0
+    end_page = min(doc.page_count, 20 if doc.page_count > 20 else doc.page_count)
+
+    for page_index in range(start_page, end_page):
+        try:
+            page = doc[page_index]
+            pix = page.get_pixmap(matrix=fitz.Matrix(2.6, 2.6), alpha=False)
+            image = Image.open(io.BytesIO(pix.tobytes("png")))
+            image = ImageOps.grayscale(image).point(lambda p: 255 if p > 175 else 0)
+            text = pytesseract.image_to_string(image, lang="eng", config="--oem 1 --psm 6")
+        except Exception:
+            continue
+
+        current_code: Optional[str] = None
+        for raw_line in text.splitlines():
+            line = re.sub(r"\s+", " ", (raw_line or "")).strip()
+            if not line:
+                continue
+            lowered = line.lower()
+
+            matched = line_pattern.match(line)
+            if matched:
+                code = matched.group("code")
+                current_code = code if code in expected_codes else None
+                if current_code:
+                    tail = _clean_dcc_ocr_fragment(matched.group("tail"))
+                    if tail and "ecc control" not in lowered and "ecc subcontrol" not in lowered:
+                        descriptions.setdefault(current_code, []).append(tail)
+                continue
+
+            if not current_code:
+                continue
+            if lowered.startswith(("document classification", "data cybersecurity controls", "appendix", "figure", "table ")):
+                continue
+            if len(line) > 220:
+                continue
+            fragment = _clean_dcc_ocr_fragment(line)
+            if fragment and "ecc control" not in lowered and "ecc subcontrol" not in lowered:
+                descriptions.setdefault(current_code, []).append(fragment)
+
+    merged: Dict[str, str] = {}
+    for code, fragments in descriptions.items():
+        unique_fragments: List[str] = []
+        seen = set()
+        for fragment in fragments:
+            normalized = fragment.lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            unique_fragments.append(fragment)
+        merged_text = " ".join(unique_fragments[:3]).strip()
+        merged_text = re.sub(r"\s{2,}", " ", merged_text)
+        if merged_text:
+            merged[code] = merged_text
+
+    return merged
+
+
+def _build_dcc_full_control_items(file_content: bytes) -> List[dict]:
+    expected_catalog = _build_dcc_expected_code_catalog()
+    description_map = _extract_dcc_control_descriptions_from_ocr(file_content)
+    items: List[dict] = []
+
+    for code, domain in expected_catalog:
+        description = description_map.get(code)
+        if not description:
+            if len(code.split("-")) == 3:
+                description = f"Saudi NCA DCC control requirement {code}."
+            else:
+                description = f"Saudi NCA DCC subcontrol requirement {code}."
+
+        items.append({
+            "item_number": code,
+            "area_domain": DCC_DOMAIN_LABELS.get(domain, f"DCC Domain {domain}"),
+            "control_description": description,
+            "compliance_status": "in_progress",
+            "priority": "medium",
+            "remarks": "Framework: Saudi NCA Data Cybersecurity Controls (DCC-1:2022). Full control-level extraction.",
+        })
+
+    return items
+
+
+def parse_cis_windows_server_2012_r2_pdf(file_content: bytes, file_name: str) -> tuple[List[dict], dict]:
+    from PyPDF2 import PdfReader
+
+    try:
+        reader = PdfReader(io.BytesIO(file_content))
+        all_page_text = [(page.extract_text() or "") for page in reader.pages]
+        sample_text = " ".join(all_page_text[: min(8, len(all_page_text))])
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unable to read PDF: {exc}",
+        ) from exc
+
+    probe_text = f"{file_name or ''} {sample_text}"
+
+    cis_signatures = [
+        "cis microsoft windows server 2012 r2 benchmark",
+        "windows server 2012 r2 benchmark",
+    ]
+    nca_cloud_signatures = [
+        "saudi nca cloud cybersecurity controls",
+        "cloud cybersecurity controls",
+        "ccc 2 2024",
+        "ccc-2:2024",
+    ]
+    nca_data_signatures = [
+        "saudi nca data cybersecurity controls",
+        "data cybersecurity controls",
+        "dcc 1 2022",
+        "dcc-1:2022",
+    ]
+
+    if _contains_pdf_signature(probe_text, cis_signatures):
+        if not os.path.exists(CIS_WS2012R2_CONTROLS_JSON):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"CIS controls seed not found at {CIS_WS2012R2_CONTROLS_JSON}",
+            )
+
+        try:
+            with open(CIS_WS2012R2_CONTROLS_JSON, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to load CIS controls seed: {exc}",
+            ) from exc
+
+        controls = payload.get("controls") or []
+        if not controls:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No controls found in CIS controls seed for this PDF handler.",
+            )
+
+        items: List[dict] = []
+        for index, control in enumerate(controls):
+            control_id = str(control.get("ControlID") or "").strip() or str(index + 1)
+            section = str(control.get("Section") or "").strip() or "CIS Benchmark"
+            title = str(control.get("Title") or "").strip()
+            description = str(control.get("Description") or "").strip()
+            expected_value = str(control.get("ExpectedValue") or "").strip()
+            level = str(control.get("Level") or "").strip().upper()
+
+            control_description = title or f"CIS Control {control_id}"
+            if description:
+                control_description = f"{control_description}\n\n{description}"
+            if expected_value:
+                control_description = f"{control_description}\n\nExpected Value: {expected_value}"
+
+            remarks_parts = []
+            assessment = str(control.get("Assessment") or "").strip()
+            scan_type = str(control.get("ScanType") or "").strip()
+            if level:
+                remarks_parts.append(f"Level: {level}")
+            if assessment:
+                remarks_parts.append(f"Assessment: {assessment}")
+            if scan_type:
+                remarks_parts.append(f"Scan Type: {scan_type}")
+
+            priority = "high" if level == "L1" else "medium" if level == "L2" else None
+            items.append({
+                "item_number": control_id,
+                "area_domain": section,
+                "control_description": control_description,
+                "compliance_status": "in_progress",
+                "priority": priority,
+                "remarks": " | ".join(remarks_parts) if remarks_parts else None,
+            })
+
+        metadata = {
+            "assessment_format": "cis_windows_server_2012_r2_pdf",
+            "detected_format": "cis_windows_server_2012_r2_pdf",
+            "benchmark": payload.get("benchmark"),
+            "version": payload.get("version"),
+            "columns_detected": [
+                "item_number",
+                "area_domain",
+                "control_description",
+                "compliance_status",
+                "priority",
+                "remarks",
+            ],
+        }
+        return items, metadata
+
+    all_lines = []
+    for chunk in all_page_text:
+        all_lines.extend(chunk.splitlines())
+
+    if _contains_pdf_signature(probe_text, nca_cloud_signatures):
+        cloud_items = _extract_cloud_controls_from_lines(all_lines)
+        if not cloud_items:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Could not extract controls from Saudi NCA Cloud Cybersecurity Controls PDF.",
+            )
+        metadata = {
+            "assessment_format": "nca_cloud_cybersecurity_controls_pdf",
+            "detected_format": "nca_cloud_cybersecurity_controls_pdf",
+            "framework": "Saudi NCA Cloud Cybersecurity Controls",
+            "version": "CCC-2:2024",
+            "columns_detected": [
+                "item_number",
+                "area_domain",
+                "control_description",
+                "compliance_status",
+                "priority",
+                "remarks",
+            ],
+        }
+        return cloud_items, metadata
+
+    if _contains_pdf_signature(probe_text, nca_data_signatures):
+        dcc_items = _build_dcc_full_control_items(file_content)
+        if not dcc_items:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Could not extract control-level items from Saudi NCA Data Cybersecurity Controls PDF.",
+            )
+        metadata = {
+            "assessment_format": "nca_data_cybersecurity_controls_pdf",
+            "detected_format": "nca_data_cybersecurity_controls_pdf",
+            "framework": "Saudi NCA Data Cybersecurity Controls",
+            "version": "DCC-1:2022",
+            "coverage": "full_control_level",
+            "total_expected_controls": len(dcc_items),
+            "columns_detected": [
+                "item_number",
+                "area_domain",
+                "control_description",
+                "compliance_status",
+                "priority",
+                "remarks",
+            ],
+        }
+        return dcc_items, metadata
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=(
+            "PDF upload for assessments currently supports CIS Windows Server 2012 R2 Benchmark, "
+            "Saudi NCA Cloud Cybersecurity Controls, and Saudi NCA Data Cybersecurity Controls formats."
+        ),
+    )
+
+
 def calculate_assessment_stats(items: List[ComplianceAssessmentDocumentItem]) -> dict:
     stats = {
         "total": len(items),
@@ -783,10 +1799,11 @@ async def upload_assessment(
                 detail="Tenant not found"
             )
         
-        if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        lower_file_name = (file.filename or "").lower()
+        if not lower_file_name.endswith(('.xlsx', '.xls', '.csv', '.pdf')):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File must be an Excel (.xlsx, .xls) or CSV file"
+                detail="File must be an Excel (.xlsx, .xls), CSV, or supported PDF file"
             )
         
         logger.info(f"Reading file content: {file.filename}")
@@ -803,16 +1820,31 @@ async def upload_assessment(
         logger.info(f"File saved to: {file_path}")
 
         # ---------------------------------------------------------- #
-        # Detect if this is an XLSX Maturity Tool (e.g. NIST CSF)
+        # Detect known workbook templates before generic parsing
         # ---------------------------------------------------------- #
         is_maturity_format = False
-        if file.filename.endswith(('.xlsx', '.xls')):
+        is_asvs_checklist = False
+        is_owasp_checklist = False
+        is_ubl_audit_master = False
+        if lower_file_name.endswith(('.xlsx', '.xls')):
+            _wb_check = None
             try:
                 _wb_check = openpyxl.load_workbook(io.BytesIO(file_content), read_only=True, data_only=True)
                 is_maturity_format = detect_xlsx_maturity_format(_wb_check)
-                _wb_check.close()
+                if not is_maturity_format:
+                    is_ubl_audit_master = detect_ubl_audit_master_tracking_format(_wb_check)
+                if not is_maturity_format and not is_ubl_audit_master:
+                    is_asvs_checklist = detect_asvs_checklist_format(_wb_check)
+                if not is_maturity_format and not is_asvs_checklist and not is_ubl_audit_master:
+                    is_owasp_checklist = detect_owasp_v4_checklist_format(_wb_check)
             except Exception:
                 pass
+            finally:
+                try:
+                    if _wb_check:
+                        _wb_check.close()
+                except Exception:
+                    pass
 
         if is_maturity_format:
             logger.info("Detected XLSX Maturity Tool format – using maturity parser")
@@ -908,9 +1940,42 @@ async def upload_assessment(
                 "message": f"Successfully uploaded maturity assessment with {len(details)} subcategories across {len(set(d.get('function','') for d in details))} functions",
             }
         
-        logger.info("Parsing Excel file...")
-        items_data, column_map = parse_excel_file(file_content, file.filename)
-        logger.info(f"Parsed {len(items_data)} items, columns: {list(column_map.keys())}")
+        parser_metadata = {"assessment_format": "standard", "columns_detected": []}
+        if lower_file_name.endswith('.pdf'):
+            logger.info("Detected PDF upload format")
+            items_data, parser_metadata = parse_cis_windows_server_2012_r2_pdf(file_content, file.filename or "")
+        elif is_ubl_audit_master:
+            logger.info("Detected UBL Audit Master Tracking format")
+            wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+            try:
+                items_data, parser_metadata = parse_ubl_audit_master_tracking_workbook(wb)
+            finally:
+                wb.close()
+        elif is_asvs_checklist:
+            logger.info("Detected ASVS checklist format")
+            wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+            try:
+                items_data, parser_metadata = parse_asvs_checklist_workbook(wb)
+            finally:
+                wb.close()
+        elif is_owasp_checklist:
+            logger.info("Detected OWASP v4 testing checklist format")
+            wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+            try:
+                items_data, parser_metadata = parse_owasp_v4_checklist_workbook(wb)
+            finally:
+                wb.close()
+        else:
+            logger.info("Parsing with generic Excel/CSV parser...")
+            items_data, column_map = parse_excel_file(file_content, file.filename)
+            parser_metadata = {
+                "assessment_format": "standard",
+                "columns_detected": list(column_map.keys()),
+            }
+        logger.info(
+            f"Parsed {len(items_data)} items, format={parser_metadata.get('assessment_format')}, "
+            f"columns={parser_metadata.get('columns_detected')}"
+        )
         
         if not items_data:
             if file_path and os.path.exists(file_path):
@@ -940,7 +2005,8 @@ async def upload_assessment(
             notes=notes,
             status="draft",
             created_by=current_user.id,
-            total_items=len(items_data)
+            total_items=len(items_data),
+            assessment_format=parser_metadata.get("assessment_format", "standard")
         )
         db.add(db_assessment)
         db.flush()
@@ -988,6 +2054,7 @@ async def upload_assessment(
             "id": db_assessment.id,
             "name": db_assessment.name,
             "assessment_type": db_assessment.assessment_type,
+            "assessment_format": db_assessment.assessment_format or "standard",
             "source": db_assessment.source,
             "file_name": db_assessment.file_name,
             "status": db_assessment.status,
@@ -998,7 +2065,8 @@ async def upload_assessment(
             "in_progress_count": db_assessment.in_progress_count,
             "na_count": db_assessment.na_count,
             "overall_score": db_assessment.overall_score,
-            "columns_detected": list(column_map.keys()),
+            "columns_detected": parser_metadata.get("columns_detected", []),
+            "detected_format": parser_metadata.get("detected_format", "standard"),
             "message": f"Successfully uploaded assessment with {len(items_data)} items"
         }
     
@@ -1049,11 +2117,41 @@ def list_assessments(
         query = query.filter(ComplianceAssessmentDocument.source == source)
     
     total = query.count()
+    summary_assessments = query.all()
     assessments = query.order_by(ComplianceAssessmentDocument.created_at.desc()).offset(skip).limit(limit).all()
-    
-    total_items = sum(a.total_items or 0 for a in assessments)
-    total_complied = sum(a.complied_count or 0 for a in assessments)
-    total_not_complied = sum(a.not_complied_count or 0 for a in assessments)
+
+    total_items = sum(a.total_items or 0 for a in summary_assessments)
+    total_complied = sum(a.complied_count or 0 for a in summary_assessments)
+    total_partial = sum(a.partially_complied_count or 0 for a in summary_assessments)
+    total_not_complied = sum(a.not_complied_count or 0 for a in summary_assessments)
+    total_in_progress = sum(a.in_progress_count or 0 for a in summary_assessments)
+    total_na = sum(a.na_count or 0 for a in summary_assessments)
+
+    by_type: dict = {}
+    by_status: dict = {}
+    by_format: dict = {}
+    scored = [float(a.overall_score) for a in summary_assessments if a.overall_score is not None]
+    average_overall_score = round(sum(scored) / len(scored), 2) if scored else None
+
+    overdue_count = 0
+    due_soon_count = 0
+    now = datetime.utcnow()
+    for a in summary_assessments:
+        t = a.assessment_type or "other"
+        s = a.status or "draft"
+        fmt = getattr(a, "assessment_format", "standard") or "standard"
+        by_type[t] = by_type.get(t, 0) + 1
+        by_status[s] = by_status.get(s, 0) + 1
+        by_format[fmt] = by_format.get(fmt, 0) + 1
+        if a.due_date:
+            try:
+                diff_days = (a.due_date - now).days
+                if diff_days < 0:
+                    overdue_count += 1
+                elif diff_days <= 30:
+                    due_soon_count += 1
+            except Exception:
+                continue
     
     return {
         "assessments": [
@@ -1084,9 +2182,16 @@ def list_assessments(
             "total_assessments": total,
             "total_items": total_items,
             "total_complied": total_complied,
+            "total_partial": total_partial,
             "total_not_complied": total_not_complied,
-            "by_type": {},
-            "by_status": {}
+            "total_in_progress": total_in_progress,
+            "total_na": total_na,
+            "average_overall_score": average_overall_score,
+            "overdue_count": overdue_count,
+            "due_soon_count": due_soon_count,
+            "by_type": by_type,
+            "by_status": by_status,
+            "by_format": by_format,
         }
     }
 
@@ -2478,6 +3583,94 @@ def get_item_evidence(
         "item_id": item_id,
         "assessment_id": assessment_id,
         "evidence": result,
+    }
+
+
+@router.post("/{assessment_id}/items/{item_id}/evidence/link")
+def link_existing_item_evidence(
+    assessment_id: int,
+    item_id: int,
+    payload: LinkExistingEvidenceRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    item = db.query(ComplianceAssessmentDocumentItem).filter(
+        ComplianceAssessmentDocumentItem.id == item_id,
+        ComplianceAssessmentDocumentItem.assessment_id == assessment_id,
+        ComplianceAssessmentDocumentItem.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment item not found")
+
+    evidence = db.query(Evidence).filter(
+        Evidence.id == payload.evidence_id,
+        Evidence.tenant_id == item.tenant_id
+    ).first()
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+
+    existing_link = db.query(AssessmentItemEvidence).filter(
+        AssessmentItemEvidence.assessment_item_id == item_id,
+        AssessmentItemEvidence.evidence_id == evidence.id
+    ).first()
+    if existing_link:
+        return {
+            "id": existing_link.id,
+            "evidence_id": evidence.id,
+            "evidence_name": evidence.name,
+            "evidence_file_name": evidence.file_name,
+            "evidence_file_type": evidence.file_type,
+            "evidence_status": evidence.status,
+            "evidence_uploaded_at": evidence.uploaded_at.isoformat() if evidence.uploaded_at else None,
+            "workflow_id": existing_link.workflow_id,
+            "current_tier": existing_link.current_tier,
+            "approval_status": existing_link.status,
+            "already_linked": True,
+            "message": "Evidence is already linked to this assessment item"
+        }
+
+    workflow = None
+    if payload.workflow_id:
+        workflow = db.query(AssessmentEvidenceApprovalWorkflow).filter(
+            AssessmentEvidenceApprovalWorkflow.id == payload.workflow_id,
+            AssessmentEvidenceApprovalWorkflow.tenant_id == item.tenant_id,
+            AssessmentEvidenceApprovalWorkflow.is_active == True
+        ).first()
+    else:
+        workflow = db.query(AssessmentEvidenceApprovalWorkflow).filter(
+            AssessmentEvidenceApprovalWorkflow.tenant_id == item.tenant_id,
+            AssessmentEvidenceApprovalWorkflow.is_default == True,
+            AssessmentEvidenceApprovalWorkflow.is_active == True
+        ).first()
+
+    evidence_link = AssessmentItemEvidence(
+        assessment_item_id=item_id,
+        evidence_id=evidence.id,
+        tenant_id=item.tenant_id,
+        workflow_id=workflow.id if workflow else None,
+        current_tier=0,
+        status="draft"
+    )
+    db.add(evidence_link)
+    db.commit()
+    db.refresh(evidence_link)
+
+    return {
+        "id": evidence_link.id,
+        "evidence_id": evidence.id,
+        "evidence_name": evidence.name,
+        "evidence_file_name": evidence.file_name,
+        "evidence_file_type": evidence.file_type,
+        "evidence_status": evidence.status,
+        "evidence_uploaded_at": evidence.uploaded_at.isoformat() if evidence.uploaded_at else None,
+        "workflow_id": evidence_link.workflow_id,
+        "current_tier": evidence_link.current_tier,
+        "approval_status": evidence_link.status,
+        "already_linked": False,
+        "message": "Evidence linked successfully"
     }
 
 

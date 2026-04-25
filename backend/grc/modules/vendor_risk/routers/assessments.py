@@ -303,6 +303,35 @@ def update_assessment(
     return serialize_assessment(assessment)
 
 
+@router.delete("/assessments/{assessment_id}")
+def delete_assessment(
+    assessment_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        raise HTTPException(status_code=403, detail="User not associated with any tenant")
+
+    assessment = get_assessment_or_404(assessment_id, tenant_ids, db)
+
+    # Preserve questionnaire history but detach it from the assessment being deleted.
+    unlinked_count = (
+        db.query(VendorQuestionnaireResponse)
+        .filter(VendorQuestionnaireResponse.assessment_id == assessment.id)
+        .update({VendorQuestionnaireResponse.assessment_id: None}, synchronize_session=False)
+    )
+
+    assessment_label = f"{assessment.assessment_type or 'assessment'} #{assessment.id}"
+    db.delete(assessment)
+    db.commit()
+
+    return {
+        "message": f"Deleted {assessment_label} successfully",
+        "unlinked_questionnaire_responses": int(unlinked_count or 0),
+    }
+
+
 @router.post("/assessments/{assessment_id}/score")
 def score_assessment(
     assessment_id: int,

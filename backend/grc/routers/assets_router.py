@@ -2,7 +2,10 @@ import random
 import csv
 import io
 import os
-from typing import List, Optional
+import json
+import re
+from functools import lru_cache
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Request, Cookie
 from fastapi.responses import StreamingResponse
@@ -13,7 +16,7 @@ from pydantic import BaseModel
 from ..models import (
     ITAsset, AssetControlLink, AssetInternalControlLink, AssetRiskAssessment, AssetFrameworkControlLink,
     AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, Risk, InternalControl,
-    Vulnerability, VulnerabilityAssetLink,
+    Vulnerability, VulnerabilityAssetLink, AssetSecurityComplianceSelection,
     GRCUser, Tenant, TenantUser, get_db
 )
 from ..schemas import (
@@ -29,6 +32,17 @@ from ..tenant_models import TenantUser as TenantSchemaUser
 
 router = APIRouter(prefix="/assets", tags=["IT Assets"])
 
+SECURITY_COMPLIANCE_BENCHMARK = "CIS_WS2012R2"
+SECURITY_COMPLIANCE_CONTROLS_FILE = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "seed_data",
+        "CIS",
+        "CIS_WS2012R2_Controls.json",
+    )
+)
+
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
     user_tenants = get_user_tenants(user, db)
@@ -37,6 +51,46 @@ def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this tenant's data"
         )
+
+
+def _security_compliance_sort_tokens(value: str) -> Tuple[Any, ...]:
+    """Natural sort for control IDs with sub-points like 1.2.10."""
+    chunks = re.findall(r"\d+|[^\d]+", str(value or ""))
+    tokens: List[Any] = []
+    for chunk in chunks:
+        if chunk.isdigit():
+            tokens.append(int(chunk))
+        else:
+            tokens.append(chunk.lower())
+    return tuple(tokens)
+
+
+@lru_cache(maxsize=1)
+def _load_security_compliance_controls() -> Dict[str, Any]:
+    if not os.path.exists(SECURITY_COMPLIANCE_CONTROLS_FILE):
+        raise FileNotFoundError(
+            f"Security compliance controls file not found: {SECURITY_COMPLIANCE_CONTROLS_FILE}"
+        )
+    with open(SECURITY_COMPLIANCE_CONTROLS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _get_asset_for_user(asset_id: int, current_user: GRCUser, db: Session) -> ITAsset:
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found",
+        )
+    return asset
+
+
+class SecurityComplianceSelectionRequest(BaseModel):
+    control_ids: List[str]
 
 
 @router.get("/tenant-users")
@@ -1096,6 +1150,223 @@ def get_asset_detail(
         risk_assessments=risk_assessments,
         coverage_percentage=float(coverage)
     )
+
+
+@router.get("/{asset_id}/security-compliance/controls")
+def list_security_compliance_controls(
+    asset_id: int,
+    search: Optional[str] = Query(None),
+    sort_by: str = Query("control_id"),
+    sort_order: str = Query("asc"),
+    level: Optional[str] = Query(None),
+    section: Optional[str] = Query(None),
+    selected_only: bool = Query(False),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    asset = _get_asset_for_user(asset_id, current_user, db)
+    if sort_by not in {"control_id", "title", "level", "section"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid sort_by")
+    if sort_order not in {"asc", "desc"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid sort_order")
+
+    try:
+        payload = _load_security_compliance_controls()
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        ) from e
+
+    controls = payload.get("controls") or []
+    if not isinstance(controls, list):
+        controls = []
+
+    selected_control_ids = {
+        row.control_id
+        for row in db.query(AssetSecurityComplianceSelection).filter(
+            AssetSecurityComplianceSelection.asset_id == asset.id,
+            AssetSecurityComplianceSelection.benchmark == SECURITY_COMPLIANCE_BENCHMARK,
+        ).all()
+    }
+
+    search_term = (search or "").strip().lower()
+    level_term = (level or "").strip().lower()
+    section_term = (section or "").strip().lower()
+
+    filtered_controls: List[Dict[str, Any]] = []
+    for entry in controls:
+        if not isinstance(entry, dict):
+            continue
+
+        control_id = str(entry.get("ControlID") or "").strip()
+        if not control_id:
+            continue
+
+        title = str(entry.get("Title") or "")
+        section_value = str(entry.get("Section") or "")
+        level_value = str(entry.get("Level") or "")
+        description = str(entry.get("Description") or "")
+
+        if search_term:
+            haystack = " ".join([control_id, title, section_value, level_value, description]).lower()
+            if search_term not in haystack:
+                continue
+
+        if level_term and level_term != level_value.lower():
+            continue
+        if section_term and section_term not in section_value.lower():
+            continue
+
+        is_selected = control_id in selected_control_ids
+        if selected_only and not is_selected:
+            continue
+
+        enriched = dict(entry)
+        enriched["control_id"] = control_id
+        enriched["selected"] = is_selected
+        filtered_controls.append(enriched)
+
+    reverse = sort_order == "desc"
+    if sort_by == "control_id":
+        filtered_controls.sort(
+            key=lambda item: _security_compliance_sort_tokens(item.get("ControlID", "")),
+            reverse=reverse,
+        )
+    elif sort_by == "title":
+        filtered_controls.sort(key=lambda item: str(item.get("Title") or "").lower(), reverse=reverse)
+    elif sort_by == "level":
+        filtered_controls.sort(key=lambda item: str(item.get("Level") or "").lower(), reverse=reverse)
+    else:
+        filtered_controls.sort(key=lambda item: str(item.get("Section") or "").lower(), reverse=reverse)
+
+    total_filtered = len(filtered_controls)
+    paged_items = filtered_controls[skip: skip + limit]
+    return {
+        "benchmark": payload.get("benchmark") or SECURITY_COMPLIANCE_BENCHMARK,
+        "version": payload.get("version"),
+        "published": payload.get("published"),
+        "total_controls_in_source": payload.get("total_controls") or len(controls),
+        "total": total_filtered,
+        "skip": skip,
+        "limit": limit,
+        "selected_count": len(selected_control_ids),
+        "controls": paged_items,
+    }
+
+
+@router.get("/{asset_id}/security-compliance/selections")
+def get_security_compliance_selections(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    _get_asset_for_user(asset_id, current_user, db)
+    selections = db.query(AssetSecurityComplianceSelection).filter(
+        AssetSecurityComplianceSelection.asset_id == asset_id,
+        AssetSecurityComplianceSelection.benchmark == SECURITY_COMPLIANCE_BENCHMARK,
+    ).order_by(AssetSecurityComplianceSelection.control_id.asc()).all()
+
+    control_ids = [row.control_id for row in selections]
+    return {
+        "benchmark": SECURITY_COMPLIANCE_BENCHMARK,
+        "count": len(control_ids),
+        "control_ids": control_ids,
+    }
+
+
+@router.post(
+    "/{asset_id}/security-compliance/selections",
+    response_model=MessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_security_compliance_selections(
+    asset_id: int,
+    payload: SecurityComplianceSelectionRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    _get_asset_for_user(asset_id, current_user, db)
+
+    requested_ids = sorted({str(control_id).strip() for control_id in payload.control_ids if str(control_id).strip()})
+    if not requested_ids:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No control IDs provided")
+
+    try:
+        source_payload = _load_security_compliance_controls()
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        ) from e
+
+    valid_ids = {
+        str(item.get("ControlID") or "").strip()
+        for item in (source_payload.get("controls") or [])
+        if isinstance(item, dict) and str(item.get("ControlID") or "").strip()
+    }
+    invalid_ids = [control_id for control_id in requested_ids if control_id not in valid_ids]
+    if invalid_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown control IDs: {', '.join(invalid_ids[:10])}",
+        )
+
+    existing_ids = {
+        row.control_id
+        for row in db.query(AssetSecurityComplianceSelection).filter(
+            AssetSecurityComplianceSelection.asset_id == asset_id,
+            AssetSecurityComplianceSelection.benchmark == SECURITY_COMPLIANCE_BENCHMARK,
+            AssetSecurityComplianceSelection.control_id.in_(requested_ids),
+        ).all()
+    }
+
+    created_count = 0
+    for control_id in requested_ids:
+        if control_id in existing_ids:
+            continue
+        db.add(
+            AssetSecurityComplianceSelection(
+                asset_id=asset_id,
+                benchmark=SECURITY_COMPLIANCE_BENCHMARK,
+                control_id=control_id,
+                selected_by=current_user.id,
+            )
+        )
+        created_count += 1
+
+    db.commit()
+    return MessageResponse(message=f"{created_count} control(s) selected", id=created_count)
+
+
+@router.delete(
+    "/{asset_id}/security-compliance/selections/{control_id}",
+    response_model=MessageResponse,
+)
+def remove_security_compliance_selection(
+    asset_id: int,
+    control_id: str,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    _get_asset_for_user(asset_id, current_user, db)
+
+    db_row = db.query(AssetSecurityComplianceSelection).filter(
+        AssetSecurityComplianceSelection.asset_id == asset_id,
+        AssetSecurityComplianceSelection.benchmark == SECURITY_COMPLIANCE_BENCHMARK,
+        AssetSecurityComplianceSelection.control_id == control_id,
+    ).first()
+    if not db_row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Selected control not found for this asset",
+        )
+
+    db.delete(db_row)
+    db.commit()
+    return MessageResponse(message="Control unselected")
 
 
 @router.post("/{asset_id}/link-framework-control", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)

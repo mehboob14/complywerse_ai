@@ -221,6 +221,8 @@ export const governanceApi = {
 
   getDocuments: (params?: { doc_type?: string; status?: string; owner_id?: number; search?: string; sort_by?: string; sort_order?: string; skip?: number; limit?: number }) =>
     apiClient.get<GovernanceDocument[]>('/governance/documents', { params }),
+  getDocumentHierarchy: (params?: { tenant_id?: number; parent_id?: number }) =>
+    apiClient.get('/governance/documents/hierarchy', { params }),
   getDocument: (id: number) => apiClient.get<GovernanceDocument>(`/governance/documents/${id}`),
   createDocument: (data: Partial<GovernanceDocument>) =>
     apiClient.post<GovernanceDocument>('/governance/documents', data),
@@ -310,9 +312,9 @@ export const governanceApi = {
     apiClient.get(`/governance/gap-analysis/compliance-summary/${documentId}`),
   runGapAnalysis: (data: { document_id: number; framework_ids?: number[]; run_all?: boolean }) =>
     apiClient.post('/governance/gap-analysis/run', data, { timeout: 30000 }),
-  generatePolicyDraft: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; include_sections?: string[] }) =>
+  generatePolicyDraft: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; include_sections?: string[]; parent_document_id?: number }) =>
     apiClient.post('/governance/documents/ai-draft', data),
-  suggestPoliciesForFramework: (data: { framework_ids: number[] }) =>
+  suggestPoliciesForFramework: (data: { framework_ids: number[]; doc_type?: string }) =>
     apiClient.post('/governance/documents/ai-suggest-policies', data),
   getWorkflowTemplates: (params?: { tenant_id?: number; is_active?: boolean; doc_type?: string; skip?: number; limit?: number }) =>
     apiClient.get('/governance/workflows/templates', { params }),
@@ -513,6 +515,25 @@ export const assetsApi = {
     apiClient.post(`/assets/${id}/link-evidence`, data),
   unlinkEvidence: (id: number, linkId: number) => 
     apiClient.delete(`/assets/${id}/link-evidence/${linkId}`),
+  getSecurityComplianceControls: (
+    id: number,
+    params?: {
+      search?: string;
+      sort_by?: 'control_id' | 'title' | 'level' | 'section';
+      sort_order?: 'asc' | 'desc';
+      level?: string;
+      section?: string;
+      selected_only?: boolean;
+      skip?: number;
+      limit?: number;
+    }
+  ) => apiClient.get(`/assets/${id}/security-compliance/controls`, { params }),
+  getSecurityComplianceSelections: (id: number) =>
+    apiClient.get(`/assets/${id}/security-compliance/selections`),
+  addSecurityComplianceSelections: (id: number, controlIds: string[]) =>
+    apiClient.post(`/assets/${id}/security-compliance/selections`, { control_ids: controlIds }),
+  removeSecurityComplianceSelection: (id: number, controlId: string) =>
+    apiClient.delete(`/assets/${id}/security-compliance/selections/${encodeURIComponent(controlId)}`),
   getCoverageAnalysis: (id: number) => apiClient.get(`/assets/${id}/coverage-analysis`),
   assessRisk: (id: number) => apiClient.post(`/assets/${id}/assess`),
   downloadTemplate: async () => {
@@ -1113,6 +1134,8 @@ export const ermApi = {
       apiClient.post(`/erm/framework-risk-assessments/${id}/questions`, data),
     updateQuestion: (assessmentId: number, questionId: number, data: Record<string, unknown>) =>
       apiClient.put(`/erm/framework-risk-assessments/${assessmentId}/questions/${questionId}`, data),
+    moveQuestionToRiskRegister: (assessmentId: number, questionId: number, data?: Record<string, unknown>) =>
+      apiClient.post(`/erm/framework-risk-assessments/${assessmentId}/questions/${questionId}/move-to-risk-register`, data || {}),
     deleteQuestion: (assessmentId: number, questionId: number) =>
       apiClient.delete(`/erm/framework-risk-assessments/${assessmentId}/questions/${questionId}`),
     uploadEvidence: (assessmentId: number, questionId: number, formData: FormData) =>
@@ -1181,6 +1204,7 @@ export const vendorRiskApi = {
   createAssessment: (data: Record<string, unknown>) => apiClient.post('/vendor-risk/assessments', data),
   getAssessment: (assessmentId: number) => apiClient.get(`/vendor-risk/assessments/${assessmentId}`),
   updateAssessment: (assessmentId: number, data: Record<string, unknown>) => apiClient.put(`/vendor-risk/assessments/${assessmentId}`, data),
+  deleteAssessment: (assessmentId: number) => apiClient.delete(`/vendor-risk/assessments/${assessmentId}`),
   scoreAssessment: (assessmentId: number, responseId?: number) =>
     apiClient.post(`/vendor-risk/assessments/${assessmentId}/score`, responseId ? { response_id: responseId } : {}),
   approveAssessment: (assessmentId: number, data?: Record<string, unknown>) =>
@@ -1212,6 +1236,10 @@ export const vendorRiskApi = {
     respondent_email?: string;
     expires_in_days?: number;
   }) => apiClient.post('/vendor-risk/questionnaires/send', data),
+  getQuestionnaireResponses: (params?: { vendor_id?: number; assessment_id?: number }) =>
+    apiClient.get('/vendor-risk/questionnaire-responses', { params }),
+  updateQuestionnaireResponse: (responseId: number, data: { assessment_id?: number }) =>
+    apiClient.patch(`/vendor-risk/questionnaire-responses/${responseId}`, data),
 };
 
 export const frameworkUploadApi = {

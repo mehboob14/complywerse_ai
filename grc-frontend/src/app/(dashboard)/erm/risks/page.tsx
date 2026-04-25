@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import { adminApi, assetsApi, ermApi } from '@/lib/api';
@@ -33,8 +33,19 @@ import Link from 'next/link';
 import { useRef } from 'react';
 
 type ScoreFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
+const UBL_TEMPLATE_REGISTER_TYPE = 'UBL Template';
+type UBLFieldInputType = 'text' | 'textarea' | 'select' | 'date' | 'number' | 'datalist';
+type UBLFieldDef = {
+  key: string;
+  label: string;
+  input: UBLFieldInputType;
+  options?: string[];
+  suggestions?: string[];
+  placeholder?: string;
+};
+type UBLFieldSection = { id: string; title: string; keys: string[] };
 
-const RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgColor: string }[] = [
+const STANDARD_RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgColor: string }[] = [
   { value: 'strategic', label: 'Strategic', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
   { value: 'operational', label: 'Operational', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
   { value: 'financial', label: 'Financial', color: 'text-green-400', bgColor: 'bg-green-500/20' },
@@ -45,7 +56,319 @@ const RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgCo
   { value: 'internal', label: 'Internal', color: 'text-slate-700', bgColor: 'bg-slate-500/20' },
 ];
 
+const UBL_RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgColor: string }[] = [
+  { value: 'isms', label: 'ISMS', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
+  { value: 'process', label: 'Process', color: 'text-indigo-700', bgColor: 'bg-indigo-100' },
+  { value: 'other', label: 'Other', color: 'text-slate-700', bgColor: 'bg-slate-100' },
+];
+
+const RISK_CATEGORIES = [...STANDARD_RISK_CATEGORIES, ...UBL_RISK_CATEGORIES];
+const UBL_ONLY_RISK_CATEGORIES: RiskCategory[] = ['technology', 'third_party', 'isms', 'process', 'other'];
+const UBL_LOCATION_OPTIONS = ['', 'Bahrain', 'International', 'Pakistan', 'Qatar', 'UAE'];
+const UBL_NON_EDITABLE_FIELD_KEYS = new Set(['source_sheet', 'risk_id']);
+const UBL_PLATFORM_DUPLICATE_KEYS = new Set([
+  'likelihood_raw',
+  'impact_raw',
+  'risk_value_raw',
+  'risk_level_raw',
+  'residual_risk_raw',
+  'status_raw',
+  'inherent_score',
+  'residual_score',
+  'mapped_status',
+  'mapped_category',
+]);
+const UBL_HIDDEN_DISPLAY_KEYS = new Set([
+  ...Array.from(UBL_PLATFORM_DUPLICATE_KEYS),
+  'risk_category_raw',
+  'sub_source_activity',
+  'source_sheet',
+]);
+
+const UBL_FIELD_DEFS: UBLFieldDef[] = [
+  {
+    key: 'source',
+    label: 'Source',
+    input: 'datalist',
+    suggestions: ['Internal', 'External', 'Threat Intelligence', 'Audit Finding', 'Incident', 'Regulatory'],
+  },
+  {
+    key: 'location',
+    label: 'Location',
+    input: 'select',
+    options: UBL_LOCATION_OPTIONS,
+  },
+  {
+    key: 'type_or_security_triad',
+    label: 'Type / Security Triad',
+    input: 'datalist',
+    suggestions: ['Confidentiality', 'Integrity', 'Availability', 'Cyber', 'Operational', 'Compliance'],
+  },
+  { key: 'application_name_or_asset', label: 'Application / Asset', input: 'text' },
+  { key: 'ip_or_url', label: 'IP / URL', input: 'text' },
+  {
+    key: 'asset_criticality',
+    label: 'Asset Criticality',
+    input: 'select',
+    options: ['', 'Critical', 'High', 'Medium', 'Low'],
+  },
+  {
+    key: 'externally_exposed',
+    label: 'Externally Exposed',
+    input: 'select',
+    options: ['', 'Yes', 'No'],
+  },
+  { key: 'vulnerability_count', label: 'Count of Vulnerabilities', input: 'number' },
+  { key: 'vulnerabilities_identified', label: 'Vulnerabilities Identified', input: 'textarea' },
+  { key: 'threat_due_to_vulnerability', label: 'Threat Due to Vulnerability', input: 'textarea' },
+  { key: 'associated_risks', label: 'Associated Risks', input: 'textarea' },
+  { key: 'risk_description_scenario', label: 'Risk Description (Scenario)', input: 'textarea' },
+  { key: 'impact_business_regulatory_financial', label: 'Impact (Business/Regulatory/Financial)', input: 'textarea' },
+  {
+    key: 'cia_impacted',
+    label: 'CIA Impacted',
+    input: 'datalist',
+    suggestions: ['Confidentiality', 'Integrity', 'Availability', 'Confidentiality, Integrity', 'Integrity, Availability'],
+  },
+  { key: 'recommended_controls', label: 'Recommended Controls', input: 'textarea' },
+  { key: 'reported_date', label: 'Reported Date', input: 'date' },
+  {
+    key: 'mitigation_option',
+    label: 'Mitigation Option',
+    input: 'select',
+    options: ['', 'Mitigate', 'Transfer', 'Accept', 'Avoid'],
+  },
+  { key: 'fixed_vulnerability_count', label: 'Count of Fixed Vulnerabilities', input: 'number' },
+  {
+    key: 'frequency',
+    label: 'Frequency',
+    input: 'select',
+    options: ['', 'Daily', 'Weekly', 'Monthly', 'Quarterly', 'Yearly'],
+  },
+  { key: 'business_justification', label: 'Business Justification', input: 'textarea' },
+  { key: 'timeline', label: 'Timeline', input: 'text' },
+  { key: 'compensating_controls', label: 'Compensating Controls', input: 'textarea' },
+  {
+    key: 'implementation_status',
+    label: 'Implementation Status',
+    input: 'select',
+    options: ['', 'Not Started', 'In Progress', 'Implemented', 'Partially Implemented', 'Closed'],
+  },
+  { key: 'mitigation_date', label: 'Mitigation Date', input: 'date' },
+  { key: 'risk_owner', label: 'Risk Owner', input: 'text' },
+  { key: 'annex_a', label: 'Annex A', input: 'text' },
+];
+
+const UBL_FIELD_KEY_SET = new Set(UBL_FIELD_DEFS.map((field) => field.key));
+const UBL_FIELD_DEF_MAP = new Map(UBL_FIELD_DEFS.map((field) => [field.key, field]));
+const UBL_SUB_CATEGORY_SUGGESTIONS: Record<RiskCategory, string[]> = {
+  technology: ['Access Management', 'Patch Management', 'Network Security', 'Application Security', 'Cloud Security', 'Data Protection', 'Business Continuity'],
+  third_party: ['Vendor Due Diligence', 'Contractual Compliance', 'Service Availability', 'Data Sharing', 'Outsourcing Governance', 'Third-Party Monitoring'],
+  process: ['Process Design', 'Process Ownership', 'Manual Error', 'Control Weakness', 'Change Handling', 'Service Delivery'],
+  isms: ['Policy Compliance', 'Risk Governance', 'Control Effectiveness', 'Annex A Alignment', 'Awareness & Training', 'Incident Response'],
+  other: ['General'],
+  strategic: ['General'],
+  operational: ['General'],
+  financial: ['General'],
+  compliance: ['General'],
+  project_change: ['General'],
+  internal: ['General'],
+};
+
+const UBL_FIELD_SECTIONS_BY_CATEGORY: Record<RiskCategory, UBLFieldSection[]> = {
+  technology: [
+    {
+      id: 'risk_identification',
+      title: 'Risk Identification',
+      keys: [
+        'source',
+        'location',
+        'type_or_security_triad',
+        'application_name_or_asset',
+        'ip_or_url',
+        'asset_criticality',
+        'externally_exposed',
+        'vulnerability_count',
+        'vulnerabilities_identified',
+        'threat_due_to_vulnerability',
+        'associated_risks',
+        'risk_description_scenario',
+        'cia_impacted',
+      ],
+    },
+    {
+      id: 'risk_analysis',
+      title: 'Risk Analysis',
+      keys: ['impact_business_regulatory_financial', 'reported_date'],
+    },
+    {
+      id: 'risk_treatment',
+      title: 'Risk Treatment',
+      keys: [
+        'recommended_controls',
+        'mitigation_option',
+        'fixed_vulnerability_count',
+        'frequency',
+        'business_justification',
+        'timeline',
+        'compensating_controls',
+        'implementation_status',
+        'mitigation_date',
+        'risk_owner',
+      ],
+    },
+  ],
+  third_party: [
+    {
+      id: 'risk_identification',
+      title: 'Risk Identification',
+      keys: [
+        'source',
+        'location',
+        'application_name_or_asset',
+        'associated_risks',
+        'risk_description_scenario',
+        'impact_business_regulatory_financial',
+      ],
+    },
+    {
+      id: 'risk_analysis',
+      title: 'Risk Analysis',
+      keys: ['reported_date'],
+    },
+    {
+      id: 'risk_treatment',
+      title: 'Risk Treatment',
+      keys: [
+        'recommended_controls',
+        'mitigation_option',
+        'business_justification',
+        'timeline',
+        'implementation_status',
+        'mitigation_date',
+        'risk_owner',
+      ],
+    },
+  ],
+  process: [
+    {
+      id: 'risk_identification',
+      title: 'Risk Identification',
+      keys: ['source', 'location', 'associated_risks', 'risk_description_scenario', 'impact_business_regulatory_financial'],
+    },
+    {
+      id: 'risk_analysis',
+      title: 'Risk Analysis',
+      keys: ['reported_date'],
+    },
+    {
+      id: 'risk_treatment',
+      title: 'Risk Treatment',
+      keys: [
+        'recommended_controls',
+        'mitigation_option',
+        'business_justification',
+        'timeline',
+        'compensating_controls',
+        'implementation_status',
+        'mitigation_date',
+        'risk_owner',
+      ],
+    },
+  ],
+  isms: [
+    {
+      id: 'risk_identification',
+      title: 'Risk Identification',
+      keys: [
+        'source',
+        'location',
+        'type_or_security_triad',
+        'associated_risks',
+        'risk_description_scenario',
+        'impact_business_regulatory_financial',
+        'cia_impacted',
+        'annex_a',
+      ],
+    },
+    {
+      id: 'risk_analysis',
+      title: 'Risk Analysis',
+      keys: ['reported_date'],
+    },
+    {
+      id: 'risk_treatment',
+      title: 'Risk Treatment',
+      keys: [
+        'recommended_controls',
+        'mitigation_option',
+        'business_justification',
+        'timeline',
+        'compensating_controls',
+        'implementation_status',
+        'mitigation_date',
+        'risk_owner',
+      ],
+    },
+  ],
+  other: [
+    {
+      id: 'risk_identification',
+      title: 'Risk Identification',
+      keys: ['source', 'location', 'associated_risks', 'risk_description_scenario', 'impact_business_regulatory_financial'],
+    },
+    {
+      id: 'risk_analysis',
+      title: 'Risk Analysis',
+      keys: ['reported_date'],
+    },
+    {
+      id: 'risk_treatment',
+      title: 'Risk Treatment',
+      keys: ['recommended_controls', 'mitigation_option', 'business_justification', 'timeline', 'implementation_status', 'mitigation_date', 'risk_owner'],
+    },
+  ],
+  strategic: [],
+  operational: [],
+  financial: [],
+  compliance: [],
+  project_change: [],
+  internal: [],
+};
+
+const UBL_DEFAULT_FIELD_SECTIONS: UBLFieldSection[] = [
+  {
+    id: 'risk_identification',
+    title: 'Risk Identification',
+    keys: [
+      'source',
+      'location',
+      'associated_risks',
+      'risk_description_scenario',
+      'impact_business_regulatory_financial',
+    ],
+  },
+  {
+    id: 'risk_treatment',
+    title: 'Risk Treatment',
+    keys: [
+      'recommended_controls',
+      'mitigation_option',
+      'fixed_vulnerability_count',
+      'frequency',
+      'business_justification',
+      'timeline',
+      'compensating_controls',
+      'implementation_status',
+      'mitigation_date',
+      'risk_owner',
+      'reported_date',
+    ],
+  },
+];
+
 const REGISTER_TYPES = [
+  { value: UBL_TEMPLATE_REGISTER_TYPE, label: 'Template' },
   { value: 'PCI-DSS', label: 'PCI-DSS' },
   { value: 'ISO 27001', label: 'ISO 27001' },
   { value: 'SOX', label: 'SOX' },
@@ -79,8 +402,96 @@ const filterValuesMatch = (left: string | null | undefined, right: string | null
   );
 };
 
+const isUBLRegisterTypeValue = (value: string | null | undefined) =>
+  canonicalFilterValue(value) === canonicalFilterValue(UBL_TEMPLATE_REGISTER_TYPE);
+
+const isUBLAllowedCategoryValue = (value: string | null | undefined) =>
+  UBL_ONLY_RISK_CATEGORIES.some((allowed) => filterValuesMatch(value, allowed));
+
+const toInputString = (value: unknown): string => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+};
+
+const formatUblFieldLabel = (key: string): string =>
+  key
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+
+const compactTitle = (title: string, maxWords = 6): string => {
+  const words = (title || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return title;
+  return `${words.slice(0, maxWords).join(' ')}...`;
+};
+
+const compactDescription = (description?: string | null): string => {
+  if (!description) return '';
+  const cleaned = description
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !/^source\s*sheet\s*:/i.test(line) && !/\bubl\b/i.test(line))
+    .join(' ');
+  if (!cleaned) return '';
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length <= 14) return `${cleaned} ....`;
+  return `${words.slice(0, 14).join(' ')} ....`;
+};
+
+const mapUblRawCategoryToRiskCategory = (value: string): RiskCategory | null => {
+  const normalized = canonicalFilterValue(value);
+  if (!normalized) return null;
+  if (normalized.includes('thirdparty') || normalized.includes('3rdparty') || normalized.includes('vendor')) return 'third_party';
+  if (normalized.includes('technology')) return 'technology';
+  if (normalized.includes('isms')) return 'isms';
+  if (normalized.includes('process')) return 'process';
+  if (normalized.includes('other')) return 'other';
+  return null;
+};
+
+const getRiskCategoryLabel = (category: RiskCategory): string =>
+  RISK_CATEGORIES.find((item) => item.value === category)?.label || category;
+
+const inferUblCategoryFromSheet = (sourceSheet: string | null | undefined): RiskCategory | null => {
+  const normalized = canonicalFilterValue(sourceSheet || '');
+  if (!normalized) return null;
+  if (normalized.includes('technology')) return 'technology';
+  if (normalized.includes('3rdparty') || normalized.includes('thirdparty')) return 'third_party';
+  if (normalized.includes('process')) return 'process';
+  if (normalized.includes('isms')) return 'isms';
+  return null;
+};
+
+const getUblFieldSections = (
+  riskCategory: RiskCategory | null | undefined,
+  sourceSheet?: string | null,
+): UBLFieldSection[] => {
+  const fromCategory = riskCategory && UBL_ONLY_RISK_CATEGORIES.includes(riskCategory) ? riskCategory : null;
+  const fromSheet = inferUblCategoryFromSheet(sourceSheet);
+  const resolved = fromCategory || fromSheet || 'technology';
+  return UBL_FIELD_SECTIONS_BY_CATEGORY[resolved] || UBL_DEFAULT_FIELD_SECTIONS;
+};
+
 const inferEffectiveRiskCategory = (risk: Risk): RiskCategory => {
   const legacyCategory = (risk as Risk & { category?: string }).category;
+  const explicitCategoryCanonical = canonicalFilterValue((risk.risk_category || legacyCategory || '').trim());
+  const explicitCategoryMap: Record<string, RiskCategory> = {
+    strategic: 'strategic',
+    operational: 'operational',
+    financial: 'financial',
+    compliance: 'compliance',
+    technology: 'technology',
+    thirdparty: 'third_party',
+    projectchange: 'project_change',
+    internal: 'internal',
+    isms: 'isms',
+    process: 'process',
+    other: 'other',
+  };
+  if (explicitCategoryMap[explicitCategoryCanonical]) return explicitCategoryMap[explicitCategoryCanonical];
+
   const categoryText = [
     risk.risk_category,
     legacyCategory,
@@ -99,6 +510,8 @@ const inferEffectiveRiskCategory = (risk: Risk): RiskCategory => {
   if (/(project|change|implementation|transformation)/.test(categoryText)) return 'project_change';
   if (/(strategy|strategic|market|reputation|brand)/.test(categoryText)) return 'strategic';
   if (/(internal|fraud|governance|culture|integrity)/.test(categoryText)) return 'internal';
+  if (/(isms|iso\/iec|annex a)/.test(categoryText)) return 'isms';
+  if (/(process|workflow|procedure)/.test(categoryText)) return 'process';
   return 'operational';
 };
 
@@ -111,6 +524,9 @@ const SUB_CATEGORIES_BY_CATEGORY: Record<RiskCategory, string[]> = {
   third_party: ['Vendor', 'Outsourcing', 'Partnership', 'Contractor', 'Other'],
   project_change: ['Project Delivery', 'Change Management', 'Integration', 'Scope', 'Other'],
   internal: ['Fraud', 'Governance', 'Culture', 'Process Integrity', 'Other'],
+  isms: ['Governance', 'ISO 27001', 'Policy', 'Compliance', 'Information Security', 'Other'],
+  process: ['Process Design', 'Control Weakness', 'Manual Error', 'Service Delivery', 'Operations', 'Other'],
+  other: ['General', 'Unclassified', 'Other'],
 };
 
 const DEPARTMENTS = [
@@ -191,8 +607,18 @@ export default function ERMRisksPage() {
   const [selectedRegisterType, setSelectedRegisterType] = useState<string>('');
   const [uploadResult, setUploadResult] = useState<{ message: string; created: number; skipped: number; errors: string[] } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [expandedRiskRows, setExpandedRiskRows] = useState<Record<number, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+  const isUBLFilterSelected = isUBLRegisterTypeValue(registerTypeFilter);
+
+  useEffect(() => {
+    if (!isUBLFilterSelected) return;
+    if (categoryFilter === 'all') return;
+    if (!isUBLAllowedCategoryValue(categoryFilter)) {
+      setCategoryFilter('all');
+    }
+  }, [isUBLFilterSelected, categoryFilter]);
 
   const { data: risks, isLoading, error } = useQuery({
     queryKey: ['erm-risks'],
@@ -415,8 +841,11 @@ export default function ERMRisksPage() {
 
   const availableCategoryOptions = useMemo(() => {
     const valuesByCanonical = new Map<string, string>();
+    const baseCategories = isUBLFilterSelected
+      ? RISK_CATEGORIES.filter((category) => UBL_ONLY_RISK_CATEGORIES.includes(category.value))
+      : STANDARD_RISK_CATEGORIES;
 
-    RISK_CATEGORIES.forEach((item) => {
+    baseCategories.forEach((item) => {
       const canonical = canonicalFilterValue(item.value);
       if (canonical && !valuesByCanonical.has(canonical)) {
         valuesByCanonical.set(canonical, item.value);
@@ -424,8 +853,14 @@ export default function ERMRisksPage() {
     });
 
     (risks || []).forEach((risk) => {
+      if (isUBLFilterSelected && !isUBLRegisterTypeValue(risk.register_type)) {
+        return;
+      }
       const legacyCategory = (risk as Risk & { category?: string }).category;
       const value = (risk.risk_category || legacyCategory || '').trim();
+      if (isUBLFilterSelected && !isUBLAllowedCategoryValue(value)) {
+        return;
+      }
       const canonical = canonicalFilterValue(value);
       if (canonical && !valuesByCanonical.has(canonical)) {
         valuesByCanonical.set(canonical, value);
@@ -438,7 +873,7 @@ export default function ERMRisksPage() {
         .replace(/_/g, ' ')
         .replace(/\b\w/g, (match) => match.toUpperCase()),
     }));
-  }, [risks]);
+  }, [risks, isUBLFilterSelected]);
 
   const availableRegisterTypeOptions = useMemo(() => {
     const valuesByCanonical = new Map<string, string>();
@@ -458,8 +893,18 @@ export default function ERMRisksPage() {
       }
     });
 
-    return Array.from(valuesByCanonical.values()).map((value) => ({ value, label: value }));
+    return Array.from(valuesByCanonical.values()).map((value) => ({
+      value,
+      label: isUBLRegisterTypeValue(value) ? 'Template' : value,
+    }));
   }, [risks]);
+
+  const toggleRiskRow = (riskId: number) => {
+    setExpandedRiskRows((current) => ({
+      ...current,
+      [riskId]: !current[riskId],
+    }));
+  };
 
   if (isLoading) {
     return (
@@ -642,7 +1087,7 @@ export default function ERMRisksPage() {
             </div>
           </div>
           <div className="mt-2 text-center text-xs text-slate-500">
-            Likelihood (Y-axis) × Impact (X-axis)
+            Likelihood (Y-axis) x Impact (X-axis)
           </div>
           {selectedHeatmapCell && (
             <button
@@ -705,7 +1150,7 @@ export default function ERMRisksPage() {
           className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
         >
           <option value="all">All Scores</option>
-          <option value="critical">Critical (≥20)</option>
+          <option value="critical">Critical (â‰¥20)</option>
           <option value="high">High (12-19)</option>
           <option value="medium">Medium (6-11)</option>
           <option value="low">Low (&lt;6)</option>
@@ -764,6 +1209,10 @@ export default function ERMRisksPage() {
                 const categoryStyle = getCategoryStyle(inferEffectiveRiskCategory(risk));
                 const statusStyle = getStatusStyle(risk.status);
                 const scoreColor = getScoreColor(risk.inherent_score);
+                const residualScoreColor = getScoreColor(risk.residual_score);
+                const isExpanded = !!expandedRiskRows[risk.id];
+                const shortTitle = compactTitle(risk.title, 6);
+                const shortDescription = compactDescription(risk.description);
                 
                 return (
                   <div
@@ -772,11 +1221,11 @@ export default function ERMRisksPage() {
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <Link href={`/risks/${risk.id}`} className="text-lg font-medium text-slate-900 hover:text-primary-400">
-                          {risk.title}
+                        <Link href={`/risks/${risk.id}`} className="text-2xl font-semibold text-slate-900 hover:text-primary-500">
+                          {shortTitle}
                         </Link>
-                        {risk.description && (
-                          <p className="mt-1 text-sm text-slate-600 line-clamp-2">{risk.description}</p>
+                        {shortDescription && (
+                          <p className="mt-1 line-clamp-1 text-sm text-slate-700">{shortDescription}</p>
                         )}
                         <div className="mt-2 flex flex-wrap gap-2">
                           <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${categoryStyle.bgColor} ${categoryStyle.color}`}>
@@ -807,18 +1256,117 @@ export default function ERMRisksPage() {
                             </span>
                           )}
                         </div>
+                        {isExpanded && (
+                          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                              <p className="text-[11px] font-medium text-slate-500">Inherent (L / I / S)</p>
+                              <p className="text-sm font-semibold text-slate-800">
+                                {(risk.inherent_likelihood || '-')} / {(risk.inherent_impact || '-')} / {(risk.inherent_score || '-')}
+                              </p>
+                            </div>
+                            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                              <p className="text-[11px] font-medium text-slate-500">Residual (L / I / S)</p>
+                              <p className="text-sm font-semibold text-slate-800">
+                                {(risk.residual_likelihood || '-')} / {(risk.residual_impact || '-')} / {(risk.residual_score || '-')}
+                              </p>
+                            </div>
+                            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                              <p className="text-[11px] font-medium text-slate-500">Treatment</p>
+                              <p className="line-clamp-2 text-sm text-slate-800">{risk.treatment_plan || 'No treatment plan'}</p>
+                            </div>
+                          </div>
+                        )}
+                        {isExpanded && risk.ubl_fields && typeof risk.ubl_fields === 'object' && (
+                          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                            {(() => {
+                              const ubl = risk.ubl_fields as Record<string, unknown>;
+                              const hasValue = (key: string) => toInputString(ubl[key]).trim().length > 0;
+                              const topFields = ['risk_id'].filter(hasValue);
+                              const sourceSheet = toInputString(ubl.source_sheet).trim();
+                              const sections = getUblFieldSections(inferEffectiveRiskCategory(risk), sourceSheet);
+                              const renderedKeys = new Set<string>();
+
+                              return (
+                                <div className="mt-2 space-y-3">
+                                  {topFields.length > 0 && (
+                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                      {topFields.map((key) => {
+                                        renderedKeys.add(key);
+                                        return (
+                                          <div key={key} className="rounded border border-slate-200 bg-white px-2 py-1">
+                                            <p className="text-[11px] font-medium text-slate-500">{formatUblFieldLabel(key)}</p>
+                                            <p className="text-xs text-slate-800 break-words whitespace-pre-wrap">{toInputString(ubl[key])}</p>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                  {sections.map((section) => {
+                                    const sectionEntries = section.keys
+                                      .filter((key) => hasValue(key) && !UBL_HIDDEN_DISPLAY_KEYS.has(key))
+                                      .map((key) => {
+                                        renderedKeys.add(key);
+                                        return [key, ubl[key]] as const;
+                                      });
+                                    if (sectionEntries.length === 0) return null;
+                                    return (
+                                      <div key={section.id}>
+                                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{section.title}</p>
+                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                          {sectionEntries.map(([key, value]) => (
+                                            <div key={key} className="rounded border border-slate-200 bg-white px-2 py-1">
+                                              <p className="text-[11px] font-medium text-slate-500">{formatUblFieldLabel(key)}</p>
+                                              <p className="text-xs text-slate-800 break-words whitespace-pre-wrap">{toInputString(value)}</p>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                  {Object.entries(ubl)
+                                    .filter(
+                                      ([key, value]) =>
+                                        !renderedKeys.has(key) &&
+                                        !UBL_HIDDEN_DISPLAY_KEYS.has(key) &&
+                                        toInputString(value).trim().length > 0,
+                                    )
+                                    .length > 0 && (
+                                    <div>
+                                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Additional Fields</p>
+                                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                        {Object.entries(ubl)
+                                          .filter(
+                                            ([key, value]) =>
+                                              !renderedKeys.has(key) &&
+                                              !UBL_HIDDEN_DISPLAY_KEYS.has(key) &&
+                                              toInputString(value).trim().length > 0,
+                                          )
+                                          .map(([key, value]) => (
+                                            <div key={key} className="rounded border border-slate-200 bg-white px-2 py-1">
+                                              <p className="text-[11px] font-medium text-slate-500">{formatUblFieldLabel(key)}</p>
+                                              <p className="text-xs text-slate-800 break-words whitespace-pre-wrap">{toInputString(value)}</p>
+                                            </div>
+                                          ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
                       </div>
                       <div className="ml-4 flex items-center gap-4">
                         <div className="text-right">
                           <p className="text-xs text-slate-500">Inherent</p>
                           <p className={`text-lg font-bold ${scoreColor.text}`}>
-                            {risk.inherent_score || '—'}
+                            {risk.inherent_score || '-'}
                           </p>
                         </div>
                         <div className="text-right">
                           <p className="text-xs text-slate-500">Residual</p>
-                          <p className={`text-lg font-bold ${getScoreColor(risk.residual_score).text}`}>
-                            {risk.residual_score || '—'}
+                          <p className={`text-lg font-bold ${residualScoreColor.text}`}>
+                            {risk.residual_score || '-'}
                           </p>
                         </div>
                         <div className="flex gap-1">
@@ -845,6 +1393,14 @@ export default function ERMRisksPage() {
                               <Trash2 className="h-4 w-4" />
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => toggleRiskRow(risk.id)}
+                            className="rounded p-1.5 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+                            aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
+                          >
+                            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -861,14 +1417,16 @@ export default function ERMRisksPage() {
             setIsModalOpen(false);
             setEditingRisk(null);
           }}
-          onSubmit={async ({ riskData, linkedAssetId }) => {
+          onSubmit={async ({ riskData, linkedAssetIds }) => {
             if (editingRisk) {
               const updated = await updateMutation.mutateAsync({ id: editingRisk.id, data: riskData });
               const updatedRiskId = updated?.data?.id || editingRisk.id;
-              if (linkedAssetId && updatedRiskId) {
-                try {
-                  await ermApi.risks.linkAsset(updatedRiskId, { asset_id: linkedAssetId });
-                } catch {
+              if (linkedAssetIds?.length && updatedRiskId) {
+                for (const assetId of linkedAssetIds) {
+                  try {
+                    await ermApi.risks.linkAsset(updatedRiskId, { asset_id: assetId });
+                  } catch {
+                  }
                 }
               }
               return;
@@ -876,12 +1434,14 @@ export default function ERMRisksPage() {
 
             const created = await createMutation.mutateAsync(riskData);
             const createdRiskId = created?.data?.id;
-            if (linkedAssetId && createdRiskId) {
-              try {
-                await ermApi.risks.linkAsset(createdRiskId, { asset_id: linkedAssetId });
-                queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
-              } catch {
+            if (linkedAssetIds?.length && createdRiskId) {
+              for (const assetId of linkedAssetIds) {
+                try {
+                  await ermApi.risks.linkAsset(createdRiskId, { asset_id: assetId });
+                } catch {
+                }
               }
+              queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
             }
           }}
           isLoading={createMutation.isPending || updateMutation.isPending}
@@ -973,7 +1533,7 @@ interface AISuggestion {
 
 interface RiskModalSubmitPayload {
   riskData: Partial<Risk>;
-  linkedAssetId?: number;
+  linkedAssetIds?: number[];
 }
 
 function RiskModal({
@@ -990,8 +1550,9 @@ function RiskModal({
   const [formData, setFormData] = useState({
     title: risk?.title || '',
     description: risk?.description || '',
+    register_type: risk?.register_type || '',
     risk_category: risk?.risk_category || 'operational' as RiskCategory,
-    risk_sub_category: risk?.risk_sub_category || '',
+    risk_sub_category: risk?.risk_sub_category || toInputString((risk?.ubl_fields as Record<string, unknown> | undefined)?.sub_source_activity || ''),
     business_owner_id: risk?.business_owner_id || undefined as number | undefined,
     affected_department_ids: risk?.affected_department_ids || [] as number[],
     status: risk?.status || 'open' as RiskStatus,
@@ -1000,7 +1561,26 @@ function RiskModal({
     residual_likelihood: risk?.residual_likelihood || 2,
     residual_impact: risk?.residual_impact || 2,
     treatment_plan: risk?.treatment_plan || '',
-    linked_asset_id: '',
+  });
+  const [assetSearch, setAssetSearch] = useState('');
+  const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>(
+    ((risk as unknown as { linked_assets?: Array<{ asset_id?: number; id?: number }> } | null)?.linked_assets || [])
+      .map((asset) => Number(asset.asset_id ?? asset.id))
+      .filter((id) => Number.isFinite(id) && id > 0)
+  );
+  const [ublFields, setUblFields] = useState<Record<string, string>>(() => {
+    const defaults: Record<string, string> = {};
+    UBL_FIELD_DEFS.forEach((field) => {
+      defaults[field.key] = '';
+    });
+
+    const raw = risk?.ubl_fields;
+    if (raw && typeof raw === 'object') {
+      Object.entries(raw as Record<string, unknown>).forEach(([key, value]) => {
+        defaults[key] = toInputString(value);
+      });
+    }
+    return defaults;
   });
 
   const [aiSuggestions, setAiSuggestions] = useState<AISuggestion | null>(null);
@@ -1037,6 +1617,62 @@ function RiskModal({
     },
   });
 
+  const filteredAssets = useMemo(() => {
+    const allAssets = assets || [];
+    const term = assetSearch.trim().toLowerCase();
+    if (!term) return allAssets;
+    return allAssets.filter((asset) => {
+      const name = (asset.name || '').toLowerCase();
+      const assetType = (asset.asset_type || '').toLowerCase();
+      const owner = (asset.owner_name || '').toLowerCase();
+      return (
+        name.includes(term) ||
+        assetType.includes(term) ||
+        owner.includes(term) ||
+        String(asset.id).includes(term)
+      );
+    });
+  }, [assets, assetSearch]);
+
+  const selectedAssets = useMemo(() => {
+    const byId = new Map((assets || []).map((asset) => [asset.id, asset]));
+    return selectedAssetIds
+      .map((id) => byId.get(id))
+      .filter((asset): asset is ITAsset => !!asset);
+  }, [assets, selectedAssetIds]);
+
+  const isUBLTemplateSelected = canonicalFilterValue(formData.register_type) === canonicalFilterValue(UBL_TEMPLATE_REGISTER_TYPE);
+  const categoryOptions = isUBLTemplateSelected
+    ? RISK_CATEGORIES.filter((category) => UBL_ONLY_RISK_CATEGORIES.includes(category.value))
+    : STANDARD_RISK_CATEGORIES;
+  const extraUblFieldKeys = useMemo(() => {
+    return Object.keys(ublFields).filter(
+      (key) =>
+        !UBL_FIELD_KEY_SET.has(key) &&
+        !UBL_NON_EDITABLE_FIELD_KEYS.has(key) &&
+        !UBL_HIDDEN_DISPLAY_KEYS.has(key),
+    );
+  }, [ublFields]);
+  const systemUblRiskId = useMemo(() => {
+    const fromForm = (ublFields.risk_id || '').trim();
+    if (fromForm) return fromForm;
+    const raw = risk?.ubl_fields as Record<string, unknown> | undefined;
+    const fromRisk = toInputString(raw?.risk_id).trim();
+    return fromRisk || '';
+  }, [ublFields.risk_id, risk?.ubl_fields]);
+  const sourceSheetValue = useMemo(() => {
+    const raw = risk?.ubl_fields as Record<string, unknown> | undefined;
+    return toInputString(raw?.source_sheet).trim();
+  }, [risk?.ubl_fields]);
+  const activeUblSections = useMemo(
+    () => getUblFieldSections(formData.risk_category, sourceSheetValue),
+    [formData.risk_category, sourceSheetValue],
+  );
+  const ublSubCategorySuggestions = useMemo(() => {
+    const key = UBL_ONLY_RISK_CATEGORIES.includes(formData.risk_category) ? formData.risk_category : 'technology';
+    return UBL_SUB_CATEGORY_SUGGESTIONS[key] || [];
+  }, [formData.risk_category]);
+
   const subCategories = SUB_CATEGORIES_BY_CATEGORY[formData.risk_category] || [];
 
   const handleCategoryChange = (newCategory: RiskCategory) => {
@@ -1047,12 +1683,50 @@ function RiskModal({
     });
   };
 
+  const handleRegisterTypeChange = (newRegisterType: string) => {
+    const isUBL = canonicalFilterValue(newRegisterType) === canonicalFilterValue(UBL_TEMPLATE_REGISTER_TYPE);
+    let nextCategory = formData.risk_category;
+    if (isUBL && !UBL_ONLY_RISK_CATEGORIES.includes(nextCategory)) {
+      nextCategory = 'technology';
+    }
+    const nextSubCategory = isUBL
+      ? formData.risk_sub_category
+      : (SUB_CATEGORIES_BY_CATEGORY[nextCategory]?.includes(formData.risk_sub_category) ? formData.risk_sub_category : '');
+    setFormData({
+      ...formData,
+      register_type: newRegisterType,
+      risk_category: nextCategory,
+      risk_sub_category: nextSubCategory,
+    });
+  };
+
   const handleDepartmentToggle = (deptId: number) => {
     const current = formData.affected_department_ids;
     if (current.includes(deptId)) {
       setFormData({ ...formData, affected_department_ids: current.filter(id => id !== deptId) });
     } else {
       setFormData({ ...formData, affected_department_ids: [...current, deptId] });
+    }
+  };
+
+  const toggleAssetSelection = (assetId: number) => {
+    setSelectedAssetIds((current) =>
+      current.includes(assetId) ? current.filter((id) => id !== assetId) : [...current, assetId]
+    );
+  };
+
+  const handleUBLFieldChange = (key: string, value: string) => {
+    setUblFields((current) => ({
+      ...current,
+      [key]: value,
+    }));
+
+    if (!isUBLTemplateSelected) return;
+    if (key === 'risk_category_raw') {
+      const mappedCategory = mapUblRawCategoryToRiskCategory(value);
+      if (mappedCategory) {
+        setFormData((current) => ({ ...current, risk_category: mappedCategory }));
+      }
     }
   };
 
@@ -1102,40 +1776,116 @@ function RiskModal({
     const causesSection = formData.description.includes('Root Causes:') 
       ? formData.description 
       : formData.description + (formData.description ? '\n\n' : '') + 'Root Causes:\n';
-    setFormData({ ...formData, description: causesSection + `• ${cause}\n` });
+    setFormData({ ...formData, description: causesSection + `â€¢ ${cause}\n` });
   };
 
   const appendConsequenceToDescription = (consequence: string) => {
     const consequenceSection = formData.description.includes('Potential Consequences:')
       ? formData.description
       : formData.description + (formData.description ? '\n\n' : '') + 'Potential Consequences:\n';
-    setFormData({ ...formData, description: consequenceSection + `• ${consequence}\n` });
+    setFormData({ ...formData, description: consequenceSection + `â€¢ ${consequence}\n` });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { linked_asset_id, ...riskData } = formData;
+    const cleanedUblFields = Object.entries(ublFields).reduce<Record<string, string>>((acc, [key, value]) => {
+      if (UBL_NON_EDITABLE_FIELD_KEYS.has(key) || UBL_PLATFORM_DUPLICATE_KEYS.has(key)) return acc;
+      const cleaned = (value || '').trim();
+      if (cleaned) acc[key] = cleaned;
+      return acc;
+    }, {});
+    const derivedSubCategory = (formData.risk_sub_category || '').trim();
+    if (isUBLTemplateSelected) {
+      cleanedUblFields.risk_category_raw = getRiskCategoryLabel(formData.risk_category);
+      if (derivedSubCategory) {
+        cleanedUblFields.sub_source_activity = derivedSubCategory;
+      }
+    }
+
     await onSubmit({
       riskData: {
-        ...riskData,
+        ...formData,
+        risk_sub_category: derivedSubCategory,
         inherent_score: formData.inherent_likelihood * formData.inherent_impact,
         residual_score: formData.residual_likelihood * formData.residual_impact,
+        ubl_fields: isUBLTemplateSelected ? cleanedUblFields : undefined,
       },
-      linkedAssetId: linked_asset_id ? Number(linked_asset_id) : undefined,
+      linkedAssetIds: selectedAssetIds,
     });
   };
 
+  const renderUblInput = (field: UBLFieldDef) => {
+    const value = ublFields[field.key] || '';
+    const listId = `ubl-${field.key}-options`;
+
+    if (field.input === 'textarea') {
+      return (
+        <textarea
+          value={value}
+          onChange={(e) => handleUBLFieldChange(field.key, e.target.value)}
+          rows={3}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+          placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
+        />
+      );
+    }
+    if (field.input === 'select') {
+      return (
+        <select
+          value={value}
+          onChange={(e) => handleUBLFieldChange(field.key, e.target.value)}
+          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+        >
+          {(field.options || ['']).map((option) => (
+            <option key={option || 'empty'} value={option}>{option || 'Select...'}</option>
+          ))}
+        </select>
+      );
+    }
+    if (field.input === 'datalist') {
+      return (
+        <>
+          <input
+            type="text"
+            list={listId}
+            value={value}
+            onChange={(e) => handleUBLFieldChange(field.key, e.target.value)}
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+            placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
+          />
+          <datalist id={listId}>
+            {(field.suggestions || []).map((option) => (
+              <option key={option} value={option} />
+            ))}
+          </datalist>
+        </>
+      );
+    }
+
+    return (
+      <input
+        type={field.input}
+        value={value}
+        onChange={(e) => handleUBLFieldChange(field.key, e.target.value)}
+        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+        placeholder={field.placeholder || `Enter ${field.label.toLowerCase()}...`}
+      />
+    );
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">{risk ? 'Edit Risk' : 'Create Risk'}</h2>
+    <div className="fixed inset-0 z-50">
+      <button type="button" aria-label="Close risk panel" className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-y-0 right-0 z-10 flex h-full w-full max-w-[1400px] flex-col border-l border-slate-200 bg-white shadow-2xl sm:w-[94vw] lg:w-[86vw] xl:w-[80vw] 2xl:w-[72vw]">
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200 px-6 py-4">
+          <h2 className="text-base font-semibold text-slate-900">{risk ? 'Edit Risk' : 'Create Risk'}</h2>
           <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           <div>
             <label className="block text-sm text-slate-600">Title</label>
             <div className="mt-1 flex gap-2">
@@ -1143,7 +1893,7 @@ function RiskModal({
                 type="text"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="flex-1 rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="flex-1 rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
                 required
                 placeholder="Enter risk title..."
               />
@@ -1333,37 +2083,127 @@ function RiskModal({
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
               rows={3}
               placeholder="Describe the risk..."
             />
           </div>
 
+          <div>
+            <label className="block text-sm text-slate-600">Register Type</label>
+            <select
+              value={formData.register_type}
+              onChange={(e) => handleRegisterTypeChange(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+            >
+              <option value="">Select register type...</option>
+              {REGISTER_TYPES.map((type) => (
+                <option key={type.value} value={type.value}>{type.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {isUBLTemplateSelected && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <h3 className="text-sm font-semibold text-slate-800">Register Fields</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Fill relevant columns from the selected register type. Risk ID is system generated.
+              </p>
+              {systemUblRiskId && (
+                <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <p className="text-[11px] font-medium text-slate-500">System Risk ID</p>
+                  <p className="text-sm font-semibold text-slate-800">{systemUblRiskId}</p>
+                </div>
+              )}
+              <div className="mt-3 space-y-4">
+                {activeUblSections.map((section) => {
+                  const sectionFields = section.keys
+                    .map((key) => UBL_FIELD_DEF_MAP.get(key))
+                    .filter((field): field is UBLFieldDef => !!field);
+                  if (sectionFields.length === 0) return null;
+                  return (
+                    <div key={section.id}>
+                      <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">{section.title}</h4>
+                      <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        {sectionFields.map((field) => (
+                          <div key={field.key}>
+                            <label className="block text-xs text-slate-600">{field.label}</label>
+                            {renderUblInput(field)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {extraUblFieldKeys.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Additional Fields</h4>
+                    <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
+                      {extraUblFieldKeys.map((key) => (
+                        <div key={key}>
+                          <label className="block text-xs text-slate-600">{formatUblFieldLabel(key)}</label>
+                          <input
+                            type="text"
+                            value={ublFields[key] || ''}
+                            onChange={(e) => handleUBLFieldChange(key, e.target.value)}
+                            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-600">Category</label>
+              <label className="block text-sm text-slate-600">
+                {isUBLTemplateSelected ? 'Category (Risk Category)' : 'Category'}
+              </label>
               <select
                 value={formData.risk_category}
                 onChange={(e) => handleCategoryChange(e.target.value as RiskCategory)}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
               >
-                {RISK_CATEGORIES.map((cat) => (
+                {categoryOptions.map((cat) => (
                   <option key={cat.value} value={cat.value}>{cat.label}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm text-slate-600">Sub-Category</label>
-              <select
-                value={formData.risk_sub_category}
-                onChange={(e) => setFormData({ ...formData, risk_sub_category: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              >
-                <option value="">Select sub-category...</option>
-                {subCategories.map((sub) => (
-                  <option key={sub} value={sub}>{sub}</option>
-                ))}
-              </select>
+              <label className="block text-sm text-slate-600">
+                {isUBLTemplateSelected ? 'Sub-Category (Sub-Source / Activity)' : 'Sub-Category'}
+              </label>
+              {isUBLTemplateSelected ? (
+                <>
+                  <input
+                    type="text"
+                    list="ubl-sub-source-options"
+                    value={formData.risk_sub_category}
+                    onChange={(e) => setFormData({ ...formData, risk_sub_category: e.target.value.slice(0, 100) })}
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+                    placeholder="Enter sub-source / activity..."
+                  />
+                  <datalist id="ubl-sub-source-options">
+                    {ublSubCategorySuggestions.map((option) => (
+                      <option key={option} value={option} />
+                    ))}
+                  </datalist>
+                </>
+              ) : (
+                <select
+                  value={formData.risk_sub_category}
+                  onChange={(e) => setFormData({ ...formData, risk_sub_category: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+                >
+                  <option value="">Select sub-category...</option>
+                  {subCategories.map((sub) => (
+                    <option key={sub} value={sub}>{sub}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 
@@ -1373,7 +2213,7 @@ function RiskModal({
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as RiskStatus })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
               >
                 {RISK_STATUSES.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
@@ -1385,7 +2225,7 @@ function RiskModal({
               <select
                 value={formData.business_owner_id || ''}
                 onChange={(e) => setFormData({ ...formData, business_owner_id: e.target.value ? Number(e.target.value) : undefined })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
               >
                 <option value="">Select owner...</option>
                 {(users || []).map((user) => (
@@ -1396,17 +2236,42 @@ function RiskModal({
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600">Linked Asset (Optional)</label>
-            <select
-              value={formData.linked_asset_id}
-              onChange={(e) => setFormData({ ...formData, linked_asset_id: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-            >
-              <option value="">Select asset...</option>
-              {(assets || []).map((asset) => (
-                <option key={asset.id} value={asset.id}>{asset.name}</option>
-              ))}
-            </select>
+            <label className="block text-sm text-slate-600">Linked Assets (Optional)</label>
+            <input
+              type="text"
+              value={assetSearch}
+              onChange={(e) => setAssetSearch(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
+              placeholder="Search assets by name..."
+            />
+            <div className="mt-2 max-h-36 overflow-y-auto rounded-lg border border-slate-300 bg-white">
+              {filteredAssets.length === 0 ? (
+                <p className="px-3 py-2 text-sm text-slate-600">No assets found</p>
+              ) : (
+                filteredAssets.map((asset) => {
+                  const checked = selectedAssetIds.includes(asset.id);
+                  return (
+                    <label
+                      key={asset.id}
+                      className="flex cursor-pointer items-center gap-2 border-b border-slate-100 px-3 py-2 text-sm text-slate-900 last:border-b-0 hover:bg-slate-100"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleAssetSelection(asset.id)}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                      <span className="truncate">{asset.name}</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+            {selectedAssets.length > 0 && (
+              <p className="mt-2 text-xs text-slate-600">
+                Selected: {selectedAssets.map((asset) => asset.name).join(', ')}
+              </p>
+            )}
           </div>
 
           <div>
@@ -1438,7 +2303,7 @@ function RiskModal({
                 max="5"
                 value={formData.inherent_likelihood}
                 onChange={(e) => setFormData({ ...formData, inherent_likelihood: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
               />
             </div>
             <div>
@@ -1449,7 +2314,7 @@ function RiskModal({
                 max="5"
                 value={formData.inherent_impact}
                 onChange={(e) => setFormData({ ...formData, inherent_impact: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
               />
             </div>
           </div>
@@ -1463,7 +2328,7 @@ function RiskModal({
                 max="5"
                 value={formData.residual_likelihood}
                 onChange={(e) => setFormData({ ...formData, residual_likelihood: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
               />
             </div>
             <div>
@@ -1474,7 +2339,7 @@ function RiskModal({
                 max="5"
                 value={formData.residual_impact}
                 onChange={(e) => setFormData({ ...formData, residual_impact: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
               />
             </div>
           </div>
@@ -1511,12 +2376,14 @@ function RiskModal({
             <textarea
               value={formData.treatment_plan}
               onChange={(e) => setFormData({ ...formData, treatment_plan: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900 transition-all duration-150 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100"
               rows={formData.treatment_plan.length > 200 ? 8 : 2}
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          </div>
+
+          <div className="flex flex-shrink-0 justify-end gap-3 border-t border-slate-200 px-6 py-4">
             <button
               type="button"
               onClick={onClose}
@@ -1538,3 +2405,4 @@ function RiskModal({
     </div>
   );
 }
+

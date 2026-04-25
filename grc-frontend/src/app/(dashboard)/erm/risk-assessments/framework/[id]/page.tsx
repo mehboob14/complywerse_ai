@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { ermApi, tenantApi } from '@/lib/api';
 import { ArrowLeft, Loader2, Plus, RefreshCw, Trash2, Upload, CheckCircle2, Sparkles } from 'lucide-react';
+import Link from 'next/link';
 
 interface EvidenceItem {
   id: number;
@@ -20,6 +21,16 @@ interface QuestionItem {
   status: string;
   assigned_user_id?: number | null;
   assigned_user_name?: string | null;
+  inherent_likelihood?: number | null;
+  inherent_impact?: number | null;
+  inherent_score?: number | null;
+  residual_likelihood?: number | null;
+  residual_impact?: number | null;
+  residual_score?: number | null;
+  is_risk_accepted?: boolean;
+  acceptance_notes?: string | null;
+  linked_risk_id?: number | null;
+  moved_to_risk_register_at?: string | null;
   evidence?: EvidenceItem[];
 }
 
@@ -67,6 +78,8 @@ const ASSESSMENT_STATUS = [
   { value: 'archived', label: 'Archived' },
 ];
 
+const RISK_SCALE_OPTIONS = [1, 2, 3, 4, 5];
+
 export default function FrameworkRiskAssessmentDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -76,6 +89,7 @@ export default function FrameworkRiskAssessmentDetailPage() {
   const [newQuestion, setNewQuestion] = useState('');
   const [generateCount, setGenerateCount] = useState('20');
   const [uploadingQuestionId, setUploadingQuestionId] = useState<number | null>(null);
+  const [movingQuestionId, setMovingQuestionId] = useState<number | null>(null);
 
   const { data: assessment, isLoading } = useQuery({
     queryKey: ['framework-risk-assessment', assessmentId],
@@ -158,6 +172,18 @@ export default function FrameworkRiskAssessmentDetailPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] }),
   });
 
+  const moveToRiskRegisterMutation = useMutation({
+    mutationFn: ({ questionId }: { questionId: number }) =>
+      ermApi.frameworkRiskAssessments.moveQuestionToRiskRegister(assessmentId, questionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
+    },
+    onSettled: () => {
+      setMovingQuestionId(null);
+    },
+  });
+
   const uploadEvidenceMutation = useMutation({
     mutationFn: async ({ questionId, file }: { questionId: number; file: File }) => {
       const formData = new FormData();
@@ -178,6 +204,10 @@ export default function FrameworkRiskAssessmentDetailPage() {
   });
 
   const questionList = useMemo(() => assessment?.questions || [], [assessment]);
+
+  const updateQuestionRiskValues = (questionId: number, data: Record<string, unknown>) => {
+    updateQuestionMutation.mutate({ questionId, data });
+  };
 
   if (isLoading || !assessment) {
     return (
@@ -262,7 +292,7 @@ export default function FrameworkRiskAssessmentDetailPage() {
           <Sparkles size={16} /> Question Workspace
         </div>
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] px-4 py-3 text-xs text-[var(--color-muted)]">
-          AI-generated questions are now framework-specific and grounded in the selected framework's control set, implementation requirements, evidence expectations, ownership, monitoring, and exception handling.
+          AI-generated questions are now framework-specific and grounded in the selected framework&apos;s control set, implementation requirements, evidence expectations, ownership, monitoring, and exception handling.
         </div>
         <div className="text-sm font-semibold text-[var(--color-text)]">Add Manual Question</div>
         <div className="flex items-center gap-2">
@@ -353,6 +383,132 @@ export default function FrameworkRiskAssessmentDetailPage() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-4 space-y-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+                Question Risk Assessment
+              </div>
+              <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Inherent Likelihood</label>
+                  <select
+                    className="cw-field w-full rounded-lg px-2 py-2 text-sm"
+                    value={question.inherent_likelihood || ''}
+                    onChange={(e) => updateQuestionRiskValues(question.id, { inherent_likelihood: e.target.value ? Number(e.target.value) : null })}
+                  >
+                    <option value="">-</option>
+                    {RISK_SCALE_OPTIONS.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Inherent Impact</label>
+                  <select
+                    className="cw-field w-full rounded-lg px-2 py-2 text-sm"
+                    value={question.inherent_impact || ''}
+                    onChange={(e) => updateQuestionRiskValues(question.id, { inherent_impact: e.target.value ? Number(e.target.value) : null })}
+                  >
+                    <option value="">-</option>
+                    {RISK_SCALE_OPTIONS.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Inherent Score</label>
+                  <div className="cw-field w-full rounded-lg px-3 py-2 text-sm bg-white/70">{question.inherent_score ?? '-'}</div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Residual Likelihood</label>
+                  <select
+                    className="cw-field w-full rounded-lg px-2 py-2 text-sm"
+                    value={question.residual_likelihood || ''}
+                    onChange={(e) => updateQuestionRiskValues(question.id, { residual_likelihood: e.target.value ? Number(e.target.value) : null })}
+                  >
+                    <option value="">-</option>
+                    {RISK_SCALE_OPTIONS.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Residual Impact</label>
+                  <select
+                    className="cw-field w-full rounded-lg px-2 py-2 text-sm"
+                    value={question.residual_impact || ''}
+                    onChange={(e) => updateQuestionRiskValues(question.id, { residual_impact: e.target.value ? Number(e.target.value) : null })}
+                  >
+                    <option value="">-</option>
+                    {RISK_SCALE_OPTIONS.map((v) => (
+                      <option key={v} value={v}>{v}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Residual Score</label>
+                  <div className="cw-field w-full rounded-lg px-3 py-2 text-sm bg-white/70">{question.residual_score ?? '-'}</div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <label className="inline-flex items-center gap-2 text-sm text-[var(--color-text)]">
+                    <input
+                      type="checkbox"
+                      checked={!!question.is_risk_accepted}
+                      onChange={(e) => updateQuestionRiskValues(question.id, { is_risk_accepted: e.target.checked })}
+                    />
+                    Accept Risk
+                  </label>
+                  <p className="mt-1 text-xs text-[var(--color-muted)]">
+                    Mark accepted risk before moving to Risk Register.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-muted)] mb-1">Acceptance Notes</label>
+                  <textarea
+                    className="cw-field w-full rounded-lg px-3 py-2 text-sm"
+                    rows={2}
+                    defaultValue={question.acceptance_notes || ''}
+                    placeholder="Add acceptance rationale or treatment notes"
+                    onBlur={(e) => updateQuestionRiskValues(question.id, { acceptance_notes: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {question.linked_risk_id ? (
+                  <div className="inline-flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-xs text-green-700">
+                    Moved to Risk Register: #{question.linked_risk_id}
+                    <Link className="underline" href={`/erm/risks`}>Open Register</Link>
+                  </div>
+                ) : (
+                  <button
+                    className="cw-btn-primary rounded-lg px-3 py-2 text-sm disabled:opacity-50"
+                    disabled={!question.is_risk_accepted || moveToRiskRegisterMutation.isPending}
+                    onClick={() => {
+                      setMovingQuestionId(question.id);
+                      moveToRiskRegisterMutation.mutate({ questionId: question.id });
+                    }}
+                  >
+                    {movingQuestionId === question.id ? (
+                      <span className="inline-flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Moving...</span>
+                    ) : (
+                      'Move to Risk Register'
+                    )}
+                  </button>
+                )}
+                {!question.is_risk_accepted && !question.linked_risk_id && (
+                  <span className="text-xs text-[var(--color-muted)]">Accept risk to enable move.</span>
+                )}
+              </div>
+              {movingQuestionId === question.id && moveToRiskRegisterMutation.isError && (
+                <div className="text-xs text-red-600">
+                  {(moveToRiskRegisterMutation.error as any)?.response?.data?.detail || 'Failed to move question to risk register.'}
+                </div>
+              )}
             </div>
 
             <div className="border-t border-[var(--color-border)] pt-3">
