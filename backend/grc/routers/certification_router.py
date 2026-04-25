@@ -83,9 +83,28 @@ def normalize_evidence_requirements(raw_evidence: list) -> list:
         return []
     normalized = []
     for item in raw_evidence:
-        if isinstance(item, dict) and "title" in item:
-            normalized.append(item)
-        elif isinstance(item, str):
+        if isinstance(item, dict):
+            title = item.get("title") or item.get("name")
+            description = item.get("description") or ""
+            filetype = (
+                item.get("filetype")
+                or item.get("format")
+                or item.get("evidence_format")
+            )
+            if title:
+                merged = dict(item)
+                merged["title"] = title
+                if description and not merged.get("description"):
+                    merged["description"] = description
+                if "type" not in merged:
+                    merged["type"] = _infer_evidence_type(f"{title} {description}")
+                if filetype and not merged.get("filetype"):
+                    merged["filetype"] = filetype
+                if "is_required" not in merged:
+                    merged["is_required"] = merged.get("is_mandatory", True)
+                normalized.append(merged)
+                continue
+        if isinstance(item, str):
             normalized.append({
                 "type": _infer_evidence_type(item),
                 "title": item,

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ermApi } from '@/lib/api';
+import { ermApi, evidenceApi, risksApi, tenantApi } from '@/lib/api';
 import {
   RiskReview,
   RiskReviewCreate,
@@ -18,8 +18,16 @@ import {
   Plus,
   X,
   AlertCircle,
+  Upload,
+  User,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+
+interface TenantUserOption {
+  id: number;
+  display_name: string;
+  email: string;
+}
 
 const REVIEW_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-500/20 text-yellow-400',
@@ -67,6 +75,14 @@ export default function ReviewsPage() {
     queryFn: async () => {
       const response = await ermApi.risks.getAll();
       return response.data;
+    },
+  });
+
+  const { data: tenantUsers } = useQuery({
+    queryKey: ['erm-reviews-tenant-users'],
+    queryFn: async () => {
+      const response = await tenantApi.getTenantUsers();
+      return (response.data || []) as TenantUserOption[];
     },
   });
 
@@ -138,7 +154,11 @@ export default function ReviewsPage() {
       {reviews && reviews.length > 0 ? (
         <div className="space-y-3">
           {reviews.map((review) => (
-            <ReviewCard key={review.id} review={review} />
+            <ReviewCard
+              key={review.id}
+              review={review}
+              tenantUsers={tenantUsers || []}
+            />
           ))}
         </div>
       ) : (
@@ -152,6 +172,7 @@ export default function ReviewsPage() {
       {showCreateModal && (
         <ReviewModal
           risks={risks || []}
+          tenantUsers={tenantUsers || []}
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
@@ -164,32 +185,30 @@ export default function ReviewsPage() {
   );
 }
 
-function ReviewCard({ review }: { review: RiskReview }) {
+function ReviewCard({ review, tenantUsers }: { review: RiskReview; tenantUsers: TenantUserOption[] }) {
   const statusColor = REVIEW_STATUS_COLORS[review.status] || REVIEW_STATUS_COLORS.pending;
   const isOverdue = new Date(review.due_date) < new Date() && review.status !== 'completed';
-  const queryClient = useQueryClient();
-
-  const updateMutation = useMutation({
-    mutationFn: (status: string) => ermApi.reviews.update(review.id, { status: status as any }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['erm-reviews'] });
-      queryClient.invalidateQueries({ queryKey: ['erm-pending-reviews'] });
-      queryClient.invalidateQueries({ queryKey: ['erm-overdue-reviews'] });
-    },
-  });
+  const [showStartModal, setShowStartModal] = useState(false);
+  const reviewerName = tenantUsers.find((u) => u.id === review.reviewer_id)?.display_name;
 
   return (
     <div className={`rounded-xl border p-4 ${isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-200 bg-white'}`}>
       <div className="flex items-start justify-between">
         <div>
           <h3 className="font-medium text-slate-900">{review.risk_title || `Risk #${review.risk_id}`}</h3>
-          <div className="mt-1 flex items-center gap-3">
+          <div className="mt-1 flex items-center gap-3 flex-wrap">
             <span className={`rounded-full px-2 py-0.5 text-xs ${statusColor}`}>
               {review.status.replace('_', ' ')}
             </span>
             <span className="text-sm text-slate-600">
               {review.review_type} • {review.review_cycle}
             </span>
+            {reviewerName && (
+              <span className="inline-flex items-center gap-1 text-xs text-slate-600">
+                <User className="h-3 w-3" />
+                {reviewerName}
+              </span>
+            )}
           </div>
         </div>
         <div className="text-right">
@@ -203,8 +222,7 @@ function ReviewCard({ review }: { review: RiskReview }) {
       {review.status === 'pending' && (
         <div className="mt-4 flex gap-2">
           <button
-            onClick={() => updateMutation.mutate('in_review')}
-            disabled={updateMutation.isPending}
+            onClick={() => setShowStartModal(true)}
             className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-500"
           >
             Start Review
@@ -215,9 +233,8 @@ function ReviewCard({ review }: { review: RiskReview }) {
       {review.status === 'in_review' && (
         <div className="mt-4 flex gap-2">
           <button
-            onClick={() => updateMutation.mutate('completed')}
-            disabled={updateMutation.isPending}
-            className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-slate-900 hover:bg-green-500"
+            onClick={() => setShowStartModal(true)}
+            className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-500"
           >
             Complete Review
           </button>
@@ -229,16 +246,25 @@ function ReviewCard({ review }: { review: RiskReview }) {
           <p className="text-sm text-slate-700">{review.findings}</p>
         </div>
       )}
+
+      {showStartModal && (
+        <StartReviewModal
+          review={review}
+          onClose={() => setShowStartModal(false)}
+        />
+      )}
     </div>
   );
 }
 
 function ReviewModal({
   risks,
+  tenantUsers,
   onClose,
   onSuccess,
 }: {
   risks: Risk[];
+  tenantUsers: TenantUserOption[];
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -247,6 +273,7 @@ function ReviewModal({
     review_cycle: 'quarterly',
     review_type: 'periodic',
     due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    reviewer_id: undefined,
   });
 
   const createMutation = useMutation({
@@ -316,6 +343,27 @@ function ReviewModal({
           </div>
 
           <div>
+            <label className="block text-sm text-slate-600">Assign To</label>
+            <select
+              value={formData.reviewer_id ?? ''}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  reviewer_id: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+            >
+              <option value="">Unassigned</option>
+              {tenantUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.display_name} ({user.email})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <label className="block text-sm text-slate-600">Due Date</label>
             <input
               type="date"
@@ -341,6 +389,286 @@ function ReviewModal({
             >
               {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Schedule
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function StartReviewModal({
+  review,
+  onClose,
+}: {
+  review: RiskReview;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+
+  const { data: risk } = useQuery({
+    queryKey: ['erm-risk-for-review', review.risk_id],
+    queryFn: async () => {
+      const response = await ermApi.risks.getById(review.risk_id);
+      return response.data;
+    },
+  });
+
+  const [inherentLikelihood, setInherentLikelihood] = useState<string>('');
+  const [inherentImpact, setInherentImpact] = useState<string>('');
+  const [residualLikelihood, setResidualLikelihood] = useState<string>('');
+  const [residualImpact, setResidualImpact] = useState<string>('');
+  const [findings, setFindings] = useState<string>(review.findings || '');
+  const [recommendations, setRecommendations] = useState<string>(review.recommendations || '');
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [evidenceName, setEvidenceName] = useState<string>('');
+  const [evidenceDescription, setEvidenceDescription] = useState<string>('');
+
+  useEffect(() => {
+    if (risk) {
+      setInherentLikelihood(risk.inherent_likelihood?.toString() ?? '');
+      setInherentImpact(risk.inherent_impact?.toString() ?? '');
+      setResidualLikelihood(risk.residual_likelihood?.toString() ?? '');
+      setResidualImpact(risk.residual_impact?.toString() ?? '');
+    }
+  }, [risk]);
+
+  useEffect(() => {
+    if (review.status === 'pending') {
+      ermApi.reviews
+        .update(review.id, { status: 'in_review' as any })
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ['erm-reviews'] });
+          queryClient.invalidateQueries({ queryKey: ['erm-pending-reviews'] });
+          queryClient.invalidateQueries({ queryKey: ['erm-overdue-reviews'] });
+        })
+        .catch(() => {
+          // ignore — user can still complete the review
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const completeMutation = useMutation({
+    mutationFn: async () => {
+      const inhL = inherentLikelihood !== '' ? Number(inherentLikelihood) : undefined;
+      const inhI = inherentImpact !== '' ? Number(inherentImpact) : undefined;
+      const resL = residualLikelihood !== '' ? Number(residualLikelihood) : undefined;
+      const resI = residualImpact !== '' ? Number(residualImpact) : undefined;
+
+      const riskUpdate: Partial<Risk> = {};
+      if (inhL !== undefined && inhL !== risk?.inherent_likelihood) riskUpdate.inherent_likelihood = inhL;
+      if (inhI !== undefined && inhI !== risk?.inherent_impact) riskUpdate.inherent_impact = inhI;
+      if (resL !== undefined && resL !== risk?.residual_likelihood) riskUpdate.residual_likelihood = resL;
+      if (resI !== undefined && resI !== risk?.residual_impact) riskUpdate.residual_impact = resI;
+
+      if (Object.keys(riskUpdate).length > 0) {
+        await ermApi.risks.update(review.risk_id, riskUpdate);
+      }
+
+      if (evidenceFile) {
+        const formData = new FormData();
+        formData.append('name', evidenceName.trim() || evidenceFile.name);
+        if (evidenceDescription.trim()) {
+          formData.append('description', evidenceDescription.trim());
+        }
+        formData.append('file', evidenceFile);
+
+        const uploadRes = await evidenceApi.create(formData);
+        const uploadedEvidenceId = uploadRes.data?.id;
+        if (uploadedEvidenceId) {
+          try {
+            await risksApi.linkEvidence(review.risk_id, { evidence_id: uploadedEvidenceId });
+          } catch {
+            // best-effort linking; proceed if endpoint not available
+          }
+        }
+      }
+
+      const newInherentScore = inhL !== undefined && inhI !== undefined ? inhL * inhI : undefined;
+      const newResidualScore = resL !== undefined && resI !== undefined ? resL * resI : undefined;
+
+      await ermApi.reviews.update(review.id, {
+        status: 'completed' as any,
+        new_inherent_score: newInherentScore,
+        new_residual_score: newResidualScore,
+        findings: findings.trim() || undefined,
+        recommendations: recommendations.trim() || undefined,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['erm-reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-pending-reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-overdue-reviews'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risks-list'] });
+      queryClient.invalidateQueries({ queryKey: ['erm-risk-for-review', review.risk_id] });
+      onClose();
+    },
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : err?.message || 'Failed to complete review.');
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    completeMutation.mutate();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">
+            {review.status === 'pending' ? 'Start Review' : 'Complete Review'}
+          </h2>
+          <button onClick={onClose} className="text-slate-600 hover:text-slate-900">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <p className="mt-1 text-sm text-slate-600">
+          {review.risk_title || `Risk #${review.risk_id}`} • Update risk values, optionally attach evidence, then complete the review.
+        </p>
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-5">
+          <div className="rounded-lg border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">Inherent Risk</h3>
+            <div className="mt-3 grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-slate-600">Likelihood (1-5)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={inherentLikelihood}
+                  onChange={(e) => setInherentLikelihood(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-600">Impact (1-5)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={inherentImpact}
+                  onChange={(e) => setInherentImpact(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">Residual Risk</h3>
+            <div className="mt-3 grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-slate-600">Likelihood (1-5)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={residualLikelihood}
+                  onChange={(e) => setResidualLikelihood(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-600">Impact (1-5)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={residualImpact}
+                  onChange={(e) => setResidualImpact(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-600">Findings (optional)</label>
+            <textarea
+              value={findings}
+              onChange={(e) => setFindings(e.target.value)}
+              rows={2}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              placeholder="Summary of review findings..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm text-slate-600">Recommendations (optional)</label>
+            <textarea
+              value={recommendations}
+              onChange={(e) => setRecommendations(e.target.value)}
+              rows={2}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              placeholder="Any recommended next steps..."
+            />
+          </div>
+
+          <div className="rounded-lg border border-dashed border-slate-300 p-4">
+            <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+              <Upload className="h-4 w-4" />
+              Attach Evidence (optional)
+            </h3>
+            <div className="mt-3 space-y-3">
+              <input
+                type="file"
+                onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
+                className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-primary-600 file:px-3 file:py-1.5 file:text-sm file:text-white hover:file:bg-primary-500"
+              />
+              {evidenceFile && (
+                <>
+                  <div>
+                    <label className="block text-xs text-slate-600">Evidence Name</label>
+                    <input
+                      type="text"
+                      value={evidenceName}
+                      onChange={(e) => setEvidenceName(e.target.value)}
+                      placeholder={evidenceFile.name}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-600">Description</label>
+                    <input
+                      type="text"
+                      value={evidenceDescription}
+                      onChange={(e) => setEvidenceDescription(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm text-slate-900"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={completeMutation.isPending}
+              className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-500 disabled:opacity-50"
+            >
+              {completeMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Complete Review
             </button>
           </div>
         </form>

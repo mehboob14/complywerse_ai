@@ -500,6 +500,9 @@ export interface EvidenceRequirement {
   is_required?: boolean;
   artifact_examples?: string[];
   review_frequency?: string;
+  filetype?: string;
+  format?: string;
+  evidence_format?: string;
 }
 
 export interface SubControlWithEvidence {

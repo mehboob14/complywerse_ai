@@ -614,7 +614,12 @@ export default function EvidenceRequirementsPage() {
                               {req.evidence_format && (
                                 <div>
                                   <h4 className="text-sm font-medium text-slate-600 mb-1">Evidence Format</h4>
-                                  <p className="text-sm text-black">{req.evidence_format}</p>
+                                  <p className="text-sm text-black">{(() => {
+                                    const fmt = req.evidence_format.toString().toLowerCase().replace(/^\./, '');
+                                    return ['pdf', 'doc', 'docx', 'docs', 'xls', 'xlsx'].includes(fmt)
+                                      ? 'Document'
+                                      : req.evidence_format;
+                                  })()}</p>
                                 </div>
                               )}
                             </div>

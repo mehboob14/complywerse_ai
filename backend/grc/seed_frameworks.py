@@ -2053,14 +2053,38 @@ def seed_framework_from_json(db, data: Dict[str, Any], tenant_id: int = None,
                     is_active=True
                 )
             elif isinstance(ev_req, dict):
-                # Dict format with full details
+                # Dict format with full details. Accept both legacy keys (title/type/format)
+                # and the newer concise schema (name/filetype).
+                title_raw = (
+                    ev_req.get("title")
+                    or ev_req.get("evidence_title")
+                    or ev_req.get("name")
+                    or "Evidence Required"
+                )
+                description_raw = (
+                    ev_req.get("description")
+                    or ev_req.get("evidence_description")
+                    or ""
+                )
+                evidence_type_raw = (
+                    ev_req.get("type")
+                    or ev_req.get("evidence_type")
+                    or _infer_evidence_type(f"{title_raw} {description_raw}")
+                )
+                evidence_format_raw = (
+                    ev_req.get("format")
+                    or ev_req.get("evidence_format")
+                    or ev_req.get("filetype")
+                    or "document"
+                )
+
                 evidence_record = ControlEvidenceRequirement(
                     framework_id=framework.id,
                     parsed_control_id=control.id,
-                    evidence_title=ev_req.get("title", ev_req.get("evidence_title", "Evidence Required"))[:500],
-                    evidence_description=ev_req.get("description", ev_req.get("evidence_description", "")),
-                    evidence_type=ev_req.get("type", ev_req.get("evidence_type", "document")),
-                    evidence_format=ev_req.get("format", ev_req.get("evidence_format", "document")),
+                    evidence_title=str(title_raw)[:500],
+                    evidence_description=description_raw,
+                    evidence_type=evidence_type_raw,
+                    evidence_format=evidence_format_raw,
                     exact_requirements=ev_req.get("exact_requirements", []),
                     acceptance_criteria=ev_req.get("acceptance_criteria", []),
                     sample_evidence=ev_req.get("sample_evidence"),

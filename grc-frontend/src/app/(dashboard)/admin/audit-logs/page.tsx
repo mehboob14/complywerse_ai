@@ -190,16 +190,22 @@ export default function AuditLogsPage() {
       header: 'Details',
       accessor: (log: AuditLogEntry) => (
         <button
+          type="button"
           onClick={() => {
-            setSelectedDetails(log.details || {});
+            setSelectedDetails(log.details ?? {});
           }}
-          className="text-primary-600 hover:text-primary-500 text-sm underline"
+          className="rounded border border-primary-200 bg-primary-50 px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100"
         >
           View
         </button>
       ),
     },
   ];
+
+  const hasDetails =
+    !!selectedDetails &&
+    typeof selectedDetails === 'object' &&
+    Object.keys(selectedDetails).length > 0;
 
   if (loading && logs.length === 0) {
     return (
@@ -297,15 +303,45 @@ export default function AuditLogsPage() {
         </div>
       )}
 
-      {selectedDetails && (
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-black">Audit Details</h3>
-            <button onClick={() => setSelectedDetails(null)} className="text-sm text-slate-600 hover:text-black">Close</button>
+      {selectedDetails !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setSelectedDetails(null)}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-xl bg-white shadow-xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+              <h3 className="text-sm font-semibold text-black">Audit Log Details</h3>
+              <button
+                type="button"
+                onClick={() => setSelectedDetails(null)}
+                className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-black"
+                aria-label="Close"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+              </button>
+            </div>
+            <div className="overflow-auto p-5">
+              {hasDetails ? (
+                <pre className="text-xs bg-slate-50 border border-slate-200 rounded p-3 text-black whitespace-pre-wrap break-words">
+                  {JSON.stringify(selectedDetails, null, 2)}
+                </pre>
+              ) : (
+                <p className="text-sm text-slate-500 italic">No additional details were recorded for this entry.</p>
+              )}
+            </div>
+            <div className="flex justify-end border-t border-slate-200 px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setSelectedDetails(null)}
+                className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+              >
+                Close
+              </button>
+            </div>
           </div>
-          <pre className="text-xs bg-slate-50 border border-slate-200 rounded p-3 overflow-auto max-h-80 text-black">
-            {JSON.stringify(selectedDetails, null, 2)}
-          </pre>
         </div>
       )}
     </div>

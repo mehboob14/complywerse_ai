@@ -1676,6 +1676,13 @@ export default function CertificationJourneyPage() {
                       };
                       const typeColor = typeColors[evType] || 'bg-gray-100 text-gray-700';
                       const typeLabel = evType.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                      const rawFiletype = (ev.filetype || ev.format || ev.evidence_format || '').toString().toLowerCase().replace(/^\./, '');
+                      const isDocumentExt = ['pdf', 'doc', 'docx', 'docs', 'xls', 'xlsx'].includes(rawFiletype);
+                      const filetypeLabel = !rawFiletype
+                        ? null
+                        : isDocumentExt
+                          ? 'Document'
+                          : rawFiletype.toUpperCase();
                       
                       return (
                         <div key={`${idx}`} className="rounded-lg bg-gray-50 border border-gray-200 p-3">
@@ -1695,6 +1702,11 @@ export default function CertificationJourneyPage() {
                                 <span className={`rounded px-1.5 py-0.5 text-xs ${typeColor}`}>
                                   {typeLabel}
                                 </span>
+                                {filetypeLabel && (
+                                  <span className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-xs text-gray-600">
+                                    {filetypeLabel}
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
@@ -1952,14 +1964,14 @@ export default function CertificationJourneyPage() {
                     : 'text-gray-600 hover:text-black'
                 }`}
               >
-                {tab === 'library' ? `${entityLabel} Library` : tab === 'policies' ? 'Policies & Procedures' : 'Evidence Management'}
+                {tab === 'library' ? `${entityLabel} Library` : tab === 'policies' ? '' : ''}
               </button>
             ))}
           </div>
-          <button className="flex items-center gap-2 rounded-lg bg-white border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          {/* <button className="flex items-center gap-2 rounded-lg bg-white border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
             <Download className="h-4 w-4" />
             Download Implementation Report
-          </button>
+          </button> */}
         </div>
 
         {controlsSubTab === 'library' && (
@@ -2021,7 +2033,7 @@ export default function CertificationJourneyPage() {
           </div>
         )}
 
-        {controlsSubTab === 'policies' && (
+        {/* {controlsSubTab === 'policies' && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <BookOpen className="mb-4 h-12 w-12 text-gray-400" />
             <h3 className="text-lg font-medium text-black">Policies & Procedures</h3>
@@ -2031,9 +2043,9 @@ export default function CertificationJourneyPage() {
               Upload Policy
             </button>
           </div>
-        )}
+        )} */}
 
-        {controlsSubTab === 'evidence' && (
+        {/* {controlsSubTab === 'evidence' && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <FileText className="mb-4 h-12 w-12 text-gray-400" />
             <h3 className="text-lg font-medium text-black">Evidence Management</h3>
@@ -2043,7 +2055,7 @@ export default function CertificationJourneyPage() {
               Upload Evidence
             </button>
           </div>
-        )}
+        )} */}
       </div>
     </div>
   );
