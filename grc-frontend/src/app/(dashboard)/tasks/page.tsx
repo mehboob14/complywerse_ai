@@ -3,16 +3,18 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
-import { criticalTasksApi, risksApi, ermApi, vulnManagementApi } from '@/lib/api';
+import { criticalTasksApi, risksApi, ermApi, vulnManagementApi, regulatoryApi, committeeApi } from '@/lib/api';
 import Link from 'next/link';
 import MyTasksPage from './my-tasks/page';
 import TaskReportsPage from './reports/page';
+import TasksSLAConfigPage from './sla/page';
+import { TASK_SLA_LABELS, TASK_SLA_ORDER, TaskSLALevel, getTaskSLAConfig } from './slaConfig';
 import { RightSlidePanel, MultiSelectDropdown, SearchInput } from '@/components/ui';
 import {
   Plus, X,
   ArrowUpDown, MoreHorizontal, Target, Loader2,
   LayoutList, Columns3, Sparkles, Copy, RefreshCw,
-  ListTodo, ClipboardList, BarChart3,
+  ListTodo, ClipboardList, BarChart3, Clock,
 } from 'lucide-react';
 
 interface TaskUser {
@@ -115,10 +117,11 @@ export default function TaskBoardPage() {
   const [sortOrder, setSortOrder] = useState('desc');
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
   const [users, setUsers] = useState<TaskUser[]>([]);
-  const [activeTab, setActiveTab] = useState<'board' | 'my-tasks' | 'reports'>('board');
+  const [activeTab, setActiveTab] = useState<'board' | 'my-tasks' | 'sla' | 'reports'>('board');
   const taskTabs = [
     { id: 'board' as const, label: 'Task Board', icon: ListTodo },
     { id: 'my-tasks' as const, label: 'My Tasks', icon: ClipboardList },
+    { id: 'sla' as const, label: 'SLA Configuration', icon: Clock },
     { id: 'reports' as const, label: 'Reports', icon: BarChart3 },
   ];
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -129,12 +132,16 @@ export default function TaskBoardPage() {
   const [riskOptions, setRiskOptions] = useState<Array<{ id: number; label: string }>>([]);
   const [controlOptions, setControlOptions] = useState<Array<{ id: number; label: string }>>([]);
   const [vulnOptions, setVulnOptions] = useState<Array<{ id: number; label: string }>>([]);
+  const [regulatoryChangeOptions, setRegulatoryChangeOptions] = useState<Array<{ id: number; label: string }>>([]);
+  const [committeeOptions, setCommitteeOptions] = useState<Array<{ id: number; label: string }>>([]);
+  const [aiContextLoading, setAiContextLoading] = useState(false);
   const [newTask, setNewTask] = useState({
     title: '', description: '', source: 'Manual', priority: 'Medium',
     severity: '', category: 'Other', assigned_owner_id: '',
-    reviewer_id: '', due_date: '', sla_days: '', evidence_notes: '',
+    reviewer_id: '', due_date: '', sla_level: '' as TaskSLALevel | '', sla_days: '', evidence_notes: '',
     source_module: '', source_entity_type: '',
     linked_risk_id: '', linked_control_id: '', linked_vulnerability_id: '',
+    linked_regulatory_change_id: '', linked_committee_id: '',
     recurrence_pattern: '', recurrence_interval: '1', approval_required: false,
   });
 
@@ -154,7 +161,9 @@ export default function TaskBoardPage() {
       risksApi.getAll().then(r => normalizeList(r.data)).catch(() => []),
       ermApi.internalControls.getAll().then(r => normalizeList(r.data)).catch(() => []),
       vulnManagementApi.vulnerabilities.getAll().then(r => normalizeList(r.data)).catch(() => []),
-    ]).then(([risks, controls, vulnerabilities]) => {
+      regulatoryApi.getChanges().then(r => normalizeList(r.data)).catch(() => []),
+      committeeApi.getCommittees().then(r => normalizeList(r.data)).catch(() => []),
+    ]).then(([risks, controls, vulnerabilities, regChanges, committees]) => {
       if (!active) return;
       setRiskOptions(
         risks
@@ -183,6 +192,27 @@ export default function TaskBoardPage() {
             const id = Number(v.id);
             if (!id) return null;
             const label = String(v.title || v.vulnerability_name || v.cve_id || `Vulnerability #${id}`);
+            return { id, label };
+          })
+          .filter(Boolean) as Array<{ id: number; label: string }>
+      );
+      setRegulatoryChangeOptions(
+        regChanges
+          .map((r) => {
+            const id = Number(r.id);
+            if (!id) return null;
+            const ref = r.reference_number ? `${String(r.reference_number)} - ` : '';
+            const label = String(r.title || r.name || `Change #${id}`);
+            return { id, label: `${ref}${label}` };
+          })
+          .filter(Boolean) as Array<{ id: number; label: string }>
+      );
+      setCommitteeOptions(
+        committees
+          .map((c) => {
+            const id = Number(c.id);
+            if (!id) return null;
+            const label = String(c.name || c.committee_name || `Committee #${id}`);
             return { id, label };
           })
           .filter(Boolean) as Array<{ id: number; label: string }>
@@ -239,6 +269,84 @@ export default function TaskBoardPage() {
     setAiDescLoading(false);
   };
 
+  const handleAiGenerateFromContext = async () => {
+    // Build context from any of the 5 linked entities the user has selected.
+    const ctx: { source: string; label: string }[] = [];
+    const findOpt = (options: Array<{ id: number; label: string }>, id: string) => {
+      const num = Number(id);
+      if (!num) return null;
+      return options.find((o) => o.id === num) || null;
+    };
+    const r = findOpt(riskOptions, newTask.linked_risk_id);
+    if (r) ctx.push({ source: 'Risk', label: r.label });
+    const c = findOpt(controlOptions, newTask.linked_control_id);
+    if (c) ctx.push({ source: 'Internal Control', label: c.label });
+    const v = findOpt(vulnOptions, newTask.linked_vulnerability_id);
+    if (v) ctx.push({ source: 'Vulnerability', label: v.label });
+    const rc = findOpt(regulatoryChangeOptions, newTask.linked_regulatory_change_id);
+    if (rc) ctx.push({ source: 'Regulatory Change', label: rc.label });
+    const cm = findOpt(committeeOptions, newTask.linked_committee_id);
+    if (cm) ctx.push({ source: 'Committee', label: cm.label });
+
+    if (ctx.length === 0) {
+      // Nothing to derive context from — fall back to title-based AI if title exists.
+      if (newTask.title.trim()) return handleAiGenerateDescription();
+      return;
+    }
+
+    setAiContextLoading(true);
+    try {
+      // Auto-derive a working title from the first linked entity so the existing
+      // AI description endpoint can produce a richer description.
+      const primary = ctx[0];
+      const synthTitle = `Action for ${primary.source}: ${primary.label}`;
+      const inferredCategory =
+        primary.source === 'Vulnerability' ? 'Security' :
+        primary.source === 'Risk' ? 'Risk Mitigation' :
+        primary.source === 'Internal Control' ? 'Compliance' :
+        primary.source === 'Regulatory Change' ? 'Compliance' :
+        primary.source === 'Committee' ? 'Governance' : 'Other';
+      const inferredSource = primary.source === 'Vulnerability' ? 'Vulnerability' :
+        primary.source === 'Risk' ? 'Risk' :
+        primary.source === 'Internal Control' ? 'Control' :
+        primary.source === 'Regulatory Change' ? 'Regulatory' :
+        primary.source === 'Committee' ? 'Committee' : 'Manual';
+
+      const res = await criticalTasksApi.aiGenerateDescription({
+        title: synthTitle,
+        category: inferredCategory,
+        source: inferredSource,
+        priority: newTask.priority || 'Medium',
+        context: ctx.map((c) => `${c.source}: ${c.label}`).join('\n'),
+      });
+      const desc = res.data?.description;
+      const parts: string[] = [];
+      if (desc?.summary) parts.push(desc.summary);
+      if (desc?.detailed_description) parts.push(desc.detailed_description);
+      if (desc?.acceptance_criteria?.length) {
+        parts.push('\nAcceptance Criteria:\n' + desc.acceptance_criteria.map((c: string) => `- ${c}`).join('\n'));
+      }
+      const generatedDesc = parts.length ? parts.join('\n\n') : ctx.map((c) => `${c.source}: ${c.label}`).join('\n');
+      const generatedTitle = (desc?.title as string) || synthTitle;
+      setNewTask((f) => ({
+        ...f,
+        title: f.title || generatedTitle,
+        description: f.description || generatedDesc,
+        category: f.category && f.category !== 'Other' ? f.category : inferredCategory,
+        source: f.source && f.source !== 'Manual' ? f.source : inferredSource,
+      }));
+    } catch {
+      // Fallback: just pre-fill from linked context locally.
+      const fallbackDesc = ctx.map((c) => `${c.source}: ${c.label}`).join('\n');
+      setNewTask((f) => ({
+        ...f,
+        title: f.title || `Action for ${ctx[0].source}: ${ctx[0].label}`,
+        description: f.description || fallbackDesc,
+      }));
+    }
+    setAiContextLoading(false);
+  };
+
   const { data, isLoading } = useQuery<TaskListResponse>({
     queryKey: ['critical-tasks', search, filters, sortBy, sortOrder],
     queryFn: async () => {
@@ -264,9 +372,10 @@ export default function TaskBoardPage() {
       setNewTask({
         title: '', description: '', source: 'Manual', priority: 'Medium',
         severity: '', category: 'Other', assigned_owner_id: '',
-        reviewer_id: '', due_date: '', sla_days: '', evidence_notes: '',
+        reviewer_id: '', due_date: '', sla_level: '', sla_days: '', evidence_notes: '',
         source_module: '', source_entity_type: '',
         linked_risk_id: '', linked_control_id: '', linked_vulnerability_id: '',
+        linked_regulatory_change_id: '', linked_committee_id: '',
         recurrence_pattern: '', recurrence_interval: '1', approval_required: false,
       });
     },
@@ -288,11 +397,13 @@ export default function TaskBoardPage() {
     else delete payload.assigned_owner_id;
     if (payload.reviewer_id) payload.reviewer_id = Number(payload.reviewer_id);
     else delete payload.reviewer_id;
+    // sla_level is a UI-only helper that resolves to sla_days via the configured map.
+    delete payload.sla_level;
     if (payload.sla_days) payload.sla_days = Number(payload.sla_days);
     else delete payload.sla_days;
     if (!payload.source_module) delete payload.source_module;
     if (!payload.source_entity_type) delete payload.source_entity_type;
-    ['linked_risk_id', 'linked_control_id', 'linked_vulnerability_id'].forEach(k => {
+    ['linked_risk_id', 'linked_control_id', 'linked_vulnerability_id', 'linked_regulatory_change_id', 'linked_committee_id'].forEach(k => {
       if (payload[k]) payload[k] = Number(payload[k]);
       else delete payload[k];
     });
@@ -693,6 +804,108 @@ export default function TaskBoardPage() {
         }
       >
         <div className="space-y-3">
+          {/* Linked entities + AI generate */}
+          <div className="rounded-lg border border-purple-200 bg-purple-50/40 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Sparkles size={14} className="text-purple-700" />
+                <span className="text-xs font-semibold text-slate-700">Link Source (optional)</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleAiGenerateFromContext}
+                disabled={aiContextLoading}
+                className="inline-flex items-center gap-1.5 rounded-md bg-purple-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-50 transition-colors"
+              >
+                {aiContextLoading ? <Loader2 className="animate-spin" size={12} /> : <Sparkles size={12} />}
+                AI Generate
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Risk</label>
+                <MultiSelectDropdown
+                  title="Risk"
+                  items={riskOptions.map((r) => ({ value: String(r.id), label: r.label }))}
+                  selectedValues={newTask.linked_risk_id ? [String(newTask.linked_risk_id)] : []}
+                  onApply={(v) => setNewTask(f => ({ ...f, linked_risk_id: v[0] || '' }))}
+                  multiSelect={false}
+                  forceSearch
+                  triggerVariant="input"
+                  placeholder="None"
+                  searchPlaceholder="Search risks"
+                  size="sm"
+                  triggerClassName="w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Internal Control</label>
+                <MultiSelectDropdown
+                  title="Internal Control"
+                  items={controlOptions.map((c) => ({ value: String(c.id), label: c.label }))}
+                  selectedValues={newTask.linked_control_id ? [String(newTask.linked_control_id)] : []}
+                  onApply={(v) => setNewTask(f => ({ ...f, linked_control_id: v[0] || '' }))}
+                  multiSelect={false}
+                  forceSearch
+                  triggerVariant="input"
+                  placeholder="None"
+                  searchPlaceholder="Search controls"
+                  size="sm"
+                  triggerClassName="w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Vulnerability</label>
+                <MultiSelectDropdown
+                  title="Vulnerability"
+                  items={vulnOptions.map((v) => ({ value: String(v.id), label: v.label }))}
+                  selectedValues={newTask.linked_vulnerability_id ? [String(newTask.linked_vulnerability_id)] : []}
+                  onApply={(v) => setNewTask(f => ({ ...f, linked_vulnerability_id: v[0] || '' }))}
+                  multiSelect={false}
+                  forceSearch
+                  triggerVariant="input"
+                  placeholder="None"
+                  searchPlaceholder="Search vulnerabilities"
+                  size="sm"
+                  triggerClassName="w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Regulatory Change</label>
+                <MultiSelectDropdown
+                  title="Regulatory Change"
+                  items={regulatoryChangeOptions.map((r) => ({ value: String(r.id), label: r.label }))}
+                  selectedValues={newTask.linked_regulatory_change_id ? [String(newTask.linked_regulatory_change_id)] : []}
+                  onApply={(v) => setNewTask(f => ({ ...f, linked_regulatory_change_id: v[0] || '' }))}
+                  multiSelect={false}
+                  forceSearch
+                  triggerVariant="input"
+                  placeholder="None"
+                  searchPlaceholder="Search regulatory changes"
+                  size="sm"
+                  triggerClassName="w-full"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Committee</label>
+                <MultiSelectDropdown
+                  title="Committee"
+                  items={committeeOptions.map((c) => ({ value: String(c.id), label: c.label }))}
+                  selectedValues={newTask.linked_committee_id ? [String(newTask.linked_committee_id)] : []}
+                  onApply={(v) => setNewTask(f => ({ ...f, linked_committee_id: v[0] || '' }))}
+                  multiSelect={false}
+                  forceSearch
+                  triggerVariant="input"
+                  placeholder="None"
+                  searchPlaceholder="Search committees"
+                  size="sm"
+                  triggerClassName="w-full"
+                />
+              </div>
+            </div>
+            {/* <p className="text-[11px] text-slate-500">Pick any source above, then click <span className="font-medium text-purple-700">AI Generate</span> — title, description, category and source will be auto-filled based on the selected context.</p> */}
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-0.5">Title *</label>
             <input
@@ -708,14 +921,14 @@ export default function TaskBoardPage() {
           <div>
             <div className="flex items-center justify-between mb-0.5">
               <label className="block text-xs font-medium text-slate-600">Description</label>
-              <button
+              {/* <button
                 type="button"
                 onClick={handleAiGenerateDescription}
                 disabled={aiDescLoading || !newTask.title.trim()}
                 className="flex items-center gap-1 text-xs text-purple-700 hover:text-purple-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 {aiDescLoading ? <Loader2 className="animate-spin" size={12} /> : <Sparkles size={12} />} AI Generate
-              </button>
+              </button> */}
             </div>
             <textarea
               value={newTask.description}
@@ -770,30 +983,6 @@ export default function TaskBoardPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Source Module</label>
-              <select
-                value={newTask.source_module}
-                onChange={e => setNewTask(f => ({ ...f, source_module: e.target.value }))}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-              >
-                <option value="">None (Manual)</option>
-                {SOURCE_MODULES.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Source Entity Type</label>
-              <select
-                value={newTask.source_entity_type}
-                onChange={e => setNewTask(f => ({ ...f, source_entity_type: e.target.value }))}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-              >
-                <option value="">None</option>
-                <option value="risk">Risk</option><option value="control">Control</option>
-                <option value="finding">Audit Finding</option><option value="vulnerability">Vulnerability</option>
-                <option value="compliance_gap">Compliance Gap</option>
-              </select>
-            </div>
-            <div>
               <label className="block text-xs font-medium text-slate-600 mb-0.5">Assigned Owner</label>
               <MultiSelectDropdown
                 title="Owner"
@@ -837,14 +1026,32 @@ export default function TaskBoardPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">SLA Days</label>
-              <input
-                type="number"
-                value={newTask.sla_days}
-                onChange={e => setNewTask(f => ({ ...f, sla_days: e.target.value }))}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                placeholder="Auto-sets due date if empty"
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">SLA Level</label>
+              <MultiSelectDropdown
+                title="SLA Level"
+                items={TASK_SLA_ORDER.map((level) => {
+                  const cfg = getTaskSLAConfig();
+                  return { value: level, label: `${TASK_SLA_LABELS[level]} (${cfg[level]} days)` };
+                })}
+                selectedValues={newTask.sla_level ? [newTask.sla_level] : []}
+                onApply={(v) => {
+                  const level = (v[0] || '') as TaskSLALevel | '';
+                  if (level) {
+                    const days = getTaskSLAConfig()[level];
+                    setNewTask(f => ({ ...f, sla_level: level, sla_days: String(days) }));
+                  } else {
+                    setNewTask(f => ({ ...f, sla_level: '', sla_days: '' }));
+                  }
+                }}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select SLA level"
+                size="sm"
+                triggerClassName="w-full"
               />
+              {newTask.sla_days && (
+                <p className="mt-1 text-[11px] text-slate-500">Applies a {newTask.sla_days}-day deadline window.</p>
+              )}
             </div>
           </div>
 
@@ -905,41 +1112,6 @@ export default function TaskBoardPage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Risk</label>
-              <select
-                value={newTask.linked_risk_id}
-                onChange={e => setNewTask(f => ({ ...f, linked_risk_id: e.target.value }))}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-              >
-                <option value="">None</option>
-                {riskOptions.map((risk) => <option key={risk.id} value={risk.id}>{risk.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Internal Control</label>
-              <select
-                value={newTask.linked_control_id}
-                onChange={e => setNewTask(f => ({ ...f, linked_control_id: e.target.value }))}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-              >
-                <option value="">None</option>
-                {controlOptions.map((control) => <option key={control.id} value={control.id}>{control.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Vulnerability</label>
-              <select
-                value={newTask.linked_vulnerability_id}
-                onChange={e => setNewTask(f => ({ ...f, linked_vulnerability_id: e.target.value }))}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-              >
-                <option value="">None</option>
-                {vulnOptions.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-              </select>
-            </div>
-          </div>
         </div>
       </RightSlidePanel>
 
@@ -1041,6 +1213,7 @@ export default function TaskBoardPage() {
       )}
 
       {activeTab === 'my-tasks' && <MyTasksPage />}
+      {activeTab === 'sla' && <TasksSLAConfigPage />}
       {activeTab === 'reports' && <TaskReportsPage />}
       </div>
     </div>

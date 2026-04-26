@@ -144,8 +144,6 @@ const navigation: NavEntry[] = [
       // { name: 'SLA Config', href: '/vulnerabilities/sla', icon: Clock, requiredPermissions: ['vulnerabilities:sla_management:*'] },
     ],
   },
-    { name: 'Integrations', href: '/integrations/connections', icon: Bot, requiredPermissions: ['dashboard:assets*'] },
-
     { name: 'IT Assets', href: '/assets', icon: Bot, requiredPermissions: ['dashboard:assets*'] },
 
   {
@@ -161,12 +159,6 @@ const navigation: NavEntry[] = [
     icon: ListTodo,
     requiredModules: ['critical_tasks'],
     requiredPermissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view']
-  },
-  {
-    name: 'Workflow Engine',
-    href: '/workflow-engine',
-    icon: GitPullRequest,
-    requiredPermissions: ['workflow_engine:definitions:*', 'workflow_engine:executions:*']
   },
   { name: 'ComplyChat', href: '/complychat', icon: Bot, requiredPermissions: ['dashboard:ai_insights:*'] },
   {

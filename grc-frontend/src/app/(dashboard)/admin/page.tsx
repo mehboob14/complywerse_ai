@@ -1,20 +1,26 @@
 'use client';
 
 import { useState } from 'react';
-import { Building2, Users as UsersIcon, ShieldCheck, ScrollText } from 'lucide-react';
+import { Building2, Users as UsersIcon, ShieldCheck, ScrollText, Bot, GitPullRequest } from 'lucide-react';
 import OrganizationProfilePage from './organization/page';
 import UsersManagementPage from './users/page';
 import RolesManagementPage from './roles/page';
 import AuditLogsPage from './audit-logs/page';
+import IntegrationsConnectionsPage from '../integrations/connections/page';
+import WorkflowEnginePage from '../workflow-engine/page';
+
+type AdminTab = 'company' | 'users' | 'roles' | 'integrations' | 'workflow' | 'audit';
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'company' | 'users' | 'roles' | 'audit'>('company');
+  const [activeTab, setActiveTab] = useState<AdminTab>('company');
 
-  const adminTabs = [
-    { id: 'company' as const, label: 'Company', icon: Building2 },
-    { id: 'users' as const, label: 'User Management', icon: UsersIcon },
-    { id: 'roles' as const, label: 'Role Management', icon: ShieldCheck },
-    { id: 'audit' as const, label: 'Audit Logs', icon: ScrollText },
+  const adminTabs: { id: AdminTab; label: string; icon: typeof Building2 }[] = [
+    { id: 'company', label: 'Company', icon: Building2 },
+    { id: 'users', label: 'User Management', icon: UsersIcon },
+    { id: 'roles', label: 'Role Management', icon: ShieldCheck },
+    { id: 'integrations', label: 'Integrations', icon: Bot },
+    { id: 'workflow', label: 'Workflow Engine', icon: GitPullRequest },
+    { id: 'audit', label: 'Audit Logs', icon: ScrollText },
   ];
 
   return (
@@ -46,6 +52,8 @@ export default function AdminPage() {
         {activeTab === 'company' && <OrganizationProfilePage />}
         {activeTab === 'users' && <UsersManagementPage />}
         {activeTab === 'roles' && <RolesManagementPage />}
+        {activeTab === 'integrations' && <IntegrationsConnectionsPage />}
+        {activeTab === 'workflow' && <WorkflowEnginePage />}
         {activeTab === 'audit' && <AuditLogsPage />}
       </div>
     </div>

@@ -755,6 +755,16 @@ export default function CertificationJourneyPage() {
     return () => el.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    // Auto-hide summary cards when browsing the requirements/controls tab,
+    // restore them on the overview tab.
+    if (activeTab === 'controls') {
+      setCardsCollapsed(true);
+    } else if (activeTab === 'overview') {
+      setCardsCollapsed(false);
+    }
+  }, [activeTab]);
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -1898,46 +1908,7 @@ export default function CertificationJourneyPage() {
   };
 
   const renderControlsTab = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center gap-3 p-4">
-          <div className="rounded-lg bg-gray-100 p-2">
-            <Layers className="h-5 w-5 text-gray-600" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-black">{controlStats.total}</p>
-            <p className="text-xs text-gray-600">Total {entityLabelPlural}</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center gap-3 p-4">
-          <div className="rounded-lg bg-emerald-50 p-2">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-emerald-600">{controlStats.implemented}</p>
-            <p className="text-xs text-gray-600">Implemented</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center gap-3 p-4">
-          <div className="rounded-lg bg-blue-50 p-2">
-            <FileCheck className="h-5 w-5 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-blue-600">{controlStats.partial}</p>
-            <p className="text-xs text-gray-600">In Progress</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center gap-3 p-4">
-          <div className="rounded-lg bg-purple-50 p-2">
-            <FileText className="h-5 w-5 text-purple-600" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-purple-600">{totalEvidence}</p>
-            <p className="text-xs text-gray-600">Evidence Collected</p>
-          </div>
-        </div>
-      </div>
-
+    <div className="space-y-4">
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
         <div className="mb-2 flex items-center justify-between text-sm">
           <span className="text-gray-600">Evidence Readiness</span>
@@ -2735,35 +2706,35 @@ export default function CertificationJourneyPage() {
             cardsCollapsed ? 'max-h-0 opacity-0 pointer-events-none mt-0' : 'max-h-[20rem] opacity-100 mt-6'
           }`}
         >
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center justify-center p-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center justify-center p-3 sm:p-4">
             <CircularProgress percentage={readinessPercentage} />
-            <div className="ml-4">
-              <p className="text-lg font-semibold text-black">{isCertificationFramework ? 'Certification Readiness' : 'Compliance Readiness'}</p>
-              <p className="text-sm text-gray-600">Approved evidence readiness</p>
+            <div className="ml-3">
+              <p className="text-sm font-semibold text-black">{isCertificationFramework ? 'Certification Readiness' : 'Compliance Readiness'}</p>
+              <p className="text-xs text-gray-600">Approved evidence readiness</p>
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-blue-50 p-2">
-                <Target className="h-5 w-5 text-blue-600" />
+                <Target className="h-4 w-4 text-blue-600" />
               </div>
-              <div>
-                <p className="text-sm text-gray-600">{isCertificationFramework ? 'Current Phase' : 'Framework Type'}</p>
-                <p className="text-lg font-semibold text-black">{isCertificationFramework ? `Phase ${journey.current_phase}` : 'Compliance'}</p>
-                <p className="text-sm text-blue-600">{isCertificationFramework ? (phasesLoading ? 'Loading...' : (phases[journey.current_phase - 1]?.name || 'Phase ' + journey.current_phase)) : ((journey as any)?.framework_overview?.regulatory_authority || 'Regulatory / Standard Requirements')}</p>
+              <div className="min-w-0">
+                <p className="text-xs text-gray-600">{isCertificationFramework ? 'Current Phase' : 'Framework Type'}</p>
+                <p className="text-sm font-semibold text-black truncate">{isCertificationFramework ? `Phase ${journey.current_phase}` : 'Compliance'}</p>
+                <p className="text-xs text-blue-600 truncate">{isCertificationFramework ? (phasesLoading ? 'Loading...' : (phases[journey.current_phase - 1]?.name || 'Phase ' + journey.current_phase)) : ((journey as any)?.framework_overview?.regulatory_authority || 'Regulatory / Standard Requirements')}</p>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-blue-50 p-2">
-                <Shield className="h-5 w-5 text-blue-600" />
+                <Shield className="h-4 w-4 text-blue-600" />
               </div>
-              <div className="flex-1">
-                  <p className="text-sm text-gray-600">{entityLabel} Coverage</p>
-                  <p className="text-lg font-semibold text-black">{fullyEvidencedControls}/{totalControlsProgress}</p>
-                <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100">
+              <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-600">{entityLabel} Coverage</p>
+                  <p className="text-sm font-semibold text-black">{fullyEvidencedControls}/{totalControlsProgress}</p>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-gray-100">
                   <div
                     className="h-full rounded-full bg-blue-600"
                       style={{ width: `${evidenceCoveragePercentage}%` }}
@@ -2772,17 +2743,17 @@ export default function CertificationJourneyPage() {
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-4">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-purple-50 p-2">
-                <Calendar className="h-5 w-5 text-purple-600" />
+                <Calendar className="h-4 w-4 text-purple-600" />
               </div>
-              <div>
-                <p className="text-sm text-gray-600">Target Date</p>
-                <p className="text-lg font-semibold text-black">
+              <div className="min-w-0">
+                <p className="text-xs text-gray-600">Target Date</p>
+                <p className="text-sm font-semibold text-black truncate">
                   {journey.target_date ? new Date(journey.target_date).toLocaleDateString() : 'Not set'}
                 </p>
-                <p className="text-sm text-gray-500">{isCertificationFramework ? 'Stage 2 audit scheduled' : 'Compliance review target'}</p>
+                <p className="text-xs text-gray-500 truncate">{isCertificationFramework ? 'Stage 2 audit scheduled' : 'Compliance review target'}</p>
               </div>
             </div>
           </div>
