@@ -137,7 +137,7 @@ export default function AttestationCampaignsPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="page-header">
         <div>
           <h1 className="text-lg sm:text-xl font-semibold text-black">Attestation Campaigns</h1>

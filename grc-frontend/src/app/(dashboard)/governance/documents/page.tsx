@@ -2,14 +2,14 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
-import { SearchInput, MultiSelectDropdown } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 import { 
   FileText,
   Loader2,
@@ -215,7 +215,7 @@ export default function GovernanceDocumentsPage() {
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'hierarchy'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'hierarchy'>('hierarchy');
   const [expandedNodeIds, setExpandedNodeIds] = useState<number[]>([]);
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -607,49 +607,68 @@ export default function GovernanceDocumentsPage() {
     const isExpanded = expandedNodeIds.includes(doc.id);
     const typeStyle = getTypeStyle(doc.doc_type);
     const statusStyle = getStatusStyle(doc.status);
+    const FileIcon = getFileIcon(doc.file_type);
 
     return (
-      <div key={doc.id}>
-        <div className="grid grid-cols-[minmax(0,1fr)_140px_80px_140px_140px_auto] items-center gap-3 border-b border-[var(--color-border)] px-4 py-3 hover:bg-[var(--color-hover)] transition-colors">
-          <div className="flex min-w-0 items-center gap-1" style={{ paddingLeft: `${depth * 24}px` }}>
-            {hasChildren ? (
-              <button
-                onClick={() => toggleNodeExpanded(doc.id)}
-                className="rounded p-1 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
-                title={isExpanded ? 'Collapse' : 'Expand'}
-              >
-                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              </button>
+      <React.Fragment key={doc.id}>
+        <tr className="hover:bg-[var(--color-hover)] transition-colors">
+          <td className="px-4 py-4">
+            <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 24}px` }}>
+              {hasChildren ? (
+                <button
+                  onClick={() => toggleNodeExpanded(doc.id)}
+                  className="rounded p-1 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors flex-shrink-0"
+                  title={isExpanded ? 'Collapse' : 'Expand'}
+                >
+                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                </button>
+              ) : (
+                <span className="inline-block h-6 w-6 flex-shrink-0" />
+              )}
+              <div className="min-w-0 max-w-xs">
+                <button
+                  onClick={() => router.push(`/governance/documents/${doc.id}`)}
+                  className="max-w-full truncate text-left font-medium cw-text-default hover:text-[var(--color-base)]"
+                  title={doc.title}
+                >
+                  {doc.title}
+                </button>
+                {doc.description && (
+                  <p className="text-sm cw-text-muted truncate">{doc.description}</p>
+                )}
+              </div>
+            </div>
+          </td>
+          <td className="whitespace-nowrap px-4 py-4">
+            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${typeStyle.bgColor} text-gray-800`}>
+              {typeStyle.label}
+            </span>
+          </td>
+          <td className="whitespace-nowrap px-4 py-4">
+            {doc.file_name ? (
+              <div className="flex items-center gap-2">
+                <FileIcon className={`h-4 w-4 ${getFileTypeColor(doc.file_type)}`} />
+                <div className="max-w-[140px]">
+                  <p className="text-sm cw-text-default truncate" title={doc.file_name}>{doc.file_name}</p>
+                </div>
+              </div>
             ) : (
-              <span className="inline-block h-6 w-6" />
+              <span className="text-sm cw-text-muted">No file</span>
             )}
-            <button
-              onClick={() => router.push(`/governance/documents/${doc.id}`)}
-              className="min-w-0 flex-1 truncate text-left text-sm font-medium cw-text-default hover:text-[var(--color-base)]"
-              title={doc.title}
-            >
-              {doc.title}
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 text-sm cw-text-default">
-            <span className={`inline-block h-2 w-2 rounded-full ${(statusStyle.bgColor || 'bg-[var(--color-muted)]').replace('/20', '')}`} />
-            <span className="truncate">{statusStyle.label}</span>
-          </div>
-
-          <div className="text-sm cw-text-default">
-            {doc.current_version || '1.0'}
-          </div>
-
-          <div className="text-sm cw-text-default truncate" title={typeStyle.label}>
-            {typeStyle.label}
-          </div>
-
-          <div className="text-sm cw-text-muted truncate" title={doc.owner_name || '-'}>
+          </td>
+          <td className="whitespace-nowrap px-4 py-4">
+            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusStyle.bgColor} text-gray-800`}>
+              {statusStyle.label}
+            </span>
+          </td>
+          <td className="whitespace-nowrap px-4 py-4 text-sm cw-text-default">
             {doc.owner_name || '-'}
-          </div>
-
-          <div className="flex items-center gap-1">
+          </td>
+          <td className="whitespace-nowrap px-4 py-4 text-sm cw-text-default">
+            {doc.current_version || '1.0'}
+          </td>
+          <td className="whitespace-nowrap px-4 py-4">
+            <div className="flex items-center gap-1">
             <button
               onClick={() => router.push(`/governance/documents/${doc.id}`)}
               className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
@@ -735,15 +754,14 @@ export default function GovernanceDocumentsPage() {
                 <Trash2 className="h-4 w-4" />
               </button>
             )}
-          </div>
-        </div>
+            </div>
+          </td>
+        </tr>
 
-        {hasChildren && isExpanded && (
-          <div>
-            {(doc.children || []).map((child) => renderHierarchyNode(child, depth + 1))}
-          </div>
-        )}
-      </div>
+        {hasChildren && isExpanded &&
+          (doc.children || []).map((child) => renderHierarchyNode(child, depth + 1))
+        }
+      </React.Fragment>
     );
   };
 
@@ -757,7 +775,7 @@ export default function GovernanceDocumentsPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-lg sm:text-xl font-semibold cw-text-default">Document Library</h1>
@@ -767,27 +785,27 @@ export default function GovernanceDocumentsPage() {
           {canCreate && (
             <button
               onClick={() => setIsAIDraftModalOpen(true)}
-              className="cw-btn-secondary flex items-center gap-2 whitespace-nowrap"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
-              <Wand2 size={18} />
+              <Wand2 size={16} />
               AI Draft Document
             </button>
           )}
           {canCreate && (
             <button
               onClick={() => setIsUploadModalOpen(true)}
-              className="cw-btn-secondary flex items-center gap-2 whitespace-nowrap"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
-              <Upload size={18} />
+              <Upload size={16} />
               New Document with File
             </button>
           )}
           {canCreate && (
             <button
               onClick={handleCreate}
-              className="cw-btn-primary flex items-center gap-2 whitespace-nowrap"
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-3 sm:px-4 py-2 text-sm font-medium whitespace-nowrap"
             >
-              <Plus size={18} />
+              <Plus size={16} />
               New Document
             </button>
           )}
@@ -827,9 +845,9 @@ export default function GovernanceDocumentsPage() {
         </div>
       )}
 
-      <div className="cw-card p-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex-1 max-w-md">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="flex-1 min-w-[180px] sm:min-w-[260px] max-w-md">
             <SearchInput
               value={searchTerm}
               onChange={(v) => { setSearchTerm(v); setPage(0); }}
@@ -931,16 +949,45 @@ export default function GovernanceDocumentsPage() {
                   </button>
                 </div>
               </div>
-              <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_140px_80px_140px_140px_auto] items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-xs font-medium uppercase tracking-wider cw-text-muted">
-                <div>Document</div>
-                <div>Status</div>
-                <div>Version</div>
-                <div>Type</div>
-                <div>Owner</div>
-                <div className="text-right">Actions</div>
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-[var(--color-surface)]">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Title</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">File</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Owner</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Version</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--color-border)]">
+                    {filteredHierarchyDocuments.map((doc) => renderHierarchyNode(doc))}
+                  </tbody>
+                </table>
               </div>
-              <div>
-                {filteredHierarchyDocuments.map((doc) => renderHierarchyNode(doc))}
+              <div className="lg:hidden">
+                {filteredHierarchyDocuments.map((doc) => {
+                  const typeStyle = getTypeStyle(doc.doc_type);
+                  const statusStyle = getStatusStyle(doc.status);
+                  return (
+                    <div key={doc.id} className="space-y-2 border-b border-[var(--color-border)] px-4 py-3">
+                      <button
+                        onClick={() => router.push(`/governance/documents/${doc.id}`)}
+                        className="block max-w-full truncate text-left text-sm font-semibold cw-text-default hover:text-[var(--color-base)]"
+                      >
+                        {doc.title}
+                      </button>
+                      <div className="flex flex-wrap items-center gap-2 text-xs cw-text-muted">
+                        <span className="rounded-full bg-[var(--color-surface)] px-2 py-0.5">{typeStyle.label}</span>
+                        <span className="rounded-full bg-[var(--color-surface)] px-2 py-0.5">{statusStyle.label}</span>
+                        <span className="rounded-full bg-[var(--color-surface)] px-2 py-0.5">v{doc.current_version || '1.0'}</span>
+                        <span className="rounded-full bg-[var(--color-surface)] px-2 py-0.5">{doc.owner_name || '-'}</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </>
           )
@@ -1467,34 +1514,56 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
   const FileIcon = file ? getFileIcon(file.name.split('.').pop() || null) : Upload;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="cw-card w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl shadow-xl">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] p-4">
-          <h2 className="text-xl font-semibold cw-text">New Document with File</h2>
+    <RightSlidePanel
+      isOpen={true}
+      onClose={onClose}
+      title="New Document with File"
+      footer={
+        <div className="flex justify-end gap-2">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
           >
-            <X className="h-5 w-5" />
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="upload-document-form"
+            disabled={isLoading || !file}
+            className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload className="h-4 w-4" />
+                Create Document
+              </>
+            )}
           </button>
         </div>
-        
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          <div
-            className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-              dragActive
-                ? 'border-primary-500 bg-primary-500/10'
-                : file
-                ? 'border-green-500 bg-green-500/10'
-                : fileError
-                ? 'border-red-500 bg-red-500/10'
-                : 'border-[var(--color-border)] hover:border-[var(--color-base)]'
-            }`}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-          >
+      }
+    >
+      <form id="upload-document-form" onSubmit={handleSubmit} className="space-y-4">
+        <div
+          className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+            dragActive
+              ? 'border-primary-500 bg-primary-500/10'
+              : file
+              ? 'border-green-500 bg-green-500/10'
+              : fileError
+              ? 'border-red-500 bg-red-500/10'
+              : 'border-[var(--color-border)] hover:border-[var(--color-base)]'
+          }`}
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+        >
             <input
               ref={fileInputRef}
               type="file"
@@ -1549,7 +1618,7 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
               required
               value={formData.title}
               onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              className="w-full cw-field"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="Enter document title"
             />
           </div>
@@ -1560,7 +1629,7 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               rows={2}
-              className="w-full cw-field"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="Brief description of the document"
             />
           </div>
@@ -1568,62 +1637,35 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-800 mb-1">Document Type *</label>
-              <select
-                required
-                value={formData.doc_type}
-                onChange={(e) => setFormData(prev => ({ ...prev, doc_type: e.target.value }))}
-                className="w-full cw-field"
-              >
-                {DOCUMENT_TYPES.filter(t => t.value).map(type => (
-                  <option key={type.value} value={type.value}>{type.label}</option>
-                ))}
-              </select>
+              <MultiSelectDropdown
+                title="Document Type"
+                items={DOCUMENT_TYPES.filter(t => t.value).map(type => ({ value: type.value, label: type.label }))}
+                selectedValues={formData.doc_type ? [formData.doc_type] : []}
+                onApply={(vals) => setFormData(prev => ({ ...prev, doc_type: vals[0] || '' }))}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select Document Type"
+                size="md"
+              />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-800 mb-1">Classification *</label>
-              <select
-                required
-                value={formData.classification}
-                onChange={(e) => setFormData(prev => ({ ...prev, classification: e.target.value }))}
-                className="w-full cw-field"
-              >
-                {CLASSIFICATIONS.map(cls => (
-                  <option key={cls.value} value={cls.value}>{cls.label}</option>
-                ))}
-              </select>
+              <MultiSelectDropdown
+                title="Classification"
+                items={CLASSIFICATIONS.filter(c => c.value).map(cls => ({ value: cls.value, label: cls.label }))}
+                selectedValues={formData.classification ? [formData.classification] : []}
+                onApply={(vals) => setFormData(prev => ({ ...prev, classification: vals[0] || '' }))}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select Classification"
+                size="md"
+              />
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="cw-btn-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading || !file}
-              className="cw-btn-primary flex items-center gap-2 disabled:opacity-50"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4" />
-                  Create Document
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </RightSlidePanel>
   );
 }
 
@@ -1706,19 +1748,41 @@ function UploadFileToDocumentModal({ documentId, onClose, onSubmit, isLoading }:
   const FileIcon = file ? getFileIcon(file.name.split('.').pop() || null) : Upload;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="cw-card w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl shadow-xl">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] p-4">
-          <h2 className="text-xl font-semibold cw-text">Upload File to Document</h2>
+    <RightSlidePanel
+      isOpen={true}
+      onClose={onClose}
+      title="Upload File to Document"
+      footer={
+        <div className="flex justify-end gap-3">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text transition-colors"
+            className="cw-btn-secondary"
           >
-            <X className="h-5 w-5" />
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="upload-file-form"
+            disabled={isLoading || !file}
+            className="cw-btn-primary flex items-center gap-2 disabled:opacity-50"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload className="h-4 w-4" />
+                Upload File
+              </>
+            )}
           </button>
         </div>
-        
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+      }
+    >
+      <form id="upload-file-form" onSubmit={handleSubmit} className="space-y-4">
           <div
             className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
               dragActive
@@ -1792,35 +1856,8 @@ function UploadFileToDocumentModal({ documentId, onClose, onSubmit, isLoading }:
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="cw-btn-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading || !file}
-              className="cw-btn-primary flex items-center gap-2 disabled:opacity-50"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4" />
-                  Upload File
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </RightSlidePanel>
   );
 }
 
@@ -1859,21 +1896,38 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="cw-card w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-xl shadow-xl">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] p-4">
-          <h2 className="text-xl font-semibold cw-text">
-            {document?.id ? 'Edit Document' : 'New Document'}
-          </h2>
+    <RightSlidePanel
+      isOpen={true}
+      onClose={onClose}
+      title={document?.id ? 'Edit Document' : 'New Document'}
+      footer={
+        <div className="flex justify-end gap-2">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
           >
-            <X className="h-5 w-5" />
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="document-form"
+            disabled={isLoading}
+            className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              document?.id ? 'Update Document' : 'Create Document'
+            )}
           </button>
         </div>
-        
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+      }
+    >
+      <form id="document-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-800 mb-1">Title *</label>
             <input
@@ -1881,7 +1935,7 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
               required
               value={formData.title}
               onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              className="w-full cw-field"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="Enter document title"
             />
           </div>
@@ -1892,7 +1946,7 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               rows={2}
-              className="w-full cw-field"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="Brief description of the document"
             />
           </div>
@@ -1900,51 +1954,54 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-800 mb-1">Document Type *</label>
-              <select
-                required
-                value={formData.doc_type}
-                onChange={(e) => setFormData(prev => ({ ...prev, doc_type: e.target.value }))}
-                className="w-full cw-field"
-              >
-                {DOCUMENT_TYPES.filter(t => t.value).map(type => (
-                  <option key={type.value} value={type.value}>{type.label}</option>
-                ))}
-              </select>
+              <MultiSelectDropdown
+                title="Document Type"
+                items={DOCUMENT_TYPES.filter(t => t.value).map(type => ({ value: type.value, label: type.label }))}
+                selectedValues={formData.doc_type ? [formData.doc_type] : []}
+                onApply={(vals) => setFormData(prev => ({ ...prev, doc_type: vals[0] || '' }))}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select Document Type"
+                size="md"
+              />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-800 mb-1">Classification</label>
-              <select
-                value={formData.classification}
-                onChange={(e) => setFormData(prev => ({ ...prev, classification: e.target.value }))}
-                className="w-full cw-field"
-              >
-                {CLASSIFICATIONS.map(cls => (
-                  <option key={cls.value} value={cls.value}>{cls.label}</option>
-                ))}
-              </select>
+              <MultiSelectDropdown
+                title="Classification"
+                items={CLASSIFICATIONS.filter(c => c.value).map(cls => ({ value: cls.value, label: cls.label }))}
+                selectedValues={formData.classification ? [formData.classification] : []}
+                onApply={(vals) => setFormData(prev => ({ ...prev, classification: vals[0] || '' }))}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select Classification"
+                size="md"
+              />
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-800 mb-1">Select Parent Document</label>
-            <select
-              value={formData.parent_document_id ?? ''}
-              onChange={(e) =>
+            <MultiSelectDropdown
+              title="Parent Document"
+              items={availableParentDocuments.map((docOption) => ({
+                value: String(docOption.id),
+                label: `${docOption.title} (${docOption.doc_type})`,
+              }))}
+              selectedValues={formData.parent_document_id != null ? [String(formData.parent_document_id)] : []}
+              onApply={(vals) =>
                 setFormData((prev) => ({
                   ...prev,
-                  parent_document_id: e.target.value ? Number(e.target.value) : null,
+                  parent_document_id: vals[0] ? Number(vals[0]) : null,
                 }))
               }
-              className="w-full cw-field"
-            >
-              <option value="">None (Top-level document)</option>
-              {availableParentDocuments.map((docOption) => (
-                <option key={docOption.id} value={docOption.id}>
-                  {docOption.title} ({docOption.doc_type})
-                </option>
-              ))}
-            </select>
+              multiSelect={false}
+              triggerVariant="input"
+              placeholder="Select Parent Document"
+              size="md"
+              forceSearch
+            />
           </div>
 
           <div>
@@ -1953,7 +2010,7 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
               value={formData.content}
               onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
               rows={6}
-              className="w-full cw-field"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="Document content..."
             />
           </div>
@@ -1966,57 +2023,33 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
                 min={1}
                 value={formData.review_cycle_months}
                 onChange={(e) => setFormData(prev => ({ ...prev, review_cycle_months: parseInt(e.target.value) || 12 }))}
-                className="w-full cw-field"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-800 mb-1">Effective Date</label>
               <input
                 type="date"
                 value={formData.effective_date}
                 onChange={(e) => setFormData(prev => ({ ...prev, effective_date: e.target.value }))}
-                className="w-full cw-field"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-800 mb-1">Expiry Date</label>
               <input
                 type="date"
                 value={formData.expiry_date}
                 onChange={(e) => setFormData(prev => ({ ...prev, expiry_date: e.target.value }))}
-                className="w-full cw-field"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="cw-btn-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="cw-btn-primary flex items-center gap-2 disabled:opacity-50"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                document?.id ? 'Update Document' : 'Create Document'
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </RightSlidePanel>
   );
 }
 
@@ -2208,22 +2241,43 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="cw-card w-full max-w-lg max-h-[90vh] overflow-hidden shadow-xl">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
-          <div>
-            <h2 className="text-lg font-semibold cw-text">Request Attestation</h2>
-            <p className="text-sm cw-text-muted mt-0.5">{document.title}</p>
-          </div>
+    <RightSlidePanel
+      isOpen={true}
+      onClose={onClose}
+      title="Request Attestation"
+      subtitle={document.title}
+      footer={
+        <div className="flex justify-end gap-3">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg p-2 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text transition-colors"
+            className="cw-btn-secondary"
+            disabled={isLoading}
           >
-            <X className="h-5 w-5" />
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="request-attestation-form"
+            disabled={isLoading || selectedUserIds.length === 0}
+            className="cw-btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                Send Requests ({selectedUserIds.length})
+              </>
+            )}
           </button>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto max-h-[calc(90vh-180px)]">
+      }
+    >
+      <form id="request-attestation-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium cw-text mb-1">
               Due Date (Optional)
@@ -2298,37 +2352,8 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
               )}
             </div>
           </div>
-        </form>
-
-        <div className="flex justify-end gap-3 border-t border-[var(--color-border)] px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="cw-btn-secondary"
-            disabled={isLoading}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isLoading || selectedUserIds.length === 0}
-            className="cw-btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              <>
-                <Send className="h-4 w-4" />
-                Send Requests ({selectedUserIds.length})
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
+      </form>
+    </RightSlidePanel>
   );
 }
 
@@ -2356,11 +2381,9 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
   });
   const [selectedFrameworkIds, setSelectedFrameworkIds] = useState<number[]>([]);
   const [selectedParentDocumentId, setSelectedParentDocumentId] = useState<number | null>(null);
-  const [showFrameworkDropdown, setShowFrameworkDropdown] = useState(false);
   const [suggestions, setSuggestions] = useState<any[] | null>(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const { data: frameworks } = useQuery({
@@ -2374,16 +2397,6 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
       );
     },
   });
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowFrameworkDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const toggleFramework = (id: number) => {
     setSelectedFrameworkIds(prev =>
@@ -2474,100 +2487,133 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="cw-card flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden shadow-xl">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] bg-gradient-to-r from-blue-50 to-violet-50 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-white p-2 shadow-sm border border-blue-100">
-              <Wand2 className="h-5 w-5 text-violet-700" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold cw-text">AI Draft Document</h2>
-              <p className="text-sm cw-text-muted">Generate professional policy documents with AI</p>
-            </div>
+    <RightSlidePanel
+      isOpen={true}
+      onClose={onClose}
+      title="AI Draft Document"
+      subtitle="Generate professional policy documents with AI"
+      footer={
+        !result ? (
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="ai-draft-form"
+              disabled={isLoading || !formData.title.trim()}
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-4 w-4" />
+                  Generate Draft
+                </>
+              )}
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-2 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6">
-          {!result ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
+        ) : (
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                onGenerate({
+                  doc_type: formData.doc_type,
+                  title: formData.title,
+                  framework_ids: selectedFrameworkIds.length > 0 ? selectedFrameworkIds : undefined,
+                  description: formData.description || undefined,
+                  parent_document_id: selectedParentDocumentId || undefined,
+                });
+              }}
+              disabled={isLoading}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <Wand2 className="h-4 w-4" />
+              Regenerate
+            </button>
+            <button
+              type="button"
+              onClick={() => onUseContent(result.generated_content, result.suggested_title, formData.doc_type, formData.description, selectedParentDocumentId || undefined)}
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              <CheckCircle className="h-4 w-4" />
+              Use This Content
+            </button>
+          </div>
+        )
+      }
+    >
+      <div>
+        {!result ? (
+          <form id="ai-draft-form" onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium cw-text mb-1">Document Type *</label>
-                  <select
-                    value={formData.doc_type}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, doc_type: e.target.value }));
+                  <MultiSelectDropdown
+                    title="Document Type"
+                    items={[
+                      { value: 'policy', label: 'Policy' },
+                      { value: 'standard', label: 'Standard' },
+                      { value: 'procedure', label: 'Procedure' },
+                      { value: 'guideline', label: 'Guideline' },
+                    ]}
+                    selectedValues={formData.doc_type ? [formData.doc_type] : []}
+                    onApply={(vals) => {
+                      setFormData(prev => ({ ...prev, doc_type: vals[0] || '' }));
                       setSuggestions(null);
                       setShowSuggestions(false);
                     }}
-                    className="w-full cw-field"
-                  >
-                    <option value="policy">Policy</option>
-                    <option value="standard">Standard</option>
-                    <option value="procedure">Procedure</option>
-                    <option value="guideline">Guideline</option>
-                  </select>
+                    multiSelect={false}
+                    triggerVariant="input"
+                    placeholder="Select Document Type"
+                    size="md"
+                  />
                 </div>
-                <div ref={dropdownRef} className="relative">
+                <div>
                   <label className="block text-sm font-medium cw-text mb-1">Regulatory Frameworks (Optional)</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowFrameworkDropdown(!showFrameworkDropdown)}
-                    className="w-full cw-field text-left flex items-center justify-between"
-                  >
-                    <span className={selectedFrameworkIds.length === 0 ? 'cw-text-muted' : 'cw-text'}>
-                      {selectedFrameworkIds.length === 0
-                        ? 'Select frameworks...'
-                        : `${selectedFrameworkIds.length} framework${selectedFrameworkIds.length > 1 ? 's' : ''} selected`}
-                    </span>
-                    <ChevronDown className="h-4 w-4 cw-text-muted" />
-                  </button>
-                  {showFrameworkDropdown && (
-                    <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] shadow-xl">
-                      {(frameworks || []).length === 0 ? (
-                        <div className="px-3 py-2 text-sm cw-text-muted">No frameworks available</div>
-                      ) : (
-                        (frameworks || []).map((fw: any) => (
-                          <label
-                            key={fw.id}
-                            className="flex items-center gap-2 px-3 py-2 hover:bg-[var(--color-hover)] cursor-pointer transition-colors"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedFrameworkIds.includes(fw.id)}
-                              onChange={() => toggleFramework(fw.id)}
-                              className="rounded border-[var(--color-border)] bg-[var(--color-subtle)] text-[var(--color-base)] focus:ring-[var(--color-base)]"
-                            />
-                            <span className="text-sm cw-text truncate">{fw.name}</span>
-                          </label>
-                        ))
-                      )}
-                    </div>
-                  )}
+                  <MultiSelectDropdown
+                    title="Frameworks"
+                    items={(frameworks || []).map((fw: any) => ({ value: String(fw.id), label: fw.name }))}
+                    selectedValues={selectedFrameworkIds.map(String)}
+                    onApply={(vals) => {
+                      setSelectedFrameworkIds(vals.map(Number));
+                      setSuggestions(null);
+                      setShowSuggestions(false);
+                    }}
+                    multiSelect={true}
+                    triggerVariant="input"
+                    placeholder="Select frameworks..."
+                    size="md"
+                    forceSearch
+                  />
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium cw-text mb-1">Select Parent Document (Optional)</label>
-                <select
-                  value={selectedParentDocumentId ?? ''}
-                  onChange={(e) => setSelectedParentDocumentId(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full cw-field"
-                >
-                  <option value="">None</option>
-                  {parentDocuments.map((docOption) => (
-                    <option key={docOption.id} value={docOption.id}>
-                      {docOption.title} ({docOption.doc_type})
-                    </option>
-                  ))}
-                </select>
+                <MultiSelectDropdown
+                  title="Parent Document"
+                  items={parentDocuments.map((docOption) => ({
+                    value: String(docOption.id),
+                    label: `${docOption.title} (${docOption.doc_type})`,
+                  }))}
+                  selectedValues={selectedParentDocumentId != null ? [String(selectedParentDocumentId)] : []}
+                  onApply={(vals) => setSelectedParentDocumentId(vals[0] ? Number(vals[0]) : null)}
+                  multiSelect={false}
+                  triggerVariant="input"
+                  placeholder="Select Parent Document"
+                  size="md"
+                  forceSearch
+                />
                 <p className="mt-1 text-xs cw-text-muted">
                   Framework references are optional. You can generate a comprehensive document with or without frameworks.
                 </p>
@@ -2708,7 +2754,7 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
                   placeholder="e.g., Information Security Policy"
                   value={formData.title}
                   onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full cw-field"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
 
@@ -2719,38 +2765,12 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
                   placeholder="Describe what this policy should cover, any specific requirements, or areas of focus..."
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full cw-field"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="cw-btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isLoading || !formData.title.trim()}
-                  className="cw-btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Wand2 className="h-4 w-4" />
-                      Generate Draft
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          ) : (
+          </form>
+        ) : (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -2806,35 +2826,9 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
-                <button
-                  onClick={() => {
-                    onGenerate({
-                      doc_type: formData.doc_type,
-                      title: formData.title,
-                      framework_ids: selectedFrameworkIds.length > 0 ? selectedFrameworkIds : undefined,
-                      description: formData.description || undefined,
-                      parent_document_id: selectedParentDocumentId || undefined,
-                    });
-                  }}
-                  disabled={isLoading}
-                  className="cw-btn-secondary flex items-center gap-2 disabled:opacity-50"
-                >
-                  <Wand2 className="h-4 w-4" />
-                  Regenerate
-                </button>
-                <button
-                  onClick={() => onUseContent(result.generated_content, result.suggested_title, formData.doc_type, formData.description, selectedParentDocumentId || undefined)}
-                  className="cw-btn-primary flex items-center gap-2"
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  Use This Content
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-    </div>
+    </RightSlidePanel>
   );
 }

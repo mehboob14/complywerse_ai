@@ -6,7 +6,7 @@ import { ermApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ClipboardCheck, Loader2, Plus, Sparkles, ListTodo, ChevronRight, Trash2 } from 'lucide-react';
+import { ClipboardCheck, Loader2, Plus, Sparkles, ListTodo, ChevronRight, Trash2, ArrowLeft } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 
 interface FrameworkOption {
@@ -41,11 +41,11 @@ interface AssignedQuestion {
 const QUESTION_COUNT_OPTIONS = [10, 15, 20, 25, 30, 40, 50];
 
 const STATUS_BADGES: Record<string, string> = {
-  in_progress: 'bg-blue-50 text-blue-700 border-blue-200',
-  completed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  archived: 'bg-gray-50 text-gray-600 border-gray-200',
-  not_started: 'bg-gray-50 text-gray-600 border-gray-200',
-  blocked: 'bg-rose-50 text-rose-700 border-rose-200',
+  in_progress: 'bg-blue-600 text-white border-blue-700',
+  completed: 'bg-emerald-600 text-white border-emerald-700',
+  archived: 'bg-slate-700 text-white border-slate-800',
+  not_started: 'bg-slate-500 text-white border-slate-600',
+  blocked: 'bg-rose-600 text-white border-rose-700',
 };
 
 export default function FrameworkRiskAssessmentsPage() {
@@ -98,8 +98,10 @@ export default function FrameworkRiskAssessmentsPage() {
         count: Number(questionCount) || 20,
         replace_existing: true,
       });
-      queryClient.invalidateQueries({ queryKey: ['framework-risk-assessments'] });
-      queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment-assigned-questions'] });
+      await queryClient.invalidateQueries({ queryKey: ['framework-risk-assessments'] });
+      await queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment-assigned-questions'] });
+      await queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] });
+      await queryClient.refetchQueries({ queryKey: ['framework-risk-assessment', assessmentId] });
       router.push(`/erm/risk-assessments/framework/${assessmentId}`);
     },
   });
@@ -125,13 +127,19 @@ export default function FrameworkRiskAssessmentsPage() {
   return (
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6 text-[var(--color-text)]">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-lg sm:text-xl font-semibold text-[var(--color-text)]">Framework Risk Assessments</h1>
-          <p className="text-sm text-[var(--color-muted)]">Generate framework-specific assessment questions, assign reviewers, and track completion with tenant-scoped ownership.</p>
+        <div className="flex items-start gap-3">
+          <Link
+            href="/erm/risk-assessments"
+            className="mt-0.5 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+            title="Back to Risk Assessments"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div>
+            <h1 className="text-lg sm:text-xl font-semibold text-[var(--color-text)]">Framework Risk Assessments</h1>
+            <p className="text-sm text-[var(--color-muted)]">Generate framework-specific assessment questions, assign reviewers, and track completion with tenant-scoped ownership.</p>
+          </div>
         </div>
-        <Link href="/erm/risk-assessments" className="cw-btn-secondary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium">
-          Back to Risk Assessments
-        </Link>
       </div>
 
       <div className="cw-card p-6 space-y-5">

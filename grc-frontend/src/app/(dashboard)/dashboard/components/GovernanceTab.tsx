@@ -7,7 +7,6 @@ import {
   CheckCircle,
   AlertCircle,
   ClipboardCheck,
-  ChevronRight,
   BarChart3,
   Users,
   BookOpen,
@@ -84,9 +83,6 @@ export default function GovernanceTab({ data }: { data: UnifiedDashboard }) {
               </div>
               <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Recent Publications</h3>
             </div>
-            <Link href="/governance/documents" className="text-xs flex items-center gap-1" style={{ color: 'var(--color-base)' }}>
-              View all <ChevronRight className="h-3 w-3" />
-            </Link>
           </div>
           <div className="p-4">
             {data.governance.recent_publications.length > 0 ? (

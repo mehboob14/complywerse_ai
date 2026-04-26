@@ -1,18 +1,16 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { vendorRiskApi, tenantApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   FileCheck,
   Loader2,
   AlertCircle,
-  Search,
   Plus,
-  X,
   Trash2,
-  ExternalLink,
+  Eye,
   Shield,
   ShieldAlert,
   Lock,
@@ -23,6 +21,11 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import {
+  SearchInput,
+  MultiSelectDropdown,
+  RightSlidePanel,
+} from '@/components/ui';
 
 // ─── Assessment Type Definitions ────────────────────────────────
 const ASSESSMENT_TYPES = [
@@ -121,28 +124,28 @@ interface UserOption {
   department: string | null;
 }
 
-const getStatusBadge = (status: string) => {
+const getStatusPill = (status: string) => {
   const styles: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-600',
-    in_progress: 'bg-blue-100 text-blue-700',
-    completed: 'bg-green-100 text-green-700',
-    reviewed: 'bg-teal-100 text-teal-700',
-    overdue: 'bg-red-100 text-red-700',
-    pending_review: 'bg-yellow-100 text-yellow-700',
-    approved: 'bg-purple-100 text-purple-700',
+    draft: 'bg-gray-600 text-white border-gray-700',
+    in_progress: 'bg-blue-600 text-white border-blue-700',
+    completed: 'bg-green-600 text-white border-green-700',
+    reviewed: 'bg-teal-600 text-white border-teal-700',
+    overdue: 'bg-red-600 text-white border-red-700',
+    pending_review: 'bg-yellow-600 text-white border-yellow-700',
+    approved: 'bg-purple-600 text-white border-purple-700',
   };
-  return styles[status?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return styles[status?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
 };
 
-const getRiskBadge = (rating: string | null) => {
+const getRiskPill = (rating: string | null) => {
   if (!rating) return '';
   const styles: Record<string, string> = {
-    critical: 'bg-red-100 text-red-700',
-    high: 'bg-orange-100 text-orange-700',
-    medium: 'bg-yellow-100 text-yellow-700',
-    low: 'bg-green-100 text-green-700',
+    critical: 'bg-red-600 text-white border-red-700',
+    high: 'bg-orange-600 text-white border-orange-700',
+    medium: 'bg-yellow-600 text-white border-yellow-700',
+    low: 'bg-green-600 text-white border-green-700',
   };
-  return styles[rating.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return styles[rating.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
 };
 
 const formatAssessmentType = (value: string) =>
@@ -181,6 +184,7 @@ export default function VendorAssessmentsPage() {
       const data = res.data;
       return (Array.isArray(data) ? data : data.items ?? []) as Assessment[];
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: vendors } = useQuery({
@@ -190,6 +194,7 @@ export default function VendorAssessmentsPage() {
       const data = res.data;
       return (Array.isArray(data) ? data : data.items ?? []) as VendorOption[];
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: users } = useQuery({
@@ -203,6 +208,7 @@ export default function VendorAssessmentsPage() {
         return [] as UserOption[];
       }
     },
+    placeholderData: keepPreviousData,
   });
 
   const createMutation = useMutation({
@@ -293,6 +299,10 @@ export default function VendorAssessmentsPage() {
     return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
   }, [assessments]);
 
+  const combinedVendorList = useMemo(() => {
+    return [...uniqueVendors, ...(vendors ?? []).filter((v) => !uniqueVendors.some((uv) => uv.id === v.id))];
+  }, [uniqueVendors, vendors]);
+
   const filtered = useMemo(() => {
     if (!assessments) return [];
     return assessments.filter((a) => {
@@ -324,11 +334,11 @@ export default function VendorAssessmentsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Vendor Assessments</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Vendor Assessments</h1>
           <p className="text-sm text-gray-500 mt-1">Track and manage third-party risk assessments</p>
         </div>
         <div className="flex items-center gap-2">
@@ -344,34 +354,25 @@ export default function VendorAssessmentsPage() {
           >
             Questionnaires
           </Link>
-          {canCreate && (
-            <button
-              onClick={openModal}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Create Assessment
-            </button>
-          )}
         </div>
       </div>
 
       {/* Stat Cards */}
       {assessments && assessments.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
             <p className="text-xs text-gray-500 uppercase font-medium">Total</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{assessments.length}</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
             <p className="text-xs text-gray-500 uppercase font-medium">In Progress</p>
             <p className="text-2xl font-bold text-blue-600 mt-1">{assessments.filter((a) => a.status === 'in_progress' || a.status === 'draft').length}</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
             <p className="text-xs text-gray-500 uppercase font-medium">Approved</p>
             <p className="text-2xl font-bold text-green-600 mt-1">{assessments.filter((a) => a.status === 'approved').length}</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
             <p className="text-xs text-gray-500 uppercase font-medium">High/Critical Risk</p>
             <p className="text-2xl font-bold text-red-600 mt-1">{assessments.filter((a) => a.risk_rating === 'high' || a.risk_rating === 'critical').length}</p>
           </div>
@@ -379,33 +380,65 @@ export default function VendorAssessmentsPage() {
       )}
 
       {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search by vendor or assessor..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="flex-1 min-w-[180px] sm:min-w-[260px] max-w-md">
+            <SearchInput
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder="Search by vendor or assessor..."
+              variant="square"
+            />
+          </div>
+          <MultiSelectDropdown
+            title="Type"
+            multiSelect={false}
+            selectedValues={typeFilter === 'all' ? [] : [typeFilter]}
+            onApply={(values) => setTypeFilter(values[0] ?? 'all')}
+            items={[
+              { value: 'all', label: 'All Types' },
+              ...availableTypeOptions.map((t) => ({ value: t.id, label: t.label })),
+            ]}
+            placeholder="All Types"
+          />
+          <MultiSelectDropdown
+            title="Status"
+            multiSelect={false}
+            selectedValues={statusFilter === 'all' ? [] : [statusFilter]}
+            onApply={(values) => setStatusFilter(values[0] ?? 'all')}
+            items={[
+              { value: 'all', label: 'All Statuses' },
+              ...STATUS_OPTIONS.map((s) => ({
+                value: s,
+                label: s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+              })),
+            ]}
+            placeholder="All Statuses"
+          />
+          <MultiSelectDropdown
+            title="Vendor"
+            multiSelect={false}
+            forceSearch
+            selectedValues={vendorFilter === 'all' ? [] : [vendorFilter]}
+            onApply={(values) => setVendorFilter(values[0] ?? 'all')}
+            items={[
+              { value: 'all', label: 'All Vendors' },
+              ...combinedVendorList.map((v) => ({ value: String(v.id), label: v.name })),
+            ]}
+            placeholder="All Vendors"
           />
         </div>
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="all">All Types</option>
-          {availableTypeOptions.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
-        </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="all">All Statuses</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</option>
-          ))}
-        </select>
-        <select value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="all">All Vendors</option>
-          {[...uniqueVendors, ...(vendors ?? []).filter((v) => !uniqueVendors.some((uv) => uv.id === v.id))].map((v) => (
-            <option key={v.id} value={String(v.id)}>{v.name}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2 ml-auto">
+          {canCreate && (
+            <button
+              onClick={openModal}
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              Add Assessment
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
@@ -458,13 +491,13 @@ export default function VendorAssessmentsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusBadge(a.status)}`}>
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize border ${getStatusPill(a.status)}`}>
                           {a.status?.replace(/_/g, ' ')}
                         </span>
                       </td>
                       <td className="px-4 py-3">
                         {a.risk_rating ? (
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getRiskBadge(a.risk_rating)}`}>
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize border ${getRiskPill(a.risk_rating)}`}>
                             {a.risk_rating}
                           </span>
                         ) : <span className="text-sm text-gray-400">-</span>}
@@ -484,7 +517,7 @@ export default function VendorAssessmentsPage() {
                             className="p-1.5 text-blue-600 hover:text-blue-800 rounded"
                             title="Open assessment"
                           >
-                            <ExternalLink className="h-4 w-4" />
+                            <Eye className="h-4 w-4" />
                           </button>
                           {canDelete && (
                             <button
@@ -514,180 +547,182 @@ export default function VendorAssessmentsPage() {
         </div>
       </div>
 
-      {/* Create Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="flex h-[70vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">
-                  {modalStep === 'select_type' ? 'Select Assessment Type' : 'Assessment Details'}
-                </h2>
-                {modalStep === 'select_type' && (
-                  <p className="text-sm text-gray-500 mt-0.5">Choose the type of risk assessment to perform</p>
-                )}
-                {modalStep === 'details' && (
-                  <p className="text-sm text-gray-500 mt-0.5">
-                    {formData.assessment_type === 'custom'
-                      ? (customAssessmentType.trim() ? formatAssessmentType(customAssessmentType.trim()) : 'Custom Assessment Type')
-                      : ASSESSMENT_TYPE_MAP[formData.assessment_type]?.label}
-                  </p>
-                )}
+      {/* Create Modal — RightSlidePanel */}
+      <RightSlidePanel
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={modalStep === 'select_type' ? 'Select Assessment Type' : 'Assessment Details'}
+        subtitle={
+          modalStep === 'select_type'
+            ? 'Choose the type of risk assessment to perform'
+            : formData.assessment_type === 'custom'
+              ? (customAssessmentType.trim() ? formatAssessmentType(customAssessmentType.trim()) : 'Custom Assessment Type')
+              : ASSESSMENT_TYPE_MAP[formData.assessment_type]?.label
+        }
+        width="w-full max-w-2xl"
+        footer={
+          modalStep === 'details' ? (
+            <div className="flex items-center justify-between w-full">
+              <button
+                type="button"
+                onClick={() => setModalStep('select_type')}
+                className="text-sm font-medium text-gray-600 hover:text-gray-800"
+              >
+                &larr; Back
+              </button>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="create-assessment-form"
+                  disabled={
+                    createMutation.isPending ||
+                    !formData.vendor_id ||
+                    !formData.assessment_type ||
+                    (formData.assessment_type === 'custom' && !customAssessmentType.trim())
+                  }
+                  className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+                >
+                  {createMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />Saving...
+                    </>
+                  ) : (
+                    'Create Assessment'
+                  )}
+                </button>
               </div>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+          ) : null
+        }
+      >
+        {modalStep === 'select_type' && (
+          <div className="space-y-3">
+            {ASSESSMENT_TYPES.map((type) => {
+              const Icon = type.icon;
+              return (
+                <button
+                  key={type.id}
+                  onClick={() => handleSelectType(type.id)}
+                  className={`w-full flex items-start gap-4 p-4 rounded-xl border-2 text-left transition-all hover:shadow-md hover:border-blue-400 ${type.color}`}
+                >
+                  <div className="mt-0.5">
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900">{type.label}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-white/80 text-gray-500 font-medium">{type.category}</span>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">{type.description}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {modalStep === 'details' && (
+          <form id="create-assessment-form" onSubmit={handleSubmit} className="space-y-5">
+            {/* Selected type summary */}
+            {formData.assessment_type && ASSESSMENT_TYPE_MAP[formData.assessment_type] && (
+              <div className={`flex items-center gap-3 p-3 rounded-lg border ${ASSESSMENT_TYPE_MAP[formData.assessment_type].color}`}>
+                {(() => { const Icon = ASSESSMENT_TYPE_MAP[formData.assessment_type].icon; return <Icon className="h-5 w-5" />; })()}
+                <div>
+                  <span className="text-sm font-medium text-gray-900">
+                    {formData.assessment_type === 'custom'
+                      ? (customAssessmentType.trim() ? formatAssessmentType(customAssessmentType.trim()) : ASSESSMENT_TYPE_MAP.custom.label)
+                      : ASSESSMENT_TYPE_MAP[formData.assessment_type].label}
+                  </span>
+                  <p className="text-xs text-gray-500">{ASSESSMENT_TYPE_MAP[formData.assessment_type].description}</p>
+                </div>
+                <button type="button" onClick={() => setModalStep('select_type')} className="ml-auto text-xs text-blue-600 hover:text-blue-800 font-medium">
+                  Change
+                </button>
+              </div>
+            )}
+
+            {formData.assessment_type === 'custom' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-800 mb-1">Custom Assessment Type *</label>
+                <input
+                  type="text"
+                  required
+                  value={customAssessmentType}
+                  onChange={(event) => setCustomAssessmentType(event.target.value)}
+                  placeholder="e.g., Saudi NCA Annual Compliance Review"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+            )}
+
+            {/* Vendor */}
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Vendor *</label>
+              <MultiSelectDropdown
+                title="Vendor"
+                multiSelect={false}
+                triggerVariant="input"
+                size="md"
+                forceSearch
+                placeholder="Select vendor..."
+                selectedValues={formData.vendor_id ? [String(formData.vendor_id)] : []}
+                onApply={(values) => setFormData({ ...formData, vendor_id: values[0] ?? '' })}
+                items={combinedVendorList.map((v) => ({ value: String(v.id), label: v.name }))}
+              />
+              {(vendors ?? []).length === 0 && uniqueVendors.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">No vendors found. Add a vendor first in Vendor Risk to create an assessment.</p>
+              )}
             </div>
 
-            {/* Step 1: Assessment Type Selection */}
-            {modalStep === 'select_type' && (
-              <div className="flex-1 overflow-y-auto p-6 space-y-3">
-                {ASSESSMENT_TYPES.map((type) => {
-                  const Icon = type.icon;
-                  return (
-                    <button
-                      key={type.id}
-                      onClick={() => handleSelectType(type.id)}
-                      className={`w-full flex items-start gap-4 p-4 rounded-xl border-2 text-left transition-all hover:shadow-md hover:border-blue-400 ${type.color}`}
-                    >
-                      <div className="mt-0.5">
-                        <Icon className="h-6 w-6" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900">{type.label}</span>
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-white/80 text-gray-500 font-medium">{type.category}</span>
-                        </div>
-                        <p className="text-sm text-gray-600 mt-1">{type.description}</p>
-                      </div>
-                    </button>
-                  );
-                })}
+            {/* Assessor from user directory */}
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Assign Assessor</label>
+              <MultiSelectDropdown
+                title="Assessor"
+                multiSelect={false}
+                triggerVariant="input"
+                size="md"
+                forceSearch
+                placeholder="Current user (default)"
+                selectedValues={formData.assessed_by ? [String(formData.assessed_by)] : []}
+                onApply={(values) => setFormData({ ...formData, assessed_by: values[0] ?? '' })}
+                items={(users ?? []).map((u) => ({
+                  value: String(u.id),
+                  label: u.display_name || u.username,
+                  subLabel: u.department || u.email,
+                }))}
+              />
+              <p className="text-xs text-gray-400 mt-1">Select from your company user directory</p>
+            </div>
+
+            {/* Due Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Due Date</label>
+              <input
+                type="date"
+                value={formData.due_date}
+                onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+
+            {/* Error */}
+            {mutationError && (
+              <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                {mutationError}
               </div>
             )}
-
-            {/* Step 2: Details Form */}
-            {modalStep === 'details' && (
-              <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
-                <div className="grid flex-1 gap-5 overflow-y-auto p-6 md:grid-cols-2">
-                {/* Selected type summary */}
-                {formData.assessment_type && ASSESSMENT_TYPE_MAP[formData.assessment_type] && (
-                  <div className={`flex items-center gap-3 p-3 rounded-lg border md:col-span-2 ${ASSESSMENT_TYPE_MAP[formData.assessment_type].color}`}>
-                    {(() => { const Icon = ASSESSMENT_TYPE_MAP[formData.assessment_type].icon; return <Icon className="h-5 w-5" />; })()}
-                    <div>
-                      <span className="text-sm font-medium text-gray-900">
-                        {formData.assessment_type === 'custom'
-                          ? (customAssessmentType.trim() ? formatAssessmentType(customAssessmentType.trim()) : ASSESSMENT_TYPE_MAP.custom.label)
-                          : ASSESSMENT_TYPE_MAP[formData.assessment_type].label}
-                      </span>
-                      <p className="text-xs text-gray-500">{ASSESSMENT_TYPE_MAP[formData.assessment_type].description}</p>
-                    </div>
-                    <button type="button" onClick={() => setModalStep('select_type')} className="ml-auto text-xs text-blue-600 hover:text-blue-800 font-medium">
-                      Change
-                    </button>
-                  </div>
-                )}
-
-                {formData.assessment_type === 'custom' && (
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Custom Assessment Type <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={customAssessmentType}
-                      onChange={(event) => setCustomAssessmentType(event.target.value)}
-                      placeholder="e.g., Saudi NCA Annual Compliance Review"
-                      className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                )}
-
-                {/* Vendor */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Vendor <span className="text-red-500">*</span></label>
-                  <select
-                    required
-                    value={formData.vendor_id}
-                    onChange={(e) => setFormData({ ...formData, vendor_id: e.target.value })}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select vendor...</option>
-                    {[...uniqueVendors, ...(vendors ?? []).filter((v) => !uniqueVendors.some((uv) => uv.id === v.id))].map((v) => (
-                      <option key={v.id} value={v.id}>{v.name}</option>
-                    ))}
-                  </select>
-                  {(vendors ?? []).length === 0 && uniqueVendors.length === 0 && (
-                    <p className="text-xs text-amber-600 mt-1">No vendors found. Add a vendor first in Vendor Risk to create an assessment.</p>
-                  )}
-                </div>
-
-                {/* Assessor from user directory */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Assign Assessor</label>
-                  <select
-                    value={formData.assessed_by}
-                    onChange={(e) => setFormData({ ...formData, assessed_by: e.target.value })}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Current user (default)</option>
-                    {(users ?? []).map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.display_name || u.username}{u.department ? ` — ${u.department}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-400 mt-1">Select from your company user directory</p>
-                </div>
-
-                {/* Due Date */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-                  <input
-                    type="date"
-                    value={formData.due_date}
-                    onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                {/* Error */}
-                {mutationError && (
-                  <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 md:col-span-2">
-                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                    {mutationError}
-                  </div>
-                )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex justify-between items-center border-t border-gray-200 p-6 pt-4">
-                  <button type="button" onClick={() => setModalStep('select_type')} className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800">
-                    &larr; Back
-                  </button>
-                  <div className="flex gap-3">
-                    <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={
-                        createMutation.isPending ||
-                        !formData.vendor_id ||
-                        !formData.assessment_type ||
-                        (formData.assessment_type === 'custom' && !customAssessmentType.trim())
-                      }
-                      className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                    >
-                      {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                      Create Assessment
-                    </button>
-                  </div>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
+          </form>
+        )}
+      </RightSlidePanel>
     </div>
   );
 }

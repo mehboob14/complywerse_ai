@@ -228,7 +228,7 @@ export default function AttestationsPage() {
   const unlinkedCompletedCount = completedAttestations.filter(a => !a.linked_to_evidence).length;
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="page-header">
         <div className="flex items-center justify-between">
           <div>

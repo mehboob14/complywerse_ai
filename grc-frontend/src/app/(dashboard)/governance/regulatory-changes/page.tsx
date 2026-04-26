@@ -258,7 +258,7 @@ export default function RegulatoryChangesPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-lg sm:text-xl font-semibold text-black">Regulatory Change Management</h1>
@@ -284,54 +284,52 @@ export default function RegulatoryChangesPage() {
         ))}
       </div>
 
-      <div className="rounded-xl border border-gray-300 bg-white">
-        <div className='flex flex-col gap-3 lg:flex-row lg:items-center justify-between border-b border-gray-300 p-4'>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center flex-1">
-            <div className="flex-1 max-w-md">
-              <SearchInput
-                value={searchTerm}
-                onChange={setSearchTerm}
-                placeholder="Search changes..."
-                size="md"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <MultiSelectDropdown
-                title="Source"
-                items={SOURCE_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
-                selectedValues={sourceFilter ? [sourceFilter] : []}
-                onApply={(vals) => setSourceFilter(vals[0] || '')}
-                multiSelect={false}
-              />
-              <MultiSelectDropdown
-                title="Status"
-                items={STATUS_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
-                selectedValues={statusFilter ? [statusFilter] : []}
-                onApply={(vals) => setStatusFilter(vals[0] || '')}
-                multiSelect={false}
-              />
-              <MultiSelectDropdown
-                title="Priority"
-                items={PRIORITY_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
-                selectedValues={priorityFilter ? [priorityFilter] : []}
-                onApply={(vals) => setPriorityFilter(vals[0] || '')}
-                multiSelect={false}
-              />
-            </div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="flex-1 min-w-[180px] sm:min-w-[260px] max-w-md">
+            <SearchInput
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder="Search changes..."
+              size="md"
+            />
           </div>
 
-          {canCreate && (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="btn-primary flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              New Change
-            </button>
-          )}
+          <MultiSelectDropdown
+            title="Source"
+            items={SOURCE_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
+            selectedValues={sourceFilter ? [sourceFilter] : []}
+            onApply={(vals) => setSourceFilter(vals[0] || '')}
+            multiSelect={false}
+          />
+          <MultiSelectDropdown
+            title="Status"
+            items={STATUS_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
+            selectedValues={statusFilter ? [statusFilter] : []}
+            onApply={(vals) => setStatusFilter(vals[0] || '')}
+            multiSelect={false}
+          />
+          <MultiSelectDropdown
+            title="Priority"
+            items={PRIORITY_OPTIONS.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
+            selectedValues={priorityFilter ? [priorityFilter] : []}
+            onApply={(vals) => setPriorityFilter(vals[0] || '')}
+            multiSelect={false}
+          />
         </div>
 
+        {canCreate && (
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            New Change
+          </button>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-gray-300 bg-white">
         <div className="overflow-x-auto">
           {(!changes || changes.length === 0) ? (
             <div className="flex flex-col items-center justify-center py-16 text-gray-600">

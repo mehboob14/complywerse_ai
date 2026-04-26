@@ -384,7 +384,7 @@ export default function RegulatoryChangeDetailPage() {
   const StatusIcon = statusStyle.icon;
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/governance/regulatory-changes" className="text-gray-600 hover:text-black transition-colors">
           <ArrowLeft size={20} />

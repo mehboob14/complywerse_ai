@@ -25,6 +25,10 @@ import {
   ArrowDown,
   Gauge,
   Zap,
+  ChevronsUp,
+  ChevronsDown,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -86,25 +90,35 @@ const IMPACT_LABELS = ['Insignificant', 'Minor', 'Moderate', 'Major', 'Catastrop
 
 function getHeatmapColor(likelihood: number, impact: number): string {
   const score = likelihood * impact;
-  if (score >= 20) return 'bg-[var(--color-danger)] hover:bg-[var(--color-danger)]/80';
-  if (score >= 15) return 'bg-[var(--color-warning)] hover:bg-[var(--color-warning)]/80';
-  if (score >= 10) return 'bg-[var(--color-warning)] hover:bg-[var(--color-warning)]/70';
-  if (score >= 5) return 'bg-[var(--color-base)] hover:bg-[var(--color-base)]/80';
-  return 'bg-[var(--color-success)] hover:bg-[var(--color-success)]/80';
+  if (score >= 20) return 'bg-red-500 hover:bg-red-600';
+  if (score >= 15) return 'bg-red-400 hover:bg-red-500';
+  if (score >= 12) return 'bg-orange-400 hover:bg-orange-500';
+  if (score >= 8) return 'bg-yellow-400 hover:bg-yellow-500';
+  if (score >= 4) return 'bg-lime-400 hover:bg-lime-500';
+  return 'bg-green-500 hover:bg-green-600';
 }
 
 function getHeatmapBorderColor(likelihood: number, impact: number): string {
   const score = likelihood * impact;
-  if (score >= 20) return 'border-[var(--color-danger)]';
-  if (score >= 15) return 'border-[var(--color-warning)]';
-  if (score >= 10) return 'border-[var(--color-warning)]';
-  if (score >= 5) return 'border-[var(--color-base)]';
-  return 'border-[var(--color-success)]';
+  if (score >= 20) return 'border-red-500';
+  if (score >= 15) return 'border-red-400';
+  if (score >= 12) return 'border-orange-400';
+  if (score >= 8) return 'border-yellow-400';
+  if (score >= 4) return 'border-lime-400';
+  return 'border-green-500';
 }
 
 interface HeatmapCellData {
   count: number;
   risks: Array<{ id: number; title: string; score: number }>;
+}
+
+function getSeverityBadgeClasses(score: number): { label: string; className: string } {
+  if (score >= 20) return { label: 'Critical', className: 'bg-red-100 text-red-700 border-red-200' };
+  if (score >= 15) return { label: 'High', className: 'bg-orange-100 text-orange-700 border-orange-200' };
+  if (score >= 8) return { label: 'Medium', className: 'bg-yellow-100 text-yellow-700 border-yellow-200' };
+  if (score >= 4) return { label: 'Low', className: 'bg-lime-100 text-lime-700 border-lime-200' };
+  return { label: 'Very Low', className: 'bg-cyan-100 text-cyan-700 border-cyan-200' };
 }
 
 function RiskSpeedometer({
@@ -115,11 +129,25 @@ function RiskSpeedometer({
   signals: Array<{ label: string; value: string; tone?: string }>;
 }) {
   const safeScore = Math.max(0, Math.min(100, score));
-  const gaugeColor = safeScore >= 75 ? '#10b981' : safeScore >= 55 ? '#f59e0b' : '#ef4444';
-  const data = [
-    { name: 'score', value: safeScore, fill: gaugeColor },
-    { name: 'remaining', value: 100 - safeScore, fill: '#e5e7eb' },
+  // Multi-color speedometer bands (red → green from low to high posture)
+  const bands = [
+    { value: 20, fill: '#ef4444' }, // Critical (0-20%)
+    { value: 20, fill: '#fb923c' }, // High    (20-40%)
+    { value: 20, fill: '#facc15' }, // Medium  (40-60%)
+    { value: 20, fill: '#a3e635' }, // Low     (60-80%)
+    { value: 20, fill: '#22c55e' }, // Healthy (80-100%)
   ];
+  const currentBand = safeScore >= 80
+    ? { label: 'Healthy', color: '#16a34a' }
+    : safeScore >= 60
+      ? { label: 'Low', color: '#65a30d' }
+      : safeScore >= 40
+        ? { label: 'Medium', color: '#ca8a04' }
+        : safeScore >= 20
+          ? { label: 'High', color: '#ea580c' }
+          : { label: 'Critical', color: '#dc2626' };
+  // Needle: half-circle goes from 180° (left) to 0° (right). Score 0% = -90°, 100% = +90°.
+  const needleAngle = -90 + (safeScore / 100) * 180;
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -134,34 +162,70 @@ function RiskSpeedometer({
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={data}
+                data={bands}
                 cx="50%"
                 cy="70%"
                 startAngle={180}
                 endAngle={0}
-                innerRadius={52}
-                outerRadius={76}
+                innerRadius={56}
+                outerRadius={80}
                 dataKey="value"
-                stroke="none"
+                stroke="white"
+                strokeWidth={2}
+                isAnimationActive={false}
               >
-                {data.map((entry, idx) => (
+                {bands.map((entry, idx) => (
                   <Cell key={idx} fill={entry.fill} />
                 ))}
               </Pie>
             </PieChart>
           </ResponsiveContainer>
-          <div className="absolute inset-x-0 flex flex-col items-center z-10" style={{ bottom: '16%' }}>
-            <span className="text-2xl font-bold leading-none" style={{ color: gaugeColor }}>{safeScore}%</span>
-            <span className="mt-0.5 text-[11px] text-gray-500">overall posture</span>
+          {/* Needle */}
+          <div
+            className="pointer-events-none absolute"
+            style={{
+              left: '50%',
+              top: '70%',
+              width: '2px',
+              height: '76px',
+              transform: `translate(-50%, -100%) rotate(${needleAngle}deg)`,
+              transformOrigin: 'bottom center',
+              transition: 'transform 700ms ease-out',
+            }}
+          >
+            <div
+              className="absolute left-1/2 -translate-x-1/2 top-0 h-full w-[3px] rounded-full"
+              style={{ background: 'linear-gradient(to top, #1e293b 60%, #334155 100%)' }}
+            />
+          </div>
+          {/* Pivot dot */}
+          <div
+            className="pointer-events-none absolute z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-900 border-2 border-white shadow"
+            style={{ left: '50%', top: '70%' }}
+          />
+          {/* Score readout */}
+          <div className="absolute inset-x-0 flex flex-col items-center z-10" style={{ bottom: '8%' }}>
+            <span className="text-2xl font-bold leading-none" style={{ color: currentBand.color }}>{safeScore}%</span>
+            <span className="mt-0.5 text-[11px] font-medium" style={{ color: currentBand.color }}>{currentBand.label} posture</span>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-          {signals.map((signal) => (
-            <div key={signal.label} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{signal.label}</p>
-              <p className={`mt-1 text-sm font-bold ${signal.tone || 'text-black'}`}>{signal.value}</p>
-            </div>
-          ))}
+          {signals.map((signal) => {
+            const palette: Record<string, { bg: string; border: string; label: string; value: string }> = {
+              'text-blue-600':   { bg: 'bg-blue-50',    border: 'border-blue-200',    label: 'text-blue-700',    value: 'text-blue-700' },
+              'text-rose-600':   { bg: 'bg-rose-50',    border: 'border-rose-200',    label: 'text-rose-700',    value: 'text-rose-700' },
+              'text-amber-600':  { bg: 'bg-amber-50',   border: 'border-amber-200',   label: 'text-amber-700',   value: 'text-amber-700' },
+              'text-violet-600': { bg: 'bg-violet-50',  border: 'border-violet-200',  label: 'text-violet-700',  value: 'text-violet-700' },
+              'text-emerald-600':{ bg: 'bg-emerald-50', border: 'border-emerald-200', label: 'text-emerald-700', value: 'text-emerald-700' },
+            };
+            const c = palette[signal.tone || ''] || { bg: 'bg-slate-50', border: 'border-slate-200', label: 'text-slate-500', value: 'text-slate-900' };
+            return (
+              <div key={signal.label} className={`rounded-lg border ${c.border} ${c.bg} px-3 py-2`}>
+                <p className={`text-[10px] font-semibold uppercase tracking-wide ${c.label}`}>{signal.label}</p>
+                <p className={`mt-1 text-sm font-bold ${c.value}`}>{signal.value}</p>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -613,15 +677,15 @@ export default function ERMOverviewPage() {
 
   const scoreRangeData = [
     { name: 'Critical', value: dashboard?.by_score_range?.critical || 0, color: '#ef4444' },
-    { name: 'High', value: dashboard?.by_score_range?.high || 0, color: '#f97316' },
-    { name: 'Medium', value: dashboard?.by_score_range?.medium || 0, color: '#eab308' },
+    { name: 'High', value: dashboard?.by_score_range?.high || 0, color: '#fb923c' },
+    { name: 'Medium', value: dashboard?.by_score_range?.medium || 0, color: '#facc15' },
     { name: 'Low', value: dashboard?.by_score_range?.low || 0, color: '#22c55e' },
   ];
 
   const categoryExposureItems = categoryData.slice(0, 6).map((item) => ({
     label: item.label,
     value: item.avgScore,
-    color: item.avgScore >= 15 ? '#ef4444' : item.avgScore >= 8 ? '#f59e0b' : '#10b981',
+    color: item.color,
     meta: `${item.count} risks`,
   }));
 
@@ -637,8 +701,8 @@ export default function ERMOverviewPage() {
     {
       label: 'Signals',
       items: [
-        { name: 'Red KRIs', value: kriSummary.red, color: '#ef4444' },
-        { name: 'Critical incidents', value: (incidents || []).filter((incident: any) => ['critical', 'high'].includes((incident.severity || '').toLowerCase())).length, color: '#8b5cf6' },
+        { name: 'Critical incidents', value: (incidents || []).filter((incident: any) => ['critical', 'high'].includes((incident.severity || '').toLowerCase())).length, color: '#ef4444' },
+        { name: 'Red KRIs', value: kriSummary.red, color: '#f43f5e' },
         { name: 'Overdue actions', value: overdueActions?.length || 0, color: '#f59e0b' },
       ],
     },
@@ -853,26 +917,21 @@ export default function ERMOverviewPage() {
               Likelihood →
             </div>
             
-            <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t border-slate-200">
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded bg-emerald-500" />
-                <span className="text-xs text-slate-600">Low (1-4)</span>
+            <div className="mt-4 pt-4 border-t border-slate-200 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              <div className="flex items-center justify-center gap-1.5 rounded-lg bg-green-500 px-3 py-2 text-xs font-semibold text-white">
+                <ChevronsDown className="h-3 w-3" /> Very Low
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded bg-yellow-500" />
-                <span className="text-xs text-slate-600">Medium (5-9)</span>
+              <div className="flex items-center justify-center gap-1.5 rounded-lg bg-lime-400 px-3 py-2 text-xs font-semibold text-lime-900">
+                <ChevronDown className="h-3 w-3" /> Low
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded bg-amber-500" />
-                <span className="text-xs text-slate-600">High (10-14)</span>
+              <div className="flex items-center justify-center gap-1.5 rounded-lg bg-yellow-400 px-3 py-2 text-xs font-semibold text-yellow-900">
+                <Minus className="h-3 w-3" /> Medium
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded bg-orange-500" />
-                <span className="text-xs text-slate-600">Very High (15-19)</span>
+              <div className="flex items-center justify-center gap-1.5 rounded-lg bg-orange-400 px-3 py-2 text-xs font-semibold text-white">
+                <ChevronUp className="h-3 w-3" /> High
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded bg-rose-600" />
-                <span className="text-xs text-slate-600">Critical (20-25)</span>
+              <div className="flex items-center justify-center gap-1.5 rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white">
+                <ChevronsUp className="h-3 w-3" /> Critical
               </div>
             </div>
           </div>
@@ -890,17 +949,17 @@ export default function ERMOverviewPage() {
           </div>
           
           <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-emerald-400">{kriSummary.green}</p>
-              <p className="text-xs text-emerald-400/80">Green</p>
+            <div className="rounded-lg p-3 text-center bg-emerald-500 text-white shadow-sm">
+              <p className="text-2xl font-bold">{kriSummary.green}</p>
+              <p className="text-xs font-medium opacity-90">Green</p>
             </div>
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-amber-400">{kriSummary.amber}</p>
-              <p className="text-xs text-amber-400/80">Amber</p>
+            <div className="rounded-lg p-3 text-center bg-amber-500 text-white shadow-sm">
+              <p className="text-2xl font-bold">{kriSummary.amber}</p>
+              <p className="text-xs font-medium opacity-90">Amber</p>
             </div>
-            <div className="bg-rose-500/10 border border-rose-500/20 rounded-lg p-3 text-center">
-              <p className="text-2xl font-bold text-rose-400">{kriSummary.red}</p>
-              <p className="text-xs text-rose-400/80">Red</p>
+            <div className="rounded-lg p-3 text-center bg-rose-500 text-white shadow-sm">
+              <p className="text-2xl font-bold">{kriSummary.red}</p>
+              <p className="text-xs font-medium opacity-90">Red</p>
             </div>
           </div>
           
@@ -911,8 +970,8 @@ export default function ERMOverviewPage() {
                   key={kri.id}
                   className={`flex items-center gap-3 rounded-lg p-3 transition-all ${
                     kri.current_status === 'red'
-                      ? 'bg-rose-500/10 border border-rose-500/20 hover:border-rose-500/40'
-                      : 'bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40'
+                      ? 'bg-rose-50 border border-rose-200 hover:border-rose-300'
+                      : 'bg-amber-50 border border-amber-200 hover:border-amber-300'
                   }`}
                 >
                   <div className={`h-2.5 w-2.5 rounded-full ${
@@ -927,9 +986,9 @@ export default function ERMOverviewPage() {
                   {kri.last_measured_at && (
                     <div className="flex items-center text-slate-500">
                       {kri.current_value > (kri.amber_threshold || 0) ? (
-                        <TrendingUp className="h-4 w-4 text-rose-400" />
+                        <TrendingUp className="h-4 w-4 text-rose-600" />
                       ) : (
-                        <TrendingDown className="h-4 w-4 text-emerald-400" />
+                        <TrendingDown className="h-4 w-4 text-emerald-600" />
                       )}
                     </div>
                   )}
@@ -938,8 +997,8 @@ export default function ERMOverviewPage() {
             </div>
           ) : (
             <div className="empty-state py-6">
-              <div className="empty-state-icon bg-emerald-500/10">
-                <CheckCircle className="h-6 w-6 text-emerald-400" />
+              <div className="empty-state-icon bg-emerald-100">
+                <CheckCircle className="h-6 w-6 text-emerald-600" />
               </div>
               <p className="empty-state-title text-sm">All KRIs Normal</p>
               <p className="empty-state-description text-xs">All indicators within thresholds</p>
@@ -975,33 +1034,30 @@ export default function ERMOverviewPage() {
           </div>
           
           {categoryData.length > 0 ? (
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categoryData} layout="vertical" margin={{ left: 0, right: 20 }}>
-                  <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis
-                    type="category"
-                    dataKey="label"
-                    width={100}
-                    tick={{ fill: '#6b7280', fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      color: '#111827',
-                    }}
-                  />
-                  <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={24}>
-                    {categoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="space-y-3">
+              {(() => {
+                const maxCount = Math.max(...categoryData.map((c) => c.count), 1);
+                return categoryData.map((cat) => {
+                  const pct = Math.min(100, Math.max(0, (cat.count / maxCount) * 100));
+                  return (
+                    <div key={cat.category} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-slate-900">{cat.label}</span>
+                        <span className="text-xs text-slate-500">
+                          {cat.count}
+                          {cat.avgScore > 0 ? ` · avg ${cat.avgScore}` : ''}
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${pct}%`, backgroundColor: cat.color }}
+                        />
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           ) : (
             <div className="empty-state py-8">
@@ -1079,32 +1135,55 @@ export default function ERMOverviewPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200">
-                  <th className="text-left py-3 px-3 text-slate-600 font-medium">#</th>
-                  <th className="text-left py-3 px-3 text-slate-600 font-medium">Risk Title</th>
-                  <th className="text-center py-3 px-3 text-slate-600 font-medium">Inherent</th>
-                  <th className="text-center py-3 px-3 text-slate-600 font-medium">Residual</th>
-                  <th className="text-center py-3 px-3 text-slate-600 font-medium">Trend</th>
+                  <th className="text-left px-3 py-2 text-slate-600 font-medium">#</th>
+                  <th className="text-left px-3 py-2 text-slate-600 font-medium">Risk Title</th>
+                  <th className="text-center px-3 py-2 text-slate-600 font-medium">Inherent</th>
+                  <th className="text-center px-3 py-2 text-slate-600 font-medium">Residual</th>
+                  <th className="text-center px-3 py-2 text-slate-600 font-medium">Change (%)</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-100">
                 {topRisks.map((risk: any, index: number) => {
                   const inherent = risk.inherent_score || 0;
                   const residual = risk.residual_score || inherent;
+                  const inherentSev = getSeverityBadgeClasses(inherent);
+                  const residualSev = getSeverityBadgeClasses(residual);
+                  const changePct = inherent > 0
+                    ? Math.round(((residual - inherent) / inherent) * 100)
+                    : 0;
+                  const isReduction = residual < inherent;
+                  const isIncrease = residual > inherent;
+                  const changeColor = isReduction
+                    ? 'text-emerald-600'
+                    : isIncrease
+                    ? 'text-rose-600'
+                    : 'text-slate-500';
 
                   return (
-                    <tr key={risk.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                      <td className="py-3 px-3 text-slate-500">{index + 1}</td>
-                      <td className="py-3 px-3 text-slate-900 font-medium truncate max-w-[320px]">{risk.name || risk.title}</td>
-                      <td className="py-3 px-3 text-center text-slate-900">{inherent}</td>
-                      <td className="py-3 px-3 text-center text-slate-900">{residual}</td>
-                      <td className="py-3 px-3 text-center">
-                        {residual < inherent ? (
-                          <TrendingDown className="h-4 w-4 text-emerald-500 mx-auto" />
-                        ) : residual > inherent ? (
-                          <TrendingUp className="h-4 w-4 text-rose-500 mx-auto" />
-                        ) : (
-                          <Minus className="h-4 w-4 text-slate-500 mx-auto" />
-                        )}
+                    <tr key={risk.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-3 py-2 text-slate-500">{index + 1}</td>
+                      <td className="px-3 py-2 text-slate-900 font-medium truncate max-w-[320px]">{risk.name || risk.title}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${inherentSev.className}`}>
+                          {inherentSev.label} · {inherent}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${residualSev.className}`}>
+                          {residualSev.label} · {residual}
+                        </span>
+                      </td>
+                      <td className={`px-3 py-2 text-center text-xs font-medium ${changeColor}`}>
+                        <span className="inline-flex items-center gap-1">
+                          {isReduction ? (
+                            <ArrowDown className="h-3.5 w-3.5" />
+                          ) : isIncrease ? (
+                            <ArrowUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <Minus className="h-3.5 w-3.5" />
+                          )}
+                          {Math.abs(changePct)}%
+                        </span>
                       </td>
                     </tr>
                   );
@@ -1123,6 +1202,8 @@ export default function ERMOverviewPage() {
         )}
       </div>
 
+      {/* KRI Gauge Panel + Risk Appetite Utilization hidden per UX direction */}
+      {false && (
       <div className="grid gap-3 lg:grid-cols-2">
         <div className="card">
           <div className="card-header">
@@ -1131,9 +1212,9 @@ export default function ERMOverviewPage() {
               <p className="card-description">Current value vs threshold</p>
             </div>
           </div>
-          {allKris && allKris.length > 0 ? (
+          {allKris && (allKris as any[]).length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {allKris.slice(0, 6).map((kri: any) => {
+              {(allKris as any[]).slice(0, 6).map((kri: any) => {
                 const current = kri.current_value || 0;
                 const red = kri.red_threshold || kri.amber_threshold * 1.5 || 100;
                 const amber = kri.amber_threshold || red * 0.7;
@@ -1228,6 +1309,7 @@ export default function ERMOverviewPage() {
           )}
         </div>
       </div>
+      )}
 
       <div className="card">
         <div className="card-header">
@@ -1348,6 +1430,7 @@ export default function ERMOverviewPage() {
         </div>
       </div>
 
+      {false && (
       <div className="grid gap-3 md:grid-cols-5">
         <Link
           href="/erm/risks"
@@ -1429,6 +1512,7 @@ export default function ERMOverviewPage() {
           </div>
         </Link>
       </div>
+      )}
     </div>
   );
 }

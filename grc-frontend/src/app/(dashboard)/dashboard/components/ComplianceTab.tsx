@@ -1,12 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import {
   Shield,
   FileText,
   Target,
   CheckCircle,
-  ChevronRight,
 } from 'lucide-react';
 import {
   KPICard,
@@ -111,9 +109,6 @@ export default function ComplianceTab({ data }: { data: UnifiedDashboard }) {
             </div>
             <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Framework Coverage</h3>
           </div>
-          <Link href="/frameworks" className="text-xs flex items-center gap-1" style={{ color: 'var(--color-base)' }}>
-            View all <ChevronRight className="h-3 w-3" />
-          </Link>
         </div>
         <div className="p-5">
           {frameworkCoverage.length > 0 ? (

@@ -96,34 +96,34 @@ export default function ReviewsPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+    <div className="space-y-4 px-3 sm:px-6">
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4">
+        <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 sm:p-4">
           <div className="flex items-center gap-3">
-            <Clock className="h-8 w-8 text-yellow-400" />
+            <Clock className="h-5 w-5 text-yellow-400" />
             <div>
-              <p className="text-2xl font-bold text-slate-900">{pendingReviews?.length || 0}</p>
-              <p className="text-sm text-yellow-400">Pending Reviews</p>
+              <p className="text-xl font-bold text-slate-900">{pendingReviews?.length || 0}</p>
+              <p className="text-xs text-yellow-400">Pending Reviews</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 sm:p-4">
           <div className="flex items-center gap-3">
-            <AlertCircle className="h-8 w-8 text-red-400" />
+            <AlertCircle className="h-5 w-5 text-red-400" />
             <div>
-              <p className="text-2xl font-bold text-slate-900">{overdueReviews?.length || 0}</p>
-              <p className="text-sm text-red-400">Overdue Reviews</p>
+              <p className="text-xl font-bold text-slate-900">{overdueReviews?.length || 0}</p>
+              <p className="text-xs text-red-400">Overdue Reviews</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-4">
+        <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 sm:p-4">
           <div className="flex items-center gap-3">
-            <CheckCircle className="h-8 w-8 text-green-400" />
+            <CheckCircle className="h-5 w-5 text-green-400" />
             <div>
-              <p className="text-2xl font-bold text-slate-900">
+              <p className="text-xl font-bold text-slate-900">
                 {reviews?.filter((r) => r.status === 'completed').length || 0}
               </p>
-              <p className="text-sm text-green-400">Completed This Month</p>
+              <p className="text-xs text-green-400">Completed This Month</p>
             </div>
           </div>
         </div>
@@ -166,9 +166,9 @@ export default function ReviewsPage() {
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-200 bg-white">
-          <Calendar className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-slate-900">No reviews scheduled</h3>
-          <p className="mt-1 text-slate-600">Schedule risk reviews to maintain compliance</p>
+          <Calendar className="h-10 w-10 text-slate-500" />
+          <h3 className="mt-4 text-sm font-semibold text-slate-900">No reviews scheduled</h3>
+          <p className="mt-1 text-xs text-slate-600">Schedule risk reviews to maintain compliance</p>
         </div>
       )}
 
@@ -195,15 +195,15 @@ function ReviewCard({ review, tenantUsers }: { review: RiskReview; tenantUsers: 
   const reviewerName = tenantUsers.find((u) => u.id === review.reviewer_id)?.display_name;
 
   return (
-    <div className={`rounded-xl border p-4 ${isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-200 bg-white'}`}>
+    <div className={`rounded-xl border p-3 sm:p-4 ${isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-200 bg-white'}`}>
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="font-medium text-slate-900">{review.risk_title || `Risk #${review.risk_id}`}</h3>
+          <h3 className="text-sm font-semibold text-slate-900">{review.risk_title || `Risk #${review.risk_id}`}</h3>
           <div className="mt-1 flex items-center gap-3 flex-wrap">
             <span className={`rounded-full px-2 py-0.5 text-xs ${statusColor}`}>
               {review.status.replace('_', ' ')}
             </span>
-            <span className="text-sm text-slate-600">
+            <span className="text-xs text-slate-600">
               {review.review_type} • {review.review_cycle}
             </span>
             {reviewerName && (
@@ -215,7 +215,7 @@ function ReviewCard({ review, tenantUsers }: { review: RiskReview; tenantUsers: 
           </div>
         </div>
         <div className="text-right">
-          <p className={`text-sm font-medium ${isOverdue ? 'text-red-400' : 'text-slate-700'}`}>
+          <p className={`text-xs font-medium ${isOverdue ? 'text-red-400' : 'text-slate-700'}`}>
             Due: {new Date(review.due_date).toLocaleDateString()}
           </p>
           {isOverdue && <p className="text-xs text-red-400">Overdue</p>}
@@ -223,7 +223,7 @@ function ReviewCard({ review, tenantUsers }: { review: RiskReview; tenantUsers: 
       </div>
 
       {review.status === 'pending' && (
-        <div className="mt-4 flex gap-2">
+        <div className="mt-3 flex gap-2">
           <button
             onClick={() => setShowStartModal(true)}
             className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-500"
@@ -234,7 +234,7 @@ function ReviewCard({ review, tenantUsers }: { review: RiskReview; tenantUsers: 
       )}
 
       {review.status === 'in_review' && (
-        <div className="mt-4 flex gap-2">
+        <div className="mt-3 flex gap-2">
           <button
             onClick={() => setShowStartModal(true)}
             className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-500"
@@ -246,7 +246,7 @@ function ReviewCard({ review, tenantUsers }: { review: RiskReview; tenantUsers: 
 
       {review.findings && (
         <div className="mt-3 rounded bg-white p-3">
-          <p className="text-sm text-slate-700">{review.findings}</p>
+          <p className="text-xs text-slate-700">{review.findings}</p>
         </div>
       )}
 
@@ -296,9 +296,9 @@ function ReviewModal({
       title="Schedule Review"
     >
       <div className="px-6 py-4">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="review-schedule-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Risk</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Risk *</label>
             <MultiSelectDropdown
               title="Risk"
               items={risks.map((risk) => ({
@@ -313,12 +313,14 @@ function ReviewModal({
               triggerClassName="w-full"
               forceSearch
               searchPlaceholder="Search risk by title..."
+              placeholder="Select Risk"
+              size="md"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Review Cycle</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Review Cycle</label>
               <MultiSelectDropdown
                 title="Cycle"
                 items={[
@@ -332,10 +334,12 @@ function ReviewModal({
                 multiSelect={false}
                 triggerVariant="input"
                 triggerClassName="w-full"
+                placeholder="Select Cycle"
+                size="md"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Review Type</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Review Type</label>
               <MultiSelectDropdown
                 title="Type"
                 items={[
@@ -349,12 +353,14 @@ function ReviewModal({
                 multiSelect={false}
                 triggerVariant="input"
                 triggerClassName="w-full"
+                placeholder="Select Type"
+                size="md"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Assign To</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Assign To</label>
             <MultiSelectDropdown
               title="Assignee"
               items={tenantUsers.map((user) => ({
@@ -374,35 +380,43 @@ function ReviewModal({
               triggerClassName="w-full"
               forceSearch
               placeholder="Unassigned"
+              size="md"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600">Due Date</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Due Date *</label>
             <input
               type="date"
               value={formData.due_date}
               onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               required
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-end gap-2 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
+              form="review-schedule-form"
               disabled={createMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
             >
-              {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Schedule
+              {createMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Schedule'
+              )}
             </button>
           </div>
         </form>
@@ -540,86 +554,86 @@ function StartReviewModal({
       subtitle={`${review.risk_title || `Risk #${review.risk_id}`} • Update risk values, optionally attach evidence, then complete the review.`}
     >
       <div className="px-6 py-4">
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="rounded-lg border border-slate-200 p-4">
+        <form id="start-review-form" onSubmit={handleSubmit} className="space-y-4">
+          <div className="rounded-lg border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-slate-900">Inherent Risk</h3>
             <div className="mt-3 grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-slate-600">Likelihood (1-5)</label>
+                <label className="block text-sm font-medium text-gray-800 mb-1">Likelihood (1-5)</label>
                 <input
                   type="number"
                   min={1}
                   max={5}
                   value={inherentLikelihood}
                   onChange={(e) => setInherentLikelihood(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-600">Impact (1-5)</label>
+                <label className="block text-sm font-medium text-gray-800 mb-1">Impact (1-5)</label>
                 <input
                   type="number"
                   min={1}
                   max={5}
                   value={inherentImpact}
                   onChange={(e) => setInherentImpact(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 p-4">
+          <div className="rounded-lg border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-slate-900">Residual Risk</h3>
             <div className="mt-3 grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm text-slate-600">Likelihood (1-5)</label>
+                <label className="block text-sm font-medium text-gray-800 mb-1">Likelihood (1-5)</label>
                 <input
                   type="number"
                   min={1}
                   max={5}
                   value={residualLikelihood}
                   onChange={(e) => setResidualLikelihood(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-600">Impact (1-5)</label>
+                <label className="block text-sm font-medium text-gray-800 mb-1">Impact (1-5)</label>
                 <input
                   type="number"
                   min={1}
                   max={5}
                   value={residualImpact}
                   onChange={(e) => setResidualImpact(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600">Findings (optional)</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Findings (optional)</label>
             <textarea
               value={findings}
               onChange={(e) => setFindings(e.target.value)}
               rows={2}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="Summary of review findings..."
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600">Recommendations (optional)</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Recommendations (optional)</label>
             <textarea
               value={recommendations}
               onChange={(e) => setRecommendations(e.target.value)}
               rows={2}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="Any recommended next steps..."
             />
           </div>
 
-          <div className="rounded-lg border border-dashed border-slate-300 p-4">
+          <div className="rounded-lg border border-dashed border-gray-300 p-4">
             <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
               <Upload className="h-4 w-4" />
               Attach Evidence (optional)
@@ -633,22 +647,22 @@ function StartReviewModal({
               {evidenceFile && (
                 <>
                   <div>
-                    <label className="block text-xs text-slate-600">Evidence Name</label>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Evidence Name</label>
                     <input
                       type="text"
                       value={evidenceName}
                       onChange={(e) => setEvidenceName(e.target.value)}
                       placeholder={evidenceFile.name}
-                      className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm text-slate-900"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-slate-600">Description</label>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
                     <input
                       type="text"
                       value={evidenceDescription}
                       onChange={(e) => setEvidenceDescription(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-sm text-slate-900"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
                   </div>
                 </>
@@ -662,21 +676,28 @@ function StartReviewModal({
             </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
+              form="start-review-form"
               disabled={completeMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-500 disabled:opacity-50"
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
             >
-              {completeMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Complete Review
+              {completeMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Complete Review'
+              )}
             </button>
           </div>
         </form>

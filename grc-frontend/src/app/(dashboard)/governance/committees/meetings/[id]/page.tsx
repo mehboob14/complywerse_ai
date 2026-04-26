@@ -328,6 +328,16 @@ export default function MeetingDetailPage() {
     },
   });
 
+  const userPickerItems = useMemo(
+    () =>
+      normalizedUsers.map((u) => ({
+        value: String(u.id),
+        label: u.name,
+        subLabel: u.name.includes('@') ? u.name : undefined,
+      })),
+    [normalizedUsers],
+  );
+
   // ─── Loading / Error States ───────────────────────────────────────────────
 
   if (meetingLoading) {
@@ -356,20 +366,10 @@ export default function MeetingDetailPage() {
   const meetingStatusStyle = MEETING_STATUS_STYLES[meeting.status]     ?? MEETING_STATUS_STYLES.scheduled;
   const sortedAgenda = [...agenda].sort((a, b) => a.item_number - b.item_number);
 
-  const userPickerItems = useMemo(
-    () =>
-      normalizedUsers.map((u) => ({
-        value: String(u.id),
-        label: u.name,
-        subLabel: u.name.includes('@') ? u.name : undefined,
-      })),
-    [normalizedUsers],
-  );
-
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+    <div className="space-y-4 sm:space-y-6">
 
       {/* ── Header ── */}
       <div>

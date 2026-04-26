@@ -152,6 +152,20 @@ export default function CommitteesPage() {
     return matchesSearch && matchesType;
   });
 
+  const typeItems = useMemo(
+    () => Object.entries(COMMITTEE_TYPE_LABELS).map(([value, { label }]) => ({ value, label })),
+    [],
+  );
+  const userItems = useMemo(
+    () =>
+      tenantUsers.map((user) => ({
+        value: String(user.id),
+        label: user.display_name || user.email || `User ${user.id}`,
+        subLabel: user.email,
+      })),
+    [tenantUsers],
+  );
+
   const isLoading = dashboardLoading || committeesLoading;
 
   if (isLoading) {
@@ -174,22 +188,8 @@ export default function CommitteesPage() {
     );
   }
 
-  const typeItems = useMemo(
-    () => Object.entries(COMMITTEE_TYPE_LABELS).map(([value, { label }]) => ({ value, label })),
-    [],
-  );
-  const userItems = useMemo(
-    () =>
-      tenantUsers.map((user) => ({
-        value: String(user.id),
-        label: user.display_name || user.email || `User ${user.id}`,
-        subLabel: user.email,
-      })),
-    [tenantUsers],
-  );
-
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="page-header">
         <div>
           <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Board & Committee Management</h1>

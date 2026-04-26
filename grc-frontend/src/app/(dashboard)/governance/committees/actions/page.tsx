@@ -233,6 +233,15 @@ export default function ActionsPage() {
   const overdueCount = (actions || []).filter(a => a.status === 'overdue').length;
   const completedCount = (actions || []).filter(a => a.status === 'completed').length;
 
+  const committeeItems = useMemo(
+    () => (committees || []).map((c) => ({ value: String(c.id), label: c.name })),
+    [committees],
+  );
+  const meetingItems = useMemo(
+    () => meetings.map((m) => ({ value: String(m.id), label: m.title })),
+    [meetings],
+  );
+
   if (isLoading) {
     return (
       <div className="space-y-8">
@@ -259,23 +268,15 @@ export default function ActionsPage() {
     { value: 'completed', label: 'Completed' },
     { value: 'overdue', label: 'Overdue' },
   ];
-  const committeeItems = useMemo(
-    () => (committees || []).map((c) => ({ value: String(c.id), label: c.name })),
-    [committees],
-  );
   const actionTypeItems = [
     { value: 'follow_up', label: 'Follow Up' },
     { value: 'policy_approval', label: 'Policy Approval' },
     { value: 'risk_review', label: 'Risk Review' },
     { value: 'audit_response', label: 'Audit Response' },
   ];
-  const meetingItems = useMemo(
-    () => meetings.map((m) => ({ value: String(m.id), label: m.title })),
-    [meetings],
-  );
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="page-header">
         <div>
           <Link href="/governance/committees" className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4">

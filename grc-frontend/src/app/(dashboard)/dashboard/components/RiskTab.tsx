@@ -1,12 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import {
   AlertTriangle,
   Clock,
   Target,
   TrendingUp,
-  ChevronRight,
   Flame,
   BarChart3,
   Layers,
@@ -64,9 +62,6 @@ export default function RiskTab({ data }: { data: UnifiedDashboard }) {
               </div>
               <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Risk Heatmap</h3>
             </div>
-            <Link href="/erm/risks" className="text-xs flex items-center gap-1" style={{ color: 'var(--color-base)' }}>
-              View all <ChevronRight className="h-3 w-3" />
-            </Link>
           </div>
           <div className="p-5">
             <RiskHeatmap data={data.risk.heatmap} />

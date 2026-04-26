@@ -395,7 +395,7 @@ export default function PolicyExceptionsPage() {
   ];
 
   return (
-    <div className="governance-exceptions space-y-4 sm:space-y-6 px-3 sm:px-6 py-3 sm:py-4">
+    <div className="governance-exceptions space-y-4 sm:space-y-6">
       {/* Header row */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>

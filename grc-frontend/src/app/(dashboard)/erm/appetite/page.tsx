@@ -765,71 +765,97 @@ export default function RiskAppetitePage() {
         onClose={() => setShowCreateModal(false)}
         title="New Appetite Configuration"
         footer={
-          <div className="flex justify-end gap-3">
-            <button onClick={() => setShowCreateModal(false)} className="btn-secondary btn-sm">Cancel</button>
+          <div className="flex justify-end gap-2">
             <button
-              onClick={() => createMutation.mutate(createForm)}
-              disabled={createMutation.isPending}
-              className="btn-primary btn-sm"
+              type="button"
+              onClick={() => setShowCreateModal(false)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
-              {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create'}
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="appetite-create-form"
+              disabled={createMutation.isPending}
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {createMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Create'
+              )}
             </button>
           </div>
         }
       >
-        <div className="space-y-4">
+        <form
+          id="appetite-create-form"
+          onSubmit={(e) => { e.preventDefault(); createMutation.mutate(createForm); }}
+          className="space-y-4"
+        >
           <div>
-            <label className="label">Category</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Category *</label>
             <MultiSelectDropdown
               title="Category"
               items={RISK_CATEGORIES.map(c => ({ value: c.value, label: c.label }))}
               selectedValues={[createForm.category]}
               onApply={(values) => setCreateForm(prev => ({ ...prev, category: (values[0] as RiskCategory) || 'strategic' }))}
               multiSelect={false}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              placeholder="Select Category"
+              size="md"
             />
           </div>
           <div>
-            <label className="label">Appetite Level</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Appetite Level *</label>
             <MultiSelectDropdown
               title="Appetite Level"
               items={APPETITE_LEVELS.map(l => ({ value: l.value, label: l.label }))}
               selectedValues={[createForm.appetite_level]}
               onApply={(values) => setCreateForm(prev => ({ ...prev, appetite_level: (values[0] as AppetiteLevel) || 'moderate' }))}
               multiSelect={false}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              placeholder="Select Appetite Level"
+              size="md"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">Tolerance Threshold</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Tolerance Threshold</label>
               <input
                 type="number" min="1" max="25"
                 value={createForm.tolerance_threshold}
                 onChange={(e) => setCreateForm(prev => ({ ...prev, tolerance_threshold: parseFloat(e.target.value) || 0 }))}
-                className="input w-full"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
             <div>
-              <label className="label">Max Acceptable Score</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Max Acceptable Score</label>
               <input
                 type="number" min="1" max="25"
                 value={createForm.max_acceptable_score}
                 onChange={(e) => setCreateForm(prev => ({ ...prev, max_acceptable_score: parseFloat(e.target.value) || 0 }))}
-                className="input w-full"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
           <div>
-            <label className="label">Description</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
             <textarea
               value={createForm.description}
               onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
               rows={3}
-              className="input w-full resize-none"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
               placeholder="Optional description..."
             />
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-700">Enable Breach Alerts</span>
+            <span className="text-sm font-medium text-gray-800">Enable Breach Alerts</span>
             <button
               type="button"
               onClick={() => setCreateForm(prev => ({ ...prev, alert_enabled: !prev.alert_enabled }))}
@@ -842,7 +868,7 @@ export default function RiskAppetitePage() {
               }`} />
             </button>
           </div>
-        </div>
+        </form>
       </RightSlidePanel>
     </div>
   );

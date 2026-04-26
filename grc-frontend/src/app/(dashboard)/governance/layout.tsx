@@ -29,37 +29,33 @@ export default function GovernanceLayout({
   const pathname = usePathname();
 
   return (
-    <div className="governance-light min-h-full">
-      {/* Header strip — full-width, title + underline tab bar */}
-      <div className="-mx-4 lg:-mx-5 -mt-4 lg:-mt-5 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div className="px-4 lg:px-5 pt-0 pb-0">
-          {/* Underline tab bar */}
-          <div className="flex items-center gap-0 overflow-x-auto">
-            {governanceNavigation.map((item) => {
-              const isActive =
-                pathname === item.href ||
-                (item.href !== '/governance' && pathname.startsWith(item.href));
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={clsx(
-                    'inline-flex items-center gap-1.5 px-3.5 py-3 text-[13px] font-semibold border-b-2 transition-colors -mb-px whitespace-nowrap',
-                    isActive
-                      ? 'border-[var(--color-base)] text-[var(--color-base)]'
-                      : 'border-transparent text-[var(--color-muted)] hover:text-[var(--color-text)] hover:border-[var(--color-border)]'
-                  )}
-                >
-                  <item.icon size={14} strokeWidth={1.75} />
-                  {item.name}
-                </Link>
-              );
-            })}
-          </div>
+    <div className="-m-4 lg:-m-5 text-slate-900">
+      <div className="border-b border-gray-200 px-3 sm:px-6 pt-3 overflow-x-auto">
+        <div className="flex items-center gap-0 min-w-max">
+          {governanceNavigation.map((item) => {
+            const isActive =
+              pathname === item.href ||
+              (item.href !== '/governance' && pathname.startsWith(item.href));
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={clsx(
+                  'inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap',
+                  isActive
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                )}
+              >
+                <item.icon size={14} />
+                {item.name}
+              </Link>
+            );
+          })}
         </div>
       </div>
 
-      <div className="pt-4">{children}</div>
+      <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-6">{children}</div>
     </div>
   );
 }

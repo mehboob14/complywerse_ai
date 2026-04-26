@@ -97,7 +97,7 @@ const navigation: NavEntry[] = [
     defaultOpen: true,
     requiredModules: ['governance'],
     items: [
-      { name: 'Policies', href: '/governance', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
+      { name: 'Documents', href: '/governance', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
       { name: 'Attestations', href: '/governance/attestations', icon: ClipboardCheck, requiredPermissions: ['governance:attestations:*'] },
       { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: GitPullRequest, requiredPermissions: ['governance:regulatory_changes:*'] },
       { name: 'Regulatory Feeds', href: '/governance/regulatory-feeds', icon: Rss, requiredPermissions: ['governance:regulatory_changes:*'] },

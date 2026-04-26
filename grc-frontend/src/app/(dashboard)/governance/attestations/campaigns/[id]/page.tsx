@@ -196,7 +196,7 @@ export default function CampaignDetailPage() {
   const pendingRequests = requests.filter(a => a.status === 'pending' || a.status === 'overdue');
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="page-header">
         <div className="flex items-center gap-4 mb-4">
           <Link href="/governance/attestations/campaigns" className="text-gray-500 hover:text-black">

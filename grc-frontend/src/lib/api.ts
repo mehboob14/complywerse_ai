@@ -354,6 +354,12 @@ export const governanceApi = {
     apiClient.post('/governance/mappings/control', data),
   unlinkControl: (linkId: number) =>
     apiClient.delete(`/governance/mappings/control/${linkId}`),
+  linkDocumentToRisk: (data: { document_id: number; risk_id: number; link_type?: string; notes?: string }) =>
+    apiClient.post('/governance/mappings/risk', data),
+  unlinkDocumentFromRisk: (linkId: number) =>
+    apiClient.delete(`/governance/mappings/risk/${linkId}`),
+  getDocumentsByRisk: (riskId: number) =>
+    apiClient.get(`/governance/mappings/by-risk/${riskId}`),
   getMappingCoverage: () =>
     apiClient.get('/governance/mappings/coverage'),
   getComplianceCoverage: () =>

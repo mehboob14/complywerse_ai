@@ -16,6 +16,8 @@ import {
   ListTodo,
   Link as LinkIcon,
   Sparkles,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import Link from 'next/link';
 import { MultiSelectDropdown, RightSlidePanel, SearchInput } from '@/components/ui';
@@ -70,6 +72,15 @@ export default function MitigationActionsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [actionTypeFilter, setActionTypeFilter] = useState<string>('all');
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const toggleExpand = (id: number) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
   const queryClient = useQueryClient();
 
   const { data: risks, isLoading: risksLoading } = useQuery({
@@ -265,6 +276,7 @@ export default function MitigationActionsPage() {
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Due Date</th>
                 <th className="px-4 py-3 text-left text-sm font-medium text-slate-600">Expected Reduction</th>
                 <th className="px-4 py-3 text-right text-sm font-medium text-slate-600">Actions</th>
+                <th className="w-10 px-2 py-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -272,21 +284,32 @@ export default function MitigationActionsPage() {
                 const typeStyle = ACTION_TYPES.find((t) => t.value === action.action_type);
                 const statusStyle = ACTION_STATUSES.find((s) => s.value === action.status);
                 const priorityStyle = ACTION_PRIORITIES.find((p) => p.value === action.priority);
-                const isOverdue = action.due_date && new Date(action.due_date) < new Date() && 
+                const isOverdue = action.due_date && new Date(action.due_date) < new Date() &&
                   action.status !== 'completed' && action.status !== 'cancelled';
-                
+                const isExpanded = expandedRows.has(action.id);
+                const titleClamp = isExpanded ? '' : 'line-clamp-1';
+                const descClamp = isExpanded ? '' : 'line-clamp-1';
+                const riskClamp = isExpanded ? 'whitespace-normal' : 'truncate';
+
                 return (
-                  <tr key={action.id} className="border-b border-slate-200/50 hover:bg-slate-100/30">
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-slate-900">{action.title}</span>
+                  <tr key={action.id} className={`border-b border-slate-200/50 hover:bg-slate-100/30 ${isExpanded ? 'align-top' : ''}`}>
+                    <td className="px-4 py-3 max-w-xs">
+                      <div className="flex flex-col">
+                        <span className={`font-medium text-slate-900 text-sm ${titleClamp}`}>{action.title}</span>
+                        {action.description && (
+                          <span className={`text-xs text-slate-500 ${descClamp}`}>
+                            {action.description}
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <Link 
+                    <td className="px-4 py-3 max-w-xs">
+                      <Link
                         href={`/erm/risks`}
                         className="flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300"
                       >
-                        <LinkIcon className="h-3 w-3" />
-                        {action.riskTitle || `Risk #${action.risk_id}`}
+                        <LinkIcon className="h-3 w-3 flex-shrink-0" />
+                        <span className={`min-w-0 ${riskClamp}`}>{action.riskTitle || `Risk #${action.risk_id}`}</span>
                       </Link>
                     </td>
                     <td className="px-4 py-3">
@@ -352,6 +375,21 @@ export default function MitigationActionsPage() {
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
+                    </td>
+                    <td className="w-10 px-2 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(action.id)}
+                        className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                        title={isExpanded ? 'Collapse row' : 'Expand row'}
+                        aria-expanded={isExpanded}
+                      >
+                        {isExpanded ? (
+                          <ChevronUp className="h-4 w-4" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4" />
+                        )}
+                      </button>
                     </td>
                   </tr>
                 );
@@ -499,212 +537,225 @@ function ActionModal({
       onClose={onClose}
       title={action ? 'Edit Mitigation Action' : 'Create Mitigation Action'}
     >
-      <div className="px-6 py-4">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm text-slate-600 mb-1">Risk *</label>
-            {action ? (
-              <input
-                type="text"
-                value={risks.find((r) => r.id === formData.risk_id)?.title || `Risk #${formData.risk_id}`}
-                disabled
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-700"
-              />
-            ) : (
-              <MultiSelectDropdown
-                title="Risk"
-                items={risks.map((risk) => ({
-                  value: String(risk.id),
-                  label: risk.title,
-                  subLabel: risk.risk_category,
-                }))}
-                selectedValues={formData.risk_id ? [String(formData.risk_id)] : []}
-                onApply={(values) => setFormData({ ...formData, risk_id: values[0] ? Number(values[0]) : 0 })}
-                multiSelect={false}
-                triggerVariant="input"
-                triggerClassName="w-full"
-                forceSearch
-                searchPlaceholder="Search risk by title..."
-              />
+      <form id="mitigation-action-form" onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-1">Risk *</label>
+          {action ? (
+            <input
+              type="text"
+              value={risks.find((r) => r.id === formData.risk_id)?.title || `Risk #${formData.risk_id}`}
+              disabled
+              className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-slate-700"
+            />
+          ) : (
+            <MultiSelectDropdown
+              title="Risk"
+              items={risks.map((risk) => ({
+                value: String(risk.id),
+                label: risk.title,
+                subLabel: risk.risk_category,
+              }))}
+              selectedValues={formData.risk_id ? [String(formData.risk_id)] : []}
+              onApply={(values) => setFormData({ ...formData, risk_id: values[0] ? Number(values[0]) : 0 })}
+              multiSelect={false}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              forceSearch
+              searchPlaceholder="Search risk by title..."
+              placeholder="Select Risk"
+              size="md"
+            />
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-1">Title *</label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              required
+            />
+            {!action && (
+              <button
+                type="button"
+                onClick={handleAiSuggest}
+                disabled={aiLoading || (!formData.risk_id && !formData.title)}
+                className="flex items-center gap-1.5 whitespace-nowrap rounded-lg btn-primary px-4 py-2 text-sm disabled:opacity-50"
+              >
+                {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                AI Suggest
+              </button>
             )}
           </div>
+        </div>
 
-          <div>
-            <label className="block text-sm text-slate-600">Title *</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
-                required
-              />
-              {!action && (
-                <button
-                  type="button"
-                  onClick={handleAiSuggest}
-                  disabled={aiLoading || (!formData.risk_id && !formData.title)}
-                  className="mt-1 flex items-center gap-1.5 whitespace-nowrap rounded-lg btn-primary px-4 py-2 text-sm disabled:opacity-50"
-                >
-                  {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  AI Suggest
-                </button>
-              )}
-            </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            rows={2}
+          />
+        </div>
+
+        {aiError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {aiError}
           </div>
+        )}
 
-          <div>
-            <label className="block text-sm text-slate-600">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
-              rows={2}
-            />
-          </div>
-
-          {aiError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {aiError}
+        {aiSuggestions.length > 0 && (
+          <div className="rounded-xl border border-primary-200 bg-primary-50 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary-600" />
+              <span className="text-sm font-medium text-primary-700">AI Suggested Mitigations</span>
+              <span className="text-xs text-slate-500">Click to apply</span>
             </div>
-          )}
-
-          {aiSuggestions.length > 0 && (
-            <div className="rounded-xl border border-primary-200 bg-primary-50 p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary-600" />
-                <span className="text-sm font-medium text-primary-700">AI Suggested Mitigations</span>
-                <span className="text-xs text-slate-500">Click to apply</span>
-              </div>
-              <div className="space-y-2">
-                {aiSuggestions.map((s, idx) => {
-                  const typeStyle = ACTION_TYPES.find((t) => t.value === s.action_type);
-                  const priorityStyle = ACTION_PRIORITIES.find((p) => p.value === s.priority);
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => applySuggestion(s)}
-                      className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-primary-300 hover:bg-primary-50"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-sm font-medium text-slate-900">{s.title}</span>
-                        <div className="flex shrink-0 gap-1.5">
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${typeStyle?.color || ''}`}>
-                            {s.action_type}
-                          </span>
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${priorityStyle?.color || ''}`}>
-                            {s.priority}
-                          </span>
-                        </div>
+            <div className="space-y-2">
+              {aiSuggestions.map((s, idx) => {
+                const typeStyle = ACTION_TYPES.find((t) => t.value === s.action_type);
+                const priorityStyle = ACTION_PRIORITIES.find((p) => p.value === s.priority);
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => applySuggestion(s)}
+                    className="w-full rounded-lg border border-slate-200 bg-white p-3 text-left transition hover:border-primary-300 hover:bg-primary-50"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-sm font-medium text-slate-900">{s.title}</span>
+                      <div className="flex shrink-0 gap-1.5">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${typeStyle?.color || ''}`}>
+                          {s.action_type}
+                        </span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${priorityStyle?.color || ''}`}>
+                          {s.priority}
+                        </span>
                       </div>
-                      <p className="mt-1 text-xs text-slate-600 line-clamp-2">{s.description}</p>
-                      <div className="mt-1 text-xs text-slate-500">
-                        Expected reduction: {s.expected_residual_reduction}%
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-slate-600 mb-1">Action Type</label>
-              <MultiSelectDropdown
-                title="Action Type"
-                items={ACTION_TYPES.map((t) => ({ value: t.value, label: t.label }))}
-                selectedValues={formData.action_type ? [formData.action_type] : []}
-                onApply={(values) => setFormData({ ...formData, action_type: (values[0] as ActionType) || 'mitigate' })}
-                multiSelect={false}
-                triggerVariant="input"
-                triggerClassName="w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-slate-600 mb-1">Priority</label>
-              <MultiSelectDropdown
-                title="Priority"
-                items={ACTION_PRIORITIES.map((p) => ({ value: p.value, label: p.label }))}
-                selectedValues={formData.priority ? [formData.priority] : []}
-                onApply={(values) => setFormData({ ...formData, priority: (values[0] as ActionPriority) || 'medium' })}
-                multiSelect={false}
-                triggerVariant="input"
-                triggerClassName="w-full"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-slate-600 mb-1">Status</label>
-              <MultiSelectDropdown
-                title="Status"
-                items={ACTION_STATUSES.filter(s => s.value !== 'overdue').map((s) => ({ value: s.value, label: s.label }))}
-                selectedValues={formData.status ? [formData.status] : []}
-                onApply={(values) => setFormData({ ...formData, status: (values[0] as ActionStatus) || 'open' })}
-                multiSelect={false}
-                triggerVariant="input"
-                triggerClassName="w-full"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-slate-600">Due Date</label>
-              <input
-                type="date"
-                value={formData.due_date || ''}
-                onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm text-slate-600">Expected Residual Reduction (%)</label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              value={formData.expected_residual_reduction || ''}
-              onChange={(e) => setFormData({ 
-                ...formData, 
-                expected_residual_reduction: e.target.value ? Number(e.target.value) : undefined 
+                    </div>
+                    <p className="mt-1 text-xs text-slate-600 line-clamp-2">{s.description}</p>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Expected reduction: {s.expected_residual_reduction}%
+                    </div>
+                  </button>
+                );
               })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
-              placeholder="e.g., 25"
-            />
+            </div>
           </div>
+        )}
 
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-slate-600">Notes</label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900"
-              rows={2}
+            <label className="block text-sm font-medium text-gray-800 mb-1">Action Type</label>
+            <MultiSelectDropdown
+              title="Action Type"
+              items={ACTION_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+              selectedValues={formData.action_type ? [formData.action_type] : []}
+              onApply={(values) => setFormData({ ...formData, action_type: (values[0] as ActionType) || 'mitigate' })}
+              multiSelect={false}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              placeholder="Select Action Type"
+              size="md"
             />
           </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
-            >
-              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {action ? 'Update' : 'Create'}
-            </button>
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Priority</label>
+            <MultiSelectDropdown
+              title="Priority"
+              items={ACTION_PRIORITIES.map((p) => ({ value: p.value, label: p.label }))}
+              selectedValues={formData.priority ? [formData.priority] : []}
+              onApply={(values) => setFormData({ ...formData, priority: (values[0] as ActionPriority) || 'medium' })}
+              multiSelect={false}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              placeholder="Select Priority"
+              size="md"
+            />
           </div>
-        </form>
-      </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Status</label>
+            <MultiSelectDropdown
+              title="Status"
+              items={ACTION_STATUSES.filter(s => s.value !== 'overdue').map((s) => ({ value: s.value, label: s.label }))}
+              selectedValues={formData.status ? [formData.status] : []}
+              onApply={(values) => setFormData({ ...formData, status: (values[0] as ActionStatus) || 'open' })}
+              multiSelect={false}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              placeholder="Select Status"
+              size="md"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Due Date</label>
+            <input
+              type="date"
+              value={formData.due_date || ''}
+              onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-1">Expected Residual Reduction (%)</label>
+          <input
+            type="number"
+            min="0"
+            max="100"
+            value={formData.expected_residual_reduction || ''}
+            onChange={(e) => setFormData({
+              ...formData,
+              expected_residual_reduction: e.target.value ? Number(e.target.value) : undefined
+            })}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            placeholder="e.g., 25"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-1">Notes</label>
+          <textarea
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            rows={2}
+          />
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="mitigation-action-form"
+            disabled={isLoading}
+            className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              action ? 'Update' : 'Create'
+            )}
+          </button>
+        </div>
+      </form>
     </RightSlidePanel>
   );
 }
@@ -740,42 +791,47 @@ function CompleteActionModal({
       title="Complete Action"
       subtitle={action.title}
     >
-      <div className="px-6 py-4">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm text-slate-600">Actual Residual Reduction Achieved (%)</label>
-            <div className="mt-2 text-xs text-slate-500">
-              Expected: {action.expected_residual_reduction ?? '—'}%
-            </div>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              value={actualReduction}
-              onChange={(e) => setActualReduction(Number(e.target.value))}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-            />
+      <form id="complete-action-form" onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-1">Actual Residual Reduction Achieved (%)</label>
+          <div className="mb-2 text-xs text-slate-500">
+            Expected: {action.expected_residual_reduction ?? '—'}%
           </div>
+          <input
+            type="number"
+            min="0"
+            max="100"
+            value={actualReduction}
+            onChange={(e) => setActualReduction(Number(e.target.value))}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          />
+        </div>
 
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={completeMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm text-slate-900 hover:bg-green-500 disabled:opacity-50"
-            >
-              {completeMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Mark Complete
-            </button>
-          </div>
-        </form>
-      </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="complete-action-form"
+            disabled={completeMutation.isPending}
+            className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {completeMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Mark Complete'
+            )}
+          </button>
+        </div>
+      </form>
     </RightSlidePanel>
   );
 }

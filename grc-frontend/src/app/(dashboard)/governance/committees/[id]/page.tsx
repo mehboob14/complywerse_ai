@@ -639,7 +639,7 @@ export default function CommitteeDetailPage() {
   });
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
         <Link href="/governance/committees" className="mb-3 flex items-center gap-2 text-slate-600 hover:text-slate-900">
           <ArrowLeft className="h-4 w-4" />

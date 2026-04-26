@@ -1,25 +1,18 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { vendorRiskApi, tenantApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
-  Building2,
   Loader2,
   AlertCircle,
-  Search,
   Plus,
-  X,
   Eye,
   Trash2,
-  Shield,
-  Filter,
-  Calendar,
-  User,
-  Database,
 } from 'lucide-react';
 import Link from 'next/link';
+import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 
 interface Vendor {
   id: number;
@@ -52,35 +45,38 @@ const TIER_OPTIONS = ['critical', 'high', 'medium', 'low'];
 const STATUS_OPTIONS = ['active', 'under_review', 'onboarding', 'offboarded', 'suspended'];
 const DATA_ACCESS_OPTIONS = ['confidential', 'restricted', 'internal', 'public', 'none'];
 
+const titleCase = (s: string) =>
+  (s ?? '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
 const getTierBadge = (tier: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-100 text-red-700',
-    high: 'bg-orange-100 text-orange-700',
-    medium: 'bg-yellow-100 text-yellow-700',
-    low: 'bg-green-100 text-green-700',
+    critical: 'bg-red-600 text-white border border-red-700',
+    high: 'bg-orange-600 text-white border border-orange-700',
+    medium: 'bg-yellow-600 text-white border border-yellow-700',
+    low: 'bg-green-600 text-white border border-green-700',
   };
-  return styles[tier?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return styles[tier?.toLowerCase()] || 'bg-gray-600 text-white border border-gray-700';
 };
 
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
-    active: 'bg-green-100 text-green-700',
-    under_review: 'bg-blue-100 text-blue-700',
-    onboarding: 'bg-purple-100 text-purple-700',
-    offboarded: 'bg-gray-100 text-gray-600',
-    suspended: 'bg-red-100 text-red-700',
+    active: 'bg-green-600 text-white border border-green-700',
+    under_review: 'bg-blue-600 text-white border border-blue-700',
+    onboarding: 'bg-purple-600 text-white border border-purple-700',
+    offboarded: 'bg-gray-600 text-white border border-gray-700',
+    suspended: 'bg-red-600 text-white border border-red-700',
   };
-  return styles[status?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return styles[status?.toLowerCase()] || 'bg-gray-600 text-white border border-gray-700';
 };
 
 const getRatingBadge = (rating: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-100 text-red-700',
-    high: 'bg-orange-100 text-orange-700',
-    medium: 'bg-yellow-100 text-yellow-700',
-    low: 'bg-green-100 text-green-700',
+    critical: 'bg-red-600 text-white border border-red-700',
+    high: 'bg-orange-600 text-white border border-orange-700',
+    medium: 'bg-yellow-600 text-white border border-yellow-700',
+    low: 'bg-green-600 text-white border border-green-700',
   };
-  return styles[rating?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return styles[rating?.toLowerCase()] || 'bg-gray-600 text-white border border-gray-700';
 };
 
 export default function VendorListPage() {
@@ -120,6 +116,7 @@ export default function VendorListPage() {
       const data = res.data;
       return (Array.isArray(data) ? data : data.items ?? []) as Vendor[];
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: users } = useQuery({
@@ -212,6 +209,15 @@ export default function VendorListPage() {
     deleteMutation.mutate(vendor.id);
   };
 
+  const tierItems = TIER_OPTIONS.map((t) => ({ value: t, label: titleCase(t) }));
+  const statusItems = STATUS_OPTIONS.map((s) => ({ value: s, label: titleCase(s) }));
+  const dataAccessItems = DATA_ACCESS_OPTIONS.map((d) => ({ value: d, label: titleCase(d) }));
+  const userItems = (users ?? []).map((u) => ({
+    value: String(u.id),
+    label: u.display_name || u.username,
+    subLabel: u.email,
+  }));
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -221,11 +227,11 @@ export default function VendorListPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Vendors</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Vendors</h1>
           <p className="text-sm text-gray-500 mt-1">Manage your third-party vendor inventory</p>
         </div>
         <div className="flex items-center gap-2">
@@ -241,10 +247,39 @@ export default function VendorListPage() {
           >
             Questionnaires
           </Link>
+        </div>
+      </div>
+
+      {/* Filters / Search row */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-wrap items-center gap-2 flex-1">
+          <div className="flex-1 min-w-[180px] sm:min-w-[260px] max-w-md">
+            <SearchInput
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder="Search vendors..."
+            />
+          </div>
+          <MultiSelectDropdown
+            title="Tier"
+            items={tierItems}
+            selectedValues={tierFilter !== 'all' ? [tierFilter] : []}
+            onApply={(v) => setTierFilter(v[0] || 'all')}
+            multiSelect={false}
+          />
+          <MultiSelectDropdown
+            title="Status"
+            items={statusItems}
+            selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
+            onApply={(v) => setStatusFilter(v[0] || 'all')}
+            multiSelect={false}
+          />
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
           {canCreate && (
             <button
               onClick={() => setShowModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
             >
               <Plus className="h-4 w-4" />
               Add Vendor
@@ -253,42 +288,8 @@ export default function VendorListPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search vendors..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <select
-          value={tierFilter}
-          onChange={(e) => setTierFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">All Tiers</option>
-          {TIER_OPTIONS.map((t) => (
-            <option key={t} value={t} className="capitalize">{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-          ))}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="all">All Statuses</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</option>
-          ))}
-        </select>
-      </div>
-
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden p-3 sm:p-4">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -349,7 +350,7 @@ export default function VendorListPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <Link href={`/vendor-risk/vendors/${vendor.id}`} className="text-blue-600 hover:text-blue-800">
+                        <Link href={`/vendor-risk/vendors/${vendor.id}`} className="text-blue-600 hover:text-blue-800" title="View vendor">
                           <Eye className="h-4 w-4" />
                         </Link>
                         {canDelete && (
@@ -376,186 +377,193 @@ export default function VendorListPage() {
         </div>
       </div>
 
-      {/* Create Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="flex h-[70vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Add Vendor</h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
-              <div className="grid flex-1 gap-4 overflow-y-auto p-6 md:grid-cols-2">
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Vendor Name *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    rows={2}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tier</label>
-                  <select
-                    value={formData.tier}
-                    onChange={(e) => setFormData({ ...formData, tier: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {TIER_OPTIONS.map((t) => (
-                      <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Data Access Level</label>
-                  <select
-                    value={formData.data_access_level}
-                    onChange={(e) => setFormData({ ...formData, data_access_level: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {DATA_ACCESS_OPTIONS.map((d) => (
-                      <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Vendor Type</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., SaaS, Cloud, Consulting"
-                    value={formData.vendor_type}
-                    onChange={(e) => setFormData({ ...formData, vendor_type: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Industry</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Technology, Healthcare"
-                    value={formData.industry}
-                    onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
-                  <input
-                    type="text"
-                    value={formData.primary_contact_name}
-                    onChange={(e) => setFormData({ ...formData, primary_contact_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact Email</label>
-                  <input
-                    type="email"
-                    value={formData.primary_contact_email}
-                    onChange={(e) => setFormData({ ...formData, primary_contact_email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact Phone</label>
-                  <input
-                    type="text"
-                    value={formData.primary_contact_phone}
-                    onChange={(e) => setFormData({ ...formData, primary_contact_phone: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
-                  <input
-                    type="text"
-                    placeholder="https://..."
-                    value={formData.website}
-                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Contract Start</label>
-                  <input
-                    type="date"
-                    value={formData.contract_start_date}
-                    onChange={(e) => setFormData({ ...formData, contract_start_date: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Contract End</label>
-                  <input
-                    type="date"
-                    value={formData.contract_end_date}
-                    onChange={(e) => setFormData({ ...formData, contract_end_date: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Owner</label>
-                  <select
-                    value={formData.owner_id}
-                    onChange={(e) => setFormData({ ...formData, owner_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select owner...</option>
-                    {(users ?? []).map((u) => (
-                      <option key={u.id} value={u.id}>{u.display_name || u.username}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Services Provided</label>
-                  <input
-                    type="text"
-                    placeholder="Comma-separated, e.g., Cloud Hosting, Security"
-                    value={formData.services_provided}
-                    onChange={(e) => setFormData({ ...formData, services_provided: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-              {createMutation.isError && (
-                <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg md:col-span-2">
-                  Failed to create vendor. Please check the form and try again.
-                </div>
+      {/* Create Modal (RightSlidePanel) */}
+      <RightSlidePanel
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title="Add Vendor"
+        width="w-full max-w-2xl"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="vendor-form"
+              disabled={createMutation.isPending}
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {createMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Add Vendor'
               )}
-              <div className="flex justify-end gap-3 border-t border-gray-200 p-6 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                >
-                  {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Add Vendor
-                </button>
-              </div>
-            </form>
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form id="vendor-form" onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-800 mb-1">Vendor Name *</label>
+              <input
+                type="text"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                rows={2}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Tier</label>
+              <MultiSelectDropdown
+                title="Tier"
+                items={tierItems}
+                selectedValues={formData.tier ? [formData.tier] : []}
+                onApply={(v) => setFormData({ ...formData, tier: v[0] || 'medium' })}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select tier"
+                size="md"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Data Access Level</label>
+              <MultiSelectDropdown
+                title="Data Access Level"
+                items={dataAccessItems}
+                selectedValues={formData.data_access_level ? [formData.data_access_level] : []}
+                onApply={(v) => setFormData({ ...formData, data_access_level: v[0] || 'internal' })}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select data access"
+                size="md"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Vendor Type</label>
+              <input
+                type="text"
+                placeholder="e.g., SaaS, Cloud, Consulting"
+                value={formData.vendor_type}
+                onChange={(e) => setFormData({ ...formData, vendor_type: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Industry</label>
+              <input
+                type="text"
+                placeholder="e.g., Technology, Healthcare"
+                value={formData.industry}
+                onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Contact Name</label>
+              <input
+                type="text"
+                value={formData.primary_contact_name}
+                onChange={(e) => setFormData({ ...formData, primary_contact_name: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Contact Email</label>
+              <input
+                type="email"
+                value={formData.primary_contact_email}
+                onChange={(e) => setFormData({ ...formData, primary_contact_email: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Contact Phone</label>
+              <input
+                type="text"
+                value={formData.primary_contact_phone}
+                onChange={(e) => setFormData({ ...formData, primary_contact_phone: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Website</label>
+              <input
+                type="text"
+                placeholder="https://..."
+                value={formData.website}
+                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Contract Start</label>
+              <input
+                type="date"
+                value={formData.contract_start_date}
+                onChange={(e) => setFormData({ ...formData, contract_start_date: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Contract End</label>
+              <input
+                type="date"
+                value={formData.contract_end_date}
+                onChange={(e) => setFormData({ ...formData, contract_end_date: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Owner</label>
+              <MultiSelectDropdown
+                title="Owner"
+                items={userItems}
+                selectedValues={formData.owner_id ? [String(formData.owner_id)] : []}
+                onApply={(v) => setFormData({ ...formData, owner_id: v[0] || '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select owner"
+                size="md"
+                forceSearch
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Services Provided</label>
+              <input
+                type="text"
+                placeholder="Comma-separated, e.g., Cloud Hosting, Security"
+                value={formData.services_provided}
+                onChange={(e) => setFormData({ ...formData, services_provided: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+          </div>
+          {createMutation.isError && (
+            <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+              Failed to create vendor. Please check the form and try again.
+            </div>
+          )}
+        </form>
+      </RightSlidePanel>
     </div>
   );
 }

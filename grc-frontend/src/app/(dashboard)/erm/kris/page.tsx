@@ -247,7 +247,7 @@ export default function KRIsPage() {
                 <div className="flex justify-end">
                   <button
                     onClick={() => setShowUploadModal(false)}
-                    className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+                    className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
                   >
                     Done
                   </button>
@@ -258,7 +258,7 @@ export default function KRIsPage() {
                 <p className="text-sm text-slate-600">
                   Upload an Excel file with KRI data. Expected columns: KRI Name, Description, Frequency, Green/Amber/Red Thresholds, Current Value, etc.
                 </p>
-                <div className="rounded-lg border-2 border-dashed border-slate-300 p-6 text-center">
+                <div className="rounded-lg border-2 border-dashed border-gray-300 p-6 text-center">
                   <input
                     type="file"
                     accept=".xlsx,.xls"
@@ -275,15 +275,16 @@ export default function KRIsPage() {
                 </div>
                 <div className="flex justify-end gap-2">
                   <button
+                    type="button"
                     onClick={() => setShowUploadModal(false)}
-                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                    className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={() => uploadFile && uploadMutation.mutate(uploadFile)}
                     disabled={!uploadFile || uploadMutation.isPending}
-                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
+                    className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
                   >
                     {uploadMutation.isPending ? (
                       <>
@@ -498,15 +499,15 @@ function KRIModal({
       title={kri ? 'Edit KRI' : 'Create KRI'}
     >
       <div className="px-6 py-4">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <form id="kri-form" onSubmit={handleSubmit} className="space-y-4">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-slate-600">Use AI to prefill KRI details for manual entry</p>
               <button
                 type="button"
                 onClick={() => aiSuggestMutation.mutate()}
                 disabled={!formData.name || aiSuggestMutation.isPending}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 hover:bg-slate-100 disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs text-slate-800 hover:bg-gray-50 disabled:opacity-50"
               >
                 {aiSuggestMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
                 AI Suggest
@@ -516,7 +517,7 @@ function KRIModal({
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600 mb-1">Risk</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Risk *</label>
             <MultiSelectDropdown
               title="Risk"
               items={risks.map((risk) => ({
@@ -531,33 +532,35 @@ function KRIModal({
               triggerClassName="w-full"
               forceSearch
               searchPlaceholder="Search risk by title..."
+              placeholder="Select Risk"
+              size="md"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600">Name</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Name *</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600">Description</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               rows={2}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Metric Type</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Metric Type</label>
               <MultiSelectDropdown
                 title="Metric Type"
                 items={[
@@ -572,43 +575,45 @@ function KRIModal({
                 multiSelect={false}
                 triggerVariant="input"
                 triggerClassName="w-full"
+                placeholder="Select Metric Type"
+                size="md"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-600">Unit</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Unit</label>
               <input
                 type="text"
                 value={formData.unit}
                 onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-600">Green Threshold</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Green Threshold</label>
               <input
                 type="number"
                 value={formData.green_threshold}
                 onChange={(e) => setFormData({ ...formData, green_threshold: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-600">Amber Threshold</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Amber Threshold</label>
               <input
                 type="number"
                 value={formData.amber_threshold}
                 onChange={(e) => setFormData({ ...formData, amber_threshold: Number(e.target.value) })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Direction</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Direction</label>
               <MultiSelectDropdown
                 title="Direction"
                 items={[
@@ -620,10 +625,12 @@ function KRIModal({
                 multiSelect={false}
                 triggerVariant="input"
                 triggerClassName="w-full"
+                placeholder="Select Direction"
+                size="md"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Frequency</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Frequency</label>
               <MultiSelectDropdown
                 title="Frequency"
                 items={[
@@ -638,25 +645,34 @@ function KRIModal({
                 multiSelect={false}
                 triggerVariant="input"
                 triggerClassName="w-full"
+                placeholder="Select Frequency"
+                size="md"
               />
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-end gap-2 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
+              form="kri-form"
               disabled={isLoading}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
             >
-              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {kri ? 'Update' : 'Create'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                kri ? 'Update' : 'Create'
+              )}
             </button>
           </div>
         </form>
@@ -696,16 +712,16 @@ function MeasureKRIModal({
       subtitle={kri.name}
     >
       <div className="px-6 py-4">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form id="measure-kri-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-600">Value</label>
-            <div className="mt-1 flex items-center gap-2">
+            <label className="block text-sm font-medium text-gray-800 mb-1">Value *</label>
+            <div className="flex items-center gap-2">
               <input
                 type="number"
                 step="0.01"
                 value={value}
                 onChange={(e) => setValue(Number(e.target.value))}
-                className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 required
               />
               {kri.unit && <span className="text-slate-600">{kri.unit}</span>}
@@ -713,30 +729,37 @@ function MeasureKRIModal({
           </div>
 
           <div>
-            <label className="block text-sm text-slate-600">Notes (optional)</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Notes (optional)</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               rows={2}
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-end gap-2 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
+              form="measure-kri-form"
               disabled={measureMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
             >
-              {measureMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Record
+              {measureMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Record'
+              )}
             </button>
           </div>
         </form>

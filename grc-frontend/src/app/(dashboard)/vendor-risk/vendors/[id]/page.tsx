@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { vendorRiskApi, tenantApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -12,21 +12,17 @@ import {
   Building2,
   Shield,
   Edit2,
-  X,
   Plus,
   Calendar,
   Mail,
   User,
   Globe,
   Database,
-  FileCheck,
-  AlertTriangle,
-  Clock,
-  CheckCircle,
   Phone,
   DollarSign,
 } from 'lucide-react';
 import Link from 'next/link';
+import { MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 
 interface Vendor {
   id: number;
@@ -99,48 +95,64 @@ interface UserOption {
   email: string;
 }
 
+const titleCase = (s: string) =>
+  (s ?? '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
 const getTierBadge = (tier: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-100 text-red-700',
-    high: 'bg-orange-100 text-orange-700',
-    medium: 'bg-yellow-100 text-yellow-700',
-    low: 'bg-green-100 text-green-700',
+    critical: 'bg-red-600 text-white border border-red-700',
+    high: 'bg-orange-600 text-white border border-orange-700',
+    medium: 'bg-yellow-600 text-white border border-yellow-700',
+    low: 'bg-green-600 text-white border border-green-700',
   };
-  return styles[tier?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return styles[tier?.toLowerCase()] || 'bg-gray-600 text-white border border-gray-700';
 };
 
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
-    active: 'bg-green-100 text-green-700',
-    under_review: 'bg-blue-100 text-blue-700',
-    onboarding: 'bg-purple-100 text-purple-700',
-    offboarded: 'bg-gray-100 text-gray-600',
-    suspended: 'bg-red-100 text-red-700',
-    completed: 'bg-green-100 text-green-700',
-    approved: 'bg-green-100 text-green-700',
-    reviewed: 'bg-indigo-100 text-indigo-700',
-    submitted: 'bg-yellow-100 text-yellow-700',
-    in_progress: 'bg-blue-100 text-blue-700',
-    draft: 'bg-gray-100 text-gray-600',
-    open: 'bg-red-100 text-red-700',
-    investigating: 'bg-orange-100 text-orange-700',
-    resolved: 'bg-green-100 text-green-700',
-    closed: 'bg-gray-100 text-gray-600',
+    active: 'bg-green-600 text-white border border-green-700',
+    under_review: 'bg-blue-600 text-white border border-blue-700',
+    onboarding: 'bg-purple-600 text-white border border-purple-700',
+    offboarded: 'bg-gray-600 text-white border border-gray-700',
+    suspended: 'bg-red-600 text-white border border-red-700',
+    completed: 'bg-green-600 text-white border border-green-700',
+    approved: 'bg-green-600 text-white border border-green-700',
+    reviewed: 'bg-indigo-600 text-white border border-indigo-700',
+    submitted: 'bg-yellow-600 text-white border border-yellow-700',
+    in_progress: 'bg-blue-600 text-white border border-blue-700',
+    draft: 'bg-gray-600 text-white border border-gray-700',
+    open: 'bg-red-600 text-white border border-red-700',
+    investigating: 'bg-orange-600 text-white border border-orange-700',
+    resolved: 'bg-green-600 text-white border border-green-700',
+    closed: 'bg-gray-600 text-white border border-gray-700',
   };
-  return styles[status?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return styles[status?.toLowerCase()] || 'bg-gray-600 text-white border border-gray-700';
 };
 
 const getSeverityBadge = (severity: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-100 text-red-700',
-    high: 'bg-orange-100 text-orange-700',
-    medium: 'bg-yellow-100 text-yellow-700',
-    low: 'bg-green-100 text-green-700',
+    critical: 'bg-red-600 text-white border border-red-700',
+    high: 'bg-orange-600 text-white border border-orange-700',
+    medium: 'bg-yellow-600 text-white border border-yellow-700',
+    low: 'bg-green-600 text-white border border-green-700',
   };
-  return styles[severity?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return styles[severity?.toLowerCase()] || 'bg-gray-600 text-white border border-gray-700';
 };
 
 type TabType = 'overview' | 'assessments' | 'sla' | 'incidents';
+
+const TIER_OPTIONS = ['critical', 'high', 'medium', 'low'];
+const STATUS_OPTIONS = ['active', 'under_review', 'onboarding', 'offboarded', 'suspended'];
+const SEVERITY_OPTIONS = ['critical', 'high', 'medium', 'low'];
+const ASSESSMENT_TYPES = [
+  { id: 'cybersecurity', label: 'Cybersecurity Assessment' },
+  { id: 'privacy_data_protection', label: 'Privacy & Data Protection' },
+  { id: 'operational_risk', label: 'Operational Risk Assessment' },
+  { id: 'compliance_regulatory', label: 'Compliance & Regulatory' },
+  { id: 'financial_risk', label: 'Financial Risk Assessment' },
+  { id: 'initial_onboarding', label: 'Initial Onboarding Assessment' },
+  { id: 'periodic_review', label: 'Periodic Review' },
+];
 
 export default function VendorDetailPage() {
   const params = useParams();
@@ -182,7 +194,8 @@ export default function VendorDetailPage() {
       const data = res.data;
       return (Array.isArray(data) ? data : data.items ?? []) as Assessment[];
     },
-    enabled: activeTab === 'assessments',
+    enabled: activeTab === 'assessments' || showAssessmentModal,
+    placeholderData: keepPreviousData,
   });
 
   const { data: slaRecords } = useQuery({
@@ -193,6 +206,7 @@ export default function VendorDetailPage() {
       return (Array.isArray(data) ? data : data.items ?? []) as SLARecord[];
     },
     enabled: activeTab === 'sla',
+    placeholderData: keepPreviousData,
   });
 
   const { data: incidents } = useQuery({
@@ -202,7 +216,8 @@ export default function VendorDetailPage() {
       const data = res.data;
       return (Array.isArray(data) ? data : data.items ?? []) as Incident[];
     },
-    enabled: activeTab === 'incidents',
+    enabled: activeTab === 'incidents' || showIncidentModal,
+    placeholderData: keepPreviousData,
   });
 
   const updateMutation = useMutation({
@@ -267,16 +282,30 @@ export default function VendorDetailPage() {
     { key: 'incidents', label: 'Incidents', count: vendor.incidents_count },
   ];
 
+  const tierItems = TIER_OPTIONS.map((t) => ({ value: t, label: titleCase(t) }));
+  const statusItems = STATUS_OPTIONS.map((s) => ({ value: s, label: titleCase(s) }));
+  const severityItems = SEVERITY_OPTIONS.map((s) => ({ value: s, label: titleCase(s) }));
+  const assessmentTypeItems = ASSESSMENT_TYPES.map((t) => ({ value: t.id, label: t.label }));
+  const userItems = (users ?? []).map((u) => ({
+    value: String(u.id),
+    label: u.display_name || u.username,
+    subLabel: u.email,
+  }));
+
+  const inputClass =
+    'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
+  const labelClass = 'block text-sm font-medium text-gray-800 mb-1';
+
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => router.push('/vendor-risk/vendors')} className="text-gray-400 hover:text-gray-600">
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-gray-900">{vendor.name}</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{vendor.name}</h1>
             <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(vendor.tier)}`}>
               {vendor.tier}
             </span>
@@ -284,7 +313,7 @@ export default function VendorDetailPage() {
               {vendor.status?.replace(/_/g, ' ')}
             </span>
           </div>
-          <div className="flex items-center gap-4 mt-1">
+          <div className="flex items-center gap-4 mt-1 flex-wrap">
             {vendor.risk_rating && (
               <span className="text-sm text-gray-500">Risk: <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(vendor.risk_rating)}`}>{vendor.risk_rating}</span></span>
             )}
@@ -297,28 +326,28 @@ export default function VendorDetailPage() {
           </div>
         </div>
         {canEdit && (
-        <button
-          onClick={() => {
-            setEditData({
-              name: vendor.name || '',
-              description: vendor.description || '',
-              tier: vendor.tier || 'medium',
-              status: vendor.status || 'active',
-              data_access_level: vendor.data_access_level || 'internal',
-              primary_contact_name: vendor.primary_contact_name || '',
-              primary_contact_email: vendor.primary_contact_email || '',
-              primary_contact_phone: vendor.primary_contact_phone || '',
-              website: vendor.website || '',
-              owner_id: vendor.owner_id ? String(vendor.owner_id) : '',
-              notes: vendor.notes || '',
-            });
-            setShowEditModal(true);
-          }}
-          className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-        >
-          <Edit2 className="h-4 w-4" />
-          Edit
-        </button>
+          <button
+            onClick={() => {
+              setEditData({
+                name: vendor.name || '',
+                description: vendor.description || '',
+                tier: vendor.tier || 'medium',
+                status: vendor.status || 'active',
+                data_access_level: vendor.data_access_level || 'internal',
+                primary_contact_name: vendor.primary_contact_name || '',
+                primary_contact_email: vendor.primary_contact_email || '',
+                primary_contact_phone: vendor.primary_contact_phone || '',
+                website: vendor.website || '',
+                owner_id: vendor.owner_id ? String(vendor.owner_id) : '',
+                notes: vendor.notes || '',
+              });
+              setShowEditModal(true);
+            }}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+          >
+            <Edit2 className="h-4 w-4" />
+            Edit
+          </button>
         )}
       </div>
 
@@ -346,9 +375,9 @@ export default function VendorDetailPage() {
 
       {/* Overview Tab */}
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Contact Information</h3>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 space-y-4">
+            <h3 className="text-sm font-semibold text-slate-900">Contact Information</h3>
             {[
               { icon: User, label: 'Contact', value: vendor.primary_contact_name },
               { icon: Mail, label: 'Email', value: vendor.primary_contact_email },
@@ -362,8 +391,8 @@ export default function VendorDetailPage() {
               </div>
             ))}
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Contract & Details</h3>
+          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 space-y-4">
+            <h3 className="text-sm font-semibold text-slate-900">Contract & Details</h3>
             {[
               { icon: Calendar, label: 'Start', value: vendor.contract_start_date ? new Date(vendor.contract_start_date).toLocaleDateString() : '-' },
               { icon: Calendar, label: 'End', value: vendor.contract_end_date ? new Date(vendor.contract_end_date).toLocaleDateString() : '-' },
@@ -381,14 +410,14 @@ export default function VendorDetailPage() {
             ))}
           </div>
           {vendor.description && (
-            <div className="col-span-full bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">Description</h3>
+            <div className="col-span-full bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
+              <h3 className="text-sm font-semibold text-slate-900 mb-2">Description</h3>
               <p className="text-sm text-gray-600">{vendor.description}</p>
             </div>
           )}
           {vendor.services_provided && vendor.services_provided.length > 0 && (
-            <div className="col-span-full bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">Services Provided</h3>
+            <div className="col-span-full bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
+              <h3 className="text-sm font-semibold text-slate-900 mb-2">Services Provided</h3>
               <div className="flex flex-wrap gap-2">
                 {(Array.isArray(vendor.services_provided) ? vendor.services_provided : [vendor.services_provided]).map((s, i) => (
                   <span key={i} className="inline-flex px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
@@ -399,8 +428,8 @@ export default function VendorDetailPage() {
             </div>
           )}
           {vendor.notes && (
-            <div className="col-span-full bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-semibold text-gray-900 mb-2">Notes</h3>
+            <div className="col-span-full bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
+              <h3 className="text-sm font-semibold text-slate-900 mb-2">Notes</h3>
               <p className="text-sm text-gray-600">{vendor.notes}</p>
             </div>
           )}
@@ -412,16 +441,16 @@ export default function VendorDetailPage() {
         <div className="space-y-4">
           <div className="flex justify-end">
             {canCreate && (
-            <button
-              onClick={() => setShowAssessmentModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              New Assessment
-            </button>
+              <button
+                onClick={() => setShowAssessmentModal(true)}
+                className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
+              >
+                <Plus className="h-4 w-4" />
+                New Assessment
+              </button>
             )}
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden p-3 sm:p-4">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -485,7 +514,7 @@ export default function VendorDetailPage() {
 
       {/* SLA Tab */}
       {activeTab === 'sla' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden p-3 sm:p-4">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -507,7 +536,7 @@ export default function VendorDetailPage() {
                     <td className="px-4 py-3 text-sm text-gray-600">{s.target_value ?? '-'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{s.actual_value ?? '-'}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${s.is_compliant ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${s.is_compliant ? 'bg-green-600 text-white border border-green-700' : 'bg-red-600 text-white border border-red-700'}`}>
                         {s.is_compliant ? 'Met' : 'Missed'}
                       </span>
                     </td>
@@ -526,16 +555,16 @@ export default function VendorDetailPage() {
         <div className="space-y-4">
           <div className="flex justify-end">
             {canCreate && (
-            <button
-              onClick={() => setShowIncidentModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Record Incident
-            </button>
+              <button
+                onClick={() => setShowIncidentModal(true)}
+                className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
+              >
+                <Plus className="h-4 w-4" />
+                Record Incident
+              </button>
             )}
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden p-3 sm:p-4">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -575,172 +604,261 @@ export default function VendorDetailPage() {
       )}
 
       {/* Edit Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="flex h-[70vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Edit Vendor</h2>
-              <button onClick={() => setShowEditModal(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
-            </div>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const payload: Record<string, unknown> = { ...editData };
-              if (editData.owner_id) payload.owner_id = Number(editData.owner_id);
-              else delete payload.owner_id;
-              updateMutation.mutate(payload);
-            }} className="flex flex-1 flex-col overflow-hidden">
-              <div className="grid flex-1 gap-4 overflow-y-auto p-6 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                <input type="text" value={editData.name || ''} onChange={(e) => setEditData({ ...editData, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea value={editData.description || ''} onChange={(e) => setEditData({ ...editData, description: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" rows={2} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tier</label>
-                  <select value={editData.tier || 'medium'} onChange={(e) => setEditData({ ...editData, tier: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    {['critical', 'high', 'medium', 'low'].map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                  <select value={editData.status || 'active'} onChange={(e) => setEditData({ ...editData, status: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    {['active', 'under_review', 'onboarding', 'offboarded', 'suspended'].map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
-                  <input type="text" value={editData.primary_contact_name || ''} onChange={(e) => setEditData({ ...editData, primary_contact_name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact Email</label>
-                  <input type="email" value={editData.primary_contact_email || ''} onChange={(e) => setEditData({ ...editData, primary_contact_email: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Owner</label>
-                <select value={editData.owner_id || ''} onChange={(e) => setEditData({ ...editData, owner_id: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">Select owner...</option>
-                  {(users ?? []).map((u) => (
-                    <option key={u.id} value={u.id}>{u.display_name || u.username}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <textarea value={editData.notes || ''} onChange={(e) => setEditData({ ...editData, notes: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" rows={2} />
-              </div>
-              </div>
-              <div className="flex justify-end gap-3 border-t border-gray-200 p-6 pt-4">
-                <button type="button" onClick={() => setShowEditModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" disabled={updateMutation.isPending} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-                  {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Save
-                </button>
-              </div>
-            </form>
+      <RightSlidePanel
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Edit Vendor"
+        width="w-full max-w-2xl"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowEditModal(false)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="vendor-edit-form"
+              disabled={updateMutation.isPending}
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {updateMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save'
+              )}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form
+          id="vendor-edit-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const payload: Record<string, unknown> = { ...editData };
+            if (editData.owner_id) payload.owner_id = Number(editData.owner_id);
+            else delete payload.owner_id;
+            updateMutation.mutate(payload);
+          }}
+          className="space-y-4"
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className={labelClass}>Name</label>
+              <input type="text" value={editData.name || ''} onChange={(e) => setEditData({ ...editData, name: e.target.value })} className={inputClass} />
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelClass}>Description</label>
+              <textarea value={editData.description || ''} onChange={(e) => setEditData({ ...editData, description: e.target.value })} className={inputClass} rows={2} />
+            </div>
+            <div>
+              <label className={labelClass}>Tier</label>
+              <MultiSelectDropdown
+                title="Tier"
+                items={tierItems}
+                selectedValues={editData.tier ? [editData.tier] : []}
+                onApply={(v) => setEditData({ ...editData, tier: v[0] || 'medium' })}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select tier"
+                size="md"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Status</label>
+              <MultiSelectDropdown
+                title="Status"
+                items={statusItems}
+                selectedValues={editData.status ? [editData.status] : []}
+                onApply={(v) => setEditData({ ...editData, status: v[0] || 'active' })}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select status"
+                size="md"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Contact Name</label>
+              <input type="text" value={editData.primary_contact_name || ''} onChange={(e) => setEditData({ ...editData, primary_contact_name: e.target.value })} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Contact Email</label>
+              <input type="email" value={editData.primary_contact_email || ''} onChange={(e) => setEditData({ ...editData, primary_contact_email: e.target.value })} className={inputClass} />
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelClass}>Owner</label>
+              <MultiSelectDropdown
+                title="Owner"
+                items={userItems}
+                selectedValues={editData.owner_id ? [String(editData.owner_id)] : []}
+                onApply={(v) => setEditData({ ...editData, owner_id: v[0] || '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select owner"
+                size="md"
+                forceSearch
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelClass}>Notes</label>
+              <textarea value={editData.notes || ''} onChange={(e) => setEditData({ ...editData, notes: e.target.value })} className={inputClass} rows={2} />
+            </div>
+          </div>
+        </form>
+      </RightSlidePanel>
 
       {/* Assessment Modal */}
-      {showAssessmentModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="flex h-[70vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">New Assessment</h2>
-              <button onClick={() => setShowAssessmentModal(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
-            </div>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const payload: Record<string, unknown> = { assessment_type: assessmentForm.assessment_type };
-              if (assessmentForm.due_date) payload.due_date = assessmentForm.due_date;
-              if (assessmentForm.assessed_by) payload.assessed_by = Number(assessmentForm.assessed_by);
-              createAssessmentMutation.mutate(payload);
-            }} className="flex flex-1 flex-col overflow-hidden">
-              <div className="grid flex-1 gap-4 overflow-y-auto p-6 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assessment Type</label>
-                <select value={assessmentForm.assessment_type} onChange={(e) => setAssessmentForm({ ...assessmentForm, assessment_type: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {[
-                    { id: 'cybersecurity', label: 'Cybersecurity Assessment' },
-                    { id: 'privacy_data_protection', label: 'Privacy & Data Protection' },
-                    { id: 'operational_risk', label: 'Operational Risk Assessment' },
-                    { id: 'compliance_regulatory', label: 'Compliance & Regulatory' },
-                    { id: 'financial_risk', label: 'Financial Risk Assessment' },
-                    { id: 'initial_onboarding', label: 'Initial Onboarding Assessment' },
-                    { id: 'periodic_review', label: 'Periodic Review' },
-                  ].map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-                <input type="date" value={assessmentForm.due_date} onChange={(e) => setAssessmentForm({ ...assessmentForm, due_date: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assign Assessor</label>
-                <select value={assessmentForm.assessed_by} onChange={(e) => setAssessmentForm({ ...assessmentForm, assessed_by: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">Current user (default)</option>
-                  {(users ?? []).map((u) => (
-                    <option key={u.id} value={u.id}>{u.display_name || u.username}</option>
-                  ))}
-                </select>
-              </div>
-              </div>
-              <div className="flex justify-end gap-3 border-t border-gray-200 p-6 pt-4">
-                <button type="button" onClick={() => setShowAssessmentModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" disabled={createAssessmentMutation.isPending} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-                  {createAssessmentMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Create
-                </button>
-              </div>
-            </form>
+      <RightSlidePanel
+        isOpen={showAssessmentModal}
+        onClose={() => setShowAssessmentModal(false)}
+        title="New Assessment"
+        width="w-full max-w-xl"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAssessmentModal(false)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="vendor-assessment-form"
+              disabled={createAssessmentMutation.isPending}
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {createAssessmentMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Create'
+              )}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form
+          id="vendor-assessment-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const payload: Record<string, unknown> = { assessment_type: assessmentForm.assessment_type };
+            if (assessmentForm.due_date) payload.due_date = assessmentForm.due_date;
+            if (assessmentForm.assessed_by) payload.assessed_by = Number(assessmentForm.assessed_by);
+            createAssessmentMutation.mutate(payload);
+          }}
+          className="space-y-4"
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className={labelClass}>Assessment Type</label>
+              <MultiSelectDropdown
+                title="Assessment Type"
+                items={assessmentTypeItems}
+                selectedValues={assessmentForm.assessment_type ? [assessmentForm.assessment_type] : []}
+                onApply={(v) => setAssessmentForm({ ...assessmentForm, assessment_type: v[0] || 'cybersecurity' })}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select type"
+                size="md"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Due Date</label>
+              <input type="date" value={assessmentForm.due_date} onChange={(e) => setAssessmentForm({ ...assessmentForm, due_date: e.target.value })} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Assign Assessor</label>
+              <MultiSelectDropdown
+                title="Assessor"
+                items={userItems}
+                selectedValues={assessmentForm.assessed_by ? [String(assessmentForm.assessed_by)] : []}
+                onApply={(v) => setAssessmentForm({ ...assessmentForm, assessed_by: v[0] || '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Current user (default)"
+                size="md"
+                forceSearch
+              />
+            </div>
+          </div>
+        </form>
+      </RightSlidePanel>
 
       {/* Incident Modal */}
-      {showIncidentModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="flex h-[70vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Record Incident</h2>
-              <button onClick={() => setShowIncidentModal(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); createIncidentMutation.mutate(incidentForm); }} className="flex flex-1 flex-col overflow-hidden">
-              <div className="grid flex-1 gap-4 overflow-y-auto p-6 md:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                <input type="text" required value={incidentForm.title} onChange={(e) => setIncidentForm({ ...incidentForm, title: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Severity</label>
-                <select value={incidentForm.severity} onChange={(e) => setIncidentForm({ ...incidentForm, severity: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {['critical', 'high', 'medium', 'low'].map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-                </select>
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea value={incidentForm.description} onChange={(e) => setIncidentForm({ ...incidentForm, description: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" rows={3} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Occurred At</label>
-                <input type="datetime-local" value={incidentForm.occurred_at} onChange={(e) => setIncidentForm({ ...incidentForm, occurred_at: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              </div>
-              <div className="flex justify-end gap-3 border-t border-gray-200 p-6 pt-4">
-                <button type="button" onClick={() => setShowIncidentModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" disabled={createIncidentMutation.isPending} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-                  {createIncidentMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Record
-                </button>
-              </div>
-            </form>
+      <RightSlidePanel
+        isOpen={showIncidentModal}
+        onClose={() => setShowIncidentModal(false)}
+        title="Record Incident"
+        width="w-full max-w-xl"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowIncidentModal(false)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="vendor-incident-form"
+              disabled={createIncidentMutation.isPending}
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {createIncidentMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Record'
+              )}
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form
+          id="vendor-incident-form"
+          onSubmit={(e) => { e.preventDefault(); createIncidentMutation.mutate(incidentForm); }}
+          className="space-y-4"
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className={labelClass}>Title *</label>
+              <input type="text" required value={incidentForm.title} onChange={(e) => setIncidentForm({ ...incidentForm, title: e.target.value })} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Severity</label>
+              <MultiSelectDropdown
+                title="Severity"
+                items={severityItems}
+                selectedValues={incidentForm.severity ? [incidentForm.severity] : []}
+                onApply={(v) => setIncidentForm({ ...incidentForm, severity: v[0] || 'medium' })}
+                multiSelect={false}
+                triggerVariant="input"
+                placeholder="Select severity"
+                size="md"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Occurred At</label>
+              <input type="datetime-local" value={incidentForm.occurred_at} onChange={(e) => setIncidentForm({ ...incidentForm, occurred_at: e.target.value })} className={inputClass} />
+            </div>
+            <div className="md:col-span-2">
+              <label className={labelClass}>Description</label>
+              <textarea value={incidentForm.description} onChange={(e) => setIncidentForm({ ...incidentForm, description: e.target.value })} className={inputClass} rows={3} />
+            </div>
+          </div>
+        </form>
+      </RightSlidePanel>
     </div>
   );
 }

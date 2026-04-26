@@ -247,6 +247,11 @@ export default function GovernanceMappingsPage() {
     }
   };
 
+  const typeFilterItems = useMemo(
+    () => DOCUMENT_TYPES.filter((t) => t.value).map((t) => ({ value: t.value, label: t.label })),
+    [],
+  );
+
   if (documentsLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -255,13 +260,8 @@ export default function GovernanceMappingsPage() {
     );
   }
 
-  const typeFilterItems = useMemo(
-    () => DOCUMENT_TYPES.filter((t) => t.value).map((t) => ({ value: t.value, label: t.label })),
-    [],
-  );
-
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6 py-3 sm:py-4">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg sm:text-xl font-semibold text-black">Policy-Control Mappings</h2>

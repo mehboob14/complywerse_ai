@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { vendorRiskApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 import {
   ClipboardList,
   Loader2,
-  Search,
   Plus,
   X,
   Send,
@@ -15,13 +15,11 @@ import {
   Shield,
   Lock,
   FileCheck,
-  Building2,
   DollarSign,
   Settings,
   Sparkles,
   FileText,
   Paperclip,
-  ChevronDown,
   Copy,
   Eye,
   ExternalLink,
@@ -106,14 +104,14 @@ const getCategoryIcon = (category: string) => {
   return icons[category?.toLowerCase()] || ClipboardList;
 };
 
-const getResponseStatusBadge = (status: string) => {
-  const styles: Record<string, string> = {
-    pending: 'bg-amber-100 text-amber-700',
-    in_progress: 'bg-blue-100 text-blue-700',
-    submitted: 'bg-emerald-100 text-emerald-700',
-    expired: 'bg-gray-100 text-gray-600',
+const getResponseStatusPill = (status: string) => {
+  const tones: Record<string, string> = {
+    pending: 'bg-amber-600 text-white border-amber-700',
+    in_progress: 'bg-blue-600 text-white border-blue-700',
+    submitted: 'bg-emerald-600 text-white border-emerald-700',
+    expired: 'bg-gray-600 text-white border-gray-700',
   };
-  return styles[status?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return tones[status?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
 };
 
 const formatAssessmentType = (value: string) =>
@@ -169,6 +167,11 @@ const DEFAULT_QUESTIONS: Record<string, Question[]> = {
 };
 
 
+const inputClass =
+  'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
+const labelClass = 'block text-sm font-medium text-gray-800 mb-1';
+
+
 export default function VendorQuestionnairesPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
@@ -214,6 +217,7 @@ export default function VendorQuestionnairesPage() {
       const data = res.data;
       return (Array.isArray(data) ? data : data.items ?? []) as QuestionnaireTemplate[];
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: vendors } = useQuery({
@@ -223,6 +227,7 @@ export default function VendorQuestionnairesPage() {
       const data = res.data;
       return (Array.isArray(data) ? data : data.items ?? []) as VendorOption[];
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: assessments } = useQuery({
@@ -232,6 +237,7 @@ export default function VendorQuestionnairesPage() {
       const data = res.data;
       return (Array.isArray(data) ? data : data.items ?? []) as AssessmentOption[];
     },
+    placeholderData: keepPreviousData,
   });
 
   const { data: questionnaireResponses } = useQuery({
@@ -241,6 +247,7 @@ export default function VendorQuestionnairesPage() {
       const data = res.data;
       return (Array.isArray(data) ? data : []) as QuestionnaireResponseRecord[];
     },
+    placeholderData: keepPreviousData,
   });
 
 
@@ -414,9 +421,32 @@ export default function VendorQuestionnairesPage() {
   const selectedResponseTemplate = selectedResponse?.template_id
     ? templatesById.get(selectedResponse.template_id)
     : undefined;
-  const selectedResponseAssessment = selectedResponse?.assessment_id
-    ? assessmentsById.get(selectedResponse.assessment_id)
-    : undefined;
+
+  // Items for dropdowns
+  const categoryItems = CATEGORIES.map((c) => ({
+    value: c,
+    label: c.charAt(0).toUpperCase() + c.slice(1),
+  }));
+
+  const questionTypeItems = [
+    { value: 'text', label: 'Text Answer' },
+    { value: 'yes_no', label: 'Yes / No' },
+    { value: 'multiple_choice', label: 'Multiple Choice' },
+    { value: 'rating', label: 'Rating (1-5)' },
+  ];
+
+  const weightItems = [1, 2, 3, 4, 5].map((w) => ({ value: String(w), label: String(w) }));
+
+  const vendorItems = (vendors ?? []).map((v) => ({
+    value: String(v.id),
+    label: v.name,
+    subLabel: v.primary_contact_email || undefined,
+  }));
+
+  const assessmentItems = sendAssessmentOptions.map((a) => ({
+    value: String(a.id),
+    label: `#${a.id} - ${formatAssessmentType(a.assessment_type)} (${a.status.replace(/_/g, ' ')})`,
+  }));
 
 
   if (isLoading) {
@@ -428,11 +458,11 @@ export default function VendorQuestionnairesPage() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Questionnaire Templates</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Questionnaire Templates</h1>
           <p className="text-sm text-gray-500 mt-1">Create and manage vendor assessment questionnaires with evidence requirements</p>
         </div>
         <div className="flex items-center gap-2">
@@ -451,7 +481,7 @@ export default function VendorQuestionnairesPage() {
           {canCreate && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
             >
               <Plus className="h-4 w-4" />
               Create Template
@@ -460,16 +490,19 @@ export default function VendorQuestionnairesPage() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Search templates..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+      {/* Filter / Search row */}
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2 flex-1">
+            <div className="flex-1 min-w-[180px] sm:min-w-[260px] max-w-md">
+              <SearchInput
+                value={searchTerm}
+                onChange={setSearchTerm}
+                placeholder="Search templates..."
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Template Cards */}
@@ -485,14 +518,14 @@ export default function VendorQuestionnairesPage() {
             const Icon = getCategoryIcon(template.category);
             const evidenceCount = (template.questions || []).filter((q: any) => q.evidence_required).length;
             return (
-              <div key={template.id} className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col hover:shadow-md transition-shadow">
+              <div key={template.id} className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 flex flex-col hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-start gap-3 flex-1">
                     <div className={`p-2 rounded-lg ${getCategoryBadge(template.category).replace('text-', 'bg-').split(' ')[0]}`}>
                       <Icon className="h-4 w-4 text-gray-700" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-gray-900 truncate">{template.name}</h3>
+                      <h3 className="text-sm font-semibold text-slate-900 truncate">{template.name}</h3>
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize mt-1 ${getCategoryBadge(template.category)}`}>
                         {template.category}
                       </span>
@@ -571,8 +604,8 @@ export default function VendorQuestionnairesPage() {
 
       {/* Sent Questionnaire Tracking */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-200">
-          <h2 className="text-sm font-semibold text-gray-900">Sent Questionnaires</h2>
+        <div className="px-3 sm:px-4 py-4 border-b border-gray-200">
+          <h2 className="text-sm font-semibold text-slate-900">Sent Questionnaires</h2>
           <p className="text-xs text-gray-500 mt-1">
             Track sent links, response status, and review questions/answers for each vendor submission.
           </p>
@@ -635,7 +668,7 @@ export default function VendorQuestionnairesPage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getResponseStatusBadge(response.status)}`}>
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize border ${getResponseStatusPill(response.status)}`}>
                             {response.status?.replace(/_/g, ' ')}
                           </span>
                         </td>
@@ -680,454 +713,516 @@ export default function VendorQuestionnairesPage() {
           </table>
         </div>
       </div>
-      {selectedResponse && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="flex h-[75vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Questionnaire Response #{selectedResponse.id}</h2>
-                <p className="text-xs text-gray-500 mt-1">
-                  {selectedResponseTemplate?.name || 'Template unavailable'}
+
+      {/* Response Detail Slide Panel */}
+      <RightSlidePanel
+        isOpen={!!selectedResponse}
+        onClose={() => setSelectedResponse(null)}
+        title={selectedResponse ? `Questionnaire Response #${selectedResponse.id}` : ''}
+        subtitle={selectedResponseTemplate?.name || 'Template unavailable'}
+        width="w-full max-w-3xl"
+      >
+        {selectedResponse && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                <p className="text-xs text-gray-500">Vendor</p>
+                <p className="text-sm font-medium text-slate-900 mt-1">
+                  {vendorsById.get(selectedResponse.vendor_id)?.name || `Vendor #${selectedResponse.vendor_id}`}
                 </p>
               </div>
-              <button onClick={() => setSelectedResponse(null)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-                  <p className="text-xs text-gray-500">Vendor</p>
-                  <p className="text-sm font-medium text-gray-900 mt-1">
-                    {vendorsById.get(selectedResponse.vendor_id)?.name || `Vendor #${selectedResponse.vendor_id}`}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-                  <p className="text-xs text-gray-500">Respondent</p>
-                  <p className="text-sm font-medium text-gray-900 mt-1">
-                    {selectedResponse.respondent_name || selectedResponse.respondent_email || 'Not provided'}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-                  <p className="text-xs text-gray-500">Status</p>
-                  <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getResponseStatusBadge(selectedResponse.status)}`}>
-                    {selectedResponse.status?.replace(/_/g, ' ')}
-                  </span>
-                </div>
-                <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-                  <p className="text-xs text-gray-500">Submitted</p>
-                  <p className="text-sm font-medium text-gray-900 mt-1">
-                    {selectedResponse.submitted_at ? new Date(selectedResponse.submitted_at).toLocaleString() : '-'}
-                  </p>
-                </div>
+              <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                <p className="text-xs text-gray-500">Respondent</p>
+                <p className="text-sm font-medium text-slate-900 mt-1">
+                  {selectedResponse.respondent_name || selectedResponse.respondent_email || 'Not provided'}
+                </p>
               </div>
-
-              {selectedResponseTemplate?.questions?.length ? (
-                <div className="space-y-3">
-                  {selectedResponseTemplate.questions.map((question, index) => {
-                    const answer = (selectedResponse.responses || {})[String(question.id)];
-                    return (
-                      <div key={`${question.id}-${index}`} className="rounded-lg border border-gray-200 p-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="text-sm font-medium text-gray-900 flex-1">
-                            <span className="text-gray-400 font-mono mr-2">Q{index + 1}.</span>
-                            {question.text}
-                          </p>
-                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 capitalize">
-                            {question.type.replace(/_/g, '/')}
-                          </span>
-                        </div>
-                        <div className="mt-2 rounded bg-gray-50 border border-gray-200 p-2 text-sm text-gray-800">
-                          {formatAnswer(answer)}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="rounded-lg border border-gray-200 p-3">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Raw Responses</p>
-                  {Object.keys(selectedResponse.responses || {}).length === 0 ? (
-                    <p className="text-sm text-gray-400">No responses submitted yet.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {Object.entries(selectedResponse.responses || {}).map(([questionId, answer]) => (
-                        <div key={questionId} className="text-sm text-gray-800 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                          <p className="text-xs text-gray-500 mb-1">{questionId}</p>
-                          <p>{formatAnswer(answer)}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="flex h-[70vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Create Questionnaire Template</h2>
-              <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
-            </div>
-            <form onSubmit={handleCreateSubmit} className="flex flex-1 flex-col overflow-hidden">
-              <div className="flex-1 space-y-5 overflow-y-auto p-6">
-              {/* Name + Category */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Template Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={templateForm.name}
-                    onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., Annual Security Assessment"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                  <select
-                    value={templateForm.category}
-                    onChange={(e) => setTemplateForm({ ...templateForm, category: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  value={templateForm.description}
-                  onChange={(e) => setTemplateForm({ ...templateForm, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={2}
-                  placeholder="Brief description of this questionnaire's purpose..."
-                />
-              </div>
-
-              {/* Questions Builder */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Questions ({templateForm.questions.filter((q) => q.text.trim()).length})
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {DEFAULT_QUESTIONS[templateForm.category] && (
-                      <button
-                        type="button"
-                        onClick={() => loadDefaultQuestions(templateForm.category)}
-                        className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1 px-2 py-1 bg-purple-50 rounded-lg"
-                      >
-                        <Sparkles className="h-3 w-3" />
-                        Load {templateForm.category.charAt(0).toUpperCase() + templateForm.category.slice(1)} Defaults
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={addQuestion}
-                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-lg"
-                    >
-                      <Plus className="h-3 w-3" /> Add Question
-                    </button>
-                  </div>
-                </div>
-                <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
-                  {templateForm.questions.map((q, idx) => (
-                    <div key={q.id} className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50/50">
-                      {/* Row 1: Question text + type */}
-                      <div className="flex items-start gap-2">
-                        <span className="text-xs text-gray-400 font-mono mt-2 shrink-0 w-6">Q{idx + 1}</span>
-                        <div className="flex-1 space-y-2">
-                          <input
-                            type="text"
-                            placeholder="Enter your question..."
-                            value={q.text}
-                            onChange={(e) => updateQuestion(idx, 'text', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                          />
-                          {/* Row 2: Controls */}
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <select
-                              value={q.type}
-                              onChange={(e) => updateQuestion(idx, 'type', e.target.value)}
-                              className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                            >
-                              <option value="text">Text Answer</option>
-                              <option value="yes_no">Yes / No</option>
-                              <option value="multiple_choice">Multiple Choice</option>
-                              <option value="rating">Rating (1-5)</option>
-                            </select>
-                            <div className="flex items-center gap-1">
-                              <label className="text-xs text-gray-500">Weight:</label>
-                              <select
-                                value={q.weight}
-                                onChange={(e) => updateQuestion(idx, 'weight', Number(e.target.value))}
-                                className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-14"
-                              >
-                                {[1, 2, 3, 4, 5].map((w) => (
-                                  <option key={w} value={w}>{w}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={q.required}
-                                onChange={(e) => updateQuestion(idx, 'required', e.target.checked)}
-                                className="rounded border-gray-300 text-blue-600"
-                              />
-                              Required
-                            </label>
-                            <label className="flex items-center gap-1.5 text-xs text-orange-600 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={q.evidence_required}
-                                onChange={(e) => updateQuestion(idx, 'evidence_required', e.target.checked)}
-                                className="rounded border-orange-300 text-orange-600"
-                              />
-                              <Paperclip className="h-3 w-3" />
-                              Evidence Required
-                            </label>
-                          </div>
-
-                          {/* Options for multiple choice */}
-                          {q.type === 'multiple_choice' && (
-                            <div className="pl-2 space-y-1">
-                              <p className="text-xs text-gray-400">Options:</p>
-                              {(q.options || []).map((opt, optIdx) => (
-                                <div key={optIdx} className="flex items-center gap-2">
-                                  <div className="w-3 h-3 rounded-full border-2 border-gray-300 shrink-0" />
-                                  <input
-                                    type="text"
-                                    value={opt}
-                                    onChange={(e) => updateOption(idx, optIdx, e.target.value)}
-                                    placeholder={`Option ${optIdx + 1}`}
-                                    className="flex-1 px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                                  />
-                                  <button type="button" onClick={() => removeOption(idx, optIdx)} className="text-gray-400 hover:text-red-500">
-                                    <X className="h-3 w-3" />
-                                  </button>
-                                </div>
-                              ))}
-                              <button
-                                type="button"
-                                onClick={() => addOption(idx)}
-                                className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-1"
-                              >
-                                <Plus className="h-3 w-3" /> Add Option
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                        {templateForm.questions.length > 1 && (
-                          <button type="button" onClick={() => removeQuestion(idx)} className="text-gray-400 hover:text-red-600 mt-2 shrink-0">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              </div>
-
-              <div className="flex justify-end gap-3 border-t border-gray-200 p-6 pt-4">
-                <button type="button" onClick={() => setShowCreateModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button type="submit" disabled={createMutation.isPending} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-                  {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Create Template
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showPreviewModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="flex h-[70vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">{showPreviewModal.name}</h2>
-                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize mt-1 ${getCategoryBadge(showPreviewModal.category)}`}>
-                  {showPreviewModal.category}
+              <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                <p className="text-xs text-gray-500">Status</p>
+                <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-xs font-medium capitalize border ${getResponseStatusPill(selectedResponse.status)}`}>
+                  {selectedResponse.status?.replace(/_/g, ' ')}
                 </span>
               </div>
-              <button onClick={() => setShowPreviewModal(null)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+              <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
+                <p className="text-xs text-gray-500">Submitted</p>
+                <p className="text-sm font-medium text-slate-900 mt-1">
+                  {selectedResponse.submitted_at ? new Date(selectedResponse.submitted_at).toLocaleString() : '-'}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {showPreviewModal.description && (
-                <p className="text-sm text-gray-500">{showPreviewModal.description}</p>
-              )}
+
+            {selectedResponseTemplate?.questions?.length ? (
               <div className="space-y-3">
-                {(showPreviewModal.questions || []).map((q: any, idx: number) => (
-                  <div key={idx} className="border border-gray-200 rounded-lg p-3">
-                    <div className="flex items-start gap-2">
-                      <span className="text-xs font-mono text-gray-400 mt-0.5">{idx + 1}.</span>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-800">{q.text}</p>
-                        <div className="flex items-center gap-3 mt-2 flex-wrap">
-                          <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full capitalize">
-                            {q.type?.replace('_', '/')}
-                          </span>
-                          <span className="text-xs text-gray-400">Weight: {q.weight || 3}/5</span>
-                          {q.required && <span className="text-xs text-blue-600">Required</span>}
-                          {q.evidence_required && (
-                            <span className="text-xs text-orange-600 flex items-center gap-1">
-                              <Paperclip className="h-3 w-3" /> Evidence Required
-                            </span>
-                          )}
-                        </div>
-                        {q.type === 'multiple_choice' && q.options?.length > 0 && (
-                          <div className="mt-2 pl-2 space-y-1">
-                            {q.options.map((opt: string, i: number) => (
-                              <div key={i} className="flex items-center gap-2 text-xs text-gray-500">
-                                <div className="w-3 h-3 rounded-full border-2 border-gray-300" />
-                                {opt}
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                {selectedResponseTemplate.questions.map((question, index) => {
+                  const answer = (selectedResponse.responses || {})[String(question.id)];
+                  return (
+                    <div key={`${question.id}-${index}`} className="rounded-lg border border-gray-200 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-sm font-medium text-slate-900 flex-1">
+                          <span className="text-gray-400 font-mono mr-2">Q{index + 1}.</span>
+                          {question.text}
+                        </p>
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 capitalize">
+                          {question.type.replace(/_/g, '/')}
+                        </span>
+                      </div>
+                      <div className="mt-2 rounded bg-gray-50 border border-gray-200 p-2 text-sm text-gray-800">
+                        {formatAnswer(answer)}
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showSendModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="flex h-[70vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Send Questionnaire</h2>
-              <button onClick={() => { setShowSendModal(false); setSendSuccess(null); setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' }); }} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
-            </div>
-
-            {sendSuccess ? (
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                  <FileCheck className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-green-800">Questionnaire sent successfully!</p>
-                  <p className="text-xs text-green-600 mt-1">Share the link below with the vendor to fill out the questionnaire.</p>
-                </div>
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                  <label className="block text-xs text-gray-500 mb-1">Vendor Response Link</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={buildQuestionnaireLink(sendSuccess.token)}
-                      className="flex-1 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm text-gray-700"
-                    />
-                    <button
-                      onClick={() => navigator.clipboard.writeText(buildQuestionnaireLink(sendSuccess.token))}
-                      className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 flex items-center gap-1"
-                    >
-                      <Copy className="h-4 w-4" /> Copy
-                    </button>
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    onClick={() => { setShowSendModal(false); setSendSuccess(null); setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' }); }}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200"
-                  >
-                    Done
-                  </button>
-                </div>
+                  );
+                })}
               </div>
             ) : (
-              <form onSubmit={handleSendSubmit} className="flex flex-1 flex-col overflow-hidden">
-                <div className="grid flex-1 gap-4 overflow-y-auto p-6 md:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
-                  <select
-                    required
-                    value={sendForm.vendor_id}
-                    onChange={(e) => {
-                      const vendorId = e.target.value;
-                      const v = (vendors ?? []).find((x) => String(x.id) === e.target.value);
-                      const vendorAssessments = (assessments || []).filter((item) => String(item.vendor_id) === vendorId);
-                      setSendForm({
-                        ...sendForm,
-                        vendor_id: vendorId,
-                        assessment_id: vendorAssessments[0] ? String(vendorAssessments[0].id) : '',
-                        respondent_email: v?.primary_contact_email || sendForm.respondent_email,
-                        respondent_name: v?.primary_contact_name || sendForm.respondent_name,
-                      });
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select vendor...</option>
-                    {(vendors ?? []).map((v) => (
-                      <option key={v.id} value={v.id}>{v.name}</option>
+              <div className="rounded-lg border border-gray-200 p-3">
+                <p className="text-sm font-medium text-gray-700 mb-2">Raw Responses</p>
+                {Object.keys(selectedResponse.responses || {}).length === 0 ? (
+                  <p className="text-sm text-gray-400">No responses submitted yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {Object.entries(selectedResponse.responses || {}).map(([questionId, answer]) => (
+                      <div key={questionId} className="text-sm text-gray-800 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                        <p className="text-xs text-gray-500 mb-1">{questionId}</p>
+                        <p>{formatAnswer(answer)}</p>
+                      </div>
                     ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Link to Assessment (optional)</label>
-                  <select
-                    value={sendForm.assessment_id}
-                    onChange={(e) => setSendForm({ ...sendForm, assessment_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={!sendForm.vendor_id}
-                  >
-                    <option value="">No linked assessment</option>
-                    {sendAssessmentOptions.map((assessment) => (
-                      <option key={assessment.id} value={assessment.id}>
-                        #{assessment.id} - {formatAssessmentType(assessment.assessment_type)} ({assessment.status.replace(/_/g, ' ')})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Respondent Name</label>
-                  <input
-                    type="text"
-                    value={sendForm.respondent_name}
-                    onChange={(e) => setSendForm({ ...sendForm, respondent_name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Vendor contact name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Respondent Email</label>
-                  <input
-                    type="email"
-                    value={sendForm.respondent_email}
-                    onChange={(e) => setSendForm({ ...sendForm, respondent_email: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="vendor-contact@example.com"
-                  />
-                </div>
-                {sendMutation.isError && (
-                  <div className="text-xs text-red-600 bg-red-50 p-2 rounded-lg md:col-span-2">
-                    {(sendMutation.error as any)?.response?.data?.detail || 'Failed to send questionnaire'}
                   </div>
                 )}
-                </div>
-                <div className="flex justify-end gap-3 border-t border-gray-200 p-6 pt-4">
-                  <button type="button" onClick={() => { setShowSendModal(false); setSendSuccess(null); setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' }); }} className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                  <button type="submit" disabled={sendMutation.isPending} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
-                    {sendMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                    <Send className="h-4 w-4" /> Send Questionnaire
-                  </button>
-                </div>
-              </form>
+              </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </RightSlidePanel>
+
+      {/* Create Template Slide Panel */}
+      <RightSlidePanel
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Create Questionnaire Template"
+        width="w-full max-w-4xl"
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(false)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="create-template-form"
+              disabled={createMutation.isPending}
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {createMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Create Template'
+              )}
+            </button>
+          </div>
+        }
+      >
+        <form id="create-template-form" onSubmit={handleCreateSubmit} className="space-y-4">
+          {/* Name + Category */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <label className={labelClass}>Template Name *</label>
+              <input
+                type="text"
+                required
+                value={templateForm.name}
+                onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
+                className={inputClass}
+                placeholder="e.g., Annual Security Assessment"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Category</label>
+              <MultiSelectDropdown
+                title="Category"
+                items={categoryItems}
+                selectedValues={[templateForm.category]}
+                onApply={(values) =>
+                  setTemplateForm({ ...templateForm, category: values[0] || 'security' })
+                }
+                multiSelect={false}
+                triggerVariant="input"
+                size="md"
+                placeholder="Select category"
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className={labelClass}>Description</label>
+            <textarea
+              value={templateForm.description}
+              onChange={(e) => setTemplateForm({ ...templateForm, description: e.target.value })}
+              className={inputClass}
+              rows={2}
+              placeholder="Brief description of this questionnaire's purpose..."
+            />
+          </div>
+
+          {/* Questions Builder */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-sm font-medium text-gray-800">
+                Questions ({templateForm.questions.filter((q) => q.text.trim()).length})
+              </label>
+              <div className="flex items-center gap-2">
+                {DEFAULT_QUESTIONS[templateForm.category] && (
+                  <button
+                    type="button"
+                    onClick={() => loadDefaultQuestions(templateForm.category)}
+                    className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1 px-2 py-1 bg-purple-50 rounded-lg"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    Load {templateForm.category.charAt(0).toUpperCase() + templateForm.category.slice(1)} Defaults
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={addQuestion}
+                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-lg"
+                >
+                  <Plus className="h-3 w-3" /> Add Question
+                </button>
+              </div>
+            </div>
+            <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+              {templateForm.questions.map((q, idx) => (
+                <div key={q.id} className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50/50">
+                  {/* Row 1: Question text + type */}
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-gray-400 font-mono mt-2 shrink-0 w-6">Q{idx + 1}</span>
+                    <div className="flex-1 space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Enter your question..."
+                        value={q.text}
+                        onChange={(e) => updateQuestion(idx, 'text', e.target.value)}
+                        className={inputClass}
+                      />
+                      {/* Row 2: Controls */}
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <div className="min-w-[160px]">
+                          <MultiSelectDropdown
+                            title="Type"
+                            items={questionTypeItems}
+                            selectedValues={[q.type]}
+                            onApply={(values) => updateQuestion(idx, 'type', values[0] || 'text')}
+                            multiSelect={false}
+                            triggerVariant="input"
+                            size="md"
+                            placeholder="Type"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <label className="text-xs text-gray-500">Weight:</label>
+                          <div className="w-20">
+                            <MultiSelectDropdown
+                              title="Weight"
+                              items={weightItems}
+                              selectedValues={[String(q.weight)]}
+                              onApply={(values) => updateQuestion(idx, 'weight', Number(values[0] || 3))}
+                              multiSelect={false}
+                              triggerVariant="input"
+                              size="md"
+                              placeholder="Weight"
+                            />
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={q.required}
+                            onChange={(e) => updateQuestion(idx, 'required', e.target.checked)}
+                            className="rounded border-gray-300 text-blue-600"
+                          />
+                          Required
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-orange-600 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={q.evidence_required}
+                            onChange={(e) => updateQuestion(idx, 'evidence_required', e.target.checked)}
+                            className="rounded border-orange-300 text-orange-600"
+                          />
+                          <Paperclip className="h-3 w-3" />
+                          Evidence Required
+                        </label>
+                      </div>
+
+                      {/* Options for multiple choice */}
+                      {q.type === 'multiple_choice' && (
+                        <div className="pl-2 space-y-1">
+                          <p className="text-xs text-gray-400">Options:</p>
+                          {(q.options || []).map((opt, optIdx) => (
+                            <div key={optIdx} className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full border-2 border-gray-300 shrink-0" />
+                              <input
+                                type="text"
+                                value={opt}
+                                onChange={(e) => updateOption(idx, optIdx, e.target.value)}
+                                placeholder={`Option ${optIdx + 1}`}
+                                className="flex-1 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                              />
+                              <button type="button" onClick={() => removeOption(idx, optIdx)} className="text-gray-400 hover:text-red-500">
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => addOption(idx)}
+                            className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 mt-1"
+                          >
+                            <Plus className="h-3 w-3" /> Add Option
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {templateForm.questions.length > 1 && (
+                      <button type="button" onClick={() => removeQuestion(idx)} className="text-gray-400 hover:text-red-600 mt-2 shrink-0">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </form>
+      </RightSlidePanel>
+
+      {/* Preview Slide Panel */}
+      <RightSlidePanel
+        isOpen={!!showPreviewModal}
+        onClose={() => setShowPreviewModal(null)}
+        title={showPreviewModal?.name || ''}
+        subtitle={showPreviewModal?.category ? showPreviewModal.category.charAt(0).toUpperCase() + showPreviewModal.category.slice(1) : undefined}
+        width="w-full max-w-3xl"
+      >
+        {showPreviewModal && (
+          <div className="space-y-4">
+            {showPreviewModal.description && (
+              <p className="text-sm text-gray-500">{showPreviewModal.description}</p>
+            )}
+            <div className="space-y-3">
+              {(showPreviewModal.questions || []).map((q: any, idx: number) => (
+                <div key={idx} className="border border-gray-200 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs font-mono text-gray-400 mt-0.5">{idx + 1}.</span>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-800">{q.text}</p>
+                      <div className="flex items-center gap-3 mt-2 flex-wrap">
+                        <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full capitalize">
+                          {q.type?.replace('_', '/')}
+                        </span>
+                        <span className="text-xs text-gray-400">Weight: {q.weight || 3}/5</span>
+                        {q.required && <span className="text-xs text-blue-600">Required</span>}
+                        {q.evidence_required && (
+                          <span className="text-xs text-orange-600 flex items-center gap-1">
+                            <Paperclip className="h-3 w-3" /> Evidence Required
+                          </span>
+                        )}
+                      </div>
+                      {q.type === 'multiple_choice' && q.options?.length > 0 && (
+                        <div className="mt-2 pl-2 space-y-1">
+                          {q.options.map((opt: string, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-xs text-gray-500">
+                              <div className="w-3 h-3 rounded-full border-2 border-gray-300" />
+                              {opt}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </RightSlidePanel>
+
+      {/* Send Questionnaire Slide Panel */}
+      <RightSlidePanel
+        isOpen={showSendModal}
+        onClose={() => {
+          setShowSendModal(false);
+          setSendSuccess(null);
+          setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' });
+        }}
+        title="Send Questionnaire"
+        width="w-full max-w-3xl"
+        footer={
+          sendSuccess ? (
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSendModal(false);
+                  setSendSuccess(null);
+                  setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' });
+                }}
+                className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
+              >
+                Done
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSendModal(false);
+                  setSendSuccess(null);
+                  setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' });
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="send-questionnaire-form"
+                disabled={sendMutation.isPending}
+                className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+              >
+                {sendMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Send Questionnaire
+                  </>
+                )}
+              </button>
+            </div>
+          )
+        }
+      >
+        {sendSuccess ? (
+          <div className="space-y-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+              <FileCheck className="h-8 w-8 text-green-600 mx-auto mb-2" />
+              <p className="text-sm font-medium text-green-800">Questionnaire sent successfully!</p>
+              <p className="text-xs text-green-600 mt-1">Share the link below with the vendor to fill out the questionnaire.</p>
+            </div>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <label className="block text-xs text-gray-500 mb-1">Vendor Response Link</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={buildQuestionnaireLink(sendSuccess.token)}
+                  className={inputClass}
+                />
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(buildQuestionnaireLink(sendSuccess.token))}
+                  className="cw-btn-primary inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm"
+                >
+                  <Copy className="h-4 w-4" /> Copy
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <form id="send-questionnaire-form" onSubmit={handleSendSubmit} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label className={labelClass}>Vendor *</label>
+                <MultiSelectDropdown
+                  title="Vendor"
+                  items={vendorItems}
+                  selectedValues={sendForm.vendor_id ? [sendForm.vendor_id] : []}
+                  onApply={(values) => {
+                    const vendorId = values[0] || '';
+                    const v = (vendors ?? []).find((x) => String(x.id) === vendorId);
+                    const vendorAssessments = (assessments || []).filter(
+                      (item) => String(item.vendor_id) === vendorId
+                    );
+                    setSendForm({
+                      ...sendForm,
+                      vendor_id: vendorId,
+                      assessment_id: vendorAssessments[0] ? String(vendorAssessments[0].id) : '',
+                      respondent_email: v?.primary_contact_email || sendForm.respondent_email,
+                      respondent_name: v?.primary_contact_name || sendForm.respondent_name,
+                    });
+                  }}
+                  multiSelect={false}
+                  triggerVariant="input"
+                  size="md"
+                  placeholder="Select vendor..."
+                  forceSearch
+                />
+                {/* Hidden required input to keep native form validation */}
+                <input
+                  type="text"
+                  required
+                  value={sendForm.vendor_id}
+                  onChange={() => {}}
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Link to Assessment (optional)</label>
+                <MultiSelectDropdown
+                  title="Assessment"
+                  items={assessmentItems}
+                  selectedValues={sendForm.assessment_id ? [sendForm.assessment_id] : []}
+                  onApply={(values) =>
+                    setSendForm({ ...sendForm, assessment_id: values[0] || '' })
+                  }
+                  multiSelect={false}
+                  triggerVariant="input"
+                  size="md"
+                  placeholder={sendForm.vendor_id ? 'No linked assessment' : 'Select vendor first'}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Respondent Name</label>
+                <input
+                  type="text"
+                  value={sendForm.respondent_name}
+                  onChange={(e) => setSendForm({ ...sendForm, respondent_name: e.target.value })}
+                  className={inputClass}
+                  placeholder="Vendor contact name"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Respondent Email</label>
+                <input
+                  type="email"
+                  value={sendForm.respondent_email}
+                  onChange={(e) => setSendForm({ ...sendForm, respondent_email: e.target.value })}
+                  className={inputClass}
+                  placeholder="vendor-contact@example.com"
+                />
+              </div>
+              {sendMutation.isError && (
+                <div className="text-xs text-red-600 bg-red-50 p-2 rounded-lg md:col-span-2">
+                  {(sendMutation.error as any)?.response?.data?.detail || 'Failed to send questionnaire'}
+                </div>
+              )}
+            </div>
+          </form>
+        )}
+      </RightSlidePanel>
     </div>
   );
 }
-
-

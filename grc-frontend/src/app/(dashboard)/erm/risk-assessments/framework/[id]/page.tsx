@@ -99,6 +99,8 @@ export default function FrameworkRiskAssessmentDetailPage() {
       return res.data as AssessmentDetail;
     },
     enabled: Number.isFinite(assessmentId),
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 
   const { data: users } = useQuery({

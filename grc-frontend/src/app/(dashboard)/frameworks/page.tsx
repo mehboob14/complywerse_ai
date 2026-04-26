@@ -26,6 +26,7 @@ import {
   Sparkles,
   CheckCircle,
   Eye,
+  ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -448,13 +449,22 @@ export default function FrameworksPage() {
           <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Compliance Frameworks</h1>
           <p className="mt-1 text-sm text-slate-600">Manage frameworks and track certification journeys</p>
         </div>
-        <div className="w-full sm:max-w-xs flex-shrink-0">
-          <SearchInput
-            value={frameworkSearch}
-            onChange={setFrameworkSearch}
-            placeholder="Search frameworks..."
-            size="md"
-          />
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:flex-shrink-0">
+          <div className="flex-1 min-w-[180px] sm:w-72">
+            <SearchInput
+              value={frameworkSearch}
+              onChange={setFrameworkSearch}
+              placeholder="Search frameworks..."
+              size="md"
+            />
+          </div>
+          <Link
+            href="/auditor-portal"
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 sm:px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Auditor Portal
+          </Link>
         </div>
       </div>
 

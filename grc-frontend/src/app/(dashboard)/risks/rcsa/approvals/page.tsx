@@ -192,6 +192,11 @@ export default function RCSAApprovalsPage() {
     }
   };
 
+  const campaignItems = useMemo(
+    () => (campaigns || []).map((c) => ({ value: String(c.id), label: c.name })),
+    [campaigns]
+  );
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -208,11 +213,6 @@ export default function RCSAApprovalsPage() {
       </div>
     );
   }
-
-  const campaignItems = useMemo(
-    () => (campaigns || []).map((c) => ({ value: String(c.id), label: c.name })),
-    [campaigns]
-  );
 
   return (
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">

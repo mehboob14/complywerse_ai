@@ -28,18 +28,18 @@ type AssessmentType = 'periodic' | 'annual' | 'ad_hoc' | 'triggered';
 type Methodology = 'qualitative' | 'quantitative' | 'semi_quantitative';
 
 const STATUS_CONFIG: Record<AssessmentStatus, { label: string; color: string; bgColor: string }> = {
-  draft: { label: 'Draft', color: 'text-slate-700', bgColor: 'bg-slate-500/20' },
-  in_progress: { label: 'In Progress', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  under_review: { label: 'Under Review', color: 'text-amber-400', bgColor: 'bg-amber-500/20' },
-  approved: { label: 'Approved', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
-  closed: { label: 'Closed', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
+  draft: { label: 'Draft', color: 'text-white', bgColor: 'bg-slate-500' },
+  in_progress: { label: 'In Progress', color: 'text-white', bgColor: 'bg-blue-600' },
+  under_review: { label: 'Under Review', color: 'text-white', bgColor: 'bg-amber-600' },
+  approved: { label: 'Approved', color: 'text-white', bgColor: 'bg-emerald-600' },
+  closed: { label: 'Closed', color: 'text-white', bgColor: 'bg-purple-600' },
 };
 
 const TYPE_CONFIG: Record<AssessmentType, { label: string; color: string; bgColor: string }> = {
-  periodic: { label: 'Periodic', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20' },
-  annual: { label: 'Annual', color: 'text-indigo-400', bgColor: 'bg-indigo-500/20' },
-  ad_hoc: { label: 'Ad Hoc', color: 'text-orange-400', bgColor: 'bg-orange-500/20' },
-  triggered: { label: 'Triggered', color: 'text-rose-400', bgColor: 'bg-rose-500/20' },
+  periodic: { label: 'Periodic', color: 'text-white', bgColor: 'bg-cyan-600' },
+  annual: { label: 'Annual', color: 'text-white', bgColor: 'bg-indigo-600' },
+  ad_hoc: { label: 'Ad Hoc', color: 'text-white', bgColor: 'bg-orange-600' },
+  triggered: { label: 'Triggered', color: 'text-white', bgColor: 'bg-rose-600' },
 };
 
 const METHODOLOGY_LABELS: Record<Methodology, string> = {
@@ -91,11 +91,11 @@ type CombinedAssessment =
   | (FrameworkAssessment & { source: 'framework' });
 
 const FRAMEWORK_STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
-  in_progress: { label: 'In Progress', color: 'text-blue-400', bgColor: 'bg-blue-500/20' },
-  completed: { label: 'Completed', color: 'text-emerald-400', bgColor: 'bg-emerald-500/20' },
-  archived: { label: 'Archived', color: 'text-slate-700', bgColor: 'bg-slate-500/20' },
-  not_started: { label: 'Not Started', color: 'text-slate-700', bgColor: 'bg-slate-500/20' },
-  blocked: { label: 'Blocked', color: 'text-rose-400', bgColor: 'bg-rose-500/20' },
+  in_progress: { label: 'In Progress', color: 'text-white', bgColor: 'bg-blue-600' },
+  completed: { label: 'Completed', color: 'text-white', bgColor: 'bg-emerald-600' },
+  archived: { label: 'Archived', color: 'text-white', bgColor: 'bg-slate-700' },
+  not_started: { label: 'Not Started', color: 'text-white', bgColor: 'bg-slate-500' },
+  blocked: { label: 'Blocked', color: 'text-white', bgColor: 'bg-rose-600' },
 };
 
 const FRAMEWORK_STATUS_TO_STANDARD: Partial<Record<string, AssessmentStatus>> = {

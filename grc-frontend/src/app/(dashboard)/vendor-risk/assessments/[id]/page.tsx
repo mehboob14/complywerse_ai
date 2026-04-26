@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { vendorRiskApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -14,16 +14,12 @@ import {
   FileCheck,
   Clock,
   User,
-  Calendar,
   CheckCircle2,
-  XCircle,
   Plus,
-  X,
   Trash2,
   Save,
   Play,
   Award,
-  ChevronRight,
   ClipboardList,
   BarChart3,
   Mail,
@@ -33,6 +29,7 @@ import {
   FileText,
 } from 'lucide-react';
 import Link from 'next/link';
+import { MultiSelectDropdown } from '@/components/ui';
 
 interface Assessment {
   id: number;
@@ -106,25 +103,25 @@ const STATUS_LABELS: Record<string, string> = {
   approved: 'Approved',
 };
 
-const getStatusBadge = (status: string) => {
+const getStatusPill = (status: string) => {
   const styles: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-600',
-    in_progress: 'bg-blue-100 text-blue-700',
-    submitted: 'bg-yellow-100 text-yellow-700',
-    reviewed: 'bg-indigo-100 text-indigo-700',
-    approved: 'bg-green-100 text-green-700',
+    draft: 'bg-gray-600 text-white border-gray-700',
+    in_progress: 'bg-blue-600 text-white border-blue-700',
+    submitted: 'bg-yellow-600 text-white border-yellow-700',
+    reviewed: 'bg-indigo-600 text-white border-indigo-700',
+    approved: 'bg-green-600 text-white border-green-700',
   };
-  return styles[status?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return styles[status?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
 };
 
-const getRatingBadge = (rating: string) => {
+const getRatingPill = (rating: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-100 text-red-700',
-    high: 'bg-orange-100 text-orange-700',
-    medium: 'bg-yellow-100 text-yellow-700',
-    low: 'bg-green-100 text-green-700',
+    critical: 'bg-red-600 text-white border-red-700',
+    high: 'bg-orange-600 text-white border-orange-700',
+    medium: 'bg-yellow-600 text-white border-yellow-700',
+    low: 'bg-green-600 text-white border-green-700',
   };
-  return styles[rating?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return styles[rating?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
 };
 
 const getRatingColor = (rating: string) => {
@@ -200,6 +197,7 @@ export default function AssessmentDetailPage() {
       return res.data as Assessment;
     },
     enabled: !!assessmentId,
+    placeholderData: keepPreviousData,
   });
 
   const { data: linkedTemplate } = useQuery({
@@ -210,6 +208,7 @@ export default function AssessmentDetailPage() {
       return items.find((t) => t.id === assessment?.template_id) || null;
     },
     enabled: !!assessment?.template_id,
+    placeholderData: keepPreviousData,
   });
 
   // ── Mutations ───────────────────────────────────────────────
@@ -331,7 +330,7 @@ export default function AssessmentDetailPage() {
   // ── Render ──────────────────────────────────────────────────
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => router.push('/vendor-risk/assessments')} className="text-gray-400 hover:text-gray-600">
@@ -339,12 +338,12 @@ export default function AssessmentDetailPage() {
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-semibold text-gray-900">{formatAssessmentType(assessment.assessment_type)}</h1>
-            <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(assessment.status)}`}>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{formatAssessmentType(assessment.assessment_type)}</h1>
+            <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusPill(assessment.status)}`}>
               {STATUS_LABELS[assessment.status] || assessment.status}
             </span>
             {assessment.risk_rating && (
-              <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getRatingBadge(assessment.risk_rating)}`}>
+              <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border ${getRatingPill(assessment.risk_rating)}`}>
                 {assessment.risk_rating} risk
               </span>
             )}
@@ -362,7 +361,7 @@ export default function AssessmentDetailPage() {
       </div>
 
       {/* Status Flow */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
         <div className="flex items-center justify-between">
           {STATUS_FLOW.map((step, idx) => {
             const isCompleted = idx < currentStatusIdx;
@@ -412,7 +411,7 @@ export default function AssessmentDetailPage() {
 
       {/* ═══ Overview Tab ═══ */}
       {activeTab === 'overview' && (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Info Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
@@ -421,7 +420,7 @@ export default function AssessmentDetailPage() {
               { label: 'Risk Rating', value: assessment.risk_rating ? assessment.risk_rating.charAt(0).toUpperCase() + assessment.risk_rating.slice(1) : '-', icon: AlertTriangle, color: assessment.risk_rating === 'critical' ? 'red' : assessment.risk_rating === 'high' ? 'orange' : assessment.risk_rating === 'medium' ? 'yellow' : 'green' },
               { label: 'Status', value: STATUS_LABELS[assessment.status] || assessment.status, icon: Clock, color: 'gray' },
             ].map(({ label, value, icon: Icon, color }) => (
-              <div key={label} className="bg-white rounded-xl border border-gray-200 p-4">
+              <div key={label} className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-lg bg-${color}-50`}>
                     <Icon className={`h-5 w-5 text-${color}-600`} />
@@ -438,8 +437,8 @@ export default function AssessmentDetailPage() {
           {/* Details Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Assessment Details */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-              <h3 className="text-sm font-semibold text-gray-900">Assessment Details</h3>
+            <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900">Assessment Details</h3>
               {[
                 { label: 'Type', value: formatAssessmentType(assessment.assessment_type) },
                 { label: 'Assessor', value: assessment.assessor ? (typeof assessment.assessor === 'object' ? assessment.assessor.full_name : assessment.assessor) : '-' },
@@ -455,26 +454,32 @@ export default function AssessmentDetailPage() {
               ))}
 
               {/* Status Change */}
-              {!isApproved && (
+              {!isApproved && canEdit && (
                 <div className="pt-3 border-t border-gray-100">
-                  <label className="block text-xs text-gray-500 mb-1">Change Status</label>
-                  <select
-                    value={assessment.status}
-                    onChange={(e) => handleStatusChange(e.target.value)}
-                    disabled={updateMutation.isPending}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {STATUS_FLOW.filter((s) => s !== 'approved').map((s) => (
-                      <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                    ))}
-                  </select>
+                  <label className="block text-sm font-medium text-gray-800 mb-1">Change Status</label>
+                  <MultiSelectDropdown
+                    title="Status"
+                    multiSelect={false}
+                    triggerVariant="input"
+                    size="md"
+                    placeholder="Select status..."
+                    selectedValues={[assessment.status]}
+                    onApply={(values) => {
+                      const v = values[0];
+                      if (v && v !== assessment.status) handleStatusChange(v);
+                    }}
+                    items={STATUS_FLOW.filter((s) => s !== 'approved').map((s) => ({
+                      value: s,
+                      label: STATUS_LABELS[s],
+                    }))}
+                  />
                 </div>
               )}
             </div>
 
             {/* Vendor & Template */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-              <h3 className="text-sm font-semibold text-gray-900">Linked Records</h3>
+            <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900">Linked Records</h3>
               <div className="flex items-center justify-between py-1">
                 <span className="text-sm text-gray-500">Vendor</span>
                 <Link href={`/vendor-risk/vendors/${assessment.vendor_id}`} className="text-sm font-medium text-blue-600 hover:text-blue-800">
@@ -493,14 +498,14 @@ export default function AssessmentDetailPage() {
           </div>
 
           {/* Findings */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-gray-900">Findings ({findings.length})</h3>
+              <h3 className="text-sm font-semibold text-slate-900">Findings ({findings.length})</h3>
               {editFindings !== null && (
                 <button
                   onClick={handleSaveFindings}
                   disabled={updateMutation.isPending}
-                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                  className="cw-btn-primary inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
                 >
                   {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
                   Save
@@ -517,14 +522,14 @@ export default function AssessmentDetailPage() {
                     <span className="text-sm text-gray-700 flex-1">{String(f)}</span>
                     {editFindings !== null && (
                       <button onClick={() => removeFinding(idx)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600">
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     )}
                   </li>
                 ))}
               </ul>
             )}
-            {!isApproved && (
+            {!isApproved && canEdit && (
               <div className="mt-3 flex items-center gap-2">
                 <input
                   type="text"
@@ -533,7 +538,7 @@ export default function AssessmentDetailPage() {
                   onChange={(e) => setNewFinding(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') { addFinding(); } }}
                   onFocus={() => { if (editFindings === null) setEditFindings([...(assessment.findings ?? [])]); }}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
                 <button
                   onClick={addFinding}
@@ -546,14 +551,14 @@ export default function AssessmentDetailPage() {
           </div>
 
           {/* Recommendations */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-gray-900">Recommendations ({recommendations.length})</h3>
+              <h3 className="text-sm font-semibold text-slate-900">Recommendations ({recommendations.length})</h3>
               {editRecommendations !== null && (
                 <button
                   onClick={handleSaveRecommendations}
                   disabled={updateMutation.isPending}
-                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                  className="cw-btn-primary inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
                 >
                   {updateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
                   Save
@@ -570,14 +575,14 @@ export default function AssessmentDetailPage() {
                     <span className="text-sm text-gray-700 flex-1">{String(r)}</span>
                     {editRecommendations !== null && (
                       <button onClick={() => removeRecommendation(idx)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-600">
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     )}
                   </li>
                 ))}
               </ul>
             )}
-            {!isApproved && (
+            {!isApproved && canEdit && (
               <div className="mt-3 flex items-center gap-2">
                 <input
                   type="text"
@@ -586,7 +591,7 @@ export default function AssessmentDetailPage() {
                   onChange={(e) => setNewRecommendation(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') { addRecommendation(); } }}
                   onFocus={() => { if (editRecommendations === null) setEditRecommendations([...(assessment.recommendations ?? [])]); }}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
                 <button
                   onClick={addRecommendation}
@@ -611,7 +616,7 @@ export default function AssessmentDetailPage() {
               {linkedTemplate && (linkedTemplate.questions || []).length > 0 && (
                 <div className="mt-6 text-left border border-gray-200 rounded-lg overflow-hidden">
                   <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                    <p className="text-sm font-semibold text-gray-800">Questions linked to this assessment</p>
+                    <p className="text-sm font-semibold text-slate-900">Questions linked to this assessment</p>
                     <p className="text-xs text-gray-500 mt-0.5">
                       Template: {linkedTemplate.name} • Category: {linkedTemplate.category || getAssessmentCategory(assessment.assessment_type)}
                     </p>
@@ -654,7 +659,7 @@ export default function AssessmentDetailPage() {
                   <div className="px-5 py-4 border-b border-gray-200">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-gray-900">Response #{qr.id}</p>
+                        <p className="text-sm font-semibold text-slate-900">Response #{qr.id}</p>
                         <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
                           {qr.respondent_name && (
                             <span className="flex items-center gap-1"><User className="h-3 w-3" />{qr.respondent_name}</span>
@@ -665,7 +670,7 @@ export default function AssessmentDetailPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusBadge(qr.status)}`}>
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize border ${getStatusPill(qr.status)}`}>
                           {qr.status}
                         </span>
                         {qr.submitted_at && (
@@ -799,18 +804,18 @@ export default function AssessmentDetailPage() {
 
       {/* ═══ Scoring & Approval Tab ═══ */}
       {activeTab === 'scoring' && (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Current Scores */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-xl border border-gray-200 p-5 text-center">
+            <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 text-center">
               <p className="text-xs text-gray-500 mb-1">Inherent Score</p>
               <p className="text-3xl font-bold text-gray-900">{assessment.inherent_score?.toFixed(1) ?? '-'}</p>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 text-center">
+            <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 text-center">
               <p className="text-xs text-gray-500 mb-1">Residual Score</p>
               <p className="text-3xl font-bold text-gray-900">{assessment.residual_score?.toFixed(1) ?? '-'}</p>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5 text-center">
+            <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 text-center">
               <p className="text-xs text-gray-500 mb-1">Risk Rating</p>
               <p className={`text-3xl font-bold capitalize ${assessment.risk_rating ? getRatingColor(assessment.risk_rating) : 'text-gray-400'}`}>
                 {assessment.risk_rating || '-'}
@@ -820,7 +825,7 @@ export default function AssessmentDetailPage() {
 
           {/* Score Result Banner */}
           {scoreResult && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 sm:p-4 flex items-center gap-3">
               <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
               <div>
                 <p className="text-sm font-medium text-green-800">Scoring Complete</p>
@@ -834,10 +839,10 @@ export default function AssessmentDetailPage() {
           {/* Actions */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Calculate Score */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
               <div className="flex items-center gap-2 mb-3">
                 <BarChart3 className="h-5 w-5 text-blue-600" />
-                <h3 className="text-sm font-semibold text-gray-900">Calculate Risk Score</h3>
+                <h3 className="text-sm font-semibold text-slate-900">Calculate Risk Score</h3>
               </div>
               <p className="text-xs text-gray-500 mb-4">
                 Calculates a weighted risk score based on submitted questionnaire responses.
@@ -851,7 +856,7 @@ export default function AssessmentDetailPage() {
               <button
                 onClick={() => scoreMutation.mutate()}
                 disabled={scoreMutation.isPending || isApproved || !canEdit}
-                className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="cw-btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
               >
                 {scoreMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
                 Calculate Score
@@ -859,10 +864,10 @@ export default function AssessmentDetailPage() {
             </div>
 
             {/* Approve Assessment */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Award className="h-5 w-5 text-green-600" />
-                <h3 className="text-sm font-semibold text-gray-900">Approve Assessment</h3>
+                <h3 className="text-sm font-semibold text-slate-900">Approve Assessment</h3>
               </div>
               <p className="text-xs text-gray-500 mb-4">
                 Approving finalizes this assessment and updates the vendor&apos;s risk scores.
@@ -876,18 +881,23 @@ export default function AssessmentDetailPage() {
               ) : (
                 <>
                   <div className="mb-3">
-                    <label className="block text-xs text-gray-500 mb-1">Override Risk Rating (optional)</label>
-                    <select
-                      value={approveRating}
-                      onChange={(e) => setApproveRating(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Use calculated rating</option>
-                      <option value="critical">Critical</option>
-                      <option value="high">High</option>
-                      <option value="medium">Medium</option>
-                      <option value="low">Low</option>
-                    </select>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Override Risk Rating (optional)</label>
+                    <MultiSelectDropdown
+                      title="Risk Rating"
+                      multiSelect={false}
+                      triggerVariant="input"
+                      size="md"
+                      placeholder="Use calculated rating"
+                      selectedValues={approveRating ? [approveRating] : []}
+                      onApply={(values) => setApproveRating(values[0] ?? '')}
+                      items={[
+                        { value: '', label: 'Use calculated rating' },
+                        { value: 'critical', label: 'Critical' },
+                        { value: 'high', label: 'High' },
+                        { value: 'medium', label: 'Medium' },
+                        { value: 'low', label: 'Low' },
+                      ]}
+                    />
                   </div>
                   {approveMutation.isError && (
                     <div className="mb-3 text-xs text-red-600 bg-red-50 p-2 rounded-lg">
@@ -897,7 +907,7 @@ export default function AssessmentDetailPage() {
                   <button
                     onClick={() => approveMutation.mutate()}
                     disabled={approveMutation.isPending || !canEdit}
-                    className="w-full px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
                   >
                     {approveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Award className="h-4 w-4" />}
                     Approve Assessment

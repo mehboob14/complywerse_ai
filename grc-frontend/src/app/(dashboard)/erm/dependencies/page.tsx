@@ -79,12 +79,12 @@ export default function DependenciesPage() {
   const riskOptions = (risks || []).map((r) => ({ value: String(r.id), label: r.title }));
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+    <div className="space-y-4 px-3 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4">
           <div>
             <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Dependencies</h2>
-            <p className="text-sm text-slate-600">Visualize relationships between risks</p>
+            <p className="text-xs text-slate-600">Visualize relationships between risks</p>
           </div>
           <MultiSelectDropdown
             title="Select risk for cascade analysis"
@@ -108,18 +108,18 @@ export default function DependenciesPage() {
       </div>
 
       {cascadeAnalysis && (
-        <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4">
-          <h3 className="font-medium text-slate-900">Cascade Analysis: {cascadeAnalysis.risk_title}</h3>
-          <p className="mt-1 text-sm text-slate-600">
+        <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-3 sm:p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Cascade Analysis: {cascadeAnalysis.risk_title}</h3>
+          <p className="mt-1 text-xs text-slate-600">
             Total Cascade Score: <span className="font-bold text-blue-400">{cascadeAnalysis.total_cascade_score.toFixed(1)}</span>
           </p>
 
           {cascadeAnalysis.direct_impacts && cascadeAnalysis.direct_impacts.length > 0 && (
-            <div className="mt-4">
-              <p className="text-sm font-medium text-slate-700">Direct Impacts:</p>
+            <div className="mt-3">
+              <p className="text-xs font-medium text-slate-700">Direct Impacts:</p>
               <div className="mt-2 space-y-1">
                 {cascadeAnalysis.direct_impacts.map((impact) => (
-                  <div key={impact.id} className="flex items-center gap-2 text-sm">
+                  <div key={impact.id} className="flex items-center gap-2 text-xs">
                     <ArrowRight className="h-4 w-4 text-blue-400" />
                     <span className="text-slate-700">{impact.title}</span>
                     <span className="text-slate-500">({impact.type}, strength: {impact.strength})</span>
@@ -136,25 +136,25 @@ export default function DependenciesPage() {
           {dependencies.map((dep) => {
             const typeInfo = DEPENDENCY_TYPES.find((t) => t.value === dep.dependency_type);
             return (
-              <div key={dep.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4">
+              <div key={dep.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <p className="font-medium text-slate-900">{dep.source_risk_title || `Risk #${dep.source_risk_id}`}</p>
+                    <p className="text-sm font-semibold text-slate-900">{dep.source_risk_title || `Risk #${dep.source_risk_id}`}</p>
                     <p className="text-xs text-slate-500">Source</p>
                   </div>
                   <div className="flex flex-col items-center">
-                    <ArrowRight className={`h-5 w-5 ${typeInfo?.color || 'text-slate-600'}`} />
+                    <ArrowRight className={`h-4 w-4 ${typeInfo?.color || 'text-slate-600'}`} />
                     <span className={`text-xs ${typeInfo?.color || 'text-slate-600'}`}>{typeInfo?.label}</span>
                   </div>
                   <div>
-                    <p className="font-medium text-slate-900">{dep.target_risk_title || `Risk #${dep.target_risk_id}`}</p>
+                    <p className="text-sm font-semibold text-slate-900">{dep.target_risk_title || `Risk #${dep.target_risk_id}`}</p>
                     <p className="text-xs text-slate-500">Target</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <p className="text-sm text-slate-600">Strength</p>
-                    <p className="font-medium text-slate-900">{dep.strength}/5</p>
+                    <p className="text-xs text-slate-600">Strength</p>
+                    <p className="text-sm font-semibold text-slate-900">{dep.strength}/5</p>
                   </div>
                   {canDelete && (
                     <button
@@ -175,9 +175,9 @@ export default function DependenciesPage() {
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-slate-200 bg-white">
-          <GitBranch className="h-12 w-12 text-slate-500" />
-          <h3 className="mt-4 text-lg font-medium text-slate-900">No dependencies defined</h3>
-          <p className="mt-1 text-slate-600">Create relationships between risks to understand cascading effects</p>
+          <GitBranch className="h-10 w-10 text-slate-500" />
+          <h3 className="mt-4 text-sm font-semibold text-slate-900">No dependencies defined</h3>
+          <p className="mt-1 text-xs text-slate-600">Create relationships between risks to understand cascading effects</p>
         </div>
       )}
 

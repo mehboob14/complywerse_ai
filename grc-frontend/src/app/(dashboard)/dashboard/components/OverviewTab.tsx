@@ -232,9 +232,6 @@ export default function OverviewTab({ data }: { data: UnifiedDashboard }) {
               </div>
               <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Top Risks Summary</h3>
             </div>
-            <Link href="/erm/risks" className="text-xs flex items-center gap-1" style={{ color: 'var(--color-base)' }}>
-              View all <ChevronRight className="h-3 w-3" />
-            </Link>
           </div>
           <div className="p-4">
             {data.risk.heatmap.length > 0 ? (
@@ -328,9 +325,6 @@ export default function OverviewTab({ data }: { data: UnifiedDashboard }) {
               </div>
               <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Recent Activity</h3>
             </div>
-            <Link href="/evidence" className="text-xs flex items-center gap-1" style={{ color: 'var(--color-base)' }}>
-              View all <ChevronRight className="h-3 w-3" />
-            </Link>
           </div>
           <div className="p-4">
             {data.recent_activity.length > 0 ? (

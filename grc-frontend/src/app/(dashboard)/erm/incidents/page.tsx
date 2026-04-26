@@ -416,163 +416,174 @@ function IncidentModal({
       onClose={onClose}
       title={incident ? 'Edit Incident' : 'Report Incident'}
     >
-      <div className="px-6 py-4">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-slate-600">Use AI to prefill incident assessment fields</p>
-              <button
-                type="button"
-                onClick={() => aiSuggestMutation.mutate()}
-                disabled={!formData.title || aiSuggestMutation.isPending}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 hover:bg-slate-100 disabled:opacity-50"
-              >
-                {aiSuggestMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                AI Suggest
-              </button>
-            </div>
-            {aiSuggestionNote && <p className="mt-2 text-xs text-slate-600">{aiSuggestionNote}</p>}
+      <form id="incident-form" onSubmit={handleSubmit} className="space-y-4">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-slate-600">Use AI to prefill incident assessment fields</p>
+            <button
+              type="button"
+              onClick={() => aiSuggestMutation.mutate()}
+              disabled={!formData.title || aiSuggestMutation.isPending}
+              className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 hover:bg-slate-100 disabled:opacity-50"
+            >
+              {aiSuggestMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              AI Suggest
+            </button>
           </div>
+          {aiSuggestionNote && <p className="mt-2 text-xs text-slate-600">{aiSuggestionNote}</p>}
+        </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-1">Title *</label>
+          <input
+            type="text"
+            value={formData.title}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            required
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm text-slate-600">Title</label>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Related Risk</label>
+            <MultiSelectDropdown
+              title="Risk"
+              items={risks.map((risk) => ({
+                value: String(risk.id),
+                label: risk.title,
+                subLabel: risk.risk_category,
+              }))}
+              selectedValues={formData.risk_id ? [String(formData.risk_id)] : []}
+              onApply={(values) => setFormData({ ...formData, risk_id: values[0] ? Number(values[0]) : 0 })}
+              multiSelect={false}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              forceSearch
+              searchPlaceholder="Search risk by title..."
+              placeholder="Select Risk"
+              size="md"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Incident Date *</label>
             <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
+              type="date"
+              value={formData.incident_date}
+              onChange={(e) => setFormData({ ...formData, incident_date: e.target.value })}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               required
             />
           </div>
+        </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-slate-600 mb-1">Related Risk</label>
-              <MultiSelectDropdown
-                title="Risk"
-                items={risks.map((risk) => ({
-                  value: String(risk.id),
-                  label: risk.title,
-                  subLabel: risk.risk_category,
-                }))}
-                selectedValues={formData.risk_id ? [String(formData.risk_id)] : []}
-                onApply={(values) => setFormData({ ...formData, risk_id: values[0] ? Number(values[0]) : 0 })}
-                multiSelect={false}
-                triggerVariant="input"
-                triggerClassName="w-full"
-                forceSearch
-                searchPlaceholder="Search risk by title..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-slate-600">Incident Date</label>
-              <input
-                type="date"
-                value={formData.incident_date}
-                onChange={(e) => setFormData({ ...formData, incident_date: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-                required
-              />
-            </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Severity</label>
+            <MultiSelectDropdown
+              title="Severity"
+              items={SEVERITIES.map((s) => ({ value: s.value, label: s.label }))}
+              selectedValues={formData.severity ? [formData.severity] : []}
+              onApply={(values) => setFormData({ ...formData, severity: (values[0] as IncidentSeverity) || 'medium' })}
+              multiSelect={false}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              placeholder="Select Severity"
+              size="md"
+            />
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
+          {incident && (
             <div>
-              <label className="block text-sm text-slate-600 mb-1">Severity</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Status</label>
               <MultiSelectDropdown
-                title="Severity"
-                items={SEVERITIES.map((s) => ({ value: s.value, label: s.label }))}
-                selectedValues={formData.severity ? [formData.severity] : []}
-                onApply={(values) => setFormData({ ...formData, severity: (values[0] as IncidentSeverity) || 'medium' })}
+                title="Status"
+                items={INCIDENT_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+                selectedValues={status ? [status] : []}
+                onApply={(values) => setStatus((values[0] as IncidentStatus) || 'open')}
                 multiSelect={false}
                 triggerVariant="input"
                 triggerClassName="w-full"
+                placeholder="Select Status"
+                size="md"
               />
             </div>
-            {incident && (
-              <div>
-                <label className="block text-sm text-slate-600 mb-1">Status</label>
-                <MultiSelectDropdown
-                  title="Status"
-                  items={INCIDENT_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
-                  selectedValues={status ? [status] : []}
-                  onApply={(values) => setStatus((values[0] as IncidentStatus) || 'open')}
-                  multiSelect={false}
-                  triggerVariant="input"
-                  triggerClassName="w-full"
-                />
-              </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Financial Impact ($)</label>
+            <input
+              type="number"
+              value={formData.financial_impact || ''}
+              onChange={(e) => setFormData({ ...formData, financial_impact: e.target.value ? Number(e.target.value) : undefined })}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            rows={2}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-1">Root Cause</label>
+          <textarea
+            value={formData.root_cause}
+            onChange={(e) => setFormData({ ...formData, root_cause: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            rows={2}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-1">Corrective Actions</label>
+          <textarea
+            value={formData.corrective_actions}
+            onChange={(e) => setFormData({ ...formData, corrective_actions: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            rows={2}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-1">Operational Impact</label>
+          <textarea
+            value={formData.operational_impact || ''}
+            onChange={(e) => setFormData({ ...formData, operational_impact: e.target.value })}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            rows={2}
+          />
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="incident-form"
+            disabled={isLoading}
+            className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              incident ? 'Update' : 'Create'
             )}
-            <div>
-              <label className="block text-sm text-slate-600">Financial Impact ($)</label>
-              <input
-                type="number"
-                value={formData.financial_impact || ''}
-                onChange={(e) => setFormData({ ...formData, financial_impact: e.target.value ? Number(e.target.value) : undefined })}
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm text-slate-600">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              rows={2}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm text-slate-600">Root Cause</label>
-            <textarea
-              value={formData.root_cause}
-              onChange={(e) => setFormData({ ...formData, root_cause: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              rows={2}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm text-slate-600">Corrective Actions</label>
-            <textarea
-              value={formData.corrective_actions}
-              onChange={(e) => setFormData({ ...formData, corrective_actions: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              rows={2}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm text-slate-600">Operational Impact</label>
-            <textarea
-              value={formData.operational_impact || ''}
-              onChange={(e) => setFormData({ ...formData, operational_impact: e.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-slate-900"
-              rows={2}
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
-            >
-              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {incident ? 'Update' : 'Create'}
-            </button>
-          </div>
-        </form>
-      </div>
+          </button>
+        </div>
+      </form>
     </RightSlidePanel>
   );
 }
@@ -624,7 +635,7 @@ function AIAnalysisModal({
         </div>
       }
     >
-      <div className="px-6 py-4">
+      <div>
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="relative">
@@ -782,10 +793,11 @@ function AIAnalysisModal({
           </div>
         )}
 
-        <div className="mt-6 flex justify-end border-t border-slate-200 pt-4">
+        <div className="mt-6 flex justify-end gap-2 border-t border-slate-200 pt-4">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
           >
             Close
           </button>

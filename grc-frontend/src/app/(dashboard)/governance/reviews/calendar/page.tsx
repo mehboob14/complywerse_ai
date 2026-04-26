@@ -310,7 +310,7 @@ export default function ReviewCalendarPage() {
     : [];
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6 py-3 sm:py-4">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <div className="mb-1 flex items-center gap-3">

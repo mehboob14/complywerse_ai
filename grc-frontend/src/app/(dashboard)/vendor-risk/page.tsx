@@ -51,36 +51,36 @@ const PIE_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#6b7280'];
 
 const getTierBadge = (tier: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-100 text-red-700',
-    high: 'bg-orange-100 text-orange-700',
-    medium: 'bg-yellow-100 text-yellow-700',
-    low: 'bg-green-100 text-green-700',
+    critical: 'bg-red-600 text-white border-red-700',
+    high: 'bg-orange-600 text-white border-orange-700',
+    medium: 'bg-yellow-600 text-white border-yellow-700',
+    low: 'bg-green-600 text-white border-green-700',
   };
-  return styles[tier?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return styles[tier?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
 };
 
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-600',
-    in_progress: 'bg-blue-100 text-blue-700',
-    completed: 'bg-green-100 text-green-700',
-    approved: 'bg-green-100 text-green-700',
-    reviewed: 'bg-indigo-100 text-indigo-700',
-    submitted: 'bg-yellow-100 text-yellow-700',
-    overdue: 'bg-red-100 text-red-700',
-    pending: 'bg-yellow-100 text-yellow-700',
+    draft: 'bg-gray-600 text-white border-gray-700',
+    in_progress: 'bg-blue-600 text-white border-blue-700',
+    completed: 'bg-green-600 text-white border-green-700',
+    approved: 'bg-green-600 text-white border-green-700',
+    reviewed: 'bg-indigo-600 text-white border-indigo-700',
+    submitted: 'bg-yellow-600 text-white border-yellow-700',
+    overdue: 'bg-red-600 text-white border-red-700',
+    pending: 'bg-yellow-600 text-white border-yellow-700',
   };
-  return styles[status?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return styles[status?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
 };
 
 const getRatingBadge = (rating: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-100 text-red-700',
-    high: 'bg-orange-100 text-orange-700',
-    medium: 'bg-yellow-100 text-yellow-700',
-    low: 'bg-green-100 text-green-700',
+    critical: 'bg-red-600 text-white border-red-700',
+    high: 'bg-orange-600 text-white border-orange-700',
+    medium: 'bg-yellow-600 text-white border-yellow-700',
+    low: 'bg-green-600 text-white border-green-700',
   };
-  return styles[rating?.toLowerCase()] || 'bg-gray-100 text-gray-700';
+  return styles[rating?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
 };
 
 function DistributionRow({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
@@ -146,24 +146,24 @@ export default function VendorRiskDashboardPage() {
   const leadTier = [...tierDistribution].sort((a, b) => Number(b.count) - Number(a.count))[0];
 
   return (
-    <div className="risk-workspace cw-dashboard p-4 space-y-4 max-w-none">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Vendor Risk Management</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Vendor Risk Management</h1>
           <p className="text-sm text-gray-500 mt-1">Third-party risk oversight and assessment tracking</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-2 ml-auto">
           <Link
             href="/vendor-risk/vendors"
-            className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
           >
             <Building2 className="h-4 w-4" />
             All Vendors
           </Link>
           <Link
             href="/vendor-risk/assessments"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
+            className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-3 sm:px-4 py-2 text-sm font-medium"
           >
             <FileCheck className="h-4 w-4" />
             Assessments
@@ -172,48 +172,48 @@ export default function VendorRiskDashboardPage() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 sm:p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-50">
-              <Building2 className="h-5 w-5 text-blue-600" />
+            <div className="p-2 rounded-lg bg-white">
+              <Building2 className="h-5 w-5 text-blue-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Total Vendors</p>
-              <p className="text-2xl font-semibold text-gray-900">{dashboard?.total_vendors ?? 0}</p>
+              <p className="text-sm text-blue-700">Total Vendors</p>
+              <p className="text-2xl font-semibold text-slate-900">{dashboard?.total_vendors ?? 0}</p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-red-50">
-              <AlertTriangle className="h-5 w-5 text-red-600" />
+            <div className="p-2 rounded-lg bg-white">
+              <AlertTriangle className="h-5 w-5 text-red-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">High/Critical Tier</p>
-              <p className="text-2xl font-semibold text-gray-900">{highCriticalCount}</p>
+              <p className="text-sm text-red-700">High/Critical Tier</p>
+              <p className="text-2xl font-semibold text-slate-900">{highCriticalCount}</p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 sm:p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-yellow-50">
-              <AlertTriangle className="h-5 w-5 text-yellow-600" />
+            <div className="p-2 rounded-lg bg-white">
+              <AlertTriangle className="h-5 w-5 text-yellow-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Open Incidents</p>
-              <p className="text-2xl font-semibold text-gray-900">{dashboard?.open_incidents ?? 0}</p>
+              <p className="text-sm text-yellow-700">Open Incidents</p>
+              <p className="text-2xl font-semibold text-slate-900">{dashboard?.open_incidents ?? 0}</p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 sm:p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-orange-50">
-              <Calendar className="h-5 w-5 text-orange-600" />
+            <div className="p-2 rounded-lg bg-white">
+              <Calendar className="h-5 w-5 text-orange-700" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Expiring Contracts (30d)</p>
-              <p className="text-2xl font-semibold text-gray-900">{dashboard?.expiring_contracts?.length ?? 0}</p>
+              <p className="text-sm text-orange-700">Expiring Contracts (30d)</p>
+              <p className="text-2xl font-semibold text-slate-900">{dashboard?.expiring_contracts?.length ?? 0}</p>
             </div>
           </div>
         </div>
@@ -221,28 +221,28 @@ export default function VendorRiskDashboardPage() {
 
       {/* Risk Score Cards */}
       {(dashboard?.avg_inherent_risk_score != null || dashboard?.avg_residual_risk_score != null) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 sm:p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-purple-50">
-                <Shield className="h-5 w-5 text-purple-600" />
+              <div className="p-2 rounded-lg bg-white">
+                <Shield className="h-5 w-5 text-purple-700" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">Avg Inherent Risk Score</p>
-                <p className="text-2xl font-semibold text-gray-900">
+                <p className="text-sm text-purple-700">Avg Inherent Risk Score</p>
+                <p className="text-2xl font-semibold text-slate-900">
                   {dashboard?.avg_inherent_risk_score?.toFixed(1) ?? '-'}
                 </p>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 sm:p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-50">
-                <TrendingUp className="h-5 w-5 text-indigo-600" />
+              <div className="p-2 rounded-lg bg-white">
+                <TrendingUp className="h-5 w-5 text-indigo-700" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">Avg Residual Risk Score</p>
-                <p className="text-2xl font-semibold text-gray-900">
+                <p className="text-sm text-indigo-700">Avg Residual Risk Score</p>
+                <p className="text-2xl font-semibold text-slate-900">
                   {dashboard?.avg_residual_risk_score?.toFixed(1) ?? '-'}
                 </p>
               </div>
@@ -251,16 +251,16 @@ export default function VendorRiskDashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-2">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-900">Tier Exposure Ladder</h3>
+            <h3 className="text-sm font-semibold text-slate-900">Tier Exposure Ladder</h3>
             <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] text-gray-600">
               {leadTier ? `${leadTier.tier} leads` : 'No data'}
             </span>
           </div>
           {tierDistribution.length === 0 ? (
-            <div className="py-8 text-center text-sm text-gray-400">No vendor data</div>
+            <div className="py-8 text-center text-sm text-gray-500">No vendor data</div>
           ) : (
             <div className="space-y-3">
               {tierDistribution.map((item) => (
@@ -276,15 +276,15 @@ export default function VendorRiskDashboardPage() {
           )}
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-900">Status Pipeline</h3>
+            <h3 className="text-sm font-semibold text-slate-900">Status Pipeline</h3>
             <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] text-gray-600">
               {totalStatusCount} vendors
             </span>
           </div>
           {statusDistribution.length === 0 ? (
-            <div className="py-8 text-center text-sm text-gray-400">No vendor data</div>
+            <div className="py-8 text-center text-sm text-gray-500">No vendor data</div>
           ) : (
             <div className="space-y-3">
               {statusDistribution.map((item, idx) => (
@@ -304,8 +304,8 @@ export default function VendorRiskDashboardPage() {
       {/* Expiring Contracts */}
       {(dashboard?.expiring_contracts?.length ?? 0) > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-900">Expiring Contracts (Next 30 Days)</h3>
+          <div className="px-3 sm:px-4 py-3 border-b border-gray-200">
+            <h3 className="text-sm font-semibold text-slate-900">Expiring Contracts (Next 30 Days)</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -325,7 +325,7 @@ export default function VendorRiskDashboardPage() {
                       </Link>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(v.tier)}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize border ${getTierBadge(v.tier)}`}>
                         {v.tier}
                       </span>
                     </td>
@@ -342,8 +342,8 @@ export default function VendorRiskDashboardPage() {
 
       {/* Recent Assessments */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-900">Recent Assessments</h3>
+        <div className="px-3 sm:px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-900">Recent Assessments</h3>
           <Link href="/vendor-risk/assessments" className="text-xs text-blue-600 hover:text-blue-800">View all</Link>
         </div>
         <div className="overflow-x-auto">
@@ -367,20 +367,20 @@ export default function VendorRiskDashboardPage() {
               ) : (
                 (dashboard?.recent_assessments ?? []).map((a) => (
                   <tr key={a.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{a.vendor_name ?? '-'}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-slate-900">{a.vendor_name ?? '-'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600 capitalize">{a.assessment_type?.replace(/_/g, ' ')}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusBadge(a.status)}`}>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize border ${getStatusBadge(a.status)}`}>
                         {a.status?.replace(/_/g, ' ')}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       {a.risk_rating ? (
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getRatingBadge(a.risk_rating)}`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize border ${getRatingBadge(a.risk_rating)}`}>
                           {a.risk_rating}
                         </span>
                       ) : (
-                        <span className="text-sm text-gray-400">-</span>
+                        <span className="text-sm text-gray-500">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">

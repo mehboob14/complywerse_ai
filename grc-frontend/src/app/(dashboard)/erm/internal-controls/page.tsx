@@ -699,15 +699,16 @@ export default function InternalControlsPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="w-full sm:w-72">
-            <SearchInput
-              value={searchTerm}
-              onChange={setSearchTerm}
-              placeholder="Search controls..."
-            />
-          </div>
+      <div className="flex flex-row items-center gap-2 overflow-x-auto pb-1">
+        <div className="flex-1 min-w-[160px] sm:min-w-[220px] max-w-md flex-shrink-0">
+          <SearchInput
+            value={searchTerm}
+            onChange={setSearchTerm}
+            placeholder="Search controls..."
+            size="md"
+          />
+        </div>
+        <div className="flex-shrink-0">
           <MultiSelectDropdown
             title="Status"
             multiSelect={false}
@@ -721,6 +722,8 @@ export default function InternalControlsPage() {
             ]}
             placeholder="All Statuses"
           />
+        </div>
+        <div className="flex-shrink-0">
           <MultiSelectDropdown
             title="Category"
             multiSelect={false}
@@ -729,19 +732,8 @@ export default function InternalControlsPage() {
             items={CONTROL_CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
             placeholder="All Categories"
           />
-          <MultiSelectDropdown
-            title="Key Control"
-            multiSelect={false}
-            selectedValues={keyControlFilter === 'all' ? [] : [keyControlFilter]}
-            onApply={(vals) => setKeyControlFilter(vals[0] || 'all')}
-            items={[
-              { value: 'yes', label: 'Key Controls Only' },
-              { value: 'no', label: 'Non-Key Controls' },
-            ]}
-            placeholder="All Controls"
-          />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-auto flex-shrink-0">
           <button
             onClick={() => {
               setShowUploadModal(true);
@@ -749,9 +741,9 @@ export default function InternalControlsPage() {
               setUploadFile(null);
               setAutoCreateUpload(true);
             }}
-            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-3.5 py-2 text-sm font-medium text-slate-900 transition-colors hover:bg-slate-200"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
           >
-            <Upload className="h-4 w-4" />
+            <Upload size={16} />
             Upload Manual + AI
           </button>
           <button
@@ -771,10 +763,10 @@ export default function InternalControlsPage() {
               setModalRegulatorySource('');
               setIsModalOpen(true);
             }}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-500"
+            className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-3 sm:px-4 py-2 text-sm font-medium"
             style={canCreate ? {} : { display: 'none' }}
           >
-            <Plus className="h-4 w-4" />
+            <Plus size={16} />
             Add New Control
           </button>
         </div>
@@ -916,14 +908,14 @@ export default function InternalControlsPage() {
           </div>
         }
         footer={
-          <div className="flex items-center justify-end gap-2.5">
+          <div className="flex justify-end gap-2">
             <button
               type="button"
               onClick={() => {
                 setIsModalOpen(false);
                 setEditingControl(null);
               }}
-              className="rounded border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
@@ -931,12 +923,16 @@ export default function InternalControlsPage() {
               type="submit"
               form="control-form"
               disabled={createMutation.isPending || updateMutation.isPending}
-              className="flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
             >
-              {(createMutation.isPending || updateMutation.isPending) && (
-                <Loader2 className="h-4 w-4 animate-spin" />
+              {(createMutation.isPending || updateMutation.isPending) ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                editingControl ? 'Update' : 'Create'
               )}
-              {editingControl ? 'Update' : 'Create'}
             </button>
           </div>
         }
@@ -951,21 +947,21 @@ export default function InternalControlsPage() {
         >
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">
-                      Control ID <span className="text-red-400">*</span>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">
+                      Control ID *
                     </label>
                     <input
                       name="control_id"
                       type="text"
                       required
                       defaultValue={editingControl?.control_id || ''}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       placeholder="e.g., CTL-001"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">
-                      Name <span className="text-red-400">*</span>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">
+                      Name *
                     </label>
                     <input
                       name="name"
@@ -973,178 +969,189 @@ export default function InternalControlsPage() {
                       required
                       defaultValue={editingControl?.name || ''}
                       onChange={(e) => setModalName(e.target.value)}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       placeholder="Control name"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Description</label>
+                  <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
                   <textarea
                     name="description"
                     rows={2}
                     value={modalDescription}
                     onChange={(e) => setModalDescription(e.target.value)}
-                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     placeholder="Describe the control..."
                   />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">Category</label>
-                    <select
-                      name="category"
-                      value={selectedModalCategory}
-                      onChange={(e) => {
-                        const nextCategory = e.target.value;
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Category</label>
+                    <input type="hidden" name="category" value={selectedModalCategory} />
+                    <MultiSelectDropdown
+                      title="Category"
+                      items={CONTROL_CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+                      selectedValues={selectedModalCategory ? [selectedModalCategory] : []}
+                      onApply={(vals) => {
+                        const nextCategory = vals[0] || '';
                         setSelectedModalCategory(nextCategory);
                         const nextOptions = CONTROL_SUBCATEGORIES[nextCategory] || [];
                         if (!nextOptions.includes(selectedModalSubCategory)) {
                           setSelectedModalSubCategory('');
                         }
                       }}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="">Select category</option>
-                      {CONTROL_CATEGORIES.map((cat) => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
+                      multiSelect={false}
+                      triggerVariant="input"
+                      placeholder="Select category"
+                      size="md"
+                    />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">Sub-Category</label>
-                    <select
-                      name="sub_category"
-                      value={selectedModalSubCategory}
-                      onChange={(e) => setSelectedModalSubCategory(e.target.value)}
-                      disabled={!selectedModalCategory}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-50"
-                    >
-                      <option value="">{selectedModalCategory ? 'Select sub-category' : 'Select category first'}</option>
-                      {availableModalSubCategories.map((subCategory) => (
-                        <option key={subCategory} value={subCategory}>{subCategory}</option>
-                      ))}
-                    </select>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Sub-Category</label>
+                    <input type="hidden" name="sub_category" value={selectedModalSubCategory} />
+                    <MultiSelectDropdown
+                      title="Sub-Category"
+                      items={availableModalSubCategories.map((sc) => ({ value: sc, label: sc }))}
+                      selectedValues={selectedModalSubCategory ? [selectedModalSubCategory] : []}
+                      onApply={(vals) => setSelectedModalSubCategory(vals[0] || '')}
+                      multiSelect={false}
+                      triggerVariant="input"
+                      placeholder={selectedModalCategory ? 'Select sub-category' : 'Select category first'}
+                      size="md"
+                    />
                   </div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">Control Type</label>
-                    <select
-                      name="control_type"
-                      value={modalControlType}
-                      onChange={(e) => setModalControlType(e.target.value)}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="">Select type</option>
-                      {CONTROL_TYPES.map((t) => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
-                      ))}
-                    </select>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Control Type</label>
+                    <input type="hidden" name="control_type" value={modalControlType} />
+                    <MultiSelectDropdown
+                      title="Control Type"
+                      items={CONTROL_TYPES.filter((o) => o.value).map((o) => ({ value: o.value, label: o.label }))}
+                      selectedValues={modalControlType ? [modalControlType] : []}
+                      onApply={(vals) => setModalControlType(vals[0] || '')}
+                      multiSelect={false}
+                      triggerVariant="input"
+                      placeholder="Select type"
+                      size="md"
+                    />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">Control Nature</label>
-                    <select
-                      name="control_nature"
-                      value={modalControlNature}
-                      onChange={(e) => setModalControlNature(e.target.value)}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="">Select nature</option>
-                      {CONTROL_NATURES.map((n) => (
-                        <option key={n.value} value={n.value}>{n.label}</option>
-                      ))}
-                    </select>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Control Nature</label>
+                    <input type="hidden" name="control_nature" value={modalControlNature} />
+                    <MultiSelectDropdown
+                      title="Control Nature"
+                      items={CONTROL_NATURES.filter((o) => o.value).map((o) => ({ value: o.value, label: o.label }))}
+                      selectedValues={modalControlNature ? [modalControlNature] : []}
+                      onApply={(vals) => setModalControlNature(vals[0] || '')}
+                      multiSelect={false}
+                      triggerVariant="input"
+                      placeholder="Select nature"
+                      size="md"
+                    />
                   </div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">Frequency</label>
-                    <select
-                      name="frequency"
-                      value={modalFrequency}
-                      onChange={(e) => setModalFrequency(e.target.value)}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="">Select frequency</option>
-                      {FREQUENCIES.map((f) => (
-                        <option key={f.value} value={f.value}>{f.label}</option>
-                      ))}
-                    </select>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Frequency</label>
+                    <input type="hidden" name="frequency" value={modalFrequency} />
+                    <MultiSelectDropdown
+                      title="Frequency"
+                      items={FREQUENCIES.filter((o) => o.value).map((o) => ({ value: o.value, label: o.label }))}
+                      selectedValues={modalFrequency ? [modalFrequency] : []}
+                      onApply={(vals) => setModalFrequency(vals[0] || '')}
+                      multiSelect={false}
+                      triggerVariant="input"
+                      placeholder="Select frequency"
+                      size="md"
+                    />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">Priority</label>
-                    <select
-                      name="priority"
-                      value={modalPriority}
-                      onChange={(e) => setModalPriority(e.target.value)}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="">Select priority</option>
-                      {PRIORITIES.map((p) => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Priority</label>
+                    <input type="hidden" name="priority" value={modalPriority} />
+                    <MultiSelectDropdown
+                      title="Priority"
+                      items={PRIORITIES.filter((o) => o.value).map((o) => ({ value: o.value, label: o.label }))}
+                      selectedValues={modalPriority ? [modalPriority] : []}
+                      onApply={(vals) => setModalPriority(vals[0] || '')}
+                      multiSelect={false}
+                      triggerVariant="input"
+                      placeholder="Select priority"
+                      size="md"
+                    />
                   </div>
                 </div>
 
                 {/* Status & Effectiveness */}
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">Status</label>
-                    <select
-                      value={modalStatus}
-                      onChange={(e) => setModalStatus(e.target.value)}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="">Select status</option>
-                      <option value="draft">Draft</option>
-                      <option value="pending_approval">Pending Approval</option>
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Status</label>
+                    <MultiSelectDropdown
+                      title="Status"
+                      items={[
+                        { value: 'draft', label: 'Draft' },
+                        { value: 'pending_approval', label: 'Pending Approval' },
+                        { value: 'active', label: 'Active' },
+                        { value: 'inactive', label: 'Inactive' },
+                      ]}
+                      selectedValues={modalStatus ? [modalStatus] : []}
+                      onApply={(vals) => setModalStatus(vals[0] || '')}
+                      multiSelect={false}
+                      triggerVariant="input"
+                      placeholder="Select status"
+                      size="md"
+                    />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">Design Effectiveness</label>
-                    <select
-                      value={modalDesignEff}
-                      onChange={(e) => setModalDesignEff(e.target.value)}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="">Not Tested</option>
-                      <option value="effective">Effective</option>
-                      <option value="partially_effective">Partially Effective</option>
-                      <option value="ineffective">Ineffective</option>
-                    </select>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Design Effectiveness</label>
+                    <MultiSelectDropdown
+                      title="Design Effectiveness"
+                      items={[
+                        { value: 'effective', label: 'Effective' },
+                        { value: 'partially_effective', label: 'Partially Effective' },
+                        { value: 'ineffective', label: 'Ineffective' },
+                      ]}
+                      selectedValues={modalDesignEff ? [modalDesignEff] : []}
+                      onApply={(vals) => setModalDesignEff(vals[0] || '')}
+                      multiSelect={false}
+                      triggerVariant="input"
+                      placeholder="Not Tested"
+                      size="md"
+                    />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">Operating Effectiveness</label>
-                    <select
-                      value={modalOperatingEff}
-                      onChange={(e) => setModalOperatingEff(e.target.value)}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="">Not Tested</option>
-                      <option value="effective">Effective</option>
-                      <option value="partially_effective">Partially Effective</option>
-                      <option value="ineffective">Ineffective</option>
-                    </select>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Operating Effectiveness</label>
+                    <MultiSelectDropdown
+                      title="Operating Effectiveness"
+                      items={[
+                        { value: 'effective', label: 'Effective' },
+                        { value: 'partially_effective', label: 'Partially Effective' },
+                        { value: 'ineffective', label: 'Ineffective' },
+                      ]}
+                      selectedValues={modalOperatingEff ? [modalOperatingEff] : []}
+                      onApply={(vals) => setModalOperatingEff(vals[0] || '')}
+                      multiSelect={false}
+                      triggerVariant="input"
+                      placeholder="Not Tested"
+                      size="md"
+                    />
                   </div>
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-600">Regulatory Source</label>
+                  <label className="block text-sm font-medium text-gray-800 mb-1">Regulatory Source</label>
                   <input
                     name="regulatory_source"
                     type="text"
                     value={modalRegulatorySource}
                     onChange={(e) => setModalRegulatorySource(e.target.value)}
                     list="regulatory-framework-options"
-                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     placeholder="Search framework or enter source"
                   />
                   <datalist id="regulatory-framework-options">
@@ -1156,21 +1163,21 @@ export default function InternalControlsPage() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">Effective Date</label>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Effective Date</label>
                     <input
                       name="effective_date"
                       type="date"
                       defaultValue={editingControl?.effective_date?.split('T')[0] || ''}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-600">Review Date</label>
+                    <label className="block text-sm font-medium text-gray-800 mb-1">Review Date</label>
                     <input
                       name="review_date"
                       type="date"
                       defaultValue={editingControl?.review_date?.split('T')[0] || ''}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
                   </div>
                 </div>
@@ -1183,7 +1190,7 @@ export default function InternalControlsPage() {
                     defaultChecked={editingControl?.is_key_control || false}
                     className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <label className="text-xs font-medium text-slate-700">Key Control</label>
+                  <label className="text-sm font-medium text-gray-800">Key Control</label>
                 </div>
         </form>
 
@@ -1251,10 +1258,11 @@ export default function InternalControlsPage() {
                   </div>
                 )}
 
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
                   <button
+                    type="button"
                     onClick={() => setShowUploadModal(false)}
-                    className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+                    className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
                   >
                     Done
                   </button>
@@ -1294,20 +1302,22 @@ export default function InternalControlsPage() {
 
                 <div className="flex justify-end gap-2">
                   <button
+                    type="button"
                     onClick={() => setShowUploadModal(false)}
-                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                    className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
+                    type="button"
                     onClick={() => uploadFile && uploadMutation.mutate({ file: uploadFile, autoCreate: autoCreateUpload })}
                     disabled={!uploadFile || uploadMutation.isPending}
-                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
+                    className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
                   >
                     {uploadMutation.isPending ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Processing...
+                        Saving...
                       </>
                     ) : (
                       <>
@@ -1335,20 +1345,28 @@ export default function InternalControlsPage() {
             <p className="mb-6 text-slate-700">
               Are you sure you want to delete this control? This action cannot be undone.
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-end gap-2">
               <button
+                type="button"
                 onClick={() => setDeleteConfirm(null)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={() => deleteMutation.mutate(deleteConfirm)}
                 disabled={deleteMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
               >
-                {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                Delete
+                {deleteMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Delete'
+                )}
               </button>
             </div>
           </div>

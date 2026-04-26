@@ -292,21 +292,39 @@ export function MultiSelectDropdown({
                 const checked = draftSet.has(item.value);
                 const hasAvatar = Boolean(item.avatarInitials || item.subLabel);
                 const initials = item.avatarInitials || getInitials(item.label);
+                const handleClick = () => {
+                  if (item.disabled) return;
+                  toggleDraftValue(item.value);
+                };
                 return (
-                  <label
+                  <div
                     key={item.value}
+                    role="option"
+                    aria-selected={checked}
+                    onClick={handleClick}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handleClick();
+                      }
+                    }}
+                    tabIndex={item.disabled ? -1 : 0}
                     className={clsx(
-                      'flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-slate-50',
-                      item.disabled && 'cursor-not-allowed opacity-50'
+                      'flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-slate-50 focus:bg-slate-50 focus:outline-none',
+                      item.disabled && 'cursor-not-allowed opacity-50',
+                      !multiSelect && checked && 'bg-primary-50'
                     )}
                   >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={item.disabled}
-                      onChange={() => toggleDraftValue(item.value)}
-                      className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-                    />
+                    {multiSelect && (
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={item.disabled}
+                        onChange={() => toggleDraftValue(item.value)}
+                        onClick={(event) => event.stopPropagation()}
+                        className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                      />
+                    )}
 
                     {hasAvatar && (
                       <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-cyan-100 text-sm font-semibold text-cyan-700">
@@ -315,14 +333,14 @@ export function MultiSelectDropdown({
                     )}
 
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm text-slate-800">{item.label}</span>
+                      <span className={clsx('block truncate text-sm', !multiSelect && checked ? 'font-medium text-primary-700' : 'text-slate-800')}>{item.label}</span>
                       {item.subLabel && (
                         <span className="block truncate text-xs text-slate-500">{item.subLabel}</span>
                       )}
                     </span>
 
                     {checked && <Check className="ml-auto h-4 w-4 text-primary-600" />}
-                  </label>
+                  </div>
                 );
               })
             )}
