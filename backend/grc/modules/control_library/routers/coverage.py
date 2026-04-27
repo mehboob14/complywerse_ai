@@ -87,6 +87,11 @@ def dedupe_framework_entries(frameworks: List[dict]) -> List[dict]:
 
 
 def calculate_coverage_matrix(db: Session, tenant_id: int, visible_tenant_ids: Optional[List[int]] = None) -> dict:
+    """
+    Build the coverage matrix in 2 batched SQL queries (legacy + parsed) instead
+    of N+1 per-objective control fetches. Cuts both DB round-trips and Python
+    work proportionally to the number of frameworks × domains × objectives.
+    """
     tenant_evidence_ids = db.query(Evidence.id).filter(
         Evidence.tenant_id == tenant_id
     ).subquery()
@@ -139,45 +144,53 @@ def calculate_coverage_matrix(db: Session, tenant_id: int, visible_tenant_ids: O
         )
     ).all()
     _tenant_fw_id_set = list({row[0] for row in _tenant_pub_fw_ids})
-    legacy_frameworks = db.query(Framework).filter(
-        Framework.id.in_(_tenant_fw_id_set),
-        or_(Framework.is_active == True, Framework.is_active.is_(None))
-    ).all() if _tenant_fw_id_set else []
-    for fw in legacy_frameworks:
-        fw_key = str(fw.id)
-        matrix[fw_key] = {
-            "framework_id": fw.id,
-            "framework_name": fw.name,
-            "framework_code": fw.short_code,
-            "categories": {}
-        }
 
-        for domain in fw.domains:
-            cat_key = domain.name or "Uncategorized"
+    if _tenant_fw_id_set:
+        legacy_frameworks = db.query(Framework).filter(
+            Framework.id.in_(_tenant_fw_id_set),
+            or_(Framework.is_active == True, Framework.is_active.is_(None))
+        ).all()
+        legacy_meta = {fw.id: (fw.name, fw.short_code) for fw in legacy_frameworks}
+
+        # Single batched query: pull every (framework_id, domain_name, control_id)
+        # tuple via FrameworkControl → ControlObjective → FrameworkDomain joins.
+        legacy_rows = (
+            db.query(
+                FrameworkDomain.framework_id,
+                FrameworkDomain.name.label("domain_name"),
+                FrameworkControl.id.label("control_id"),
+            )
+            .join(ControlObjective, ControlObjective.domain_id == FrameworkDomain.id)
+            .join(FrameworkControl, FrameworkControl.objective_id == ControlObjective.id)
+            .filter(FrameworkDomain.framework_id.in_(_tenant_fw_id_set))
+            .all()
+        )
+
+        for fw_id in _tenant_fw_id_set:
+            if fw_id not in legacy_meta:
+                continue
+            name, short_code = legacy_meta[fw_id]
+            matrix[str(fw_id)] = {
+                "framework_id": fw_id,
+                "framework_name": name,
+                "framework_code": short_code,
+                "categories": {}
+            }
+
+        for framework_id, domain_name, control_id in legacy_rows:
+            fw_key = str(framework_id)
+            if fw_key not in matrix:
+                continue
+            cat_key = domain_name or "Uncategorized"
             categories.add(cat_key)
-
-            if cat_key not in matrix[fw_key]["categories"]:
-                matrix[fw_key]["categories"][cat_key] = {
-                    "controls_total": 0,
-                    "controls_with_evidence": 0,
-                    "coverage_percent": 0
-                }
-
-            for objective in domain.objectives:
-                controls = db.query(FrameworkControl).filter(
-                    FrameworkControl.objective_id == objective.id
-                ).all()
-                for ctrl in controls:
-                    matrix[fw_key]["categories"][cat_key]["controls_total"] += 1
-                    if ctrl.id in covered_fc_set:
-                        matrix[fw_key]["categories"][cat_key]["controls_with_evidence"] += 1
-
-        for cat_key in matrix[fw_key]["categories"]:
-            cat_data = matrix[fw_key]["categories"][cat_key]
-            if cat_data["controls_total"] > 0:
-                cat_data["coverage_percent"] = round(
-                    (cat_data["controls_with_evidence"] / cat_data["controls_total"]) * 100, 2
-                )
+            cat = matrix[fw_key]["categories"].setdefault(cat_key, {
+                "controls_total": 0,
+                "controls_with_evidence": 0,
+                "coverage_percent": 0,
+            })
+            cat["controls_total"] += 1
+            if control_id in covered_fc_set:
+                cat["controls_with_evidence"] += 1
 
     tenant_filter = [tenant_id]
     if visible_tenant_ids:
@@ -195,45 +208,61 @@ def calculate_coverage_matrix(db: Session, tenant_id: int, visible_tenant_ids: O
         )
     ).all())
 
-    for uploaded_framework in uploaded_frameworks:
-        parsed_controls = db.query(ParsedFrameworkControl).filter(
-            ParsedFrameworkControl.uploaded_framework_id == uploaded_framework.id
-        ).all()
+    if uploaded_frameworks:
+        uploaded_ids = [uf.id for uf in uploaded_frameworks]
 
-        if not parsed_controls:
-            continue
+        # Single batched query for all parsed controls across selected uploaded frameworks
+        parsed_rows = (
+            db.query(
+                ParsedFrameworkControl.uploaded_framework_id,
+                ParsedFrameworkControl.id,
+                ParsedFrameworkControl.category,
+                ParsedFrameworkControl.domain,
+            )
+            .filter(ParsedFrameworkControl.uploaded_framework_id.in_(uploaded_ids))
+            .all()
+        )
 
-        synthetic_framework_id = -uploaded_framework.id
-        fw_key = str(synthetic_framework_id)
-        matrix[fw_key] = {
-            "framework_id": synthetic_framework_id,
-            "framework_name": uploaded_framework.name,
-            "framework_code": build_framework_display_code(
-                uploaded_framework.name,
-                None,
-                uploaded_framework.framework_type,
-                uploaded_framework.id,
-            ),
-            "categories": {}
-        }
+        # Group rows by uploaded_framework_id once so we can skip frameworks with zero parsed controls.
+        rows_by_uploaded: dict = {}
+        for uf_id, pc_id, pc_category, pc_domain in parsed_rows:
+            rows_by_uploaded.setdefault(uf_id, []).append((pc_id, pc_category, pc_domain))
 
-        for parsed_control in parsed_controls:
-            cat_key = parsed_control.category or parsed_control.domain or "Uncategorized"
-            categories.add(cat_key)
+        for uploaded_framework in uploaded_frameworks:
+            rows = rows_by_uploaded.get(uploaded_framework.id)
+            if not rows:
+                continue
 
-            if cat_key not in matrix[fw_key]["categories"]:
-                matrix[fw_key]["categories"][cat_key] = {
+            synthetic_framework_id = -uploaded_framework.id
+            fw_key = str(synthetic_framework_id)
+            matrix[fw_key] = {
+                "framework_id": synthetic_framework_id,
+                "framework_name": uploaded_framework.name,
+                "framework_code": build_framework_display_code(
+                    uploaded_framework.name,
+                    None,
+                    uploaded_framework.framework_type,
+                    uploaded_framework.id,
+                ),
+                "categories": {}
+            }
+
+            for pc_id, pc_category, pc_domain in rows:
+                cat_key = pc_category or pc_domain or "Uncategorized"
+                categories.add(cat_key)
+                cat = matrix[fw_key]["categories"].setdefault(cat_key, {
                     "controls_total": 0,
                     "controls_with_evidence": 0,
-                    "coverage_percent": 0
-                }
+                    "coverage_percent": 0,
+                })
+                cat["controls_total"] += 1
+                if pc_id in covered_pc_set:
+                    cat["controls_with_evidence"] += 1
 
-            matrix[fw_key]["categories"][cat_key]["controls_total"] += 1
-            if parsed_control.id in covered_pc_set:
-                matrix[fw_key]["categories"][cat_key]["controls_with_evidence"] += 1
-
-        for cat_key in matrix[fw_key]["categories"]:
-            cat_data = matrix[fw_key]["categories"][cat_key]
+    # Final pass: compute coverage_percent for every (framework, category) bucket
+    # in one consolidated loop now that all counts are tallied.
+    for fw_data in matrix.values():
+        for cat_data in fw_data["categories"].values():
             if cat_data["controls_total"] > 0:
                 cat_data["coverage_percent"] = round(
                     (cat_data["controls_with_evidence"] / cat_data["controls_total"]) * 100, 2
@@ -545,6 +574,7 @@ def calculate_audit_savings(db: Session, tenant_id: int) -> dict:
 
 @router.get("/matrix")
 def get_coverage_matrix(
+    summary: bool = Query(False, description="If true, omit per-category breakdown for a much smaller payload."),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -555,26 +585,39 @@ def get_coverage_matrix(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User has no tenant assigned"
         )
-    
+
     result = calculate_coverage_matrix(db, tenant_id, user_tenants)
-    
+
     frameworks = []
+    used_categories: set = set()
     for fw_key, fw_data in result["matrix"].items():
-        total = sum(c["controls_total"] for c in fw_data["categories"].values())
-        covered = sum(c["controls_with_evidence"] for c in fw_data["categories"].values())
-        frameworks.append({
+        # Skip categories that have no controls — they bloat the payload without adding signal.
+        non_empty_categories = {
+            cat_name: cat
+            for cat_name, cat in fw_data["categories"].items()
+            if cat.get("controls_total", 0) > 0
+        }
+        total = sum(c["controls_total"] for c in non_empty_categories.values())
+        if total == 0:
+            # Nothing to report for this framework — drop it from the response.
+            continue
+        covered = sum(c["controls_with_evidence"] for c in non_empty_categories.values())
+        used_categories.update(non_empty_categories.keys())
+        entry = {
             "framework_id": fw_data["framework_id"],
             "framework_name": fw_data["framework_name"],
             "framework_code": fw_data["framework_code"],
             "total_controls": total,
             "covered_controls": covered,
             "coverage_percent": round((covered / total * 100) if total > 0 else 0, 2),
-            "categories": fw_data["categories"]
-        })
-    
+        }
+        if not summary:
+            entry["categories"] = non_empty_categories
+        frameworks.append(entry)
+
     return {
         "frameworks": dedupe_framework_entries(frameworks),
-        "categories": result["categories"]
+        "categories": [c for c in result["categories"] if c in used_categories],
     }
 
 

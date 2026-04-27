@@ -423,6 +423,7 @@ export default function GapAnalysisDashboardPage() {
         </div>
       </div>
 
+      {false && (
       <div className="grid grid-cols-1 gap-4">
         <DataCard
           title="Framework Coverage"
@@ -454,11 +455,11 @@ export default function GapAnalysisDashboardPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-medium uppercase tracking-wide text-slate-500">With Evidence</p>
-                  <p className="mt-1 text-lg font-semibold text-green-600">{selectedCoverageFramework.controls_with_evidence}</p>
+                  <p className="mt-1 text-lg font-semibold text-green-600">{selectedCoverageFramework!.controls_with_evidence}</p>
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Without Evidence</p>
-                  <p className="mt-1 text-lg font-semibold text-red-600">{selectedCoverageFramework.controls_without_evidence}</p>
+                  <p className="mt-1 text-lg font-semibold text-red-600">{selectedCoverageFramework!.controls_without_evidence}</p>
                 </div>
               </div>
               <div className="h-52">
@@ -484,7 +485,7 @@ export default function GapAnalysisDashboardPage() {
               </div>
               <div className="rounded-lg border border-slate-200 bg-white p-3">
                 <p className="text-xs text-slate-500">
-                  Coverage: <span className="font-semibold text-slate-900">{selectedCoverageFramework.coverage_percentage}%</span> ({selectedCoverageFramework.framework_code})
+                  Coverage: <span className="font-semibold text-slate-900">{selectedCoverageFramework!.coverage_percentage}%</span> ({selectedCoverageFramework!.framework_code})
                 </p>
               </div>
             </div>
@@ -523,7 +524,9 @@ export default function GapAnalysisDashboardPage() {
           )}
         </DataCard>
       </div>
+      )}
 
+      {false && (
       <DataCard
         title="Top Framework Gaps"
         subtitle={`Top ${topFrameworkGapsData.length} frameworks with highest controls missing evidence`}
@@ -568,6 +571,7 @@ export default function GapAnalysisDashboardPage() {
           </ResponsiveContainer>
         </div>
       </DataCard>
+      )}
 
       <div className="rounded-lg border border-slate-200 bg-white">
         <div className="border-b border-slate-200 px-4 py-3">

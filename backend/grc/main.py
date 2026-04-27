@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from .models import init_grc_db
@@ -62,6 +63,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Compress JSON responses larger than 500 bytes — typical 5–10x reduction
+# for the heavy coverage / heatmap / dashboard payloads. Critical for
+# proxies/CDNs that enforce response-size limits in production.
+app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
 
 app.add_middleware(TenantMiddleware)
 
