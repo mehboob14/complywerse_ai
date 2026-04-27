@@ -152,11 +152,6 @@ const SOURCE_STYLES: Record<string, { bg: string; text: string }> = {
   import: { bg: 'bg-blue-100', text: 'text-blue-700' },
 };
 
-// Sibling literal routes that share the `/control-library/*` namespace. If the
-// dynamic `[id]` route ever catches one of these (build cache, soft-nav glitch,
-// stale CDN bundle), redirect away instead of issuing `/groups/NaN` API calls.
-const CONTROL_LIBRARY_SIBLING_ROUTES = new Set(['coverage', 'compare', 'gaps', 'evidence']);
-
 export default function ControlGroupDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -165,20 +160,16 @@ export default function ControlGroupDetailPage() {
   const rawId = String(params.id ?? '');
   const groupId = Number(rawId);
   const isValidGroupId = Number.isFinite(groupId) && groupId > 0 && /^\d+$/.test(rawId);
-  const lowerRawId = rawId.toLowerCase();
-  const isKnownSiblingRoute = CONTROL_LIBRARY_SIBLING_ROUTES.has(lowerRawId);
-  // If the dynamic page accidentally caught a sibling literal route (e.g. when
-  // the live bundle is stale or the CDN serves the wrong chunk for /coverage),
-  // bounce to the proper sibling page. For any other invalid id, bounce to the
-  // control-library index so the user never sees the broken-detail UI.
+  // Whenever this dynamic page is invoked with a non-numeric id (which can
+  // happen on stale/CDN-cached production bundles where /control-library/coverage
+  // accidentally routes through `[id]`), bounce straight to the control-library
+  // index. We deliberately do NOT redirect to the sibling literal — that would
+  // re-enter the same broken route and loop the user on a blank page.
   useEffect(() => {
-    if (isValidGroupId) return;
-    if (isKnownSiblingRoute) {
-      router.replace(`/control-library/${lowerRawId}`);
-    } else {
+    if (!isValidGroupId) {
       router.replace('/control-library');
     }
-  }, [isValidGroupId, isKnownSiblingRoute, lowerRawId, router]);
+  }, [isValidGroupId, router]);
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabType>('controls');
   const [frameworkFilter, setFrameworkFilter] = useState<number | null>(null);
@@ -323,9 +314,18 @@ export default function ControlGroupDetailPage() {
   };
 
   if (!isValidGroupId) {
-    // The useEffect above is redirecting (either to a sibling route or to
-    // /control-library). Render nothing to avoid any flash of error UI.
-    return null;
+    // The useEffect above is redirecting to /control-library. Render a
+    // minimal manual-navigation fallback so the user is never stuck on a
+    // blank page if router.replace fails or is delayed by the host.
+    return (
+      <div className="flex h-64 flex-col items-center justify-center gap-3 text-slate-600">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        <p className="text-sm">Redirecting…</p>
+        <Link href="/control-library" className="text-xs text-blue-600 hover:underline">
+          Tap here if not redirected
+        </Link>
+      </div>
+    );
   }
 
   if (isLoading) {
