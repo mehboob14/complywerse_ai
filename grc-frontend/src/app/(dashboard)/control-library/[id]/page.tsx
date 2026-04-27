@@ -158,6 +158,7 @@ export default function ControlGroupDetailPage() {
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('controls:control_library:edit');
   const groupId = Number(params.id);
+  const isValidGroupId = Number.isFinite(groupId) && groupId > 0;
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabType>('controls');
   const [frameworkFilter, setFrameworkFilter] = useState<number | null>(null);
@@ -171,6 +172,7 @@ export default function ControlGroupDetailPage() {
       const response = await apiClient.get(`/control-library/groups/${groupId}`);
       return response.data;
     },
+    enabled: isValidGroupId,
   });
 
   const { data: frameworksData } = useQuery<FrameworksResponse>({
@@ -179,6 +181,7 @@ export default function ControlGroupDetailPage() {
       const response = await apiClient.get(`/control-library/groups/${groupId}/frameworks`);
       return response.data;
     },
+    enabled: isValidGroupId,
   });
 
   const { data: evidenceRecs, refetch: refetchEvidence } = useQuery<{ recommendations: EvidenceRecommendation[] }>({
@@ -187,7 +190,7 @@ export default function ControlGroupDetailPage() {
       const response = await apiClient.get(`/control-library/evidence-recs/for-group/${groupId}`);
       return response.data;
     },
-    enabled: activeTab === 'evidence',
+    enabled: isValidGroupId && activeTab === 'evidence',
   });
 
   const { data: similarities } = useQuery<{ items: SimilarityItem[] }>({
@@ -196,7 +199,7 @@ export default function ControlGroupDetailPage() {
       const response = await apiClient.get(`/control-library/groups/${groupId}/similarities`);
       return response.data;
     },
-    enabled: activeTab === 'similarity',
+    enabled: isValidGroupId && activeTab === 'similarity',
   });
 
   const generateSummaryMutation = useMutation({
@@ -298,6 +301,18 @@ export default function ControlGroupDetailPage() {
     }
     return groups;
   };
+
+  if (!isValidGroupId) {
+    return (
+      <div className="flex h-64 flex-col items-center justify-center text-slate-600">
+        <AlertCircle className="mb-2 h-8 w-8" />
+        <p>Invalid control group reference</p>
+        <Link href="/control-library" className="mt-4 text-blue-600 hover:underline">
+          Back to Control Library
+        </Link>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

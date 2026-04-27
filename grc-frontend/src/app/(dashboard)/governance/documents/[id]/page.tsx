@@ -129,6 +129,48 @@ const dedupeFrameworkOptions = (items: any[] = []) => {
   return Array.from(deduped.values()).sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
 };
 
+/**
+ * Some AI-generated documents emit markdown where a bullet marker (`* `,
+ * `- `, `+ `) appears on a line by itself, with the actual list-item text
+ * on a separate non-blank line below it. ReactMarkdown then renders an
+ * empty bullet followed by a stray paragraph, which looks broken (see
+ * "Mandatory Standard Requirements" example with empty dots above 6.1, 6.2…).
+ *
+ * This pre-processor merges the empty marker with the next content line so
+ * markdown sees a normal "* 6.1: text" list item. It preserves indentation
+ * (so nested lists keep their hierarchy) and leaves intentional blank-line
+ * separators between true paragraphs alone.
+ */
+const normalizeAiMarkdown = (raw: string | null | undefined): string => {
+  if (!raw) return '';
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+  const result: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const current = lines[i];
+    const stripped = current.trimEnd();
+    // Match a line that is ONLY a list marker (with optional indent), no content after it.
+    const emptyBulletMatch = stripped.match(/^([\t ]*)([*+\-]|\d+\.)\s*$/);
+    if (emptyBulletMatch) {
+      const indent = emptyBulletMatch[1] ?? '';
+      const marker = emptyBulletMatch[2] ?? '*';
+      // Look ahead for the next non-blank line whose indentation is >= the marker's
+      // indent — that's the content that belongs with this bullet.
+      let j = i + 1;
+      while (j < lines.length && lines[j].trim() === '') j++;
+      if (j < lines.length) {
+        const nextStripped = lines[j].replace(/^\s+/, '');
+        result.push(`${indent}${marker} ${nextStripped}`);
+        i = j + 1;
+        continue;
+      }
+    }
+    result.push(current);
+    i += 1;
+  }
+  return result.join('\n');
+};
+
 const sanitizeDocumentHtml = (html: string | null | undefined) => {
   if (!html) return '';
 
@@ -1360,6 +1402,11 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
   // Detect if doc.content is markdown (AI-generated docs always are)
   const rawContent: string = doc?.content || '';
   const isMarkdown = /^#{1,6}\s|^\*\*|^-\s|^\d+\.\s/m.test(rawContent);
+  // Normalize markdown that AI sometimes emits with empty bullet markers
+  // ("* " or "- " on a line by itself, then the actual text on the next
+  // non-blank line). ReactMarkdown otherwise renders a stray empty bullet
+  // followed by a separate paragraph and the document looks broken.
+  const normalizedMarkdown = useMemo(() => normalizeAiMarkdown(rawContent), [rawContent]);
   const renderedHtml = useMemo(() => sanitizeDocumentHtml(htmlContent?.html), [htmlContent?.html]);
 
   return (
@@ -1399,7 +1446,7 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
                 td: ({ children }) => <td className="border border-gray-300 px-3 py-2 text-gray-800">{children}</td>,
               }}
             >
-              {rawContent}
+              {normalizedMarkdown}
             </ReactMarkdown>
           ) : renderedHtml ? (
             <>
