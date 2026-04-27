@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient, { frameworksApi, controlsApi, frameworkUploadApi } from '@/lib/api';
@@ -152,13 +152,33 @@ const SOURCE_STYLES: Record<string, { bg: string; text: string }> = {
   import: { bg: 'bg-blue-100', text: 'text-blue-700' },
 };
 
+// Sibling literal routes that share the `/control-library/*` namespace. If the
+// dynamic `[id]` route ever catches one of these (build cache, soft-nav glitch,
+// stale CDN bundle), redirect away instead of issuing `/groups/NaN` API calls.
+const CONTROL_LIBRARY_SIBLING_ROUTES = new Set(['coverage', 'compare', 'gaps', 'evidence']);
+
 export default function ControlGroupDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('controls:control_library:edit');
-  const groupId = Number(params.id);
-  const isValidGroupId = Number.isFinite(groupId) && groupId > 0;
+  const rawId = String(params.id ?? '');
+  const groupId = Number(rawId);
+  const isValidGroupId = Number.isFinite(groupId) && groupId > 0 && /^\d+$/.test(rawId);
+  const lowerRawId = rawId.toLowerCase();
+  const isKnownSiblingRoute = CONTROL_LIBRARY_SIBLING_ROUTES.has(lowerRawId);
+  // If the dynamic page accidentally caught a sibling literal route (e.g. when
+  // the live bundle is stale or the CDN serves the wrong chunk for /coverage),
+  // bounce to the proper sibling page. For any other invalid id, bounce to the
+  // control-library index so the user never sees the broken-detail UI.
+  useEffect(() => {
+    if (isValidGroupId) return;
+    if (isKnownSiblingRoute) {
+      router.replace(`/control-library/${lowerRawId}`);
+    } else {
+      router.replace('/control-library');
+    }
+  }, [isValidGroupId, isKnownSiblingRoute, lowerRawId, router]);
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabType>('controls');
   const [frameworkFilter, setFrameworkFilter] = useState<number | null>(null);
@@ -303,15 +323,9 @@ export default function ControlGroupDetailPage() {
   };
 
   if (!isValidGroupId) {
-    return (
-      <div className="flex h-64 flex-col items-center justify-center text-slate-600">
-        <AlertCircle className="mb-2 h-8 w-8" />
-        <p>Invalid control group reference</p>
-        <Link href="/control-library" className="mt-4 text-blue-600 hover:underline">
-          Back to Control Library
-        </Link>
-      </div>
-    );
+    // The useEffect above is redirecting (either to a sibling route or to
+    // /control-library). Render nothing to avoid any flash of error UI.
+    return null;
   }
 
   if (isLoading) {
