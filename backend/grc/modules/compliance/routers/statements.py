@@ -74,7 +74,7 @@ def list_policy_statements(
     priority: Optional[str] = None,
     statement_status: Optional[str] = None,
     skip: int = Query(0, ge=0),
-    limit: int = Query(50, le=200),
+    limit: int = Query(50, ge=1, le=1000),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
