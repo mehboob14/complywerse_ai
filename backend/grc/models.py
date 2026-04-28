@@ -7600,42 +7600,42 @@ def init_grc_db():
     Base.metadata.create_all(bind=engine)
     
     # Add any missing columns that may have been added to models
-    _add_missing_columns()
+    # _add_missing_columns()
     
-    from .seed_frameworks import seed_frameworks, seed_uploaded_frameworks
-    seed_frameworks()
+    # from .seed_frameworks import seed_frameworks, seed_uploaded_frameworks
+    # seed_frameworks()
     
-    seed_uploaded_frameworks()
+    # seed_uploaded_frameworks()
     
-    from .seed_subcontrols import seed_subcontrols
-    seed_subcontrols()
+    # from .seed_subcontrols import seed_subcontrols
+    # seed_subcontrols()
     
-    from .seed_evidence_items import seed_curated_evidence_items
-    seed_curated_evidence_items()
+    # from .seed_evidence_items import seed_curated_evidence_items
+    # seed_curated_evidence_items()
     
-    from .seed_control_evidence import seed_control_evidence
-    seed_control_evidence()
+    # from .seed_control_evidence import seed_control_evidence
+    # seed_control_evidence()
     
-    from .seed_certification_phases import seed_certification_phases
-    seed_certification_phases()
+    # from .seed_certification_phases import seed_certification_phases
+    # seed_certification_phases()
     
     # Internal controls are now only created when users upload policies and select statements to convert
     # No pre-seeded controls - all controls come from user-uploaded policy documents
     
-    from .seed_vulnerabilities import seed_vulnerability_data
-    seed_vulnerability_data()
+    # from .seed_vulnerabilities import seed_vulnerability_data
+    # seed_vulnerability_data()
     
-    from .seed_vuln_workflows import seed_default_vuln_workflow
-    seed_default_vuln_workflow()
+    # from .seed_vuln_workflows import seed_default_vuln_workflow
+    # seed_default_vuln_workflow()
 
-    from .seed_workflow_engine_defaults import seed_workflow_engine_defaults
-    seed_workflow_engine_defaults()
+    # from .seed_workflow_engine_defaults import seed_workflow_engine_defaults
+    # seed_workflow_engine_defaults()
     
-    from .seed_rcsa_templates import seed_rcsa_templates
-    seed_rcsa_templates()
+    # from .seed_rcsa_templates import seed_rcsa_templates
+    # seed_rcsa_templates()
     
-    from .seed_committees import seed_committees
-    seed_committees()
+    # from .seed_committees import seed_committees
+    # seed_committees()
 
 
 def get_db():

@@ -401,7 +401,7 @@ export default function ControlLibraryPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        {/* <Link href="/control-library/coverage" className="card group hover:border-primary-500/50 transition-colors">
+        <Link href="/control-library/coverage" className="card group hover:border-primary-500/50 transition-colors">
           <div className="flex items-center gap-4">
             <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3">
               <Grid3X3 className="h-6 w-6 text-blue-400" />
@@ -411,7 +411,7 @@ export default function ControlLibraryPage() {
               <p className="text-sm text-gray-600">View evidence coverage heatmap</p>
             </div>
           </div>
-        </Link> */}
+        </Link>
         <Link href="/control-library/gaps" className="card hover:border-primary-500/50 transition-colors group">
           <div className="flex items-center gap-4">
             <div className="rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/10 p-3">
@@ -479,7 +479,7 @@ export default function ControlLibraryPage() {
               />
               Show empty groups
             </label>
-            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+            <div className="flex rounded-lg border border-gray-200">
               <button
                 onClick={() => setViewMode('cards')}
                 className={`px-3 py-1.5 text-sm font-medium transition-colors ${

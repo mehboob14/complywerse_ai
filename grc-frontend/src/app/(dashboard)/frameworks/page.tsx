@@ -459,7 +459,7 @@ export default function FrameworksPage() {
             />
           </div>
           <Link
-            href="/auditor-portal"
+            href="auditor-portal/1"
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 sm:px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap"
           >
             <ExternalLink className="h-4 w-4" />
