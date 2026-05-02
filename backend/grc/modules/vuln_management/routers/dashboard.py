@@ -1032,5 +1032,441 @@ def get_escalation_metrics(
         "level_2_count": total_level_2,
         "level_3_count": total_level_3
     }
-    
+
     return {"escalations": escalations, "summary": summary}
+
+
+# =============================================================================
+# Trends + reporting (added for the overview "intuitive graphs" feature)
+# =============================================================================
+
+# Period → (start_date_offset_days, default_bucket).
+# Quarter is treated as 90 days; longer windows auto-bucket into weeks/months
+# so the chart series stay readable.
+def _resolve_period(period: str):
+    p = (period or "").strip().lower()
+    if p in ("60d", "60", "60days"):
+        return 60, "day"
+    if p in ("90d", "90", "90days", "quarter", "q"):
+        return 90, "day"
+    if p in ("180d", "2quarters", "2q"):
+        return 180, "week"
+    if p in ("365d", "year", "1y"):
+        return 365, "week"
+    if p in ("30d", "30", "30days"):
+        return 30, "day"
+    # Allow caller-specified "<n>d" for arbitrary windows.
+    if p.endswith("d") and p[:-1].isdigit():
+        days = max(1, min(int(p[:-1]), 730))
+        bucket = "day" if days <= 90 else "week" if days <= 270 else "month"
+        return days, bucket
+    return 90, "day"
+
+
+def _bucket_key(dt: datetime, bucket: str) -> str:
+    """Return an ISO-style key for a date bucket: YYYY-MM-DD for day,
+    ISO Monday-of-week for week, YYYY-MM-01 for month."""
+    if bucket == "week":
+        # ISO Monday
+        monday = (dt.date() - timedelta(days=dt.weekday()))
+        return monday.isoformat()
+    if bucket == "month":
+        return dt.date().replace(day=1).isoformat()
+    return dt.date().isoformat()
+
+
+def _enumerate_buckets(start: date, end: date, bucket: str):
+    """Yield every bucket key between two dates (inclusive on both ends).
+
+    Filling in zero-valued buckets keeps the time-series charts continuous
+    even for days/weeks with no activity.
+    """
+    keys = []
+    cur = start
+    if bucket == "week":
+        cur = cur - timedelta(days=cur.weekday())
+        end_b = end - timedelta(days=end.weekday())
+        while cur <= end_b:
+            keys.append(cur.isoformat())
+            cur = cur + timedelta(days=7)
+    elif bucket == "month":
+        cur = cur.replace(day=1)
+        end_b = end.replace(day=1)
+        while cur <= end_b:
+            keys.append(cur.isoformat())
+            # advance one month
+            year = cur.year + (1 if cur.month == 12 else 0)
+            month = 1 if cur.month == 12 else cur.month + 1
+            cur = date(year, month, 1)
+    else:
+        while cur <= end:
+            keys.append(cur.isoformat())
+            cur = cur + timedelta(days=1)
+    return keys
+
+
+@router.get("/trends")
+def get_dashboard_trends(
+    tenant_id: Optional[int] = None,
+    period: str = "90d",
+    bucket: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Time-bucketed metrics for the overview trend charts.
+
+    Returns four parallel series keyed by date bucket:
+      - discovered:        new vulnerabilities created in the bucket
+      - resolved:          vulnerabilities transitioned to a closed status
+      - net_open_delta:    discovered - resolved (positive = backlog growing)
+      - status_changes:    workflow-history events in the bucket
+    Plus aggregate scalars (totals, MTTR within window, fixed-vs-new ratio)
+    that the report endpoint reuses without recomputing.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"period": period, "bucket": bucket or "day", "buckets": [],
+                "discovered": [], "resolved": [], "net_open_delta": [],
+                "status_changes": [], "summary": {}}
+
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        filter_tenants = [tenant_id]
+    else:
+        filter_tenants = user_tenants
+
+    days, default_bucket = _resolve_period(period)
+    bucket = (bucket or default_bucket).lower()
+    if bucket not in ("day", "week", "month"):
+        bucket = default_bucket
+
+    now = datetime.utcnow()
+    start = now - timedelta(days=days)
+
+    # Discovered (created_at within window).
+    discovered_rows = db.query(Vulnerability.created_at, Vulnerability.discovered_at).filter(
+        Vulnerability.tenant_id.in_(filter_tenants),
+        or_(
+            and_(Vulnerability.discovered_at != None, Vulnerability.discovered_at >= start),
+            and_(Vulnerability.discovered_at == None, Vulnerability.created_at >= start),
+        ),
+    ).all()
+
+    # Resolved (resolved_at within window).
+    resolved_rows = db.query(Vulnerability.resolved_at).filter(
+        Vulnerability.tenant_id.in_(filter_tenants),
+        Vulnerability.resolved_at != None,
+        Vulnerability.resolved_at >= start,
+    ).all()
+
+    # Status-change events from workflow history.
+    status_change_rows = db.query(GRCVulnWorkflowHistory.performed_at).join(
+        Vulnerability,
+        Vulnerability.id == GRCVulnWorkflowHistory.vulnerability_id,
+    ).filter(
+        Vulnerability.tenant_id.in_(filter_tenants),
+        GRCVulnWorkflowHistory.performed_at != None,
+        GRCVulnWorkflowHistory.performed_at >= start,
+    ).all()
+
+    discovered_counts: Dict[str, int] = {}
+    resolved_counts: Dict[str, int] = {}
+    status_change_counts: Dict[str, int] = {}
+
+    for created_at, disc_at in discovered_rows:
+        when = disc_at or created_at
+        if not when:
+            continue
+        key = _bucket_key(when, bucket)
+        discovered_counts[key] = discovered_counts.get(key, 0) + 1
+
+    resolution_days_within = []
+    for (resolved_at,) in resolved_rows:
+        if not resolved_at:
+            continue
+        key = _bucket_key(resolved_at, bucket)
+        resolved_counts[key] = resolved_counts.get(key, 0) + 1
+
+    for (performed_at,) in status_change_rows:
+        if not performed_at:
+            continue
+        key = _bucket_key(performed_at, bucket)
+        status_change_counts[key] = status_change_counts.get(key, 0) + 1
+
+    # MTTR within the window: avg(resolved_at - discovered_at) for vulns
+    # both discovered and resolved during the window.
+    mttr_rows = db.query(Vulnerability.discovered_at, Vulnerability.resolved_at).filter(
+        Vulnerability.tenant_id.in_(filter_tenants),
+        Vulnerability.resolved_at != None,
+        Vulnerability.resolved_at >= start,
+    ).all()
+    for disc_at, res_at in mttr_rows:
+        if disc_at and res_at:
+            resolution_days_within.append((res_at - disc_at).total_seconds() / 86400.0)
+    mttr_within = (sum(resolution_days_within) / len(resolution_days_within)) if resolution_days_within else None
+
+    # Fill zero-buckets so charts are continuous.
+    bucket_keys = _enumerate_buckets(start.date(), now.date(), bucket)
+    discovered_series = [{"date": k, "count": discovered_counts.get(k, 0)} for k in bucket_keys]
+    resolved_series = [{"date": k, "count": resolved_counts.get(k, 0)} for k in bucket_keys]
+    status_change_series = [{"date": k, "count": status_change_counts.get(k, 0)} for k in bucket_keys]
+    net_open_delta_series = [
+        {"date": k, "count": discovered_counts.get(k, 0) - resolved_counts.get(k, 0)}
+        for k in bucket_keys
+    ]
+
+    total_discovered = sum(p["count"] for p in discovered_series)
+    total_resolved = sum(p["count"] for p in resolved_series)
+    total_status_changes = sum(p["count"] for p in status_change_series)
+
+    # Tasks linked to vulnerabilities — aggregate progress for the report.
+    # Soft import to avoid a circular dependency at module load time.
+    from ....models import CriticalTask
+    task_progress = {"total": 0, "by_status": {}}
+    task_rows = db.query(CriticalTask.status, func.count(CriticalTask.id)).filter(
+        CriticalTask.tenant_id.in_(filter_tenants),
+        CriticalTask.linked_vulnerability_id != None,
+    ).group_by(CriticalTask.status).all()
+    for st, cnt in task_rows:
+        task_progress["by_status"][st or "Unknown"] = int(cnt)
+        task_progress["total"] += int(cnt)
+
+    summary = {
+        "period_days": days,
+        "bucket": bucket,
+        "start": start.date().isoformat(),
+        "end": now.date().isoformat(),
+        "total_discovered": total_discovered,
+        "total_resolved": total_resolved,
+        "net_change": total_discovered - total_resolved,
+        "total_status_changes": total_status_changes,
+        "mttr_days_within_window": round(mttr_within, 1) if mttr_within is not None else None,
+        "fixed_vs_new_ratio": (
+            round(total_resolved / total_discovered, 2)
+            if total_discovered > 0 else None
+        ),
+        "task_progress": task_progress,
+    }
+
+    return {
+        "period": period,
+        "bucket": bucket,
+        "buckets": bucket_keys,
+        "discovered": discovered_series,
+        "resolved": resolved_series,
+        "net_open_delta": net_open_delta_series,
+        "status_changes": status_change_series,
+        "summary": summary,
+    }
+
+
+def _render_pdf_report(payload: dict) -> bytes:
+    """Render the trend payload as a PDF using reportlab.
+
+    Returns raw PDF bytes. Raises ImportError if reportlab is not installed,
+    in which case the caller falls back to a plain-text report.
+    """
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+    from reportlab.lib import colors
+    import io as _io
+
+    buf = _io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter, title="Vulnerability Status Report")
+    styles = getSampleStyleSheet()
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], spaceAfter=6)
+    body = styles["BodyText"]
+
+    s = payload.get("summary", {})
+    story = [
+        Paragraph("Vulnerability Status Report", styles["Title"]),
+        Spacer(1, 6),
+        Paragraph(
+            f"Window: {s.get('start','')} – {s.get('end','')} "
+            f"({s.get('period_days','?')} days, bucket: {s.get('bucket','day')})",
+            body,
+        ),
+        Spacer(1, 12),
+        Paragraph("Summary", h2),
+    ]
+
+    summary_table = [
+        ["Total discovered", s.get("total_discovered", 0)],
+        ["Total resolved", s.get("total_resolved", 0)],
+        ["Net change (open delta)", s.get("net_change", 0)],
+        ["Status changes", s.get("total_status_changes", 0)],
+        ["MTTR (days, in window)",
+         s.get("mttr_days_within_window") if s.get("mttr_days_within_window") is not None else "—"],
+        ["Fixed-vs-new ratio",
+         s.get("fixed_vs_new_ratio") if s.get("fixed_vs_new_ratio") is not None else "—"],
+    ]
+    t = Table(summary_table, hAlign="LEFT", colWidths=[200, 100])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
+        ("BOX", (0, 0), (-1, -1), 0.25, colors.grey),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
+        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 16))
+
+    # Linked task progress.
+    tp = s.get("task_progress") or {}
+    story.append(Paragraph("Task Progress (linked to vulnerabilities)", h2))
+    if tp.get("total"):
+        rows = [["Status", "Count"]]
+        for st, cnt in (tp.get("by_status") or {}).items():
+            rows.append([str(st), int(cnt)])
+        rows.append(["Total", int(tp.get("total", 0))])
+        t2 = Table(rows, hAlign="LEFT", colWidths=[200, 100])
+        t2.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("BOX", (0, 0), (-1, -1), 0.25, colors.grey),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.whitesmoke),
+            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ]))
+        story.append(t2)
+    else:
+        story.append(Paragraph("No tasks are linked to vulnerabilities in this window.", body))
+    story.append(Spacer(1, 16))
+
+    # Time-series tables (compact).
+    def _series_table(title: str, series: List[Dict[str, Any]]):
+        story.append(Paragraph(title, h2))
+        if not series:
+            story.append(Paragraph("No data in window.", body))
+            return
+        rows = [["Date", "Count"]]
+        for p in series:
+            rows.append([p.get("date", ""), int(p.get("count", 0))])
+        tt = Table(rows, hAlign="LEFT", colWidths=[200, 100], repeatRows=1)
+        tt.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("BOX", (0, 0), (-1, -1), 0.25, colors.grey),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ]))
+        story.append(tt)
+        story.append(Spacer(1, 12))
+
+    _series_table("Discovered over time", payload.get("discovered") or [])
+    _series_table("Resolved over time", payload.get("resolved") or [])
+    _series_table("Net open delta", payload.get("net_open_delta") or [])
+    _series_table("Status changes", payload.get("status_changes") or [])
+
+    doc.build(story)
+    pdf_bytes = buf.getvalue()
+    buf.close()
+    return pdf_bytes
+
+
+def _render_text_report(payload: dict) -> str:
+    """Plain-text fallback when reportlab is unavailable."""
+    s = payload.get("summary", {})
+    lines = []
+    lines.append("VULNERABILITY STATUS REPORT")
+    lines.append("=" * 60)
+    lines.append(f"Window: {s.get('start','')} - {s.get('end','')} "
+                 f"({s.get('period_days','?')} days, bucket: {s.get('bucket','day')})")
+    lines.append("")
+    lines.append("SUMMARY")
+    lines.append("-" * 60)
+    lines.append(f"Total discovered:         {s.get('total_discovered', 0)}")
+    lines.append(f"Total resolved:           {s.get('total_resolved', 0)}")
+    lines.append(f"Net change (open delta):  {s.get('net_change', 0)}")
+    lines.append(f"Status changes:           {s.get('total_status_changes', 0)}")
+    mttr = s.get("mttr_days_within_window")
+    lines.append(f"MTTR (days, in window):   {mttr if mttr is not None else '-'}")
+    fvn = s.get("fixed_vs_new_ratio")
+    lines.append(f"Fixed-vs-new ratio:       {fvn if fvn is not None else '-'}")
+    lines.append("")
+    tp = s.get("task_progress") or {}
+    lines.append("TASK PROGRESS (linked to vulnerabilities)")
+    lines.append("-" * 60)
+    if tp.get("total"):
+        for st, cnt in (tp.get("by_status") or {}).items():
+            lines.append(f"  {st:24s}{cnt:>6d}")
+        lines.append(f"  {'TOTAL':24s}{tp.get('total', 0):>6d}")
+    else:
+        lines.append("  No tasks linked to vulnerabilities in this window.")
+    lines.append("")
+
+    def _block(title: str, series):
+        lines.append(title)
+        lines.append("-" * 60)
+        if not series:
+            lines.append("  (no data)")
+        else:
+            for p in series:
+                lines.append(f"  {p.get('date',''):12s}{int(p.get('count', 0)):>6d}")
+        lines.append("")
+
+    _block("DISCOVERED OVER TIME", payload.get("discovered") or [])
+    _block("RESOLVED OVER TIME", payload.get("resolved") or [])
+    _block("NET OPEN DELTA", payload.get("net_open_delta") or [])
+    _block("STATUS CHANGES", payload.get("status_changes") or [])
+    return "\n".join(lines)
+
+
+@router.get("/report")
+def download_dashboard_report(
+    tenant_id: Optional[int] = None,
+    period: str = "90d",
+    bucket: Optional[str] = None,
+    fmt: str = "pdf",
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Download a vulnerability status report.
+
+    `fmt` accepts `pdf` (default) or `text`. PDF rendering uses reportlab if
+    available; if it isn't installed in the deployment we fall back to a
+    plain-text report (filename .txt) so the endpoint never errors out.
+    """
+    payload = get_dashboard_trends(
+        tenant_id=tenant_id,
+        period=period,
+        bucket=bucket,
+        db=db,
+        current_user=current_user,
+    )
+
+    from fastapi.responses import StreamingResponse
+    import io as _io
+
+    fname_base = f"vulnerability-report-{payload.get('summary', {}).get('end', 'now')}-{period}"
+    if fmt.lower() == "text":
+        text = _render_text_report(payload)
+        return StreamingResponse(
+            iter([text.encode("utf-8")]),
+            media_type="text/plain",
+            headers={"Content-Disposition": f"attachment; filename={fname_base}.txt"},
+        )
+
+    try:
+        pdf_bytes = _render_pdf_report(payload)
+    except ImportError:
+        # reportlab not installed — degrade to a text report rather than 500.
+        text = _render_text_report(payload)
+        return StreamingResponse(
+            iter([text.encode("utf-8")]),
+            media_type="text/plain",
+            headers={
+                "Content-Disposition": f"attachment; filename={fname_base}.txt",
+                "X-Report-Format-Fallback": "text-no-reportlab",
+            },
+        )
+
+    return StreamingResponse(
+        iter([pdf_bytes]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={fname_base}.pdf"},
+    )

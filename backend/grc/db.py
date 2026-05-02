@@ -104,6 +104,17 @@ def get_tenant_engine(slug: str) -> Engine:
             # dependency at module-load time (the migrations module imports
             # from this file).
             try:
+                # First, create any tables that the model registry knows
+                # about but this tenant DB hasn't been populated with yet
+                # (e.g. a brand-new pivot table introduced after the tenant
+                # was originally provisioned). `create_all` only creates
+                # missing tables — existing ones are left untouched, so
+                # this is safe to call on every engine init.
+                from .models import Base as _Base
+                _Base.metadata.create_all(bind=engine)
+            except Exception:
+                logger.exception("create_all failed for slug=%s", slug)
+            try:
                 from .modules.compliance.schema_migrations import _ensure_for_engine
                 _ensure_for_engine(engine)
             except Exception:

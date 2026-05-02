@@ -869,6 +869,24 @@ export const ermApi = {
           expected_residual_reduction: number;
         }>;
       }>('/erm/mitigation-actions/ai-suggest', data),
+    // Evidence linkage — same shape as `internalControls.{getEvidence,linkEvidence,unlinkEvidence}`.
+    getEvidence: (actionId: number) =>
+      apiClient.get<Array<{
+        id: number;
+        evidence_id: number;
+        title: string;
+        description?: string | null;
+        evidence_type?: string | null;
+        status?: string | null;
+        file_name?: string | null;
+        file_url?: string | null;
+        notes?: string | null;
+        linked_at?: string | null;
+      }>>(`/erm/mitigation-actions/${actionId}/evidence`),
+    linkEvidence: (actionId: number, data: { evidence_id: number; notes?: string }) =>
+      apiClient.post(`/erm/mitigation-actions/${actionId}/evidence`, data),
+    unlinkEvidence: (actionId: number, linkId: number) =>
+      apiClient.delete(`/erm/mitigation-actions/${actionId}/evidence/${linkId}`),
   },
   scales: {
     getAll: () => 
@@ -1492,14 +1510,25 @@ export const vulnManagementApi = {
     delete: (id: number) => apiClient.delete(`/vuln-management/reports/${id}`),
   },
   vulnerabilities: {
-    getAll: (params?: { status?: string; severity?: string; report_id?: number; search?: string }) => 
-      apiClient.get('/vuln-management/vulnerabilities', { 
+    getAll: (params?: {
+      status?: string;
+      severity?: string;
+      report_id?: number;
+      search?: string;
+      // Closed/mitigated vulns are hidden by default. Pass `true` to mix
+      // them back in, or `closed_only=true` to show only closed/mitigated.
+      include_closed?: boolean;
+      closed_only?: boolean;
+    }) =>
+      apiClient.get('/vuln-management/vulnerabilities', {
         params: params ? {
           status_filter: params.status,
           severity: params.severity,
           report_id: params.report_id,
-          search: params.search
-        } : undefined 
+          search: params.search,
+          include_closed: params.include_closed,
+          closed_only: params.closed_only,
+        } : undefined
       }),
     getById: (id: number) => apiClient.get(`/vuln-management/vulnerabilities/${id}`),
     create: (data: Record<string, unknown>) => 
@@ -1637,6 +1666,16 @@ export const vulnManagementApi = {
     getDepartmentWorkload: () => apiClient.get('/vuln-management/dashboard/department-workload'),
     getAgingByDepartment: () => apiClient.get('/vuln-management/dashboard/aging-by-department'),
     getEscalationMetrics: () => apiClient.get('/vuln-management/dashboard/escalation-metrics'),
+    // Trend series + report download for the overview "intuitive graphs"
+    // section. `period` accepts "60d", "90d", "quarter", "180d", "365d".
+    // `bucket` is auto-resolved by the backend; pass to override.
+    getTrends: (params?: { period?: string; bucket?: 'day' | 'week' | 'month'; tenant_id?: number }) =>
+      apiClient.get('/vuln-management/dashboard/trends', { params }),
+    downloadReport: (params?: { period?: string; bucket?: 'day' | 'week' | 'month'; fmt?: 'pdf' | 'text' }) =>
+      apiClient.get('/vuln-management/dashboard/report', {
+        params,
+        responseType: 'blob',
+      }),
   },
 };
 

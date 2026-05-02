@@ -1335,10 +1335,48 @@ class RiskMitigationAction(Base):
     risk = relationship("Risk", back_populates="mitigation_actions")
     owner = relationship("GRCUser")
     evidence = relationship("Evidence")
-    
+    # Many-to-many evidence linkage (mirrors InternalControlEvidence). The
+    # legacy single `evidence_id` column above is kept for back-compat.
+    evidence_links = relationship(
+        "RiskMitigationActionEvidence",
+        back_populates="action",
+        cascade="all, delete-orphan",
+    )
+
     __table_args__ = (
         Index("ix_mitigation_action_risk", "risk_id"),
         Index("ix_mitigation_action_status", "status"),
+    )
+
+
+class RiskMitigationActionEvidence(Base):
+    """Pivot table linking evidence records to a mitigation action.
+
+    Mirrors `InternalControlEvidence` so the same UX pattern (search, link,
+    unlink, list) can be reused. A unique (action, evidence) constraint
+    prevents duplicate links.
+    """
+    __tablename__ = "grc_risk_mitigation_action_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    mitigation_action_id = Column(Integer, ForeignKey("grc_risk_mitigation_actions.id"), nullable=False, index=True)
+    evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=True, index=True)
+    linked_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    linked_at = Column(DateTime, default=datetime.utcnow)
+    notes = Column(Text, nullable=True)
+
+    action = relationship("RiskMitigationAction", back_populates="evidence_links")
+    evidence = relationship("Evidence")
+    linker = relationship("GRCUser")
+
+    __table_args__ = (
+        Index(
+            "uq_risk_mitigation_action_evidence",
+            "mitigation_action_id",
+            "evidence_id",
+            unique=True,
+        ),
     )
 
 

@@ -108,6 +108,12 @@ def _build_vulnerability_response(v: Vulnerability) -> VulnerabilityResponse:
     )
 
 
+# Statuses that should be hidden from the default vulnerability register list.
+# Mirrors `RESOLVED_STATUSES` in the dashboard router so the two views stay
+# consistent on what counts as "closed/mitigated".
+_LIST_CLOSED_STATUSES = ["resolved", "remediated", "verified", "closed", "accepted", "false_positive"]
+
+
 @router.get("/vulnerabilities", response_model=List[VulnerabilityResponse])
 def list_vulnerabilities(
     tenant_id: Optional[int] = None,
@@ -118,6 +124,15 @@ def list_vulnerabilities(
     cve_id: Optional[str] = None,
     is_exception: Optional[bool] = None,
     is_overdue: Optional[bool] = None,
+    # New: closed/mitigated vulnerabilities are hidden by default to keep the
+    # operational register focused on what still needs work. Two toggles:
+    #   include_closed=true → include closed/mitigated alongside open ones
+    #   closed_only=true    → show ONLY closed/mitigated (the "show closed" view)
+    # An explicit `status_filter=<value>` always wins over these toggles so
+    # existing callers that pin a specific status (and any saved bookmarks)
+    # behave exactly as before.
+    include_closed: bool = False,
+    closed_only: bool = False,
     search: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
@@ -128,13 +143,13 @@ def list_vulnerabilities(
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return []
-    
+
     query = db.query(Vulnerability).options(
         joinedload(Vulnerability.assignee),
         joinedload(Vulnerability.verifier),
         joinedload(Vulnerability.asset_links).joinedload(VulnerabilityAssetLink.asset),
     ).filter(Vulnerability.tenant_id.in_(user_tenants))
-    
+
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(Vulnerability.tenant_id == tenant_id)
@@ -144,6 +159,12 @@ def list_vulnerabilities(
         query = query.filter(Vulnerability.severity == severity)
     if status_filter:
         query = query.filter(Vulnerability.status == status_filter)
+    else:
+        # Apply the closed/open toggle only when no explicit status was given.
+        if closed_only:
+            query = query.filter(Vulnerability.status.in_(_LIST_CLOSED_STATUSES))
+        elif not include_closed:
+            query = query.filter(Vulnerability.status.notin_(_LIST_CLOSED_STATUSES))
     if assigned_to:
         query = query.filter(Vulnerability.assigned_to == assigned_to)
     if cve_id:

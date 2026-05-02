@@ -12,6 +12,8 @@ import {
   Building2,
   AlertTriangle,
   TrendingUp,
+  Download,
+  FileText,
 } from 'lucide-react';
 import {
   PieChart,
@@ -29,6 +31,9 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis,
   Legend,
+  LineChart,
+  Line,
+  CartesianGrid,
 } from 'recharts';
 import { useState, useMemo } from 'react';
 
@@ -181,8 +186,45 @@ const TreeBlock = (props: Record<string, unknown>) => {
 
 // â”€â”€â”€ Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+// Period selector for the trend section. Sent as `period` query param to
+// the backend; the server resolves the implied bucket size (day/week/month).
+type TrendPeriod = '60d' | '90d' | 'quarter' | '180d' | '365d';
+const PERIOD_LABEL: Record<TrendPeriod, string> = {
+  '60d': '60 days',
+  '90d': '90 days',
+  'quarter': 'Quarter',
+  '180d': '2 quarters',
+  '365d': '1 year',
+};
+
+interface TrendBucket { date: string; count: number }
+interface TrendsResponse {
+  period: string;
+  bucket: 'day' | 'week' | 'month';
+  buckets: string[];
+  discovered: TrendBucket[];
+  resolved: TrendBucket[];
+  net_open_delta: TrendBucket[];
+  status_changes: TrendBucket[];
+  summary: {
+    period_days: number;
+    bucket: string;
+    start: string;
+    end: string;
+    total_discovered: number;
+    total_resolved: number;
+    net_change: number;
+    total_status_changes: number;
+    mttr_days_within_window: number | null;
+    fixed_vs_new_ratio: number | null;
+    task_progress: { total: number; by_status: Record<string, number> };
+  };
+}
+
 export default function VulnerabilityDashboardPage() {
   const [selectedSeverity, setSelectedSeverity] = useState<string | null>(null);
+  const [trendPeriod, setTrendPeriod] = useState<TrendPeriod>('90d');
+  const [reportDownloading, setReportDownloading] = useState(false);
 
   const { data: dashboard, isLoading, refetch } = useQuery({
     queryKey: ['vuln-dashboard'],
@@ -192,6 +234,40 @@ export default function VulnerabilityDashboardPage() {
     },
     refetchInterval: 60000,
   });
+
+  const { data: trends } = useQuery({
+    queryKey: ['vuln-trends', trendPeriod],
+    queryFn: async () => {
+      const res = await vulnManagementApi.dashboard.getTrends({ period: trendPeriod });
+      return res.data as TrendsResponse;
+    },
+    refetchInterval: 120000,
+  });
+
+  const handleDownloadReport = async () => {
+    setReportDownloading(true);
+    try {
+      const res = await vulnManagementApi.dashboard.downloadReport({ period: trendPeriod, fmt: 'pdf' });
+      // Honour whatever media type the server actually sent (it falls back
+      // to text/plain when reportlab isn't available on the deployment).
+      const headers = res.headers as Record<string, string> | undefined;
+      const contentType = (headers?.['content-type'] || 'application/pdf').toString();
+      const isPdf = contentType.includes('pdf');
+      const blob = new Blob([res.data as BlobPart], { type: isPdf ? 'application/pdf' : 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `vulnerability-report-${trendPeriod}.${isPdf ? 'pdf' : 'txt'}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download vulnerability report', err);
+    } finally {
+      setReportDownloading(false);
+    }
+  };
 
   const { data: trendData } = useQuery({
     queryKey: ['vuln-discovery-trend'],
@@ -344,6 +420,145 @@ export default function VulnerabilityDashboardPage() {
           <p className="text-2xl font-bold mt-1" style={{ color: slaColor }}>{slaPercent}%</p>
           <p className="text-xs text-gray-400 mt-1">{overdueCount} overdue</p>
         </div>
+      </div>
+
+      {/* Trends & Reports — fixed-vs-new, status-change velocity, and a
+          downloadable PDF/text report covering the same window. */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <TrendingUp size={14} className="text-blue-600" />
+              Trends &amp; Historical Breakdown
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Vulnerabilities discovered, resolved, and status changes over the selected window.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+              {(['60d', '90d', 'quarter', '180d', '365d'] as TrendPeriod[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setTrendPeriod(p)}
+                  className={`px-3 py-1.5 transition-colors ${
+                    trendPeriod === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {PERIOD_LABEL[p]}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={handleDownloadReport}
+              disabled={reportDownloading}
+              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-gray-400"
+              title="Download a status report covering the selected window"
+            >
+              {reportDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Download Report
+            </button>
+          </div>
+        </div>
+
+        {/* Trend summary cards */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-2">
+            <p className="text-[10px] uppercase tracking-wide text-gray-500">New</p>
+            <p className="text-lg font-bold text-rose-600">{trends?.summary?.total_discovered ?? 0}</p>
+          </div>
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-2">
+            <p className="text-[10px] uppercase tracking-wide text-gray-500">Fixed</p>
+            <p className="text-lg font-bold text-emerald-600">{trends?.summary?.total_resolved ?? 0}</p>
+          </div>
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-2">
+            <p className="text-[10px] uppercase tracking-wide text-gray-500">Net change</p>
+            <p
+              className={`text-lg font-bold ${
+                (trends?.summary?.net_change ?? 0) > 0 ? 'text-rose-600' : 'text-emerald-600'
+              }`}
+            >
+              {trends?.summary?.net_change != null
+                ? `${trends.summary.net_change > 0 ? '+' : ''}${trends.summary.net_change}`
+                : '0'}
+            </p>
+          </div>
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-2">
+            <p className="text-[10px] uppercase tracking-wide text-gray-500">MTTR (in window)</p>
+            <p className="text-lg font-bold text-amber-600">
+              {trends?.summary?.mttr_days_within_window != null
+                ? `${trends.summary.mttr_days_within_window}d`
+                : '-'}
+            </p>
+          </div>
+          <div className="rounded-lg border border-gray-100 bg-gray-50 p-2">
+            <p className="text-[10px] uppercase tracking-wide text-gray-500">Status changes</p>
+            <p className="text-lg font-bold text-indigo-600">{trends?.summary?.total_status_changes ?? 0}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Discovered vs Resolved (grouped bars) */}
+          <div className="rounded-lg border border-gray-100 p-2">
+            <p className="text-xs font-medium text-gray-600 mb-1">Discovered vs Resolved</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart
+                data={(trends?.buckets ?? []).map((d, i) => ({
+                  date: d,
+                  Discovered: trends?.discovered?.[i]?.count ?? 0,
+                  Resolved: trends?.resolved?.[i]?.count ?? 0,
+                }))}
+                margin={{ top: 4, right: 8, bottom: 0, left: -10 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={(v) => (typeof v === 'string' ? v.slice(5) : v)}
+                  interval="preserveStartEnd"
+                />
+                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="Discovered" fill="#ef4444" />
+                <Bar dataKey="Resolved" fill="#22c55e" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Status-change velocity (line) */}
+          <div className="rounded-lg border border-gray-100 p-2">
+            <p className="text-xs font-medium text-gray-600 mb-1">Status change activity</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart
+                data={(trends?.status_changes ?? []).map((p) => ({ date: p.date, count: p.count }))}
+                margin={{ top: 4, right: 8, bottom: 0, left: -10 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10 }}
+                  tickFormatter={(v) => (typeof v === 'string' ? v.slice(5) : v)}
+                  interval="preserveStartEnd"
+                />
+                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                <Tooltip />
+                <Line type="monotone" dataKey="count" stroke="#6366f1" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Task progress strip */}
+        {trends?.summary?.task_progress?.total ? (
+          <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-2 text-xs text-gray-600">
+            <span className="font-semibold text-gray-700">Linked task progress:</span>{' '}
+            {Object.entries(trends.summary.task_progress.by_status || {})
+              .map(([k, v]) => `${k}: ${v}`)
+              .join(' · ')}{' '}
+            <span className="text-gray-500">(total {trends.summary.task_progress.total})</span>
+          </div>
+        ) : null}
       </div>
 
       {/* -- Severity Exposure Radar -- */}

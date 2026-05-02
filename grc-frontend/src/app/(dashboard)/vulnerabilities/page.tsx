@@ -210,6 +210,10 @@ export default function VulnerabilitiesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
+  // By default the register hides closed/mitigated rows so it stays focused
+  // on what still needs work. The checkbox toggles them back in. An explicit
+  // status pick from the existing dropdown overrides this on the backend.
+  const [showClosed, setShowClosed] = useState(false);
   const [sortBy, setSortBy] = useState<'created_at' | 'severity' | 'due_date' | 'title'>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -241,12 +245,20 @@ export default function VulnerabilitiesPage() {
   ];
 
   const { data: vulnerabilities, isLoading, error } = useQuery({
-    queryKey: ['vulnerabilities', statusFilter, severityFilter],
+    queryKey: ['vulnerabilities', statusFilter, severityFilter, showClosed],
     queryFn: async () => {
       const params: Record<string, unknown> = {};
       if (statusFilter !== 'all') params.status = statusFilter;
       if (severityFilter !== 'all') params.severity = severityFilter;
-      const response = await vulnManagementApi.vulnerabilities.getAll(params as { status?: string; severity?: string });
+      // Only forward the closed-toggle when no explicit status filter is set;
+      // the backend already gives precedence to status_filter, but skipping
+      // the redundant param keeps the URL clean.
+      if (statusFilter === 'all') {
+        params.include_closed = showClosed;
+      }
+      const response = await vulnManagementApi.vulnerabilities.getAll(
+        params as { status?: string; severity?: string; include_closed?: boolean }
+      );
       return response.data as Vulnerability[];
     },
     placeholderData: keepPreviousData,
@@ -763,6 +775,28 @@ export default function VulnerabilitiesPage() {
             placeholder="All Severity"
             size="md"
           />
+          {/* Hide closed/mitigated rows by default; the checkbox brings
+              them back. Disabled when a specific status is picked above
+              (because that takes precedence on the server). */}
+          <label
+            className={`flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm ${
+              statusFilter !== 'all' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50'
+            }`}
+            title={
+              statusFilter !== 'all'
+                ? 'Status filter is active — clear it to use this toggle'
+                : 'Show closed / mitigated vulnerabilities'
+            }
+          >
+            <input
+              type="checkbox"
+              checked={showClosed}
+              disabled={statusFilter !== 'all'}
+              onChange={(e) => setShowClosed(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-gray-700">Show closed</span>
+          </label>
           {/* <MultiSelectDropdown
             title="Sort by"
             items={[

@@ -8,13 +8,14 @@ from sqlalchemy import and_
 from openai import OpenAI
 
 from ....models import (
-    Risk, RiskMitigationAction, GRCUser, InternalControl, get_db
+    Risk, RiskMitigationAction, RiskMitigationActionEvidence, GRCUser,
+    InternalControl, Evidence, get_db
 )
 from ....schemas import (
     RiskMitigationActionCreate, RiskMitigationActionUpdate, RiskMitigationActionResponse,
     MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/mitigation-actions", tags=["ERM - Mitigation Actions"])
 
@@ -416,5 +417,142 @@ def create_risk_action(
     db.add(db_action)
     db.commit()
     db.refresh(db_action)
-    
+
     return RiskMitigationActionResponse.model_validate(db_action)
+
+
+# ─── Evidence Linking (mirrors InternalControlEvidence pattern) ──────────────
+
+class _MitigationEvidenceLinkCreate(BaseModel):
+    evidence_id: int
+    notes: Optional[str] = None
+
+
+class _MitigationEvidenceLinkResponse(BaseModel):
+    id: int
+    evidence_id: int
+    title: str
+    description: Optional[str] = None
+    evidence_type: Optional[str] = None
+    status: Optional[str] = None
+    file_name: Optional[str] = None
+    file_url: Optional[str] = None
+    notes: Optional[str] = None
+    linked_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+def _get_action_or_404(action_id: int, user_tenants, db: Session) -> RiskMitigationAction:
+    """Resolve a mitigation action and confirm it belongs to a tenant the
+    caller has access to (via the parent risk's tenant)."""
+    action = db.query(RiskMitigationAction).filter(
+        RiskMitigationAction.id == action_id
+    ).first()
+    if not action:
+        raise HTTPException(status_code=404, detail="Mitigation action not found")
+    risk = db.query(Risk).filter(Risk.id == action.risk_id).first()
+    if not risk or risk.tenant_id not in user_tenants:
+        raise HTTPException(status_code=404, detail="Mitigation action not found")
+    return action
+
+
+def _serialize_evidence_link(link: RiskMitigationActionEvidence) -> _MitigationEvidenceLinkResponse:
+    ev = link.evidence
+    return _MitigationEvidenceLinkResponse(
+        id=link.id,
+        evidence_id=ev.id if ev else 0,
+        title=(getattr(ev, "name", None) or getattr(ev, "title", None) or (ev.file_name if ev else "") or "") if ev else "",
+        description=getattr(ev, "description", None) if ev else None,
+        evidence_type=getattr(ev, "evidence_type", None) if ev else None,
+        status=getattr(ev, "status", None) if ev else None,
+        file_name=ev.file_name if ev else None,
+        file_url=getattr(ev, "file_url", None) if ev else None,
+        notes=link.notes,
+        linked_at=link.linked_at,
+    )
+
+
+@router.get("/{action_id}/evidence", response_model=List[_MitigationEvidenceLinkResponse])
+def list_mitigation_action_evidence(
+    action_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    action = _get_action_or_404(action_id, user_tenants, db)
+
+    links = db.query(RiskMitigationActionEvidence).filter(
+        RiskMitigationActionEvidence.mitigation_action_id == action.id
+    ).all()
+    return [_serialize_evidence_link(l) for l in links if l.evidence is not None]
+
+
+@router.post(
+    "/{action_id}/evidence",
+    response_model=_MitigationEvidenceLinkResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def link_evidence_to_mitigation_action(
+    action_id: int,
+    data: _MitigationEvidenceLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=404, detail="Mitigation action not found")
+    action = _get_action_or_404(action_id, user_tenants, db)
+
+    ev = db.query(Evidence).filter(
+        Evidence.id == data.evidence_id,
+        Evidence.tenant_id.in_(user_tenants),
+    ).first()
+    if not ev:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+
+    existing = db.query(RiskMitigationActionEvidence).filter(
+        RiskMitigationActionEvidence.mitigation_action_id == action.id,
+        RiskMitigationActionEvidence.evidence_id == ev.id,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Evidence already linked")
+
+    link = RiskMitigationActionEvidence(
+        mitigation_action_id=action.id,
+        evidence_id=ev.id,
+        tenant_id=get_user_primary_tenant(current_user, db),
+        linked_by=current_user.id,
+        notes=data.notes,
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+    return _serialize_evidence_link(link)
+
+
+@router.delete("/{action_id}/evidence/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_evidence_from_mitigation_action(
+    action_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=404, detail="Mitigation action not found")
+    action = _get_action_or_404(action_id, user_tenants, db)
+
+    link = db.query(RiskMitigationActionEvidence).filter(
+        RiskMitigationActionEvidence.id == link_id,
+        RiskMitigationActionEvidence.mitigation_action_id == action.id,
+    ).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Evidence link not found")
+
+    db.delete(link)
+    db.commit()
+    return None
