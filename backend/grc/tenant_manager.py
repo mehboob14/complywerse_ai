@@ -1,147 +1,45 @@
-import os
-import re
-from datetime import datetime
-from sqlalchemy import create_engine, text, inspect
-from sqlalchemy.orm import sessionmaker, Session
-from typing import Optional, Dict, Any, List
+"""
+Per-database-per-tenant provisioning.
+
+A tenant's lifecycle:
+  1. Insert a row in the master catalog (`grc_tenants`).
+  2. CREATE DATABASE grc_{slug} on the Postgres server.
+  3. Run `Base.metadata.create_all` against the new database.
+  4. Seed the new database with frameworks, normalized controls, and workflow defaults.
+  5. Create the first user (the admin who registered the org) inside the new database.
+
+If any step after CREATE DATABASE fails, we drop the database and remove the
+master row to avoid orphaned state.
+"""
+
+import logging
 from contextlib import contextmanager
+from datetime import datetime
+from typing import Optional
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost/grc_db")
+import bcrypt
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+from .db import (
+    MasterSession,
+    create_tenant_database,
+    drop_tenant_database,
+    get_tenant_engine,
+    open_tenant_session,
+    validate_slug,
+    get_master_db,  # re-exported for legacy callers
+)
 
-# Detect if using SQLite
-IS_SQLITE = DATABASE_URL.startswith("sqlite")
-
-master_engine = create_engine(DATABASE_URL)
-MasterSession = sessionmaker(autocommit=False, autoflush=False, bind=master_engine)
-
-tenant_engines: Dict[str, Any] = {}
-tenant_sessions: Dict[str, sessionmaker] = {}
-_sqlite_tenant_columns_ensured = False
-_sqlite_tenant_columns_lock = None
-
-
-def ensure_sqlite_tenant_columns(engine):
-    """Ensure SQLite tenant tables include tenant_id columns for isolation."""
-    global _sqlite_tenant_columns_ensured, _sqlite_tenant_columns_lock
-    if not IS_SQLITE:
-        return
-
-    if _sqlite_tenant_columns_lock is None:
-        from threading import Lock
-        _sqlite_tenant_columns_lock = Lock()
-
-    with _sqlite_tenant_columns_lock:
-        if _sqlite_tenant_columns_ensured:
-            return
-
-        tenant_tables = {
-            "users": ["tenant_id"],
-            "roles": ["tenant_id"],
-            "permissions": ["tenant_id"],
-            "role_permissions": ["tenant_id"],
-            "user_roles": ["tenant_id"],
-            "organization_profile": ["tenant_id"],
-            "audit_logs": ["tenant_id"],
-        }
-
-        with engine.connect() as conn:
-            existing_tables = {
-                row[0] for row in conn.exec_driver_sql(
-                    "SELECT name FROM sqlite_master WHERE type='table'"
-                ).fetchall()
-            }
-            for table_name, required_cols in tenant_tables.items():
-                if table_name not in existing_tables:
-                    continue
-
-                existing_cols = {
-                    row[1] for row in conn.exec_driver_sql(
-                        f"PRAGMA table_info('{table_name}')"
-                    ).fetchall()
-                }
-                for col_name in required_cols:
-                    if col_name not in existing_cols:
-                        try:
-                            conn.exec_driver_sql(
-                                f"ALTER TABLE {table_name} ADD COLUMN {col_name} VARCHAR(100)"
-                            )
-                        except Exception as exc:
-                            if "duplicate column name" not in str(exc).lower():
-                                raise
-
-            # If there's only one tenant, backfill missing tenant_id values
-            if "grc_tenants" in existing_tables:
-                tenant_rows = conn.execute(
-                    text("SELECT schema_name FROM grc_tenants WHERE schema_name IS NOT NULL")
-                ).fetchall()
-                if len(tenant_rows) == 1:
-                    tenant_schema = tenant_rows[0][0]
-                    for table_name in tenant_tables.keys():
-                        if table_name in existing_tables:
-                            conn.execute(
-                                text(
-                                    f"UPDATE {table_name} SET tenant_id = :tenant "
-                                    "WHERE tenant_id IS NULL OR tenant_id = ''"
-                                ),
-                                {"tenant": tenant_schema}
-                            )
-
-            conn.commit()
-
-        _sqlite_tenant_columns_ensured = True
-
-
-def sanitize_schema_name(subdomain: str) -> str:
-    schema = re.sub(r'[^a-z0-9_]', '_', subdomain.lower())
-    if schema[0].isdigit():
-        schema = f"t_{schema}"
-    return f"tenant_{schema}"
-
-
-def get_tenant_engine(schema_name: str):
-    if schema_name not in tenant_engines:
-        if IS_SQLITE:
-            # For SQLite, use the same engine (no schema support)
-            engine = master_engine
-            ensure_sqlite_tenant_columns(engine)
-        else:
-            # For PostgreSQL, create engine with schema in search path
-            engine = create_engine(
-                DATABASE_URL,
-                connect_args={"options": f"-csearch_path={schema_name},public"}
-            )
-        tenant_engines[schema_name] = engine
-        tenant_sessions[schema_name] = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    return tenant_engines[schema_name]
-
-
-def get_tenant_session(schema_name: str) -> sessionmaker:
-    if schema_name not in tenant_sessions:
-        get_tenant_engine(schema_name)
-    return tenant_sessions[schema_name]
-
-
-def create_tenant_session_instance(schema_name: str):
-    """Create a tenant session with search_path properly set to the tenant schema"""
-    SessionClass = get_tenant_session(schema_name)
-    session = SessionClass()
-    if not IS_SQLITE:
-        # Set search_path to ensure queries only access the tenant schema
-        session.execute(text(f'SET search_path TO "{schema_name}", public'))
-    return session
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def tenant_session(schema_name: str):
-    SessionClass = get_tenant_session(schema_name)
-    session = SessionClass()
+def tenant_session(slug: str):
+    """Context manager yielding a Session bound to a tenant's DB. Commits on success, rolls back on error."""
+    validate_slug(slug)
+    session = open_tenant_session(slug)
     try:
-        # Ensure search_path is set for this session
-        if not IS_SQLITE:
-            session.execute(text(f'SET search_path TO "{schema_name}", public'))
         yield session
         session.commit()
     except Exception:
@@ -151,269 +49,206 @@ def tenant_session(schema_name: str):
         session.close()
 
 
-def create_tenant_schema(subdomain: str) -> str:
-    schema_name = sanitize_schema_name(subdomain)
-    
-    if not IS_SQLITE:
-        # Only create schema for PostgreSQL
-        with master_engine.connect() as conn:
-            conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'))
-            conn.commit()
-    
-    return schema_name
+def _seed_tenant_database(session: Session) -> None:
+    """Run the platform's standard seed scripts against a fresh tenant DB.
 
-
-def initialize_tenant_tables(schema_name: str):
-    from .tenant_models import TenantBase
-    
-    engine = get_tenant_engine(schema_name)
-    
-    if not IS_SQLITE:
-        # Only set search_path for PostgreSQL
-        with engine.connect() as conn:
-            conn.execute(text(f'SET search_path TO "{schema_name}"'))
-            conn.commit()
-    
-    TenantBase.metadata.create_all(bind=engine)
-
-
-def drop_tenant_schema(schema_name: str):
-    if not IS_SQLITE:
-        # Only drop schema for PostgreSQL
-        with master_engine.connect() as conn:
-            conn.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))
-            conn.commit()
-    
-    if schema_name in tenant_engines:
-        if not IS_SQLITE:  # Don't dispose master engine for SQLite
-            tenant_engines[schema_name].dispose()
-        del tenant_engines[schema_name]
-    if schema_name in tenant_sessions:
-        del tenant_sessions[schema_name]
-
-
-def provision_tenant(subdomain: str) -> str:
-    schema_name = create_tenant_schema(subdomain)
-    initialize_tenant_tables(schema_name)
-    return schema_name
-
-
-def seed_tenant_permissions(schema_name: str):
-    from .permissions import PERMISSION_MATRIX
-    from .tenant_models import Permission
-    
-    SessionClass = get_tenant_session(schema_name)
-    session = SessionClass()
+    Per product decision: seed frameworks (+ normalized controls) and workflow engine defaults.
+    RBAC defaults and document templates are NOT auto-seeded.
+    """
+    # Frameworks + normalized controls.
     try:
-        if not IS_SQLITE:
-            session.execute(text(f'SET search_path TO "{schema_name}", public'))
-        
-        # For SQLite, filter existing by tenant_id
-        if IS_SQLITE:
-            existing = session.query(Permission).filter(Permission.tenant_id == schema_name).count()
-        else:
-            existing = session.query(Permission).count()
-        
-        if existing > 0:
-            session.close()
-            return
-        
-        for module_data in PERMISSION_MATRIX:
-            module = module_data["module"]
-            for submodule_data in module_data.get("submodules", []):
-                submodule = submodule_data["name"]
-                for action in submodule_data.get("actions", []):
-                    perm_name = f"{module}:{submodule}:{action}"
-                    
-                    # Check if permission already exists (especially important for SQLite)
-                    if IS_SQLITE:
-                        existing_perm = session.query(Permission).filter(
-                            Permission.name == perm_name,
-                            Permission.tenant_id == schema_name
-                        ).first()
-                    else:
-                        existing_perm = session.query(Permission).filter(
-                            Permission.name == perm_name
-                        ).first()
-                    
-                    if not existing_perm:
-                        perm = Permission(
-                            tenant_id=schema_name,  # Add tenant_id for SQLite
-                            name=perm_name,
-                            module=module,
-                            submodule=submodule,
-                            action=action,
-                            description=f"{action.replace('_', ' ').title()} {submodule.replace('_', ' ')}"
-                        )
-                        session.add(perm)
-        session.commit()
-    finally:
-        session.close()
+        from .seed_frameworks import seed_frameworks, seed_uploaded_frameworks
+        seed_frameworks(session)
+        seed_uploaded_frameworks(session)
+    except Exception:
+        logger.exception("seed_frameworks failed for new tenant DB")
+        raise
 
-
-def seed_tenant_admin_role(schema_name: str, admin_user_id: int):
-    from .tenant_models import Role, RolePermission, Permission, UserRole
-    
-    SessionClass = get_tenant_session(schema_name)
-    session = SessionClass()
+    # Workflow engine defaults.
     try:
-        if not IS_SQLITE:
-            session.execute(text(f'SET search_path TO "{schema_name}", public'))
-        
-        # For SQLite, filter by tenant_id
-        if IS_SQLITE:
-            admin_role = session.query(Role).filter(
-                Role.name == "Administrator",
-                Role.tenant_id == schema_name
-            ).first()
-        else:
-            admin_role = session.query(Role).filter(Role.name == "Administrator").first()
-        
-        if not admin_role:
-            admin_role = Role(
-                tenant_id=schema_name,  # Add tenant_id for SQLite
-                name="Administrator",
-                description="Full administrative access to all modules and features",
-                is_system_role=True
-            )
-            session.add(admin_role)
-            session.flush()
-        
-        # For SQLite, filter permissions by tenant_id
-        if IS_SQLITE:
-            all_perms = session.query(Permission).filter(Permission.tenant_id == schema_name).all()
-        else:
-            all_perms = session.query(Permission).all()
-        
-        for perm in all_perms:
-            if IS_SQLITE:
-                existing = session.query(RolePermission).filter(
-                    RolePermission.role_id == admin_role.id,
-                    RolePermission.permission_id == perm.id,
-                    RolePermission.tenant_id == schema_name
-                ).first()
-            else:
-                existing = session.query(RolePermission).filter(
-                    RolePermission.role_id == admin_role.id,
-                    RolePermission.permission_id == perm.id
-                ).first()
-            
-            if not existing:
-                rp = RolePermission(
-                    tenant_id=schema_name,  # Add tenant_id for SQLite
-                    role_id=admin_role.id,
-                    permission_id=perm.id
-                )
-                session.add(rp)
-        
-        user_role = UserRole(
-            tenant_id=schema_name,  # Add tenant_id for SQLite
-            user_id=admin_user_id,
-            role_id=admin_role.id
-        )
-        session.add(user_role)
-        session.commit()
-    finally:
-        session.close()
+        from .seed_workflow_engine_defaults import seed_workflow_engine_defaults
+        seed_workflow_engine_defaults(session=session)
+    except Exception:
+        logger.exception("seed_workflow_engine_defaults failed for new tenant DB")
+        raise
 
 
-def create_tenant_admin_user(schema_name: str, username: str, email: str, password_hash: str, display_name: str) -> int:
-    from .tenant_models import TenantUser as TenantSchemaUser
-    import bcrypt
-    
-    SessionClass = get_tenant_session(schema_name)
-    session = SessionClass()
-    try:
-        if not IS_SQLITE:
-            session.execute(text(f'SET search_path TO "{schema_name}", public'))
-        admin_user = TenantSchemaUser(
-            tenant_id=schema_name,  # Add tenant_id for SQLite
-            username=username,
-            email=email,
-            password_hash=password_hash,
-            display_name=display_name,
-            is_active=True
-        )
-        session.add(admin_user)
-        session.commit()
-        session.refresh(admin_user)
-        return admin_user.id
-    finally:
-        session.close()
+def _create_tenant_self_row(session: Session, *, tenant_id: int, name: str, slug: str,
+                            subdomain: Optional[str], primary_contact_name: Optional[str],
+                            primary_contact_email: Optional[str], primary_contact_phone: Optional[str],
+                            legal_entity: Optional[str], industry: Optional[str],
+                            company_size: Optional[str], geography: Optional[str],
+                            regulatory_scope: Optional[str], settings: Optional[dict] = None) -> None:
+    """Insert a `grc_tenants` row inside the tenant's own DB.
 
+    The tenant's local copy of the row keeps existing FK relationships happy
+    (every operational model has `tenant_id` -> `grc_tenants.id`) and lets
+    `tenant_id` filters in router code continue to match.
+    """
+    from .models import Tenant
 
-def create_organization_profile(schema_name: str, name: str, legal_entity: str = None, 
-                                 industry: str = None, company_size: str = None,
-                                 geography: str = None, regulatory_scope: str = None,
-                                 contact_name: str = None, contact_email: str = None,
-                                 contact_phone: str = None):
-    from .tenant_models import OrganizationProfile
-    
-    SessionClass = get_tenant_session(schema_name)
-    session = SessionClass()
-    try:
-        if not IS_SQLITE:
-            session.execute(text(f'SET search_path TO "{schema_name}", public'))
-        profile = OrganizationProfile(
-            tenant_id=schema_name,  # Add tenant_id for SQLite
-            name=name,
-            legal_entity=legal_entity,
-            industry=industry,
-            company_size=company_size,
-            geography=geography,
-            regulatory_scope=regulatory_scope,
-            primary_contact_name=contact_name,
-            primary_contact_email=contact_email,
-            primary_contact_phone=contact_phone
-        )
-        session.add(profile)
-        session.commit()
-        session.refresh(profile)
-        return profile.id
-    finally:
-        session.close()
-
-
-def full_tenant_provisioning(subdomain: str, org_name: str, admin_username: str, 
-                              admin_email: str, admin_password_hash: str, 
-                              admin_display_name: str, org_details: dict = None) -> dict:
-    schema_name = provision_tenant(subdomain)
-    
-    seed_tenant_permissions(schema_name)
-    
-    admin_user_id = create_tenant_admin_user(
-        schema_name=schema_name,
-        username=admin_username,
-        email=admin_email,
-        password_hash=admin_password_hash,
-        display_name=admin_display_name
+    self_row = Tenant(
+        id=tenant_id,
+        name=name,
+        slug=slug,
+        subdomain=subdomain,
+        is_active=True,
+        primary_contact_name=primary_contact_name,
+        primary_contact_email=primary_contact_email,
+        primary_contact_phone=primary_contact_phone,
+        legal_entity=legal_entity,
+        industry=industry,
+        company_size=company_size,
+        geography=geography,
+        regulatory_scope=regulatory_scope,
+        settings=settings or {},
     )
-    
-    seed_tenant_admin_role(schema_name, admin_user_id)
-    
+    session.add(self_row)
+    session.flush()
+
+
+def _create_tenant_admin_user(session: Session, *, username: str, email: str,
+                              password_hash: str, display_name: str) -> int:
+    """Create the first admin user inside the tenant's own DB. Returns user id."""
+    from .models import GRCUser
+
+    admin = GRCUser(
+        username=username,
+        email=email,
+        password_hash=password_hash,
+        display_name=display_name,
+        is_active=True,
+    )
+    session.add(admin)
+    session.flush()
+    return admin.id
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def full_tenant_provisioning(
+    *,
+    slug: str,
+    subdomain: Optional[str],
+    org_name: str,
+    admin_username: str,
+    admin_email: str,
+    admin_password_hash: str,
+    admin_display_name: str,
+    org_details: Optional[dict] = None,
+) -> dict:
+    """Provision a brand-new tenant: master row + dedicated DB + seed data + admin user.
+
+    Returns: {tenant_id, slug, db_name, admin_user_id}
+    """
+    from .models import Tenant, Base
+
     org_details = org_details or {}
-    create_organization_profile(
-        schema_name=schema_name,
-        name=org_name,
-        legal_entity=org_details.get('legal_entity'),
-        industry=org_details.get('industry'),
-        company_size=org_details.get('company_size'),
-        geography=org_details.get('geography'),
-        regulatory_scope=org_details.get('regulatory_scope'),
-        contact_name=admin_display_name,
-        contact_email=admin_email,
-        contact_phone=org_details.get('contact_phone')
-    )
-    
-    return {
-        "schema_name": schema_name,
-        "admin_user_id": admin_user_id
-    }
+    validate_slug(slug)
 
-
-def get_master_db():
-    db = MasterSession()
+    # Step 1: insert into master catalog
+    master = MasterSession()
     try:
-        yield db
+        existing = master.query(Tenant).filter(
+            (Tenant.slug == slug) | (Tenant.subdomain == subdomain)
+        ).first()
+        if existing:
+            raise ValueError(f"Tenant with slug={slug!r} or subdomain={subdomain!r} already exists")
+
+        tenant_row = Tenant(
+            name=org_name,
+            slug=slug,
+            subdomain=subdomain,
+            is_active=True,
+            settings=org_details.get("settings") or {},
+            legal_entity=org_details.get("legal_entity"),
+            industry=org_details.get("industry"),
+            regulatory_scope=org_details.get("regulatory_scope"),
+            company_size=org_details.get("company_size"),
+            geography=org_details.get("geography"),
+            primary_contact_name=admin_display_name,
+            primary_contact_email=admin_email,
+            primary_contact_phone=org_details.get("contact_phone"),
+        )
+        master.add(tenant_row)
+        master.commit()
+        master.refresh(tenant_row)
+        tenant_id = tenant_row.id
     finally:
-        db.close()
+        master.close()
+
+    # Step 2 onwards: create DB, schema, seed, admin. Roll back master row if any step fails.
+    db_created = False
+    try:
+        db_name = create_tenant_database(slug)
+        db_created = True
+
+        tenant_engine = get_tenant_engine(slug)
+        Base.metadata.create_all(bind=tenant_engine)
+
+        with tenant_session(slug) as ts:
+            _create_tenant_self_row(
+                ts,
+                tenant_id=tenant_id,
+                name=org_name,
+                slug=slug,
+                subdomain=subdomain,
+                primary_contact_name=admin_display_name,
+                primary_contact_email=admin_email,
+                primary_contact_phone=org_details.get("contact_phone"),
+                legal_entity=org_details.get("legal_entity"),
+                industry=org_details.get("industry"),
+                company_size=org_details.get("company_size"),
+                geography=org_details.get("geography"),
+                regulatory_scope=org_details.get("regulatory_scope"),
+            )
+            admin_user_id = _create_tenant_admin_user(
+                ts,
+                username=admin_username,
+                email=admin_email,
+                password_hash=admin_password_hash,
+                display_name=admin_display_name,
+            )
+            _seed_tenant_database(ts)
+
+        logger.info("Tenant %s (id=%s) fully provisioned: db=%s, admin_user_id=%s",
+                    slug, tenant_id, db_name, admin_user_id)
+
+        return {
+            "tenant_id": tenant_id,
+            "slug": slug,
+            "db_name": db_name,
+            "admin_user_id": admin_user_id,
+        }
+    except Exception:
+        logger.exception("Tenant provisioning failed for slug=%s; rolling back", slug)
+        # Rollback: drop tenant DB if we got that far, then remove master row.
+        if db_created:
+            try:
+                drop_tenant_database(slug)
+            except Exception:
+                logger.exception("Failed to drop tenant DB during rollback for slug=%s", slug)
+        # Master session uses a stripped-down schema (only grc_tenants exists),
+        # so we delete via raw SQL to bypass ORM cascade traversal of relationships
+        # whose target tables don't live in the master DB.
+        try:
+            master = MasterSession()
+            master.execute(text("DELETE FROM grc_tenants WHERE id = :id"), {"id": tenant_id})
+            master.commit()
+            master.close()
+        except Exception:
+            logger.exception("Failed to remove master row during rollback for slug=%s", slug)
+        raise
+
+
+def teardown_tenant(slug: str) -> None:
+    """Admin teardown: drop the tenant's DB and remove its master row."""
+    drop_tenant_database(slug)
+    master = MasterSession()
+    try:
+        master.execute(text("DELETE FROM grc_tenants WHERE slug = :s"), {"s": slug})
+        master.commit()
+    finally:
+        master.close()

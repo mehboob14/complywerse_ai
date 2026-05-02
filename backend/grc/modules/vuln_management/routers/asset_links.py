@@ -11,38 +11,13 @@ from ....schemas import (
     VulnerabilityAssetLinkCreate, VulnerabilityAssetLinkResponse, MessageResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, decode_token
-from ....tenant_manager import get_tenant_session, IS_SQLITE
-from ....tenant_models import TenantUser as TenantSchemaUser
 
 
 def _resolve_tenant_user_to_public(owner_id: int, token: str, db: Session):
-    """Resolve a tenant-schema user ID to a public GRCUser by email match"""
+    """Per-database-per-tenant: there is no separate schema-scoped user table —
+    `db` already points at the tenant's DB and GRCUser is the user model."""
     try:
-        if not token:
-            return None
-        payload = decode_token(token)
-        schema_name = payload.get("schema")
-        if not schema_name:
-            return None
-        
-        TenantSession = get_tenant_session(schema_name)
-        tenant_session = TenantSession()
-        try:
-            if not IS_SQLITE:
-                tenant_session.execute(text(f'SET search_path TO "{schema_name}", public'))
-            tenant_user = tenant_session.query(TenantSchemaUser).filter(
-                TenantSchemaUser.id == owner_id
-            ).first()
-            if not tenant_user:
-                return None
-            
-            # Match by email to public GRCUser
-            public_user = db.query(GRCUser).filter(
-                GRCUser.email == tenant_user.email
-            ).first()
-            return public_user
-        finally:
-            tenant_session.close()
+        return db.query(GRCUser).filter(GRCUser.id == owner_id).first()
     except Exception as e:
         print(f"[asset-link] Tenant user resolution failed: {e}")
         return None

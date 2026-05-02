@@ -5,15 +5,16 @@ import threading
 from typing import List, Optional
 from datetime import datetime
 from difflib import SequenceMatcher
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from openai import OpenAI
 
 from sqlalchemy import func
+from ....db import open_tenant_session
 from ....models import (
     GovernanceDocument, GovernanceDocumentVersion, PolicyStatement,
-    PolicyStatementCompliance, PolicyStatementVersion, InternalControl, GRCUser, AuditLog, get_db, SessionLocal
+    PolicyStatementCompliance, PolicyStatementVersion, InternalControl, GRCUser, AuditLog, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ....schemas import ConvertStatementsRequest, InternalControlFromStatementResponse
@@ -407,6 +408,7 @@ def _create_version_snapshot(db: Session, statement: PolicyStatement, change_typ
 @router.get("/{document_id}/parse-status")
 def get_parse_status(
     document_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -418,16 +420,84 @@ def get_parse_status(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    status_info = _parsing_status.get(document_id, {"status": "idle"})
+    # Cross-process state lives in Redis (worker writes, web reads).
+    tenant_slug = getattr(request.state, "tenant_slug", None)
+    if tenant_slug:
+        from ....job_status import get_status as _get_redis_status, delete_status as _delete_redis_status
+        redis_status = _get_redis_status(tenant_slug, "policy_parse", document_id, default={})
+        if redis_status:
+            status_info = redis_status
+        else:
+            status_info = _parsing_status.get(document_id, {"status": "idle"})
+    else:
+        status_info = _parsing_status.get(document_id, {"status": "idle"})
+
+    # Staleness sweep: a worker that crashed between the wrapper's "Worker
+    # picked up" write and the body's first chunk update can leave a
+    # parsing/queued/running entry in Redis indefinitely (7-day TTL). If the
+    # last update was more than STALE_AFTER_SECONDS ago, treat it as idle so
+    # the UI doesn't show a phantom progress bar forever.
+    STALE_AFTER_SECONDS = 600  # 10 minutes
+    in_flight = {"parsing", "queued", "running"}
+    if status_info.get("status") in in_flight:
+        updated_at_raw = status_info.get("updated_at")
+        if updated_at_raw:
+            try:
+                updated_at = datetime.fromisoformat(updated_at_raw)
+                age = (datetime.utcnow() - updated_at).total_seconds()
+                if age > STALE_AFTER_SECONDS:
+                    if tenant_slug:
+                        try:
+                            from ....job_status import delete_status as _del
+                            _del(tenant_slug, "policy_parse", document_id)
+                        except Exception:
+                            pass
+                    _parsing_status.pop(document_id, None)
+                    status_info = {"status": "idle", "stale_cleared": True}
+            except (ValueError, TypeError):
+                pass
+        else:
+            # No timestamp at all means this entry pre-dates the staleness
+            # tracking — most likely a leftover. Clear it.
+            if tenant_slug:
+                try:
+                    from ....job_status import delete_status as _del
+                    _del(tenant_slug, "policy_parse", document_id)
+                except Exception:
+                    pass
+            _parsing_status.pop(document_id, None)
+            status_info = {"status": "idle", "stale_cleared": True}
     return status_info
 
 
-def _parse_policy_background(document_id: int, user_id: int):
-    db = SessionLocal()
+def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = None):
+    """Body of the policy-parse job. Takes an open tenant-scoped session and
+    runs to completion.
+
+    Writes progress to BOTH the in-process `_parsing_status` global dict (for
+    legacy in-process callers) AND Redis `job_status` (for cross-process
+    visibility — uvicorn and the celery worker are different processes, so
+    only Redis is observable from the HTTP status endpoint).
+    """
+    # Cross-process status helper. Captures `tenant_slug` + `document_id` from
+    # the closure so each call site is a one-liner. Stamps `updated_at` on
+    # every write so the status endpoint can detect dead workers (entries
+    # whose timestamp is older than the staleness threshold).
+    def _write_status(payload):
+        payload = {**payload, "updated_at": datetime.utcnow().isoformat()}
+        _parsing_status[document_id] = payload
+        if tenant_slug:
+            try:
+                from ....job_status import set_status as _set_redis_status
+                _set_redis_status(tenant_slug, "policy_parse", document_id, payload)
+            except Exception:
+                # Status mirroring must never bring down the parse itself.
+                pass
+
     try:
         document = db.query(GovernanceDocument).filter(GovernanceDocument.id == document_id).first()
         if not document:
-            _parsing_status[document_id] = {"status": "failed", "error": "Document not found"}
+            _write_status({"status": "failed", "error": "Document not found"})
             return
 
         file_path = document.file_path
@@ -446,30 +516,30 @@ def _parse_policy_background(document_id: int, user_id: int):
             extracted_text = document.content
 
         if not extracted_text or not extracted_text.strip():
-            _parsing_status[document_id] = {"status": "failed", "error": "Document has no content or file to parse"}
+            _write_status({"status": "failed", "error": "Document has no content or file to parse"})
             return
 
         try:
-            _parsing_status[document_id] = {
+            _write_status({
                 "status": "parsing",
                 "message": "Extracting policy statements with AI...",
                 "processed_chunks": 0,
                 "total_chunks": 0,
                 "current_chunk": 0,
                 "progress_percent": 0,
-            }
+            })
 
             def _update_chunk_progress(current_chunk: int, total_chunks: int, phase: str = "processing"):
                 processed_chunks = max(current_chunk - 1, 0) if phase == "processing" else current_chunk
                 percent = int((processed_chunks / total_chunks) * 100) if total_chunks else 0
-                _parsing_status[document_id] = {
+                _write_status({
                     "status": "parsing",
                     "message": f"Parsing chunk {current_chunk}/{total_chunks}...",
                     "processed_chunks": processed_chunks,
                     "total_chunks": total_chunks,
                     "current_chunk": current_chunk,
                     "progress_percent": percent,
-                }
+                })
 
             parsed_statements_data = parse_policy_statements_with_openai(
                 extracted_text,
@@ -479,7 +549,7 @@ def _parse_policy_background(document_id: int, user_id: int):
 
             if not parsed_statements_data:
                 total_chunks = int(_parsing_status.get(document_id, {}).get("total_chunks") or 0)
-                _parsing_status[document_id] = {
+                _write_status({
                     "status": "completed",
                     "total_statements": 0,
                     "message": "No statements found",
@@ -487,7 +557,7 @@ def _parse_policy_background(document_id: int, user_id: int):
                     "total_chunks": total_chunks,
                     "current_chunk": total_chunks,
                     "progress_percent": 100,
-                }
+                })
                 return
 
             version_id = None
@@ -550,7 +620,7 @@ def _parse_policy_background(document_id: int, user_id: int):
                     "update_count": sum(1 for p in proposals if p["type"] == "update"),
                 }
 
-                _parsing_status[document_id] = {
+                _write_status({
                     "status": "review_required",
                     "total_statements": len(parsed_statements_data),
                     "message": f"Found {len(proposals)} proposed changes. Review required before applying.",
@@ -559,7 +629,7 @@ def _parse_policy_background(document_id: int, user_id: int):
                     "total_chunks": _parsing_status.get(document_id, {}).get("total_chunks", 0),
                     "current_chunk": _parsing_status.get(document_id, {}).get("total_chunks", 0),
                     "progress_percent": 100,
-                }
+                })
             else:
                 for idx, statement_data in enumerate(parsed_statements_data, start=1):
                     statement_code = f"PS-{document_id:04d}-{idx:03d}"
@@ -593,7 +663,7 @@ def _parse_policy_background(document_id: int, user_id: int):
                     db.add(compliance_record)
 
                 db.commit()
-                _parsing_status[document_id] = {
+                _write_status({
                     "status": "completed",
                     "total_statements": len(parsed_statements_data),
                     "message": f"Successfully parsed {len(parsed_statements_data)} policy statements",
@@ -601,10 +671,24 @@ def _parse_policy_background(document_id: int, user_id: int):
                     "total_chunks": _parsing_status.get(document_id, {}).get("total_chunks", 0),
                     "current_chunk": _parsing_status.get(document_id, {}).get("total_chunks", 0),
                     "progress_percent": 100,
-                }
+                })
+                return {"status": "completed", "total_statements": len(parsed_statements_data)}
         except Exception as e:
             db.rollback()
-            _parsing_status[document_id] = {"status": "failed", "error": str(e)[:500]}
+            _write_status({"status": "failed", "error": str(e)[:500]})
+            raise
+    except Exception:
+        # bubble up; the Celery task wrapper re-records job_status in Redis
+        raise
+
+
+def _parse_policy_background(document_id: int, user_id: int, tenant_slug: str):
+    """Legacy in-process entry point. Opens its own tenant session and calls
+    `_parse_policy_body`. Kept so threaded callers (if any remain) keep
+    working; new dispatches go through the Celery task instead."""
+    db = open_tenant_session(tenant_slug)
+    try:
+        return _parse_policy_body(db, document_id, user_id, tenant_slug)
     finally:
         db.close()
 
@@ -612,9 +696,14 @@ def _parse_policy_background(document_id: int, user_id: int):
 @router.post("/{document_id}/parse-policy")
 def parse_policy_document(
     document_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    tenant_slug = getattr(request.state, "tenant_slug", None)
+    if not tenant_slug:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
     user_tenants = get_user_tenants(current_user, db)
     document = db.query(GovernanceDocument).filter(
         GovernanceDocument.id == document_id,
@@ -628,24 +717,35 @@ def parse_policy_document(
     if current_status.get("status") == "parsing":
         return {"status": "parsing", "message": "Document is already being parsed"}
 
-    _parsing_status[document_id] = {"status": "parsing", "message": "Starting policy statement extraction..."}
-    _parsing_status[document_id].update({
+    initial = {
+        "status": "queued",
+        "message": "Job queued; waiting for a worker",
         "processed_chunks": 0,
         "total_chunks": 0,
         "current_chunk": 0,
         "progress_percent": 0,
-    })
+    }
+    _parsing_status[document_id] = initial
 
-    thread = threading.Thread(
-        target=_parse_policy_background,
-        args=(document_id, current_user.id),
-        daemon=True
-    )
-    thread.start()
+    # Mirror to Redis so the status endpoint can read it across processes.
+    from ....job_status import set_status as _set_redis_status
+    _set_redis_status(tenant_slug, "policy_parse", document_id, initial)
+
+    # Per-tenant rate limit + idempotent dispatch.
+    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
+    try:
+        tenant_rate_limit(tenant_slug, bucket="governance_parse")
+    except RateLimitExceeded:
+        raise HTTPException(status_code=429, detail="Too many parse jobs in the last minute; try again shortly")
+
+    from ....tasks.governance import parse_policy_document as _parse_task
+    async_result = _parse_task.delay(tenant_slug, document_id, current_user.id)
+    print(f"[DISPATCH] policy_parse → celery task_id={async_result.id} tenant={tenant_slug} doc={document_id}", flush=True)
 
     return {
-        "status": "parsing",
-        "message": "Policy parsing started in background. Check status for results.",
+        "status": "queued",
+        "task_id": async_result.id,
+        "message": "Policy parsing queued. Poll /parse-status for progress.",
         "document_id": document_id
     }
 

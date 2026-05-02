@@ -1,19 +1,28 @@
+
 import os
+import re
 from datetime import datetime, timedelta
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Cookie, Header, Request
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-from sqlalchemy import text
-import bcrypt
-from jose import jwt, JWTError
 
-from ..models import GRCUser, TenantUser, Tenant, BusinessUnit, Role, UserRole, get_db
-from ..schemas import UserCreate, UserLogin, UserResponse, TokenResponse, OrganizationRegisterRequest
-from ..tenant_manager import (
-    full_tenant_provisioning, sanitize_schema_name, get_tenant_session, IS_SQLITE
+import bcrypt
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, status
+from fastapi.responses import JSONResponse
+from jose import JWTError, jwt
+from sqlalchemy.orm import Session
+
+from ..db import open_tenant_session
+from ..models import (
+    GRCUser,
+    Permission,
+    Role,
+    RolePermission,
+    Tenant,
+    UserRole,
+    get_db,
+    get_master_db,
 )
-from ..tenant_models import TenantUser as TenantSchemaUser, Role as TenantRole, UserRole as TenantUserRole, Permission as TenantPermission, RolePermission as TenantRolePermission
+from ..schemas import OrganizationRegisterRequest, UserLogin
+from ..tenant_manager import full_tenant_provisioning
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -27,44 +36,39 @@ TOKEN_REFRESH_THRESHOLD_HOURS = 6
 
 
 PERSONAL_EMAIL_DOMAINS = {
-    'gmaiil.com', "test.om"
-   
+    "gmaiil.com", "test.om",
 }
 
 
 def is_corporate_email(email: str) -> bool:
     try:
-        domain = email.lower().split('@')[1]
+        domain = email.lower().split("@")[1]
         return domain not in PERSONAL_EMAIL_DOMAINS
     except (IndexError, AttributeError):
         return False
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
     try:
-        return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
     except (ValueError, Exception):
         return False
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    expire = datetime.utcnow() + (expires_delta or timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
     to_encode.update({"exp": expire, "iat": datetime.utcnow()})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def decode_token(token: str) -> Optional[dict]:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
 
@@ -78,8 +82,28 @@ def should_refresh_token(payload: dict) -> bool:
     return hours_since_issue > TOKEN_REFRESH_THRESHOLD_HOURS
 
 
-def set_auth_cookie(response: JSONResponse, token: str) -> None:
+def _resolve_cookie_domain(http_request: Optional[Request]) -> Optional[str]:
+    """Pick a parent domain so the cookie is shared across tenant subdomains.
+
+    Order of preference:
+      1. `AUTH_COOKIE_DOMAIN` env (production override, e.g. `.compliverse.ai`).
+      2. Auto-detect `.localhost` so dev subdomains (acme.localhost) share the cookie.
+      3. Otherwise return None (host-only cookie, the default).
+    """
+    explicit = os.environ.get("AUTH_COOKIE_DOMAIN")
+    if explicit:
+        return explicit
+    if http_request is None:
+        return None
+    host = (http_request.headers.get("host") or "").split(":")[0].lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return "localhost"
+    return None
+
+
+def set_auth_cookie(response: JSONResponse, token: str, http_request: Optional[Request] = None) -> None:
     is_production = os.environ.get("REPL_DEPLOYMENT", "") == "1"
+    domain = _resolve_cookie_domain(http_request)
     response.set_cookie(
         key="grc_auth_token",
         value=token,
@@ -87,24 +111,9 @@ def set_auth_cookie(response: JSONResponse, token: str) -> None:
         secure=is_production,
         samesite="lax",
         max_age=ACCESS_TOKEN_EXPIRE_HOURS * 3600,
-        path="/"
+        path="/",
+        domain=domain,
     )
-
-
-def get_user_tenants(user: GRCUser, db: Session) -> List[int]:
-    tenant_users = db.query(TenantUser).filter(TenantUser.user_id == user.id).all()
-    return [tu.tenant_id for tu in tenant_users]
-
-
-def get_user_primary_tenant(user: GRCUser, db: Session) -> Optional[int]:
-    primary = db.query(TenantUser).filter(
-        TenantUser.user_id == user.id,
-        TenantUser.is_primary == True
-    ).first()
-    if primary:
-        return primary.tenant_id
-    first_tenant = db.query(TenantUser).filter(TenantUser.user_id == user.id).first()
-    return first_tenant.tenant_id if first_tenant else None
 
 
 def _extract_bearer_token(authorization: Optional[str]) -> Optional[str]:
@@ -116,524 +125,253 @@ def _extract_bearer_token(authorization: Optional[str]) -> Optional[str]:
     return value.strip() or None
 
 
+def _resolve_token(request: Request, token_cookie: Optional[str], authorization_header: Optional[str]) -> Optional[str]:
+    return (
+        token_cookie
+        or _extract_bearer_token(authorization_header)
+        or _extract_bearer_token(request.headers.get("authorization"))
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tenant-scoped helpers consumed by other routers.
+# In per-DB-per-tenant, a tenant DB only ever contains its own tenant. Returning
+# the self-tenant id keeps existing `.filter(Model.tenant_id.in_(user_tenants))`
+# filters tautological-but-correct, so router code does not need rewrites.
+# ---------------------------------------------------------------------------
+
+def get_user_tenants(user: GRCUser, db: Session) -> List[int]:
+    row = db.query(Tenant).first()
+    return [row.id] if row else []
+
+
+def get_user_primary_tenant(user: GRCUser, db: Session) -> Optional[int]:
+    row = db.query(Tenant).first()
+    return row.id if row else None
+
+
+# ---------------------------------------------------------------------------
+# Authentication dependencies
+# ---------------------------------------------------------------------------
+
 def get_current_user(
     request: Request,
     token: Optional[str] = Cookie(None, alias="grc_auth_token"),
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ) -> Optional[GRCUser]:
-    resolved_token = token or _extract_bearer_token(authorization) or _extract_bearer_token(request.headers.get("authorization"))
-    if not resolved_token:
+    resolved = _resolve_token(request, token, authorization)
+    if not resolved:
         return None
-    payload = decode_token(resolved_token)
+    payload = decode_token(resolved)
     if not payload:
         return None
     username = payload.get("sub")
     if not username:
         return None
-    
-    user = db.query(GRCUser).filter(GRCUser.username == username).first()
-    
-    if not user:
-        schema_name = payload.get("schema_name")
-        tenant_id = payload.get("tenant_id")
-        if schema_name and tenant_id:
-            try:
-                SessionClass = get_tenant_session(schema_name)
-                tenant_db = SessionClass()
-                if not IS_SQLITE:
-                    tenant_db.execute(text(f'SET search_path TO "{schema_name}", public'))
-                tenant_user = tenant_db.query(TenantSchemaUser).filter(
-                    TenantSchemaUser.username == username
-                ).first()
-                if tenant_user:
-                    t_email = tenant_user.email
-                    t_display = tenant_user.display_name
-                    t_active = tenant_user.is_active
-                    tenant_db.close()
-                    
-                    user = GRCUser(
-                        username=username,
-                        email=t_email,
-                        password_hash="tenant_managed",
-                        display_name=t_display,
-                        is_active=t_active
-                    )
-                    db.add(user)
-                    db.commit()
-                    db.refresh(user)
-                    
-                    existing_link = db.query(TenantUser).filter(
-                        TenantUser.user_id == user.id,
-                        TenantUser.tenant_id == tenant_id
-                    ).first()
-                    if not existing_link:
-                        link = TenantUser(
-                            user_id=user.id,
-                            tenant_id=tenant_id,
-                            is_primary=True
-                        )
-                        db.add(link)
-                        db.commit()
-                    
-                    return user
-                tenant_db.close()
-            except Exception:
-                pass
-    
-    return user
+    return db.query(GRCUser).filter(GRCUser.username == username).first()
 
 
 def require_auth(
     request: Request,
     token: Optional[str] = Cookie(None, alias="grc_auth_token"),
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ) -> GRCUser:
     user = get_current_user(request=request, token=token, authorization=authorization, db=db)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is deactivated"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
     return user
 
 
 def require_tenant_permission(permission_name: str):
+    """Dependency factory: confirms current user has the named permission within the tenant DB.
+
+    Administrator role is granted everything. Primary contact email also gets
+    administrator-grade access (matches prior behaviour).
+    """
     def permission_checker(
         request: Request,
         token: Optional[str] = Cookie(None, alias="grc_auth_token"),
         authorization: Optional[str] = Header(None, alias="Authorization"),
-    ):
-        resolved_token = token or _extract_bearer_token(authorization) or _extract_bearer_token(request.headers.get("authorization"))
-        if not resolved_token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Not authenticated"
-            )
+        db: Session = Depends(get_db),
+    ) -> bool:
+        resolved = _resolve_token(request, token, authorization)
+        if not resolved:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-        payload = decode_token(resolved_token)
+        payload = decode_token(resolved)
         if not payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-        schema_name = payload.get("schema_name")
         username = payload.get("sub")
-        if not schema_name or not username:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Tenant context not found"
-            )
+        if not username:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid token payload")
 
-        SessionClass = get_tenant_session(schema_name)
-        tenant_db = SessionClass()
-        try:
-            if not IS_SQLITE:
-                tenant_db.execute(text(f'SET search_path TO "{schema_name}", public'))
+        user = db.query(GRCUser).filter(GRCUser.username == username).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found in tenant")
 
-            if IS_SQLITE:
-                user = tenant_db.query(TenantSchemaUser).filter(
-                    TenantSchemaUser.username == username,
-                    TenantSchemaUser.tenant_id == schema_name
-                ).first()
-            else:
-                user = tenant_db.query(TenantSchemaUser).filter(
-                    TenantSchemaUser.username == username
-                ).first()
-
-            if not user:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="User not found in tenant"
-                )
-
-            if IS_SQLITE:
-                role_ids = [
-                    ur.role_id for ur in tenant_db.query(TenantUserRole).filter(
-                        TenantUserRole.user_id == user.id,
-                        TenantUserRole.tenant_id == schema_name
-                    ).all()
-                ]
-            else:
-                role_ids = [
-                    ur.role_id for ur in tenant_db.query(TenantUserRole).filter(
-                        TenantUserRole.user_id == user.id
-                    ).all()
-                ]
-
-            if not role_ids:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Permission denied"
-                )
-
-            if IS_SQLITE:
-                admin_role = tenant_db.query(TenantRole).filter(
-                    TenantRole.id.in_(role_ids),
-                    TenantRole.name == "Administrator",
-                    TenantRole.tenant_id == schema_name
-                ).first()
-            else:
-                admin_role = tenant_db.query(TenantRole).filter(
-                    TenantRole.id.in_(role_ids),
-                    TenantRole.name == "Administrator"
-                ).first()
-            if admin_role:
-                return True
-
-            if IS_SQLITE:
-                permission = tenant_db.query(TenantPermission).filter(
-                    TenantPermission.name == permission_name,
-                    TenantPermission.tenant_id == schema_name
-                ).first()
-            else:
-                permission = tenant_db.query(TenantPermission).filter(
-                    TenantPermission.name == permission_name
-                ).first()
-
-            if not permission:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Permission denied"
-                )
-
-            if IS_SQLITE:
-                has_perm = tenant_db.query(TenantRolePermission).filter(
-                    TenantRolePermission.role_id.in_(role_ids),
-                    TenantRolePermission.permission_id == permission.id,
-                    TenantRolePermission.tenant_id == schema_name
-                ).first()
-            else:
-                has_perm = tenant_db.query(TenantRolePermission).filter(
-                    TenantRolePermission.role_id.in_(role_ids),
-                    TenantRolePermission.permission_id == permission.id
-                ).first()
-
-            if not has_perm:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Permission denied"
-                )
-
+        # Primary contact bypass
+        tenant_row = db.query(Tenant).first()
+        if (
+            tenant_row
+            and tenant_row.primary_contact_email
+            and user.email
+            and tenant_row.primary_contact_email.lower() == user.email.lower()
+        ):
             return True
-        finally:
-            tenant_db.close()
+
+        role_ids = [ur.role_id for ur in db.query(UserRole).filter(UserRole.user_id == user.id).all()]
+        if not role_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+        admin_role = db.query(Role).filter(Role.id.in_(role_ids), Role.name == "Administrator").first()
+        if admin_role:
+            return True
+
+        permission = db.query(Permission).filter(Permission.name == permission_name).first()
+        if not permission:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+        has_perm = db.query(RolePermission).filter(
+            RolePermission.role_id.in_(role_ids),
+            RolePermission.permission_id == permission.id,
+        ).first()
+        if not has_perm:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+        return True
 
     return permission_checker
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
-def register(request: UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(GRCUser).filter(
-        (GRCUser.username == request.username) | (GRCUser.email == request.email)
-    ).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username or email already exists"
-        )
-    
-    user = GRCUser(
-        username=request.username,
-        email=request.email,
-        password_hash=hash_password(request.password),
-        display_name=request.display_name or request.username,
-        department=request.department,
-        group=request.group,
-        division=request.division,
-        designation=request.designation
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    
-    # Auto-assign user to default tenant
-    default_tenant = db.query(Tenant).filter(Tenant.id == 1).first()
-    if not default_tenant:
-        default_tenant = db.query(Tenant).filter(Tenant.name.ilike("%Default%")).first()
-    
-    if not default_tenant:
-        # Create default tenant if none exists
-        default_tenant = Tenant(
-            name="Default Organization",
-            slug="default-organization"
-        )
-        db.add(default_tenant)
-        db.commit()
-        db.refresh(default_tenant)
+def _generate_slug(name: str) -> str:
+    slug = name.lower().strip()
+    slug = re.sub(r"[^\w\s-]", "", slug)
+    slug = re.sub(r"[\s_-]+", "-", slug)
+    return slug[:40].strip("-") or "tenant"
 
-        from ..seed_workflow_engine_defaults import seed_workflow_engine_defaults
-        seed_workflow_engine_defaults(default_tenant.id)
-    
-    # Create TenantUser record linking user to tenant
-    tenant_user = TenantUser(
-        user_id=user.id,
-        tenant_id=default_tenant.id,
-        is_primary=True
-    )
-    db.add(tenant_user)
-    db.commit()
-    
-    token = create_access_token({"sub": user.username})
-    response = JSONResponse(content={
-        "message": "Registration successful",
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "display_name": user.display_name
-        }
-    }, status_code=status.HTTP_201_CREATED)
-    set_auth_cookie(response, token)
-    return response
+
+_PUBLIC_EMAIL_DOMAINS = {
+    "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com",
+    "aol.com", "live.com", "protonmail.com", "proton.me", "mail.com",
+}
+
+
+def _slug_from_email(email: str) -> Optional[str]:
+    """Pick a tenant slug from the email domain, e.g. 'mehboob@layeron.com' -> 'layeron'.
+
+    Returns None for public mail providers (gmail/yahoo/etc.) so we fall back to
+    org-name slugification — using `gmail` as a tenant slug is obviously wrong.
+    """
+    try:
+        domain = email.split("@", 1)[1].lower().strip()
+    except (IndexError, AttributeError):
+        return None
+    if not domain or domain in _PUBLIC_EMAIL_DOMAINS:
+        return None
+    base = domain.split(".", 1)[0]
+    base = re.sub(r"[^a-z0-9-]", "", base)
+    return base[:40] or None
 
 
 @router.post("/login")
 def login(
-    request: UserLogin, 
+    request: UserLogin,
+    http_request: Request,
     x_tenant_slug: Optional[str] = Header(None, alias="X-Tenant-Slug"),
-    db: Session = Depends(get_db)
+    master: Session = Depends(get_master_db),
 ):
-    subdomain = x_tenant_slug
+    """Tenant-scoped login.
+
+    Either X-Tenant-Slug header or a tenant subdomain MUST be provided. Auto-
+    discovery by email domain is supported as a convenience: if exactly one
+    tenant matches the user's email domain, that tenant is used.
+    """
     is_email_login = bool(request.username and "@" in request.username)
-    
-    # If no tenant slug provided, try resolving tenant by email domain
-    if not subdomain and is_email_login:
+    slug = x_tenant_slug or getattr(http_request.state, "tenant_slug", None)
+
+    # Convenience: if no slug, try to resolve by email domain against master.
+    if not slug and is_email_login:
         email_domain = request.username.split("@")[-1].lower().strip()
-        domain_matches = db.query(Tenant).filter(
-            Tenant.is_active == True,
-            Tenant.schema_name.isnot(None),
-            Tenant.primary_contact_email.ilike(f"%@{email_domain}")
+        domain_matches = master.query(Tenant).filter(
+            Tenant.is_active.is_(True),
+            Tenant.primary_contact_email.ilike(f"%@{email_domain}"),
         ).all()
         if len(domain_matches) == 1:
-            subdomain = domain_matches[0].subdomain
+            slug = domain_matches[0].slug
         elif len(domain_matches) > 1:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Multiple organizations found for this domain. Please login with your tenant slug."
+                detail="Multiple organizations found for this domain. Please login with your tenant slug.",
             )
-    elif not subdomain and not is_email_login:
+
+    if not slug:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Please login with your email address or provide a tenant slug."
+            detail="Tenant context required. Provide X-Tenant-Slug or access via tenant subdomain.",
         )
-    
-    # If subdomain provided, authenticate against that tenant's schema only
-    if subdomain:
-        tenant = db.query(Tenant).filter(
-            (Tenant.subdomain == subdomain) | (Tenant.slug == subdomain),
-            Tenant.is_active == True
-        ).first()
-        
-        if not tenant:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Organization not found"
-            )
-        
-        if not tenant.schema_name:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Organization database not configured"
-            )
-        
-        try:
-            SessionClass = get_tenant_session(tenant.schema_name)
-            tenant_db = SessionClass()
-            if not IS_SQLITE:
-                tenant_db.execute(text(f'SET search_path TO "{tenant.schema_name}", public'))
-            
-            if is_email_login:
-                tenant_user = tenant_db.query(TenantSchemaUser).filter(
-                    TenantSchemaUser.email == request.username
-                ).first()
-            else:
-                tenant_user = tenant_db.query(TenantSchemaUser).filter(
-                    (TenantSchemaUser.username == request.username) | 
-                    (TenantSchemaUser.email == request.username)
-                ).first()
-            
-            if not tenant_user or not verify_password(request.password, tenant_user.password_hash):
-                tenant_db.close()
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid username or password"
-                )
-            
-            if not tenant_user.is_active:
-                tenant_db.close()
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="User account is deactivated"
-                )
-            
-            user_id = tenant_user.id
-            user_username = tenant_user.username
-            user_email = tenant_user.email
-            user_display_name = tenant_user.display_name
-            
-            tenant_user.last_login = datetime.utcnow()
-            tenant_db.commit()
-            tenant_db.close()
-            
-            token = create_access_token({
-                "sub": user_username,
-                "tenant_id": tenant.id,
-                "subdomain": tenant.subdomain,
-                "schema_name": tenant.schema_name,
-                "user_type": "tenant"
-            })
-            
-            response = JSONResponse(content={
-                "message": "Login successful",
-                "user": {
-                    "id": user_id,
-                    "username": user_username,
-                    "email": user_email,
-                    "display_name": user_display_name
-                },
-                "tenant": {
-                    "id": tenant.id,
-                    "name": tenant.name,
-                    "slug": tenant.subdomain
-                }
-            })
-            set_auth_cookie(response, token)
-            return response
-            
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Login error: {str(e)}"
-            )
-    
-    # No subdomain - try public schema first (platform admins), then auto-discover tenant
-    user = db.query(GRCUser).filter(
-        (GRCUser.username == request.username) | (GRCUser.email == request.username)
+
+    tenant = master.query(Tenant).filter(
+        ((Tenant.slug == slug) | (Tenant.subdomain == slug)),
+        Tenant.is_active.is_(True),
     ).first()
-    
-    if user and user.password_hash != "tenant_managed" and verify_password(request.password, user.password_hash):
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+
+    tdb = open_tenant_session(tenant.slug)
+    try:
+        if is_email_login:
+            user = tdb.query(GRCUser).filter(GRCUser.email == request.username).first()
+        else:
+            user = tdb.query(GRCUser).filter(
+                (GRCUser.username == request.username) | (GRCUser.email == request.username)
+            ).first()
+
+        if not user or not verify_password(request.password, user.password_hash):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
+
         if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is deactivated"
-            )
-        
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
+
         user.last_login = datetime.utcnow()
-        db.commit()
-        
-        token = create_access_token({"sub": user.username})
-        response = JSONResponse(content={
+        tdb.commit()
+
+        token = create_access_token({
+            "sub": user.username,
+            "tenant_slug": tenant.slug,
+            "tenant_id": tenant.id,
+        })
+
+        body = {
             "message": "Login successful",
+            # access_token is also returned in the body so the frontend can
+            # use Bearer auth from localStorage. This sidesteps the browser
+            # rejecting `Domain=localhost` cookies (RFC 6265 single-label
+            # rule), which silently breaks cross-subdomain auth in dev.
+            "access_token": token,
+            "token_type": "bearer",
             "user": {
                 "id": user.id,
                 "username": user.username,
                 "email": user.email,
-                "display_name": user.display_name
-            }
-        })
-        set_auth_cookie(response, token)
-        return response
-    
-    # Auto-discover tenant: search all active tenant schemas for this user
-    tenants = db.query(Tenant).filter(Tenant.is_active == True, Tenant.schema_name.isnot(None)).all()
-    matches = []
-    
-    for tenant in tenants:
-        try:
-            SessionClass = get_tenant_session(tenant.schema_name)
-            tenant_db = SessionClass()
-            if not IS_SQLITE:
-                tenant_db.execute(text(f'SET search_path TO "{tenant.schema_name}", public'))
-            
-            if is_email_login:
-                tenant_user = tenant_db.query(TenantSchemaUser).filter(
-                    TenantSchemaUser.email == request.username
-                ).first()
-            else:
-                tenant_user = tenant_db.query(TenantSchemaUser).filter(
-                    (TenantSchemaUser.username == request.username) | 
-                    (TenantSchemaUser.email == request.username)
-                ).first()
-            
-            if tenant_user and verify_password(request.password, tenant_user.password_hash):
-                matches.append((tenant, tenant_user))
-            
-            tenant_db.close()
-        except HTTPException:
-            raise
-        except Exception:
-            continue
-    
-    if len(matches) > 1:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Multiple organizations found for this user. Please select a company and login using its tenant slug."
-        )
-    
-    if len(matches) == 1:
-        tenant, tenant_user = matches[0]
-        if not tenant_user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is deactivated"
-            )
-        
-        user_id = tenant_user.id
-        user_username = tenant_user.username
-        user_email = tenant_user.email
-        user_display_name = tenant_user.display_name
-        
-        tenant_user.last_login = datetime.utcnow()
-        # Re-open tenant session to persist last_login if needed
-        SessionClass = get_tenant_session(tenant.schema_name)
-        tenant_db = SessionClass()
-        try:
-            if not IS_SQLITE:
-                tenant_db.execute(text(f'SET search_path TO "{tenant.schema_name}", public'))
-            tenant_db.merge(tenant_user)
-            tenant_db.commit()
-        finally:
-            tenant_db.close()
-        
-        token = create_access_token({
-            "sub": user_username,
-            "tenant_id": tenant.id,
-            "subdomain": tenant.subdomain,
-            "schema_name": tenant.schema_name,
-            "user_type": "tenant"
-        })
-        
-        response = JSONResponse(content={
-            "message": "Login successful",
-            "user": {
-                "id": user_id,
-                "username": user_username,
-                "email": user_email,
-                "display_name": user_display_name
+                "display_name": user.display_name,
             },
             "tenant": {
                 "id": tenant.id,
                 "name": tenant.name,
-                "slug": tenant.subdomain
-            }
-        })
-        set_auth_cookie(response, token)
+                "slug": tenant.slug,
+                "subdomain": tenant.subdomain,
+            },
+        }
+        response = JSONResponse(content=body)
+        set_auth_cookie(response, token, http_request)
         return response
-    
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid username or password"
-    )
+    finally:
+        tdb.close()
 
 
 @router.post("/logout")
@@ -645,54 +383,47 @@ def logout():
         httponly=True,
         secure=is_production,
         samesite="lax",
-        path="/"
+        path="/",
     )
     return response
 
 
 @router.post("/refresh")
 def refresh_token(
+    http_request: Request,
     token: Optional[str] = Cookie(None, alias="grc_auth_token"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No token provided"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No token provided")
+
     payload = decode_token(token)
     if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+
     username = payload.get("sub")
     if not username:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token payload"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+
     user = db.query(GRCUser).filter(GRCUser.username == username).first()
     if not user or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or deactivated"
-        )
-    
-    new_token = create_access_token({"sub": user.username})
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or deactivated")
+
+    new_token = create_access_token({
+        "sub": user.username,
+        "tenant_slug": payload.get("tenant_slug"),
+        "tenant_id": payload.get("tenant_id"),
+    })
     response = JSONResponse(content={
         "message": "Token refreshed successfully",
         "user": {
             "id": user.id,
             "username": user.username,
             "email": user.email,
-            "display_name": user.display_name
-        }
+            "display_name": user.display_name,
+        },
     })
-    set_auth_cookie(response, new_token)
+    set_auth_cookie(response, new_token, http_request)
     return response
 
 
@@ -701,179 +432,54 @@ def get_me(
     request: Request,
     token: Optional[str] = Cookie(None, alias="grc_auth_token"),
     authorization: Optional[str] = Header(None, alias="Authorization"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    if not token:
+    resolved = _resolve_token(request, token, authorization)
+    if not resolved:
         return {"authenticated": False, "user": None}
-    
-    payload = decode_token(token)
+
+    payload = decode_token(resolved)
     if not payload:
         return {"authenticated": False, "user": None}
-    
-    schema_name = payload.get("schema_name")
-    tenant_id = payload.get("tenant_id")
-    subdomain = payload.get("subdomain")
+
     username = payload.get("sub")
-    
-    if schema_name and tenant_id:
-        try:
-            SessionClass = get_tenant_session(schema_name)
-            tenant_db = SessionClass()
-            if not IS_SQLITE:
-                tenant_db.execute(text(f'SET search_path TO "{schema_name}", public'))
-            
-            tenant_user = tenant_db.query(TenantSchemaUser).filter(
-                TenantSchemaUser.username == username
-            ).first()
-            
-            if tenant_user:
-                tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-                
-                from ..tenant_models import Role, UserRole, Permission, RolePermission
-                if IS_SQLITE:
-                    roles = tenant_db.query(Role).join(UserRole).filter(
-                        UserRole.user_id == tenant_user.id,
-                        UserRole.tenant_id == schema_name,
-                        Role.tenant_id == schema_name
-                    ).all()
+    if not username:
+        return {"authenticated": False, "user": None}
 
-                    if not roles:
-                        legacy_role_ids = [
-                            ur.role_id for ur in tenant_db.query(UserRole).filter(
-                                UserRole.user_id == tenant_user.id
-                            ).all()
-                        ]
-                        if legacy_role_ids:
-                            tenant_db.query(Role).filter(
-                                Role.id.in_(legacy_role_ids),
-                                (Role.tenant_id.is_(None) | (Role.tenant_id == ""))
-                            ).update({Role.tenant_id: schema_name}, synchronize_session=False)
-
-                            tenant_db.query(UserRole).filter(
-                                UserRole.user_id == tenant_user.id,
-                                (UserRole.tenant_id.is_(None) | (UserRole.tenant_id == ""))
-                            ).update({UserRole.tenant_id: schema_name}, synchronize_session=False)
-
-                            tenant_db.commit()
-
-                            roles = tenant_db.query(Role).join(UserRole).filter(
-                                UserRole.user_id == tenant_user.id,
-                                UserRole.tenant_id == schema_name,
-                                Role.tenant_id == schema_name
-                            ).all()
-                else:
-                    roles = tenant_db.query(Role).join(UserRole).filter(
-                        UserRole.user_id == tenant_user.id
-                    ).all()
-                
-                role_ids = [r.id for r in roles]
-                role_names = [r.name for r in roles]
-                
-                permissions = []
-                allowed_modules = []
-                is_primary_contact = bool(
-                    tenant
-                    and tenant.primary_contact_email
-                    and tenant_user.email
-                    and tenant.primary_contact_email.lower() == tenant_user.email.lower()
-                )
-                is_admin = any(name == "Administrator" for name in role_names) or is_primary_contact
-                
-                # For new admin users who might not have permissions set up yet,
-                # grant all permissions if they have admin role
-                if is_admin:
-                    allowed_modules = ["dashboard", "risks", "erm", "controls", "compliance", "evidence", "governance", "vulnerabilities", "assets", "frameworks", "reports", "admin", "integrations", "workflow_engine", "is_projects", "critical_tasks", "auditor_portal"]
-                    permissions = ["*:*:*"]
-                elif role_ids:
-                    if IS_SQLITE:
-                        perms = tenant_db.query(Permission).join(RolePermission).filter(
-                            RolePermission.role_id.in_(role_ids),
-                            RolePermission.tenant_id == schema_name,
-                            Permission.tenant_id == schema_name
-                        ).all()
-
-                        if not perms:
-                            tenant_db.query(RolePermission).filter(
-                                RolePermission.role_id.in_(role_ids),
-                                (RolePermission.tenant_id.is_(None) | (RolePermission.tenant_id == ""))
-                            ).update({RolePermission.tenant_id: schema_name}, synchronize_session=False)
-
-                            perm_ids = [
-                                rp.permission_id for rp in tenant_db.query(RolePermission).filter(
-                                    RolePermission.role_id.in_(role_ids)
-                                ).all()
-                            ]
-                            if perm_ids:
-                                tenant_db.query(Permission).filter(
-                                    Permission.id.in_(perm_ids),
-                                    (Permission.tenant_id.is_(None) | (Permission.tenant_id == ""))
-                                ).update({Permission.tenant_id: schema_name}, synchronize_session=False)
-
-                            tenant_db.commit()
-
-                            perms = tenant_db.query(Permission).join(RolePermission).filter(
-                                RolePermission.role_id.in_(role_ids),
-                                RolePermission.tenant_id == schema_name,
-                                Permission.tenant_id == schema_name
-                            ).all()
-                    else:
-                        perms = tenant_db.query(Permission).join(RolePermission).filter(
-                            RolePermission.role_id.in_(role_ids)
-                        ).all()
-                    permissions = list(set(p.name for p in perms))
-                    allowed_modules = list(set(p.module for p in perms))
-                
-                user_id = tenant_user.id
-                user_username = tenant_user.username
-                user_email = tenant_user.email
-                user_display_name = tenant_user.display_name
-                user_is_active = tenant_user.is_active
-                user_created_at = tenant_user.created_at.isoformat() if hasattr(tenant_user, 'created_at') and tenant_user.created_at else None
-                
-                tenant_db.close()
-                
-                return {
-                    "authenticated": True,
-                    "user": {
-                        "id": user_id,
-                        "username": user_username,
-                        "email": user_email,
-                        "display_name": user_display_name,
-                        "is_active": user_is_active,
-                        "created_at": user_created_at,
-                        "last_login": None,
-                        "tenant_ids": [tenant_id],
-                        "primary_tenant_id": tenant_id,
-                        "primary_tenant_name": tenant.name if tenant else None,
-                        "roles": [{"id": r_id, "name": r_name} for r_id, r_name in zip(role_ids, role_names)],
-                        "is_admin": is_admin,
-                        "permissions": permissions,
-                        "allowed_modules": allowed_modules
-                    },
-                    "tenant": {
-                        "id": tenant_id,
-                        "name": tenant.name if tenant else None,
-                        "slug": tenant.slug if tenant else None,
-                        "subdomain": tenant.subdomain if tenant else subdomain
-                    }
-                }
-            tenant_db.close()
-        except Exception:
-            pass
-    
-    user = get_current_user(request=request, token=token, authorization=authorization, db=db)
+    user = db.query(GRCUser).filter(GRCUser.username == username).first()
     if not user:
         return {"authenticated": False, "user": None}
-    
-    tenants = get_user_tenants(user, db)
-    primary_tenant = get_user_primary_tenant(user, db)
-    
-    primary_tenant_name = None
-    if primary_tenant:
-        tenant = db.query(Tenant).filter(Tenant.id == primary_tenant).first()
-        if tenant:
-            primary_tenant_name = tenant.name
-    
+
+    tenant = db.query(Tenant).first()
+    role_ids = [ur.role_id for ur in db.query(UserRole).filter(UserRole.user_id == user.id).all()]
+    roles = db.query(Role).filter(Role.id.in_(role_ids)).all() if role_ids else []
+    role_names = [r.name for r in roles]
+
+    is_primary_contact = bool(
+        tenant
+        and tenant.primary_contact_email
+        and user.email
+        and tenant.primary_contact_email.lower() == user.email.lower()
+    )
+    is_admin = is_primary_contact or any(name == "Administrator" for name in role_names)
+
+    if is_admin:
+        permissions = ["*:*:*"]
+        allowed_modules = [
+            "dashboard", "risks", "erm", "controls", "compliance", "evidence",
+            "governance", "vulnerabilities", "assets", "frameworks", "reports",
+            "admin", "integrations", "workflow_engine", "is_projects",
+            "critical_tasks",
+        ]
+    else:
+        perms = []
+        if role_ids:
+            perms = db.query(Permission).join(
+                RolePermission, RolePermission.permission_id == Permission.id
+            ).filter(RolePermission.role_id.in_(role_ids)).all()
+        permissions = sorted({p.name for p in perms})
+        allowed_modules = sorted({p.module for p in perms})
+
     response_data = {
         "authenticated": True,
         "user": {
@@ -882,78 +488,84 @@ def get_me(
             "email": user.email,
             "display_name": user.display_name,
             "is_active": user.is_active,
-            "created_at": user.created_at.isoformat(),
+            "created_at": user.created_at.isoformat() if user.created_at else None,
             "last_login": user.last_login.isoformat() if user.last_login else None,
-            "tenant_ids": tenants,
-            "primary_tenant_id": primary_tenant,
-            "primary_tenant_name": primary_tenant_name,
-            "is_admin": True,
-            "permissions": [],
-            "allowed_modules": ["dashboard", "risks", "erm", "controls", "compliance", "evidence", "governance", "vulnerabilities", "assets", "frameworks", "reports", "admin", "integrations", "workflow_engine", "is_projects", "critical_tasks", "auditor_portal"]
-        }
+            "tenant_ids": [tenant.id] if tenant else [],
+            "primary_tenant_id": tenant.id if tenant else None,
+            "primary_tenant_name": tenant.name if tenant else None,
+            "roles": [{"id": r.id, "name": r.name} for r in roles],
+            "is_admin": is_admin,
+            "permissions": permissions,
+            "allowed_modules": allowed_modules,
+        },
+        "tenant": {
+            "id": tenant.id if tenant else None,
+            "name": tenant.name if tenant else None,
+            "slug": tenant.slug if tenant else None,
+            "subdomain": tenant.subdomain if tenant else None,
+        },
     }
-    
-    if payload and should_refresh_token(payload):
-        new_token = create_access_token({"sub": user.username})
+
+    if should_refresh_token(payload):
+        new_token = create_access_token({
+            "sub": user.username,
+            "tenant_slug": payload.get("tenant_slug"),
+            "tenant_id": payload.get("tenant_id"),
+        })
         response = JSONResponse(content=response_data)
-        set_auth_cookie(response, new_token)
+        set_auth_cookie(response, new_token, request)
         return response
-    
+
     return response_data
 
 
-def generate_slug(name: str) -> str:
-    import re
-    slug = name.lower().strip()
-    slug = re.sub(r'[^\w\s-]', '', slug)
-    slug = re.sub(r'[\s_-]+', '-', slug)
-    return slug[:100]
-
-
 @router.post("/register-organization", status_code=status.HTTP_201_CREATED)
-def register_organization(request: OrganizationRegisterRequest, db: Session = Depends(get_db)):
+def register_organization(
+    request: OrganizationRegisterRequest,
+    http_request: Request,
+    master: Session = Depends(get_master_db),
+):
+    """Provision a new tenant (master row + dedicated DB + seed data + first admin user)."""
     if not is_corporate_email(request.email):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Personal email addresses are not allowed. Please use your corporate email address."
+            detail="Personal email addresses are not allowed. Please use your corporate email address.",
         )
-    
+
     email_domain = request.email.split("@")[-1].lower().strip()
-    existing_domain = db.query(Tenant).filter(
+    existing_domain = master.query(Tenant).filter(
         Tenant.primary_contact_email.ilike(f"%@{email_domain}")
     ).first()
     if existing_domain:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An organization with this email domain already exists"
+            detail="An organization with this email domain already exists",
         )
-    
-    existing_tenant = db.query(Tenant).filter(Tenant.primary_contact_email == request.email).first()
-    if existing_tenant:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An organization with this email already exists"
-        )
-    
-    base_slug = generate_slug(request.organization_name)
+
+    # Prefer the email domain (e.g. layeron.com -> "layeron"). Falls back to
+    # org-name slugification for public-email registrations.
+    base_slug = _slug_from_email(request.email) or _generate_slug(request.organization_name)
     slug = base_slug
     counter = 1
-    while db.query(Tenant).filter(Tenant.slug == slug).first():
-        slug = f"{base_slug}-{counter}"
+    while master.query(Tenant).filter(Tenant.slug == slug).first():
+        slug = f"{base_slug}-{counter}"[:40]
         counter += 1
-    
-    subdomain = slug.replace("-", "")[:20]
-    base_subdomain = subdomain
+
+    # Subdomain mirrors the slug so layeron.localhost just works.
+    base_subdomain = re.sub(r"[^a-z0-9]", "", slug)[:20] or "tenant"
+    subdomain = base_subdomain
     counter = 1
-    while db.query(Tenant).filter(Tenant.subdomain == subdomain).first():
-        subdomain = f"{base_subdomain}{counter}"
+    while master.query(Tenant).filter(Tenant.subdomain == subdomain).first():
+        suffix = str(counter)
+        subdomain = (base_subdomain[: 20 - len(suffix)] + suffix)
         counter += 1
-    
-    username = request.email.split('@')[0]
+
+    username = request.email.split("@")[0]
     password_hash = hash_password(request.password)
-    
+
     try:
         result = full_tenant_provisioning(
+            slug=slug,
             subdomain=subdomain,
             org_name=request.organization_name,
             admin_username=username,
@@ -961,224 +573,46 @@ def register_organization(request: OrganizationRegisterRequest, db: Session = De
             admin_password_hash=password_hash,
             admin_display_name=request.display_name,
             org_details={
-                'legal_entity': request.legal_entity,
-                'industry': request.industry,
-                'company_size': request.company_size,
-                'geography': request.geography,
-                'regulatory_scope': request.regulatory_scope,
-                'contact_phone': request.primary_contact_phone
-            }
+                "legal_entity": request.legal_entity,
+                "industry": request.industry,
+                "company_size": request.company_size,
+                "geography": request.geography,
+                "regulatory_scope": request.regulatory_scope,
+                "contact_phone": request.primary_contact_phone,
+                "settings": {"email_domain": email_domain},
+            },
         )
-        schema_name = result["schema_name"]
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to provision tenant database: {str(e)}"
+            detail=f"Failed to provision tenant database: {str(e)}",
         )
-    
-    tenant = Tenant(
-        name=request.organization_name,
-        slug=slug,
-        subdomain=subdomain,
-        schema_name=schema_name,
-        legal_entity=request.legal_entity,
-        industry=request.industry,
-        regulatory_scope=request.regulatory_scope,
-        company_size=request.company_size,
-        geography=request.geography,
-        primary_contact_name=request.display_name,
-        primary_contact_email=request.email,
-        primary_contact_phone=request.primary_contact_phone,
-        settings={"email_domain": email_domain},
-        is_active=True
-    )
-    db.add(tenant)
-    db.commit()
-    db.refresh(tenant)
 
-    from ..seed_workflow_engine_defaults import seed_workflow_engine_defaults
-    seed_workflow_engine_defaults(tenant.id)
-    
     token = create_access_token({
         "sub": username,
-        "tenant_id": tenant.id,
-        "subdomain": subdomain,
-        "schema_name": schema_name
+        "tenant_slug": slug,
+        "tenant_id": result["tenant_id"],
     })
-    
-    response = JSONResponse(content={
-        "message": "Organization registration successful",
-        "admin_credentials": {
-            "username": username,
-            "email": request.email,
-            "password": request.password
-        },
-        "tenant": {
-            "id": tenant.id,
-            "name": tenant.name,
-            "slug": tenant.slug,
-            "subdomain": subdomain
-        },
-        "login_url": f"https://{subdomain}.yourdomain.com/login"
-    }, status_code=status.HTTP_201_CREATED)
-    set_auth_cookie(response, token)
-    return response
 
-
-@router.post("/tenant-login")
-def tenant_login(request: UserLogin, subdomain: str = None, db: Session = Depends(get_db)):
-    if not subdomain:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Subdomain is required for tenant login"
-        )
-    
-    tenant = db.query(Tenant).filter(
-        Tenant.subdomain == subdomain,
-        Tenant.is_active == True
-    ).first()
-    
-    if not tenant:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found"
-        )
-    
-    if not tenant.schema_name:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Tenant database not configured"
-        )
-    
-    try:
-        SessionClass = get_tenant_session(tenant.schema_name)
-        tenant_db = SessionClass()
-        if not IS_SQLITE:
-            tenant_db.execute(text(f'SET search_path TO "{tenant.schema_name}", public'))
-        
-        user = tenant_db.query(TenantSchemaUser).filter(
-            (TenantSchemaUser.username == request.username) | 
-            (TenantSchemaUser.email == request.username)
-        ).first()
-        
-        if not user:
-            tenant_db.close()
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid username or password"
-            )
-        
-        if not verify_password(request.password, user.password_hash):
-            tenant_db.close()
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid username or password"
-            )
-        
-        if not user.is_active:
-            tenant_db.close()
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is deactivated"
-            )
-        
-        from datetime import datetime
-        user.last_login = datetime.utcnow()
-        tenant_db.commit()
-        
-        tenant_db.close()
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Login error: {str(e)}"
-        )
-    
-    token = create_access_token({
-        "sub": user.username,
-        "tenant_id": tenant.id,
-        "subdomain": tenant.subdomain,
-        "schema_name": tenant.schema_name
-    })
-    
-    response = JSONResponse(content={
-        "message": "Login successful",
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "display_name": user.display_name
-        },
-        "tenant": {
-            "id": tenant.id,
-            "name": tenant.name,
-            "subdomain": tenant.subdomain
-        }
-    })
-    set_auth_cookie(response, token)
-    return response
-
-
-@router.get("/tenant-me")
-def get_tenant_me(
-    token: Optional[str] = Cookie(None, alias="grc_auth_token"),
-    db: Session = Depends(get_db)
-):
-    if not token:
-        return {"authenticated": False, "user": None}
-    
-    payload = decode_token(token)
-    if not payload:
-        return {"authenticated": False, "user": None}
-    
-    username = payload.get("sub")
-    schema_name = payload.get("schema_name")
-    tenant_id = payload.get("tenant_id")
-    subdomain = payload.get("subdomain")
-    
-    if not username or not schema_name:
-        return {"authenticated": False, "user": None}
-    
-    try:
-        SessionClass = get_tenant_session(schema_name)
-        tenant_db = SessionClass()
-        if not IS_SQLITE:
-            tenant_db.execute(text(f'SET search_path TO "{schema_name}", public'))
-        
-        user = tenant_db.query(TenantSchemaUser).filter(
-            TenantSchemaUser.username == username
-        ).first()
-        
-        if not user:
-            tenant_db.close()
-            return {"authenticated": False, "user": None}
-        
-        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-        
-        from ..tenant_models import Role, UserRole
-        roles = tenant_db.query(Role).join(UserRole).filter(
-            UserRole.user_id == user.id
-        ).all()
-        
-        tenant_db.close()
-        
-        return {
-            "authenticated": True,
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "display_name": user.display_name,
-                "is_active": user.is_active,
-                "roles": [{"id": r.id, "name": r.name} for r in roles]
+    response = JSONResponse(
+        content={
+            "message": "Organization registration successful",
+            "access_token": token,
+            "token_type": "bearer",
+            "admin_credentials": {
+                "username": username,
+                "email": request.email,
+                "password": request.password,
             },
             "tenant": {
-                "id": tenant.id if tenant else None,
-                "name": tenant.name if tenant else None,
-                "subdomain": subdomain
-            }
-        }
-    except Exception as e:
-        return {"authenticated": False, "user": None, "error": str(e)}
+                "id": result["tenant_id"],
+                "name": request.organization_name,
+                "slug": slug,
+                "subdomain": subdomain,
+            },
+            "login_url": f"https://{subdomain}.yourdomain.com/login",
+        },
+        status_code=status.HTTP_201_CREATED,
+    )
+    set_auth_cookie(response, token, http_request)
+    return response

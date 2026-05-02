@@ -553,9 +553,7 @@ export default function ControlLibraryPage() {
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="rounded-lg bg-primary-500/20 p-2">
-                        <Shield className="h-5 w-5 text-blue-600" />
-                      </div>
+                      <Shield className="h-5 w-5 text-blue-600 flex-shrink-0" />
                       <div>
                         <span className="font-mono text-xs text-blue-600">{group.code}</span>
                         <h3 className="font-medium text-black line-clamp-1">{group.name}</h3>
@@ -989,9 +987,7 @@ export default function ControlLibraryPage() {
           <div className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-primary-500/20 p-2">
-                  <Sparkles className="h-5 w-5 text-blue-600" />
-                </div>
+                <Sparkles className="h-5 w-5 text-blue-600 flex-shrink-0" />
                 <h2 className="text-lg font-semibold text-black">AI Auto-Grouping</h2>
               </div>
               <button onClick={() => setShowAutoGroupModal(false)} className="text-gray-600 hover:text-black">
@@ -1130,9 +1126,7 @@ export default function ControlLibraryPage() {
           <div className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-purple-500/20 p-2">
-                  <Brain className="h-5 w-5 text-purple-400" />
-                </div>
+                <Brain className="h-5 w-5 text-purple-500 flex-shrink-0" />
                 <h2 className="text-lg font-semibold text-black">AI Similarity Analysis</h2>
               </div>
               <button onClick={() => setShowAnalysisModal(false)} className="text-gray-600 hover:text-black">

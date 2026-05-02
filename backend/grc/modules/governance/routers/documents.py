@@ -212,6 +212,11 @@ def serialize_document(doc: GovernanceDocument, db: Session = None) -> dict:
     }
     
     if db:
+        try:
+            from ...compliance.schema_migrations import ensure_assigned_column
+            ensure_assigned_column(db)
+        except Exception:
+            pass
         policy_count = db.query(PolicyStatement).filter(
             PolicyStatement.document_id == doc.id
         ).count()

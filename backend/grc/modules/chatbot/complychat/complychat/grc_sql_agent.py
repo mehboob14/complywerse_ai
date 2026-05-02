@@ -71,37 +71,23 @@ def load_full_database_schema():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        if is_sqlite_database():
-            # SQLite schema discovery
-            cur.execute("""
-                SELECT name FROM sqlite_master
-                WHERE type='table' AND name NOT LIKE 'sqlite_%'
-                ORDER BY name
-            """)
-            tables = [row[0] for row in cur.fetchall()]
+        # PostgreSQL schema discovery
+        cur.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+        """)
+        tables = [row[0] for row in cur.fetchall()]
 
-            for table in tables:
-                cur.execute(f"PRAGMA table_info('{table}')")
-                columns = [row[1].lower() for row in cur.fetchall()]
-                CACHED_DB_SCHEMA[table] = columns
-        else:
-            # PostgreSQL schema discovery
-            cur.execute("""
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-                ORDER BY table_name
+        for table in tables:
+            cur.execute(f"""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = '{table}' AND table_schema = 'public'
             """)
-            tables = [row[0] for row in cur.fetchall()]
-
-            for table in tables:
-                cur.execute(f"""
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = '{table}' AND table_schema = 'public'
-                """)
-                columns = [row[0].lower() for row in cur.fetchall()]
-                CACHED_DB_SCHEMA[table] = columns
+            columns = [row[0].lower() for row in cur.fetchall()]
+            CACHED_DB_SCHEMA[table] = columns
         
         SCHEMA_LOADED = True
         logger.info(f"[YES] LOADED SCHEMA: {len(CACHED_DB_SCHEMA)} tables cached")
@@ -369,59 +355,52 @@ WHERE COALESCE(owner_id, -1) = 123
 ```
 
 =================================================================================
-📅 SQLITE DATE FUNCTIONS (CRITICAL!)
+📅 POSTGRESQL DATE FUNCTIONS (CRITICAL!)
 =================================================================================
 
-**NO PostgreSQL syntax!** Use SQLite date functions only.
+**Use PostgreSQL date functions only. NO SQLite syntax.**
 
 **Current date/time:**
-- `date('now')` - Current date (YYYY-MM-DD)
-- `datetime('now')` - Current datetime (YYYY-MM-DD HH:MM:SS)
-- `time('now')` - Current time (HH:MM:SS)
+- `CURRENT_DATE` - Current date (YYYY-MM-DD)
+- `CURRENT_TIMESTAMP` / `NOW()` - Current datetime
+- `LOCALTIME` - Current time
 
 **Date arithmetic:**
-- `date('now', '+7 days')` - 7 days from now
-- `date('now', '-30 days')` - 30 days ago
-- `datetime('now', '+1 month')` - 1 month from now
+- `CURRENT_DATE + INTERVAL '7 days'` - 7 days from now
+- `CURRENT_DATE - INTERVAL '30 days'` - 30 days ago
+- `NOW() + INTERVAL '1 month'` - 1 month from now
 
 **Date comparisons:**
-- `WHERE created_at > datetime('now', '-30 days')` - Last 30 days
-- `WHERE due_date BETWEEN datetime('now') AND datetime('now', '+7 days')` - Next 7 days
+- `WHERE created_at > NOW() - INTERVAL '30 days'` - Last 30 days
+- `WHERE due_date BETWEEN NOW() AND NOW() + INTERVAL '7 days'` - Next 7 days
 
 **Date differences (days between dates):**
 ```sql
-CAST((julianday(end_date) - julianday(start_date)) AS INTEGER) as days_diff
+(end_date::date - start_date::date) AS days_diff
 ```
 
 **Extract month/year:**
-- `strftime('%Y-%m', column_name)` - YYYY-MM format
-- `strftime('%Y', column_name)` - Year only
-- `WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')` - This month
-
-**FORBIDDEN (PostgreSQL syntax):**
-- [FAIL] `CURRENT_DATE`, `CURRENT_TIMESTAMP` [>] Use datetime('now') or date('now')
-- [FAIL] `INTERVAL '7 days'` [>] Use '+7 days' modifier
-- [FAIL] `DATE_TRUNC('month', column)` [>] Use strftime('%Y-%m', column)
-- [FAIL] `column::date` casting [>] Use CAST(column AS DATE) or just column
-- [FAIL] `column + INTERVAL '30 days'` [>] Use datetime(column, '+30 days')
+- `TO_CHAR(column_name, 'YYYY-MM')` - YYYY-MM format
+- `EXTRACT(YEAR FROM column_name)` - Year only
+- `WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', NOW())` - This month
 
 **Example queries:**
 ```sql
 -- Items from this month
-WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
+WHERE DATE_TRUNC('month', created_at) = DATE_TRUNC('month', NOW())
 
 -- Overdue items
-WHERE due_date < datetime('now')
+WHERE due_date < NOW()
 
 -- Next 7 days
-WHERE scheduled_date BETWEEN datetime('now') AND datetime('now', '+7 days')
+WHERE scheduled_date BETWEEN NOW() AND NOW() + INTERVAL '7 days'
 
 -- Days overdue calculation
-SELECT 
+SELECT
   id, title,
-  CAST((julianday('now') - julianday(due_date)) AS INTEGER) as days_overdue
+  (CURRENT_DATE - due_date::date) AS days_overdue
 FROM table_name
-WHERE due_date < datetime('now')
+WHERE due_date < NOW()
 ```
 
 NULL-SAFE JOINS:
@@ -641,19 +620,19 @@ exception_approved_by, exception_expiry, created_at, updated_at
 - severity: 'critical', 'high', 'medium', 'low', 'info' (lowercase only!)
 - status: 'open', 'in_progress', 'resolved' (lowercase with underscores!)
 
-QUERY EXAMPLE (with NULL handling + SQLite date syntax):
+QUERY EXAMPLE (with NULL handling + PostgreSQL date syntax):
 ```sql
-SELECT 
+SELECT
   id,
   COALESCE(title, 'Untitled Vulnerability') as title,
   LOWER(severity) as severity,
   COALESCE(status, 'Unknown') as status,
-  COALESCE(due_date, date('now', '+30 days')) as due_date,
-  CAST((julianday('now') - julianday(due_date)) AS INTEGER) as days_overdue
+  COALESCE(due_date, CURRENT_DATE + INTERVAL '30 days') as due_date,
+  (CURRENT_DATE - due_date::date) as days_overdue
 FROM grc_vulnerabilities
-WHERE LOWER(severity) = 'critical' 
+WHERE LOWER(severity) = 'critical'
   AND COALESCE(status, 'open') NOT IN ('resolved', 'closed')
-  AND due_date < datetime('now')
+  AND due_date < NOW()
 ORDER BY due_date ASC LIMIT 100
 ```
 
@@ -2066,7 +2045,7 @@ A: {{"sql": "SELECT id, COALESCE(title, 'Untitled') as title, ... WHERE inherent
 =================================================================================
 """
 
-SQL_GENERATION_PROMPT = f"""You are a GRC compliance data analyst. Generate SQLite queries ONLY.
+SQL_GENERATION_PROMPT = f"""You are a GRC compliance data analyst. Generate PostgreSQL queries ONLY.
 
 {GRC_SCHEMA}
 
@@ -2081,9 +2060,9 @@ CRITICAL GENERATION RULES:
 8. **Limit columns to 3-5 maximum** for clean results
 9. **LEFT JOIN for optional data** (evidence, links, etc.)
 10. **NULL-safe WHERE clauses**: Use COALESCE(column, default) = value
-11. **SQLite DATE SYNTAX**: Use datetime('now'), date('now'), strftime() - NEVER DATE_TRUNC or INTERVAL
-12. **NO CASTING with ::** - Use CAST(column AS type) instead
-13. **LIKE for pattern matching** - Use LIKE (case-insensitive), NEVER ILIKE or SIMILAR TO
+11. **PostgreSQL DATE SYNTAX**: Use NOW(), CURRENT_DATE, INTERVAL '...', DATE_TRUNC(), TO_CHAR()
+12. **PostgreSQL casting**: Use `column::type` or CAST(column AS type)
+13. **Case-insensitive matching**: Use ILIKE (PostgreSQL) for case-insensitive pattern matching
 
 DOMAIN DECISION TREE:
 - Framework / control / compliance questions [>] COMPLIANCE & FRAMEWORKS (Domain 1)
@@ -2256,48 +2235,72 @@ A: {{"sql": "SELECT vm.id, COALESCE(v.title,'Vuln') as vulnerability, COALESCE(v
 # =================================================================================
 
 def get_database_url() -> str:
-    """Get database URL from environment with safe fallback."""
-    return os.getenv("DATABASE_URL", "postgresql://localhost/grc_db")
+    """Master catalog URL — only used to resolve a representative tenant DB
+    for SCHEMA INTROSPECTION (not for queries). All tenant DBs share the same
+    Base.metadata, so any tenant DB is a valid sample."""
+    return os.getenv("MASTER_DATABASE_URL") or os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/grc_master")
 
 
 def is_sqlite_database() -> bool:
-    return get_database_url().startswith("sqlite")
+    """SQLite has been removed from the project; this always returns False.
+    Kept as a shim because some prompt-generation paths still call it."""
+    return False
 
 
-def resolve_sqlite_path(db_url: str) -> str:
-    parsed = urlparse(db_url)
-    db_path = parsed.path or ""
-    if db_path.startswith("/") and len(db_path) > 1:
-        db_path = db_path[1:]
-    if not db_path:
-        db_path = "grc_tenant.db"
-    backend_root = Path(__file__).parents[5]
-    return str((backend_root / db_path).resolve())
+def _resolve_introspection_db_url() -> str:
+    """Pick a database URL suitable for schema introspection only.
+
+    Per-database-per-tenant: every tenant DB has the same `Base.metadata`, so
+    any one of them is representative. We pick the first row from
+    `grc_master.grc_tenants` and substitute its slug into TENANT_DB_URL_TEMPLATE.
+    Falls back to MASTER_DATABASE_URL if no tenants exist yet (master only has
+    `grc_tenants`, so the chatbot will see an almost-empty schema until the
+    first registration — which is correct).
+    """
+    import psycopg2
+    master_url = get_database_url()
+    template = os.getenv("TENANT_DB_URL_TEMPLATE")
+    if not template:
+        return master_url
+    try:
+        parsed = urlparse(master_url)
+        master_conn = psycopg2.connect(
+            host=parsed.hostname or 'localhost',
+            port=int(parsed.port or 5432),
+            dbname=(parsed.path or '/grc_master').lstrip('/') or 'grc_master',
+            user=parsed.username or 'postgres',
+            password=parsed.password or '',
+        )
+        try:
+            cur = master_conn.cursor()
+            cur.execute("SELECT slug FROM grc_tenants WHERE is_active = TRUE ORDER BY id LIMIT 1")
+            row = cur.fetchone()
+        finally:
+            master_conn.close()
+        if row and row[0]:
+            return template.format(slug=row[0])
+    except Exception as exc:
+        logger.warning(f"[CHATBOT] Schema introspection: could not resolve a tenant DB ({exc}); falling back to master")
+    return master_url
 
 
 def get_db_connection():
-    """Get database connection for schema introspection."""
-    if is_sqlite_database():
-        import sqlite3
-        db_path = resolve_sqlite_path(get_database_url())
-        return sqlite3.connect(db_path)
+    """Get database connection for schema introspection (Postgres-only).
 
+    Returns a connection to a representative tenant DB so the introspection
+    sees the full operational schema, not just the master catalog's
+    `grc_tenants` table. Query execution still happens via the request-scoped
+    tenant session in the chatbot router — this connection is metadata-only.
+    """
     import psycopg2
-    import os
 
-    # Use environment variables with fallbacks
-    db_host = os.getenv('DB_HOST', 'localhost')
-    db_port = os.getenv('DB_PORT', '5432')
-    db_name = os.getenv('DB_NAME', 'postgres')
-    db_user = os.getenv('DB_USER', 'postgres')
-    db_password = os.getenv('DB_PASSWORD', '123')
-
+    parsed = urlparse(_resolve_introspection_db_url())
     return psycopg2.connect(
-        host=db_host,
-        port=int(db_port),
-        dbname=db_name,
-        user=db_user,
-        password=db_password
+        host=parsed.hostname or os.getenv('DB_HOST', 'localhost'),
+        port=int(parsed.port or os.getenv('DB_PORT', '5432')),
+        dbname=(parsed.path or '/postgres').lstrip('/') or 'postgres',
+        user=parsed.username or os.getenv('DB_USER', 'postgres'),
+        password=parsed.password or os.getenv('DB_PASSWORD', ''),
     )
 
 def fetch_table_schema_from_db(table_name: str) -> str:
@@ -2324,18 +2327,14 @@ def fetch_table_schema_from_db(table_name: str) -> str:
             except Exception:
                 pass
 
-        # Get columns with types for better context
-        if is_sqlite_database():
-            cur.execute(f"PRAGMA table_info('{table_name}')")
-            columns = [(row[1], row[2], 'YES' if row[3] == 0 else 'NO') for row in cur.fetchall()]
-        else:
-            cur.execute(f"""
-                SELECT column_name, data_type, is_nullable
-                FROM information_schema.columns
-                WHERE table_name = '{table_name}' AND table_schema = 'public'
-                ORDER BY ordinal_position
-            """)
-            columns = cur.fetchall()
+        # Get columns with types for better context (Postgres only).
+        cur.execute(f"""
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_name = '{table_name}' AND table_schema = 'public'
+            ORDER BY ordinal_position
+        """)
+        columns = cur.fetchall()
         
         if not columns:
             if conn:

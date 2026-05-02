@@ -459,9 +459,13 @@ def _validate_assigned_user_for_tenant(tenant_id: int, assigned_user_id: Optiona
     if not assigned_user_id:
         return
 
-    exists = db.query(TenantUser.id).filter(
-        TenantUser.tenant_id == tenant_id,
-        TenantUser.user_id == assigned_user_id
+    # Per-tenant DB: every active grc_users row belongs to this tenant.
+    # The previous check joined through grc_tenant_users which is only
+    # populated for the bootstrap admin, so users created via /admin/users
+    # were rejected here.
+    exists = db.query(GRCUser.id).filter(
+        GRCUser.id == assigned_user_id,
+        GRCUser.is_active.is_(True),
     ).first()
 
     if not exists:
@@ -494,12 +498,11 @@ def _recalculate_question_scores(question: FrameworkRiskQuestion) -> None:
 
 
 def _resolve_framework_id_for_assessment(uploaded_fw: UploadedFramework, db: Session) -> int:
-    """
-    Ensure framework_id is always populated.
+    """Ensure framework_id is always populated.
 
-    Some existing SQLite databases still enforce NOT NULL on
-    grc_framework_risk_assessments.framework_id. For those databases,
-    uploaded frameworks that are not yet published would otherwise fail insert.
+    `grc_framework_risk_assessments.framework_id` is NOT NULL in some legacy
+    schemas, so uploaded frameworks that aren't yet published would otherwise
+    fail insert. We materialize a bridge `Framework` row so the FK resolves.
     """
     if uploaded_fw.published_framework_id:
         return uploaded_fw.published_framework_id
@@ -995,11 +998,13 @@ def move_framework_question_to_risk_register(
     if owner_id:
         _validate_assigned_user_for_tenant(assessment.tenant_id, owner_id, db)
     else:
-        creator_tenant_link = db.query(TenantUser.id).filter(
-            TenantUser.tenant_id == assessment.tenant_id,
-            TenantUser.user_id == assessment.created_by
+        # Per-tenant DB fallback: if the creator is still an active user,
+        # use them as the owner. We no longer require a TenantUser link.
+        creator_active = db.query(GRCUser.id).filter(
+            GRCUser.id == assessment.created_by,
+            GRCUser.is_active.is_(True),
         ).first()
-        if creator_tenant_link:
+        if creator_active:
             owner_id = assessment.created_by
 
     framework_name = None

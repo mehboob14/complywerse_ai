@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import Link from 'next/link';
-import apiClient, { evidenceAIApi, QuickAssessResponse } from '@/lib/api';
+import apiClient, { evidenceAIApi, QuickAssessResponse, assetsApi } from '@/lib/api';
+import type { ITAsset } from '@/types';
 import { SearchInput, MultiSelectDropdown } from '@/components/ui';
 import {
   FileCheck,
@@ -189,10 +190,23 @@ export default function EvidencePage() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: (formData: FormData) => 
-      apiClient.post('/evidence-mgmt/items/upload', formData, {
+    mutationFn: async ({ formData, linkedAssetIds }: { formData: FormData; linkedAssetIds: number[] }) => {
+      const res = await apiClient.post('/evidence-mgmt/items/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-      }),
+      });
+      const evidenceId = (res.data as { id?: number })?.id;
+      // Link selected assets after the evidence row exists. Failures here
+      // shouldn't roll back the upload — the user can re-link from the
+      // detail page if the network blips.
+      if (evidenceId && linkedAssetIds.length > 0) {
+        await Promise.all(
+          linkedAssetIds.map((assetId) =>
+            assetsApi.linkEvidence(assetId, { evidence_id: evidenceId }).catch(() => null)
+          )
+        );
+      }
+      return res;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evidence-items'] });
       queryClient.invalidateQueries({ queryKey: ['evidence-summary'] });
@@ -671,7 +685,7 @@ export default function EvidencePage() {
       {isUploadModalOpen && (
         <UploadModal
           onClose={() => setIsUploadModalOpen(false)}
-          onUpload={(formData) => uploadMutation.mutate(formData)}
+          onUpload={(formData, linkedAssetIds) => uploadMutation.mutate({ formData, linkedAssetIds })}
           isLoading={uploadMutation.isPending}
           evidenceTypes={evidenceTypes || []}
         />
@@ -680,14 +694,22 @@ export default function EvidencePage() {
   );
 }
 
-function UploadModal({ 
-  onClose, 
-  onUpload, 
+const VALIDITY_PRESETS: Array<{ value: string; label: string }> = [
+  { value: '90', label: '3 months' },
+  { value: '180', label: '6 months' },
+  { value: '365', label: '1 year' },
+  { value: '730', label: '2 years' },
+  { value: 'custom', label: 'Custom (days)' },
+];
+
+function UploadModal({
+  onClose,
+  onUpload,
   isLoading,
   evidenceTypes
-}: { 
+}: {
   onClose: () => void;
-  onUpload: (formData: FormData) => void;
+  onUpload: (formData: FormData, linkedAssetIds: number[]) => void;
   isLoading: boolean;
   evidenceTypes: EvidenceType[];
 }) {
@@ -695,14 +717,54 @@ function UploadModal({
   const [description, setDescription] = useState('');
   const [evidenceType, setEvidenceType] = useState('');
   const [collectionDate, setCollectionDate] = useState('');
-  const [validityPeriodDays, setValidityPeriodDays] = useState('365');
-  const [sourceSystem, setSourceSystem] = useState('');
+  const [validityPreset, setValidityPreset] = useState<string>('365');
+  const [validityCustomDays, setValidityCustomDays] = useState('');
+  const [ownerId, setOwnerId] = useState<number | null>(null);
+  const [linkedAssetIds, setLinkedAssetIds] = useState<number[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [aiAssessment, setAiAssessment] = useState<QuickAssessResponse | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  // Owner dropdown source: tenant users.
+  const { data: tenantUsers = [] } = useQuery({
+    queryKey: ['tenant-users-evidence'],
+    queryFn: async () => {
+      const res = await assetsApi.getTenantUsers();
+      return res.data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Asset list for the source-system / linked-assets multi-select.
+  const { data: assets = [] } = useQuery({
+    queryKey: ['assets-evidence-link'],
+    queryFn: async () => {
+      const res = await assetsApi.getAll();
+      return (res.data || []) as ITAsset[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const ownerItems = useMemo(
+    () => tenantUsers.map((u) => ({
+      value: String(u.id),
+      label: u.display_name,
+      subLabel: u.email,
+    })),
+    [tenantUsers]
+  );
+
+  const assetItems = useMemo(
+    () => assets.map((a) => ({
+      value: String(a.id),
+      label: a.name,
+      subLabel: a.asset_type ? String(a.asset_type) : undefined,
+    })),
+    [assets]
+  );
 
   const runQuickAssessment = useCallback(async (fileName: string, fileType: string, evidenceName: string, desc: string, evType: string) => {
     setIsAiLoading(true);
@@ -727,6 +789,27 @@ function UploadModal({
     }
   }, []);
 
+  const resolvedValidityDays = (() => {
+    if (validityPreset === 'custom') {
+      const n = parseInt(validityCustomDays, 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    }
+    if (validityPreset === '') return null;
+    const n = parseInt(validityPreset, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
+
+  // Mirror selected asset names back into source_system for at-a-glance
+  // display in lists/exports — the structured link is the source of truth,
+  // the string is human-readable shorthand.
+  const sourceSystemLabel = useMemo(() => {
+    if (!linkedAssetIds.length) return '';
+    return linkedAssetIds
+      .map((id) => assets.find((a) => a.id === id)?.name)
+      .filter(Boolean)
+      .join(', ');
+  }, [linkedAssetIds, assets]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !name) return;
@@ -736,10 +819,11 @@ function UploadModal({
     if (description) formData.append('description', description);
     if (evidenceType) formData.append('evidence_type', evidenceType);
     if (collectionDate) formData.append('collection_date', collectionDate);
-    if (validityPeriodDays) formData.append('validity_period_days', validityPeriodDays);
-    if (sourceSystem) formData.append('source_system', sourceSystem);
+    if (resolvedValidityDays) formData.append('validity_period_days', String(resolvedValidityDays));
+    if (sourceSystemLabel) formData.append('source_system', sourceSystemLabel);
+    if (ownerId) formData.append('owner_id', String(ownerId));
     formData.append('file', file);
-    onUpload(formData);
+    onUpload(formData, linkedAssetIds);
   };
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -767,11 +851,17 @@ function UploadModal({
   }, [name, description, evidenceType, runQuickAssessment]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4">
+      <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-black">Upload Evidence</h2>
-          <button onClick={onClose} className="text-gray-600 hover:text-black">
+          <div className="flex items-center gap-3">
+            <Upload className="h-5 w-5 text-primary-600" />
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Upload Evidence</h2>
+              <p className="text-xs text-slate-500">Attach a file and capture its metadata in one step.</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
             <X size={20} />
           </button>
         </div>
@@ -942,34 +1032,34 @@ function UploadModal({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700">Name *</label>
+              <label className="block text-sm font-medium text-slate-700">Name *</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-slate-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 placeholder="Evidence name"
                 required
               />
             </div>
 
             <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <label className="block text-sm font-medium text-slate-700">Description</label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-slate-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 placeholder="Describe this evidence..."
                 rows={2}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Evidence Type</label>
+              <label className="block text-sm font-medium text-slate-700">Evidence Type</label>
               <select
                 value={evidenceType}
                 onChange={(e) => setEvidenceType(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-blue-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               >
                 <option value="">Select type...</option>
                 {evidenceTypes.map(type => (
@@ -979,36 +1069,76 @@ function UploadModal({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Collection Date</label>
+              <label className="block text-sm font-medium text-slate-700">Owner</label>
+              <MultiSelectDropdown
+                title="Owner"
+                items={ownerItems}
+                selectedValues={ownerId ? [String(ownerId)] : []}
+                onApply={(v) => setOwnerId(v[0] ? Number(v[0]) : null)}
+                multiSelect={false}
+                autoApply
+                forceSearch
+                triggerVariant="input"
+                placeholder="Select owner"
+                searchPlaceholder="Search users..."
+                size="md"
+                triggerClassName="mt-1 w-full"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Collection Date</label>
               <input
                 type="date"
                 value={collectionDate}
                 onChange={(e) => setCollectionDate(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-blue-500 focus:outline-none"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Validity Period (Days)</label>
-              <input
-                type="number"
-                value={validityPeriodDays}
-                onChange={(e) => setValidityPeriodDays(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black focus:border-blue-500 focus:outline-none"
-                placeholder="365"
-                min="1"
-              />
+              <label className="block text-sm font-medium text-slate-700">Validity Period</label>
+              <select
+                value={validityPreset}
+                onChange={(e) => setValidityPreset(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              >
+                {VALIDITY_PRESETS.map((p) => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
+              </select>
+              {validityPreset === 'custom' && (
+                <input
+                  type="number"
+                  min="1"
+                  value={validityCustomDays}
+                  onChange={(e) => setValidityCustomDays(e.target.value)}
+                  className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-slate-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  placeholder="Number of days"
+                  autoFocus
+                />
+              )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Source System</label>
-              <input
-                type="text"
-                value={sourceSystem}
-                onChange={(e) => setSourceSystem(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-black placeholder-gray-500 focus:border-blue-500 focus:outline-none"
-                placeholder="e.g., Splunk, AWS"
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-slate-700">Source System / Linked Assets</label>
+              <MultiSelectDropdown
+                title="Linked Assets"
+                items={assetItems}
+                selectedValues={linkedAssetIds.map(String)}
+                onApply={(v) => setLinkedAssetIds(v.map(Number))}
+                multiSelect
+                autoApply
+                forceSearch
+                triggerVariant="input"
+                placeholder="Search assets to link..."
+                searchPlaceholder="Search by asset name or type..."
+                size="md"
+                triggerClassName="mt-1 w-full"
               />
+              <p className="mt-1 text-xs text-slate-500">
+                Pick one or more assets this evidence was sourced from. You can link more later from the evidence detail page.
+              </p>
             </div>
           </div>
 
@@ -1016,14 +1146,14 @@ function UploadModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-black hover:bg-gray-50"
+              className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading || !file || !name}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 disabled:opacity-50"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               Upload Evidence

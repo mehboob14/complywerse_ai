@@ -390,27 +390,6 @@ PERMISSION_MATRIX = [
         ]
     },
     {
-        "module": "auditor_portal",
-        "display_name": "Auditor Portal",
-        "submodules": [
-            {
-                "name": "evidence_review",
-                "display_name": "Evidence Review",
-                "actions": ["view", "approve", "reject"]
-            },
-            {
-                "name": "audit_reports",
-                "display_name": "Audit Reports",
-                "actions": ["view", "create", "export"]
-            },
-            {
-                "name": "framework_access",
-                "display_name": "Framework Access",
-                "actions": ["view"]
-            }
-        ]
-    },
-    {
         "module": "critical_tasks",
         "display_name": "Critical Tasks",
         "submodules": [

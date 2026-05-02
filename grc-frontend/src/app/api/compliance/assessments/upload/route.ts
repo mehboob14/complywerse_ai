@@ -10,10 +10,16 @@ export async function POST(request: NextRequest) {
     
     const cookies = request.headers.get('cookie') || '';
     const authHeader = request.headers.get('authorization') || '';
-    
+    // X-Tenant-Slug is how the backend resolves the tenant DB. The axios
+    // client always sends it, so we must forward it through this proxy too.
+    const tenantSlug = request.headers.get('x-tenant-slug')
+                    || request.headers.get('X-Tenant-Slug')
+                    || '';
+
     const headers: Record<string, string> = {};
     if (cookies) headers['Cookie'] = cookies;
     if (authHeader) headers['Authorization'] = authHeader;
+    if (tenantSlug) headers['X-Tenant-Slug'] = tenantSlug;
     
     const backendUrl = `${BACKEND_URL}/grc/compliance/assessments/upload`;
     console.log(`[Assessment Upload] Attempting to connect to: ${backendUrl}`);

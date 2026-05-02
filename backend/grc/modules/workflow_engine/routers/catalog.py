@@ -164,14 +164,12 @@ def list_actor_users(
     if not tenant_ids:
         return {"users": []}
 
+    # Per-tenant DB: every active grc_users row is a tenant member.
+    # Joining through grc_tenant_users would silently drop users created
+    # via /admin/users (which doesn't backfill that join table).
     query = (
         db.query(GRCUser)
-        .join(TenantUser, TenantUser.user_id == GRCUser.id)
-        .filter(
-            TenantUser.tenant_id.in_(tenant_ids),
-            GRCUser.is_active.is_(True),
-        )
-        .distinct()
+        .filter(GRCUser.is_active.is_(True))
     )
 
     if search:

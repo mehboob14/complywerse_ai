@@ -137,17 +137,76 @@ export default function TaskBoardPage() {
   const [aiContextLoading, setAiContextLoading] = useState(false);
   const [newTask, setNewTask] = useState({
     title: '', description: '', source: 'Manual', priority: 'Medium',
-    severity: '', category: 'Other', assigned_owner_id: '',
+    severity: '', category: 'Other',
+    // Legacy single owner kept for back-compat but the canonical owner list is
+    // `assigned_user_ids`. The server reads the array and syncs the legacy
+    // scalar to its first entry.
+    assigned_owner_id: '',
+    assigned_user_ids: [] as string[],
     reviewer_id: '', due_date: '', sla_level: '' as TaskSLALevel | '', sla_days: '', evidence_notes: '',
     source_module: '', source_entity_type: '',
     linked_risk_id: '', linked_control_id: '', linked_vulnerability_id: '',
     linked_regulatory_change_id: '', linked_committee_id: '',
+    linked_framework_id: '', linked_requirement_id: '',
     recurrence_pattern: '', recurrence_interval: '1', approval_required: false,
   });
+
+  const [frameworkOptions, setFrameworkOptions] = useState<Array<{ id: number; label: string }>>([]);
+  const [requirementOptions, setRequirementOptions] = useState<Array<{ id: number; label: string }>>([]);
 
   useEffect(() => {
     criticalTasksApi.getTenantUsers().then(r => setUsers(r.data || [])).catch(() => setUsers([]));
   }, []);
+
+  // Load certification frameworks (used as the "Compliance Framework" source
+  // for tasks). Options are static for the form lifetime, requirements load
+  // lazily once a framework is picked.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const { certificationsApi } = await import('@/lib/api');
+        const res = await certificationsApi.getAll();
+        const list = Array.isArray(res.data) ? (res.data as any[]) : [];
+        if (!active) return;
+        setFrameworkOptions(
+          list.map((f) => ({
+            id: Number(f.id),
+            label: f.framework_name || f.name || `Framework ${f.id}`,
+          }))
+        );
+      } catch {
+        if (active) setFrameworkOptions([]);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const fid = newTask.linked_framework_id ? Number(newTask.linked_framework_id) : null;
+    if (!fid) {
+      setRequirementOptions([]);
+      return;
+    }
+    let active = true;
+    (async () => {
+      try {
+        const { certificationsApi } = await import('@/lib/api');
+        const res = await certificationsApi.getControls(fid);
+        const list = Array.isArray(res.data) ? (res.data as any[]) : [];
+        if (!active) return;
+        setRequirementOptions(
+          list.map((c) => ({
+            id: Number(c.id),
+            label: `${c.control_code || c.system_control_code || `#${c.id}`} — ${c.control_name || ''}`.trim(),
+          }))
+        );
+      } catch {
+        if (active) setRequirementOptions([]);
+      }
+    })();
+    return () => { active = false; };
+  }, [newTask.linked_framework_id]);
 
   useEffect(() => {
     let active = true;
@@ -371,13 +430,17 @@ export default function TaskBoardPage() {
       setShowCreate(false);
       setNewTask({
         title: '', description: '', source: 'Manual', priority: 'Medium',
-        severity: '', category: 'Other', assigned_owner_id: '',
+        severity: '', category: 'Other',
+        assigned_owner_id: '',
+        assigned_user_ids: [] as string[],
         reviewer_id: '', due_date: '', sla_level: '', sla_days: '', evidence_notes: '',
         source_module: '', source_entity_type: '',
         linked_risk_id: '', linked_control_id: '', linked_vulnerability_id: '',
         linked_regulatory_change_id: '', linked_committee_id: '',
+        linked_framework_id: '', linked_requirement_id: '',
         recurrence_pattern: '', recurrence_interval: '1', approval_required: false,
       });
+      setRequirementOptions([]);
     },
   });
 
@@ -393,8 +456,19 @@ export default function TaskBoardPage() {
 
   const handleCreate = () => {
     const payload: Record<string, unknown> = { ...newTask };
-    if (payload.assigned_owner_id) payload.assigned_owner_id = Number(payload.assigned_owner_id);
-    else delete payload.assigned_owner_id;
+    // Multi-assignee owner: send the array; the server picks the first entry
+    // as the legacy single `assigned_owner_id` for back-compat.
+    const assignedIds = (newTask.assigned_user_ids || []).map(Number).filter((n) => !Number.isNaN(n) && n > 0);
+    if (assignedIds.length > 0) {
+      payload.assigned_user_ids = assignedIds;
+      payload.assigned_owner_id = assignedIds[0];
+    } else if (payload.assigned_owner_id) {
+      // legacy fallback for any caller that still sets the scalar
+      payload.assigned_owner_id = Number(payload.assigned_owner_id);
+    } else {
+      delete payload.assigned_owner_id;
+      delete payload.assigned_user_ids;
+    }
     if (payload.reviewer_id) payload.reviewer_id = Number(payload.reviewer_id);
     else delete payload.reviewer_id;
     // sla_level is a UI-only helper that resolves to sla_days via the configured map.
@@ -403,7 +477,7 @@ export default function TaskBoardPage() {
     else delete payload.sla_days;
     if (!payload.source_module) delete payload.source_module;
     if (!payload.source_entity_type) delete payload.source_entity_type;
-    ['linked_risk_id', 'linked_control_id', 'linked_vulnerability_id', 'linked_regulatory_change_id', 'linked_committee_id'].forEach(k => {
+    ['linked_risk_id', 'linked_control_id', 'linked_vulnerability_id', 'linked_regulatory_change_id', 'linked_committee_id', 'linked_framework_id', 'linked_requirement_id'].forEach(k => {
       if (payload[k]) payload[k] = Number(payload[k]);
       else delete payload[k];
     });
@@ -902,6 +976,52 @@ export default function TaskBoardPage() {
                   triggerClassName="w-full"
                 />
               </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Compliance Framework</label>
+                <MultiSelectDropdown
+                  title="Compliance Framework"
+                  items={frameworkOptions.map((f) => ({ value: String(f.id), label: f.label }))}
+                  selectedValues={newTask.linked_framework_id ? [String(newTask.linked_framework_id)] : []}
+                  onApply={(v) =>
+                    setNewTask((f) => ({
+                      ...f,
+                      linked_framework_id: v[0] || '',
+                      // changing the framework invalidates the requirement selection
+                      linked_requirement_id: '',
+                    }))
+                  }
+                  multiSelect={false}
+                  forceSearch
+                  triggerVariant="input"
+                  placeholder="None"
+                  searchPlaceholder="Search frameworks"
+                  size="sm"
+                  triggerClassName="w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Framework Requirement</label>
+                <MultiSelectDropdown
+                  title="Framework Requirement"
+                  items={requirementOptions.map((r) => ({ value: String(r.id), label: r.label }))}
+                  selectedValues={newTask.linked_requirement_id ? [String(newTask.linked_requirement_id)] : []}
+                  onApply={(v) => setNewTask((f) => ({ ...f, linked_requirement_id: v[0] || '' }))}
+                  multiSelect={false}
+                  forceSearch
+                  triggerVariant="input"
+                  placeholder={
+                    !newTask.linked_framework_id
+                      ? 'Select framework first'
+                      : requirementOptions.length === 0
+                        ? 'Loading requirements...'
+                        : 'None'
+                  }
+                  searchPlaceholder="Search requirements"
+                  size="sm"
+                  triggerClassName="w-full"
+                />
+              </div>
             </div>
             {/* <p className="text-[11px] text-slate-500">Pick any source above, then click <span className="font-medium text-purple-700">AI Generate</span> — title, description, category and source will be auto-filled based on the selected context.</p> */}
           </div>
@@ -983,13 +1103,21 @@ export default function TaskBoardPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-0.5">Assigned Owner</label>
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">Assigned Owners</label>
               <MultiSelectDropdown
-                title="Owner"
+                title="Owners"
                 items={userItems}
-                selectedValues={newTask.assigned_owner_id ? [newTask.assigned_owner_id] : []}
-                onApply={(v) => setNewTask(f => ({ ...f, assigned_owner_id: v[0] || '' }))}
-                multiSelect={false}
+                selectedValues={newTask.assigned_user_ids}
+                onApply={(v) =>
+                  setNewTask((f) => ({
+                    ...f,
+                    assigned_user_ids: v,
+                    // keep the legacy single-owner field in sync with the
+                    // first selection so any code path still reading it works
+                    assigned_owner_id: v[0] || '',
+                  }))
+                }
+                multiSelect
                 autoApply
                 forceSearch
                 triggerVariant="input"

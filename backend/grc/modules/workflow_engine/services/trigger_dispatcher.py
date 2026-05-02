@@ -73,10 +73,6 @@ _EVENT_MAP: Dict[str, Dict[str, List[str]]] = {
         "update": ["asset_updated", "assets.update"],
         "delete": ["asset_deleted", "assets.delete"],
     },
-    "audits": {
-        "create": ["audit_finding_created", "audits.create", "audit.finding_created"],
-        "update": ["audits.update"],
-    },
 }
 
 # Module path aliases → normalised resource type

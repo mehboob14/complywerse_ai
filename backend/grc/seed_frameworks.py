@@ -144,16 +144,17 @@ def _determine_control_attributes(control_name, control_statement):
     return risk_category, evidence_type, control_objective
 
 
-def seed_frameworks():
+def seed_frameworks(session=None):
     """
     DEPRECATED: Pre-seeded frameworks have been removed from the system.
     Users should now upload their own framework documents via the Framework Upload feature.
+    Kept as a no-op so tenant provisioning can call it idempotently.
     """
     print("Pre-seeded frameworks disabled. Use Framework Upload to add frameworks.")
     return
-    
+
     # Legacy code below - kept for reference but never executed
-    db = SessionLocal()
+    db = session or SessionLocal()
     try:
         existing = db.query(Framework).first()
         if existing:
@@ -2153,7 +2154,7 @@ def _infer_collection_frequency(evidence_text: str) -> str:
         return "annually"
 
 
-def seed_uploaded_frameworks(seed_dir: str = None, tenant_id: int = None, 
+def seed_uploaded_frameworks(session=None, seed_dir: str = None, tenant_id: int = None,
                               uploaded_by: int = 1, force: bool = False) -> List[UploadedFramework]:
     """
     Seed all frameworks from JSON files in the seed directory.
@@ -2185,40 +2186,44 @@ def seed_uploaded_frameworks(seed_dir: str = None, tenant_id: int = None,
         return []
     
     print(f"Found {len(json_files)} framework JSON file(s) to seed")
-    
-    db = SessionLocal()
+
+    owns_session = session is None
+    db = session or SessionLocal()
     seeded_frameworks = []
-    
+
     try:
         # Get default tenant if not specified
         if tenant_id is None:
             tenant_id = get_default_tenant(db)
-        
+
         for json_file in json_files:
             file_path = os.path.join(seed_dir, json_file)
             data = load_framework_json(file_path)
-            
+
             if data is None:
                 continue
-            
+
             framework = seed_framework_from_json(
-                db, data, tenant_id=tenant_id, 
+                db, data, tenant_id=tenant_id,
                 uploaded_by=uploaded_by, force=force
             )
-            
+
             if framework:
                 seeded_frameworks.append(framework)
-        
-        db.commit()
+
+        db.flush()
         print(f"\nSuccessfully seeded {len(seeded_frameworks)} framework(s)")
-        
+
     except Exception as e:
-        db.rollback()
+        if owns_session:
+            db.rollback()
         print(f"Error seeding frameworks: {e}")
         raise
     finally:
-        db.close()
-    
+        if owns_session:
+            db.commit()
+            db.close()
+
     return seeded_frameworks
 
 

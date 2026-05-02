@@ -80,14 +80,10 @@ def _get_ai_frameworks(db: Session) -> list[Framework]:
 def _get_ai_tenant_users(db: Session, tenant_id: int | None) -> list[GRCUser]:
     if not tenant_id:
         return []
+    # Per-tenant DB: every active grc_users row belongs to this tenant.
     return (
         db.query(GRCUser)
-        .join(TenantUser, TenantUser.user_id == GRCUser.id)
-        .filter(
-            TenantUser.tenant_id == tenant_id,
-            GRCUser.is_active.is_(True),
-        )
-        .distinct()
+        .filter(GRCUser.is_active.is_(True))
         .order_by(GRCUser.display_name.asc(), GRCUser.username.asc())
         .limit(200)
         .all()

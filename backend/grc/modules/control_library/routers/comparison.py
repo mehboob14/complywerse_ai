@@ -17,11 +17,14 @@ try:
 except ImportError:
     HAS_OPENPYXL = False
 
+from fastapi import Request
+
 from ....models import (
     CommonControlGroup, CommonControlGroupMapping, NormalizedControl,
     FrameworkControl, FrameworkDomain, ControlObjective, Framework,
     ControlSimilarityMapping, GRCUser, get_db,
-    UploadedFramework, ParsedFrameworkControl
+    UploadedFramework, ParsedFrameworkControl,
+    ControlComparisonRun, ControlComparisonMapping,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -1353,3 +1356,280 @@ Return up to 5 best matches. Only include matches with confidence >= 0.5."""
         if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
             raise HTTPException(status_code=402, detail="Cloud budget exceeded")
         raise HTTPException(status_code=500, detail=f"AI mapping failed: {error_msg}")
+
+
+# =============================================================================
+# AI-driven framework-to-framework comparison (Celery-backed, cached)
+# =============================================================================
+
+class AiCompareRunRequest(BaseModel):
+    source_framework_id: int
+    dest_framework_id: int
+    refresh: Optional[bool] = False  # if True, drop existing run before dispatch
+
+
+def _serialize_run(run: ControlComparisonRun) -> dict:
+    return {
+        "id": run.id,
+        "source_framework_id": run.source_framework_id,
+        "dest_framework_id": run.dest_framework_id,
+        "status": run.status,
+        "progress_total": run.progress_total or 0,
+        "progress_done": run.progress_done or 0,
+        "progress_percent": (
+            int((run.progress_done or 0) * 100 / run.progress_total)
+            if run.progress_total else 0
+        ),
+        "error_message": run.error_message,
+        "model_used": run.model_used,
+        "task_id": run.task_id,
+        "started_at": run.started_at.isoformat() if run.started_at else None,
+        "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+        "created_at": run.created_at.isoformat() if run.created_at else None,
+    }
+
+
+def _serialize_mappings(run_id: int, db: Session) -> dict:
+    """Build the per-source-control map of dest matches for a completed run.
+
+    Returns a list shaped roughly like the keyword-match crosswalk so the
+    frontend can render with minimal changes."""
+    mappings = (
+        db.query(ControlComparisonMapping)
+        .filter(ControlComparisonMapping.run_id == run_id)
+        .order_by(
+            ControlComparisonMapping.source_control_id.asc(),
+            ControlComparisonMapping.rank.asc(),
+        )
+        .all()
+    )
+    if not mappings:
+        return {"items": [], "total": 0}
+
+    src_ids = sorted({m.source_control_id for m in mappings})
+    dst_ids = sorted({m.dest_control_id for m in mappings})
+    src_lookup = {
+        c.id: c
+        for c in db.query(ParsedFrameworkControl).filter(ParsedFrameworkControl.id.in_(src_ids)).all()
+    }
+    dst_lookup = {
+        c.id: c
+        for c in db.query(ParsedFrameworkControl).filter(ParsedFrameworkControl.id.in_(dst_ids)).all()
+    }
+
+    grouped: dict = {}
+    for m in mappings:
+        bucket = grouped.setdefault(m.source_control_id, [])
+        dst = dst_lookup.get(m.dest_control_id)
+        bucket.append({
+            "dest_control_id": m.dest_control_id,
+            "dest_reference": (dst.original_reference or dst.control_id or "") if dst else "",
+            "dest_title": dst.title if dst else "",
+            "dest_description": dst.description if dst else "",
+            "dest_domain": dst.domain if dst else "",
+            "confidence": round(m.confidence or 0.0, 3),
+            "rationale": m.rationale or "",
+            "evidence_recommendations": m.evidence_recommendations or [],
+            "rank": m.rank,
+        })
+
+    items = []
+    for src_id, dest_list in grouped.items():
+        src = src_lookup.get(src_id)
+        if not src:
+            continue
+        items.append({
+            "source_control_id": src.id,
+            "source_reference": src.original_reference or src.control_id or "",
+            "source_title": src.title or "",
+            "source_description": src.description or "",
+            "source_domain": src.domain or "",
+            "destinations": dest_list,
+        })
+    items.sort(key=lambda x: x["source_reference"] or "")
+    return {"items": items, "total": len(items)}
+
+
+@router.get("/ai-compare/lookup")
+def ai_compare_lookup(
+    source_framework_id: int = Query(...),
+    dest_framework_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Check if a comparison run already exists for this (tenant, src, dst) pair.
+
+    Frontend calls this on framework selection. If a completed run is found,
+    UI can render results immediately without dispatch."""
+    user_tenants = get_user_tenants(current_user, db)
+    run = (
+        db.query(ControlComparisonRun)
+        .filter(
+            ControlComparisonRun.tenant_id.in_(user_tenants),
+            ControlComparisonRun.source_framework_id == source_framework_id,
+            ControlComparisonRun.dest_framework_id == dest_framework_id,
+        )
+        .order_by(ControlComparisonRun.id.desc())
+        .first()
+    )
+    if not run:
+        return {"exists": False}
+    return {"exists": True, "run": _serialize_run(run)}
+
+
+@router.post("/ai-compare/run", status_code=status.HTTP_202_ACCEPTED)
+def ai_compare_dispatch(
+    body: AiCompareRunRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Dispatch (or return cached) AI cross-framework comparison job.
+
+    * If a completed run exists for (tenant, src, dst) and `refresh` is false,
+      return it immediately — caller skips polling.
+    * If a run is queued/running, return it; the caller should poll
+      `/ai-compare/runs/{id}`.
+    * If `refresh=true`, the existing run + mappings are deleted and a fresh
+      run is dispatched.
+    * Otherwise, create a new run and enqueue the Celery task.
+    """
+    if not check_ai_available():
+        raise_ai_unavailable(fallback_available=True)
+
+    tenant_slug = getattr(http_request.state, "tenant_slug", None)
+    if not tenant_slug:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    if body.source_framework_id == body.dest_framework_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Source and destination framework must be different",
+        )
+
+    user_tenants = get_user_tenants(current_user, db)
+
+    source_fw = db.query(UploadedFramework).filter(
+        UploadedFramework.id == body.source_framework_id,
+        UploadedFramework.tenant_id.in_(user_tenants),
+    ).first()
+    dest_fw = db.query(UploadedFramework).filter(
+        UploadedFramework.id == body.dest_framework_id,
+        UploadedFramework.tenant_id.in_(user_tenants),
+    ).first()
+    if not source_fw or not dest_fw:
+        raise HTTPException(
+            status_code=404,
+            detail="Source or destination framework not found in this tenant",
+        )
+
+    primary_tenant_id = get_user_primary_tenant(current_user, db)
+
+    existing = (
+        db.query(ControlComparisonRun)
+        .filter(
+            ControlComparisonRun.tenant_id.in_(user_tenants),
+            ControlComparisonRun.source_framework_id == body.source_framework_id,
+            ControlComparisonRun.dest_framework_id == body.dest_framework_id,
+        )
+        .first()
+    )
+
+    if existing and not body.refresh:
+        if existing.status in ("queued", "running", "completed"):
+            return _serialize_run(existing)
+        # status == "failed" -> fall through and re-dispatch
+
+    if existing and (body.refresh or existing.status == "failed"):
+        db.delete(existing)
+        db.commit()
+        existing = None
+
+    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
+    try:
+        tenant_rate_limit(tenant_slug, bucket="control_compare")
+    except RateLimitExceeded:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many comparison runs queued; try again shortly",
+        )
+
+    run = ControlComparisonRun(
+        tenant_id=primary_tenant_id,
+        source_framework_id=body.source_framework_id,
+        dest_framework_id=body.dest_framework_id,
+        status="queued",
+        progress_total=0,
+        progress_done=0,
+        created_by_id=current_user.id,
+        model_used=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+
+    from ....tasks.control_library import ai_compare_frameworks as _compare_task
+    async_result = _compare_task.delay(tenant_slug, run.id)
+    run.task_id = async_result.id
+    db.commit()
+    print(
+        f"[DISPATCH] ai_compare -> celery task_id={async_result.id} tenant={tenant_slug} "
+        f"run={run.id} source={body.source_framework_id} dest={body.dest_framework_id}",
+        flush=True,
+    )
+
+    return _serialize_run(run)
+
+
+@router.get("/ai-compare/runs/{run_id}")
+def ai_compare_run_detail(
+    run_id: int,
+    include_mappings: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Get a comparison run's status. Pass `include_mappings=true` to also
+    return the full source-to-dest mapping list (only useful when completed)."""
+    user_tenants = get_user_tenants(current_user, db)
+    run = (
+        db.query(ControlComparisonRun)
+        .filter(
+            ControlComparisonRun.id == run_id,
+            ControlComparisonRun.tenant_id.in_(user_tenants),
+        )
+        .first()
+    )
+    if not run:
+        raise HTTPException(status_code=404, detail="Comparison run not found")
+
+    payload = _serialize_run(run)
+    if include_mappings and run.status == "completed":
+        payload["mappings"] = _serialize_mappings(run.id, db)
+    return payload
+
+
+@router.get("/ai-compare/runs/{run_id}/mappings")
+def ai_compare_run_mappings(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Mappings for a completed run. Separate from status so the UI can poll
+    cheaply and only fetch the (possibly large) mappings once."""
+    user_tenants = get_user_tenants(current_user, db)
+    run = (
+        db.query(ControlComparisonRun)
+        .filter(
+            ControlComparisonRun.id == run_id,
+            ControlComparisonRun.tenant_id.in_(user_tenants),
+        )
+        .first()
+    )
+    if not run:
+        raise HTTPException(status_code=404, detail="Comparison run not found")
+    if run.status != "completed":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Run status is {run.status}; mappings available only when completed",
+        )
+    return _serialize_mappings(run.id, db)

@@ -5,7 +5,8 @@ from typing import Any, Dict, Optional
 from fastapi import Request
 from starlette.responses import Response
 
-from .models import SessionLocal, AuditLog, GRCUser
+from .models import AuditLog, GRCUser
+from .db import open_tenant_session
 from .routers.auth_router import decode_token
 
 
@@ -155,44 +156,43 @@ def write_audit_log(
     try:
         path = request.url.path or ""
         tenant = getattr(request.state, "tenant", None)
-        tenant_id = getattr(tenant, "id", None)
+        tenant_slug = getattr(request.state, "tenant_slug", None)
+        tenant_id = (tenant or {}).get("id") if isinstance(tenant, dict) else getattr(tenant, "id", None)
 
-        token = request.cookies.get("grc_auth_token")
-        user_id = None
-        if token:
-            payload = decode_token(token)
-            username = payload.get("sub") if payload else None
-            if username:
-                db_lookup = SessionLocal()
-                try:
-                    user = db_lookup.query(GRCUser).filter(GRCUser.username == username).first()
-                    if user:
-                        user_id = user.id
-                        if tenant_id is None and payload:
-                            tenant_id = payload.get("tenant_id")
-                finally:
-                    db_lookup.close()
-
-        if not tenant_id:
+        if not tenant_slug:
+            # No tenant context => nothing to audit (audit log lives in tenant DB).
             return
 
-        resource_type, resource_id = _extract_resource(path)
-        status_code = getattr(response, "status_code", 200)
-        duration_ms = int((time.time() - started_at) * 1000)
-        method = request.method.upper()
-
-        details = {
-            "method": method,
-            "path": path,
-            "query": dict(request.query_params),
-            "status_code": status_code,
-            "duration_ms": duration_ms,
-            "user_agent": request.headers.get("user-agent"),
-            "request": request_payload,
-        }
-
-        db = SessionLocal()
+        db = open_tenant_session(tenant_slug)
         try:
+            user_id = None
+            token = request.cookies.get("grc_auth_token")
+            if token:
+                payload = decode_token(token)
+                username = payload.get("sub") if payload else None
+                if username:
+                    user = db.query(GRCUser).filter(GRCUser.username == username).first()
+                    if user:
+                        user_id = user.id
+
+            if not tenant_id:
+                return
+
+            resource_type, resource_id = _extract_resource(path)
+            status_code = getattr(response, "status_code", 200)
+            duration_ms = int((time.time() - started_at) * 1000)
+            method = request.method.upper()
+
+            details = {
+                "method": method,
+                "path": path,
+                "query": dict(request.query_params),
+                "status_code": status_code,
+                "duration_ms": duration_ms,
+                "user_agent": request.headers.get("user-agent"),
+                "request": request_payload,
+            }
+
             log = AuditLog(
                 tenant_id=tenant_id,
                 user_id=user_id,

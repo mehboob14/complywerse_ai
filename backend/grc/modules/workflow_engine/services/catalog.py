@@ -38,8 +38,7 @@ TRIGGER_NODE_TYPES = [
     {"key": "policy_approved", "label": "Policy approved / published"},
     {"key": "control_review_due", "label": "Control effectiveness review due"},
     {"key": "attestation_overdue", "label": "Attestation campaign overdue"},
-    # ── Audit triggers ────────────────────────────────────────────────────────
-    {"key": "audit_finding_created", "label": "Audit finding created"},    # ── IT Asset triggers ─────────────────────────────────────────
+    # ── IT Asset triggers ─────────────────────────────────────────────────────
     {"key": "asset_created", "label": "IT asset created"},
     {"key": "asset_updated", "label": "IT asset updated"},
     {"key": "asset_deleted", "label": "IT asset deleted"},]
@@ -77,11 +76,6 @@ ACTION_NODE_TYPES = [
     {"key": "submit_policy_exception", "label": "Submit policy exception request"},
     {"key": "approve_policy_exception", "label": "Approve policy exception"},
     {"key": "request_attestation", "label": "Request policy attestation"},
-    # ── Audit actions ─────────────────────────────────────────────────────────
-    {"key": "create_audit_finding", "label": "Create audit finding"},
-    {"key": "create_audit_plan", "label": "Create audit plan"},
-    {"key": "close_audit_finding", "label": "Close / remediate audit finding"},
-    {"key": "assign_auditor", "label": "Assign auditor to audit"},
     # ── Control library actions ───────────────────────────────────────────────
     {"key": "update_control_effectiveness", "label": "Update control effectiveness rating"},
     {"key": "set_control_not_applicable", "label": "Mark control as not applicable"},
@@ -196,7 +190,6 @@ def _module_display_name_from_folder(folder_name: str) -> str:
         "governance": "Governance",
         "compliance": "Compliance",
         "evidence": "Evidence",
-        "audit_management": "Audit Management",
         "vuln_management": "Vulnerability Management",
         "framework_upload": "Framework Upload",
         "control_library": "Control Library",

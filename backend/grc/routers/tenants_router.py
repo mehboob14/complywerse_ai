@@ -126,19 +126,47 @@ def list_tenant_users(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    """List active users in the tenant.
+
+    Per-tenant DB: every active row in `grc_users` belongs to this tenant.
+    Joining through `grc_tenant_users` would silently miss every user
+    created via `POST /admin/users` (which doesn't backfill that join
+    table) — that's why dropdowns built on this endpoint (gap analysis,
+    governance docs, etc.) appeared empty after a fresh user was added.
+
+    We still respect the existing `TenantUserResponse` shape so the frontend
+    contract is unchanged: each item carries an `id`, `user_id`, `tenant_id`,
+    `is_primary`, and a nested `user` payload. For users that have no
+    real `grc_tenant_users` row we synthesize the wrapper from the
+    `GRCUser` row so callers always get a complete list.
+    """
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found"
         )
-    
-    tenant_users = db.query(TenantUser).options(
-        joinedload(TenantUser.user)
-    ).filter(
+
+    real_links = db.query(TenantUser).filter(
         TenantUser.tenant_id == tenant_id
     ).all()
-    return tenant_users
+    real_by_user_id = {tl.user_id: tl for tl in real_links}
+
+    users = db.query(GRCUser).filter(GRCUser.is_active == True).all()
+    result = []
+    for u in users:
+        link = real_by_user_id.get(u.id)
+        result.append({
+            # `id` was the TenantUser PK; for synthesized rows we fall back
+            # to the user id so the field is always populated for the
+            # response_model's `int` type.
+            "id": link.id if link else u.id,
+            "user_id": u.id,
+            "tenant_id": tenant_id,
+            "is_primary": bool(link.is_primary) if link else False,
+            "user": u,
+        })
+    return result
 
 
 @router.post("/{tenant_id}/users", response_model=TenantUserResponse, status_code=status.HTTP_201_CREATED)

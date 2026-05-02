@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import apiClient from '@/lib/api';
+import apiClient, { assetsApi } from '@/lib/api';
 import {
   RadarChart,
   Radar,
@@ -52,6 +52,15 @@ interface Detail {
     priority?: string;
     verification_checks?: string[];
   }[];
+  // Editable per-row metadata. Persisted into the JSONB blob alongside the
+  // maturity scores; absent on legacy rows but optional everywhere so older
+  // data renders cleanly.
+  remarks?: string | null;
+  assigned_to_id?: number | null;
+  assigned_to_name?: string | null;
+  due_date?: string | null;
+  gaps_identified?: string | null;
+  proposed_solution?: string | null;
 }
 
 interface SummaryRowDraft {
@@ -63,6 +72,18 @@ interface SummaryRowDraft {
 interface DetailRowDraft {
   policy_maturity: string;
   practice_maturity: string;
+  remarks: string;
+  assigned_to_id: number | null;
+  assigned_to_name: string;
+  due_date: string;
+  gaps_identified: string;
+  proposed_solution: string;
+  // Framework-structural fields. Subcategory text + code stay read-only at
+  // the UI layer ("exact assessment text" / "exact numbering" per the spec)
+  // — function, category, and references are user-editable.
+  function: string;
+  category: string;
+  references: string;
 }
 
 interface Reference {
@@ -263,6 +284,17 @@ export default function XlsxMaturityViewer({
       setEditingDetailIndex(null);
       setEditingDetailDraft(null);
     },
+  });
+
+  // Tenant users for the per-row "Assigned To" dropdown. Same source the
+  // assets module uses, so naming is consistent across the app.
+  const { data: tenantUsers = [] } = useQuery({
+    queryKey: ['tenant-users-xlsx-assessment'],
+    queryFn: async () => {
+      const res = await assetsApi.getTenantUsers();
+      return res.data;
+    },
+    staleTime: 5 * 60 * 1000,
   });
 
   const generateRecommendationMutation = useMutation({
@@ -534,16 +566,44 @@ export default function XlsxMaturityViewer({
     setEditingDetailDraft({
       policy_maturity: row.policy_maturity?.toString() ?? '',
       practice_maturity: row.practice_maturity?.toString() ?? '',
+      remarks: row.remarks ?? '',
+      assigned_to_id: row.assigned_to_id ?? null,
+      assigned_to_name: row.assigned_to_name ?? '',
+      due_date: row.due_date ?? '',
+      gaps_identified: row.gaps_identified ?? '',
+      proposed_solution: row.proposed_solution ?? '',
+      function: row.function ?? '',
+      category: row.category ?? '',
+      // References are stored as a JSON array but edited as a single
+      // newline-separated textarea so users can paste pipe-/comma-/line-
+      // separated lists naturally; we re-split on save.
+      references: Array.isArray(row.references) ? row.references.join('\n') : '',
     });
   };
 
   const saveDetailEdit = () => {
     if (editingDetailIndex === null || !editingDetailDraft) return;
+    // Resolve the user record so the backend gets a name alongside the id;
+    // this avoids a join when rendering the read-only state.
+    const assignedUser = tenantUsers.find((u) => u.id === editingDetailDraft.assigned_to_id);
+    const referencesArray = editingDetailDraft.references
+      .split(/[\n;]+/)
+      .map((r) => r.trim())
+      .filter(Boolean);
     updateScoreMutation.mutate({
       sheet: 'details',
       row_index: editingDetailIndex,
       policy_maturity: parseScoreValue(editingDetailDraft.policy_maturity),
       practice_maturity: parseScoreValue(editingDetailDraft.practice_maturity),
+      remarks: editingDetailDraft.remarks,
+      assigned_to_id: editingDetailDraft.assigned_to_id,
+      assigned_to_name: assignedUser?.display_name ?? editingDetailDraft.assigned_to_name,
+      due_date: editingDetailDraft.due_date,
+      gaps_identified: editingDetailDraft.gaps_identified,
+      proposed_solution: editingDetailDraft.proposed_solution,
+      function: editingDetailDraft.function,
+      category: editingDetailDraft.category,
+      references: referencesArray,
     });
   };
 
@@ -901,6 +961,8 @@ export default function XlsxMaturityViewer({
                     <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase min-w-[320px]">Recommended Evidence (AI)</th>
                     <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase w-24">Policy Maturity</th>
                     <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase w-24">Practice Maturity</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase w-56">Assigned To / Due</th>
+                    <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase min-w-[260px]">Remarks</th>
                     <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase w-36">Actions</th>
                   </tr>
                 </thead>
@@ -938,15 +1000,35 @@ export default function XlsxMaturityViewer({
                       <Fragment key={i}>
                         <tr className="hover:bg-gray-50">
                           <td className="px-4 py-2 align-top">
-                            <span
-                              className="inline-block px-2 py-0.5 rounded text-xs font-bold text-white"
-                              style={{ backgroundColor: fnColor }}
-                            >
-                              {fnKey}
-                            </span>
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editingDetailDraft.function}
+                                onChange={(e) => setEditingDetailDraft({ ...editingDetailDraft, function: e.target.value })}
+                                className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs"
+                                placeholder="Function"
+                              />
+                            ) : (
+                              <span
+                                className="inline-block px-2 py-0.5 rounded text-xs font-bold text-white"
+                                style={{ backgroundColor: fnColor }}
+                              >
+                                {fnKey}
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-2 align-top text-gray-600 text-xs">
-                            {renderExpandableText(d.category, `category-${d._rowIndex}`, 'leading-5')}
+                            {isEditing ? (
+                              <textarea
+                                value={editingDetailDraft.category}
+                                onChange={(e) => setEditingDetailDraft({ ...editingDetailDraft, category: e.target.value })}
+                                rows={2}
+                                className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs leading-5"
+                                placeholder="Category"
+                              />
+                            ) : (
+                              renderExpandableText(d.category, `category-${d._rowIndex}`, 'leading-5')
+                            )}
                           </td>
                           <td className="px-4 py-2 align-top">
                             {parsedSubcategory.code ? (
@@ -960,8 +1042,16 @@ export default function XlsxMaturityViewer({
                           <td className="px-4 py-2 align-top text-gray-800">
                             {renderExpandableText(parsedSubcategory.description || d.subcategory, `subcategory-${d._rowIndex}`, 'leading-5')}
                           </td>
-                          <td className="px-4 py-2 flex items-start justify-start">
-                            {normalizedReferences.length === 0 ? (
+                          <td className="px-4 py-2 align-top">
+                            {isEditing ? (
+                              <textarea
+                                value={editingDetailDraft.references}
+                                onChange={(e) => setEditingDetailDraft({ ...editingDetailDraft, references: e.target.value })}
+                                rows={3}
+                                className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs leading-5"
+                                placeholder={'One per line, e.g.\nNIST SP 800-53 AC-1\nISO 27001 A.5.1'}
+                              />
+                            ) : normalizedReferences.length === 0 ? (
                               <span className="text-xs text-gray-400">-</span>
                             ) : (
                               <div>
@@ -1060,6 +1150,53 @@ export default function XlsxMaturityViewer({
                           </td>
                           <td className="px-4 py-2 align-top">
                             {isEditing ? (
+                              <div className="space-y-2">
+                                <select
+                                  value={editingDetailDraft.assigned_to_id ?? ''}
+                                  onChange={(e) =>
+                                    setEditingDetailDraft({
+                                      ...editingDetailDraft,
+                                      assigned_to_id: e.target.value ? Number(e.target.value) : null,
+                                    })
+                                  }
+                                  className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs"
+                                >
+                                  <option value="">Unassigned</option>
+                                  {tenantUsers.map((u) => (
+                                    <option key={u.id} value={u.id}>{u.display_name}</option>
+                                  ))}
+                                </select>
+                                <input
+                                  type="date"
+                                  value={editingDetailDraft.due_date}
+                                  onChange={(e) => setEditingDetailDraft({ ...editingDetailDraft, due_date: e.target.value })}
+                                  className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs"
+                                />
+                              </div>
+                            ) : (
+                              <div className="space-y-0.5 text-xs">
+                                <div className="text-gray-800">{d.assigned_to_name || <span className="text-gray-400 italic">Unassigned</span>}</div>
+                                <div className="text-gray-500">{d.due_date ? formatDateTime(d.due_date).split(',')[0] : <span className="text-gray-400">No due date</span>}</div>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 align-top">
+                            {isEditing ? (
+                              <textarea
+                                value={editingDetailDraft.remarks}
+                                onChange={(e) => setEditingDetailDraft({ ...editingDetailDraft, remarks: e.target.value })}
+                                className="w-full rounded border border-gray-300 bg-white px-2 py-1 text-xs leading-5"
+                                rows={3}
+                                placeholder="Remarks / observations..."
+                              />
+                            ) : (
+                              <p className="whitespace-pre-line text-xs leading-5 text-gray-700">
+                                {d.remarks || <span className="italic text-gray-400">No remarks</span>}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 align-top">
+                            {isEditing ? (
                               <div className="flex justify-end gap-2">
                                 <button
                                   onClick={saveDetailEdit}
@@ -1103,7 +1240,7 @@ export default function XlsxMaturityViewer({
                         </tr>
                         {isEvidenceExpanded && (
                           <tr className="bg-slate-50">
-                            <td colSpan={9} className="px-4 py-4">
+                            <td colSpan={11} className="px-4 py-4">
                               {!itemId ? (
                                 <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
                                   Unable to map this control row to an assessment item, so evidence cannot be linked here.

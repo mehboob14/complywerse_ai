@@ -67,6 +67,11 @@ async def upload_evidence(
     name: str = Form(...),
     description: Optional[str] = Form(None),
     tenant_id: Optional[int] = Form(None),
+    evidence_type: Optional[str] = Form(None),
+    collection_date: Optional[str] = Form(None),
+    validity_period_days: Optional[int] = Form(None),
+    source_system: Optional[str] = Form(None),
+    owner_id: Optional[int] = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
@@ -80,22 +85,35 @@ async def upload_evidence(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User is not assigned to any tenant"
             )
-    
+
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found"
         )
-    
+
     file_ext = os.path.splitext(file.filename)[1] if file.filename else ""
     file_id = str(uuid.uuid4())
     file_path = os.path.join(UPLOAD_DIR, f"{file_id}{file_ext}")
-    
+
     contents = await file.read()
     with open(file_path, "wb") as f:
         f.write(contents)
-    
+
+    # Optional metadata: parse the date string and compute expiry from validity.
+    parsed_collection_date = None
+    if collection_date:
+        try:
+            parsed_collection_date = datetime.fromisoformat(collection_date.replace("Z", "+00:00"))
+        except ValueError:
+            parsed_collection_date = None
+
+    expiry_date = None
+    if parsed_collection_date and validity_period_days and validity_period_days > 0:
+        from datetime import timedelta
+        expiry_date = parsed_collection_date + timedelta(days=validity_period_days)
+
     db_evidence = Evidence(
         tenant_id=tenant_id,
         name=name,
@@ -104,8 +122,22 @@ async def upload_evidence(
         file_name=file.filename,
         file_type=file.content_type,
         uploaded_by=current_user.id,
-        status="draft"
+        status="draft",
+        evidence_type=evidence_type or None,
+        collection_date=parsed_collection_date,
+        validity_period_days=validity_period_days,
+        expiry_date=expiry_date,
+        source_system=source_system or None,
     )
+    # owner_id lives on the Evidence model only when the schema has been
+    # migrated to add the column. Set conditionally so older deployments
+    # that haven't run the ALTER yet don't blow up.
+    if hasattr(Evidence, "owner_id") and owner_id:
+        try:
+            setattr(db_evidence, "owner_id", owner_id)
+        except Exception:
+            pass
+
     db.add(db_evidence)
     db.commit()
     db.refresh(db_evidence)

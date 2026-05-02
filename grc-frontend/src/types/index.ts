@@ -199,15 +199,6 @@ export interface RiskMitigationAction {
   updated_at: string;
 }
 
-export interface RiskAuditFindingLink {
-  id: number;
-  risk_id: number;
-  issue_id: number;
-  notes?: string;
-  created_at: string;
-  issue?: GovernanceIssue;
-}
-
 export interface LikelihoodImpactScale {
   id: number;
   tenant_id: number;
@@ -267,7 +258,6 @@ export interface Risk {
   review_date?: string;
   gap_finding_id?: number;
   mitigation_actions?: RiskMitigationAction[];
-  audit_finding_links?: RiskAuditFindingLink[];
   created_at: string;
   updated_at: string;
 }
@@ -559,6 +549,14 @@ export interface CertificationControl {
   approved_evidence_count?: number;
   evidence_coverage?: number;
   status_source?: string;
+  // Legacy single-assignee fields. Still emitted by the API for back-compat
+  // (mirror the first entry of `assignees`).
+  assigned_to_user_id?: number | null;
+  assignee_name?: string | null;
+  assignee_email?: string | null;
+  // Canonical multi-assignee fields.
+  assigned_user_ids?: number[];
+  assignees?: Array<{ id: number; display_name: string; email: string }>;
 }
 
 // Advanced ERM Types

@@ -20,7 +20,14 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from openai import OpenAI
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+# One-off helper script: connects to a single tenant DB. Pass the slug via the
+# TENANT_SLUG env var, or fall back to the master catalog URL.
+_TENANT_SLUG = os.environ.get("TENANT_SLUG")
+_TENANT_TEMPLATE = os.environ.get("TENANT_DB_URL_TEMPLATE", "postgresql://postgres:postgres@localhost:5432/grc_{slug}")
+if _TENANT_SLUG:
+    DATABASE_URL = _TENANT_TEMPLATE.format(slug=_TENANT_SLUG)
+else:
+    DATABASE_URL = os.environ.get("MASTER_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/grc_master")
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
 

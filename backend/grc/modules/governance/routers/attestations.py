@@ -98,13 +98,12 @@ async def request_attestations(
     created_attestations = []
     
     for user_id in attestation_data.user_ids:
-        user = db.query(GRCUser).join(
-            TenantUser, TenantUser.user_id == GRCUser.id
-        ).filter(
+        # Per-tenant DB: every active grc_users row belongs to this tenant.
+        user = db.query(GRCUser).filter(
             GRCUser.id == user_id,
-            TenantUser.tenant_id.in_(user_tenants)
+            GRCUser.is_active.is_(True),
         ).first()
-        
+
         if not user:
             continue
         

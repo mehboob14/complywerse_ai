@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { authedFetch } from '@/lib/auth-fetch';
 
 const PERM_CACHE_KEY = '__perm_state';
 
@@ -29,7 +30,7 @@ export function usePermissions() {
 
     const fetchPermissions = async () => {
       try {
-        const response = await fetch('/api/auth/me', { credentials: 'include' });
+        const response = await authedFetch('/api/auth/me');
         if (response.ok) {
           const data = await response.json();
           if (data?.authenticated && data.user) {

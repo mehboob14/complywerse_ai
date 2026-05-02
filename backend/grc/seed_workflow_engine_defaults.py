@@ -2,9 +2,7 @@ from sqlalchemy import desc
 
 from .models import (
     GRCUser,
-    SessionLocal,
     Tenant,
-    TenantUser,
     WorkflowDefinition,
     WorkflowEdge,
     WorkflowEngineTemplate,
@@ -28,19 +26,10 @@ DEFAULT_WORKFLOWS = [
 
 
 def _default_recipient_for_tenant(db, tenant_id: int):
-    tenant_user = (
-        db.query(TenantUser)
-        .filter(TenantUser.tenant_id == tenant_id)
-        .order_by(desc(TenantUser.is_primary), TenantUser.id.asc())
-        .first()
-    )
-    if not tenant_user:
-        return None, "admin@example.com"
-
-    user = db.query(GRCUser).filter(GRCUser.id == tenant_user.user_id).first()
+    """In per-DB-per-tenant the only users in this DB are the tenant's own users."""
+    user = db.query(GRCUser).order_by(GRCUser.id.asc()).first()
     if not user:
         return None, "admin@example.com"
-
     return user.id, user.email or "admin@example.com"
 
 
@@ -140,9 +129,20 @@ def _build_workflow_graph(trigger: str, recipient_user_id: int | None, recipient
     return nodes, edges
 
 
-def seed_workflow_engine_defaults(tenant_id: int | None = None):
-    """Ensure default workflow engine definitions/templates exist for active tenants."""
-    db = SessionLocal()
+def seed_workflow_engine_defaults(session=None, tenant_id: int | None = None):
+    """Ensure default workflow engine definitions/templates exist.
+
+    Per-database-per-tenant: pass `session` bound to the tenant's DB. The DB
+    only contains its own tenant's data, so we seed against the single tenant
+    row found in the local `grc_tenants` table.
+    """
+    if session is None:
+        # Backwards-compatible no-op path: callers must now pass a session.
+        logger.info("seed_workflow_engine_defaults called without session; nothing to do")
+        return
+
+    db = session
+    owns_session = False
     try:
         query = db.query(Tenant).filter(Tenant.is_active == True)
         if tenant_id is not None:
@@ -238,19 +238,12 @@ def seed_workflow_engine_defaults(tenant_id: int | None = None):
                     )
                     seeded_templates += 1
 
-        db.commit()
+        db.flush()
         logger.info(
             "Workflow engine default seeding complete: %s definitions added, %s templates added",
             seeded_definitions,
             seeded_templates,
         )
     except Exception as exc:
-        db.rollback()
         logger.error("Error seeding workflow engine defaults: %s", exc)
         raise
-    finally:
-        db.close()
-
-
-if __name__ == "__main__":
-    seed_workflow_engine_defaults()

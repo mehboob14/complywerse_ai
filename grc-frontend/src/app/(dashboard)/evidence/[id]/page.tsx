@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
@@ -12,7 +12,7 @@ import {
   AlertTriangle, Eye, Trash2, Send, ThumbsUp, ThumbsDown, RefreshCw,
   History, FileSpreadsheet, Shield, Building2, Info, Image, Settings,
   ShieldCheck, ClipboardList, ExternalLink, Plus, X, Lock, Unlock,
-  ChevronDown, ChevronRight, Hash, Cpu, FileCode, Quote
+  ChevronDown, ChevronRight, Hash, Cpu, FileCode, Quote, Search, ChevronLeft
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -343,14 +343,19 @@ export default function EvidenceDetailPage() {
     enabled: activeTab === 'cross-links' || showIncidentModal,
   });
 
-  const { data: policyStatementsList } = useQuery<{
-    statements: Array<{ id: number; statement_code: string; statement_summary?: string | null }>;
-    total: number;
+  // The previous wiring fetched a flat `/compliance/statements` list which
+  // doesn't exist in this backend. Instead we fetch governance documents
+  // up-front; the picker drills into a doc to show its statements on demand.
+  const { data: governanceDocsList } = useQuery<{
+    documents: Array<{ id: number; title: string; document_code?: string | null; doc_type?: string | null }>;
   }>({
-    queryKey: ['policy-statements-list'],
+    queryKey: ['governance-documents-for-evidence-link'],
     queryFn: async () => {
-      const response = await apiClient.get('/compliance/statements', { params: { limit: 200 } });
-      return response.data;
+      const response = await apiClient.get('/governance/documents', { params: { limit: 500 } });
+      const data = response.data;
+      // The backend returns either a list or a paginated envelope; normalise.
+      const docs = Array.isArray(data) ? data : (data?.items || data?.documents || []);
+      return { documents: docs };
     },
     enabled: activeTab === 'cross-links' || showPolicyModal,
   });
@@ -545,8 +550,11 @@ export default function EvidenceDetailPage() {
     },
   });
 
+  // Accepts an array so the new doc → statements picker can link many at
+  // once. Single-pick callers can still hand it `[id]`.
   const linkPolicyMutation = useMutation({
-    mutationFn: () => apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/policy-statements`, { statement_ids: [selectedPolicyStatementId] }),
+    mutationFn: (statementIds: number[]) =>
+      apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/policy-statements`, { statement_ids: statementIds }),
     onSuccess: () => {
       setShowPolicyModal(false);
       setSelectedPolicyStatementId(null);
@@ -1065,7 +1073,7 @@ export default function EvidenceDetailPage() {
             risksList={risksList}
             assetsList={assetsList}
             incidentsList={incidentsList}
-            policyStatementsList={policyStatementsList}
+            governanceDocsList={governanceDocsList}
             onLinkRisk={(id) => {
               setSelectedRiskId(id);
               setTimeout(() => linkRiskMutation.mutate(), 0);
@@ -1078,10 +1086,7 @@ export default function EvidenceDetailPage() {
               setSelectedIncidentId(id);
               setTimeout(() => linkIncidentMutation.mutate(), 0);
             }}
-            onLinkPolicy={(id) => {
-              setSelectedPolicyStatementId(id);
-              setTimeout(() => linkPolicyMutation.mutate(), 0);
-            }}
+            onLinkPolicies={(ids) => linkPolicyMutation.mutate(ids)}
             isLinkingRisk={linkRiskMutation.isPending}
             isLinkingAsset={linkAssetMutation.isPending}
             isLinkingIncident={linkIncidentMutation.isPending}
@@ -1254,22 +1259,13 @@ export default function EvidenceDetailPage() {
                 <h3 className="text-lg font-semibold text-black">Link Policy Statement</h3>
                 <button onClick={() => setShowPolicyModal(false)} className="text-gray-500 hover:text-black"><X className="h-5 w-5" /></button>
               </div>
-              <select
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                value={selectedPolicyStatementId ?? ''}
-                onChange={(e) => setSelectedPolicyStatementId(e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">Select policy statement</option>
-                {policyStatementsList?.statements?.map((statement) => (
-                  <option key={statement.id} value={statement.id}>
-                    {(statement.statement_code || `Statement #${statement.id}`) + ' - ' + (statement.statement_summary || 'Policy Statement')}
-                  </option>
-                ))}
-              </select>
+              <p className="mb-3 text-sm text-gray-600">
+                Use the inline picker on the Cross-links tab to choose a document and pick statements.
+              </p>
               <div className="mt-4 flex justify-end gap-3">
-                <button onClick={() => setShowPolicyModal(false)} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button onClick={() => setShowPolicyModal(false)} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Close</button>
                 <button
-                  onClick={() => linkPolicyMutation.mutate()}
+                  onClick={() => selectedPolicyStatementId && linkPolicyMutation.mutate([selectedPolicyStatementId])}
                   disabled={!selectedPolicyStatementId || linkPolicyMutation.isPending}
                   className="rounded bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
                 >
@@ -2097,11 +2093,11 @@ function CrossLinksTab({
   risksList,
   assetsList,
   incidentsList,
-  policyStatementsList,
+  governanceDocsList,
   onLinkRisk,
   onLinkAsset,
   onLinkIncident,
-  onLinkPolicy,
+  onLinkPolicies,
   isLinkingRisk,
   isLinkingAsset,
   isLinkingIncident,
@@ -2120,11 +2116,11 @@ function CrossLinksTab({
   risksList?: Array<{ id: number; title?: string | null }>;
   assetsList?: Array<{ id: number; name?: string | null }>;
   incidentsList?: Array<{ id: number; title: string; severity?: string | null }>;
-  policyStatementsList?: { statements?: Array<{ id: number; statement_code: string; statement_summary?: string | null }> };
+  governanceDocsList?: { documents?: Array<{ id: number; title: string; document_code?: string | null; doc_type?: string | null }> };
   onLinkRisk: (id: number) => void;
   onLinkAsset: (id: number) => void;
   onLinkIncident: (id: number) => void;
-  onLinkPolicy: (id: number) => void;
+  onLinkPolicies: (ids: number[]) => void;
   isLinkingRisk: boolean;
   isLinkingAsset: boolean;
   isLinkingIncident: boolean;
@@ -2149,13 +2145,12 @@ function CrossLinksTab({
       label: i.title || `Incident #${i.id}`,
       subLabel: i.severity ?? undefined,
     }));
-  const policyItems = (policyStatementsList?.statements || [])
-    .filter((s) => !linkedPolicyIds.has(s.id))
-    .map((s) => ({
-      value: String(s.id),
-      label: s.statement_code || `Statement #${s.id}`,
-      subLabel: s.statement_summary ?? undefined,
-    }));
+  const documentsForPicker = (governanceDocsList?.documents || []).map((d) => ({
+    id: d.id,
+    title: d.title,
+    code: d.document_code || undefined,
+    docType: d.doc_type || undefined,
+  }));
 
   // Suppress unused-warnings for the legacy modal openers (kept for fallback)
   void onOpenRiskModal; void onOpenAssetModal; void onOpenIncidentModal; void onOpenPolicyModal;
@@ -2358,22 +2353,17 @@ function CrossLinksTab({
           )}
         </LinkSection>
 
-        <LinkSection 
-          title="Policy Statements" 
-          icon={FileText} 
+        <LinkSection
+          title="Policy Statements"
+          icon={FileText}
           iconColor="text-purple-400"
           count={links.policy_statements.total}
           addButton={
-            <InlineLinkPicker
-              triggerLabel="Add"
-              triggerClassName="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
-              triggerIcon={<Plus className="h-4 w-4" />}
-              items={policyItems}
-              isLoading={isLinkingPolicy}
-              emptyText="No policy statements available"
-              searchPlaceholder="Search statements"
-              popoverWidth={360}
-              onSelect={(value) => onLinkPolicy(Number(value))}
+            <PolicyStatementPicker
+              documents={documentsForPicker}
+              alreadyLinkedStatementIds={linkedPolicyIds}
+              isLinking={isLinkingPolicy}
+              onLink={(ids) => onLinkPolicies(ids)}
             />
           }
         >
@@ -2403,6 +2393,267 @@ function CrossLinksTab({
           )}
         </LinkSection>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Two-stage popover for linking policy statements to an evidence item.
+ *   Stage 1: pick a governance document from a searchable list.
+ *   Stage 2: see that document's policy statements, tick off as many as
+ *            wanted (already-linked ones are pre-disabled), then "Link N".
+ *
+ * The single flat `/compliance/statements` endpoint we used to call doesn't
+ * exist in this backend; statements only live under their document.
+ */
+function PolicyStatementPicker({
+  documents,
+  alreadyLinkedStatementIds,
+  isLinking,
+  onLink,
+}: {
+  documents: Array<{ id: number; title: string; code?: string; docType?: string }>;
+  alreadyLinkedStatementIds: Set<number>;
+  isLinking: boolean;
+  onLink: (statementIds: number[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [docSearch, setDocSearch] = useState('');
+  const [selectedDocId, setSelectedDocId] = useState<number | null>(null);
+  const [statementSearch, setStatementSearch] = useState('');
+  const [selectedStatementIds, setSelectedStatementIds] = useState<Set<number>>(new Set());
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  // Click-outside to close.
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open]);
+
+  // Reset internal state whenever the popover closes so the next opening
+  // starts fresh.
+  useEffect(() => {
+    if (!open) {
+      setDocSearch('');
+      setSelectedDocId(null);
+      setStatementSearch('');
+      setSelectedStatementIds(new Set());
+    }
+  }, [open]);
+
+  const { data: statementsForDoc, isLoading: statementsLoading } = useQuery<{
+    statements?: Array<{ id: number; statement_code?: string | null; statement_summary?: string | null; statement_text?: string | null; category?: string | null }>;
+  }>({
+    queryKey: ['policy-statements-by-doc', selectedDocId],
+    queryFn: async () => {
+      if (!selectedDocId) return { statements: [] };
+      const res = await apiClient.get(`/governance/documents/${selectedDocId}/policy-statements`);
+      return res.data;
+    },
+    enabled: !!selectedDocId,
+  });
+
+  const filteredDocs = useMemo(() => {
+    const q = docSearch.trim().toLowerCase();
+    if (!q) return documents;
+    return documents.filter((d) =>
+      (d.title || '').toLowerCase().includes(q) ||
+      (d.code || '').toLowerCase().includes(q) ||
+      (d.docType || '').toLowerCase().includes(q)
+    );
+  }, [documents, docSearch]);
+
+  const filteredStatements = useMemo(() => {
+    const all = statementsForDoc?.statements || [];
+    const q = statementSearch.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((s) =>
+      (s.statement_code || '').toLowerCase().includes(q) ||
+      (s.statement_summary || '').toLowerCase().includes(q) ||
+      (s.statement_text || '').toLowerCase().includes(q)
+    );
+  }, [statementsForDoc, statementSearch]);
+
+  const toggleStatement = (id: number) => {
+    setSelectedStatementIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSubmit = () => {
+    if (selectedStatementIds.size === 0) return;
+    onLink(Array.from(selectedStatementIds));
+    setOpen(false);
+  };
+
+  const selectedDocTitle = documents.find((d) => d.id === selectedDocId);
+
+  return (
+    <div ref={wrapperRef} className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={isLinking}
+        className="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+      >
+        {isLinking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+        Add
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-30 mt-1 w-[380px] rounded-lg border border-gray-200 bg-white shadow-lg">
+          {/* Stage 1: pick a document */}
+          {!selectedDocId && (
+            <>
+              <div className="border-b border-gray-100 p-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                  <input
+                    autoFocus
+                    type="text"
+                    value={docSearch}
+                    onChange={(e) => setDocSearch(e.target.value)}
+                    placeholder="Search documents..."
+                    className="w-full rounded-md border border-gray-200 bg-white pl-8 pr-2 py-1.5 text-sm text-slate-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                </div>
+              </div>
+              <div className="max-h-72 overflow-y-auto py-1">
+                {filteredDocs.length === 0 ? (
+                  <p className="px-3 py-6 text-center text-xs text-gray-500">
+                    {documents.length === 0 ? 'No governance documents found.' : 'No documents match your search.'}
+                  </p>
+                ) : (
+                  filteredDocs.map((d) => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => setSelectedDocId(d.id)}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-slate-900">{d.title}</p>
+                        <p className="truncate text-[11px] text-gray-500">
+                          {[d.code, d.docType].filter(Boolean).join(' · ') || 'Document'}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Stage 2: pick statements within that document */}
+          {selectedDocId && (
+            <>
+              <div className="flex items-center gap-2 border-b border-gray-100 p-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDocId(null)}
+                  className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-slate-900"
+                  title="Back to documents"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium text-slate-900" title={selectedDocTitle?.title}>
+                    {selectedDocTitle?.title || 'Document'}
+                  </p>
+                  <p className="text-[10px] text-gray-500">
+                    {selectedStatementIds.size > 0 ? `${selectedStatementIds.size} selected` : 'Pick statements to link'}
+                  </p>
+                </div>
+              </div>
+              <div className="border-b border-gray-100 p-2">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={statementSearch}
+                    onChange={(e) => setStatementSearch(e.target.value)}
+                    placeholder="Search statements..."
+                    className="w-full rounded-md border border-gray-200 bg-white pl-8 pr-2 py-1.5 text-sm text-slate-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                </div>
+              </div>
+              <div className="max-h-64 overflow-y-auto py-1">
+                {statementsLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                  </div>
+                ) : filteredStatements.length === 0 ? (
+                  <p className="px-3 py-6 text-center text-xs text-gray-500">
+                    {(statementsForDoc?.statements || []).length === 0
+                      ? 'This document has no parsed policy statements yet.'
+                      : 'No statements match your search.'}
+                  </p>
+                ) : (
+                  filteredStatements.map((s) => {
+                    const alreadyLinked = alreadyLinkedStatementIds.has(s.id);
+                    const isSelected = selectedStatementIds.has(s.id);
+                    return (
+                      <label
+                        key={s.id}
+                        className={`flex items-start gap-2 px-3 py-2 text-sm ${
+                          alreadyLinked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                          checked={isSelected || alreadyLinked}
+                          disabled={alreadyLinked}
+                          onChange={() => !alreadyLinked && toggleStatement(s.id)}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-medium text-purple-600">
+                            {s.statement_code || `Statement #${s.id}`}
+                            {alreadyLinked && <span className="ml-2 text-[10px] text-gray-400">(linked)</span>}
+                          </p>
+                          <p className="text-xs text-slate-700 line-clamp-2">
+                            {s.statement_summary || s.statement_text || 'Policy statement'}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-2 border-t border-gray-100 p-2">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={selectedStatementIds.size === 0 || isLinking}
+                  className="flex items-center gap-1 rounded-md bg-primary-600 px-3 py-1 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {isLinking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                  {selectedStatementIds.size > 0
+                    ? `Link ${selectedStatementIds.size} statement${selectedStatementIds.size === 1 ? '' : 's'}`
+                    : 'Link statements'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

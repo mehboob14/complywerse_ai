@@ -7,7 +7,6 @@ import urllib.request
 logger = logging.getLogger(__name__)
 
 from ....models import (
-    AuditFinding,
     ComplianceAssessmentDocumentItem,
     Evidence,
     FrameworkControl,
@@ -275,18 +274,6 @@ def _build_template_context(db, instance, definition) -> Dict[str, Any]:
                     "expiry_date":      obj.expiry_date.strftime("%Y-%m-%d") if obj.expiry_date else "",
                 })
 
-        elif resource_type == "audits":
-            obj = db.query(AuditFinding).filter(AuditFinding.id == rid, AuditFinding.tenant_id == tid).first()
-            if obj:
-                ctx.update({
-                    "title":          obj.title or "",
-                    "condition":      obj.condition or "",
-                    "severity":       obj.severity or "",
-                    "status":         obj.status or "",
-                    "finding_number": obj.finding_number or "",
-                    "due_date":       obj.due_date.strftime("%Y-%m-%d") if obj.due_date else "",
-                })
-
         elif resource_type == "assets":
             obj = db.query(ITAsset).filter(ITAsset.id == rid, ITAsset.tenant_id == tid).first()
             if obj:
@@ -370,11 +357,16 @@ def _notification_html(subject: str, body: str, cta_url: str = "", cta_label: st
 
 
 def _get_manager_emails(db, tenant_id) -> List[str]:
-    """Return email addresses of all active users in the tenant (fallback: all users)."""
+    """Return email addresses of all active users in the tenant (fallback: all users).
+
+    Per-tenant DB: every active grc_users row is a tenant member, so we
+    query it directly. The previous implementation joined through
+    grc_tenant_users, which is only populated for the bootstrap admin and
+    would miss every user created via /admin/users.
+    """
     tenant_users = (
         db.query(GRCUser)
-        .join(TenantUser, TenantUser.user_id == GRCUser.id)
-        .filter(TenantUser.tenant_id == int(tenant_id), GRCUser.is_active.is_(True))
+        .filter(GRCUser.is_active.is_(True))
         .all()
     )
     return [u.email for u in tenant_users if u.email]
@@ -471,7 +463,6 @@ class WorkflowActionHandlers:
         dispatch = {
             "create_risk_entry": WorkflowActionHandlers._create_risk_entry,
             "update_compliance_status": WorkflowActionHandlers._update_compliance_status,
-            "create_audit_finding": WorkflowActionHandlers._create_audit_finding,
             "send_notification_email": WorkflowActionHandlers._send_notification_email,
             "request_evidence_upload": WorkflowActionHandlers._request_evidence_upload,
             "assign_control_owner": WorkflowActionHandlers._assign_control_owner,
@@ -1047,30 +1038,6 @@ class WorkflowActionHandlers:
         item.compliance_status = new_status
         item.remarks = payload.get("remarks") or item.remarks
         return {"action": "update_compliance_status", "assessment_item_id": item.id, "status": item.compliance_status}
-
-    @staticmethod
-    def _create_audit_finding(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
-        engagement_id = payload.get("engagement_id")
-        title = payload.get("title")
-        if not engagement_id or not title:
-            return {"action": "create_audit_finding", "result": "missing_engagement_or_title"}
-
-        finding = AuditFinding(
-            tenant_id=instance.tenant_id,
-            engagement_id=int(engagement_id),
-            title=title,
-            condition=payload.get("condition"),
-            criteria=payload.get("criteria"),
-            cause=payload.get("cause"),
-            effect=payload.get("effect"),
-            severity=payload.get("severity") or "medium",
-            status=payload.get("status") or "open",
-            owner_id=payload.get("owner_id"),
-            ai_generated=bool(payload.get("ai_generated", False)),
-        )
-        db.add(finding)
-        db.flush()
-        return {"action": "create_audit_finding", "finding_id": finding.id}
 
     @staticmethod
     def _call_webhook_api(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:

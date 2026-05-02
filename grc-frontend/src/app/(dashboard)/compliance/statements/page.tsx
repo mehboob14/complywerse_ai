@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { complianceApi, evidenceApi, governanceApi } from '@/lib/api';
+import { authedFetch } from '@/lib/auth-fetch';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SearchInput, MultiSelectDropdown } from '@/components/ui';
 
@@ -18,6 +19,8 @@ import {
   Link as LinkIcon,
   Save,
   Shield,
+  UserCircle2,
+  Lock,
 } from 'lucide-react';
 
 interface Statement {
@@ -41,6 +44,8 @@ interface Statement {
   compliance_status: string;
   compliance_score: number | null;
   next_assessment_date: string | null;
+  assigned_to_user_id: number | null;
+  assignee_name: string | null;
   created_at: string | null;
 }
 
@@ -55,6 +60,9 @@ interface StatementDetail {
   sub_category: string | null;
   priority: string | null;
   is_mandatory: boolean;
+  assigned_to_user_id: number | null;
+  assignee_name: string | null;
+  assignee_email?: string | null;
   compliance: {
     id: number | null;
     compliance_status: string;
@@ -138,8 +146,32 @@ function getStatementDisplayText(statement: Statement | StatementDetail) {
 }
 
 export default function PolicyStatementsPage() {
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isAdmin } = usePermissions();
   const canCreate = hasPermission('compliance:statements:create');
+  const canEdit = hasPermission('compliance:statements:edit');
+
+  // Fetch the current user's id once. Used to enforce "only the assignee
+  // can assess / link evidence" on the client; the server enforces the
+  // same rule, but disabling the inputs gives clearer UX.
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authedFetch('/api/auth/me');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.authenticated && data.user?.id) {
+          setCurrentUserId(Number(data.user.id));
+        }
+      } catch {
+        /* ignore — guard will simply allow nothing extra */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
@@ -156,6 +188,7 @@ export default function PolicyStatementsPage() {
     next_assessment_date: '',
   });
   const [evidenceToLink, setEvidenceToLink] = useState<number[]>([]);
+  const [assignForm, setAssignForm] = useState<number | null>(null);
   const [selectedStatementIds, setSelectedStatementIds] = useState<number[]>([]);
   const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
   const [convertForm, setConvertForm] = useState({
@@ -201,6 +234,15 @@ export default function PolicyStatementsPage() {
     enabled: isModalOpen,
   });
 
+  const { data: tenantUsers } = useQuery({
+    queryKey: ['compliance-statements-tenant-users'],
+    queryFn: async () => {
+      const response = await complianceApi.statements.getTenantUsers();
+      return response.data;
+    },
+    enabled: isModalOpen,
+  });
+
   const updateComplianceMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
       return complianceApi.statements.updateCompliance(id, data);
@@ -210,6 +252,25 @@ export default function PolicyStatementsPage() {
       queryClient.invalidateQueries({ queryKey: ['compliance-dashboard-summary'] });
       setIsModalOpen(false);
       setSelectedStatement(null);
+    },
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: async ({ id, userId }: { id: number; userId: number | null }) => {
+      return complianceApi.statements.assign(id, userId);
+    },
+    onSuccess: async (_data, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['compliance-statements'] });
+      if (selectedStatement?.id === id) {
+        try {
+          const refreshed = await complianceApi.statements.getById(id);
+          const detail = refreshed.data as StatementDetail;
+          setSelectedStatement(detail);
+          setAssignForm(detail.assigned_to_user_id ?? null);
+        } catch (error) {
+          console.error('Failed to refresh statement details', error);
+        }
+      }
     },
   });
 
@@ -265,14 +326,29 @@ export default function PolicyStatementsPage() {
         next_assessment_date: detail.compliance?.next_assessment_date?.split('T')[0] || '',
       });
       setEvidenceToLink(detail.compliance?.evidence_ids || []);
+      setAssignForm(detail.assigned_to_user_id ?? null);
       setIsModalOpen(true);
     } catch (err) {
       console.error('Failed to load statement details', err);
     }
   };
 
+  // Assess / findings / evidence editing is gated when the statement has been
+  // assigned: only the assignee or an admin can change it. Unassigned
+  // statements remain editable by anyone with the existing edit permission,
+  // preserving prior behavior. The server enforces the same rule.
+  const assignedUserId = selectedStatement?.assigned_to_user_id ?? null;
+  const canAssess =
+    !selectedStatement
+      ? false
+      : assignedUserId === null
+        ? true
+        : isAdmin || (currentUserId !== null && assignedUserId === currentUserId);
+  const lockedToOtherUser = !!selectedStatement && assignedUserId !== null && !canAssess;
+
   const handleSaveCompliance = () => {
     if (!selectedStatement) return;
+    if (!canAssess) return;
     const data: any = {
       compliance_status: complianceForm.compliance_status,
     };
@@ -286,6 +362,13 @@ export default function PolicyStatementsPage() {
       linkEvidenceMutation.mutate({ id: selectedStatement.id, evidenceIds: evidenceToLink });
     }
   };
+
+  const handleSaveAssignment = () => {
+    if (!selectedStatement) return;
+    assignMutation.mutate({ id: selectedStatement.id, userId: assignForm });
+  };
+
+  const tenantUserList = (tenantUsers as Array<{ id: number; username?: string; display_name?: string; email?: string }> | undefined) ?? [];
 
   const handleToggleStatement = (statementId: number) => {
     setSelectedStatementIds((prev) =>
@@ -492,6 +575,12 @@ export default function PolicyStatementsPage() {
                         <p className="truncate text-sm text-black">
                           {getStatementDisplayText(stmt)}
                         </p>
+                        {stmt.assignee_name && (
+                          <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500">
+                            <UserCircle2 className="h-3 w-3" />
+                            <span className="truncate">{stmt.assignee_name}</span>
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm text-gray-600">{stmt.document_title || '-'}</span>
@@ -659,11 +748,65 @@ export default function PolicyStatementsPage() {
               </div>
 
               <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                  <UserCircle2 className="h-4 w-4" />
+                  Assigned To
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <MultiSelectDropdown
+                      title="Assignee"
+                      items={tenantUserList.map((u) => ({
+                        value: String(u.id),
+                        label: u.display_name || u.username || u.email || `User #${u.id}`,
+                        subLabel: u.email,
+                      }))}
+                      selectedValues={assignForm != null ? [String(assignForm)] : []}
+                      onApply={(v) => setAssignForm(v[0] ? Number(v[0]) : null)}
+                      multiSelect={false}
+                      autoApply
+                      forceSearch
+                      triggerVariant="input"
+                      triggerClassName="w-full"
+                      placeholder="Unassigned"
+                      searchPlaceholder="Search users"
+                      size="sm"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveAssignment}
+                    disabled={assignMutation.isPending || (assignForm ?? null) === (selectedStatement.assigned_to_user_id ?? null) || (!canEdit && !isAdmin)}
+                    className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2 text-sm font-medium"
+                    title={(!canEdit && !isAdmin) ? 'You do not have permission to assign statements' : 'Save assignment'}
+                  >
+                    {assignMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Assign
+                  </button>
+                </div>
+                {selectedStatement.assignee_name && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Currently assigned to <span className="font-medium text-gray-700">{selectedStatement.assignee_name}</span>
+                    {selectedStatement.assignee_email ? ` (${selectedStatement.assignee_email})` : ''}.
+                  </p>
+                )}
+                {lockedToOtherUser && (
+                  <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    <Lock className="h-4 w-4 flex-shrink-0 mt-[1px]" />
+                    <span>
+                      This statement is assigned to {selectedStatement.assignee_name || 'another user'}. Only the assignee or an admin can update its compliance, findings, or evidence.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Compliance Status</label>
                 <select
                   value={complianceForm.compliance_status}
                   onChange={(e) => setComplianceForm({ ...complianceForm, compliance_status: e.target.value })}
-                  className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
+                  disabled={!canAssess}
+                  className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full disabled:bg-gray-100 disabled:cursor-not-allowed"
                 >
                   {STATUS_OPTIONS.filter(o => o.value).map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -676,7 +819,8 @@ export default function PolicyStatementsPage() {
                 <textarea
                   value={complianceForm.findings}
                   onChange={(e) => setComplianceForm({ ...complianceForm, findings: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px]"
+                  disabled={!canAssess}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[100px] disabled:bg-gray-100 disabled:cursor-not-allowed"
                   placeholder="Document your findings..."
                 />
               </div>
@@ -686,7 +830,8 @@ export default function PolicyStatementsPage() {
                 <textarea
                   value={complianceForm.remediation_notes}
                   onChange={(e) => setComplianceForm({ ...complianceForm, remediation_notes: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[80px]"
+                  disabled={!canAssess}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[80px] disabled:bg-gray-100 disabled:cursor-not-allowed"
                   placeholder="Remediation plan..."
                 />
               </div>
@@ -697,7 +842,8 @@ export default function PolicyStatementsPage() {
                   type="date"
                   value={complianceForm.next_assessment_date}
                   onChange={(e) => setComplianceForm({ ...complianceForm, next_assessment_date: e.target.value })}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={!canAssess}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -752,7 +898,8 @@ export default function PolicyStatementsPage() {
               </button>
               <button
                 onClick={handleSaveCompliance}
-                disabled={updateComplianceMutation.isPending}
+                disabled={updateComplianceMutation.isPending || !canAssess}
+                title={!canAssess ? 'Only the assigned user can update this statement' : undefined}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2 font-medium"
               >
                 {updateComplianceMutation.isPending ? (

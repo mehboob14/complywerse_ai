@@ -283,7 +283,24 @@ export default function PolicyDetailPage() {
       return response.data as any;
     },
     enabled: !!id && activeTab === 'gap-analysis',
+    // Poll while any run is in flight so the summary updates as soon as
+    // each framework completes (otherwise the user sees an empty card after
+    // the runs finish until they refresh).
+    refetchInterval: hasRunningAnalysis ? 5000 : false,
   });
+
+  // When all runs transition from running → completed, force an immediate
+  // refetch of summary + findings so the UI doesn't have to wait for the
+  // next poll tick.
+  const prevHasRunningRef = useRef(hasRunningAnalysis);
+  useEffect(() => {
+    if (prevHasRunningRef.current && !hasRunningAnalysis) {
+      queryClient.invalidateQueries({ queryKey: ['compliance-summary', id] });
+      queryClient.invalidateQueries({ queryKey: ['document-gap-findings', id] });
+      queryClient.invalidateQueries({ queryKey: ['gap-analysis-runs', id] });
+    }
+    prevHasRunningRef.current = hasRunningAnalysis;
+  }, [hasRunningAnalysis, id, queryClient]);
 
   const { data: gapFindings, isLoading: findingsLoading } = useQuery({
     queryKey: ['document-gap-findings', id, gapFilters],
@@ -846,42 +863,88 @@ export default function PolicyDetailPage() {
       )}
 
       {activeTab === 'gap-analysis' && (
-        <div className="space-y-6">
-          {/* Run Analysis Panel */}
-          <div className="rounded-xl border border-gray-300 bg-gradient-to-r from-purple-50 to-blue-50 p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-purple-100 p-2.5">
-                  <Wand2 className="h-6 w-6 text-purple-700" />
+        <div className="space-y-4">
+          {/* Run Analysis Panel — neutral slate, compact */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="rounded-lg bg-slate-100 p-2 flex-shrink-0">
+                  <Wand2 className="h-5 w-5 text-slate-700" />
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-black">AI Gap Analysis</h3>
-                  <p className="text-sm text-gray-600">Analyze this document against compliance frameworks</p>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-slate-900">AI Gap Analysis</h3>
+                  <p className="text-xs text-slate-500">Analyze this document against compliance frameworks</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowGapModal(true)}
                 disabled={runGapAnalysisMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700 transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-primary-700 transition-colors disabled:opacity-50"
               >
                 {runGapAnalysisMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Play className="h-4 w-4" />
+                  <Play className="h-3.5 w-3.5" />
                 )}
                 Run Gap Analysis
               </button>
             </div>
-            {(runGapAnalysisMutation.isPending || hasRunningAnalysis) && (
-              <div className="mt-4 flex items-center gap-3 rounded-lg bg-purple-100 border border-purple-300 p-3">
-                <Loader2 className="h-5 w-5 animate-spin text-purple-600" />
-                <span className="text-purple-700">
-                  {hasRunningAnalysis
-                    ? 'Gap analysis is running in the background. Results will appear automatically when complete...'
-                    : `Submitting analysis request...`}
-                </span>
-              </div>
-            )}
+
+            {/* In-flight runs — compact 2-column grid; each card is its own framework */}
+            {(() => {
+              const runs = (gapAnalysisRuns?.runs || gapAnalysisRuns || []) as any[];
+              const running = Array.isArray(runs) ? runs.filter((r: any) => r.status === 'running' || r.status === 'queued') : [];
+              if (!runGapAnalysisMutation.isPending && running.length === 0) return null;
+              return (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {runGapAnalysisMutation.isPending && running.length === 0 && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 flex items-center gap-2 text-xs text-slate-600">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary-600 flex-shrink-0" />
+                      <span>Submitting analysis request…</span>
+                    </div>
+                  )}
+                  {running.map((r: any) => {
+                    const total = Number(r.clauses_total || 0);
+                    const done = Number(r.clauses_processed || 0);
+                    const hasProgress = total > 0;
+                    const pct = hasProgress ? Math.min(100, Math.round((done / total) * 100)) : 0;
+                    return (
+                      <div
+                        key={r.id}
+                        className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="truncate text-xs font-medium text-slate-800" title={r.framework_name || 'Framework'}>
+                            {r.framework_name || `Run ${r.id}`}
+                          </span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] font-medium text-primary-700 flex-shrink-0">
+                            <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                            {r.status === 'queued' ? 'Queued' : hasProgress ? `${pct}%` : 'Running'}
+                          </span>
+                        </div>
+                        {hasProgress ? (
+                          <>
+                            <div className="h-1 w-full overflow-hidden rounded-full bg-slate-200">
+                              <div
+                                className="h-full rounded-full bg-primary-500 transition-all duration-300"
+                                style={{ width: `${Math.max(2, pct)}%` }}
+                              />
+                            </div>
+                            <div className="mt-1 text-[10px] text-slate-500">
+                              {done}/{total} clauses
+                            </div>
+                          </>
+                        ) : (
+                          <div className="h-1 w-full overflow-hidden rounded-full bg-slate-200">
+                            <div className="h-full w-1/3 animate-[gap-progress_1.4s_ease-in-out_infinite] rounded-full bg-primary-500" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Compliance Summary */}
@@ -1402,10 +1465,6 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
   // Detect if doc.content is markdown (AI-generated docs always are)
   const rawContent: string = doc?.content || '';
   const isMarkdown = /^#{1,6}\s|^\*\*|^-\s|^\d+\.\s/m.test(rawContent);
-  // Normalize markdown that AI sometimes emits with empty bullet markers
-  // ("* " or "- " on a line by itself, then the actual text on the next
-  // non-blank line). ReactMarkdown otherwise renders a stray empty bullet
-  // followed by a separate paragraph and the document looks broken.
   const normalizedMarkdown = useMemo(() => normalizeAiMarkdown(rawContent), [rawContent]);
   const renderedHtml = useMemo(() => sanitizeDocumentHtml(htmlContent?.html), [htmlContent?.html]);
 
@@ -1659,6 +1718,12 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
       return res.data as any;
     },
     enabled: !!documentId,
+    // Poll while parsing is in flight so the progress bar advances. Stop
+    // polling once the run is terminal so we don't burn CPU on idle pages.
+    refetchInterval: (query) => {
+      const s = (query.state.data as any)?.status;
+      return s === 'parsing' || s === 'queued' ? 2000 : false;
+    },
   });
 
   const { data: proposalsData } = useQuery({
@@ -1830,14 +1895,14 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
             <button
               onClick={() => parsePolicyMutation.mutate()}
               disabled={parsePolicyMutation.isPending || isParsing}
-              className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 font-medium text-black hover:bg-purple-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 disabled:opacity-50"
             >
               {(parsePolicyMutation.isPending || isParsing) ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Wand2 className="h-4 w-4" />
               )}
-              {isParsing ? 'Parsing in background...' : 'Parse Policy Statements'}
+              {isParsing ? 'Parsing in background…' : 'Parse Policy Statements'}
             </button>
             <button
               onClick={() => setShowAddForm(true)}
@@ -1847,6 +1912,31 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
               Add Manually
             </button>
           </div>
+          {/* Live parse progress bar */}
+          {(isParsing || parseStatus?.status === 'parsing' || parseStatus?.status === 'queued') && (
+            <div className="mx-auto mt-4 max-w-md">
+              <div className="mb-1 flex items-center justify-between text-xs">
+                <span className="text-slate-600">
+                  {parseStatus?.status === 'queued'
+                    ? 'Queued — waiting for worker'
+                    : parseStatus?.message || 'Parsing'}
+                </span>
+                <span className="font-medium text-slate-700">
+                  {typeof parseStatus?.progress_percent === 'number' ? `${parseStatus.progress_percent}%` : ''}
+                </span>
+              </div>
+              <div className="h-1 w-full overflow-hidden rounded-full bg-slate-200">
+                {typeof parseStatus?.progress_percent === 'number' && parseStatus.progress_percent > 0 ? (
+                  <div
+                    className="h-full rounded-full bg-primary-500 transition-all"
+                    style={{ width: `${Math.min(100, Math.max(2, parseStatus.progress_percent))}%` }}
+                  />
+                ) : (
+                  <div className="h-full w-1/3 animate-[gap-progress_1.4s_ease-in-out_infinite] rounded-full bg-primary-500" />
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1901,13 +1991,39 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
           <button
             onClick={() => parsePolicyMutation.mutate()}
             disabled={parsePolicyMutation.isPending || isParsing}
-            className="flex items-center gap-2 rounded-lg border border-purple-500/50 bg-purple-500/10 px-3 py-1.5 text-sm text-purple-400 hover:bg-purple-500/20 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
-            {(parsePolicyMutation.isPending || isParsing) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-            {isParsing ? 'Parsing...' : 'Re-parse All'}
+            {(parsePolicyMutation.isPending || isParsing) ? <Loader2 className="h-4 w-4 animate-spin text-primary-600" /> : <Wand2 className="h-4 w-4" />}
+            {isParsing ? 'Parsing…' : 'Re-parse All'}
           </button>
         </div>
       </div>
+
+      {/* Live re-parse progress bar — same shape as the empty-state one */}
+      {(isParsing || parseStatus?.status === 'parsing' || parseStatus?.status === 'queued') && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="mb-1 flex items-center justify-between text-xs">
+            <span className="truncate text-slate-700">
+              {parseStatus?.status === 'queued'
+                ? 'Queued — waiting for worker'
+                : parseStatus?.message || 'Re-parsing policy statements'}
+            </span>
+            <span className="font-medium text-slate-700 ml-2 flex-shrink-0">
+              {typeof parseStatus?.progress_percent === 'number' ? `${parseStatus.progress_percent}%` : ''}
+            </span>
+          </div>
+          <div className="h-1 w-full overflow-hidden rounded-full bg-slate-200">
+            {typeof parseStatus?.progress_percent === 'number' && parseStatus.progress_percent > 0 ? (
+              <div
+                className="h-full rounded-full bg-primary-500 transition-all"
+                style={{ width: `${Math.min(100, Math.max(2, parseStatus.progress_percent))}%` }}
+              />
+            ) : (
+              <div className="h-full w-1/3 animate-[gap-progress_1.4s_ease-in-out_infinite] rounded-full bg-primary-500" />
+            )}
+          </div>
+        </div>
+      )}
 
       {showAddForm && (
         <div className="rounded-xl border border-green-500/30 bg-white p-5">
@@ -2480,7 +2596,6 @@ function ComplianceSummarySection({ summary, loading }: { summary: any; loading:
 
   return (
     <div className="rounded-xl border border-gray-300 bg-white p-5">
-      <h3 className="text-lg font-semibold text-black mb-4">Compliance Summary by Framework</h3>
       <div className="space-y-4">
         {frameworks.map((fw: any, idx: number) => {
           const pct = fw.compliance_percentage ?? fw.compliance_score ?? 0;

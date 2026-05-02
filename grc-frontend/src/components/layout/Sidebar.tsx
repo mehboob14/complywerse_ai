@@ -310,9 +310,12 @@ export default function Sidebar() {
         const res = await apiClient.get('/auth/me');
         data = res.data;
       } catch {
-        // Fallback to raw fetch in case axios interceptors/session state cause an edge-case redirect
+        // Fallback in case axios interceptors/session state cause an edge-case redirect.
+        // authedFetch attaches Bearer + X-Tenant-Slug from localStorage so the request
+        // works even when Domain=localhost cookies were rejected by the browser.
         try {
-          const res = await fetch('/api/auth/me', { credentials: 'include' });
+          const { authedFetch } = await import('@/lib/auth-fetch');
+          const res = await authedFetch('/api/auth/me');
           data = await res.json();
         } catch {
           data = null;

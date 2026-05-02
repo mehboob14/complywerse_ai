@@ -56,54 +56,60 @@ export function ProgressRing({
 
   return (
     <div
-      className={clsx('relative inline-flex items-center justify-center', className)}
+      className={clsx('inline-flex flex-col items-center justify-center', className)}
       role="progressbar"
       aria-valuenow={percentage}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-label={label || `Progress: ${percentage}%`}
     >
-      <svg
-        width={size}
-        height={size}
-        className="transform -rotate-90"
-      >
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={strokeWidth}
-          className="text-slate-200"
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          className={clsx(
-            colorStyle.stroke,
-            animated && 'transition-[stroke-dashoffset] duration-1000 ease-out'
-          )}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
+      <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+        <svg
+          width={size}
+          height={size}
+          className="transform -rotate-90"
+        >
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            className="text-slate-200"
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            className={clsx(
+              colorStyle.stroke,
+              animated && 'transition-[stroke-dashoffset] duration-1000 ease-out'
+            )}
+          />
+        </svg>
         {showPercentage && (
-          <span className={clsx('font-bold', colorStyle.text, size < 60 ? 'text-sm' : size < 100 ? 'text-lg' : 'text-xl')}>
+          <span
+            className={clsx(
+              'absolute inset-0 flex items-center justify-center font-bold leading-none',
+              colorStyle.text,
+              size < 50 ? 'text-[11px]' : size < 70 ? 'text-xs' : size < 100 ? 'text-base' : 'text-xl'
+            )}
+          >
             {Math.round(animatedPercentage)}%
           </span>
         )}
-        {label && (
-          <span className="text-xs font-medium text-slate-700 mt-0.5 text-center px-1 truncate max-w-full">
-            {label}
-          </span>
-        )}
       </div>
+      {label && (
+        <span className="mt-1.5 text-[11px] font-medium text-slate-600 text-center max-w-[calc(100%+1rem)] truncate">
+          {label}
+        </span>
+      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from grc.main import app as grc_app
-from grc.models import init_grc_db
+from grc.models import init_master_db
 from grc.modules.workflow_engine import (
     start_workflow_engine_runtime,
     stop_workflow_engine_runtime,
@@ -36,8 +36,9 @@ os.makedirs(uploads_dir, exist_ok=True)
 
 @app.on_event("startup")
 def on_startup():
-    init_grc_db()
-    start_workflow_engine_runtime()
+    init_master_db()
+    if os.getenv("DISABLE_EMBEDDED_WORKFLOW_RUNTIME", "").strip().lower() not in ("1", "true", "yes", "on"):
+        start_workflow_engine_runtime()
 
 
 @app.on_event("shutdown")

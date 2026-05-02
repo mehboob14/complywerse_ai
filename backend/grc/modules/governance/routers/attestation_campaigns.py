@@ -368,11 +368,14 @@ def activate_campaign(
     target_user_ids = set()
     
     if campaign.target_type == "all_users":
-        tenant_users = db.query(TenantUser).filter(
-            TenantUser.tenant_id == campaign.tenant_id
+        # Per-tenant DB: every active grc_users row is a tenant member.
+        # The previous query through grc_tenant_users would silently miss
+        # users created via /admin/users (which doesn't backfill that table).
+        active_users = db.query(GRCUser.id).filter(
+            GRCUser.is_active.is_(True)
         ).all()
-        for tu in tenant_users:
-            target_user_ids.add(tu.user_id)
+        for (uid,) in active_users:
+            target_user_ids.add(uid)
     
     elif campaign.target_type == "by_department":
         if campaign.target_department_ids:

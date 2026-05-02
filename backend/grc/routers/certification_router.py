@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from sqlalchemy.orm.attributes import flag_modified
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -1059,6 +1060,42 @@ def list_journey_controls(
             len(evidence_list or []),
         )
 
+        # Resolve assignees. Canonical source is the JSON array
+        # `assigned_user_ids`; we fall back to the legacy single-FK column
+        # so existing rows pre-dating multi-assignment keep showing an
+        # assignee until they are saved fresh.
+        raw_assigned_ids = getattr(impl, "assigned_user_ids", None) or []
+        if not isinstance(raw_assigned_ids, list):
+            raw_assigned_ids = []
+        legacy_single_id = getattr(impl, "assigned_to_user_id", None)
+        if not raw_assigned_ids and legacy_single_id:
+            raw_assigned_ids = [legacy_single_id]
+
+        assignees_list = []
+        if raw_assigned_ids:
+            users = (
+                db.query(GRCUser)
+                .filter(GRCUser.id.in_(raw_assigned_ids))
+                .all()
+            )
+            user_by_id = {u.id: u for u in users}
+            # preserve the order of `raw_assigned_ids`
+            for uid in raw_assigned_ids:
+                u = user_by_id.get(uid)
+                if not u:
+                    continue
+                assignees_list.append({
+                    "id": u.id,
+                    "display_name": u.display_name or u.username,
+                    "email": u.email,
+                })
+
+        # Back-compat scalar fields (first assignee, if any).
+        primary_assignee = assignees_list[0] if assignees_list else None
+        assigned_to_user_id = primary_assignee["id"] if primary_assignee else None
+        assignee_name = primary_assignee["display_name"] if primary_assignee else None
+        assignee_email = primary_assignee["email"] if primary_assignee else None
+
         result.append({
             "id": impl.id,
             "journey_id": impl.journey_id,
@@ -1081,6 +1118,11 @@ def list_journey_controls(
             "verified_date": impl.verified_date.isoformat() if impl.verified_date else None,
             "is_applicable": impl.is_applicable,
             "priority": impl.priority,
+            "assigned_to_user_id": assigned_to_user_id,
+            "assignee_name": assignee_name,
+            "assignee_email": assignee_email,
+            "assigned_user_ids": [a["id"] for a in assignees_list],
+            "assignees": assignees_list,
             "sub_controls": sub_controls_list,
             "evidence_requirements": evidence_requirements,
             "evidence_recommendations": evidence_recommendations,
@@ -1256,6 +1298,145 @@ def update_control_implementation(
     db.commit()
     db.refresh(implementation)
     return implementation
+
+
+class _ControlAssignRequest(BaseModel):
+    """Body for control assignment.
+
+    `assigned_user_ids` replaces the previous single-user payload. An empty
+    list clears the assignment (withdraws every assignee). The legacy
+    `assigned_to_user_id` field is still accepted for backward compatibility:
+    callers that send only it are translated to a one-element list.
+    """
+    assigned_user_ids: Optional[List[int]] = None
+    assigned_to_user_id: Optional[int] = None  # legacy single-user shape
+
+
+@router.patch("/{journey_id}/controls/{control_id}/assign")
+def assign_control_implementation(
+    journey_id: int,
+    control_id: int,
+    payload: _ControlAssignRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Replace the set of assignees on a framework requirement.
+
+    Per-tenant DB: every active row in `grc_users` is a tenant user. Sending
+    an empty list withdraws all assignees. Order is preserved (the first
+    entry is treated as the legacy "primary" assignee for older code paths).
+    """
+    journey = get_journey_or_404(journey_id, current_user, db)
+
+    implementation = db.query(ControlImplementation).filter(
+        ControlImplementation.id == control_id,
+        ControlImplementation.journey_id == journey_id,
+    ).first()
+    if not implementation:
+        raise HTTPException(status_code=404, detail="Control implementation not found")
+
+    # Resolve the requested assignee list, accepting both the new array shape
+    # and the legacy single-id shape.
+    if payload.assigned_user_ids is not None:
+        raw_ids = list(payload.assigned_user_ids)
+    elif payload.assigned_to_user_id is not None:
+        raw_ids = [payload.assigned_to_user_id]
+    else:
+        raw_ids = []
+
+    # Deduplicate while preserving order, drop falsy values.
+    seen: set = set()
+    requested_ids: List[int] = []
+    for uid in raw_ids:
+        if uid is None:
+            continue
+        if uid in seen:
+            continue
+        seen.add(uid)
+        requested_ids.append(int(uid))
+
+    # Validate every id maps to an active user in this tenant DB.
+    resolved_users = []
+    if requested_ids:
+        users = (
+            db.query(GRCUser)
+            .filter(GRCUser.id.in_(requested_ids), GRCUser.is_active == True)
+            .all()
+        )
+        user_by_id = {u.id: u for u in users}
+        for uid in requested_ids:
+            u = user_by_id.get(uid)
+            if not u:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"User {uid} is not an active member of this tenant",
+                )
+            resolved_users.append(u)
+
+    final_ids = [u.id for u in resolved_users]
+    implementation.assigned_user_ids = final_ids
+    # Keep the legacy single-FK column in sync with the first assignee so any
+    # older code path reading `assigned_to_user_id` still sees a valid value.
+    implementation.assigned_to_user_id = final_ids[0] if final_ids else None
+    flag_modified(implementation, "assigned_user_ids")
+    db.commit()
+    db.refresh(implementation)
+
+    return {
+        "message": "Requirement assignees updated",
+        "control_id": implementation.id,
+        "journey_id": journey_id,
+        "assigned_user_ids": final_ids,
+        "assignees": [
+            {
+                "id": u.id,
+                "display_name": u.display_name or u.username,
+                "email": u.email,
+            }
+            for u in resolved_users
+        ],
+        # Back-compat scalar fields.
+        "assigned_to_user_id": implementation.assigned_to_user_id,
+        "assignee_name": (resolved_users[0].display_name or resolved_users[0].username) if resolved_users else None,
+        "assignee_email": resolved_users[0].email if resolved_users else None,
+    }
+
+
+@router.get("/meta/tenant-users")
+def list_certification_tenant_users(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Active users in the caller's tenant DB, suitable for the assignment dropdown.
+
+    Per-tenant DB: every active row in `grc_users` belongs to this tenant. We
+    don't join through `grc_tenant_users` since that table is only populated
+    when users are explicitly invited across tenants. Includes the current
+    user as a fallback so the dropdown is never empty.
+    """
+    users = (
+        db.query(GRCUser)
+        .filter(GRCUser.is_active == True)
+        .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())
+        .all()
+    )
+    result = [
+        {
+            "id": u.id,
+            "username": u.username,
+            "display_name": u.display_name or u.username,
+            "email": u.email,
+        }
+        for u in users
+    ]
+    if not any(r["id"] == current_user.id for r in result):
+        result.insert(0, {
+            "id": current_user.id,
+            "username": current_user.username,
+            "display_name": current_user.display_name or current_user.username,
+            "email": current_user.email,
+        })
+    return result
 
 
 @router.post("/{journey_id}/controls/{control_id}/evidence", response_model=ImplementationEvidenceResponse, status_code=status.HTTP_201_CREATED)

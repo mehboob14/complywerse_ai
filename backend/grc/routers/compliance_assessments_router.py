@@ -117,6 +117,23 @@ class XlsxScoreUpdateRequest(BaseModel):
     practice_score: Optional[float] = None
     policy_maturity: Optional[float] = None
     practice_maturity: Optional[float] = None
+    # Per-row metadata persisted into the JSONB blob alongside the maturity
+    # scores. Sentinel "" / null means "clear this field" — distinguish from
+    # `None` (i.e. field not in payload) so a partial PUT doesn't wipe state.
+    remarks: Optional[str] = None
+    assigned_to_id: Optional[int] = None
+    assigned_to_name: Optional[str] = None
+    due_date: Optional[str] = None
+    # Free-form fields (mirrors what page.tsx exposes for non-UBL items).
+    gaps_identified: Optional[str] = None
+    proposed_solution: Optional[str] = None
+    # Framework-structural fields stored on each detail row. Editable per
+    # the user's "all fields editable except numbering and assessment text"
+    # rule — `subcategory` (the actual control text) and its code stay
+    # read-only at the UI layer.
+    function: Optional[str] = None
+    category: Optional[str] = None
+    references: Optional[List[str]] = None
 
 COLUMN_MAPPINGS = {
     "item_number": ["sr", "sr.", "sr#", "s#", "s.no", "s.no.", "no", "no.", "item", "item no", "item number", "control id", "control #", "id", "ref", "reference", "#"],
@@ -2745,6 +2762,30 @@ def update_assessment_xlsx_data(
         if request.practice_maturity is not None:
             row["practice_maturity"] = _safe_float(request.practice_maturity)
 
+        # Free-form per-row metadata. Read with `__contains__` against the
+        # request's set fields so that an explicit empty string clears the
+        # field but an absent key leaves the existing value alone.
+        sent_fields = request.model_fields_set if hasattr(request, "model_fields_set") else set()
+        if "remarks" in sent_fields:
+            row["remarks"] = (request.remarks or "").strip() or None
+        if "assigned_to_id" in sent_fields:
+            row["assigned_to_id"] = request.assigned_to_id
+        if "assigned_to_name" in sent_fields:
+            row["assigned_to_name"] = (request.assigned_to_name or "").strip() or None
+        if "due_date" in sent_fields:
+            row["due_date"] = (request.due_date or "").strip() or None
+        if "gaps_identified" in sent_fields:
+            row["gaps_identified"] = (request.gaps_identified or "").strip() or None
+        if "proposed_solution" in sent_fields:
+            row["proposed_solution"] = (request.proposed_solution or "").strip() or None
+        if "function" in sent_fields:
+            row["function"] = (request.function or "").strip()
+        if "category" in sent_fields:
+            row["category"] = (request.category or "").strip()
+        if "references" in sent_fields:
+            cleaned_refs = [r.strip() for r in (request.references or []) if r and r.strip()]
+            row["references"] = cleaned_refs
+
         _recalculate_csf_summary_from_details(data)
 
     elif request.sheet == "csf_summary":
@@ -3010,6 +3051,7 @@ def update_assessment(
 def update_assessment_item(
     item_id: int,
     compliance_status: Optional[str] = None,
+    area_domain: Optional[str] = None,
     gaps_identified: Optional[str] = None,
     proposed_solution: Optional[str] = None,
     responsible_party: Optional[str] = None,
@@ -3035,6 +3077,8 @@ def update_assessment_item(
     
     if compliance_status is not None:
         item.compliance_status = normalize_status(compliance_status)
+    if area_domain is not None:
+        item.area_domain = area_domain
     if gaps_identified is not None:
         item.gaps_identified = gaps_identified
     if proposed_solution is not None:

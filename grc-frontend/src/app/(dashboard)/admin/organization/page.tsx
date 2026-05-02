@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { adminApi, OrganizationProfile } from '@/lib/api';
+import { authedFetch } from '@/lib/auth-fetch';
 
 async function ensureTenantContext(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
-  
+
   try {
-    const response = await fetch('/api/auth/me', { credentials: 'include' });
+    const response = await authedFetch('/api/auth/me');
     if (!response.ok) return false;
-    
+
     const data = await response.json();
     if (data.authenticated && data.tenant) {
       const resolvedSlug = data.tenant.subdomain || data.tenant.slug || '';

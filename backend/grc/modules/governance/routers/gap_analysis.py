@@ -6,16 +6,17 @@ import math
 import threading
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel
 from openai import OpenAI
 
+from ....db import open_tenant_session
 from ....models import (
     GovernanceDocument, PolicyGapAnalysisRun, PolicyGapFinding,
-    UploadedFramework, ParsedFrameworkControl, GRCUser, get_db, SessionLocal,
+    UploadedFramework, ParsedFrameworkControl, GRCUser, get_db,
     Risk
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
@@ -346,11 +347,13 @@ def serialize_run(run: PolicyGapAnalysisRun) -> dict:
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         "created_by": run.created_by,
+        "clauses_total": getattr(run, "clauses_total", 0) or 0,
+        "clauses_processed": getattr(run, "clauses_processed", 0) or 0,
     }
 
 
-def _run_gap_analysis_background(run_ids: list, document_id: int, user_id: int):
-    db = SessionLocal()
+def _gap_analysis_body(db, run_ids: list, document_id: int, user_id: int, tenant_slug: str = None):
+    """Body of the gap-analysis job. Takes an open tenant-scoped session."""
     try:
         document = db.query(GovernanceDocument).filter(GovernanceDocument.id == document_id).first()
         if not document:
@@ -402,6 +405,15 @@ def _run_gap_analysis_background(run_ids: list, document_id: int, user_id: int):
                         "control_obj": ctrl
                     })
 
+                # Live progress: initialise totals so the UI can render a real
+                # percentage instead of an indeterminate sweep.
+                try:
+                    run.clauses_total = len(clauses)
+                    run.clauses_processed = 0
+                    db.commit()
+                except Exception:
+                    db.rollback()
+
                 batch_size = 15
                 all_findings_data = []
 
@@ -410,6 +422,11 @@ def _run_gap_analysis_background(run_ids: list, document_id: int, user_id: int):
                     batch_for_api = [{"reference": c["reference"], "title": c["title"], "requirement": c["requirement"]} for c in batch]
                     findings_data = analyze_clauses_batch(policy_text, batch_for_api, framework.name, document.title or "")
                     all_findings_data.extend(findings_data)
+                    try:
+                        run.clauses_processed = min(len(clauses), (run.clauses_processed or 0) + len(batch))
+                        db.commit()
+                    except Exception:
+                        db.rollback()
 
                 all_findings_data = post_process_scope_filter(all_findings_data, document.title or "", policy_text)
 
@@ -472,6 +489,8 @@ def _run_gap_analysis_background(run_ids: list, document_id: int, user_id: int):
                 run.compliance_percentage = compliance_pct
                 run.status = "completed"
                 run.completed_at = datetime.utcnow()
+                if run.clauses_total:
+                    run.clauses_processed = run.clauses_total
                 db.commit()
 
             except Exception as e:
@@ -491,6 +510,16 @@ def _run_gap_analysis_background(run_ids: list, document_id: int, user_id: int):
                 db.commit()
             except:
                 pass
+    except Exception:
+        # Bubble up — Celery task wrapper records job_status in Redis.
+        raise
+
+
+def _run_gap_analysis_background(run_ids: list, document_id: int, user_id: int, tenant_slug: str):
+    """Legacy in-process entry: opens its own session, calls `_gap_analysis_body`."""
+    db = open_tenant_session(tenant_slug)
+    try:
+        return _gap_analysis_body(db, run_ids, document_id, user_id, tenant_slug)
     finally:
         db.close()
 
@@ -498,9 +527,14 @@ def _run_gap_analysis_background(run_ids: list, document_id: int, user_id: int):
 @router.post("/run")
 def run_gap_analysis(
     request: GapAnalysisRunRequest,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    tenant_slug = getattr(http_request.state, "tenant_slug", None)
+    if not tenant_slug:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
     user_tenants = get_user_tenants(current_user, db)
 
     document = db.query(GovernanceDocument).filter(
@@ -574,18 +608,22 @@ def run_gap_analysis(
     run_ids = [r.id for r in all_runs]
     serialized = [serialize_run(r) for r in all_runs]
 
-    thread = threading.Thread(
-        target=_run_gap_analysis_background,
-        args=(run_ids, request.document_id, current_user.id),
-        daemon=True
-    )
-    thread.start()
+    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
+    try:
+        tenant_rate_limit(tenant_slug, bucket="gap_analysis")
+    except RateLimitExceeded:
+        raise HTTPException(status_code=429, detail="Too many gap-analysis runs in the last minute; try again shortly")
+
+    from ....tasks.governance import run_gap_analysis as _gap_task
+    async_result = _gap_task.delay(tenant_slug, run_ids, request.document_id, current_user.id)
+    print(f"[DISPATCH] gap_analysis → celery task_id={async_result.id} tenant={tenant_slug} doc={request.document_id} runs={len(run_ids)}", flush=True)
 
     return {
-        "message": f"Gap analysis started for {len(all_runs)} framework(s). Check status for results.",
+        "message": f"Gap analysis queued for {len(all_runs)} framework(s). Check status for results.",
         "document_id": request.document_id,
+        "task_id": async_result.id,
         "runs": serialized,
-        "status": "running"
+        "status": "queued"
     }
 
 
@@ -612,6 +650,24 @@ def get_analysis_runs(
         PolicyGapAnalysisRun.document_id == document_id,
         PolicyGapAnalysisRun.tenant_id.in_(user_tenants)
     ).order_by(PolicyGapAnalysisRun.started_at.desc()).all()
+
+    # Staleness sweep: a worker that crashed mid-run leaves a row in
+    # status='running' that the UI polls forever. If `started_at` is older
+    # than the threshold, mark it failed so polling can stop and the user
+    # gets a clear error instead of an indefinite spinner.
+    STALE_AFTER_SECONDS = 1800  # 30 minutes
+    now = datetime.utcnow()
+    stale_dirty = False
+    for r in runs:
+        if r.status == "running" and r.started_at:
+            age = (now - r.started_at).total_seconds()
+            if age > STALE_AFTER_SECONDS:
+                r.status = "failed"
+                r.error_message = "Worker did not finish within timeout (stale run cleared)"
+                r.completed_at = now
+                stale_dirty = True
+    if stale_dirty:
+        db.commit()
 
     return {
         "document_id": document_id,

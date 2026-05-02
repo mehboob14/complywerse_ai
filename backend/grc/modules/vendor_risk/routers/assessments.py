@@ -186,12 +186,12 @@ def create_assessment(
     tenant_id = payload.tenant_id if payload.tenant_id and payload.tenant_id in tenant_ids else vendor.tenant_id
     assessed_by = current_user.id
     if payload.assessed_by:
+        # Per-tenant DB: every active grc_users row belongs to this tenant.
         assessor = (
             db.query(GRCUser)
-            .join(TenantUser, TenantUser.user_id == GRCUser.id)
             .filter(
                 GRCUser.id == payload.assessed_by,
-                TenantUser.tenant_id.in_(tenant_ids),
+                GRCUser.is_active.is_(True),
             )
             .first()
         )

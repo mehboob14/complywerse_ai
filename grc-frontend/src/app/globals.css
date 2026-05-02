@@ -9,6 +9,14 @@
   100% { transform: translateX(-50%) translateY(0);     opacity: 1; }
 }
 
+/* Indeterminate progress sweep used by the parse-policy and gap-analysis
+   in-flight bars when a precise percentage isn't available. */
+@keyframes gap-progress {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(150%); }
+  100% { transform: translateX(150%); }
+}
+
 @keyframes dotBounce {
   0%, 100% { transform: translateX(-50%) translateY(0);    opacity: 1; }
   40%       { transform: translateX(-50%) translateY(-6px); opacity: 0.6; }

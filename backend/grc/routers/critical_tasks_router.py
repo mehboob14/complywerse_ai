@@ -30,12 +30,44 @@ SORTABLE_COLUMNS = {"created_at", "updated_at", "title", "priority", "status", "
 def _validate_tenant_user(db: Session, user_id: Optional[int], user_tenants: List[int]):
     if user_id is None:
         return
-    tenant_link = db.query(TenantUser).filter(
-        TenantUser.user_id == user_id,
-        TenantUser.tenant_id.in_(user_tenants),
+    # Per-tenant DB: every active grc_users row belongs to this tenant. The
+    # earlier check joined through grc_tenant_users, but that table is only
+    # populated for the bootstrap admin — users created later via
+    # /admin/users have no row there, so the check would fail incorrectly.
+    user = db.query(GRCUser).filter(
+        GRCUser.id == user_id,
+        GRCUser.is_active.is_(True),
     ).first()
-    if not tenant_link:
+    if not user:
         raise HTTPException(status_code=400, detail=f"User {user_id} does not belong to your tenant")
+
+
+def _normalize_assignee_list(db: Session, raw_ids) -> List[int]:
+    """Validate, dedupe and order-preserve a list of user ids."""
+    if raw_ids is None:
+        return []
+    seen: set = set()
+    cleaned: List[int] = []
+    for uid in raw_ids:
+        if uid is None:
+            continue
+        if uid in seen:
+            continue
+        seen.add(uid)
+        cleaned.append(int(uid))
+    if not cleaned:
+        return []
+    users = db.query(GRCUser).filter(
+        GRCUser.id.in_(cleaned), GRCUser.is_active.is_(True),
+    ).all()
+    valid = {u.id for u in users}
+    missing = [uid for uid in cleaned if uid not in valid]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Users {missing} do not belong to your tenant",
+        )
+    return cleaned
 
 
 class TaskCreate(BaseModel):
@@ -49,13 +81,17 @@ class TaskCreate(BaseModel):
     severity: Optional[str] = None
     category: str = "Other"
     assigned_owner_id: Optional[int] = None
+    # New: multi-assignee. If provided, this is the canonical list and the
+    # legacy `assigned_owner_id` is auto-synced to its first entry.
+    assigned_user_ids: Optional[List[int]] = None
     reviewer_id: Optional[int] = None
     due_date: Optional[datetime] = None
     sla_days: Optional[int] = None
     linked_risk_id: Optional[int] = None
     linked_control_id: Optional[int] = None
-    linked_finding_id: Optional[int] = None
     linked_vulnerability_id: Optional[int] = None
+    linked_framework_id: Optional[int] = None
+    linked_requirement_id: Optional[int] = None
     evidence_notes: Optional[str] = None
     recurrence_pattern: Optional[str] = None
     recurrence_interval: Optional[int] = 1
@@ -73,13 +109,15 @@ class TaskUpdate(BaseModel):
     severity: Optional[str] = None
     category: Optional[str] = None
     assigned_owner_id: Optional[int] = None
+    assigned_user_ids: Optional[List[int]] = None
     reviewer_id: Optional[int] = None
     due_date: Optional[datetime] = None
     sla_days: Optional[int] = None
     linked_risk_id: Optional[int] = None
     linked_control_id: Optional[int] = None
-    linked_finding_id: Optional[int] = None
     linked_vulnerability_id: Optional[int] = None
+    linked_framework_id: Optional[int] = None
+    linked_requirement_id: Optional[int] = None
     evidence_notes: Optional[str] = None
     recurrence_pattern: Optional[str] = None
     recurrence_interval: Optional[int] = None
@@ -126,7 +164,6 @@ class CrossModuleTaskCreate(BaseModel):
     sla_days: Optional[int] = None
     linked_risk_id: Optional[int] = None
     linked_control_id: Optional[int] = None
-    linked_finding_id: Optional[int] = None
     linked_vulnerability_id: Optional[int] = None
     evidence_notes: Optional[str] = None
 
@@ -200,6 +237,31 @@ def _auto_escalate_task(task, db):
 
 
 def _serialize_task(task, include_relations=False):
+    raw_assigned_ids = getattr(task, "assigned_user_ids", None) or []
+    if not isinstance(raw_assigned_ids, list):
+        raw_assigned_ids = []
+    # Back-compat lift: if a row pre-dates multi-assignment but has a legacy
+    # single owner, surface it as a one-element list.
+    if not raw_assigned_ids and getattr(task, "assigned_owner_id", None):
+        raw_assigned_ids = [task.assigned_owner_id]
+
+    assignees_payload = []
+    if raw_assigned_ids:
+        sess = Session.object_session(task)
+        if sess is not None:
+            users = sess.query(GRCUser).filter(GRCUser.id.in_(raw_assigned_ids)).all()
+            user_by_id = {u.id: u for u in users}
+            for uid in raw_assigned_ids:
+                u = user_by_id.get(uid)
+                if not u:
+                    continue
+                assignees_payload.append({
+                    "id": u.id,
+                    "username": u.username,
+                    "display_name": u.display_name or u.username,
+                    "email": u.email,
+                })
+
     result = {
         "id": task.id,
         "tenant_id": task.tenant_id,
@@ -214,6 +276,8 @@ def _serialize_task(task, include_relations=False):
         "status": task.status,
         "category": task.category,
         "assigned_owner_id": task.assigned_owner_id,
+        "assigned_user_ids": [a["id"] for a in assignees_payload],
+        "assignees": assignees_payload,
         "reviewer_id": task.reviewer_id,
         "created_by_id": task.created_by_id,
         "due_date": task.due_date.isoformat() if task.due_date else None,
@@ -222,8 +286,9 @@ def _serialize_task(task, include_relations=False):
         "escalation_level": task.escalation_level,
         "linked_risk_id": task.linked_risk_id,
         "linked_control_id": task.linked_control_id,
-        "linked_finding_id": task.linked_finding_id,
         "linked_vulnerability_id": task.linked_vulnerability_id,
+        "linked_framework_id": getattr(task, "linked_framework_id", None),
+        "linked_requirement_id": getattr(task, "linked_requirement_id", None),
         "evidence_notes": task.evidence_notes,
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
         "verified_at": task.verified_at.isoformat() if task.verified_at else None,
@@ -518,19 +583,22 @@ def get_tenant_users(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    user_tenants = get_user_tenants(current_user, db)
+    """Active users in the caller's tenant DB.
+
+    Per-tenant DB: every active row in `grc_users` belongs to this tenant.
+    The previous implementation joined through `grc_tenant_users`, but that
+    table is only populated for the bootstrap admin — users created later
+    via `POST /admin/users` don't get a row, so the join silently filtered
+    them out and the dropdown looked empty. Falls back to the caller so the
+    list is never empty.
+    """
     users = (
         db.query(GRCUser)
-        .join(TenantUser, TenantUser.user_id == GRCUser.id)
-        .filter(
-            TenantUser.tenant_id.in_(user_tenants),
-            GRCUser.is_active == True,
-        )
-        .distinct()
+        .filter(GRCUser.is_active == True)
         .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())
         .all()
     )
-    return [
+    result = [
         {
             "id": u.id,
             "username": u.username,
@@ -539,6 +607,14 @@ def get_tenant_users(
         }
         for u in users
     ]
+    if not any(r["id"] == current_user.id for r in result):
+        result.insert(0, {
+            "id": current_user.id,
+            "username": current_user.username,
+            "display_name": current_user.display_name or current_user.username,
+            "email": current_user.email,
+        })
+    return result
 
 
 @router.get("/reports/summary")
@@ -779,7 +855,6 @@ def create_task_from_module(
         sla_days=payload.sla_days,
         linked_risk_id=payload.linked_risk_id,
         linked_control_id=payload.linked_control_id,
-        linked_finding_id=payload.linked_finding_id,
         linked_vulnerability_id=payload.linked_vulnerability_id,
         evidence_notes=payload.evidence_notes,
     )
@@ -914,10 +989,23 @@ def create_task(
     user_tenants = get_user_tenants(current_user, db)
     _validate_tenant_user(db, payload.assigned_owner_id, user_tenants)
     _validate_tenant_user(db, payload.reviewer_id, user_tenants)
+
+    # Resolve the multi-assignee list. If the caller provided one, it is the
+    # canonical source and the legacy single owner is synced to its first
+    # entry. If only the legacy owner is set, lift it into a one-element list.
+    payload_dict = payload.model_dump()
+    assigned_ids: List[int] = []
+    if payload.assigned_user_ids is not None:
+        assigned_ids = _normalize_assignee_list(db, payload.assigned_user_ids)
+    elif payload.assigned_owner_id is not None:
+        assigned_ids = [payload.assigned_owner_id]
+    payload_dict["assigned_user_ids"] = assigned_ids
+    payload_dict["assigned_owner_id"] = assigned_ids[0] if assigned_ids else payload.assigned_owner_id
+
     task = CriticalTask(
         tenant_id=tenant_id,
         created_by_id=current_user.id,
-        **payload.model_dump(),
+        **payload_dict,
     )
     if task.sla_days and not task.due_date:
         task.due_date = datetime.utcnow() + timedelta(days=task.sla_days)
@@ -951,6 +1039,12 @@ def update_task(
         _validate_tenant_user(db, update_data["assigned_owner_id"], user_tenants)
     if "reviewer_id" in update_data:
         _validate_tenant_user(db, update_data["reviewer_id"], user_tenants)
+    if "assigned_user_ids" in update_data:
+        # Replace the multi-assignee list and keep `assigned_owner_id` in sync
+        # with the first entry (single-source-of-truth for back-compat).
+        normalized_ids = _normalize_assignee_list(db, update_data["assigned_user_ids"])
+        update_data["assigned_user_ids"] = normalized_ids
+        update_data["assigned_owner_id"] = normalized_ids[0] if normalized_ids else None
 
     if "status" in update_data and update_data["status"] != task.status:
         new_status = update_data["status"]

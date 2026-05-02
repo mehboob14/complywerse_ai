@@ -492,6 +492,7 @@ async def upload_evidence(
     collection_date: Optional[str] = Form(None),
     validity_period_days: Optional[int] = Form(None),
     source_system: Optional[str] = Form(None),
+    owner_id: Optional[int] = Form(None),
     tenant_id: Optional[int] = Form(None),
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = None,
@@ -566,6 +567,14 @@ async def upload_evidence(
         status="draft",
         ocr_status=ocr_status_val
     )
+    # owner_id was added later. Set conditionally so older deployments
+    # without the column still work.
+    if owner_id and hasattr(Evidence, "owner_id"):
+        try:
+            setattr(db_evidence, "owner_id", owner_id)
+        except Exception:
+            pass
+
     db.add(db_evidence)
     db.commit()
     db.refresh(db_evidence)

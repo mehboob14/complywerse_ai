@@ -433,9 +433,7 @@ export default function EvidenceSuggestionsPage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-blue-500/20 p-2">
-                    <FileCheck className="h-5 w-5 text-blue-400" />
-                  </div>
+                  <FileCheck className="h-5 w-5 text-blue-500 flex-shrink-0" />
                   <div>
                     <p className="text-lg font-semibold text-black">{reuseStats.total_evidence}</p>
                     <p className="text-xs text-gray-600">Total Evidence</p>
@@ -444,9 +442,7 @@ export default function EvidenceSuggestionsPage() {
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-purple-500/20 p-2">
-                    <Repeat className="h-5 w-5 text-purple-400" />
-                  </div>
+                  <Repeat className="h-5 w-5 text-purple-500 flex-shrink-0" />
                   <div>
                     <p className="text-lg font-semibold text-black">{reuseStats.multi_framework_evidence}</p>
                     <p className="text-xs text-gray-600">Multi-Framework</p>
@@ -455,9 +451,7 @@ export default function EvidenceSuggestionsPage() {
               </div>
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-green-500/20 p-2">
-                    <BarChart3 className="h-5 w-5 text-green-400" />
-                  </div>
+                  <BarChart3 className="h-5 w-5 text-green-500 flex-shrink-0" />
                   <div>
                     <p className="text-lg font-semibold text-black">{reuseStats.average_controls_per_evidence}</p>
                     <p className="text-xs text-gray-600">Avg Controls/Evidence</p>
@@ -499,9 +493,7 @@ export default function EvidenceSuggestionsPage() {
             {auditSavings && (
               <div className="mt-4 rounded-lg border border-green-500/30 bg-green-500/10 p-4">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-green-500/20 p-2">
-                    <Percent className="h-5 w-5 text-green-400" />
-                  </div>
+                  <Percent className="h-5 w-5 text-green-500 flex-shrink-0" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-green-400">
                       Audit Effort Savings: {auditSavings.savings_percent}%

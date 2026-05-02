@@ -27,8 +27,8 @@ from ..schemas import (
     AssetDetailResponse, AssetCoverageAnalysis
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, decode_token
-from ..tenant_manager import get_tenant_session, IS_SQLITE
-from ..tenant_models import TenantUser as TenantSchemaUser
+# Per-database-per-tenant: the tenant DB *is* the active session, so tenant
+# users are just GRCUser rows in the current request's session.
 
 router = APIRouter(prefix="/assets", tags=["IT Assets"])
 
@@ -100,39 +100,7 @@ def get_tenant_users(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Get all users from the tenant schema for owner selection"""
-    try:
-        auth_token = token
-        if not auth_token:
-            auth_header = http_request.headers.get("authorization", "")
-            if auth_header.startswith("Bearer "):
-                auth_token = auth_header[7:]
-        
-        if auth_token:
-            payload = decode_token(auth_token)
-            schema_name = payload.get("schema")
-            if schema_name:
-                TenantSession = get_tenant_session(schema_name)
-                tenant_session = TenantSession()
-                try:
-                    tenant_session.execute(text(f'SET search_path TO \"{schema_name}\", public'))
-                    tenant_users = tenant_session.query(TenantSchemaUser).filter(
-                        TenantSchemaUser.is_active == True
-                    ).all()
-                    return [
-                        {
-                            "id": u.id,
-                            "display_name": u.display_name or u.username,
-                            "email": u.email
-                        }
-                        for u in tenant_users
-                    ]
-                finally:
-                    tenant_session.close()
-    except Exception as e:
-        print(f"[tenant-users] Tenant schema lookup failed: {e}")
-    
-    # Fallback: return public GRCUser users
+    """Get all users in the current tenant DB for owner selection."""
     users = db.query(GRCUser).filter(GRCUser.is_active == True).all()
     return [
         {

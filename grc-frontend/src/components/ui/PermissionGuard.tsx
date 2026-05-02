@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Lock } from 'lucide-react';
+import { authedFetch } from '@/lib/auth-fetch';
 
 interface PermissionGuardProps {
   /** One or more permission strings. Access is granted if the user has ANY of them. */
@@ -74,7 +75,7 @@ export default function PermissionGuard({ required, children, fallback }: Permis
       } catch {}
     }
 
-    fetch('/api/auth/me', { credentials: 'include' })
+    authedFetch('/api/auth/me')
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
@@ -127,7 +128,7 @@ export function IfPermission({ required, children }: { required: string | string
         return;
       } catch {}
     }
-    fetch('/api/auth/me', { credentials: 'include' })
+    authedFetch('/api/auth/me')
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;

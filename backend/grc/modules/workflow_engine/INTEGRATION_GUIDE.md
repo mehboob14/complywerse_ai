@@ -662,7 +662,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from grc.models import WorkflowDefinition, WorkflowNode, WorkflowEdge
 
-db = sessionmaker(bind=create_engine('sqlite:///backend/grc_app.db'))()
+from grc.db import open_tenant_session
+db = open_tenant_session('your-tenant-slug')
 
 # ── Configuration ────────────────────────────────────────────────────────────
 TENANT_ID         = 1                                    # your tenant id

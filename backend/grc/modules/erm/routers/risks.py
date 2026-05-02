@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 from ....models import (
     Risk, RiskControlLink, RiskAssetLink, RiskEvidenceLink,
-    RiskFrameworkControlLink, RiskGovernanceLink, RiskAuditFindingLink,
+    RiskFrameworkControlLink, RiskGovernanceLink,
     NormalizedControl, FrameworkControl, ITAsset, Evidence,
     GovernanceObjective, Issue, GRCUser, Tenant, get_db,
     ParsedFrameworkControl, UploadedFramework, RiskMitigationAction,
@@ -29,7 +29,6 @@ from ....schemas import (
     RiskControlLinkCreate, RiskAssetLinkCreate, RiskEvidenceLinkCreate,
     RiskFrameworkControlLinkCreate, RiskGovernanceLinkCreate,
     RiskDetailResponse, RiskHeatmapData, MessageResponse,
-    RiskAuditFindingLinkCreate, RiskAuditFindingLinkResponse,
     RiskMitigationActionCreate, RiskMitigationActionResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
@@ -2352,99 +2351,6 @@ def reopen_risk(
     db.commit()
     db.refresh(risk)
     return risk
-
-
-@router.post("/{risk_id}/audit-findings", response_model=RiskAuditFindingLinkResponse, status_code=status.HTTP_201_CREATED)
-def link_audit_finding_to_risk(
-    risk_id: int,
-    link: RiskAuditFindingLinkCreate,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
-):
-    user_tenants = get_user_tenants(current_user, db)
-    
-    risk = db.query(Risk).filter(
-        Risk.id == risk_id,
-        Risk.tenant_id.in_(user_tenants)
-    ).first()
-    
-    if not risk:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Risk not found"
-        )
-    
-    issue = db.query(Issue).filter(
-        Issue.id == link.issue_id,
-        Issue.tenant_id.in_(user_tenants)
-    ).first()
-    
-    if not issue:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Audit finding/issue not found"
-        )
-    
-    existing = db.query(RiskAuditFindingLink).filter(
-        RiskAuditFindingLink.risk_id == risk_id,
-        RiskAuditFindingLink.issue_id == link.issue_id
-    ).first()
-    
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Link already exists"
-        )
-    
-    db_link = RiskAuditFindingLink(
-        risk_id=risk_id,
-        issue_id=link.issue_id,
-        notes=link.notes
-    )
-    db.add(db_link)
-    db.commit()
-    db.refresh(db_link)
-    
-    response = RiskAuditFindingLinkResponse.model_validate(db_link)
-    response.issue_title = issue.title
-    response.issue_severity = issue.severity
-    return response
-
-
-@router.delete("/{risk_id}/audit-findings/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
-def unlink_audit_finding_from_risk(
-    risk_id: int,
-    link_id: int,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
-):
-    user_tenants = get_user_tenants(current_user, db)
-    
-    risk = db.query(Risk).filter(
-        Risk.id == risk_id,
-        Risk.tenant_id.in_(user_tenants)
-    ).first()
-    
-    if not risk:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Risk not found"
-        )
-    
-    link = db.query(RiskAuditFindingLink).filter(
-        RiskAuditFindingLink.id == link_id,
-        RiskAuditFindingLink.risk_id == risk_id
-    ).first()
-    
-    if not link:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Audit finding link not found"
-        )
-    
-    db.delete(link)
-    db.commit()
-    return None
 
 
 class RiskAISuggestionRequest(BaseModel):

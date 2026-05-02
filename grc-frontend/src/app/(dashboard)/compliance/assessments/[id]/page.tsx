@@ -253,6 +253,10 @@ export default function AssessmentDetailPage() {
   const [editingTimelineRaw, setEditingTimelineRaw] = useState<string>('');
   const [editingTimelineTouched, setEditingTimelineTouched] = useState<boolean>(false);
   const [editingRemarks, setEditingRemarks] = useState<string>('');
+  const [editingGapsIdentified, setEditingGapsIdentified] = useState<string>('');
+  const [editingProposedSolution, setEditingProposedSolution] = useState<string>('');
+  const [editingAreaDomain, setEditingAreaDomain] = useState<string>('');
+  const [editingPriority, setEditingPriority] = useState<string>('');
   const [expandedEvidence, setExpandedEvidence] = useState<Set<number>>(new Set());
   const [uploadingItemId, setUploadingItemId] = useState<number | null>(null);
   const [generatingAIForItem, setGeneratingAIForItem] = useState<number | null>(null);
@@ -300,7 +304,9 @@ export default function AssessmentDetailPage() {
         })
         .filter((entry: TenantUserOption | null): entry is TenantUserOption => !!entry);
     },
-    enabled: Boolean(assessment?.tenant_id) && isAuditMasterAssessment,
+    // Used by every assessment type now (NCA, Cloud Cybersecurity, NIST,
+    // OWASP, audit master) for the Responsible Party dropdown.
+    enabled: Boolean(assessment?.tenant_id),
     staleTime: 60 * 1000,
   });
 
@@ -374,18 +380,30 @@ export default function AssessmentDetailPage() {
       responsibleParty,
       timeline,
       remarks,
+      gapsIdentified,
+      proposedSolution,
+      areaDomain,
+      priority,
     }: {
       itemId: number;
       complianceStatus?: string;
       responsibleParty?: string;
       timeline?: string;
       remarks?: string;
+      gapsIdentified?: string;
+      proposedSolution?: string;
+      areaDomain?: string;
+      priority?: string;
     }) => {
       const params: Record<string, string> = {};
       if (complianceStatus !== undefined) params.compliance_status = complianceStatus;
       if (responsibleParty !== undefined) params.responsible_party = responsibleParty;
       if (timeline !== undefined) params.timeline = timeline;
       if (remarks !== undefined) params.remarks = remarks;
+      if (gapsIdentified !== undefined) params.gaps_identified = gapsIdentified;
+      if (proposedSolution !== undefined) params.proposed_solution = proposedSolution;
+      if (areaDomain !== undefined) params.area_domain = areaDomain;
+      if (priority !== undefined) params.priority = priority;
       const response = await apiClient.put(`/compliance/assessments/items/${itemId}`, null, {
         params,
       });
@@ -400,6 +418,10 @@ export default function AssessmentDetailPage() {
       setEditingTimelineRaw('');
       setEditingTimelineTouched(false);
       setEditingRemarks('');
+      setEditingGapsIdentified('');
+      setEditingProposedSolution('');
+      setEditingAreaDomain('');
+      setEditingPriority('');
     },
   });
 
@@ -558,6 +580,10 @@ export default function AssessmentDetailPage() {
     setEditingTimelineRaw(item.timeline || '');
     setEditingTimelineTouched(false);
     setEditingRemarks(item.remarks || '');
+    setEditingGapsIdentified(item.gaps_identified || '');
+    setEditingProposedSolution(item.proposed_solution || '');
+    setEditingAreaDomain(item.area_domain || '');
+    setEditingPriority(item.priority || '');
     if (isAuditMasterAssessment) {
       setExpandedAuditItems((prev) => {
         const next = new Set(prev);
@@ -575,22 +601,30 @@ export default function AssessmentDetailPage() {
     setEditingTimelineRaw('');
     setEditingTimelineTouched(false);
     setEditingRemarks('');
+    setEditingGapsIdentified('');
+    setEditingProposedSolution('');
+    setEditingAreaDomain('');
+    setEditingPriority('');
   };
 
   const saveEditing = () => {
     if (editingItemId && editingStatus) {
-      if (isAuditMasterAssessment) {
-        const timelineForSave = editingTimelineTouched ? editingTimeline : editingTimelineRaw;
-        updateItemMutation.mutate({
-          itemId: editingItemId,
-          complianceStatus: editingStatus,
-          responsibleParty: editingResponsibleParty,
-          timeline: timelineForSave,
-          remarks: editingRemarks,
-        });
-        return;
-      }
-      updateItemMutation.mutate({ itemId: editingItemId, complianceStatus: editingStatus });
+      // Same payload for every assessment type — the user wants the full
+      // editable surface (responsible party, timeline, remarks, gaps,
+      // proposed solution) to save on OWASP / NCA / NIST too, not just on
+      // the audit-master flow.
+      const timelineForSave = editingTimelineTouched ? editingTimeline : editingTimelineRaw;
+      updateItemMutation.mutate({
+        itemId: editingItemId,
+        complianceStatus: editingStatus,
+        responsibleParty: editingResponsibleParty,
+        timeline: timelineForSave,
+        remarks: editingRemarks,
+        gapsIdentified: editingGapsIdentified,
+        proposedSolution: editingProposedSolution,
+        areaDomain: editingAreaDomain,
+        priority: editingPriority,
+      });
     }
   };
 
@@ -1184,8 +1218,14 @@ export default function AssessmentDetailPage() {
 
                                   {isAuditItemExpanded && (
                                     <>
-                                      {isAuditMasterAssessment ? (
-                                        <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/30 p-4">
+                                      {/* Unified Control Information panel.
+                                          Used for every assessment type (UBL
+                                          audit master AND framework-style
+                                          assessments like NCA, Cloud
+                                          Cybersecurity, NIST, OWASP) so the
+                                          editable surface is identical
+                                          everywhere. */}
+                                      <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/30 p-4">
                                           <div className="mb-3 flex items-center justify-between">
                                             <h4 className="text-sm font-semibold text-black">Control Information</h4>
                                             <span className="text-xs text-gray-500">
@@ -1249,69 +1289,80 @@ export default function AssessmentDetailPage() {
                                               )}
                                             </div>
                                           </div>
-                                          {(item.gaps_identified || item.proposed_solution || item.priority) && (
-                                            <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-                                              {item.gaps_identified && (
-                                                <div className="rounded-lg border border-gray-200 bg-white p-3">
-                                                  <p className="text-xs text-gray-600 mb-1">Gaps Identified</p>
-                                                  <p className="text-sm text-gray-700">{item.gaps_identified}</p>
-                                                </div>
-                                              )}
-                                              {item.proposed_solution && (
-                                                <div className="rounded-lg border border-gray-200 bg-white p-3">
-                                                  <p className="text-xs text-gray-600 mb-1">Proposed Solution</p>
-                                                  <p className="text-sm text-gray-700">{item.proposed_solution}</p>
-                                                </div>
-                                              )}
-                                              {item.priority && (
-                                                <div className="rounded-lg border border-gray-200 bg-white p-3">
-                                                  <p className="text-xs text-gray-600 mb-1">Priority</p>
-                                                  <p className="text-sm text-gray-700 capitalize">{item.priority}</p>
-                                                </div>
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ) : (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
-                                          {item.gaps_identified && (
-                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div className="rounded-lg border border-gray-200 bg-white p-3">
                                               <p className="text-xs text-gray-600 mb-1">Gaps Identified</p>
-                                              <p className="text-sm text-gray-700">{item.gaps_identified}</p>
+                                              {isEditing && canEdit ? (
+                                                <textarea
+                                                  value={editingGapsIdentified}
+                                                  onChange={(e) => setEditingGapsIdentified(e.target.value)}
+                                                  rows={3}
+                                                  placeholder="Describe the gaps observed..."
+                                                  className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                              ) : (
+                                                <p className="text-sm text-gray-700 whitespace-pre-line">
+                                                  {item.gaps_identified || <span className="italic text-gray-400">No gaps recorded</span>}
+                                                </p>
+                                              )}
                                             </div>
-                                          )}
-                                          {item.proposed_solution && (
-                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                            <div className="rounded-lg border border-gray-200 bg-white p-3">
                                               <p className="text-xs text-gray-600 mb-1">Proposed Solution</p>
-                                              <p className="text-sm text-gray-700">{item.proposed_solution}</p>
+                                              {isEditing && canEdit ? (
+                                                <textarea
+                                                  value={editingProposedSolution}
+                                                  onChange={(e) => setEditingProposedSolution(e.target.value)}
+                                                  rows={3}
+                                                  placeholder="Suggest remediation steps..."
+                                                  className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                              ) : (
+                                                <p className="text-sm text-gray-700 whitespace-pre-line">
+                                                  {item.proposed_solution || <span className="italic text-gray-400">No proposed solution</span>}
+                                                </p>
+                                              )}
                                             </div>
-                                          )}
-                                          {item.responsible_party && (
-                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                              <p className="text-xs text-gray-600 mb-1">Responsible Party</p>
-                                              <p className="text-sm text-gray-700">{item.responsible_party}</p>
+                                            <div className="rounded-lg border border-gray-200 bg-white p-3">
+                                              <p className="text-xs text-gray-600 mb-1">Area / Domain</p>
+                                              {isEditing && canEdit ? (
+                                                <input
+                                                  type="text"
+                                                  value={editingAreaDomain}
+                                                  onChange={(e) => setEditingAreaDomain(e.target.value)}
+                                                  placeholder="e.g. Access Control"
+                                                  className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                              ) : (
+                                                <p className="text-sm text-gray-700">{item.area_domain || <span className="italic text-gray-400">—</span>}</p>
+                                              )}
                                             </div>
-                                          )}
-                                          {item.timeline && (
-                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                              <p className="text-xs text-gray-600 mb-1">Timeline</p>
-                                              <p className="text-sm text-gray-700">{item.timeline}</p>
-                                            </div>
-                                          )}
-                                          {item.priority && (
-                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                            <div className="rounded-lg border border-gray-200 bg-white p-3">
                                               <p className="text-xs text-gray-600 mb-1">Priority</p>
-                                              <p className="text-sm text-gray-700 capitalize">{item.priority}</p>
+                                              {isEditing && canEdit ? (
+                                                <select
+                                                  value={editingPriority}
+                                                  onChange={(e) => setEditingPriority(e.target.value)}
+                                                  className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                  <option value="">— Select priority —</option>
+                                                  <option value="critical">Critical</option>
+                                                  <option value="high">High</option>
+                                                  <option value="medium">Medium</option>
+                                                  <option value="low">Low</option>
+                                                </select>
+                                              ) : (
+                                                <p className="text-sm text-gray-700 capitalize">{item.priority || <span className="italic text-gray-400">—</span>}</p>
+                                              )}
                                             </div>
-                                          )}
-                                          {item.remarks && (
-                                            <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                              <p className="text-xs text-gray-600 mb-1">Remarks</p>
-                                              <p className="text-sm text-gray-700">{item.remarks}</p>
-                                            </div>
-                                          )}
+                                          </div>
+                                          {/* Per-item evidence is managed via
+                                              the Paperclip toggle on each
+                                              row — that opens the rich
+                                              search-existing + upload-new
+                                              panel below, which is the
+                                              canonical evidence linking flow
+                                              for every assessment type. */}
                                         </div>
-                                      )}
                                     </>
                                   )}
                                 </div>

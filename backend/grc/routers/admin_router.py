@@ -8,14 +8,24 @@ from sqlalchemy import text, or_
 from pydantic import BaseModel, EmailStr
 import bcrypt
 
-from ..models import Tenant, GRCUser, AuditLog as GlobalAuditLog, get_db
-from ..tenant_manager import (
-    get_tenant_session, tenant_session, sanitize_schema_name, IS_SQLITE
+from ..models import (
+    AuditLog as GlobalAuditLog,
+    GRCUser,
+    GRCUser as TenantUser,
+    Permission,
+    Role,
+    RolePermission,
+    Tenant,
+    UserRole,
+    get_db,
 )
-from ..tenant_models import (
-    TenantUser, Role, Permission, RolePermission, UserRole,
-    OrganizationProfile
-)
+from ..db import open_tenant_session
+
+# Per-database-per-tenant: each tenant DB carries the full schema. The legacy
+# `OrganizationProfile` model lived in a now-deleted per-schema base; the
+# tenant's own self-row in `grc_tenants` plays that role.
+OrganizationProfile = Tenant
+
 from ..permissions import get_permission_matrix_for_ui, get_all_permissions
 from .auth_router import decode_token, require_auth, get_current_user
 
@@ -41,10 +51,27 @@ def get_tenant_from_request(
     token: Optional[str] = None,
     db: Session = Depends(get_db)
 ) -> Tenant:
-    tenant = getattr(request.state, 'tenant', None)
-    if tenant:
-        return tenant
-    
+    """Return the request's Tenant as an ORM row.
+
+    `request.state.tenant` is a detached dict (set by middleware to avoid
+    lazy-loading after the master session closes), so we always re-query the
+    current DB to hand callers a real ORM object whose attributes can be read.
+    """
+    state_tenant = getattr(request.state, "tenant", None)
+    state_slug = None
+    if isinstance(state_tenant, dict):
+        state_slug = state_tenant.get("slug")
+    elif state_tenant is not None:
+        state_slug = getattr(state_tenant, "slug", None)
+
+    if state_slug:
+        tenant = db.query(Tenant).filter(
+            Tenant.slug == state_slug,
+            Tenant.is_active == True,
+        ).first()
+        if tenant:
+            return tenant
+
     x_tenant_slug = request.headers.get("X-Tenant-Slug")
     if x_tenant_slug:
         tenant = db.query(Tenant).filter(
@@ -53,7 +80,7 @@ def get_tenant_from_request(
         ).first()
         if tenant:
             return tenant
-    
+
     resolved_token = token if isinstance(token, str) else None
     if not resolved_token:
         auth_header = request.headers.get("authorization", "")
@@ -65,23 +92,23 @@ def get_tenant_from_request(
     if resolved_token:
         payload = decode_token(resolved_token)
         if payload:
+            tenant_slug = payload.get("tenant_slug") or payload.get("subdomain")
             tenant_id = payload.get("tenant_id")
-            subdomain = payload.get("subdomain")
+            if tenant_slug:
+                tenant = db.query(Tenant).filter(
+                    Tenant.slug == tenant_slug,
+                    Tenant.is_active == True,
+                ).first()
+                if tenant:
+                    return tenant
             if tenant_id:
                 tenant = db.query(Tenant).filter(
                     Tenant.id == tenant_id,
-                    Tenant.is_active == True
+                    Tenant.is_active == True,
                 ).first()
                 if tenant:
                     return tenant
-            elif subdomain:
-                tenant = db.query(Tenant).filter(
-                    Tenant.subdomain == subdomain,
-                    Tenant.is_active == True
-                ).first()
-                if tenant:
-                    return tenant
-    
+
     raise HTTPException(
         status_code=400,
         detail="Tenant not identified. Use subdomain or X-Tenant-Slug header."
@@ -89,22 +116,18 @@ def get_tenant_from_request(
 
 
 def get_tenant_db(
-    request: Request, 
+    request: Request,
     token: Optional[str] = Cookie(None, alias="grc_auth_token"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
+    """Yield a session bound to the tenant identified by the request.
+
+    Per-database-per-tenant: the tenant slug routes us to a dedicated DB.
+    """
     tenant = get_tenant_from_request(request, token, db)
-    if not tenant.schema_name:
-        raise HTTPException(status_code=400, detail="Tenant schema not configured")
-    
-    SessionClass = get_tenant_session(tenant.schema_name)
-    tenant_db = SessionClass()
-    # Store schema_name in the session for filtering
-    tenant_db.info['tenant_schema'] = tenant.schema_name
+    tenant_db = open_tenant_session(tenant.slug)
+    tenant_db.info['tenant_schema'] = tenant.slug
     try:
-        # Ensure search_path is set for this session to isolate schema (PostgreSQL only)
-        if not IS_SQLITE:
-            tenant_db.execute(text(f'SET search_path TO "{tenant.schema_name}", public'))
         yield tenant_db
     finally:
         tenant_db.close()
@@ -132,126 +155,48 @@ def get_current_tenant_user(
     if not username:
         raise HTTPException(status_code=401, detail="Invalid token payload")
     
-    # Get tenant schema for filtering (SQLite support)
-    tenant_schema = tenant_db.info.get('tenant_schema')
-    
-    # Filter by tenant_id for SQLite
-    if IS_SQLITE:
-        user = tenant_db.query(TenantUser).filter(
-            TenantUser.username == username,
-            TenantUser.tenant_id == tenant_schema
-        ).first()
-        if not user:
-            legacy_user = tenant_db.query(TenantUser).filter(
-                TenantUser.username == username,
-                or_(TenantUser.tenant_id.is_(None), TenantUser.tenant_id == "")
-            ).first()
-            if legacy_user:
-                legacy_user.tenant_id = tenant_schema
-                tenant_db.query(UserRole).filter(
-                    UserRole.user_id == legacy_user.id,
-                    or_(UserRole.tenant_id.is_(None), UserRole.tenant_id == "")
-                ).update({UserRole.tenant_id: tenant_schema}, synchronize_session=False)
+    user = tenant_db.query(TenantUser).filter(TenantUser.username == username).first()
 
-                role_ids = [
-                    ur.role_id for ur in tenant_db.query(UserRole).filter(
-                        UserRole.user_id == legacy_user.id
-                    ).all()
-                ]
-                if role_ids:
-                    tenant_db.query(Role).filter(
-                        Role.id.in_(role_ids),
-                        or_(Role.tenant_id.is_(None), Role.tenant_id == "")
-                    ).update({Role.tenant_id: tenant_schema}, synchronize_session=False)
-
-                    tenant_db.query(RolePermission).filter(
-                        RolePermission.role_id.in_(role_ids),
-                        or_(RolePermission.tenant_id.is_(None), RolePermission.tenant_id == "")
-                    ).update({RolePermission.tenant_id: tenant_schema}, synchronize_session=False)
-
-                    perm_ids = [
-                        rp.permission_id for rp in tenant_db.query(RolePermission).filter(
-                            RolePermission.role_id.in_(role_ids)
-                        ).all()
-                    ]
-                    if perm_ids:
-                        tenant_db.query(Permission).filter(
-                            Permission.id.in_(perm_ids),
-                            or_(Permission.tenant_id.is_(None), Permission.tenant_id == "")
-                        ).update({Permission.tenant_id: tenant_schema}, synchronize_session=False)
-
-                tenant_db.commit()
-                user = tenant_db.query(TenantUser).filter(
-                    TenantUser.username == username,
-                    TenantUser.tenant_id == tenant_schema
-                ).first()
-    else:
-        user = tenant_db.query(TenantUser).filter(TenantUser.username == username).first()
-    
     if not user:
         raise HTTPException(status_code=401, detail="User not found in this tenant")
-    
+
     return user
 
 
 def check_permission(user: TenantUser, tenant_db: Session, required_permission: str) -> bool:
-    tenant_schema = tenant_db.info.get('tenant_schema')
-    
-    # Filter user roles by tenant_id for SQLite
-    if IS_SQLITE:
-        user_roles = tenant_db.query(UserRole).filter(
-            UserRole.user_id == user.id,
-            UserRole.tenant_id == tenant_schema
-        ).all()
-    else:
-        user_roles = tenant_db.query(UserRole).filter(UserRole.user_id == user.id).all()
-    
+    # Primary-contact bypass: the email registered as the tenant's primary
+    # contact gets administrator-grade access without needing a UserRole row.
+    # Mirrors auth_router.require_tenant_permission so admin endpoints work
+    # for the founding admin before any RBAC is configured.
+    tenant_row = tenant_db.query(Tenant).first()
+    if (
+        tenant_row
+        and tenant_row.primary_contact_email
+        and getattr(user, "email", None)
+        and tenant_row.primary_contact_email.lower() == user.email.lower()
+    ):
+        return True
+
+    user_roles = tenant_db.query(UserRole).filter(UserRole.user_id == user.id).all()
     if not user_roles:
         return False
-    
     role_ids = [ur.role_id for ur in user_roles]
-    
-    # Filter admin role by tenant_id for SQLite
-    if IS_SQLITE:
-        admin_role = tenant_db.query(Role).filter(
-            Role.id.in_(role_ids),
-            Role.name == "Administrator",
-            Role.tenant_id == tenant_schema
-        ).first()
-    else:
-        admin_role = tenant_db.query(Role).filter(
-            Role.id.in_(role_ids),
-            Role.name == "Administrator"
-        ).first()
-    
+
+    admin_role = tenant_db.query(Role).filter(
+        Role.id.in_(role_ids),
+        Role.name == "Administrator",
+    ).first()
     if admin_role:
         return True
-    
-    # Filter permission by tenant_id for SQLite
-    if IS_SQLITE:
-        permission = tenant_db.query(Permission).filter(
-            Permission.name == required_permission,
-            Permission.tenant_id == tenant_schema
-        ).first()
-    else:
-        permission = tenant_db.query(Permission).filter(Permission.name == required_permission).first()
-    
+
+    permission = tenant_db.query(Permission).filter(Permission.name == required_permission).first()
     if not permission:
         return False
-    
-    # Filter role permission by tenant_id for SQLite
-    if IS_SQLITE:
-        has_perm = tenant_db.query(RolePermission).filter(
-            RolePermission.role_id.in_(role_ids),
-            RolePermission.permission_id == permission.id,
-            RolePermission.tenant_id == tenant_schema
-        ).first()
-    else:
-        has_perm = tenant_db.query(RolePermission).filter(
-            RolePermission.role_id.in_(role_ids),
-            RolePermission.permission_id == permission.id
-        ).first()
-    
+
+    has_perm = tenant_db.query(RolePermission).filter(
+        RolePermission.role_id.in_(role_ids),
+        RolePermission.permission_id == permission.id,
+    ).first()
     return has_perm is not None
 
 
@@ -319,6 +264,9 @@ def get_organization_profile(
     if not profile:
         return {"id": None, "name": "Not configured"}
     
+    # OrganizationProfile is now an alias for the tenant's self-row in `grc_tenants`,
+    # which doesn't carry the legacy address/website/logo_url/updated_at columns.
+    # Use getattr with defaults so existing UI fields render as empty rather than 500.
     return {
         "id": profile.id,
         "name": profile.name,
@@ -330,12 +278,12 @@ def get_organization_profile(
         "primary_contact_name": profile.primary_contact_name,
         "primary_contact_email": profile.primary_contact_email,
         "primary_contact_phone": profile.primary_contact_phone,
-        "address": profile.address,
-        "website": profile.website,
-        "logo_url": profile.logo_url,
-        "settings": profile.settings,
-        "created_at": profile.created_at.isoformat() if profile.created_at else None,
-        "updated_at": profile.updated_at.isoformat() if profile.updated_at else None
+        "address": getattr(profile, "address", None),
+        "website": getattr(profile, "website", None),
+        "logo_url": getattr(profile, "logo_url", None),
+        "settings": getattr(profile, "settings", None),
+        "created_at": profile.created_at.isoformat() if getattr(profile, "created_at", None) else None,
+        "updated_at": profile.updated_at.isoformat() if getattr(profile, "updated_at", None) else None,
     }
 
 
@@ -347,16 +295,21 @@ def update_organization_profile(
 ):
     profile = tenant_db.query(OrganizationProfile).first()
     if not profile:
-        profile = OrganizationProfile(name=data.name or "Organization")
-        tenant_db.add(profile)
-    
+        # Should never happen — provisioning inserts a self-row — but degrade gracefully.
+        raise HTTPException(status_code=404, detail="Tenant profile not found")
+
+    # Only assign fields that actually exist on the Tenant model (skip legacy
+    # OrganizationProfile-only fields like address/website/logo_url).
+    profile_columns = {c.name for c in profile.__table__.columns}
     for field, value in data.dict(exclude_unset=True).items():
-        setattr(profile, field, value)
-    
-    profile.updated_at = datetime.utcnow()
+        if field in profile_columns:
+            setattr(profile, field, value)
+
+    if "updated_at" in profile_columns:
+        profile.updated_at = datetime.utcnow()
     tenant_db.commit()
     tenant_db.refresh(profile)
-    
+
     return {"message": "Organization profile updated", "id": profile.id}
 
 
@@ -365,25 +318,11 @@ def list_users(
     user: TenantUser = Depends(require_permission("admin:users:view")),
     tenant_db: Session = Depends(get_tenant_db)
 ):
-    # Get tenant schema for filtering (SQLite support)
-    tenant_schema = tenant_db.info.get('tenant_schema')
-    
-    # Filter by tenant_id for SQLite, schema isolation for PostgreSQL
-    if IS_SQLITE:
-        users = tenant_db.query(TenantUser).filter(TenantUser.tenant_id == tenant_schema).all()
-    else:
-        users = tenant_db.query(TenantUser).all()
-    
+    users = tenant_db.query(TenantUser).all()
+
     result = []
     for u in users:
-        # Filter roles by tenant_id for SQLite
-        if IS_SQLITE:
-            roles = tenant_db.query(Role).join(UserRole).filter(
-                UserRole.user_id == u.id,
-                Role.tenant_id == tenant_schema
-            ).all()
-        else:
-            roles = tenant_db.query(Role).join(UserRole).filter(UserRole.user_id == u.id).all()
+        roles = tenant_db.query(Role).join(UserRole).filter(UserRole.user_id == u.id).all()
         
         result.append({
             "id": u.id,
@@ -404,24 +343,11 @@ def get_user(
     user: TenantUser = Depends(require_permission("admin:users:view")),
     tenant_db: Session = Depends(get_tenant_db)
 ):
-    tenant_schema = tenant_db.info.get('tenant_schema')
-    if IS_SQLITE:
-        target_user = tenant_db.query(TenantUser).filter(
-            TenantUser.id == user_id,
-            TenantUser.tenant_id == tenant_schema
-        ).first()
-    else:
-        target_user = tenant_db.query(TenantUser).filter(TenantUser.id == user_id).first()
+    target_user = tenant_db.query(TenantUser).filter(TenantUser.id == user_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    if IS_SQLITE:
-        roles = tenant_db.query(Role).join(UserRole).filter(
-            UserRole.user_id == target_user.id,
-            Role.tenant_id == tenant_schema
-        ).all()
-    else:
-        roles = tenant_db.query(Role).join(UserRole).filter(UserRole.user_id == target_user.id).all()
+
+    roles = tenant_db.query(Role).join(UserRole).filter(UserRole.user_id == target_user.id).all()
     
     return {
         "id": target_user.id,
@@ -452,49 +378,33 @@ def create_user(
                 status_code=400,
                 detail="User email domain must match the company domain"
             )
-    # Get tenant schema for filtering (SQLite support)
-    tenant_schema = tenant_db.info.get('tenant_schema')
-    
-    # Check existing users in this tenant only
-    if IS_SQLITE:
-        existing = tenant_db.query(TenantUser).filter(
-            TenantUser.tenant_id == tenant_schema,
-            (TenantUser.username == data.username) | (TenantUser.email == data.email)
-        ).first()
-    else:
-        existing = tenant_db.query(TenantUser).filter(
-            (TenantUser.username == data.username) | (TenantUser.email == data.email)
-        ).first()
-    
+    local_tenant_id = tenant.id
+
+    existing = tenant_db.query(TenantUser).filter(
+        (TenantUser.username == data.username) | (TenantUser.email == data.email)
+    ).first()
+
     if existing:
         raise HTTPException(status_code=400, detail="Username or email already exists")
-    
+
     new_user = TenantUser(
-        tenant_id=tenant_schema if IS_SQLITE else None,  # Add tenant_id for SQLite
         username=data.username,
         email=data.email,
         password_hash=hash_password(data.password),
         display_name=data.display_name or data.username,
-        created_by=user.id
     )
     tenant_db.add(new_user)
     tenant_db.commit()
     tenant_db.refresh(new_user)
-    
+
     for role_id in data.role_ids:
-        if IS_SQLITE:
-            role = tenant_db.query(Role).filter(
-                Role.id == role_id,
-                Role.tenant_id == tenant_schema
-            ).first()
-        else:
-            role = tenant_db.query(Role).filter(Role.id == role_id).first()
+        role = tenant_db.query(Role).filter(Role.id == role_id).first()
         if role:
             user_role = UserRole(
-                tenant_id=tenant_schema if IS_SQLITE else None,
+                tenant_id=local_tenant_id,
                 user_id=new_user.id,
                 role_id=role_id,
-                assigned_by=user.id
+                assigned_by=user.id,
             )
             tenant_db.add(user_role)
     tenant_db.commit()
@@ -521,17 +431,12 @@ def update_user(
 ):
     tenant = get_tenant_from_request(request, None, db)
     tenant_domain = get_tenant_email_domain(tenant)
-    tenant_schema = tenant_db.info.get('tenant_schema')
-    if IS_SQLITE:
-        target_user = tenant_db.query(TenantUser).filter(
-            TenantUser.id == user_id,
-            TenantUser.tenant_id == tenant_schema
-        ).first()
-    else:
-        target_user = tenant_db.query(TenantUser).filter(TenantUser.id == user_id).first()
+    local_tenant_id = tenant.id
+
+    target_user = tenant_db.query(TenantUser).filter(TenantUser.id == user_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
     if data.display_name is not None:
         target_user.display_name = data.display_name
     if data.email is not None:
@@ -542,48 +447,29 @@ def update_user(
                     status_code=400,
                     detail="User email domain must match the company domain"
                 )
-        if IS_SQLITE:
-            existing = tenant_db.query(TenantUser).filter(
-                TenantUser.email == data.email,
-                TenantUser.id != user_id,
-                TenantUser.tenant_id == tenant_schema
-            ).first()
-        else:
-            existing = tenant_db.query(TenantUser).filter(
-                TenantUser.email == data.email,
-                TenantUser.id != user_id
-            ).first()
+        existing = tenant_db.query(TenantUser).filter(
+            TenantUser.email == data.email,
+            TenantUser.id != user_id,
+        ).first()
         if existing:
             raise HTTPException(status_code=400, detail="Email already in use")
         target_user.email = data.email
     if data.is_active is not None:
         target_user.is_active = data.is_active
-    
+
     if data.role_ids is not None:
-        if IS_SQLITE:
-            tenant_db.query(UserRole).filter(
-                UserRole.user_id == user_id,
-                UserRole.tenant_id == tenant_schema
-            ).delete()
-        else:
-            tenant_db.query(UserRole).filter(UserRole.user_id == user_id).delete()
+        tenant_db.query(UserRole).filter(UserRole.user_id == user_id).delete()
         for role_id in data.role_ids:
-            if IS_SQLITE:
-                role = tenant_db.query(Role).filter(
-                    Role.id == role_id,
-                    Role.tenant_id == tenant_schema
-                ).first()
-            else:
-                role = tenant_db.query(Role).filter(Role.id == role_id).first()
+            role = tenant_db.query(Role).filter(Role.id == role_id).first()
             if role:
                 user_role = UserRole(
-                    tenant_id=tenant_schema if IS_SQLITE else None,
+                    tenant_id=local_tenant_id,
                     user_id=user_id,
                     role_id=role_id,
-                    assigned_by=user.id
+                    assigned_by=user.id,
                 )
                 tenant_db.add(user_role)
-    
+
     tenant_db.commit()
     return {"message": "User updated successfully"}
 
@@ -596,15 +482,8 @@ def delete_user(
 ):
     if user_id == user.id:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
-    
-    tenant_schema = tenant_db.info.get('tenant_schema')
-    if IS_SQLITE:
-        target_user = tenant_db.query(TenantUser).filter(
-            TenantUser.id == user_id,
-            TenantUser.tenant_id == tenant_schema
-        ).first()
-    else:
-        target_user = tenant_db.query(TenantUser).filter(TenantUser.id == user_id).first()
+
+    target_user = tenant_db.query(TenantUser).filter(TenantUser.id == user_id).first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -619,33 +498,14 @@ def list_roles(
     user: TenantUser = Depends(require_permission("admin:users:view")),
     tenant_db: Session = Depends(get_tenant_db)
 ):
-    # Get tenant schema for filtering (SQLite support)
-    tenant_schema = tenant_db.info.get('tenant_schema')
-    
-    # Filter by tenant_id for SQLite
-    if IS_SQLITE:
-        roles = tenant_db.query(Role).filter(Role.tenant_id == tenant_schema).all()
-    else:
-        roles = tenant_db.query(Role).all()
-    
+    roles = tenant_db.query(Role).all()
+
     result = []
     for role in roles:
-        # Filter permissions and user count by tenant_id for SQLite
-        if IS_SQLITE:
-            perms = tenant_db.query(Permission).join(RolePermission).filter(
-                RolePermission.role_id == role.id,
-                RolePermission.tenant_id == tenant_schema,
-                Permission.tenant_id == tenant_schema
-            ).all()
-            user_count = tenant_db.query(UserRole).filter(
-                UserRole.role_id == role.id,
-                UserRole.tenant_id == tenant_schema
-            ).count()
-        else:
-            perms = tenant_db.query(Permission).join(RolePermission).filter(
-                RolePermission.role_id == role.id
-            ).all()
-            user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role.id).count()
+        perms = tenant_db.query(Permission).join(RolePermission).filter(
+            RolePermission.role_id == role.id
+        ).all()
+        user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role.id).count()
         
         result.append({
             "id": role.id,
@@ -665,26 +525,13 @@ def get_role(
     user: TenantUser = Depends(require_permission("admin:roles:view")),
     tenant_db: Session = Depends(get_tenant_db)
 ):
-    tenant_schema = tenant_db.info.get('tenant_schema')
-    if IS_SQLITE:
-        role = tenant_db.query(Role).filter(
-            Role.id == role_id,
-            Role.tenant_id == tenant_schema
-        ).first()
-    else:
-        role = tenant_db.query(Role).filter(Role.id == role_id).first()
+    role = tenant_db.query(Role).filter(Role.id == role_id).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
-    
-    if IS_SQLITE:
-        perms = tenant_db.query(Permission).join(RolePermission).filter(
-            RolePermission.role_id == role.id,
-            Permission.tenant_id == tenant_schema
-        ).all()
-    else:
-        perms = tenant_db.query(Permission).join(RolePermission).filter(
-            RolePermission.role_id == role.id
-        ).all()
+
+    perms = tenant_db.query(Permission).join(RolePermission).filter(
+        RolePermission.role_id == role.id
+    ).all()
     
     return {
         "id": role.id,
@@ -702,44 +549,32 @@ def create_role(
     user: TenantUser = Depends(require_permission("admin:roles:create")),
     tenant_db: Session = Depends(get_tenant_db)
 ):
-    tenant_schema = tenant_db.info.get('tenant_schema')
-    if IS_SQLITE:
-        existing = tenant_db.query(Role).filter(
-            Role.name == data.name,
-            Role.tenant_id == tenant_schema
-        ).first()
-    else:
-        existing = tenant_db.query(Role).filter(Role.name == data.name).first()
+    local_tenant_id = (tenant_db.query(Tenant).first() or Tenant()).id
+
+    existing = tenant_db.query(Role).filter(Role.name == data.name).first()
     if existing:
         raise HTTPException(status_code=400, detail="Role name already exists")
-    
+
     role = Role(
-        tenant_id=tenant_schema if IS_SQLITE else None,
+        tenant_id=local_tenant_id,
         name=data.name,
         description=data.description,
-        is_system_role=False
+        is_system_role=False,
     )
     tenant_db.add(role)
     tenant_db.commit()
     tenant_db.refresh(role)
-    
+
     for perm_name in data.permission_names:
-        if IS_SQLITE:
-            perm = tenant_db.query(Permission).filter(
-                Permission.name == perm_name,
-                Permission.tenant_id == tenant_schema
-            ).first()
-        else:
-            perm = tenant_db.query(Permission).filter(Permission.name == perm_name).first()
+        perm = tenant_db.query(Permission).filter(Permission.name == perm_name).first()
         if perm:
             rp = RolePermission(
-                tenant_id=tenant_schema if IS_SQLITE else None,
                 role_id=role.id,
-                permission_id=perm.id
+                permission_id=perm.id,
             )
             tenant_db.add(rp)
     tenant_db.commit()
-    
+
     return {"message": "Role created successfully", "role": {"id": role.id, "name": role.name}}
 
 
@@ -750,63 +585,40 @@ def update_role(
     user: TenantUser = Depends(require_permission("admin:roles:edit")),
     tenant_db: Session = Depends(get_tenant_db)
 ):
-    tenant_schema = tenant_db.info.get('tenant_schema')
-    if IS_SQLITE:
-        role = tenant_db.query(Role).filter(
-            Role.id == role_id,
-            Role.tenant_id == tenant_schema
-        ).first()
-    else:
-        role = tenant_db.query(Role).filter(Role.id == role_id).first()
+    role = tenant_db.query(Role).filter(Role.id == role_id).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
-    
+
     if role.is_system_role and role.name == "Administrator":
         raise HTTPException(status_code=400, detail="Cannot modify system Administrator role")
-    
+
+    local_tenant_id = (tenant_db.query(Tenant).first() or Tenant()).id
+
     if data.name is not None:
-        if IS_SQLITE:
-            existing = tenant_db.query(Role).filter(
-                Role.name == data.name,
-                Role.id != role_id,
-                Role.tenant_id == tenant_schema
-            ).first()
-        else:
-            existing = tenant_db.query(Role).filter(Role.name == data.name, Role.id != role_id).first()
+        existing = tenant_db.query(Role).filter(
+            Role.name == data.name, Role.id != role_id
+        ).first()
         if existing:
             raise HTTPException(status_code=400, detail="Role name already exists")
         role.name = data.name
-    
+
     if data.description is not None:
         role.description = data.description
-    
+
     if data.permission_names is not None:
-        if IS_SQLITE:
-            tenant_db.query(RolePermission).filter(
-                RolePermission.role_id == role_id,
-                RolePermission.tenant_id == tenant_schema
-            ).delete()
-        else:
-            tenant_db.query(RolePermission).filter(RolePermission.role_id == role_id).delete()
+        tenant_db.query(RolePermission).filter(RolePermission.role_id == role_id).delete()
         for perm_name in data.permission_names:
-            if IS_SQLITE:
-                perm = tenant_db.query(Permission).filter(
-                    Permission.name == perm_name,
-                    Permission.tenant_id == tenant_schema
-                ).first()
-            else:
-                perm = tenant_db.query(Permission).filter(Permission.name == perm_name).first()
+            perm = tenant_db.query(Permission).filter(Permission.name == perm_name).first()
             if perm:
                 rp = RolePermission(
-                    tenant_id=tenant_schema if IS_SQLITE else None,
                     role_id=role.id,
-                    permission_id=perm.id
+                    permission_id=perm.id,
                 )
                 tenant_db.add(rp)
-    
+
     role.updated_at = datetime.utcnow()
     tenant_db.commit()
-    
+
     return {"message": "Role updated successfully"}
 
 
@@ -816,27 +628,14 @@ def delete_role(
     user: TenantUser = Depends(require_permission("admin:roles:delete")),
     tenant_db: Session = Depends(get_tenant_db)
 ):
-    tenant_schema = tenant_db.info.get('tenant_schema')
-    if IS_SQLITE:
-        role = tenant_db.query(Role).filter(
-            Role.id == role_id,
-            Role.tenant_id == tenant_schema
-        ).first()
-    else:
-        role = tenant_db.query(Role).filter(Role.id == role_id).first()
+    role = tenant_db.query(Role).filter(Role.id == role_id).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
-    
+
     if role.is_system_role:
         raise HTTPException(status_code=400, detail="Cannot delete system role")
-    
-    if IS_SQLITE:
-        user_count = tenant_db.query(UserRole).filter(
-            UserRole.role_id == role_id,
-            UserRole.tenant_id == tenant_schema
-        ).count()
-    else:
-        user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role_id).count()
+
+    user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role_id).count()
     if user_count > 0:
         raise HTTPException(status_code=400, detail=f"Role is assigned to {user_count} users. Unassign first.")
     

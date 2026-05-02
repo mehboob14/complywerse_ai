@@ -4,15 +4,16 @@ import { useState, useEffect, useMemo } from 'react';
 import { DataTable, IfPermission, SearchInput } from '@/components/ui';
 import { Edit2, Plus, Trash2 } from 'lucide-react';
 import { adminApi, AdminUser, AdminRole } from '@/lib/api';
+import { authedFetch } from '@/lib/auth-fetch';
 
 async function ensureTenantContext(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
-  
+
   const existingSlug = localStorage.getItem('tenant_slug');
   if (existingSlug) return true;
-  
+
   try {
-    const response = await fetch('/api/auth/me', { credentials: 'include' });
+    const response = await authedFetch('/api/auth/me');
     if (!response.ok) return false;
     
     const data = await response.json();

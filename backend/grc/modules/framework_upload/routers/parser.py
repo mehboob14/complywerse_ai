@@ -3,7 +3,7 @@ import json
 import threading
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from pydantic import BaseModel
@@ -12,7 +12,7 @@ from openai import OpenAI
 from ....models import (
     UploadedFramework, ParsedFrameworkControl, ControlEvidenceMapping,
     FrameworkControlAlignment, AssessmentItem, AssessmentEvidence,
-    AssessmentRemediation, GRCUser, get_db, SessionLocal,
+    AssessmentRemediation, GRCUser, get_db,
     ControlEvidenceRequirement, EvidenceRequirementHistory
 )
 from ....routers.auth_router import require_auth, get_user_tenants
@@ -1253,15 +1253,11 @@ def update_parsing_heartbeat(db: Session, framework_id: int, stage: str):
         print(f"[PARSE] Heartbeat update failed: {e}", flush=True)
 
 
-def run_background_parsing(framework_id: int, file_path: str, file_type: str, framework_name: str):
-    """Run parsing in a background thread to avoid HTTP timeout."""
-    print(f"[PARSE] ========================================", flush=True)
+def _run_background_parsing_body(db, framework_id: int, file_path: str, file_type: str, framework_name: str, tenant_slug: str):
+    """Body of the framework-parse job. Takes an open tenant-scoped session."""
     print(f"[PARSE] Background parsing started for framework ID: {framework_id}", flush=True)
-    print(f"[PARSE] Framework name: {framework_name}", flush=True)
-    print(f"[PARSE] File: {file_path} ({file_type})", flush=True)
-    print(f"[PARSE] ========================================", flush=True)
-    
-    db = SessionLocal()
+    print(f"[PARSE] Framework name: {framework_name} | File: {file_path} ({file_type}) | Tenant: {tenant_slug}", flush=True)
+
     try:
         extracted_text = ""
         if file_type == "pdf":
@@ -1487,6 +1483,17 @@ def run_background_parsing(framework_id: int, file_path: str, file_type: str, fr
                 db.commit()
         except Exception:
             pass
+        raise
+
+
+def run_background_parsing(framework_id: int, file_path: str, file_type: str, framework_name: str, tenant_slug: str):
+    """Legacy in-process entry point. Opens its own tenant session and calls
+    `_run_background_parsing_body`. Kept for any threaded callers; new
+    dispatches go through `grc.tasks.frameworks.parse_framework`."""
+    from ....db import open_tenant_session
+    db = open_tenant_session(tenant_slug)
+    try:
+        return _run_background_parsing_body(db, framework_id, file_path, file_type, framework_name, tenant_slug)
     finally:
         db.close()
 
@@ -1760,6 +1767,7 @@ def classify_framework(
 def parse_framework_document(
     framework_id: int,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     classify_first: bool = Query(False, description="Run classification before parsing if not already classified"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
@@ -1853,14 +1861,19 @@ def parse_framework_document(
     framework.upload_status = "parsing"
     framework.parse_error = None
     db.commit()
-    
-    thread = threading.Thread(
-        target=run_background_parsing,
-        args=(framework_id, file_path, file_type, framework_name),
-        daemon=True
-    )
-    thread.start()
-    
+
+    tenant_slug = getattr(http_request.state, "tenant_slug", None)
+    if not tenant_slug:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
+    try:
+        tenant_rate_limit(tenant_slug, bucket="framework_parse")
+    except RateLimitExceeded:
+        raise HTTPException(status_code=429, detail="Too many framework parses queued; try again shortly")
+    from ....tasks.frameworks import parse_framework as _parse_task
+    _parse_task.delay(tenant_slug, framework_id, file_path, file_type, framework_name)
+
     return {
         "message": "Parsing started in background. Refresh the page periodically to check status.",
         "framework_id": framework_id,
@@ -1903,6 +1916,7 @@ def get_parse_status(
 @router.post("/{framework_id}/retry-parse")
 def retry_framework_parsing(
     framework_id: int,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1998,13 +2012,18 @@ def retry_framework_parsing(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Framework file not found on disk"
         )
-    
-    thread = threading.Thread(
-        target=run_background_parsing,
-        args=(framework_id, file_path, file_type, framework_name),
-        daemon=True
-    )
-    thread.start()
+
+    tenant_slug = getattr(http_request.state, "tenant_slug", None)
+    if not tenant_slug:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
+    try:
+        tenant_rate_limit(tenant_slug, bucket="framework_parse")
+    except RateLimitExceeded:
+        raise HTTPException(status_code=429, detail="Too many framework parses queued; try again shortly")
+    from ....tasks.frameworks import parse_framework as _parse_task
+    _parse_task.delay(tenant_slug, framework_id, file_path, file_type, framework_name)
     
     return {
         "message": f"Parsing restarted. Previous status was '{old_status}'.",
@@ -2441,9 +2460,8 @@ def delete_parsed_control(
     return None
 
 
-def enhance_framework_controls_background(framework_id: int, framework_name: str):
-    """Background task to enhance all controls with evidence requirements."""
-    db = SessionLocal()
+def _enhance_controls_body(db, framework_id: int, framework_name: str):
+    """Body of the AI-enhance job. Takes an open tenant-scoped session."""
     try:
         if not check_ai_available():
             print("[ENHANCE] OpenAI API key not configured", flush=True)
@@ -2560,9 +2578,18 @@ Return JSON with "controls" array containing objects with "id" and "evidence_req
             db.commit()
         
         print(f"[ENHANCE] Enhancement complete for framework {framework_id}", flush=True)
-        
+        return {"status": "completed", "framework_id": framework_id}
     except Exception as e:
         print(f"[ENHANCE] Error: {str(e)}", flush=True)
+        raise
+
+
+def enhance_framework_controls_background(framework_id: int, framework_name: str, tenant_slug: str):
+    """Legacy in-process entry; new dispatches use the Celery task."""
+    from ....db import open_tenant_session
+    db = open_tenant_session(tenant_slug)
+    try:
+        return _enhance_controls_body(db, framework_id, framework_name)
     finally:
         db.close()
 
@@ -2571,6 +2598,7 @@ Return JSON with "controls" array containing objects with "id" and "evidence_req
 def enhance_framework_with_evidence(
     framework_id: int,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -2609,11 +2637,17 @@ def enhance_framework_with_evidence(
         func.jsonb_array_length(ParsedFrameworkControl.evidence_requirements) > 0
     ).count()
     
-    background_tasks.add_task(
-        enhance_framework_controls_background,
-        framework_id,
-        framework.name
-    )
+    tenant_slug = getattr(http_request.state, "tenant_slug", None)
+    if not tenant_slug:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
+    try:
+        tenant_rate_limit(tenant_slug, bucket="framework_enhance")
+    except RateLimitExceeded:
+        raise HTTPException(status_code=429, detail="Too many enhancement runs queued; try again shortly")
+    from ....tasks.frameworks import enhance_framework_controls as _enhance_task
+    _enhance_task.delay(tenant_slug, framework_id, framework.name)
     
     return {
         "message": "Enhancement started",
@@ -2743,9 +2777,8 @@ def generate_evidence_requirements_for_controls_batch(
     return results
 
 
-def generate_evidence_requirements_background(framework_id: int, framework_name: str):
-    """Background task to generate evidence requirements for all controls in a framework."""
-    db = SessionLocal()
+def _generate_evidence_reqs_body(db, framework_id: int, framework_name: str):
+    """Body of the generate-evidence-reqs job. Takes an open tenant-scoped session."""
     try:
         framework = db.query(UploadedFramework).filter(
             UploadedFramework.id == framework_id
@@ -2809,14 +2842,23 @@ def generate_evidence_requirements_background(framework_id: int, framework_name:
         
         framework.parse_error = None
         db.commit()
-        
+
         print(f"[EVIDENCE] Completed! Generated {total_requirements} evidence requirements for {total_controls} controls", flush=True)
-        
+        return {"status": "completed", "framework_id": framework_id, "total_requirements": total_requirements, "total_controls": total_controls}
     except Exception as e:
         print(f"[EVIDENCE] Error: {str(e)}", flush=True)
         if framework:
             framework.parse_error = f"Error generating evidence: {str(e)[:200]}"
             db.commit()
+        raise
+
+
+def generate_evidence_requirements_background(framework_id: int, framework_name: str, tenant_slug: str):
+    """Legacy in-process entry; new dispatches use the Celery task."""
+    from ....db import open_tenant_session
+    db = open_tenant_session(tenant_slug)
+    try:
+        return _generate_evidence_reqs_body(db, framework_id, framework_name)
     finally:
         db.close()
 
@@ -2825,6 +2867,7 @@ def generate_evidence_requirements_background(framework_id: int, framework_name:
 def generate_evidence_requirements(
     framework_id: int,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -2861,11 +2904,17 @@ def generate_evidence_requirements(
         ControlEvidenceRequirement.framework_id == framework_id
     ).count()
     
-    background_tasks.add_task(
-        generate_evidence_requirements_background,
-        framework_id,
-        framework.name
-    )
+    tenant_slug = getattr(http_request.state, "tenant_slug", None)
+    if not tenant_slug:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
+    try:
+        tenant_rate_limit(tenant_slug, bucket="framework_evidence_reqs")
+    except RateLimitExceeded:
+        raise HTTPException(status_code=429, detail="Too many evidence-requirement jobs queued; try again shortly")
+    from ....tasks.frameworks import generate_evidence_requirements as _evid_task
+    _evid_task.delay(tenant_slug, framework_id, framework.name)
     
     return {
         "message": "Evidence requirement generation started",

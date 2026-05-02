@@ -1,9 +1,9 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { controlLibraryApi } from '@/lib/api';
-import { MultiSelectDropdown } from '@/components/ui';
+import { MultiSelectDropdown, SearchInput } from '@/components/ui';
 import {
   GitCompare,
   Loader2,
@@ -15,6 +15,8 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 
 interface FrameworkInfo {
@@ -69,6 +71,42 @@ interface AIMapResult {
   ai_mappings: AIMapping[];
 }
 
+interface AiCompareRun {
+  id: number;
+  source_framework_id: number;
+  dest_framework_id: number;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  progress_total: number;
+  progress_done: number;
+  progress_percent: number;
+  error_message?: string;
+  model_used?: string;
+  task_id?: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
+interface AiCompareDestination {
+  dest_control_id: number;
+  dest_reference: string;
+  dest_title: string;
+  dest_description?: string;
+  dest_domain?: string;
+  confidence: number;
+  rationale: string;
+  evidence_recommendations: string[];
+  rank: number;
+}
+
+interface AiCompareItem {
+  source_control_id: number;
+  source_reference: string;
+  source_title: string;
+  source_description?: string;
+  source_domain?: string;
+  destinations: AiCompareDestination[];
+}
+
 function dedupeComparisonFrameworks(frameworks: FrameworkInfo[]) {
   const map = new Map<string, FrameworkInfo>();
 
@@ -96,6 +134,22 @@ export default function FrameworkComparisonPage() {
   const [compareTriggered, setCompareTriggered] = useState(false);
   const [aiResults, setAiResults] = useState<Record<number, AIMapResult>>({});
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+
+  // AI cross-framework compare (Celery-backed, cached per pair)
+  const [mode, setMode] = useState<'keyword' | 'ai'>('keyword');
+  const [aiRun, setAiRun] = useState<AiCompareRun | null>(null);
+  const [aiItems, setAiItems] = useState<AiCompareItem[]>([]);
+  const [aiError, setAiError] = useState<string>('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const aiPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Post-compare client-side filtering & sorting. The same controls drive
+  // both the keyword crosswalk and the AI compare table; only one mode is
+  // visible at a time so a single pair of states is enough.
+  type SortField = 'reference' | 'title' | 'domain' | 'matches';
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState<SortField>('reference');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const { data: frameworksData, isLoading: frameworksLoading } = useQuery({
     queryKey: ['comparison-frameworks'],
@@ -137,12 +191,90 @@ export default function FrameworkComparisonPage() {
 
   const handleCompare = () => {
     if (sourceFrameworkId && destFrameworkId) {
+      setMode('keyword');
       setCompareTriggered(true);
       setPage(0);
       setAiResults({});
       setExpandedRows(new Set());
     }
   };
+
+  const stopAiPolling = () => {
+    if (aiPollRef.current) {
+      clearInterval(aiPollRef.current);
+      aiPollRef.current = null;
+    }
+  };
+
+  const fetchAiMappings = async (runId: number) => {
+    try {
+      const r = await controlLibraryApi.comparison.aiCompareMappings(runId);
+      const items = (r.data as { items?: AiCompareItem[] })?.items || [];
+      setAiItems(items);
+    } catch (e: any) {
+      setAiError(e?.response?.data?.detail || 'Failed to load AI mappings');
+    }
+  };
+
+  const startAiPolling = (runId: number) => {
+    stopAiPolling();
+    aiPollRef.current = setInterval(async () => {
+      try {
+        const r = await controlLibraryApi.comparison.aiCompareStatus(runId);
+        const next = r.data as AiCompareRun;
+        setAiRun(next);
+        if (next.status === 'completed') {
+          stopAiPolling();
+          await fetchAiMappings(runId);
+        } else if (next.status === 'failed') {
+          stopAiPolling();
+          setAiError(next.error_message || 'AI comparison failed');
+        }
+      } catch {
+        // soft-fail; keep polling
+      }
+    }, 3000);
+  };
+
+  const handleAiCompare = async (refresh = false) => {
+    if (!sourceFrameworkId || !destFrameworkId) return;
+    setMode('ai');
+    setCompareTriggered(true);
+    setAiError('');
+    setAiItems([]);
+    setExpandedRows(new Set());
+    setAiBusy(true);
+    try {
+      const r = await controlLibraryApi.comparison.aiCompareRun(
+        sourceFrameworkId,
+        destFrameworkId,
+        refresh
+      );
+      const run = r.data as AiCompareRun;
+      setAiRun(run);
+      if (run.status === 'completed') {
+        await fetchAiMappings(run.id);
+      } else if (run.status === 'queued' || run.status === 'running') {
+        startAiPolling(run.id);
+      } else if (run.status === 'failed') {
+        setAiError(run.error_message || 'AI comparison failed');
+      }
+    } catch (e: any) {
+      setAiError(e?.response?.data?.detail || 'Failed to start AI comparison');
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  // Stop polling on unmount or when frameworks change.
+  useEffect(() => stopAiPolling, []);
+  useEffect(() => {
+    // Reset AI state when the framework selection changes.
+    stopAiPolling();
+    setAiRun(null);
+    setAiItems([]);
+    setAiError('');
+  }, [sourceFrameworkId, destFrameworkId]);
 
   const toggleRow = (id: number) => {
     setExpandedRows(prev => {
@@ -205,6 +337,96 @@ export default function FrameworkComparisonPage() {
     if (ev?.name) return ev.name;
     return JSON.stringify(ev);
   };
+
+  // Natural reference compare: A-1, A-2, A-10 sort correctly (not A-1, A-10, A-2).
+  const compareReferences = (a: string, b: string): number =>
+    String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
+
+  const compareStrings = (a: string, b: string): number =>
+    String(a || '').localeCompare(String(b || ''), undefined, { sensitivity: 'base' });
+
+  const matchesQuery = (q: string, ...fields: Array<string | undefined | null>): boolean => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return true;
+    return fields.some((f) => (f || '').toLowerCase().includes(needle));
+  };
+
+  const filteredKeywordRows = useMemo(() => {
+    const rows = crosswalkData?.crosswalk || [];
+    const filtered = rows.filter((row) => {
+      const destRefs = row.destination_controls.map((d) => d.reference).join(' ');
+      const destTitles = row.destination_controls.map((d) => d.title).join(' ');
+      const destDomains = row.destination_controls.map((d) => d.domain || '').join(' ');
+      return matchesQuery(
+        searchQuery,
+        row.source_control.reference,
+        row.source_control.title,
+        row.source_control.description,
+        row.source_control.domain,
+        row.source_control.category,
+        destRefs,
+        destTitles,
+        destDomains,
+      );
+    });
+    const sorted = [...filtered].sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case 'reference':
+          cmp = compareReferences(a.source_control.reference, b.source_control.reference);
+          break;
+        case 'title':
+          cmp = compareStrings(a.source_control.title, b.source_control.title);
+          break;
+        case 'domain':
+          cmp = compareStrings(
+            a.source_control.domain || a.source_control.category || '',
+            b.source_control.domain || b.source_control.category || '',
+          );
+          break;
+        case 'matches':
+          cmp = (a.match_count || 0) - (b.match_count || 0);
+          break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [crosswalkData, searchQuery, sortField, sortDir]);
+
+  const filteredAiRows = useMemo(() => {
+    const filtered = aiItems.filter((row) => {
+      const destRefs = row.destinations.map((d) => d.dest_reference).join(' ');
+      const destTitles = row.destinations.map((d) => d.dest_title || '').join(' ');
+      return matchesQuery(
+        searchQuery,
+        row.source_reference,
+        row.source_title,
+        row.source_description,
+        row.source_domain,
+        destRefs,
+        destTitles,
+      );
+    });
+    const sorted = [...filtered].sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case 'reference':
+          cmp = compareReferences(a.source_reference, b.source_reference);
+          break;
+        case 'title':
+          cmp = compareStrings(a.source_title, b.source_title);
+          break;
+        case 'domain':
+          cmp = compareStrings(a.source_domain || '', b.source_domain || '');
+          break;
+        case 'matches':
+          cmp = (a.destinations?.length || 0) - (b.destinations?.length || 0);
+          break;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [aiItems, searchQuery, sortField, sortDir]);
 
   const totalPages = crosswalkData ? Math.ceil(crosswalkData.total / pageSize) : 0;
   const sourceFramework = frameworkOptions.find(f => f.id === sourceFrameworkId);
@@ -285,10 +507,20 @@ export default function FrameworkComparisonPage() {
           <button
             onClick={handleCompare}
             disabled={!sourceFrameworkId || !destFrameworkId || sourceFrameworkId === destFrameworkId}
-            className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 sm:px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 sm:px-5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Fast keyword/category-based crosswalk"
           >
             <GitCompare className="h-4 w-4" />
-            Compare
+            Quick Compare
+          </button>
+          <button
+            onClick={() => handleAiCompare(false)}
+            disabled={!sourceFrameworkId || !destFrameworkId || sourceFrameworkId === destFrameworkId || aiBusy}
+            className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 sm:px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+            title="AI-driven comparison; cached per pair so it's instant on re-run"
+          >
+            {aiBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            AI Compare
           </button>
         </div>
       </div>
@@ -296,27 +528,21 @@ export default function FrameworkComparisonPage() {
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex items-center gap-2 mb-1.5">
-            <div className="rounded-lg bg-blue-50 p-1.5">
-              <Shield className="h-4 w-4 text-blue-600" />
-            </div>
+            <Shield className="h-4 w-4 text-blue-600 flex-shrink-0" />
             <p className="text-xs font-medium text-slate-500 truncate">Available Frameworks</p>
           </div>
           <p className="text-lg sm:text-xl font-semibold text-slate-900">{frameworkOptions.length || 0}</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex items-center gap-2 mb-1.5">
-            <div className="rounded-lg bg-blue-50 p-1.5">
-              <GitCompare className="h-4 w-4 text-blue-500" />
-            </div>
+            <GitCompare className="h-4 w-4 text-blue-500 flex-shrink-0" />
             <p className="text-xs font-medium text-slate-500 truncate">Source Controls</p>
           </div>
           <p className="text-lg sm:text-xl font-semibold text-slate-900">{crosswalkData?.total || 0}</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex items-center gap-2 mb-1.5">
-            <div className="rounded-lg bg-emerald-50 p-1.5">
-              <Sparkles className="h-4 w-4 text-emerald-600" />
-            </div>
+            <Sparkles className="h-4 w-4 text-emerald-600 flex-shrink-0" />
             <p className="text-xs font-medium text-slate-500 truncate">Mapped Controls</p>
           </div>
           <p className="text-lg sm:text-xl font-semibold text-slate-900">
@@ -327,7 +553,207 @@ export default function FrameworkComparisonPage() {
         </div>
       </div>
 
-      {compareTriggered && sourceFrameworkId && destFrameworkId && (
+      {compareTriggered && sourceFrameworkId && destFrameworkId && mode === 'ai' && (
+        <div className="card">
+          <div className="card-header flex items-center justify-between">
+            <div>
+              <h2 className="card-title flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary-600" />
+                AI Crosswalk: {sourceFramework?.short_code || 'Source'} → {destFramework?.short_code || 'Destination'}
+              </h2>
+              <p className="card-description">
+                {aiRun?.status === 'completed'
+                  ? `${aiItems.length} source controls mapped via ${aiRun.model_used || 'AI'}.`
+                  : aiRun?.status === 'running' || aiRun?.status === 'queued'
+                    ? `Running in background. ${aiRun.progress_done}/${aiRun.progress_total} controls processed.`
+                    : 'AI is comparing controls one-to-one across the two frameworks.'}
+              </p>
+            </div>
+            {aiRun?.status === 'completed' && (
+              <button
+                onClick={() => handleAiCompare(true)}
+                disabled={aiBusy}
+                className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                title="Re-run the AI comparison from scratch"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Refresh
+              </button>
+            )}
+          </div>
+
+          {aiError && (
+            <div className="mx-4 mt-2 mb-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+              {aiError}
+            </div>
+          )}
+
+          {(aiRun?.status === 'queued' || aiRun?.status === 'running') && (
+            <div className="px-4 py-6">
+              <div className="mb-2 flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2 font-medium text-slate-700">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary-600" />
+                  {aiRun.status === 'queued' ? 'Queued — waiting for a worker' : 'AI is running'}
+                </span>
+                <span className="text-xs text-slate-500">
+                  {aiRun.progress_done}/{aiRun.progress_total || '?'} ({aiRun.progress_percent || 0}%)
+                </span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-primary-600 transition-all"
+                  style={{ width: `${Math.min(100, Math.max(2, aiRun.progress_percent || 0))}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                You can leave this page; the job runs in the background. Re-clicking the same pair later
+                returns the result instantly.
+              </p>
+            </div>
+          )}
+
+          {aiRun?.status === 'completed' && aiItems.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <AlertCircle className="mb-4 h-12 w-12 text-gray-400" />
+              <h3 className="text-lg font-medium text-black">No high-confidence matches</h3>
+              <p className="mt-1 text-gray-600">
+                AI did not find overlap above the 0.5 confidence threshold. Try the Quick Compare for a wider lookup.
+              </p>
+            </div>
+          )}
+
+          {aiRun?.status === 'completed' && aiItems.length > 0 && (
+            <>
+              <CompareTableToolbar
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                sortField={sortField}
+                onSortFieldChange={setSortField}
+                sortDir={sortDir}
+                onSortDirToggle={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                resultCount={filteredAiRows.length}
+                totalCount={aiItems.length}
+                matchesLabel="Matches"
+              />
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[1100px]">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-24">Source Ref</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-64">Source Requirement</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-32">Source Domain</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-72">AI Mapped Destinations</th>
+                      <th className="px-3 py-3 text-center text-xs font-medium uppercase text-gray-600 w-20">Top Conf.</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-72">Evidence</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredAiRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="px-3 py-10 text-center text-sm text-gray-500">
+                          No matches for "{searchQuery}"
+                        </td>
+                      </tr>
+                    ) : filteredAiRows.map((row) => {
+                    const isExpanded = expandedRows.has(row.source_control_id);
+                    const top = row.destinations[0];
+                    const destRefs = row.destinations.map((d) => d.dest_reference).join(' • ') || 'No high-confidence match';
+                    const evidence = Array.from(
+                      new Set(row.destinations.flatMap((d) => d.evidence_recommendations || []))
+                    ).join(' • ') || '—';
+                    return (
+                      <Fragment key={row.source_control_id}>
+                        <tr
+                          className="cursor-pointer align-top hover:bg-gray-50"
+                          onClick={() => toggleRow(row.source_control_id)}
+                        >
+                          <td className="px-3 py-3">
+                            <span className="font-mono text-sm font-medium text-blue-600">{row.source_reference}</span>
+                          </td>
+                          <td className="px-3 py-3">
+                            <p className="truncate whitespace-nowrap text-sm font-medium text-black" title={row.source_title}>
+                              {truncateInlineText(row.source_title, 78)}
+                            </p>
+                          </td>
+                          <td className="px-3 py-3">
+                            <span className="block truncate text-xs text-gray-700" title={row.source_domain || '—'}>
+                              {truncateInlineText(row.source_domain || '—', 26)}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3">
+                            <p className="truncate font-mono text-sm text-purple-700" title={destRefs}>
+                              {truncateInlineText(destRefs, 60)}
+                            </p>
+                            <span className="mt-0.5 inline-block rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700">
+                              AI Match · {row.destinations.length} match{row.destinations.length === 1 ? '' : 'es'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            {top ? (
+                              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                                {Math.round(top.confidence * 100)}%
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3">
+                            <p className="truncate text-xs text-gray-700" title={evidence}>
+                              {truncateInlineText(evidence, 80)}
+                            </p>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="bg-slate-50">
+                            <td colSpan={6} className="px-4 py-4">
+                              <div className="rounded-lg border border-purple-200 bg-purple-50 p-3">
+                                <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-purple-700">
+                                  <Sparkles className="h-4 w-4" /> AI Mapping Details
+                                </p>
+                                {row.destinations.length === 0 ? (
+                                  <p className="text-xs text-purple-700">No mappings above the 0.5 confidence threshold.</p>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {row.destinations.map((d) => (
+                                      <div key={d.dest_control_id} className="rounded-md bg-white/70 p-2">
+                                        <p className="text-sm font-medium text-purple-800">
+                                          {d.dest_reference}
+                                          {d.dest_title ? ` — ${d.dest_title}` : ''}
+                                        </p>
+                                        <p className="text-xs text-purple-700">
+                                          Confidence: {Math.round(d.confidence * 100)}%
+                                          {d.dest_domain ? ` · ${d.dest_domain}` : ''}
+                                        </p>
+                                        {d.rationale && (
+                                          <p className="mt-1 text-xs text-purple-700/80">{d.rationale}</p>
+                                        )}
+                                        {d.evidence_recommendations && d.evidence_recommendations.length > 0 && (
+                                          <div className="mt-1">
+                                            {d.evidence_recommendations.map((e, i) => (
+                                              <p key={i} className="text-xs text-purple-700/75">• {e}</p>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {compareTriggered && sourceFrameworkId && destFrameworkId && mode === 'keyword' && (
         <div className="card">
           <div className="card-header flex items-center justify-between">
             <div>
@@ -353,6 +779,17 @@ export default function FrameworkComparisonPage() {
             </div>
           ) : (
             <>
+              <CompareTableToolbar
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                sortField={sortField}
+                onSortFieldChange={setSortField}
+                sortDir={sortDir}
+                onSortDirToggle={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                resultCount={filteredKeywordRows.length}
+                totalCount={crosswalkData.crosswalk.length}
+                matchesLabel="Mapped destinations"
+              />
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1200px]">
                   <thead>
@@ -368,7 +805,13 @@ export default function FrameworkComparisonPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {crosswalkData.crosswalk.map((row) => {
+                    {filteredKeywordRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-3 py-10 text-center text-sm text-gray-500">
+                          No matches for "{searchQuery}"
+                        </td>
+                      </tr>
+                    ) : filteredKeywordRows.map((row) => {
                       const isExpanded = expandedRows.has(row.source_control.id);
                       const aiResult = aiResults[row.source_control.id];
                       const hasDest = row.destination_controls.length > 0;
@@ -560,6 +1003,72 @@ export default function FrameworkComparisonPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+interface CompareTableToolbarProps {
+  searchQuery: string;
+  onSearchChange: (value: string) => void;
+  sortField: 'reference' | 'title' | 'domain' | 'matches';
+  onSortFieldChange: (value: 'reference' | 'title' | 'domain' | 'matches') => void;
+  sortDir: 'asc' | 'desc';
+  onSortDirToggle: () => void;
+  resultCount: number;
+  totalCount: number;
+  matchesLabel: string;
+}
+
+function CompareTableToolbar({
+  searchQuery,
+  onSearchChange,
+  sortField,
+  onSortFieldChange,
+  sortDir,
+  onSortDirToggle,
+  resultCount,
+  totalCount,
+  matchesLabel,
+}: CompareTableToolbarProps) {
+  return (
+    <div className="flex flex-col gap-2 border-b border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-1 items-center gap-2">
+        <div className="flex-1 max-w-md">
+          <SearchInput
+            value={searchQuery}
+            onChange={onSearchChange}
+            placeholder="Search by clause, title, domain..."
+            variant="square"
+            size="sm"
+          />
+        </div>
+        <span className="hidden sm:block text-xs text-slate-500 whitespace-nowrap">
+          {searchQuery ? `${resultCount} of ${totalCount}` : `${totalCount} rows`}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <label className="text-xs text-slate-500">Sort by</label>
+        <select
+          value={sortField}
+          onChange={(e) => onSortFieldChange(e.target.value as CompareTableToolbarProps['sortField'])}
+          className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+        >
+          <option value="reference">Reference</option>
+          <option value="title">Title</option>
+          <option value="domain">Domain</option>
+          <option value="matches">{matchesLabel}</option>
+        </select>
+        <button
+          type="button"
+          onClick={onSortDirToggle}
+          className="flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+          title={sortDir === 'asc' ? 'Ascending — click for descending' : 'Descending — click for ascending'}
+          aria-label={`Sort ${sortDir === 'asc' ? 'descending' : 'ascending'}`}
+        >
+          {sortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+          {sortDir === 'asc' ? 'Asc' : 'Desc'}
+        </button>
+      </div>
     </div>
   );
 }

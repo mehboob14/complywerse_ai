@@ -37,7 +37,6 @@ import {
   RiskTrendData,
   IncidentDashboard,
   RiskMitigationAction,
-  RiskAuditFindingLink,
   LikelihoodImpactScale,
   GovernanceDocument,
   GovernanceDocumentVersion,
@@ -81,9 +80,12 @@ apiClient.interceptors.request.use(
       }
       const hostTenant = getTenantSlugFromHost();
       const tenantSlug = hostTenant || localStorage.getItem('tenant_slug');
-      if (hostTenant) {
-        localStorage.setItem('tenant_slug', hostTenant);
-      }
+      // We deliberately do NOT mirror hostTenant back into localStorage here.
+      // localStorage.tenant_slug is owned by the login flow (set from the
+      // /auth/login response). If we keep stamping it from the hostname,
+      // any user who lands on the wrong subdomain has their canonical
+      // tenant context silently overwritten, which is the root cause of
+      // the post-login bounce loop.
       if (tenantSlug) {
         config.headers['X-Tenant-Slug'] = tenantSlug;
       }
@@ -98,12 +100,49 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      if (typeof window !== 'undefined') {
-        // CRITICAL: Clear ALL localStorage to prevent cross-tenant data leakage
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      const url = (error.config?.url || '').toString();
+      const host = window.location.hostname.toLowerCase();
+
+      // Wrong-subdomain detection. localStorage knows the canonical tenant
+      // subdomain (set by login). If the browser is on a different
+      // subdomain — e.g. user pasted a layeron link while logged in to acme,
+      // or a stale tab navigated cross-tenant — redirect to the canonical
+      // subdomain WITHOUT clearing storage. This is preserved from before.
+      const canonicalSub = localStorage.getItem('tenant_subdomain') || localStorage.getItem('tenant_slug');
+      let currentSub: string | null = null;
+      if (host.endsWith('.localhost')) {
+        const parts = host.split('.');
+        if (parts.length === 2) currentSub = parts[0];
+      } else if (host !== 'localhost' && host !== '127.0.0.1') {
+        const parts = host.split('.');
+        if (parts.length >= 3) currentSub = parts[0];
+      }
+      if (canonicalSub && currentSub && canonicalSub !== currentSub) {
+        const { protocol, port } = window.location;
+        const baseHost = host.endsWith('.localhost')
+          ? 'localhost'
+          : host.split('.').slice(-2).join('.');
+        window.location.href = `${protocol}//${canonicalSub}.${baseHost}${port ? ':' + port : ''}/dashboard`;
+        return Promise.reject(error);
+      }
+
+      // Auto-logout policy: only force a logout when /auth/me itself returns
+      // 401 (meaning we are PROVABLY unauthenticated). A 401 from any other
+      // endpoint can mean "you don't have access to this specific resource"
+      // — which should NOT kick the user out of the entire app. Previously
+      // any single 401 nuked localStorage and bounced to /login, which made
+      // tenant-scoped permission errors look like sudden logouts.
+      const isAuthMeCall = /\/auth\/me(?:[/?#]|$)/.test(url);
+      const isAuthRefresh = /\/auth\/refresh(?:[/?#]|$)/.test(url);
+      if (isAuthMeCall || isAuthRefresh) {
         localStorage.clear();
         window.location.href = '/login';
+        return Promise.reject(error);
       }
+
+      // Otherwise: surface the 401 to the caller and let it decide. No
+      // auto-clear, no auto-redirect.
     }
     return Promise.reject(error);
   }
@@ -736,6 +775,15 @@ export const certificationsApi = {
   getCDESystems: () => apiClient.get('/certifications/cde-systems'),
   updateCDESystemScope: (assetId: number, data: { cde_environment: boolean }) =>
     apiClient.put(`/certifications/cde-systems/${assetId}/scope`, data),
+
+  assignControl: (journeyId: number, controlId: number, userIds: number[]) =>
+    apiClient.patch(`/certifications/${journeyId}/controls/${controlId}/assign`, {
+      assigned_user_ids: userIds,
+    }),
+  getTenantUsers: () =>
+    apiClient.get<Array<{ id: number; username: string; display_name: string; email: string }>>(
+      '/certifications/meta/tenant-users'
+    ),
 };
 
 export const ermApi = {
@@ -821,12 +869,6 @@ export const ermApi = {
           expected_residual_reduction: number;
         }>;
       }>('/erm/mitigation-actions/ai-suggest', data),
-  },
-  auditFindings: {
-    link: (riskId: number, issueId: number, notes?: string) => 
-      apiClient.post<RiskAuditFindingLink>(`/erm/risks/${riskId}/audit-findings`, { issue_id: issueId, notes }),
-    unlink: (riskId: number, linkId: number) => 
-      apiClient.delete(`/erm/risks/${riskId}/audit-findings/${linkId}`),
   },
   scales: {
     getAll: () => 
@@ -1363,6 +1405,12 @@ export const complianceApi = {
     }) => apiClient.put(`/compliance/policies/statements/${id}/compliance`, data),
     linkEvidence: (id: number, evidenceIds: number[]) =>
       apiClient.post(`/compliance/policies/statements/${id}/evidence`, { evidence_ids: evidenceIds }),
+    assign: (id: number, userId: number | null) =>
+      apiClient.patch(`/compliance/policies/statements/${id}/assign`, { assigned_to_user_id: userId }),
+    getTenantUsers: () =>
+      apiClient.get<Array<{ id: number; username: string; display_name: string; email: string }>>(
+        '/compliance/policies/statements/meta/tenant-users'
+      ),
     convertToControls: (documentId: number, data: { statement_ids: number[]; category?: string; priority?: string }) =>
       apiClient.post(`/governance/documents/${documentId}/statements/convert-to-controls`, data),
   },
@@ -1938,9 +1986,25 @@ export const controlLibraryApi = {
       apiClient.post('/control-library/comparison/export-comparison', data, { responseType: 'blob' }),
     // Positional parameter version for frontend compatibility
     aiMapControl: (sourceFrameworkId: number, destFrameworkId: number, sourceControlId: number) =>
-      apiClient.post('/control-library/comparison/crosswalk/ai-map', null, { 
-        params: { source_framework_id: sourceFrameworkId, destination_framework_id: destFrameworkId, source_control_id: sourceControlId } 
+      apiClient.post('/control-library/comparison/crosswalk/ai-map', null, {
+        params: { source_framework_id: sourceFrameworkId, destination_framework_id: destFrameworkId, source_control_id: sourceControlId }
       }),
+
+    // AI cross-framework comparison (Celery-backed, cached per pair)
+    aiCompareLookup: (sourceFrameworkId: number, destFrameworkId: number) =>
+      apiClient.get('/control-library/comparison/ai-compare/lookup', {
+        params: { source_framework_id: sourceFrameworkId, dest_framework_id: destFrameworkId },
+      }),
+    aiCompareRun: (sourceFrameworkId: number, destFrameworkId: number, refresh = false) =>
+      apiClient.post('/control-library/comparison/ai-compare/run', {
+        source_framework_id: sourceFrameworkId,
+        dest_framework_id: destFrameworkId,
+        refresh,
+      }),
+    aiCompareStatus: (runId: number) =>
+      apiClient.get(`/control-library/comparison/ai-compare/runs/${runId}`),
+    aiCompareMappings: (runId: number) =>
+      apiClient.get(`/control-library/comparison/ai-compare/runs/${runId}/mappings`),
   },
 
   // Coverage Module
@@ -2097,193 +2161,6 @@ export const tenantAuthApi = {
     geography?: string;
     primary_contact_phone?: string;
   }) => apiClient.post('/auth/register-organization', data),
-};
-
-export const auditApi = {
-  universe: {
-    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/universe', { params }),
-    getById: (id: number) => apiClient.get(`/audit/universe/${id}`),
-    create: (data: Record<string, unknown>) => apiClient.post('/audit/universe', data),
-    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/universe/${id}`, data),
-    delete: (id: number) => apiClient.delete(`/audit/universe/${id}`),
-    getCoverageGaps: () => apiClient.get('/audit/universe/coverage-gaps'),
-    getRiskEnrichment: () => apiClient.get('/audit/universe/risk-enrichment'),
-    syncFromRisks: () => apiClient.post('/audit/universe/sync-from-risks'),
-    refreshRiskScores: () => apiClient.post('/audit/universe/refresh-risk-scores'),
-    generateDescription: (data: Record<string, unknown>) => apiClient.post('/audit/universe/generate-description', data),
-  },
-  plans: {
-    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/plans', { params }),
-    getById: (id: number) => apiClient.get(`/audit/plans/${id}`),
-    create: (data: Record<string, unknown>) => apiClient.post('/audit/plans', data),
-    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/plans/${id}`, data),
-    delete: (id: number) => apiClient.delete(`/audit/plans/${id}`),
-    approve: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/plans/${id}/approve`, data),
-    generateFromUniverse: (data: Record<string, unknown>) => apiClient.post('/audit/plans/generate-from-universe', data),
-    addItem: (planId: number, data: Record<string, unknown>) => apiClient.post(`/audit/plans/${planId}/items`, data),
-    updateItem: (planId: number, itemId: number, data: Record<string, unknown>) => apiClient.put(`/audit/plans/${planId}/items/${itemId}`, data),
-    deleteItem: (planId: number, itemId: number) => apiClient.delete(`/audit/plans/${planId}/items/${itemId}`),
-    getCalendar: (planId: number) => apiClient.get(`/audit/plans/${planId}/calendar`),
-    getRegulatoryImpact: (params?: Record<string, unknown>) => apiClient.get('/audit/plans/regulatory-impact', { params }),
-  },
-  engagements: {
-    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/engagements', { params }),
-    getById: (id: number) => apiClient.get(`/audit/engagements/${id}`),
-    create: (data: Record<string, unknown>) => apiClient.post('/audit/engagements', data),
-    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/engagements/${id}`, data),
-    delete: (id: number) => apiClient.delete(`/audit/engagements/${id}`),
-    transition: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/engagements/${id}/transition`, data),
-    createFromPlanItem: (data: Record<string, unknown>) => apiClient.post('/audit/engagements/from-plan-item', data),
-    createFromPlan: (planId: number) => apiClient.post('/audit/engagements/from-plan', undefined, { params: { plan_id: planId } }),
-    getResourceCalendar: (params?: Record<string, unknown>) => apiClient.get('/audit/engagements/resource-calendar', { params }),
-    getPriorAudits: (id: number) => apiClient.get(`/audit/engagements/${id}/prior-audits`),
-    getSamplingRecords: (id: number) => apiClient.get(`/audit/engagements/${id}/sampling-records`),
-    saveSamplingRecord: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/engagements/${id}/sampling-records`, data),
-    deleteSamplingRecord: (id: number, recordId: number) => apiClient.delete(`/audit/engagements/${id}/sampling-records/${recordId}`),
-    addTeamMember: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/engagements/${id}/team`, data),
-    removeTeamMember: (id: number, memberId: number) => apiClient.delete(`/audit/engagements/${id}/team/${memberId}`),
-    addTimeEntry: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/engagements/${id}/time-entries`, data),
-    deleteTimeEntry: (id: number, entryId: number) => apiClient.delete(`/audit/engagements/${id}/time-entries/${entryId}`),
-  },
-  workpapers: {
-    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/workpapers', { params }),
-    getById: (id: number) => apiClient.get(`/audit/workpapers/${id}`),
-    create: (data: Record<string, unknown>) => apiClient.post('/audit/workpapers', data),
-    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/workpapers/${id}`, data),
-    delete: (id: number) => apiClient.delete(`/audit/workpapers/${id}`),
-    signoff: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/workpapers/${id}/signoff`, data),
-    addProcedure: (workpaperId: number, data: Record<string, unknown>) => apiClient.post(`/audit/workpapers/${workpaperId}/procedures`, data),
-    updateProcedure: (workpaperId: number, procedureId: number, data: Record<string, unknown>) => apiClient.put(`/audit/workpapers/${workpaperId}/procedures/${procedureId}`, data),
-  },
-  findings: {
-    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/findings', { params }),
-    getById: (id: number) => apiClient.get(`/audit/findings/${id}`),
-    create: (data: Record<string, unknown>) => apiClient.post('/audit/findings', data),
-    downloadTemplate: () => apiClient.get('/audit/findings/template/download', { responseType: 'blob' }),
-    importFile: (file: File) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      return apiClient.post('/audit/findings/import', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-    },
-    createWithAttachment: (data: FormData) => apiClient.post('/audit/findings/with-attachment', data, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }),
-    suggestDetails: (data: Record<string, unknown>) => apiClient.post('/audit/findings/ai-suggest', data),
-    getGroupedByEngagement: (params?: Record<string, unknown>) => apiClient.get('/audit/findings/grouped-by-engagement', { params }),
-    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/findings/${id}`, data),
-    delete: (id: number) => apiClient.delete(`/audit/findings/${id}`),
-    getOverdue: () => apiClient.get('/audit/findings/overdue'),
-    getThemes: () => apiClient.get('/audit/findings/themes'),
-    suggestRootCause: (id: number) => apiClient.post(`/audit/findings/${id}/ai-root-cause`),
-    addManagementResponse: (findingId: number, data: Record<string, unknown>) => apiClient.post(`/audit/findings/${findingId}/management-response`, data),
-    addRecommendation: (findingId: number, data: Record<string, unknown>) => apiClient.post(`/audit/findings/${findingId}/recommendations`, data),
-    addActionPlan: (findingId: number, recId: number, data: Record<string, unknown>) => apiClient.post(`/audit/findings/${findingId}/recommendations/${recId}/action-plans`, data),
-    updateActionPlan: (findingId: number, recId: number, apId: number, data: Record<string, unknown>) => apiClient.put(`/audit/findings/${findingId}/recommendations/${recId}/action-plans/${apId}`, data),
-    addFollowUp: (findingId: number, data: Record<string, unknown>) => apiClient.post(`/audit/findings/${findingId}/follow-ups`, data),
-    closeFollowUp: (findingId: number, fuId: number, data?: Record<string, unknown>) => apiClient.post(`/audit/findings/${findingId}/follow-ups/${fuId}/close`, data || {}),
-  },
-  ccm: {
-    getRules: (params?: Record<string, unknown>) => apiClient.get('/audit/ccm/rules', { params }),
-    createRule: (data: Record<string, unknown>) => apiClient.post('/audit/ccm/rules', data),
-    updateRule: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/ccm/rules/${id}`, data),
-    deleteRule: (id: number) => apiClient.delete(`/audit/ccm/rules/${id}`),
-    getAnomalies: (params?: Record<string, unknown>) => apiClient.get('/audit/ccm/anomalies', { params }),
-    createAnomaly: (data: Record<string, unknown>) => apiClient.post('/audit/ccm/anomalies', data),
-    reviewAnomaly: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/ccm/anomalies/${id}/review`, data),
-    getStats: () => apiClient.get('/audit/ccm/stats'),
-  },
-  reporting: {
-    getReports: (params?: Record<string, unknown>) => apiClient.get('/audit/reporting/reports', { params }),
-    createReport: (data: Record<string, unknown>) => apiClient.post('/audit/reporting/reports', data),
-    updateReport: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/reporting/reports/${id}`, data),
-    getFullReport: (id: number) => apiClient.get(`/audit/reporting/reports/${id}/full`),
-    exportPDF: (id: number) => apiClient.get(`/audit/reporting/reports/${id}/export/pdf`, { responseType: 'blob' }),
-    exportDOCX: (id: number) => apiClient.get(`/audit/reporting/reports/${id}/export/docx`, { responseType: 'blob' }),
-    getBoardPacks: () => apiClient.get('/audit/reporting/board-packs'),
-    createBoardPack: (data: Record<string, unknown>) => apiClient.post('/audit/reporting/board-packs', data),
-    getKPIs: () => apiClient.get('/audit/reporting/kpis'),
-    getTrendAnalysis: (params?: Record<string, unknown>) => apiClient.get('/audit/reporting/trend-analysis', { params }),
-    getRiskPrioritization: () => apiClient.get('/audit/reporting/risk-prioritization'),
-    getAccountability: () => apiClient.get('/audit/reporting/accountability'),
-    getROIMetrics: (hourlyRate?: number) => apiClient.get('/audit/reporting/roi-metrics', { params: hourlyRate ? { hourly_rate: hourlyRate } : {} }),
-    getRegulatoryImpactTracker: () => apiClient.get('/audit/reporting/regulatory-impact-tracker'),
-    downloadStoryboardPDF: () => apiClient.get('/audit/reporting/storyboard-pdf', { responseType: 'blob' }),
-    getPBC: (params?: Record<string, unknown>) => apiClient.get('/audit/reporting/pbc', { params }),
-    createPBCItem: (data: Record<string, unknown>) => apiClient.post('/audit/reporting/pbc', data),
-    updatePBCItem: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/reporting/pbc/${id}`, data),
-  },
-  qaip: {
-    getReviews: (params?: Record<string, unknown>) => apiClient.get('/audit/qaip/reviews', { params }),
-    createReview: (data: Record<string, unknown>) => apiClient.post('/audit/qaip/reviews', data),
-    updateReview: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/qaip/reviews/${id}`, data),
-    getIIAStandards: () => apiClient.get('/audit/qaip/iia-standards'),
-    getConformance: () => apiClient.get('/audit/qaip/conformance'),
-    getMaturity: () => apiClient.get('/audit/qaip/maturity'),
-    getTemplates: () => apiClient.get('/audit/qaip/templates'),
-    createTemplate: (data: Record<string, unknown>) => apiClient.post('/audit/qaip/templates', data),
-    updateTemplate: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/qaip/templates/${id}`, data),
-    deleteTemplate: (id: number) => apiClient.delete(`/audit/qaip/templates/${id}`),
-    applyTemplate: (templateId: number, engagementId: number) => apiClient.post(`/audit/qaip/templates/${templateId}/apply/${engagementId}`),
-  },
-  testScripts: {
-    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/test-scripts', { params }),
-    getById: (id: number) => apiClient.get(`/audit/test-scripts/${id}`),
-    create: (data: Record<string, unknown>) => apiClient.post('/audit/test-scripts', data),
-    generateFromEngagement: (data: Record<string, unknown>) => apiClient.post('/audit/test-scripts/generate-from-engagement', data),
-    update: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/test-scripts/${id}`, data),
-    delete: (id: number) => apiClient.delete(`/audit/test-scripts/${id}`),
-    cloneToEngagement: (id: number, data: Record<string, unknown>) => apiClient.post(`/audit/test-scripts/${id}/clone-to-engagement`, data),
-  },
-  skillMatrix: {
-    getAll: (params?: Record<string, unknown>) => apiClient.get('/audit/skill-matrix', { params }),
-    getByUser: (userId: number) => apiClient.get(`/audit/skill-matrix/user/${userId}`),
-    createSkill: (data: Record<string, unknown>) => apiClient.post('/audit/skill-matrix', data),
-    updateSkill: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/skill-matrix/${id}`, data),
-    deleteSkill: (id: number) => apiClient.delete(`/audit/skill-matrix/${id}`),
-    upsertProfile: (data: Record<string, unknown>) => apiClient.put('/audit/skill-matrix/profile/upsert', data),
-    match: (params?: Record<string, unknown>) => apiClient.get('/audit/skill-matrix/match', { params }),
-    getStats: () => apiClient.get('/audit/skill-matrix/stats'),
-  },
-  capacity: {
-    getCalendar: (params?: Record<string, unknown>) => apiClient.get('/audit/capacity/calendar', { params }),
-    getUtilization: (params?: Record<string, unknown>) => apiClient.get('/audit/capacity/utilization', { params }),
-    getConflicts: (params?: Record<string, unknown>) => apiClient.get('/audit/capacity/conflicts', { params }),
-  },
-  notifications: {
-    getTemplates: () => apiClient.get('/audit/notifications/templates'),
-    createTemplate: (data: Record<string, unknown>) => apiClient.post('/audit/notifications/templates', data),
-    updateTemplate: (id: number, data: Record<string, unknown>) => apiClient.put(`/audit/notifications/templates/${id}`, data),
-    deleteTemplate: (id: number) => apiClient.delete(`/audit/notifications/templates/${id}`),
-    seedDefaults: () => apiClient.post('/audit/notifications/templates/seed-defaults'),
-  },
-  tools: {
-    samplingCalculator: (data: Record<string, unknown>) => apiClient.post('/audit/tools/sampling-calculator', data),
-    getRegulatoryChanges: () => apiClient.get('/audit/tools/regulatory-changes'),
-  },
-  ai: {
-    generateAuditPlan: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-audit-plan', data),
-    generateProcedures: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-procedures', data),
-    draftFinding: (data: Record<string, unknown>) => apiClient.post('/audit/ai/draft-finding', data),
-    getCCMInsights: (data: Record<string, unknown>) => apiClient.post('/audit/ai/ccm-insights', data),
-    generateBoardPackNarrative: (data: Record<string, unknown>) => apiClient.post('/audit/ai/board-pack-narrative', data),
-    getBoardPackNarrative: (data: Record<string, unknown>) => apiClient.post('/audit/ai/board-pack-narrative', data),
-    generateEngagementDetails: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-engagement-details', data),
-    generateScope: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-scope', data),
-    generateEngagementLetter: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-engagement-letter', data),
-    getRiskSuggestions: (data: Record<string, unknown>) => apiClient.post('/audit/ai/risk-assessment-suggestions', data),
-    findingSimilarity: (data: Record<string, unknown>) => apiClient.post('/audit/ai/finding-similarity', data),
-    getFieldworkGuidance: (data: Record<string, unknown>) => apiClient.post('/audit/ai/fieldwork-guidance', data),
-    regulatoryImpact: (data: Record<string, unknown>) => apiClient.post('/audit/ai/regulatory-impact-assessment', data),
-    generateTestScript: (data: Record<string, unknown>) => apiClient.post('/audit/ai/generate-test-script', data),
-    suggestEngagementSkills: (data: Record<string, unknown>) => apiClient.post('/audit/ai/suggest-engagement-skills', data),
-    calibrateSeverity: (data: Record<string, unknown>) => apiClient.post('/audit/ai/calibrate-severity', data),
-    detectRecurringIssues: (data: Record<string, unknown>) => apiClient.post('/audit/ai/detect-recurring-issues', data),
-    evaluateResponse: (data: Record<string, unknown>) => apiClient.post('/audit/ai/evaluate-response', data),
-    suggestOpinion: (data: Record<string, unknown>) => apiClient.post('/audit/ai/suggest-opinion', data),
-    aggregateThemes: (data: Record<string, unknown>) => apiClient.post('/audit/ai/aggregate-themes', data),
-  },
 };
 
 export const integrationsApi = {

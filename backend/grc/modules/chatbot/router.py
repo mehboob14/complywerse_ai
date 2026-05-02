@@ -3219,7 +3219,7 @@ ACTUAL TABLE SCHEMAS (from database):
 
 ORIGINAL QUESTION: {request.message}
 
-Generate new SQL using ONLY the column names listed above. Use SQLite syntax (datetime('now'), LIKE, strftime).
+Generate new SQL using ONLY the column names listed above. Use PostgreSQL syntax (NOW(), CURRENT_DATE, INTERVAL, ILIKE, DATE_TRUNC, TO_CHAR).
 """
                     
                     retry_result = generate_sql_query(

@@ -229,16 +229,27 @@ export default function RegisterPage() {
 
       if (response.ok) {
         const data = await response.json();
-        // CRITICAL: Clear ALL previous localStorage to prevent cross-tenant data leakage
+        // CRITICAL: Clear ALL previous localStorage to prevent cross-tenant data
+        // leakage. Don't carry the auto-issued auth token into the new tenant's
+        // login flow either — registration finishes by sending the user to the
+        // login page so they can authenticate explicitly.
         localStorage.clear();
-        
-        if (data.tenant) {
-          localStorage.setItem('tenant_slug', data.tenant.subdomain || data.tenant.slug);
-          localStorage.setItem('tenant_subdomain', data.tenant.subdomain || data.tenant.slug);
-          localStorage.setItem('tenant_name', data.tenant.name);
-          localStorage.setItem('tenant_id', String(data.tenant.id));
+
+        // Send the user to the new tenant's /login URL. We pre-fill the email
+        // via query param so they only need to type the password they just set.
+        const subdomain = data.tenant?.subdomain || data.tenant?.slug;
+        if (subdomain) {
+          const { protocol, hostname, port } = window.location;
+          const baseHost = hostname.endsWith('.localhost')
+            ? hostname.split('.').slice(-1)[0]
+            : hostname.split('.').slice(-2).join('.');
+          const emailParam = encodeURIComponent(formData.email);
+          const target = `${protocol}//${subdomain}.${baseHost}${port ? ':' + port : ''}/login?registered=1&email=${emailParam}`;
+          window.location.href = target;
+          return;
         }
-        router.push('/dashboard');
+        // No subdomain in response — fall back to the same-host login.
+        router.push(`/login?registered=1&email=${encodeURIComponent(formData.email)}`);
       } else {
         const data = await response.json();
         let errorMessage = 'Registration failed. Please try again.';

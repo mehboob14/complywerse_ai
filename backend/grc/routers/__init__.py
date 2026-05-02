@@ -14,10 +14,11 @@ from .advanced_erm_router import router as advanced_erm_router
 from .compliance_assessments_router import router as compliance_assessments_router
 from .critical_tasks_router import router as critical_tasks_router
 from .is_projects_router import router as is_projects_router
+from .tasks_router import router as tasks_router
 
 __all__ = [
     "auth_router",
-    "tenants_router", 
+    "tenants_router",
     "frameworks_router",
     "controls_router",
     "evidence_router",
@@ -32,4 +33,5 @@ __all__ = [
     "compliance_assessments_router",
     "critical_tasks_router",
     "is_projects_router",
+    "tasks_router",
 ]

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Building2, Lock } from 'lucide-react';
 
@@ -40,12 +40,12 @@ function getTenantSlug(): string | null {
 }
 
 export default function LoginPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [tenantSlug, setTenantSlug] = useState<string | null>(null);
   const [tenantName, setTenantName] = useState<string | null>(null);
@@ -55,6 +55,13 @@ export default function LoginPage() {
     setTenantSlug(slug);
     const name = localStorage.getItem('tenant_name');
     setTenantName(name);
+
+    // Just registered? Show a confirmation banner and pre-fill the email.
+    if (searchParams?.get('registered') === '1') {
+      const prefill = searchParams.get('email') || '';
+      if (prefill) setEmail(prefill);
+      setInfo("Account created. Sign in with the password you just set.");
+    }
   }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -80,13 +87,27 @@ export default function LoginPage() {
 
       if (response.ok) {
         const data = await response.json();
-        
+
         // CRITICAL: Clear ALL previous localStorage and sessionStorage to prevent cross-user data leakage
         localStorage.clear();
         sessionStorage.clear(); // Clears permission cache so new user gets fresh permissions
-        
+
+        // Bearer token from response body. Stored in localStorage so the axios
+        // interceptor can stamp every request with `Authorization: Bearer ...`.
+        // We don't rely on the Set-Cookie header alone because browsers reject
+        // `Domain=localhost` cookies — the cookie would be silently discarded
+        // and the user would bounce-loop on the dashboard.
+        if (data.access_token) {
+          localStorage.setItem('token', data.access_token);
+        }
+
         if (data.tenant) {
           localStorage.setItem('tenant_slug', data.tenant.slug || data.tenant.subdomain || '');
+          // tenant_subdomain is read by the 401 response interceptor to
+          // detect wrong-subdomain bounces and redirect cleanly. Always
+          // populate it (even if it equals tenant_slug, like in our default
+          // setup where slug == subdomain).
+          localStorage.setItem('tenant_subdomain', data.tenant.subdomain || data.tenant.slug || '');
           localStorage.setItem('tenant_name', data.tenant.name || '');
           localStorage.setItem('tenant_id', String(data.tenant.id || ''));
         }
@@ -94,8 +115,56 @@ export default function LoginPage() {
         // Ensure no stale user/session data survives cross-account login.
         queryClient.clear();
 
-        router.replace('/dashboard');
-        router.refresh();
+        // ALWAYS do a full-page navigation to the canonical tenant URL after
+        // login. Two reasons we don't use router.replace here:
+        //
+        //   1. If the current subdomain differs from the authenticated tenant
+        //      (e.g. browser at acme.localhost, logged in as bob@layeron),
+        //      we must change hostname so the axios interceptor reads the
+        //      right slug from window.location. The interceptor in api.ts
+        //      OVERWRITES localStorage.tenant_slug with the host-derived slug
+        //      on every request, which silently breaks any cross-host
+        //      `router.replace`.
+        //   2. A full nav resets React state and React Query cache cleanly,
+        //      so the new tenant context can't see any stale data from the
+        //      previous user/tenant.
+        const targetSub: string | undefined = data.tenant?.subdomain || data.tenant?.slug;
+        const host = window.location.hostname.toLowerCase();
+        const { protocol, port } = window.location;
+        let currentSub: string | null = null;
+        if (host.endsWith('.localhost')) {
+          const parts = host.split('.');
+          if (parts.length === 2) currentSub = parts[0];
+        } else if (host !== 'localhost' && host !== '127.0.0.1') {
+          const parts = host.split('.');
+          if (parts.length >= 3) currentSub = parts[0];
+        }
+        const baseHost = host.endsWith('.localhost')
+          ? 'localhost'
+          : (currentSub ? host.split('.').slice(-2).join('.') : host);
+        // eslint-disable-next-line no-console
+        console.log('[login] currentSub=%s targetSub=%s host=%s', currentSub, targetSub, host);
+
+        if (targetSub && currentSub !== targetSub) {
+          // Cross-subdomain redirect. localStorage on the destination is a
+          // SEPARATE storage area (per-origin), so we hand off the token + tenant
+          // context via URL fragment. Fragments are not sent to the server, so
+          // the token never leaks via access logs / proxies. The destination's
+          // root layout reads the fragment, hydrates its own localStorage, then
+          // strips the fragment from the URL.
+          const params = new URLSearchParams();
+          if (data.access_token) params.set('auth_token', data.access_token);
+          if (data.tenant?.slug) params.set('tenant_slug', data.tenant.slug);
+          if (data.tenant?.subdomain) params.set('tenant_subdomain', data.tenant.subdomain);
+          if (data.tenant?.name) params.set('tenant_name', data.tenant.name);
+          if (data.tenant?.id != null) params.set('tenant_id', String(data.tenant.id));
+          const dest = `${protocol}//${targetSub}.${baseHost}${port ? ':' + port : ''}/dashboard#${params.toString()}`;
+          window.location.href = dest;
+          return;
+        }
+        // Same tenant — still do a full nav to wipe React state.
+        window.location.href = `${protocol}//${host}${port ? ':' + port : ''}/dashboard`;
+        return;
       } else {
         const data = await response.json();
         if (response.status === 409) {
@@ -191,6 +260,11 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {info && !error && (
+              <div className="flex items-start gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5 text-emerald-700">
+                <span className="text-xs">{info}</span>
+              </div>
+            )}
             {error && (
               <div className="flex items-start gap-2 rounded-lg bg-rose-50 border border-rose-200 px-3 py-2.5 text-rose-700">
                 <AlertCircle size={15} className="mt-0.5 shrink-0" />
@@ -243,13 +317,13 @@ export default function LoginPage() {
 
           <p className="mt-5 text-center text-xs text-slate-400">
             Want to join?{' '}
-            <span
-              title="Registration is currently restricted."
-              className="text-slate-400 cursor-not-allowed line-through"
+            <a
+              href="/register"
+              className="font-medium text-blue-600 hover:text-blue-700"
             >
               Register your company
-            </span>
-            {' '}&mdash; contact{' '}
+            </a>
+            {' '}&mdash; or contact{' '}
             <a href="mailto:support@compliverse.ai" className="text-blue-600 hover:text-blue-700">
               support
             </a>

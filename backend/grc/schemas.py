@@ -1500,29 +1500,6 @@ class RiskMitigationActionResponse(BaseModel):
 
 
 # =============================================================================
-# Risk Audit Finding Link Schemas
-# =============================================================================
-
-class RiskAuditFindingLinkCreate(BaseModel):
-    risk_id: int
-    issue_id: int
-    notes: Optional[str] = None
-
-
-class RiskAuditFindingLinkResponse(BaseModel):
-    id: int
-    risk_id: int
-    issue_id: int
-    notes: Optional[str]
-    created_at: datetime
-    issue_title: Optional[str] = None
-    issue_severity: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-# =============================================================================
 # Likelihood Impact Scale Schemas
 # =============================================================================
 

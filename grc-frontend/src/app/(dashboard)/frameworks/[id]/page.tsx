@@ -303,6 +303,57 @@ export default function CertificationJourneyPage() {
   const [targetDateValue, setTargetDateValue] = useState('');
   const [generatingPhaseTasks, setGeneratingPhaseTasks] = useState(false);
 
+  // Per-requirement assignment: lazy-fetched tenant users + current-user id.
+  // Fetching is deferred until a user actually opens the assign picker, so it
+  // doesn't add latency to the initial framework load.
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { authedFetch } = await import('@/lib/auth-fetch');
+        const res = await authedFetch('/api/auth/me');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.authenticated && data.user?.id) {
+          setCurrentUserId(Number(data.user.id));
+        }
+      } catch {
+        /* non-fatal */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const { data: assignmentTenantUsers } = useQuery({
+    queryKey: ['certification-tenant-users', journeyId],
+    queryFn: async () => {
+      const res = await certificationsApi.getTenantUsers();
+      return res.data;
+    },
+    enabled: !!journeyId,
+  });
+
+  // Multi-assignee picker: per-control draft list + open/closed toggle.
+  // Draft mirrors the server state until the user clicks "Assign", then we
+  // flush it via the mutation. Removing every selection acts as "withdraw".
+  const [assignPickerOpenFor, setAssignPickerOpenFor] = useState<number | null>(null);
+  const [assignDraftByControl, setAssignDraftByControl] = useState<Record<number, number[]>>({});
+
+  const assignControlMutation = useMutation({
+    mutationFn: async ({ controlId, userIds }: { controlId: number; userIds: number[] }) =>
+      certificationsApi.assignControl(journeyId, controlId, userIds),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+      setAssignPickerOpenFor(null);
+      setAssignDraftByControl((prev) => {
+        const next = { ...prev };
+        delete next[vars.controlId];
+        return next;
+      });
+    },
+  });
+
   const [showApplicabilityModal, setShowApplicabilityModal] = useState(false);
   const [applicabilityModalControl, setApplicabilityModalControl] = useState<any>(null);
   const [applicabilityJustification, setApplicabilityJustification] = useState('');
@@ -741,7 +792,8 @@ export default function CertificationJourneyPage() {
     { id: 'overview', label: 'Overview' },
     ...(isCertificationFramework ? [{ id: 'phases' as TabType, label: 'Phases' }] : []),
     ...(isPciDssFramework ? [{ id: 'cde-scope' as TabType, label: 'CDE Scope' }] : []),
-    { id: 'controls', label: entityLabelPlural },
+    { id: 'controls', label: 'Requirements' },
+    { id: 'assigned-to-me' as TabType, label: 'Assigned to Me' },
     { id: 'applicability', label: 'Applicability' },
   ];
 
@@ -756,12 +808,13 @@ export default function CertificationJourneyPage() {
   }, []);
 
   useEffect(() => {
-    // Auto-hide summary cards when browsing the requirements/controls tab,
-    // restore them on the overview tab.
-    if (activeTab === 'controls') {
-      setCardsCollapsed(true);
-    } else if (activeTab === 'overview') {
+    // Summary cards belong on the Overview tab only — every other tab is
+    // operational (browsing/working on requirements) and benefits from the
+    // extra vertical space.
+    if (activeTab === 'overview') {
       setCardsCollapsed(false);
+    } else {
+      setCardsCollapsed(true);
     }
   }, [activeTab]);
 
@@ -1510,6 +1563,120 @@ export default function CertificationJourneyPage() {
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               {/* Linked Evidence - Now appears FIRST (left column) */}
               <div>
+                {/* Compact "Assigned to" row, sitting above the evidence
+                    upload control. Shows a count + names summary at a glance,
+                    expands to the global MultiSelectDropdown picker on click.
+                    Multi-assignee: any combination of users; clearing all
+                    selections withdraws every assignment. */}
+                {(() => {
+                  const serverIds: number[] = control.assigned_user_ids
+                    || (control.assigned_to_user_id ? [control.assigned_to_user_id] : []);
+                  const serverNames = (control.assignees && control.assignees.length > 0)
+                    ? control.assignees.map((a) => a.display_name)
+                    : (control.assignee_name ? [control.assignee_name] : []);
+                  const draftIds = assignDraftByControl[control.id] ?? serverIds;
+                  const isOpen = assignPickerOpenFor === control.id;
+                  const isPendingForThis = assignControlMutation.isPending
+                    && assignControlMutation.variables?.controlId === control.id;
+                  const isDirty = JSON.stringify([...draftIds].sort())
+                    !== JSON.stringify([...serverIds].sort());
+
+                  return (
+                    <div className="mb-2">
+                      <div className="flex items-start gap-2 text-xs">
+                        <Users className="h-3.5 w-3.5 text-gray-500 mt-1 flex-shrink-0" />
+                        <span className="text-gray-500 mt-1 flex-shrink-0">Assigned to:</span>
+                        {serverNames.length === 0 ? (
+                          <span className="italic text-gray-400 mt-1">Unassigned</span>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {serverNames.map((name, idx) => (
+                              <span
+                                key={`${idx}-${name}`}
+                                className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+                              >
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {canEdit && !isOpen && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAssignDraftByControl((prev) => ({ ...prev, [control.id]: serverIds }));
+                              setAssignPickerOpenFor(control.id);
+                            }}
+                            className="ml-auto flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                          >
+                            {serverNames.length ? 'Change' : 'Assign'}
+                          </button>
+                        )}
+                      </div>
+
+                      {isOpen && (
+                        <div className="mt-2 flex items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <MultiSelectDropdown
+                              title="Assignees"
+                              items={(assignmentTenantUsers || []).map((u: any) => ({
+                                value: String(u.id),
+                                label: u.display_name || u.username || u.email || `User #${u.id}`,
+                                subLabel: u.email,
+                              }))}
+                              selectedValues={draftIds.map(String)}
+                              onApply={(values) =>
+                                setAssignDraftByControl((prev) => ({
+                                  ...prev,
+                                  [control.id]: values.map(Number),
+                                }))
+                              }
+                              multiSelect
+                              autoApply
+                              forceSearch
+                              triggerVariant="input"
+                              triggerClassName="w-full"
+                              placeholder={
+                                draftIds.length === 0
+                                  ? 'Select users...'
+                                  : `${draftIds.length} selected`
+                              }
+                              searchPlaceholder="Search users"
+                              size="sm"
+                            />
+                          </div>
+                          {/* Assign button — same dimensions as the Upload button below. */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              assignControlMutation.mutate({
+                                controlId: control.id,
+                                userIds: draftIds,
+                              })
+                            }
+                            disabled={!isDirty || isPendingForThis}
+                            className="flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                          >
+                            {isPendingForThis ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Check className="h-3 w-3" />
+                            )}
+                            {draftIds.length === 0 ? 'Withdraw' : 'Assign'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAssignPickerOpenFor(null)}
+                            className="rounded border border-gray-300 px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="flex items-center gap-2 text-sm font-semibold text-black">
                     <Paperclip className="h-4 w-4 text-blue-600" />
@@ -1905,6 +2072,53 @@ export default function CertificationJourneyPage() {
       </div>
     </div>
   );
+  };
+
+  const renderAssignedToMeTab = () => {
+    const assignedToMe = (controls || []).filter((c: CertificationControl) => {
+      if (currentUserId === null) return false;
+      const ids = c.assigned_user_ids
+        || (c.assigned_to_user_id ? [c.assigned_to_user_id] : []);
+      return ids.includes(currentUserId);
+    });
+
+    if (currentUserId === null) {
+      return (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
+          <Loader2 className="h-6 w-6 animate-spin text-blue-600 mx-auto" />
+          <p className="mt-3 text-sm text-gray-600">Loading your assignments...</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <Users className="h-4 w-4 text-blue-600" />
+            <span>
+              <span className="font-semibold">{assignedToMe.length}</span> requirement{assignedToMe.length === 1 ? '' : 's'} assigned to you
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+          {assignedToMe.length > 0 ? (
+            <div className="space-y-3">
+              {assignedToMe.map((control: CertificationControl) => renderControlAccordion(control))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Shield className="mb-4 h-12 w-12 text-gray-400" />
+              <p className="text-gray-600">No requirements are assigned to you yet</p>
+              <p className="text-sm text-gray-500 mt-1">
+                When a requirement is assigned to you it will appear here with the same upload, evidence and recommendations tools.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   const renderControlsTab = () => (
@@ -2573,6 +2787,8 @@ export default function CertificationJourneyPage() {
         return renderSoaTab();
       case 'controls':
         return renderControlsTab();
+      case 'assigned-to-me':
+        return renderAssignedToMeTab();
       case 'cde-scope':
         return renderCDEScopeTab();
       case 'applicability':

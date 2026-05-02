@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-from .models import init_grc_db
+from .models import init_master_db
 from .audit_logger import should_audit_request, parse_request_payload, write_audit_log
 from .routers import (
     auth_router,
@@ -23,6 +23,7 @@ from .routers import (
     compliance_assessments_router,
     critical_tasks_router,
     is_projects_router,
+    tasks_router,
 )
 
 
@@ -120,6 +121,7 @@ app.include_router(advanced_erm_router)
 app.include_router(compliance_assessments_router)
 app.include_router(critical_tasks_router)
 app.include_router(is_projects_router)
+app.include_router(tasks_router)
 app.include_router(erm_router)
 app.include_router(governance_module_router)
 app.include_router(framework_upload_router)
@@ -135,7 +137,19 @@ app.include_router(integrations_router)
 
 @app.on_event("startup")
 def on_startup():
-    init_grc_db()
+    init_master_db()
+
+    # Self-heal: add any compliance-module columns that pre-existing tenant DBs
+    # are missing. New tenants get them via `Base.metadata.create_all` at
+    # provisioning time; this catches DBs that were created before the column
+    # was introduced. Failures are logged and swallowed.
+    try:
+        from .modules.compliance.schema_migrations import ensure_compliance_columns
+        ensure_compliance_columns()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("compliance schema self-heal failed")
+
     _disable_embedded = os.getenv("DISABLE_EMBEDDED_WORKFLOW_RUNTIME", "").strip().lower()
     if _disable_embedded not in ("1", "true", "yes", "on"):
         start_workflow_engine_runtime()

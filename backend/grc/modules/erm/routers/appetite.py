@@ -7,7 +7,7 @@ import os
 import json
 
 from ....models import (
-    SessionLocal, RiskAppetiteConfig, GRCUser, Risk
+    RiskAppetiteConfig, GRCUser, Risk, get_db,
 )
 from ....schemas import (
     RiskAppetiteConfigCreate, RiskAppetiteConfigUpdate, RiskAppetiteConfigResponse
@@ -15,14 +15,6 @@ from ....schemas import (
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/appetite")
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 RISK_CATEGORIES = [

@@ -369,9 +369,7 @@ export default function ControlGroupDetailPage() {
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
-              <Layers className="h-6 w-6" />
-            </div>
+            <Layers className="h-7 w-7 text-blue-600 flex-shrink-0" />
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm font-medium text-blue-600">{group.code}</span>
