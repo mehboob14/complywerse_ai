@@ -29,6 +29,121 @@ OrganizationProfile = Tenant
 from ..permissions import get_permission_matrix_for_ui, get_all_permissions
 from .auth_router import decode_token, require_auth, get_current_user
 
+
+def _generate_audit_description(
+    action: str,
+    resource_type: str,
+    resource_id: Optional[int],
+    path: str,
+    request_payload: Optional[dict],
+) -> str:
+    """Return a plain-English summary of an audit log action."""
+    payload = request_payload or {}
+    path_lower = (path or "").lower()
+    segments = [s for s in (path or "").replace("/grc", "", 1).strip("/").split("/") if s]
+    last_seg = segments[-1] if segments else ""
+
+    def _name() -> Optional[str]:
+        for k in ("title", "name", "vendor_name", "framework_name", "display_name",
+                  "subject", "label", "filename", "file_name"):
+            v = payload.get(k)
+            if v and isinstance(v, str) and len(v.strip()) < 120:
+                return v.strip()
+        return None
+
+    RT: dict[str, str] = {
+        "risks": "risk", "evidence": "evidence", "vulnerabilities": "vulnerability",
+        "frameworks": "framework", "controls": "control", "governance": "document",
+        "compliance": "compliance item", "vendor_risk": "vendor",
+        "audits": "audit", "assessments": "assessment", "statements": "statement",
+        "documents": "document", "assets": "asset", "users": "user",
+        "integrations": "integration", "workflow": "workflow",
+        "system": "system", "chatbot": "chat",
+    }
+    rt = RT.get(resource_type, resource_type.replace("_", " ") if resource_type else "record")
+    id_part = f" #{resource_id}" if resource_id else ""
+    nm = _name()
+    nm_part = f' "{nm}"' if nm else ""
+
+    # Gap analysis
+    if "gap-analysis" in path_lower or "gap_analysis" in path_lower:
+        doc = payload.get("document_name") or payload.get("document") or payload.get("policy_name")
+        fw = payload.get("framework_name") or payload.get("framework")
+        fw_id = payload.get("framework_id")
+        parts = []
+        if doc:
+            parts.append(f'"{doc}"')
+        if fw:
+            parts.append(f'framework "{fw}"')
+        elif fw_id:
+            parts.append(f"framework #{fw_id}")
+        if parts:
+            return "Ran gap analysis: " + " against ".join(parts)
+        return "Ran gap analysis"
+
+    # Assessment start
+    if last_seg in ("start", "begin", "initiate") or (
+        "start" in last_seg and "assessment" in path_lower
+    ):
+        return f"Started assessment{id_part}"
+
+    # Status update via dedicated /status endpoint
+    if last_seg == "status":
+        new_status = payload.get("status") or payload.get("new_status") or payload.get("value")
+        if isinstance(new_status, str):
+            return f'Updated {rt}{id_part} status to "{new_status}"'
+        return f"Updated {rt}{id_part} status"
+
+    # File/multipart upload
+    if payload.get("multipart"):
+        module_label = {"evidence": "evidence", "frameworks": "framework",
+                        "governance": "document", "documents": "document"}.get(resource_type, rt)
+        filename = payload.get("filename") or payload.get("file_name") or nm or "file"
+        return f'Uploaded {module_label} "{filename}"'
+
+    # Auth events
+    if "login" in path_lower and action == "create":
+        return "User logged in"
+    if "logout" in path_lower:
+        return "User logged out"
+
+    # Cross-link / relationship
+    if "cross-link" in path_lower or "crosslink" in path_lower:
+        return f"Linked {rt}{id_part} to another record"
+
+    # Generic action-based
+    if action == "create":
+        if resource_type == "evidence":
+            return f"Uploaded evidence{nm_part}"
+        if resource_type == "frameworks":
+            return f"Uploaded framework{nm_part}"
+        if nm:
+            return f'Created {rt} "{nm}"'
+        return f"Created new {rt}{id_part}"
+
+    if action == "update":
+        status_val = payload.get("status")
+        if isinstance(status_val, str):
+            return f'Updated {rt}{id_part} status to "{status_val}"'
+        if nm:
+            return f'Updated {rt} "{nm}"'
+        return f"Updated {rt}{id_part}"
+
+    if action == "delete":
+        if nm:
+            return f'Deleted {rt} "{nm}"'
+        return f"Deleted {rt}{id_part}"
+
+    if action == "read":
+        return f"Viewed {rt} #{resource_id}" if resource_id else f"Viewed {rt} list"
+
+    if action.endswith("_failed"):
+        base = action.replace("_failed", "")
+        return f"Failed to {base} {rt}{nm_part or id_part}"
+
+    action_display = action.replace("_", " ").title()
+    return f"{action_display} {rt}{nm_part or id_part}"
+
 router = APIRouter(prefix="/admin", tags=["Administration"])
 
 
@@ -710,13 +825,33 @@ def list_audit_logs(
             log_user = db.query(GRCUser).filter(GRCUser.id == log.user_id).first()
 
         changes = log.changes if isinstance(log.changes, dict) else {}
+
+        # Resolve display name: DB lookup → stored actor_display → stored actor → fallback
+        if log_user:
+            user_name = log_user.display_name or log_user.username
+        else:
+            user_name = (
+                changes.get("actor_display")
+                or changes.get("actor")
+                or "Unknown User"
+            )
+
+        description = _generate_audit_description(
+            action=log.action,
+            resource_type=log.resource_type,
+            resource_id=log.resource_id,
+            path=changes.get("path", ""),
+            request_payload=changes.get("request"),
+        )
+
         result.append({
             "id": log.id,
             "user_id": log.user_id,
-            "user_name": log_user.display_name if log_user else "System",
+            "user_name": user_name,
             "action": log.action,
             "resource_type": log.resource_type,
             "resource_id": log.resource_id,
+            "description": description,
             "details": changes,
             "method": changes.get("method"),
             "path": changes.get("path"),

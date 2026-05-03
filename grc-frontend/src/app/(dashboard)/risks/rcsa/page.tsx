@@ -16,7 +16,6 @@ import {
   Activity,
   Layers,
   ChevronRight,
-  PieChart as PieIcon,
   BarChart3,
   Building2,
   Shield,
@@ -25,8 +24,6 @@ import {
 import Link from 'next/link';
 import {
   ResponsiveContainer,
-  PieChart,
-  Pie,
   Cell,
   Tooltip,
   BarChart,
@@ -52,16 +49,20 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: 'Rejected',
 };
 
+// Soft-tone status pills — matches the convention used in compliance,
+// risks, and certifications. The previous solid-tone pills (bg-X-600 with
+// white text) read as visually loud against the neutral cards on this
+// dashboard.
 const STATUS_BADGE: Record<string, { bg: string; text: string }> = {
-  draft: { bg: 'bg-slate-500 border border-slate-600', text: 'text-white' },
-  active: { bg: 'bg-emerald-600 border border-emerald-700', text: 'text-white' },
-  closed: { bg: 'bg-blue-600 border border-blue-700', text: 'text-white' },
-  not_started: { bg: 'bg-slate-500 border border-slate-600', text: 'text-white' },
-  in_progress: { bg: 'bg-blue-600 border border-blue-700', text: 'text-white' },
-  submitted: { bg: 'bg-purple-600 border border-purple-700', text: 'text-white' },
-  under_review: { bg: 'bg-amber-600 border border-amber-700', text: 'text-white' },
-  approved: { bg: 'bg-emerald-600 border border-emerald-700', text: 'text-white' },
-  rejected: { bg: 'bg-rose-600 border border-rose-700', text: 'text-white' },
+  draft: { bg: 'bg-slate-100 border border-slate-200', text: 'text-slate-700' },
+  active: { bg: 'bg-emerald-50 border border-emerald-200', text: 'text-emerald-700' },
+  closed: { bg: 'bg-blue-50 border border-blue-200', text: 'text-blue-700' },
+  not_started: { bg: 'bg-slate-100 border border-slate-200', text: 'text-slate-700' },
+  in_progress: { bg: 'bg-blue-50 border border-blue-200', text: 'text-blue-700' },
+  submitted: { bg: 'bg-purple-50 border border-purple-200', text: 'text-purple-700' },
+  under_review: { bg: 'bg-amber-50 border border-amber-200', text: 'text-amber-700' },
+  approved: { bg: 'bg-emerald-50 border border-emerald-200', text: 'text-emerald-700' },
+  rejected: { bg: 'bg-rose-50 border border-rose-200', text: 'text-rose-700' },
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -70,15 +71,6 @@ const SEVERITY_COLORS: Record<string, string> = {
   medium: '#eab308',
   low: '#22c55e',
 };
-
-// Canonical 5-pill severity legend used elsewhere
-const SEVERITY_LEGEND = [
-  { label: 'Very Low', color: '#06b6d4' },
-  { label: 'Low', color: '#22c55e' },
-  { label: 'Medium', color: '#eab308' },
-  { label: 'High', color: '#f97316' },
-  { label: 'Critical', color: '#ef4444' },
-];
 
 const TOOLTIP_STYLE = {
   backgroundColor: '#ffffff',
@@ -313,18 +305,17 @@ export default function RCSADashboardPage() {
       };
     });
 
+  // Unified KPI tile shape: white card, neutral border, only the small icon
+  // chip carries the colour. Previously each tile had its own background
+  // colour which read as visual fluff against the data-dense charts below.
   const kpis: Array<{
     name: string;
     value: string | number;
     icon: typeof ClipboardList;
     href: string;
     sublabel: string;
-    border: string;
-    bg: string;
-    hoverBorder: string;
     iconColor: string;
-    labelColor: string;
-    sublabelColor: string;
+    iconBg: string;
   }> = [
     {
       name: 'Active Campaigns',
@@ -332,12 +323,8 @@ export default function RCSADashboardPage() {
       icon: ClipboardList,
       href: '/risks/rcsa/campaigns',
       sublabel: 'Running now',
-      border: 'border-blue-200',
-      bg: 'bg-blue-50',
-      hoverBorder: 'hover:border-blue-300',
       iconColor: 'text-blue-600',
-      labelColor: 'text-blue-700',
-      sublabelColor: 'text-blue-600/80',
+      iconBg: 'bg-blue-50',
     },
     {
       name: 'Pending Assessments',
@@ -345,12 +332,8 @@ export default function RCSADashboardPage() {
       icon: Clock,
       href: '/risks/rcsa/campaigns',
       sublabel: 'Awaiting response',
-      border: 'border-amber-200',
-      bg: 'bg-amber-50',
-      hoverBorder: 'hover:border-amber-300',
       iconColor: 'text-amber-600',
-      labelColor: 'text-amber-700',
-      sublabelColor: 'text-amber-600/80',
+      iconBg: 'bg-amber-50',
     },
     {
       name: 'Open Findings',
@@ -358,12 +341,8 @@ export default function RCSADashboardPage() {
       icon: AlertTriangle,
       href: '/risks/rcsa/findings',
       sublabel: 'Need remediation',
-      border: 'border-red-200',
-      bg: 'bg-red-50',
-      hoverBorder: 'hover:border-red-300',
-      iconColor: 'text-red-600',
-      labelColor: 'text-red-700',
-      sublabelColor: 'text-red-600/80',
+      iconColor: 'text-rose-600',
+      iconBg: 'bg-rose-50',
     },
     {
       name: 'Completion Rate',
@@ -371,12 +350,8 @@ export default function RCSADashboardPage() {
       icon: TrendingUp,
       href: '/risks/rcsa/campaigns',
       sublabel: 'Across campaigns',
-      border: 'border-emerald-200',
-      bg: 'bg-emerald-50',
-      hoverBorder: 'hover:border-emerald-300',
       iconColor: 'text-emerald-600',
-      labelColor: 'text-emerald-700',
-      sublabelColor: 'text-emerald-600/80',
+      iconBg: 'bg-emerald-50',
     },
   ];
 
@@ -415,103 +390,36 @@ export default function RCSADashboardPage() {
         </div>
       </div>
 
-      {/* KPI Tiles - solid soft palette with white-bg icon chips */}
+      {/* KPI Tiles — neutral card, colour only on the icon chip. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map((kpi) => (
           <Link
             key={kpi.name}
             href={kpi.href}
-            className={`group rounded-xl border ${kpi.border} ${kpi.bg} p-3 sm:p-4 hover:shadow-md ${kpi.hoverBorder} transition-all`}
+            className="group rounded-xl border border-slate-200 bg-white p-3 sm:p-4 hover:border-slate-300 hover:shadow-sm transition-all"
           >
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white shadow-sm">
+              <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${kpi.iconBg}`}>
                 <kpi.icon className={`h-5 w-5 ${kpi.iconColor}`} />
               </div>
               <div className="min-w-0">
                 <p className="text-2xl font-bold text-slate-900">{kpi.value}</p>
-                <p className={`text-sm font-medium ${kpi.labelColor}`}>{kpi.name}</p>
-                <p className={`text-xs ${kpi.sublabelColor}`}>{kpi.sublabel}</p>
+                <p className="text-sm font-medium text-slate-700">{kpi.name}</p>
+                <p className="text-xs text-slate-500">{kpi.sublabel}</p>
               </div>
             </div>
           </Link>
         ))}
       </div>
 
-      {/* Mid Section: Findings + Pipeline (left, col-span-2) | Maturity Radar (right) */}
+      {/* Mid Section: Pipeline (left, col-span-2) | Maturity Radar (right).
+          The "Findings by Severity" donut that used to live here was visually
+          loud (4-colour pie with floating legend pills) and duplicated
+          information already in the Open Findings KPI tile. Replaced with
+          the Pipeline as the primary chart, plus a more intuitive horizontal
+          severity bar embedded under it. */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        {/* Left column: Findings by Severity + Pipeline funnel */}
         <div className="space-y-3 lg:col-span-2">
-          {/* Findings by Severity Donut */}
-          <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50">
-                  <PieIcon className="h-4 w-4 text-rose-600" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900">Findings by Severity</h3>
-                  <p className="text-[11px] text-slate-500">Open findings distributed by risk level</p>
-                </div>
-              </div>
-              <Link href="/risks/rcsa/findings" className="text-xs text-blue-600 inline-flex items-center gap-1 hover:underline">
-                View All <ChevronRight className="h-3 w-3" />
-              </Link>
-            </div>
-            {totalFindings > 0 ? (
-              <div className="flex items-center gap-6">
-                <div className="h-44 w-44 flex-shrink-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={findingsChartData.filter((f) => f.value > 0)}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={44}
-                        outerRadius={66}
-                        dataKey="value"
-                        stroke="none"
-                        paddingAngle={2}
-                      >
-                        {findingsChartData.filter((f) => f.value > 0).map((entry, i) => (
-                          <Cell key={i} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex-1 space-y-2.5">
-                  {findingsChartData.filter((f) => f.value > 0).map((item) => (
-                    <div key={item.label} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-                        <span className="text-sm capitalize text-slate-700">{item.label}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-bold text-slate-900">{item.value}</span>
-                        <span className="text-xs text-slate-400">
-                          {totalFindings > 0 ? Math.round((item.value / totalFindings) * 100) : 0}%
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="mt-1 border-t border-slate-100 pt-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-500">Total Findings</span>
-                      <span className="text-sm font-bold text-slate-900">{totalFindings}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-10 text-center">
-                <CheckCircle className="mb-2 h-10 w-10 text-emerald-400" />
-                <p className="text-sm font-semibold text-slate-900">No open findings</p>
-                <p className="text-xs text-slate-500">All clear across campaigns</p>
-              </div>
-            )}
-          </div>
-
           {/* Assessment Workflow Pipeline */}
           <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
             <div className="mb-4 flex items-center gap-2">
@@ -559,6 +467,71 @@ export default function RCSADashboardPage() {
                 <Activity className="mb-2 h-10 w-10 text-slate-400" />
                 <p className="text-sm font-semibold text-slate-900">No assessments yet</p>
                 <p className="text-xs text-slate-500">Pipeline will populate once campaigns kick off</p>
+              </div>
+            )}
+          </div>
+
+          {/* Risk Severity Distribution — compact horizontal stacked bar.
+              Replaces the noisy donut: same data expressed as a single
+              proportional bar so the user can read the mix of critical /
+              high / medium / low at a glance, with the count and percent
+              shown inline rather than in a separate floating legend. */}
+          <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50">
+                  <AlertTriangle className="h-4 w-4 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Risk Severity Distribution</h3>
+                  <p className="text-[11px] text-slate-500">Open findings by risk level</p>
+                </div>
+              </div>
+              <Link href="/risks/rcsa/findings" className="text-xs text-blue-600 inline-flex items-center gap-1 hover:underline">
+                View All <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+            {totalFindings > 0 ? (
+              <>
+                <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100">
+                  {findingsChartData
+                    .filter((f) => f.value > 0)
+                    .map((item) => {
+                      const pct = (item.value / totalFindings) * 100;
+                      return (
+                        <span
+                          key={item.label}
+                          className="h-full"
+                          style={{ width: `${pct}%`, backgroundColor: item.color }}
+                          title={`${item.label}: ${item.value} (${Math.round(pct)}%)`}
+                        />
+                      );
+                    })}
+                </div>
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {findingsChartData.map((item) => (
+                    <div
+                      key={item.label}
+                      className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/60 px-2.5 py-1.5"
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className="h-2 w-2 flex-shrink-0 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <span className="text-[11px] capitalize text-slate-600 truncate">
+                          {item.label}
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-900">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center gap-2 py-3 text-xs text-slate-500">
+                <CheckCircle className="h-4 w-4 text-emerald-500" />
+                No open findings — all clear across campaigns.
               </div>
             )}
           </div>
@@ -624,36 +597,25 @@ export default function RCSADashboardPage() {
                 <p className="text-[11px] text-slate-500">At-a-glance program metrics</p>
               </div>
             </div>
+            {/* Snapshot tiles — uniform neutral palette so the eye reads
+                the numbers rather than four different background colours.
+                Trend / status semantics live in the figure colour only. */}
             <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <div className="rounded-lg border border-slate-200 bg-white p-2">
                 <p className="text-lg font-bold text-slate-900">{totalAssessmentsCount}</p>
                 <p className="text-[11px] text-slate-500">Total Assessments</p>
               </div>
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2">
-                <p className="text-lg font-bold text-emerald-700">{approvedPct}%</p>
-                <p className="text-[11px] text-emerald-700/80">Approved Rate</p>
+              <div className="rounded-lg border border-slate-200 bg-white p-2">
+                <p className="text-lg font-bold text-emerald-600">{approvedPct}%</p>
+                <p className="text-[11px] text-slate-500">Approved Rate</p>
               </div>
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-2">
-                <p className="text-lg font-bold text-blue-700">{inProgressCount}</p>
-                <p className="text-[11px] text-blue-700/80">In Progress</p>
+              <div className="rounded-lg border border-slate-200 bg-white p-2">
+                <p className="text-lg font-bold text-blue-600">{inProgressCount}</p>
+                <p className="text-[11px] text-slate-500">In Progress</p>
               </div>
-              <div className="rounded-lg border border-purple-200 bg-purple-50 p-2">
-                <p className="text-lg font-bold text-purple-700">{submittedCount}</p>
-                <p className="text-[11px] text-purple-700/80">Submitted</p>
-              </div>
-            </div>
-            <div className="mt-3 border-t border-slate-100 pt-3">
-              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Severity Legend</p>
-              <div className="flex flex-wrap gap-1.5">
-                {SEVERITY_LEGEND.map(s => (
-                  <span
-                    key={s.label}
-                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-white"
-                    style={{ backgroundColor: s.color }}
-                  >
-                    {s.label}
-                  </span>
-                ))}
+              <div className="rounded-lg border border-slate-200 bg-white p-2">
+                <p className="text-lg font-bold text-purple-600">{submittedCount}</p>
+                <p className="text-[11px] text-slate-500">Submitted</p>
               </div>
             </div>
             <div className="mt-3 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">

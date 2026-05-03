@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -29,7 +29,7 @@ import {
   FileText,
 } from 'lucide-react';
 import Link from 'next/link';
-import { MultiSelectDropdown } from '@/components/ui';
+import { MultiSelectDropdown, PageLoader } from '@/components/ui';
 
 interface Assessment {
   id: number;
@@ -92,7 +92,7 @@ interface QuestionnaireTemplateLite {
   questions: TemplateQuestion[];
 }
 
-// ─── Helpers ────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const STATUS_FLOW = ['draft', 'in_progress', 'submitted', 'reviewed', 'approved'];
 const STATUS_LABELS: Record<string, string> = {
@@ -105,23 +105,23 @@ const STATUS_LABELS: Record<string, string> = {
 
 const getStatusPill = (status: string) => {
   const styles: Record<string, string> = {
-    draft: 'bg-gray-600 text-white border-gray-700',
-    in_progress: 'bg-blue-600 text-white border-blue-700',
-    submitted: 'bg-yellow-600 text-white border-yellow-700',
-    reviewed: 'bg-indigo-600 text-white border-indigo-700',
-    approved: 'bg-green-600 text-white border-green-700',
+    draft: 'bg-gray-50 text-gray-700 border-gray-200',
+    in_progress: 'bg-blue-50 text-blue-700 border-blue-200',
+    submitted: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    reviewed: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    approved: 'bg-green-50 text-green-700 border-green-200',
   };
-  return styles[status?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
+  return styles[status?.toLowerCase()] || 'bg-gray-50 text-gray-700 border-gray-200';
 };
 
 const getRatingPill = (rating: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-600 text-white border-red-700',
-    high: 'bg-orange-600 text-white border-orange-700',
-    medium: 'bg-yellow-600 text-white border-yellow-700',
-    low: 'bg-green-600 text-white border-green-700',
+    critical: 'bg-red-50 text-red-700 border-red-200',
+    high: 'bg-orange-50 text-orange-700 border-orange-200',
+    medium: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    low: 'bg-green-50 text-green-700 border-green-200',
   };
-  return styles[rating?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
+  return styles[rating?.toLowerCase()] || 'bg-gray-50 text-gray-700 border-gray-200';
 };
 
 const getRatingColor = (rating: string) => {
@@ -166,7 +166,7 @@ const getQuestionCategory = (q: TemplateQuestion, assessmentType?: string): stri
   return getAssessmentCategory(assessmentType);
 };
 
-// ─── Component ──────────────────────────────────────────────────
+// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function AssessmentDetailPage() {
   const params = useParams();
@@ -188,7 +188,7 @@ export default function AssessmentDetailPage() {
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:assessments:edit');
 
-  // ── Queries ─────────────────────────────────────────────────
+  // â”€â”€ Queries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const { data: assessment, isLoading, error } = useQuery({
     queryKey: ['assessment', assessmentId],
@@ -211,7 +211,7 @@ export default function AssessmentDetailPage() {
     placeholderData: keepPreviousData,
   });
 
-  // ── Mutations ───────────────────────────────────────────────
+  // â”€â”€ Mutations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const updateMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
@@ -254,12 +254,12 @@ export default function AssessmentDetailPage() {
     },
   });
 
-  // ── Loading / Error states ──────────────────────────────────
+  // â”€â”€ Loading / Error states â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <PageLoader size="md" />
       </div>
     );
   }
@@ -274,7 +274,7 @@ export default function AssessmentDetailPage() {
     );
   }
 
-  // ── Derived data ────────────────────────────────────────────
+  // â”€â”€ Derived data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const findings = editFindings ?? assessment.findings ?? [];
   const recommendations = editRecommendations ?? assessment.recommendations ?? [];
@@ -287,7 +287,7 @@ export default function AssessmentDetailPage() {
     { key: 'scoring', label: 'Scoring & Approval', icon: BarChart3 },
   ];
 
-  // ── Handlers ────────────────────────────────────────────────
+  // â”€â”€ Handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const handleSaveFindings = () => {
     updateMutation.mutate({ findings: editFindings });
@@ -327,7 +327,7 @@ export default function AssessmentDetailPage() {
     setEditRecommendations(updated);
   };
 
-  // ── Render ──────────────────────────────────────────────────
+  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   return (
     <div className="p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
@@ -409,7 +409,7 @@ export default function AssessmentDetailPage() {
         </nav>
       </div>
 
-      {/* ═══ Overview Tab ═══ */}
+      {/* â•â•â• Overview Tab â•â•â• */}
       {activeTab === 'overview' && (
         <div className="space-y-4 sm:space-y-6">
           {/* Info Cards */}
@@ -605,7 +605,7 @@ export default function AssessmentDetailPage() {
         </div>
       )}
 
-      {/* ═══ Questionnaire Tab ═══ */}
+      {/* â•â•â• Questionnaire Tab â•â•â• */}
       {activeTab === 'questionnaire' && (
         <div className="space-y-4">
           {(assessment.questionnaire_responses ?? []).length === 0 ? (
@@ -618,7 +618,7 @@ export default function AssessmentDetailPage() {
                   <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
                     <p className="text-sm font-semibold text-slate-900">Questions linked to this assessment</p>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Template: {linkedTemplate.name} • Category: {linkedTemplate.category || getAssessmentCategory(assessment.assessment_type)}
+                      Template: {linkedTemplate.name} â€¢ Category: {linkedTemplate.category || getAssessmentCategory(assessment.assessment_type)}
                     </p>
                   </div>
                   <div className="divide-y divide-gray-100">
@@ -802,7 +802,7 @@ export default function AssessmentDetailPage() {
         </div>
       )}
 
-      {/* ═══ Scoring & Approval Tab ═══ */}
+      {/* â•â•â• Scoring & Approval Tab â•â•â• */}
       {activeTab === 'scoring' && (
         <div className="space-y-4 sm:space-y-6">
           {/* Current Scores */}

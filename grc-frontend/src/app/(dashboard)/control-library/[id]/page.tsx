@@ -1,5 +1,7 @@
-'use client';
+﻿'use client';
 
+
+import { PageLoader } from '@/components/ui';
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -319,7 +321,7 @@ export default function ControlGroupDetailPage() {
     // blank page if router.replace fails or is delayed by the host.
     return (
       <div className="flex h-64 flex-col items-center justify-center gap-3 text-slate-600">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        <PageLoader size="sm" />
         <p className="text-sm">Redirecting…</p>
         <Link href="/control-library" className="text-xs text-blue-600 hover:underline">
           Tap here if not redirected
@@ -331,7 +333,7 @@ export default function ControlGroupDetailPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <PageLoader size="md" />
       </div>
     );
   }

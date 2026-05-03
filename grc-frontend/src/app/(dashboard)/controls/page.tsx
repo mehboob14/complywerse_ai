@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Fragment, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { controlsApi, evidenceApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { SearchInput, MultiSelectDropdown, InlineLinkPicker } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, InlineLinkPicker, PageLoader } from '@/components/ui';
 import {
   Shield,
   Loader2,
@@ -552,7 +552,7 @@ export default function ControlsPage() {
   if (isLoading && !data) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <PageLoader size="md" />
       </div>
     );
   }

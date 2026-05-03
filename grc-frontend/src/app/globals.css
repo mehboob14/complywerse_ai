@@ -9,6 +9,30 @@
   100% { transform: translateX(-50%) translateY(0);     opacity: 1; }
 }
 
+/* ----- Platform-wide page loader animations -----------------------------
+   Used by `<PageLoader>` (components/ui/PageLoader.tsx). Twelve dots arranged
+   around a circle, each scaling/fading in sequence to produce a smooth
+   chasing wave — gives a richer "in-progress" feel than a single rotating
+   arc and stays in the same visual family as a Lottie loading-circle. */
+@keyframes pageLoaderDot {
+  0%, 39%, 100% { transform: scale(0.45); opacity: 0.25; }
+  40%           { transform: scale(1);    opacity: 1; }
+}
+
+/* Soft outer halo — pulses behind the dots so the whole indicator feels
+   alive when the data is taking a moment. */
+@keyframes pageLoaderHalo {
+  0%, 100% { transform: scale(0.85); opacity: 0.35; }
+  50%      { transform: scale(1.05); opacity: 0.1;  }
+}
+
+/* The container rotates slowly so the staggered wave isn't perfectly
+   anchored — adds a sense of forward motion. */
+@keyframes pageLoaderSpin {
+  0%   { transform: rotate(0deg);   }
+  100% { transform: rotate(360deg); }
+}
+
 /* Indeterminate progress sweep used by the parse-policy and gap-analysis
    in-flight bars when a precise percentage isn't available. */
 @keyframes gap-progress {

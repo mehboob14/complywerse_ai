@@ -1,10 +1,10 @@
-'use client';
+﻿'use client';
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { vendorRiskApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 import {
   ClipboardList,
   Loader2,
@@ -80,17 +80,10 @@ interface QuestionnaireResponseRecord {
 
 const CATEGORIES = ['security', 'privacy', 'compliance', 'operational', 'financial', 'general'];
 
-const getCategoryBadge = (category: string) => {
-  const styles: Record<string, string> = {
-    security: 'bg-red-100 text-red-700',
-    privacy: 'bg-purple-100 text-purple-700',
-    compliance: 'bg-blue-100 text-blue-700',
-    operational: 'bg-orange-100 text-orange-700',
-    financial: 'bg-green-100 text-green-700',
-    general: 'bg-gray-100 text-gray-700',
-  };
-  return styles[category?.toLowerCase()] || 'bg-gray-100 text-gray-700';
-};
+// Single neutral chip for every category — keeps the page calm and consistent
+// with how other modules tag rows. The category is identifying metadata, not
+// a status that warrants its own colour.
+const getCategoryBadge = (_category: string) => 'bg-gray-100 text-gray-700';
 
 const getCategoryIcon = (category: string) => {
   const icons: Record<string, typeof Shield> = {
@@ -104,14 +97,17 @@ const getCategoryIcon = (category: string) => {
   return icons[category?.toLowerCase()] || ClipboardList;
 };
 
+// Soft tone status pills, matching the convention used elsewhere
+// (compliance / risk / certifications). Heavier solid-tone pills were
+// visually loud against the neutral table rows.
 const getResponseStatusPill = (status: string) => {
   const tones: Record<string, string> = {
-    pending: 'bg-amber-600 text-white border-amber-700',
-    in_progress: 'bg-blue-600 text-white border-blue-700',
-    submitted: 'bg-emerald-600 text-white border-emerald-700',
-    expired: 'bg-gray-600 text-white border-gray-700',
+    pending: 'bg-amber-50 text-amber-700 border-amber-200',
+    in_progress: 'bg-blue-50 text-blue-700 border-blue-200',
+    submitted: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    expired: 'bg-gray-100 text-gray-600 border-gray-200',
   };
-  return tones[status?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
+  return tones[status?.toLowerCase()] || 'bg-gray-100 text-gray-600 border-gray-200';
 };
 
 const formatAssessmentType = (value: string) =>
@@ -452,38 +448,41 @@ export default function VendorQuestionnairesPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <PageLoader size="md" />
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Questionnaire Templates</h1>
-          <p className="text-sm text-gray-500 mt-1">Create and manage vendor assessment questionnaires with evidence requirements</p>
+    <div className="p-4 sm:p-5 space-y-3 sm:space-y-4 max-w-7xl mx-auto">
+      {/* Header — wraps on small screens so the action buttons don't push
+          off-canvas; tighter typography to match the rest of the platform. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-lg font-semibold text-slate-900">Questionnaire Templates</h1>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+            Create and manage vendor assessment questionnaires with evidence requirements
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/vendor-risk/vendors"
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50"
           >
             Vendors
           </Link>
           <Link
             href="/vendor-risk/assessments"
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50"
           >
             Assessments
           </Link>
           {canCreate && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
+              className="cw-btn-primary inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-3.5 w-3.5" />
               Create Template
             </button>
           )}
@@ -506,7 +505,7 @@ export default function VendorQuestionnairesPage() {
       </div>
 
       {/* Template Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
         {filtered.length === 0 ? (
           <div className="col-span-full bg-white rounded-xl border border-gray-200 p-8 text-center">
             <ClipboardList className="h-10 w-10 text-gray-300 mx-auto mb-3" />
@@ -518,23 +517,23 @@ export default function VendorQuestionnairesPage() {
             const Icon = getCategoryIcon(template.category);
             const evidenceCount = (template.questions || []).filter((q: any) => q.evidence_required).length;
             return (
-              <div key={template.id} className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4 flex flex-col hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-start gap-3 flex-1">
-                    <div className={`p-2 rounded-lg ${getCategoryBadge(template.category).replace('text-', 'bg-').split(' ')[0]}`}>
-                      <Icon className="h-4 w-4 text-gray-700" />
+              <div key={template.id} className="bg-white rounded-xl border border-gray-200 p-3 flex flex-col hover:border-gray-300 hover:shadow-sm transition-all">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-start gap-2 flex-1 min-w-0">
+                    <div className="p-1.5 rounded-md bg-gray-100 flex-shrink-0">
+                      <Icon className="h-3.5 w-3.5 text-gray-600" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-semibold text-slate-900 truncate">{template.name}</h3>
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize mt-1 ${getCategoryBadge(template.category)}`}>
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide mt-1 ${getCategoryBadge(template.category)}`}>
                         {template.category}
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
                     <button
                       onClick={() => setShowPreviewModal(template)}
-                      className="p-1.5 text-gray-400 hover:text-blue-600 rounded"
+                      className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
                       title="Preview questions"
                     >
                       <Eye className="h-4 w-4" />
@@ -544,7 +543,8 @@ export default function VendorQuestionnairesPage() {
                         onClick={() => {
                           if (confirm('Delete this template?')) deleteMutation.mutate(template.id);
                         }}
-                        className="p-1.5 text-gray-400 hover:text-red-600 rounded"
+                        className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                        title="Delete template"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -552,17 +552,17 @@ export default function VendorQuestionnairesPage() {
                   </div>
                 </div>
                 {template.description && (
-                  <p className="text-xs text-gray-500 mb-3 line-clamp-2">{template.description}</p>
+                  <p className="text-xs text-gray-500 mb-2 line-clamp-2">{template.description}</p>
                 )}
 
                 {/* Stats */}
-                <div className="flex items-center gap-3 text-xs text-gray-400 mb-4">
+                <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
                   <span className="flex items-center gap-1">
                     <FileText className="h-3 w-3" />
                     {template.questions?.length ?? 0} questions
                   </span>
                   {evidenceCount > 0 && (
-                    <span className="flex items-center gap-1 text-orange-500">
+                    <span className="flex items-center gap-1 text-amber-700">
                       <Paperclip className="h-3 w-3" />
                       {evidenceCount} evidence required
                     </span>
@@ -570,7 +570,7 @@ export default function VendorQuestionnairesPage() {
                 </div>
 
                 {/* Preview first 3 questions */}
-                <div className="mb-4 space-y-1">
+                <div className="mb-3 space-y-0.5">
                   {(template.questions || []).slice(0, 3).map((q: any, i: number) => (
                     <p key={i} className="text-xs text-gray-500 truncate">
                       <span className="text-gray-400 font-mono mr-1">{i + 1}.</span>
@@ -590,9 +590,9 @@ export default function VendorQuestionnairesPage() {
                       setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' });
                       setShowSendModal(true);
                     }}
-                    className="w-full px-3 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 flex items-center justify-center gap-2"
+                    className="w-full px-3 py-1.5 bg-blue-50 text-blue-700 rounded-md text-xs font-medium hover:bg-blue-100 flex items-center justify-center gap-1.5"
                   >
-                    <Send className="h-4 w-4" />
+                    <Send className="h-3.5 w-3.5" />
                     Send to Vendor
                   </button>
                 </div>
@@ -604,9 +604,9 @@ export default function VendorQuestionnairesPage() {
 
       {/* Sent Questionnaire Tracking */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-3 sm:px-4 py-4 border-b border-gray-200">
+        <div className="px-3 sm:px-4 py-3 border-b border-gray-200">
           <h2 className="text-sm font-semibold text-slate-900">Sent Questionnaires</h2>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-gray-500 mt-0.5">
             Track sent links, response status, and review questions/answers for each vendor submission.
           </p>
         </div>
@@ -990,7 +990,12 @@ export default function VendorQuestionnairesPage() {
                       )}
                     </div>
                     {templateForm.questions.length > 1 && (
-                      <button type="button" onClick={() => removeQuestion(idx)} className="text-gray-400 hover:text-red-600 mt-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => removeQuestion(idx)}
+                        className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors mt-1 shrink-0"
+                        title="Remove question"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     )}

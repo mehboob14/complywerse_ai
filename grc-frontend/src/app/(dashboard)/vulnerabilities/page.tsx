@@ -1,10 +1,10 @@
-'use client';
+﻿'use client';
 
 import { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { vulnManagementApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { SearchInput, MultiSelectDropdown } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
 import {
   Upload,
   Bug,
@@ -590,7 +590,7 @@ export default function VulnerabilitiesPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <PageLoader size="md" />
       </div>
     );
   }
@@ -1279,7 +1279,7 @@ export default function VulnerabilitiesPage() {
 
           {deptsLoading ? (
             <div className="flex h-64 items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+              <PageLoader size="md" />
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1496,7 +1496,7 @@ export default function VulnerabilitiesPage() {
       {activeTab === 'sla' && (
         <div className="space-y-3 px-3 sm:px-6 py-3 bg-[var(--color-subtle)]">
           {slaLoading ? (
-            <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary-600" /></div>
+            <div className="flex h-64 items-center justify-center"><PageLoader size="md" /></div>
           ) : slaError ? (
             <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center"><AlertCircle className="mx-auto h-8 w-8 text-red-600" /><p className="mt-2 text-red-600">Failed to load SLA configuration</p></div>
           ) : (

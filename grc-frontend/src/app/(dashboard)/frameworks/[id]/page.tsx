@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
@@ -9,7 +9,7 @@ import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CertificationJourney, ControlImplementation, ProgressSummary, CertificationControl, SubControlWithEvidence, ControlEvidence, ITAsset } from '@/types';
 import ControlImplementationModal from '@/components/ControlImplementationModal';
-import { SearchInput, MultiSelectDropdown } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
 import {
   Loader2,
   AlertCircle,
@@ -971,7 +971,7 @@ export default function CertificationJourneyPage() {
           <div className="space-y-2">
             {phases.length === 0 && phasesLoading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                <PageLoader size="sm" />
               </div>
             ) : phases.length === 0 ? (
               <div className="flex items-center justify-center py-8">
@@ -2275,7 +2275,7 @@ export default function CertificationJourneyPage() {
     if (cdeLoading || cdeAssetsFallbackLoading) {
       return (
         <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <PageLoader size="md" />
         </div>
       );
     }
@@ -2508,7 +2508,7 @@ export default function CertificationJourneyPage() {
 
         {applicabilityLoading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <PageLoader size="md" />
           </div>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">

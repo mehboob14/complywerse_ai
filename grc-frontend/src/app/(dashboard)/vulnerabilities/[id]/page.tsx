@@ -1,11 +1,11 @@
-'use client';
+﻿'use client';
 
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi, assetsApi, ermApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { InlineLinkPicker } from '@/components/ui';
+import { InlineLinkPicker, PageLoader } from '@/components/ui';
 import {
   Bug,
   Loader2,
@@ -516,7 +516,7 @@ export default function VulnerabilityDetailPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center rounded-xl border border-slate-200 bg-white">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <PageLoader size="md" />
       </div>
     );
   }

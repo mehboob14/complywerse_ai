@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import { assetsApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
 import type { ITAsset } from '@/types';
-import { SearchInput, InlineLinkPicker } from '@/components/ui';
+import { SearchInput, InlineLinkPicker, PageLoader } from '@/components/ui';
 import {
   ArrowLeft, Loader2, AlertCircle, Shield, DollarSign,
   Target, TrendingUp, FileCheck, AlertTriangle,
@@ -365,7 +365,7 @@ export default function AssetDetailPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center rounded-lg border border-slate-200 bg-white">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <PageLoader size="md" />
       </div>
     );
   }
@@ -1503,7 +1503,7 @@ function SecurityComplianceTab({ assetId }: { assetId: number }) {
 
       {isLoading ? (
         <div className="flex items-center justify-center rounded-lg border border-slate-200 bg-white py-10">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+          <PageLoader size="sm" />
         </div>
       ) : error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">

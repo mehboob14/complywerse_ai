@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -26,7 +26,7 @@ import {
   Target,
 } from 'lucide-react';
 import Link from 'next/link';
-import { StatCard, ProgressRing, SeverityBadge, DataCard } from '@/components/ui';
+import { StatCard, ProgressRing, SeverityBadge, DataCard, PageLoader } from '@/components/ui';
 import {
   PieChart,
   Pie,
@@ -726,7 +726,7 @@ export default function GapAnalysisDashboardPage() {
             <div>
               {unmappedLoading ? (
                 <div className="flex h-48 items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <PageLoader size="md" />
                 </div>
               ) : !unmappedControls?.controls.length ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -800,7 +800,7 @@ export default function GapAnalysisDashboardPage() {
             <div>
               {noEvidenceLoading ? (
                 <div className="flex h-48 items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <PageLoader size="md" />
                 </div>
               ) : !controlsWithoutEvidence?.controls.length ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -872,7 +872,7 @@ export default function GapAnalysisDashboardPage() {
             <div>
               {evidenceGapsLoading ? (
                 <div className="flex h-48 items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <PageLoader size="md" />
                 </div>
               ) : !evidenceGaps?.controls_with_gaps?.length ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -963,7 +963,7 @@ export default function GapAnalysisDashboardPage() {
 
             {frameworkGapsLoading ? (
               <div className="flex h-64 items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <PageLoader size="md" />
               </div>
             ) : frameworkGaps ? (
               <div className="space-y-6">

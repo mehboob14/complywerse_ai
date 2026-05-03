@@ -6,11 +6,54 @@ from pydantic import BaseModel
 
 from ....models import (
     Evidence, Risk, ITAsset, RiskIncident, PolicyStatement,
+    PolicyStatementCompliance,
     RiskEvidenceLink, AssetEvidenceLink, EvidenceIncidentLink, EvidencePolicyLink,
     AssessmentItemEvidence, ComplianceAssessmentDocumentItem,
     GRCUser, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from sqlalchemy.orm.attributes import flag_modified
+
+
+def _add_evidence_to_compliance(db: Session, statement: PolicyStatement, evidence_id: int) -> None:
+    """Mirror an evidence ↔ statement link into `PolicyStatementCompliance.evidence_ids`.
+
+    The compliance statements page (`/compliance/statements`) reads its
+    "Linked Evidence" view from this JSON column, while the cross-link
+    table (`EvidencePolicyLink`) is what the evidence detail page reads.
+    Without keeping the two in sync a link created from one side stays
+    invisible on the other — exactly what the user reported.
+    """
+    record = db.query(PolicyStatementCompliance).filter(
+        PolicyStatementCompliance.statement_id == statement.id,
+        PolicyStatementCompliance.tenant_id == statement.tenant_id,
+    ).first()
+    if not record:
+        record = PolicyStatementCompliance(
+            tenant_id=statement.tenant_id,
+            statement_id=statement.id,
+            compliance_status="not_assessed",
+            evidence_ids=[evidence_id],
+        )
+        db.add(record)
+        return
+    existing = list(record.evidence_ids or [])
+    if evidence_id not in existing:
+        existing.append(evidence_id)
+        record.evidence_ids = existing
+        flag_modified(record, "evidence_ids")
+
+
+def _remove_evidence_from_compliance(db: Session, statement_id: int, evidence_id: int) -> None:
+    record = db.query(PolicyStatementCompliance).filter(
+        PolicyStatementCompliance.statement_id == statement_id,
+    ).first()
+    if not record or not record.evidence_ids:
+        return
+    existing = list(record.evidence_ids)
+    if evidence_id in existing:
+        record.evidence_ids = [eid for eid in existing if eid != evidence_id]
+        flag_modified(record, "evidence_ids")
 
 router = APIRouter(prefix="/cross-links", tags=["Evidence - Cross-Module Links"])
 
@@ -486,8 +529,11 @@ def link_evidence_to_policy_statements(
             created_at=datetime.utcnow()
         )
         db.add(link)
+        # Mirror to the compliance statement's evidence_ids JSON so the link
+        # is also visible from /compliance/statements.
+        _add_evidence_to_compliance(db, statement, evidence_id)
         db.flush()
-        
+
         created_links.append({
             "id": link.id,
             "evidence_id": evidence_id,
@@ -495,9 +541,9 @@ def link_evidence_to_policy_statements(
             "link_type": link.link_type,
             "policy_statement": serialize_policy_statement(statement)
         })
-    
+
     db.commit()
-    
+
     return {
         "evidence_id": evidence_id,
         "created_count": len(created_links),
@@ -557,10 +603,14 @@ def delete_evidence_policy_statement_link(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Policy statement link not found"
         )
-    
+
+    # Capture before delete so we can mirror the removal into the compliance
+    # statement's evidence_ids array (the statements page reads from there).
+    statement_id = link.policy_statement_id
     db.delete(link)
+    _remove_evidence_from_compliance(db, statement_id, evidence_id)
     db.commit()
-    
+
     return {"message": "Policy statement link removed successfully"}
 
 

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -31,7 +31,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
-import { StatCard, ProgressRing, DataCard, SearchInput, MultiSelectDropdown } from '@/components/ui';
+import { StatCard, ProgressRing, DataCard, SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
 
 interface ControlGroup {
   id: number;
@@ -507,7 +507,7 @@ export default function ControlLibraryPage() {
 
       {groupsLoading ? (
         <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <PageLoader size="md" />
         </div>
       ) : groupsError ? (
         <div className="flex h-64 flex-col items-center justify-center text-red-400">

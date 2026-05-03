@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
-import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 
 interface Vendor {
   id: number;
@@ -50,33 +50,33 @@ const titleCase = (s: string) =>
 
 const getTierBadge = (tier: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-600 text-white border border-red-700',
-    high: 'bg-orange-600 text-white border border-orange-700',
-    medium: 'bg-yellow-600 text-white border border-yellow-700',
-    low: 'bg-green-600 text-white border border-green-700',
+    critical: 'bg-red-50 text-red-700 border border-red-200',
+    high: 'bg-orange-50 text-orange-700 border border-orange-200',
+    medium: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+    low: 'bg-green-50 text-green-700 border border-green-200',
   };
-  return styles[tier?.toLowerCase()] || 'bg-gray-600 text-white border border-gray-700';
+  return styles[tier?.toLowerCase()] || 'bg-gray-50 text-gray-700 border border-gray-200';
 };
 
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
-    active: 'bg-green-600 text-white border border-green-700',
-    under_review: 'bg-blue-600 text-white border border-blue-700',
-    onboarding: 'bg-purple-600 text-white border border-purple-700',
-    offboarded: 'bg-gray-600 text-white border border-gray-700',
-    suspended: 'bg-red-600 text-white border border-red-700',
+    active: 'bg-green-50 text-green-700 border border-green-200',
+    under_review: 'bg-blue-50 text-blue-700 border border-blue-200',
+    onboarding: 'bg-purple-50 text-purple-700 border border-purple-200',
+    offboarded: 'bg-gray-50 text-gray-700 border border-gray-200',
+    suspended: 'bg-red-50 text-red-700 border border-red-200',
   };
-  return styles[status?.toLowerCase()] || 'bg-gray-600 text-white border border-gray-700';
+  return styles[status?.toLowerCase()] || 'bg-gray-50 text-gray-700 border border-gray-200';
 };
 
 const getRatingBadge = (rating: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-600 text-white border border-red-700',
-    high: 'bg-orange-600 text-white border border-orange-700',
-    medium: 'bg-yellow-600 text-white border border-yellow-700',
-    low: 'bg-green-600 text-white border border-green-700',
+    critical: 'bg-red-50 text-red-700 border border-red-200',
+    high: 'bg-orange-50 text-orange-700 border border-orange-200',
+    medium: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+    low: 'bg-green-50 text-green-700 border border-green-200',
   };
-  return styles[rating?.toLowerCase()] || 'bg-gray-600 text-white border border-gray-700';
+  return styles[rating?.toLowerCase()] || 'bg-gray-50 text-gray-700 border border-gray-200';
 };
 
 export default function VendorListPage() {
@@ -221,7 +221,7 @@ export default function VendorListPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <PageLoader size="md" />
       </div>
     );
   }

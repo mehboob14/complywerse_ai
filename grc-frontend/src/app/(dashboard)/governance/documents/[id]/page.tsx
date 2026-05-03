@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -7,7 +7,7 @@ import apiClient from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useToast } from '@/components/ui/ToastProvider';
-import { SearchInput, MultiSelectDropdown } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -1477,7 +1477,7 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
         <div className="p-6">
           {htmlLoading ? (
             <div className="flex h-48 items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              <PageLoader size="md" />
             </div>
           ) : isMarkdown ? (
             <ReactMarkdown

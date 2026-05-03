@@ -1,5 +1,7 @@
-'use client';
+﻿'use client';
 
+
+import { PageLoader } from '@/components/ui';
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRouter, useParams } from 'next/navigation';
@@ -104,7 +106,7 @@ export default function FrameworkOverviewPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <PageLoader size="md" />
       </div>
     );
   }

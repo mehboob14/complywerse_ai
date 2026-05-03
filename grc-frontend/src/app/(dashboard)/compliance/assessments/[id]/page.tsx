@@ -1,5 +1,7 @@
-'use client';
+﻿'use client';
 
+
+import { PageLoader } from '@/components/ui';
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -702,7 +704,7 @@ export default function AssessmentDetailPage() {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <PageLoader size="md" />
       </div>
     );
   }

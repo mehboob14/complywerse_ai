@@ -63,8 +63,12 @@ const CATEGORY_LABELS: Record<string, string> = {
   third_party: 'Third-party',
 };
 
+// Treatment palette intentionally avoids blue tones — the sunburst sits
+// next to severity (red/orange/amber/green) and a blue ring next to those
+// reads as an unrelated accent. Violet for mitigate keeps it visually
+// distinct; the fallback uses slate so unknown treatments stay neutral.
 const TREATMENT_COLORS: Record<string, string> = {
-  mitigate: '#3b82f6',
+  mitigate: '#8b5cf6',
   accept: '#22c55e',
   transfer: '#f59e0b',
   avoid: '#ef4444',
@@ -151,12 +155,6 @@ function RiskSpeedometer({
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h2 className="text-sm font-semibold text-black">Risk Pulse Speedometer</h2>
-          <p className="text-[11px] text-gray-400 mt-0.5">Blended view of exposure, KRIs, and response capacity</p>
-        </div>
-      </div>
       <div className="grid gap-4 lg:grid-cols-[220px_1fr] lg:items-center">
         <div className="relative mx-auto h-[180px] w-full max-w-[220px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -329,12 +327,6 @@ function RiskSunburst({
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h2 className="text-sm font-semibold text-black">Risk Universe Sunburst</h2>
-          <p className="text-[11px] text-gray-400 mt-0.5">Exposure layers across score, treatment, and signal status</p>
-        </div>
-      </div>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
         <div className="relative mx-auto h-[240px] w-[240px] flex-shrink-0">
           <ResponsiveContainer width="100%" height="100%">
@@ -607,7 +599,7 @@ export default function ERMOverviewPage() {
       .map(([name, value]) => ({
         name: name.charAt(0).toUpperCase() + name.slice(1),
         value,
-        fill: TREATMENT_COLORS[name] || '#6366f1',
+        fill: TREATMENT_COLORS[name] || '#64748b',
       }));
   }, [risks]);
 
@@ -673,7 +665,14 @@ export default function ERMOverviewPage() {
   const actionHealth = mitigationProgress.total > 0
     ? Math.round((mitigationProgress.percentage * 0.7) + (Math.max(0, 100 - Math.round(((overdueActions?.length || 0) / mitigationProgress.total) * 100)) * 0.3))
     : 100;
-  const ermHealthScore = Math.round((residualHealth * 0.35) + (exposureHealth * 0.25) + (kriHealth * 0.2) + (actionHealth * 0.2));
+  // Posture is grounded in the residual heatmap position. The previous blend
+  // included KRI/action/exposure factors that defaulted to 100% when there
+  // was no data — that inflated the score artificially (a tenant with one
+  // medium risk and no KRIs/actions read as ~94 instead of ~50).
+  // Sticking to the heatmap keeps the value intuitive: the score now
+  // mirrors the average residual position on the 5×5 matrix, where Medium
+  // risks sit around 50, High around 25–35, Low around 75–80, etc.
+  const ermHealthScore = residualHealth;
 
   const scoreRangeData = [
     { name: 'Critical', value: dashboard?.by_score_range?.critical || 0, color: '#ef4444' },

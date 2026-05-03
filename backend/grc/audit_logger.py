@@ -166,14 +166,24 @@ def write_audit_log(
         db = open_tenant_session(tenant_slug)
         try:
             user_id = None
+            actor_username = None
+            actor_display = None
+
+            # Try cookie auth first, then fall back to Authorization Bearer header
             token = request.cookies.get("grc_auth_token")
+            if not token:
+                auth_header = request.headers.get("authorization", "")
+                if auth_header.startswith("Bearer "):
+                    token = auth_header[7:]
+
             if token:
                 payload = decode_token(token)
-                username = payload.get("sub") if payload else None
-                if username:
-                    user = db.query(GRCUser).filter(GRCUser.username == username).first()
+                actor_username = payload.get("sub") if payload else None
+                if actor_username:
+                    user = db.query(GRCUser).filter(GRCUser.username == actor_username).first()
                     if user:
                         user_id = user.id
+                        actor_display = user.display_name or user.username
 
             if not tenant_id:
                 return
@@ -191,6 +201,9 @@ def write_audit_log(
                 "duration_ms": duration_ms,
                 "user_agent": request.headers.get("user-agent"),
                 "request": request_payload,
+                # Store actor info so display always works even if user is later deleted
+                "actor": actor_username,
+                "actor_display": actor_display,
             }
 
             log = AuditLog(

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -21,13 +21,11 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  SearchInput,
+import { SearchInput,
   MultiSelectDropdown,
-  RightSlidePanel,
-} from '@/components/ui';
+  RightSlidePanel, PageLoader } from '@/components/ui';
 
-// ─── Assessment Type Definitions ────────────────────────────────
+// â”€â”€â”€ Assessment Type Definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const ASSESSMENT_TYPES = [
   {
     id: 'cybersecurity',
@@ -126,26 +124,26 @@ interface UserOption {
 
 const getStatusPill = (status: string) => {
   const styles: Record<string, string> = {
-    draft: 'bg-gray-600 text-white border-gray-700',
-    in_progress: 'bg-blue-600 text-white border-blue-700',
-    completed: 'bg-green-600 text-white border-green-700',
+    draft: 'bg-gray-50 text-gray-700 border-gray-200',
+    in_progress: 'bg-blue-50 text-blue-700 border-blue-200',
+    completed: 'bg-green-50 text-green-700 border-green-200',
     reviewed: 'bg-teal-600 text-white border-teal-700',
-    overdue: 'bg-red-600 text-white border-red-700',
-    pending_review: 'bg-yellow-600 text-white border-yellow-700',
-    approved: 'bg-purple-600 text-white border-purple-700',
+    overdue: 'bg-red-50 text-red-700 border-red-200',
+    pending_review: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    approved: 'bg-purple-50 text-purple-700 border-purple-200',
   };
-  return styles[status?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
+  return styles[status?.toLowerCase()] || 'bg-gray-50 text-gray-700 border-gray-200';
 };
 
 const getRiskPill = (rating: string | null) => {
   if (!rating) return '';
   const styles: Record<string, string> = {
-    critical: 'bg-red-600 text-white border-red-700',
-    high: 'bg-orange-600 text-white border-orange-700',
-    medium: 'bg-yellow-600 text-white border-yellow-700',
-    low: 'bg-green-600 text-white border-green-700',
+    critical: 'bg-red-50 text-red-700 border-red-200',
+    high: 'bg-orange-50 text-orange-700 border-orange-200',
+    medium: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    low: 'bg-green-50 text-green-700 border-green-200',
   };
-  return styles[rating.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
+  return styles[rating.toLowerCase()] || 'bg-gray-50 text-gray-700 border-gray-200';
 };
 
 const formatAssessmentType = (value: string) =>
@@ -328,7 +326,7 @@ export default function VendorAssessmentsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <PageLoader size="md" />
       </div>
     );
   }
@@ -547,7 +545,7 @@ export default function VendorAssessmentsPage() {
         </div>
       </div>
 
-      {/* Create Modal — RightSlidePanel */}
+      {/* Create Modal â€” RightSlidePanel */}
       <RightSlidePanel
         isOpen={showModal}
         onClose={() => setShowModal(false)}

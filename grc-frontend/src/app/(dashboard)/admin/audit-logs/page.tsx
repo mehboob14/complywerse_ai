@@ -13,6 +13,7 @@ interface AuditLogEntry {
   action: string;
   resource_type: string;
   resource_id: number | null;
+  description: string;
   details: Record<string, unknown>;
   method?: string;
   path?: string;
@@ -21,6 +22,230 @@ interface AuditLogEntry {
   ip_address: string | null;
   timestamp: string;
 }
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function UserAvatar({ name }: { name: string }) {
+  const initials = name
+    .split(/\s+/)
+    .map((n) => n[0] ?? '')
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || '?';
+  return (
+    <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-primary-100 text-primary-700 text-xs font-semibold shrink-0 select-none">
+      {initials}
+    </span>
+  );
+}
+
+const ACTION_CFG: Record<string, { bg: string; label: string }> = {
+  create:         { bg: 'bg-emerald-50 text-emerald-700 border border-emerald-200', label: 'Create' },
+  update:         { bg: 'bg-blue-50 text-blue-700 border border-blue-200',          label: 'Update' },
+  delete:         { bg: 'bg-red-50 text-red-700 border border-red-200',             label: 'Delete' },
+  read:           { bg: 'bg-slate-50 text-slate-500 border border-slate-200',       label: 'Read'   },
+  create_failed:  { bg: 'bg-amber-50 text-amber-700 border border-amber-200',       label: 'Create Failed' },
+  update_failed:  { bg: 'bg-amber-50 text-amber-700 border border-amber-200',       label: 'Update Failed' },
+  delete_failed:  { bg: 'bg-amber-50 text-amber-700 border border-amber-200',       label: 'Delete Failed' },
+};
+
+function ActionBadge({ action }: { action: string }) {
+  const cfg = ACTION_CFG[action] ?? {
+    bg: 'bg-slate-50 text-slate-600 border border-slate-200',
+    label: action.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+  };
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${cfg.bg}`}>
+      {cfg.label}
+    </span>
+  );
+}
+
+function fmtTs(ts: string) {
+  const d = new Date(ts);
+  return {
+    date: d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+    time: d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+  };
+}
+
+// ── Module / sub-module derivation ───────────────────────────────────────────
+//
+// The audit log records URL paths like `/grc/erm/risks/5` or
+// `/grc/governance/documents/3/policy-statements`. We split the path into a
+// module (first segment) and an optional sub-module (second segment when it
+// isn't a numeric id), then look each up in the friendly-label maps below.
+// Anything not in the maps falls back to title-cased text so the column never
+// blank-renders.
+
+const MODULE_LABELS: Record<string, string> = {
+  erm: 'Risks & ERM',
+  evidence: 'Evidence',
+  'evidence-mgmt': 'Evidence',
+  governance: 'Governance',
+  compliance: 'Compliance',
+  'vuln-management': 'Vulnerability Mgmt',
+  vulnerabilities: 'Vulnerability Mgmt',
+  frameworks: 'Frameworks',
+  'framework-upload': 'Frameworks',
+  certifications: 'Certifications',
+  admin: 'Administration',
+  auth: 'Authentication',
+  'vendor-risk': 'Vendor Risk',
+  vendor_risk: 'Vendor Risk',
+  tasks: 'Critical Tasks',
+  'critical-tasks': 'Critical Tasks',
+  assets: 'Assets',
+  'control-library': 'Control Library',
+  controls: 'Controls',
+  dashboard: 'Dashboard',
+  'workflow-engine': 'Workflow Engine',
+  workflow: 'Workflow Engine',
+  chatbot: 'AI Assistant',
+  complychat: 'AI Assistant',
+  integrations: 'Integrations',
+  'audit-management': 'Audit',
+  audits: 'Audit',
+  'is-projects': 'IS Projects',
+  reports: 'Reports',
+  documents: 'Documents',
+  system: 'System',
+  risks: 'Risks & ERM',
+};
+
+const SUBMODULE_LABELS: Record<string, string> = {
+  // ERM
+  risks: 'Risks',
+  kris: 'KRIs',
+  incidents: 'Incidents',
+  'mitigation-actions': 'Mitigation Actions',
+  'internal-controls': 'Internal Controls',
+  reviews: 'Reviews',
+  appetite: 'Risk Appetite',
+  rcsa: 'RCSA',
+  'risk-assessments': 'Risk Assessments',
+  'framework-risk-assessments': 'Framework Risk Assessments',
+  scales: 'Scoring Scales',
+  dependencies: 'Risk Dependencies',
+  // Governance
+  documents: 'Documents',
+  'gap-analysis': 'Gap Analysis',
+  attestations: 'Attestations',
+  'attestation-campaigns': 'Attestation Campaigns',
+  committees: 'Committees',
+  'regulatory-changes': 'Regulatory Changes',
+  'regulatory-feeds': 'Regulatory Feeds',
+  workflows: 'Workflows',
+  'workflow-templates': 'Workflow Templates',
+  mappings: 'Mappings',
+  exceptions: 'Exceptions',
+  applicability: 'Applicability',
+  versions: 'Document Versions',
+  // Compliance
+  policies: 'Policies',
+  statements: 'Policy Statements',
+  assessments: 'Assessments',
+  // Evidence
+  'cross-links': 'Cross-Module Links',
+  'audit-packages': 'Audit Packages',
+  // Vulnerability
+  vulnerabilities: 'Findings',
+  sla: 'SLA Config',
+  departments: 'Departments',
+  // Vendor risk
+  vendors: 'Vendors',
+  questionnaires: 'Questionnaires',
+  'questionnaire-templates': 'Questionnaire Templates',
+  // Admin
+  users: 'Users',
+  roles: 'Roles',
+  permissions: 'Permissions',
+  organization: 'Organization',
+  'audit-logs': 'Audit Logs',
+  // AI / cross-cutting
+  ai: 'AI Assistant',
+  // Workflow engine
+  definitions: 'Definitions',
+  instances: 'Instances',
+  notifications: 'Notifications',
+  'escalation-configs': 'Escalation Configs',
+  // Frameworks
+  parser: 'Parser',
+  controls: 'Controls',
+  alignment: 'Alignment',
+};
+
+const SUB_ENTITY_MODULES = new Set([
+  'erm', 'evidence-mgmt', 'vuln-management', 'audit-management',
+  'control-library', 'governance', 'compliance', 'vendor-risk',
+  'workflow-engine', 'framework-upload',
+]);
+
+function titleCase(s: string): string {
+  return s
+    .replace(/[-_]/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+function deriveModuleContext(log: AuditLogEntry): { module: string; submodule: string | null } {
+  const path = log.path || '';
+  const normalized = path.replace(/^\/grc/, '').replace(/^\//, '');
+  const parts = normalized.split('/').filter(Boolean);
+  if (parts.length === 0) {
+    const fallback = log.resource_type ? MODULE_LABELS[log.resource_type] || titleCase(log.resource_type) : 'System';
+    return { module: fallback, submodule: null };
+  }
+  const moduleKey = parts[0];
+  const moduleLabel = MODULE_LABELS[moduleKey] || titleCase(moduleKey);
+  let submodule: string | null = null;
+  // Sub-module = second segment when it isn't a numeric id, but only for
+  // modules whose URL structure actually nests resources (most do).
+  if (SUB_ENTITY_MODULES.has(moduleKey) && parts.length > 1 && !/^\d+$/.test(parts[1])) {
+    const subKey = parts[1];
+    submodule = SUBMODULE_LABELS[subKey] || titleCase(subKey);
+  }
+  // Avoid showing the same label twice (e.g. module=Documents, sub=Documents).
+  if (submodule && submodule.toLowerCase() === moduleLabel.toLowerCase()) {
+    submodule = null;
+  }
+  return { module: moduleLabel, submodule };
+}
+
+/**
+ * Append module / sub-module context to the backend's description if it
+ * doesn't already mention them, so each row reads as a self-contained
+ * sentence ("Updated risk #5 — in Risks & ERM"). We only append when the
+ * description doesn't already reference the module (e.g. for actions like
+ * "Ran gap analysis on document #3 against framework "ISO 27001"" the
+ * extra "in Governance" hint would be noise).
+ */
+function enrichDescription(log: AuditLogEntry): string {
+  const base = log.description || `${titleCase(log.action || 'action')} on ${log.resource_type || 'record'}`;
+  const ctx = deriveModuleContext(log);
+  const moduleLabel = ctx.submodule || ctx.module;
+  if (!moduleLabel || moduleLabel === 'System') return base;
+  const lower = base.toLowerCase();
+  if (lower.includes(moduleLabel.toLowerCase())) return base;
+  // Some backend phrasings already say "in <module>" — don't double up.
+  if (/\bin\s+\w/.test(lower) && (lower.includes('module') || lower.includes('framework') || lower.includes('document'))) {
+    return base;
+  }
+  return `${base} — in ${moduleLabel}`;
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex gap-3 py-1.5 border-b border-slate-100 last:border-0">
+      <span className="w-36 shrink-0 text-xs font-medium text-slate-500 uppercase tracking-wide pt-0.5">{label}</span>
+      <span className="text-sm text-black break-all">{value}</span>
+    </div>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
@@ -33,46 +258,33 @@ export default function AuditLogsPage() {
   const [dateFilter, setDateFilter] = useState('all');
   const [availableActions, setAvailableActions] = useState<string[]>([]);
   const [availableModules, setAvailableModules] = useState<string[]>([]);
-  const [selectedDetails, setSelectedDetails] = useState<Record<string, unknown> | null>(null);
+  const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
   const limit = 50;
 
-  useEffect(() => {
-    fetchFilters();
-  }, []);
-
-  useEffect(() => {
-    fetchLogs();
-  }, [page, actionFilter, moduleFilter, dateFilter]);
+  useEffect(() => { fetchFilters(); }, []);
+  useEffect(() => { fetchLogs(); }, [page, actionFilter, moduleFilter, dateFilter]);
 
   const getDateRange = () => {
     if (dateFilter === 'all') return {};
     const now = new Date();
     const toDate = now.toISOString().slice(0, 10);
-
-    if (dateFilter === 'today') {
-      return { start_date: toDate, end_date: toDate };
-    }
-
+    if (dateFilter === 'today') return { start_date: toDate, end_date: toDate };
     if (dateFilter === 'last_7_days') {
-      const from = new Date(now);
-      from.setDate(now.getDate() - 6);
+      const from = new Date(now); from.setDate(now.getDate() - 6);
       return { start_date: from.toISOString().slice(0, 10), end_date: toDate };
     }
-
     if (dateFilter === 'last_30_days') {
-      const from = new Date(now);
-      from.setDate(now.getDate() - 29);
+      const from = new Date(now); from.setDate(now.getDate() - 29);
       return { start_date: from.toISOString().slice(0, 10), end_date: toDate };
     }
-
     return {};
   };
 
   const fetchFilters = async () => {
     try {
-      const response = await adminApi.getAuditLogFilters();
-      setAvailableActions(response.data.actions || []);
-      setAvailableModules(response.data.modules || []);
+      const res = await adminApi.getAuditLogFilters();
+      setAvailableActions(res.data.actions || []);
+      setAvailableModules(res.data.modules || []);
     } catch {
       setAvailableActions([]);
       setAvailableModules([]);
@@ -82,163 +294,270 @@ export default function AuditLogsPage() {
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      const dateRange = getDateRange();
-      const response = await adminApi.getAuditLogs({
+      const dr = getDateRange();
+      const res = await adminApi.getAuditLogs({
         limit,
         offset: page * limit,
         action: actionFilter !== 'all' ? actionFilter : undefined,
         module: moduleFilter !== 'all' ? moduleFilter : undefined,
-        start_date: dateRange.start_date,
-        end_date: dateRange.end_date,
+        start_date: (dr as Record<string, string>).start_date,
+        end_date: (dr as Record<string, string>).end_date,
       });
-      setLogs(response.data.logs);
-      setTotal(response.data.total);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load audit logs');
+      setLogs(res.data.logs);
+      setTotal(res.data.total);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      setError(e.response?.data?.detail || 'Failed to load audit logs');
     } finally {
       setLoading(false);
     }
   };
 
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString();
+  const handleSingleApply = (setter: (v: string) => void) => (values: string[]) => {
+    setPage(0);
+    setter(values[0] || 'all');
   };
 
-  const getActionBadgeColor = (action: string) => {
-    if (action.includes('create') || action.includes('add')) {
-      return 'bg-green-50 text-green-700';
-    }
-    if (action.includes('delete') || action.includes('remove')) {
-      return 'bg-red-50 text-red-700';
-    }
-    if (action.includes('update') || action.includes('edit')) {
-      return 'bg-blue-50 text-blue-700';
-    }
-    return 'bg-slate-50 text-slate-700';
-  };
+  // ── Columns ──────────────────────────────────────────────────────────────
 
   const columns = [
     {
       id: 'timestamp',
       header: 'Timestamp',
-      accessor: (log: AuditLogEntry) => (
-        <span className="text-slate-600 text-sm whitespace-nowrap">
-          {formatTimestamp(log.timestamp)}
-        </span>
-      ),
+      accessor: (log: AuditLogEntry) => {
+        const { date, time } = fmtTs(log.timestamp);
+        return (
+          <div className="min-w-[110px]">
+            <div className="text-xs font-medium text-black">{date}</div>
+            <div className="text-xs text-slate-500 mt-0.5">{time}</div>
+          </div>
+        );
+      },
     },
     {
       id: 'user',
       header: 'User',
       accessor: (log: AuditLogEntry) => (
-        <span className="text-black">{log.user_name}</span>
+        <div className="flex items-center gap-2 min-w-[120px]">
+          <UserAvatar name={log.user_name} />
+          <span className="text-sm font-medium text-black truncate max-w-[140px]" title={log.user_name}>
+            {log.user_name}
+          </span>
+        </div>
       ),
     },
     {
       id: 'action',
       header: 'Action',
+      accessor: (log: AuditLogEntry) => <ActionBadge action={log.action} />,
+    },
+    {
+      id: 'module',
+      header: 'Module',
+      accessor: (log: AuditLogEntry) => {
+        const ctx = deriveModuleContext(log);
+        return (
+          <div className="min-w-[140px] max-w-[180px]">
+            <div className="text-sm font-medium text-black truncate" title={ctx.module}>
+              {ctx.module}
+            </div>
+            {ctx.submodule && (
+              <div className="text-xs text-slate-500 truncate" title={ctx.submodule}>
+                {ctx.submodule}
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: 'activity',
+      header: 'Activity',
       accessor: (log: AuditLogEntry) => (
-        <span className={`px-2 py-1 rounded text-xs ${getActionBadgeColor(log.action)}`}>
-          {log.action}
+        <span className="text-sm text-black">
+          {enrichDescription(log)}
         </span>
       ),
     },
     {
-      id: 'request',
-      header: 'Request',
-      accessor: (log: AuditLogEntry) => (
-        <div className="text-sm">
-          <div className="text-black font-medium">{log.method || '-'}</div>
-          <div className="text-slate-600 truncate max-w-[280px]" title={log.path || '-'}>{log.path || '-'}</div>
-        </div>
-      ),
-    },
-    {
-      id: 'status',
-      header: 'Status',
-      accessor: (log: AuditLogEntry) => (
-        <div className="text-sm">
-          <div className={`${(log.status_code || 0) >= 400 ? 'text-red-600' : 'text-green-700'} font-medium`}>
-            {log.status_code || '-'}
-          </div>
-          <div className="text-slate-600">{log.duration_ms ?? '-'} ms</div>
-        </div>
-      ),
-    },
-    {
-      id: 'resource',
-      header: 'Resource',
-      accessor: (log: AuditLogEntry) => (
-        <div>
-          <span className="text-slate-600">{log.resource_type}</span>
-          {log.resource_id && (
-            <span className="text-slate-500 ml-1">#{log.resource_id}</span>
-          )}
-        </div>
-      ),
-    },
-    {
-      id: 'ip',
-      header: 'IP Address',
-      accessor: (log: AuditLogEntry) => (
-        <span className="text-slate-600 text-sm">{log.ip_address || '-'}</span>
-      ),
-    },
-    {
       id: 'details',
-      header: 'Details',
+      header: '',
       accessor: (log: AuditLogEntry) => (
         <button
           type="button"
-          onClick={() => {
-            setSelectedDetails(log.details ?? {});
-          }}
-          className="rounded border border-primary-200 bg-primary-50 px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100"
+          onClick={() => setSelectedLog(log)}
+          className="rounded border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100 whitespace-nowrap"
         >
-          View
+          View Details
         </button>
       ),
     },
   ];
 
-  const hasDetails =
-    !!selectedDetails &&
-    typeof selectedDetails === 'object' &&
-    Object.keys(selectedDetails).length > 0;
+  // ── Detail Modal ─────────────────────────────────────────────────────────
+
+  const modal = selectedLog && (() => {
+    const { date, time } = fmtTs(selectedLog.timestamp);
+    const req = (selectedLog.details?.request as Record<string, unknown> | null) ?? {};
+    const hasPayload = req && Object.keys(req).length > 0;
+    const statusCode = selectedLog.status_code ?? 0;
+
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        onClick={() => setSelectedLog(null)}
+      >
+        <div
+          className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-xl bg-white shadow-xl flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <ActionBadge action={selectedLog.action} />
+              <h3 className="text-sm font-semibold text-black">{selectedLog.description || 'Audit Log Details'}</h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedLog(null)}
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-black"
+              aria-label="Close"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="overflow-auto p-5 space-y-5">
+            {/* Who / When */}
+            <section>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Overview</p>
+              <div className="bg-slate-50 rounded-lg px-4 py-1 divide-y divide-slate-100">
+                <DetailRow label="User" value={
+                  <div className="flex items-center gap-2">
+                    <UserAvatar name={selectedLog.user_name} />
+                    <span>{selectedLog.user_name}</span>
+                  </div>
+                } />
+                <DetailRow label="Timestamp" value={`${date} at ${time}`} />
+                {selectedLog.ip_address && <DetailRow label="IP Address" value={selectedLog.ip_address} />}
+              </div>
+            </section>
+
+            {/* Action / Resource */}
+            <section>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Action Details</p>
+              <div className="bg-slate-50 rounded-lg px-4 py-1 divide-y divide-slate-100">
+                <DetailRow label="Action" value={<ActionBadge action={selectedLog.action} />} />
+                {(() => {
+                  const ctx = deriveModuleContext(selectedLog);
+                  return (
+                    <>
+                      <DetailRow label="Module" value={ctx.module || '—'} />
+                      {ctx.submodule && <DetailRow label="Sub-module" value={ctx.submodule} />}
+                    </>
+                  );
+                })()}
+                <DetailRow
+                  label="Resource Type"
+                  value={
+                    <span className="font-mono text-xs text-slate-500">
+                      {selectedLog.resource_type || '—'}
+                    </span>
+                  }
+                />
+                {selectedLog.resource_id && <DetailRow label="Record ID" value={`#${selectedLog.resource_id}`} />}
+              </div>
+            </section>
+
+            {/* Technical */}
+            <section>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Request Info</p>
+              <div className="bg-slate-50 rounded-lg px-4 py-1 divide-y divide-slate-100">
+                {selectedLog.method && <DetailRow label="Method" value={selectedLog.method} />}
+                {selectedLog.path && (
+                  <DetailRow label="Path" value={
+                    <span className="font-mono text-xs break-all">{selectedLog.path}</span>
+                  } />
+                )}
+                {selectedLog.status_code && (
+                  <DetailRow label="Status" value={
+                    <span className={statusCode >= 400 ? 'text-red-600 font-medium' : 'text-emerald-700 font-medium'}>
+                      {selectedLog.status_code}
+                    </span>
+                  } />
+                )}
+                {selectedLog.duration_ms != null && (
+                  <DetailRow label="Duration" value={`${selectedLog.duration_ms} ms`} />
+                )}
+                {Boolean(selectedLog.details?.user_agent) && (
+                  <DetailRow label="User Agent" value={
+                    <span className="text-xs text-slate-500 break-all">{String(selectedLog.details.user_agent)}</span>
+                  } />
+                )}
+              </div>
+            </section>
+
+            {/* Payload */}
+            {hasPayload && (
+              <section>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Request Payload</p>
+                <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 text-black whitespace-pre-wrap break-words max-h-60 overflow-auto">
+                  {JSON.stringify(req, null, 2)}
+                </pre>
+              </section>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex justify-end border-t border-slate-200 px-5 py-3">
+            <button
+              type="button"
+              onClick={() => setSelectedLog(null)}
+              className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  })();
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading && logs.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
       </div>
     );
   }
 
-  const actionItems = availableActions.map((action) => ({ value: action, label: action }));
-  const moduleItems = availableModules.map((module) => ({ value: module, label: module }));
-  const dateItems = [
-    { value: 'today', label: 'Today' },
-    { value: 'last_7_days', label: 'Last 7 Days' },
+  const actionItems  = availableActions.map((a) => ({ value: a, label: ACTION_CFG[a]?.label ?? a }));
+  const moduleItems  = availableModules.map((m) => ({ value: m, label: m }));
+  const dateItems    = [
+    { value: 'today',        label: 'Today' },
+    { value: 'last_7_days',  label: 'Last 7 Days' },
     { value: 'last_30_days', label: 'Last 30 Days' },
   ];
 
-  const handleSingleApply = (
-    setter: (v: string) => void
-  ) => (values: string[]) => {
-    setPage(0);
-    setter(values[0] || 'all');
-  };
-
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Title */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Audit Logs</h1>
-          <p className="mt-1 text-sm text-slate-600">Comprehensive system-wide audit trail of all user and API actions</p>
+          <p className="mt-1 text-sm text-slate-600">Track every action taken by users across the platform</p>
         </div>
+        {total > 0 && (
+          <span className="text-xs text-slate-500 self-center">{total.toLocaleString()} total records</span>
+        )}
       </div>
 
+      {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         <MultiSelectDropdown
           title="Action"
@@ -270,38 +589,52 @@ export default function AuditLogsPage() {
           placeholder="All Dates"
           size="md"
         />
+        {(actionFilter !== 'all' || moduleFilter !== 'all' || dateFilter !== 'all') && (
+          <button
+            type="button"
+            onClick={() => { setActionFilter('all'); setModuleFilter('all'); setDateFilter('all'); setPage(0); }}
+            className="text-xs text-slate-500 hover:text-black underline"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-500/50 rounded-lg p-4 text-red-600">
-          {error}
-          <button onClick={() => setError(null)} className="ml-4 underline">
-            Dismiss
-          </button>
+        <div className="bg-red-50 border border-red-500/50 rounded-lg p-4 text-sm text-red-600 flex justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="underline ml-4 shrink-0">Dismiss</button>
         </div>
       )}
 
+      {/* Table */}
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
         <DataTable data={logs} columns={columns} />
+        {loading && logs.length > 0 && (
+          <div className="flex justify-center py-3 border-t border-slate-100">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-400" />
+          </div>
+        )}
       </div>
 
+      {/* Pagination */}
       {total > limit && (
         <div className="flex items-center justify-between">
-          <div className="text-sm text-slate-600">
-            Showing {page * limit + 1} - {Math.min((page + 1) * limit, total)} of {total}
-          </div>
-          <div className="flex space-x-2">
+          <span className="text-sm text-slate-600">
+            {page * limit + 1}–{Math.min((page + 1) * limit, total)} of {total.toLocaleString()}
+          </span>
+          <div className="flex gap-2">
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="px-4 py-2 bg-slate-200 hover:bg-slate-600 text-black rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-black rounded text-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Previous
             </button>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={(page + 1) * limit >= total}
-              className="px-4 py-2 bg-slate-200 hover:bg-slate-600 text-black rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-black rounded text-sm disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Next
             </button>
@@ -309,47 +642,7 @@ export default function AuditLogsPage() {
         </div>
       )}
 
-      {selectedDetails !== null && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setSelectedDetails(null)}
-        >
-          <div
-            className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-xl bg-white shadow-xl flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-              <h3 className="text-sm font-semibold text-black">Audit Log Details</h3>
-              <button
-                type="button"
-                onClick={() => setSelectedDetails(null)}
-                className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-black"
-                aria-label="Close"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-              </button>
-            </div>
-            <div className="overflow-auto p-5">
-              {hasDetails ? (
-                <pre className="text-xs bg-slate-50 border border-slate-200 rounded p-3 text-black whitespace-pre-wrap break-words">
-                  {JSON.stringify(selectedDetails, null, 2)}
-                </pre>
-              ) : (
-                <p className="text-sm text-slate-500 italic">No additional details were recorded for this entry.</p>
-              )}
-            </div>
-            <div className="flex justify-end border-t border-slate-200 px-5 py-3">
-              <button
-                type="button"
-                onClick={() => setSelectedDetails(null)}
-                className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 hover:bg-slate-200"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {modal}
     </div>
   );
 }

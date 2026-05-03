@@ -1,5 +1,7 @@
-'use client';
+﻿'use client';
 
+
+import { PageLoader } from '@/components/ui';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
@@ -296,7 +298,7 @@ export default function EvidenceRequirementsPage() {
   if (frameworksLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+        <PageLoader size="md" />
       </div>
     );
   }
@@ -443,7 +445,7 @@ export default function EvidenceRequirementsPage() {
 
       {selectedFramework && requirementsLoading && (
         <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
+          <PageLoader size="md" />
         </div>
       )}
 

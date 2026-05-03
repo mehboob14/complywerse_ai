@@ -16,3 +16,4 @@ export { MultiSelectDropdown, type MultiSelectDropdownProps, type MultiSelectDro
 export { SearchInput, type SearchInputProps } from './SearchInput';
 export { InlineLinkPicker, type InlineLinkPickerProps, type InlineLinkPickerItem } from './InlineLinkPicker';
 export { default as PermissionGuard, IfPermission } from './PermissionGuard';
+export { PageLoader, default as PageLoaderDefault, type PageLoaderProps, type PageLoaderSize } from './PageLoader';

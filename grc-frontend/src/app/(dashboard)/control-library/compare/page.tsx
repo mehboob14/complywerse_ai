@@ -1,9 +1,9 @@
-'use client';
+﻿'use client';
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { controlLibraryApi } from '@/lib/api';
-import { MultiSelectDropdown, SearchInput } from '@/components/ui';
+import { MultiSelectDropdown, SearchInput, PageLoader } from '@/components/ui';
 import {
   GitCompare,
   Loader2,
@@ -769,7 +769,7 @@ export default function FrameworkComparisonPage() {
 
           {crosswalkLoading || crosswalkFetching ? (
             <div className="flex h-48 items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              <PageLoader size="md" />
             </div>
           ) : !crosswalkData?.crosswalk?.length ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">

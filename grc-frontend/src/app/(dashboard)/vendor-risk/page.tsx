@@ -1,5 +1,7 @@
-'use client';
+﻿'use client';
 
+
+import { PageLoader } from '@/components/ui';
 import { useQuery } from '@tanstack/react-query';
 import { vendorRiskApi } from '@/lib/api';
 import {
@@ -49,38 +51,41 @@ const TIER_COLORS: Record<string, string> = {
 
 const PIE_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#6b7280'];
 
+// Softer tone-based badges, consistent with the rest of the platform
+// (compliance / risks / certifications). Heavy solid-tone pills were
+// visually loud against the data-dense rows on this page.
 const getTierBadge = (tier: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-600 text-white border-red-700',
-    high: 'bg-orange-600 text-white border-orange-700',
-    medium: 'bg-yellow-600 text-white border-yellow-700',
-    low: 'bg-green-600 text-white border-green-700',
+    critical: 'bg-red-50 text-red-700 border-red-200',
+    high: 'bg-orange-50 text-orange-700 border-orange-200',
+    medium: 'bg-amber-50 text-amber-700 border-amber-200',
+    low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   };
-  return styles[tier?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
+  return styles[tier?.toLowerCase()] || 'bg-gray-100 text-gray-600 border-gray-200';
 };
 
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
-    draft: 'bg-gray-600 text-white border-gray-700',
-    in_progress: 'bg-blue-600 text-white border-blue-700',
-    completed: 'bg-green-600 text-white border-green-700',
-    approved: 'bg-green-600 text-white border-green-700',
-    reviewed: 'bg-indigo-600 text-white border-indigo-700',
-    submitted: 'bg-yellow-600 text-white border-yellow-700',
-    overdue: 'bg-red-600 text-white border-red-700',
-    pending: 'bg-yellow-600 text-white border-yellow-700',
+    draft: 'bg-gray-100 text-gray-600 border-gray-200',
+    in_progress: 'bg-blue-50 text-blue-700 border-blue-200',
+    completed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    reviewed: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    submitted: 'bg-amber-50 text-amber-700 border-amber-200',
+    overdue: 'bg-red-50 text-red-700 border-red-200',
+    pending: 'bg-amber-50 text-amber-700 border-amber-200',
   };
-  return styles[status?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
+  return styles[status?.toLowerCase()] || 'bg-gray-100 text-gray-600 border-gray-200';
 };
 
 const getRatingBadge = (rating: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-600 text-white border-red-700',
-    high: 'bg-orange-600 text-white border-orange-700',
-    medium: 'bg-yellow-600 text-white border-yellow-700',
-    low: 'bg-green-600 text-white border-green-700',
+    critical: 'bg-red-50 text-red-700 border-red-200',
+    high: 'bg-orange-50 text-orange-700 border-orange-200',
+    medium: 'bg-amber-50 text-amber-700 border-amber-200',
+    low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   };
-  return styles[rating?.toLowerCase()] || 'bg-gray-600 text-white border-gray-700';
+  return styles[rating?.toLowerCase()] || 'bg-gray-100 text-gray-600 border-gray-200';
 };
 
 function DistributionRow({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
@@ -110,7 +115,7 @@ export default function VendorRiskDashboardPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <PageLoader size="md" />
       </div>
     );
   }

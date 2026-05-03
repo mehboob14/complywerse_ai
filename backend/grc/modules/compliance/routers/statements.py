@@ -530,15 +530,35 @@ def link_evidence_to_compliance(
         raise HTTPException(status_code=400, detail="No valid evidence IDs provided")
     
     compliance = get_or_create_compliance_record(db, statement_id, statement.tenant_id)
-    
+
     existing_ids = compliance.evidence_ids or []
     updated_ids = list(set(existing_ids + valid_evidence_ids))
     compliance.evidence_ids = updated_ids
     compliance.updated_at = datetime.utcnow()
-    
+
+    # Mirror to the cross-link table so the same link is also visible on the
+    # evidence detail page's Cross-Module Links tab.
+    from ....models import EvidencePolicyLink
+    for eid in valid_evidence_ids:
+        if eid in existing_ids:
+            continue
+        existing_link = db.query(EvidencePolicyLink).filter(
+            EvidencePolicyLink.evidence_id == eid,
+            EvidencePolicyLink.policy_statement_id == statement_id,
+        ).first()
+        if existing_link:
+            continue
+        db.add(EvidencePolicyLink(
+            evidence_id=eid,
+            policy_statement_id=statement_id,
+            link_type=None,
+            created_by=current_user.id,
+            created_at=datetime.utcnow(),
+        ))
+
     db.commit()
     db.refresh(compliance)
-    
+
     return {
         "message": "Evidence linked successfully",
         "statement_id": statement_id,

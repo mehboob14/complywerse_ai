@@ -1128,11 +1128,30 @@ const NETWORK_EDGES = [
 function GrcNetworkFlow({ counts }: {
   counts: { risks: number; compliance: number; controls: number; evidence: number; governance: number; vulns: number }
 }) {
-  const [hovered, setHovered] = useState<string | null>(null);
+  // Two distinct sources of "active" node:
+  //   1. manualHovered — set when the user actually moves the mouse over a
+  //      node. Takes precedence and pauses the auto-cycle entirely.
+  //   2. autoIdx — index into NETWORK_NODES that advances on a slow timer
+  //      so the diagram demonstrates the cross-domain relationships even
+  //      without user interaction.
+  const [manualHovered, setManualHovered] = useState<string | null>(null);
+  const [autoIdx, setAutoIdx] = useState(0);
+
+  useEffect(() => {
+    if (manualHovered) return;
+    const tick = window.setInterval(() => {
+      setAutoIdx((i) => (i + 1) % NETWORK_NODES.length);
+    }, 2200);
+    return () => window.clearInterval(tick);
+  }, [manualHovered]);
+
+  // The currently spotlighted node id — drives both edge highlighting and
+  // the node ring/glow treatment.
+  const active = manualHovered ?? NETWORK_NODES[autoIdx]?.id ?? null;
 
   return (
     <div className="relative">
-      <svg viewBox="0 0 450 360" width="100%" height="100%" style={{ overflow: 'visible' }}>
+      <svg viewBox="0 0 450 380" width="100%" height="100%" style={{ overflow: 'visible' }}>
         <defs>
           {NETWORK_NODES.map((nd) => (
             <radialGradient key={nd.id} id={`ng-${nd.id}`} cx="50%" cy="50%" r="50%">
@@ -1145,32 +1164,42 @@ function GrcNetworkFlow({ counts }: {
           </marker>
         </defs>
 
-        {/* Edges */}
+        {/* Edges — highlight the ones touching the active node. CSS
+            transitions on stroke / opacity / width let the auto-cycle
+            morph between states smoothly instead of snapping. */}
         {NETWORK_EDGES.map(([a, b]) => {
           const na = NETWORK_NODES.find((n) => n.id === a)!;
           const nb = NETWORK_NODES.find((n) => n.id === b)!;
-          const isHov = hovered === a || hovered === b;
+          const isHov = active === a || active === b;
           const col = isHov ? na.color : '#e5e7eb';
           return (
-            <line key={`${a}-${b}`}
+            <line
+              key={`${a}-${b}`}
               x1={na.x} y1={na.y} x2={nb.x} y2={nb.y}
-              stroke={col} strokeWidth={isHov ? 2 : 1}
-              strokeOpacity={isHov ? 0.8 : 0.5}
+              stroke={col}
+              strokeWidth={isHov ? 2 : 1}
+              strokeOpacity={isHov ? 0.85 : 0.5}
               strokeDasharray={isHov ? '' : '4 4'}
               markerEnd={isHov ? 'url(#arrow)' : undefined}
+              style={{
+                transition:
+                  'stroke 0.6s ease-out, stroke-opacity 0.6s ease-out, stroke-width 0.6s ease-out',
+              }}
             />
           );
         })}
 
-        {/* Nodes */}
+        {/* Nodes — the count value sits inside the ring (it's the headline
+            number); the textual label sits BELOW the ring so the circle
+            isn't visually crowded and the text is fully readable. */}
         {NETWORK_NODES.map((nd) => {
-          const isHov = hovered === nd.id;
+          const isHov = active === nd.id;
           const val = counts[nd.id as keyof typeof counts] ?? 0;
           return (
             <g key={nd.id}
               transform={`translate(${nd.x},${nd.y})`}
-              onMouseEnter={() => setHovered(nd.id)}
-              onMouseLeave={() => setHovered(null)}
+              onMouseEnter={() => setManualHovered(nd.id)}
+              onMouseLeave={() => setManualHovered(null)}
               style={{ cursor: 'default' }}>
               {/* glow */}
               {isHov && <circle r={32} fill={`url(#ng-${nd.id})`} />}
@@ -1179,34 +1208,32 @@ function GrcNetworkFlow({ counts }: {
                 fill="white"
                 stroke={nd.color}
                 strokeWidth={isHov ? 2.5 : 1.5}
-                opacity={isHov ? 1 : 0.8}
+                opacity={isHov ? 1 : 0.85}
+                style={{ transition: 'stroke-width 0.4s ease-out, opacity 0.4s ease-out' }}
               />
-              {/* value */}
-              <text y={-3} textAnchor="middle" dominantBaseline="middle"
-                fontSize={11} fontWeight={700} fill={nd.color}>{val || '—'}</text>
-              {/* label */}
-              <text y={10} textAnchor="middle" dominantBaseline="middle"
-                fontSize={8} fill="#9ca3af">{nd.label}</text>
-              {/* pulse on hover */}
+              {/* count value (centred inside the ring) */}
+              <text y={1} textAnchor="middle" dominantBaseline="middle"
+                fontSize={14} fontWeight={700} fill={nd.color}>{val || '—'}</text>
+              {/* label — placed BELOW the ring so it isn't crammed inside
+                  the circle. This also removes the need for the redundant
+                  legend strip that used to sit under the SVG. */}
+              <text y={42} textAnchor="middle" dominantBaseline="middle"
+                fontSize={11} fontWeight={500}
+                fill={isHov ? nd.color : '#475569'}
+                style={{ transition: 'fill 0.4s ease-out' }}>
+                {nd.label}
+              </text>
+              {/* pulse on hover/active */}
               {isHov && (
                 <circle r={24} fill="none" stroke={nd.color} strokeWidth={1} opacity={0.4}>
-                  <animate attributeName="r" values="24;36;24" dur="1.5s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="0.4;0;0.4" dur="1.5s" repeatCount="indefinite" />
+                  <animate attributeName="r" values="24;36;24" dur="1.6s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.4;0;0.4" dur="1.6s" repeatCount="indefinite" />
                 </circle>
               )}
             </g>
           );
         })}
       </svg>
-
-      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-        {NETWORK_NODES.map((nd) => (
-          <div key={nd.id} className="flex items-center gap-1 text-[10px] text-gray-500">
-            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: nd.color }} />
-            {nd.label}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -1462,7 +1489,7 @@ export default function MainDashboard() {
 
   return (
     <div
-      className="space-y-4 min-h-screen bg-white"
+      className="space-y-4 min-h-screen bg-white p-4 sm:p-5"
       style={{
         opacity: entered ? 1 : 0,
         transform: entered ? 'translateY(0)' : 'translateY(14px)',

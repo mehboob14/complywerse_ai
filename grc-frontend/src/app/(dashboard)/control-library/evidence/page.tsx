@@ -1,5 +1,7 @@
-'use client';
+﻿'use client';
 
+
+import { PageLoader } from '@/components/ui';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient, { frameworksApi } from '@/lib/api';
@@ -344,7 +346,7 @@ export default function EvidenceSuggestionsPage() {
           </div>
           {priorityLoading ? (
             <div className="flex h-40 items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+              <PageLoader size="sm" />
             </div>
           ) : (
             <div className="space-y-4">
@@ -421,7 +423,7 @@ export default function EvidenceSuggestionsPage() {
         
         {reuseLoading ? (
           <div className="flex h-40 items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+            <PageLoader size="sm" />
           </div>
         ) : !reuseStats?.top_reused_evidence?.length ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -553,7 +555,7 @@ export default function EvidenceSuggestionsPage() {
 
         {recsLoading ? (
           <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <PageLoader size="md" />
           </div>
         ) : recsError ? (
           <div className="flex h-64 flex-col items-center justify-center text-red-400">
@@ -726,7 +728,7 @@ export default function EvidenceSuggestionsPage() {
                   <div className="flex items-center justify-center">
                     {bulkProgress.status === 'processing' ? (
                       <div className="flex flex-col items-center gap-3">
-                        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+                        <PageLoader size="lg" />
                         <p className="text-gray-700">Generating recommendations...</p>
                       </div>
                     ) : bulkProgress.status === 'completed' ? (

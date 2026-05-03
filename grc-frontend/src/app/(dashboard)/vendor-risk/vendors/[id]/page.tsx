@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -22,7 +22,7 @@ import {
   DollarSign,
 } from 'lucide-react';
 import Link from 'next/link';
-import { MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
+import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 
 interface Vendor {
   id: number;
@@ -100,43 +100,43 @@ const titleCase = (s: string) =>
 
 const getTierBadge = (tier: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-600 text-white border border-red-700',
-    high: 'bg-orange-600 text-white border border-orange-700',
-    medium: 'bg-yellow-600 text-white border border-yellow-700',
-    low: 'bg-green-600 text-white border border-green-700',
+    critical: 'bg-red-50 text-red-700 border border-red-200',
+    high: 'bg-orange-50 text-orange-700 border border-orange-200',
+    medium: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+    low: 'bg-green-50 text-green-700 border border-green-200',
   };
-  return styles[tier?.toLowerCase()] || 'bg-gray-600 text-white border border-gray-700';
+  return styles[tier?.toLowerCase()] || 'bg-gray-50 text-gray-700 border border-gray-200';
 };
 
 const getStatusBadge = (status: string) => {
   const styles: Record<string, string> = {
-    active: 'bg-green-600 text-white border border-green-700',
-    under_review: 'bg-blue-600 text-white border border-blue-700',
-    onboarding: 'bg-purple-600 text-white border border-purple-700',
-    offboarded: 'bg-gray-600 text-white border border-gray-700',
-    suspended: 'bg-red-600 text-white border border-red-700',
-    completed: 'bg-green-600 text-white border border-green-700',
-    approved: 'bg-green-600 text-white border border-green-700',
-    reviewed: 'bg-indigo-600 text-white border border-indigo-700',
-    submitted: 'bg-yellow-600 text-white border border-yellow-700',
-    in_progress: 'bg-blue-600 text-white border border-blue-700',
-    draft: 'bg-gray-600 text-white border border-gray-700',
-    open: 'bg-red-600 text-white border border-red-700',
-    investigating: 'bg-orange-600 text-white border border-orange-700',
-    resolved: 'bg-green-600 text-white border border-green-700',
-    closed: 'bg-gray-600 text-white border border-gray-700',
+    active: 'bg-green-50 text-green-700 border border-green-200',
+    under_review: 'bg-blue-50 text-blue-700 border border-blue-200',
+    onboarding: 'bg-purple-50 text-purple-700 border border-purple-200',
+    offboarded: 'bg-gray-50 text-gray-700 border border-gray-200',
+    suspended: 'bg-red-50 text-red-700 border border-red-200',
+    completed: 'bg-green-50 text-green-700 border border-green-200',
+    approved: 'bg-green-50 text-green-700 border border-green-200',
+    reviewed: 'bg-indigo-50 text-indigo-700 border border-indigo-200',
+    submitted: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+    in_progress: 'bg-blue-50 text-blue-700 border border-blue-200',
+    draft: 'bg-gray-50 text-gray-700 border border-gray-200',
+    open: 'bg-red-50 text-red-700 border border-red-200',
+    investigating: 'bg-orange-50 text-orange-700 border border-orange-200',
+    resolved: 'bg-green-50 text-green-700 border border-green-200',
+    closed: 'bg-gray-50 text-gray-700 border border-gray-200',
   };
-  return styles[status?.toLowerCase()] || 'bg-gray-600 text-white border border-gray-700';
+  return styles[status?.toLowerCase()] || 'bg-gray-50 text-gray-700 border border-gray-200';
 };
 
 const getSeverityBadge = (severity: string) => {
   const styles: Record<string, string> = {
-    critical: 'bg-red-600 text-white border border-red-700',
-    high: 'bg-orange-600 text-white border border-orange-700',
-    medium: 'bg-yellow-600 text-white border border-yellow-700',
-    low: 'bg-green-600 text-white border border-green-700',
+    critical: 'bg-red-50 text-red-700 border border-red-200',
+    high: 'bg-orange-50 text-orange-700 border border-orange-200',
+    medium: 'bg-yellow-50 text-yellow-700 border border-yellow-200',
+    low: 'bg-green-50 text-green-700 border border-green-200',
   };
-  return styles[severity?.toLowerCase()] || 'bg-gray-600 text-white border border-gray-700';
+  return styles[severity?.toLowerCase()] || 'bg-gray-50 text-gray-700 border border-gray-200';
 };
 
 type TabType = 'overview' | 'assessments' | 'sla' | 'incidents';
@@ -258,7 +258,7 @@ export default function VendorDetailPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <PageLoader size="md" />
       </div>
     );
   }
@@ -536,7 +536,7 @@ export default function VendorDetailPage() {
                     <td className="px-4 py-3 text-sm text-gray-600">{s.target_value ?? '-'}</td>
                     <td className="px-4 py-3 text-sm text-gray-600">{s.actual_value ?? '-'}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${s.is_compliant ? 'bg-green-600 text-white border border-green-700' : 'bg-red-600 text-white border border-red-700'}`}>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${s.is_compliant ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
                         {s.is_compliant ? 'Met' : 'Missed'}
                       </span>
                     </td>
