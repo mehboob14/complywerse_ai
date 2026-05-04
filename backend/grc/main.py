@@ -57,9 +57,34 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+def _build_cors_kwargs() -> dict:
+    """Mirror the outer wrapper's env-driven CORS resolution.
+
+    The outer FastAPI app in `backend/main.py` mounts this sub-app at
+    `/grc`, so its CORS middleware is the primary line of defence. We
+    still configure CORS here as defence-in-depth — and so this module is
+    safe to import / run in isolation (tests, scripts) without exposing
+    a wide-open `*` origin policy.
+    """
+    regex = (os.getenv("ALLOWED_ORIGIN_REGEX") or "").strip()
+    if regex:
+        return {"allow_origin_regex": regex, "allow_origins": []}
+
+    csv_origins = (os.getenv("ALLOWED_ORIGINS") or "").strip()
+    if csv_origins:
+        return {
+            "allow_origins": [o.strip() for o in csv_origins.split(",") if o.strip()],
+        }
+
+    return {
+        "allow_origin_regex": r"^https?://([a-z0-9-]+\.)?localhost(:[0-9]+)?$",
+        "allow_origins": [],
+    }
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    **_build_cors_kwargs(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

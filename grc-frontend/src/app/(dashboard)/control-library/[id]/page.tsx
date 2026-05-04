@@ -164,14 +164,19 @@ export default function ControlGroupDetailPage() {
   const isValidGroupId = Number.isFinite(groupId) && groupId > 0 && /^\d+$/.test(rawId);
   // Whenever this dynamic page is invoked with a non-numeric id (which can
   // happen on stale/CDN-cached production bundles where /control-library/coverage
-  // accidentally routes through `[id]`), bounce straight to the control-library
-  // index. We deliberately do NOT redirect to the sibling literal — that would
-  // re-enter the same broken route and loop the user on a blank page.
+  // accidentally routes through `[id]`), redirect to the correct sibling route
+  // if the id matches a known sub-page, otherwise fall back to the index.
+  const SIBLING_ROUTES: Record<string, string> = {
+    coverage: '/control-library/coverage',
+    gaps: '/control-library/gaps',
+    compare: '/control-library/compare',
+    evidence: '/control-library/evidence',
+  };
   useEffect(() => {
     if (!isValidGroupId) {
-      router.replace('/control-library');
+      router.replace(SIBLING_ROUTES[rawId] ?? '/control-library');
     }
-  }, [isValidGroupId, router]);
+  }, [isValidGroupId, rawId, router]);
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabType>('controls');
   const [frameworkFilter, setFrameworkFilter] = useState<number | null>(null);

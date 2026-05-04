@@ -25,12 +25,19 @@ export default function AuditorPortalIndexPage() {
     },
   });
 
+  // The list endpoint returns the flat journey name; only the per-journey
+  // detail endpoint populates a nested `framework` object. Resolve through
+  // every plausible source so we never fall through to a generic
+  // "Untitled framework" placeholder for an active journey.
+  const resolveName = (j: CertificationJourney): string =>
+    j.framework?.name || j.framework_name || j.name || 'Untitled framework';
+
   const frameworks = useMemo(() => {
     const list = (certifications || []) as CertificationJourney[];
     const term = search.trim().toLowerCase();
     if (!term) return list;
     return list.filter((j) => {
-      const name = (j.framework?.name || '').toLowerCase();
+      const name = resolveName(j).toLowerCase();
       const code = (j.framework?.short_code || '').toLowerCase();
       return name.includes(term) || code.includes(term);
     });
@@ -73,7 +80,7 @@ export default function AuditorPortalIndexPage() {
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {frameworks.map((journey) => {
-            const name = journey.framework?.name || 'Untitled framework';
+            const name = resolveName(journey);
             const code = journey.framework?.short_code || '';
             const status = journey.status || 'in_progress';
             return (

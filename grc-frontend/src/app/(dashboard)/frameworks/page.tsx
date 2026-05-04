@@ -26,6 +26,7 @@ import {
   Sparkles,
   CheckCircle,
   Eye,
+  ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -457,6 +458,17 @@ export default function FrameworksPage() {
               size="md"
             />
           </div>
+          {/* Auditor Portal entry. The original button used a relative href
+              (`auditor-portal/1`) which Next.js resolved to `/frameworks/...`
+              and 404'd; the absolute path below lands on the listing page
+              where the auditor picks a certification journey to review. */}
+          <Link
+            href="/auditor-portal"
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 sm:px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Auditor Portal
+          </Link>
         </div>
       </div>
 

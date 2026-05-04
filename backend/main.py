@@ -16,9 +16,43 @@ from grc.modules.workflow_engine import (
 
 app = FastAPI(title="ComplyVerse GRC Platform API", version="1.0.0")
 
+
+def _build_cors_kwargs() -> dict:
+    """Resolve CORS settings from env at startup.
+
+    Production should set ALLOWED_ORIGIN_REGEX (e.g.
+    `^https://([a-z0-9-]+\\.)?compliverse\\.ai$`) so every tenant subdomain
+    is accepted without listing them individually. ALLOWED_ORIGINS is a
+    simple comma-separated list for environments where regex isn't worth
+    the cognitive load. If neither is set we fall back to a localhost-only
+    pattern so dev keeps working without any env file.
+
+    Wide-open `allow_origins=["*"]` was previously hardcoded — this is
+    incompatible with `allow_credentials=True` in modern browsers and is
+    a real cross-origin attack surface in production.
+    """
+    regex = (os.getenv("ALLOWED_ORIGIN_REGEX") or "").strip()
+    if regex:
+        return {"allow_origin_regex": regex, "allow_origins": []}
+
+    csv_origins = (os.getenv("ALLOWED_ORIGINS") or "").strip()
+    if csv_origins:
+        return {
+            "allow_origins": [o.strip() for o in csv_origins.split(",") if o.strip()],
+        }
+
+    # Dev fallback — every `*.localhost:<port>` and bare `localhost:<port>`
+    # over HTTP or HTTPS. Matches the platform's tenant-subdomain dev
+    # convention (e.g. `acme.localhost:3000`).
+    return {
+        "allow_origin_regex": r"^https?://([a-z0-9-]+\.)?localhost(:[0-9]+)?$",
+        "allow_origins": [],
+    }
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    **_build_cors_kwargs(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

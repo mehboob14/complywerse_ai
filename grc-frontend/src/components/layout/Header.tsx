@@ -43,6 +43,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
   '/compliance/assessments': { title: 'Assessment Control Center' },
   '/compliance/assessments/approvals': { title: 'Pending Approvals', subtitle: 'Compliance assessments awaiting review' },
   '/control-library': { title: 'Control Library' },
+  '/auditor-portal': { title: 'Auditor Portal', subtitle: 'Review certification journeys, evidence, and compliance progress' },
   '/assets': { title: 'IT Asset Inventory & Valuation', subtitle: 'Manage and track IT assets with CIA ratings and valuations.' },
   '/integrations': { title: 'Integrations', subtitle: 'Configure and manage third-party integrations.' },
   '/integrations/connections': { title: 'Scanner Connections', subtitle: 'Manage vulnerability scanner connections and sync schedules.' },

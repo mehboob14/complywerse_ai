@@ -131,6 +131,7 @@ const navigation: NavEntry[] = [
       { name: 'Pending Approvals', href: '/compliance/assessments/approvals', icon: Clock, requiredPermissions: ['compliance:assessments:*'] },
       { name: 'Evidence', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
       { name: 'Control Library', href: '/control-library', icon: Library, requiredPermissions: ['controls:control_library:*'] },
+      { name: 'Auditor Portal', href: '/auditor-portal', icon: BookOpen, requiredPermissions: ['compliance:certifications:*', 'compliance:frameworks:*'] },
     ],
   },
   {
