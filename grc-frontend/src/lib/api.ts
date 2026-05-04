@@ -60,6 +60,12 @@ const getTenantSlugFromHost = (): string | null => {
   return null;
 };
 
+/** Returns the active tenant slug for use in manual fetch() calls that bypass the axios interceptor. */
+export const getTenantSlug = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  return getTenantSlugFromHost() || localStorage.getItem('tenant_slug');
+};
+
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,

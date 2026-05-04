@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import Link from 'next/link';
-import apiClient, { AdminUser, adminApi } from '@/lib/api';
+import apiClient, { AdminUser, adminApi, getTenantSlug } from '@/lib/api';
 import { SearchInput, MultiSelectDropdown } from '@/components/ui';
 import {
   FileText,
@@ -283,6 +283,10 @@ export default function AssessmentsPage() {
         method: 'POST',
         body: formData,
         credentials: 'include',
+        headers: (() => {
+          const slug = getTenantSlug();
+          return slug ? { 'X-Tenant-Slug': slug } : {};
+        })(),
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: 'Upload failed' }));

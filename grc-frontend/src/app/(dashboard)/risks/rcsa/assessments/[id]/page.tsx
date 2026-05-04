@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { rcsaApi } from '@/lib/api';
+import { rcsaApi, getTenantSlug } from '@/lib/api';
 import {
   ArrowLeft,
   Save,
@@ -368,6 +368,10 @@ export default function AssessmentDetailPage() {
         method: 'POST',
         body: formData,
         credentials: 'include',
+        headers: (() => {
+          const slug = getTenantSlug();
+          return slug ? { 'X-Tenant-Slug': slug } : {};
+        })(),
       });
       
       if (response.ok) {

@@ -25,6 +25,7 @@ import {
 import { clsx } from 'clsx';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { getTenantSlug } from '@/lib/api';
 
 interface Source {
   rank: number;
@@ -251,6 +252,7 @@ export default function ComplyChatPage() {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+        ...(getTenantSlug() ? { 'X-Tenant-Slug': getTenantSlug()! } : {}),
       },
       credentials: 'include',
       body: formData,
