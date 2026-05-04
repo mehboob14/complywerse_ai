@@ -370,7 +370,11 @@ export default function AssessmentDetailPage() {
         credentials: 'include',
         headers: (() => {
           const slug = getTenantSlug();
-          return slug ? { 'X-Tenant-Slug': slug } : {};
+          const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+          return {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(slug ? { 'X-Tenant-Slug': slug } : {}),
+          };
         })(),
       });
       

@@ -285,7 +285,11 @@ export default function AssessmentsPage() {
         credentials: 'include',
         headers: (() => {
           const slug = getTenantSlug();
-          return slug ? { 'X-Tenant-Slug': slug } : {};
+          const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+          return {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(slug ? { 'X-Tenant-Slug': slug } : {}),
+          };
         })(),
       });
       if (!response.ok) {
