@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { frameworkUploadApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { PageLoader } from '@/components/ui';
 import Link from 'next/link';
 import {
   Upload,
@@ -465,9 +466,7 @@ export default function FrameworkUploadPage() {
         </div>
 
         {isLoading ? (
-          <div className="flex h-48 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
-          </div>
+          <PageLoader size="sm" className="h-48" />
         ) : frameworks.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">

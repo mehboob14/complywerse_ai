@@ -209,7 +209,7 @@ from ....models import (
 )
 from ....schemas import (
     RCSATemplateCreate, RCSATemplateUpdate, RCSATemplateResponse, RCSATemplateDetailResponse,
-    RCSAQuestionCreate, RCSAQuestionUpdate, RCSAQuestionResponse,
+    RCSAQuestionCreate, RCSAQuestionUpdate, RCSAQuestionResponse, RCSAQuestionUpsert,
     RCSACampaignCreate, RCSACampaignUpdate, RCSACampaignResponse,
     RCSAAssessmentResponse, RCSAAssessmentDetailResponse, RCSAQuestionWithResponse, RCSAResponseDetail, RCSAEvidenceFile,
     RCSAResponseCreate, RCSAResponseUpdate, RCSAResponseResponse,
@@ -427,23 +427,79 @@ def update_template(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    
+
     db_template = db.query(RCSATemplate).filter(
         RCSATemplate.id == template_id,
         RCSATemplate.tenant_id.in_(user_tenants),
         RCSATemplate.is_system_template == False
     ).first()
-    
+
     if not db_template:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found or not editable")
-    
+
     update_data = template.model_dump(exclude_unset=True)
+    questions_data = update_data.pop('questions', None)
+
+    # Update scalar template fields
     for key, value in update_data.items():
         setattr(db_template, key, value)
-    
+
+    # Upsert / delete questions when provided
+    if questions_data is not None:
+        # Direct query — avoids any refresh/lazy-load ordering issues
+        existing_questions = db.query(RCSAQuestion).filter(
+            RCSAQuestion.template_id == template_id
+        ).all()
+        existing_by_id = {q.id: q for q in existing_questions}
+
+        payload_existing_ids = {
+            q['id'] for q in questions_data
+            if q.get('id') and q['id'] in existing_by_id
+        }
+
+        # Delete questions that were removed from the payload
+        for q in existing_questions:
+            if q.id not in payload_existing_ids:
+                db.delete(q)
+        db.flush()
+
+        # Update existing / insert new
+        for idx, q_data in enumerate(questions_data):
+            q_id = q_data.get('id')
+            order = q_data.get('sequence') or q_data.get('question_order') or (idx + 1)
+            section = q_data.get('section') or q_data.get('category') or None
+            guidance = q_data.get('guidance_text') or q_data.get('guidance') or None
+
+            if q_id and q_id in existing_by_id:
+                db_q = existing_by_id[q_id]
+                db_q.question_text = q_data.get('question_text', db_q.question_text)
+                db_q.question_type = q_data.get('question_type', db_q.question_type)
+                db_q.question_order = order
+                db_q.section = section
+                db_q.is_required = q_data.get('is_required', db_q.is_required)
+                db_q.options = q_data.get('options') or []
+                db_q.risk_category = q_data.get('risk_category') or None
+                db_q.control_objective = q_data.get('control_objective') or None
+                db_q.guidance_text = guidance
+                db_q.ai_suggestion_enabled = q_data.get('ai_suggestion_enabled', True)
+            else:
+                db.add(RCSAQuestion(
+                    template_id=template_id,
+                    question_text=q_data.get('question_text') or '',
+                    question_type=q_data.get('question_type') or 'text',
+                    question_order=order,
+                    section=section,
+                    is_required=q_data.get('is_required', True),
+                    options=q_data.get('options') or [],
+                    risk_category=q_data.get('risk_category') or None,
+                    control_objective=q_data.get('control_objective') or None,
+                    guidance_text=guidance,
+                    ai_suggestion_enabled=q_data.get('ai_suggestion_enabled', True),
+                ))
+
     db.commit()
     db.refresh(db_template)
-    
+
     return RCSATemplateResponse(
         id=db_template.id,
         tenant_id=db_template.tenant_id,

@@ -6,6 +6,7 @@ import { rcsaApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Loader2, Upload, Download, AlertTriangle } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { PageLoader } from '@/components/ui';
 
 interface RCSATemplate {
   id: number;
@@ -75,9 +76,7 @@ export default function RCSATemplatesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { frameworkUploadApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { PageLoader } from '@/components/ui';
 import {
   GitCompare,
   Loader2,
@@ -468,9 +469,7 @@ export default function AlignmentPage() {
         </div>
 
         {alignmentsLoading ? (
-          <div className="flex h-48 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
-          </div>
+          <PageLoader size="sm" className="h-48" />
         ) : filteredAlignments.length === 0 ? (
           <div className="flex h-48 flex-col items-center justify-center gap-2 text-slate-600">
             <GitCompare className="h-12 w-12" />

@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { certificationsApi } from '@/lib/api';
 import { CertificationJourney } from '@/types';
-import { SearchInput } from '@/components/ui';
+import { SearchInput, PageLoader } from '@/components/ui';
 import {
   Loader2,
   Shield,
@@ -61,9 +61,7 @@ export default function AuditorPortalIndexPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex h-64 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        </div>
+        <PageLoader className="h-64" />
       ) : error ? (
         <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />

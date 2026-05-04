@@ -914,10 +914,7 @@ export default function VulnerabilitiesPage() {
 
         {/* Data Table */}
         {isLoading ? (
-          <div className="cw-card rounded-lg p-12 text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
-            <p className="cw-text-muted mt-4">Loading vulnerabilities...</p>
-          </div>
+          <PageLoader className="py-12" label="Loading vulnerabilities..." />
         ) : error ? (
           <div className="cw-card border-red-200 rounded-lg p-6 text-center">
             <AlertCircle className="h-8 w-8 text-red-600 mx-auto" />

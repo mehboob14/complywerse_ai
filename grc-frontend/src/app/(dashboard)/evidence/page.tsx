@@ -6,7 +6,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import Link from 'next/link';
 import apiClient, { evidenceAIApi, QuickAssessResponse, assetsApi } from '@/lib/api';
 import type { ITAsset } from '@/types';
-import { SearchInput, MultiSelectDropdown } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
 import {
   FileCheck,
   Loader2,
@@ -436,9 +436,7 @@ export default function EvidencePage() {
         </div>
 
         {isLoading ? (
-          <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-          </div>
+          <PageLoader className="h-64" />
         ) : error ? (
           <div className="flex h-64 flex-col items-center justify-center text-red-400">
             <AlertCircle className="mb-2 h-8 w-8" />
@@ -727,6 +725,7 @@ function UploadModal({
   const [aiAssessment, setAiAssessment] = useState<QuickAssessResponse | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   // Owner dropdown source: tenant users.
   const { data: tenantUsers = [] } = useQuery({
@@ -841,6 +840,12 @@ function UploadModal({
     setIsDragging(false);
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile) {
+      const ext = droppedFile.name.split('.').pop()?.toLowerCase();
+      if (ext === 'exe') {
+        setFileError('Executable files (.exe) are not allowed.');
+        return;
+      }
+      setFileError(null);
       setFile(droppedFile);
       const newName = droppedFile.name.replace(/\.[^/.]+$/, '');
       if (!name) {
@@ -887,6 +892,13 @@ function UploadModal({
               onChange={(e) => {
                 const selectedFile = e.target.files?.[0];
                 if (selectedFile) {
+                  const ext = selectedFile.name.split('.').pop()?.toLowerCase();
+                  if (ext === 'exe') {
+                    setFileError('Executable files (.exe) are not allowed.');
+                    e.target.value = '';
+                    return;
+                  }
+                  setFileError(null);
                   setFile(selectedFile);
                   const newName = selectedFile.name.replace(/\.[^/.]+$/, '');
                   if (!name) {
@@ -911,6 +923,13 @@ function UploadModal({
               </>
             )}
           </div>
+
+          {fileError && (
+            <p className="flex items-center gap-1.5 text-sm text-red-600">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {fileError}
+            </p>
+          )}
 
           {/* {(isAiLoading || aiAssessment || aiError) && (
             <div className="animate-in fade-in slide-in-from-top-2 duration-300 rounded-lg border border-purple-500/30 bg-gradient-to-br from-purple-900/20 via-blue-900/20 to-indigo-900/20 p-4">

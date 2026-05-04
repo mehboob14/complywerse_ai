@@ -478,7 +478,11 @@ def get_me(
                 RolePermission, RolePermission.permission_id == Permission.id
             ).filter(RolePermission.role_id.in_(role_ids)).all()
         permissions = sorted({p.name for p in perms})
-        allowed_modules = sorted({p.module for p in perms})
+        # Permission rows store name as "module:submodule:action" — there's no
+        # dedicated `module` column on the model, so derive it from the name.
+        allowed_modules = sorted({
+            p.name.split(":", 1)[0] for p in perms if p.name and ":" in p.name
+        })
 
     response_data = {
         "authenticated": True,

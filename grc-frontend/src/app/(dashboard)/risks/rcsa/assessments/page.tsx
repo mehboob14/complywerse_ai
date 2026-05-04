@@ -18,6 +18,7 @@ import {
 import Link from 'next/link';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { PageLoader } from '@/components/ui';
 
 interface Assessment {
   id: number;
@@ -176,9 +177,7 @@ export default function RCSAAssessmentsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

@@ -12,6 +12,7 @@ import {
   TrendingDown,
   ArrowRight,
 } from 'lucide-react';
+import { PageLoader } from '@/components/ui';
 
 export default function ReportsPage() {
   const [selectedReportType, setSelectedReportType] = useState<ReportType>('executive');
@@ -69,9 +70,7 @@ export default function ReportsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

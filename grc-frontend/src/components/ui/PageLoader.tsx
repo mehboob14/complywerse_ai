@@ -40,7 +40,7 @@ const DOT_PX: Record<PageLoaderSize, number> = {
 };
 
 const DOT_COUNT = 12;
-const DOT_COLOR = '#2563eb'; // blue-600 — single solid brand colour
+const DOT_COLOR = 'var(--color-base)'; // brand colour from tokens.css
 
 export function PageLoader({
   size = 'md',
@@ -69,7 +69,7 @@ export function PageLoader({
         className="absolute inset-0 rounded-full"
         style={{
           background:
-            'radial-gradient(circle, rgba(37,99,235,0.18) 0%, rgba(37,99,235,0) 70%)',
+            'radial-gradient(circle, color-mix(in srgb, var(--color-base) 18%, transparent) 0%, transparent 70%)',
           animation: 'pageLoaderHalo 2.4s ease-in-out infinite',
         }}
       />

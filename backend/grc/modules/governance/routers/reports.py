@@ -9,7 +9,7 @@ from sqlalchemy import func
 from ....models import (
     GovernanceDocument, PolicyGapAnalysisRun, PolicyGapFinding,
     AuditLog, GRCUser, UploadedFramework, PolicyStatement,
-    PolicyStatementVersion, get_db
+    PolicyStatementVersion, AttestationCampaign, AttestationRequest, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -208,3 +208,49 @@ def export_policy_statements(
 
     doc_title = (document.title or "document").replace(" ", "_")[:50]
     return _csv_response(output, f"policy_statements_{doc_title}_{datetime.utcnow().strftime('%Y%m%d')}.csv")
+
+
+@router.get("/campaigns/{campaign_id}/export-csv")
+def export_campaign_attestations(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Export attestation campaign results as CSV for audit evidence."""
+    user_tenants = get_user_tenants(current_user, db)
+
+    campaign = db.query(AttestationCampaign).filter(
+        AttestationCampaign.id == campaign_id,
+        AttestationCampaign.tenant_id.in_(user_tenants)
+    ).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    requests = db.query(AttestationRequest).filter(
+        AttestationRequest.campaign_id == campaign_id
+    ).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "User Name", "Email", "Status",
+        "Assigned Date", "Due Date", "Completed Date",
+        "IP Address", "User Comments", "Evidence Attached"
+    ])
+
+    for r in requests:
+        user = db.query(GRCUser).filter(GRCUser.id == r.user_id).first()
+        writer.writerow([
+            (user.display_name or user.username) if user else "",
+            user.email if user else "",
+            r.status or "",
+            r.assigned_at.isoformat() if r.assigned_at else "",
+            r.due_date.isoformat() if r.due_date else "",
+            r.completed_at.isoformat() if r.completed_at else "",
+            r.ip_address or "",
+            r.user_comments or "",
+            "Yes" if r.evidence_id else "No",
+        ])
+
+    campaign_name = (campaign.name or "campaign").replace(" ", "_")[:50]
+    return _csv_response(output, f"attestation_{campaign_name}_{datetime.utcnow().strftime('%Y%m%d')}.csv")

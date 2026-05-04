@@ -1822,6 +1822,9 @@ export const attestationApi = {
   getAttestation: (id: number) => apiClient.get(`/governance/attestation-campaigns/requests/${id}`),
   linkToEvidence: (id: number) => apiClient.post(`/governance/attestations/${id}/link-to-evidence`),
   bulkLinkToEvidence: (attestationIds: number[]) => apiClient.post('/governance/attestations/bulk-link-evidence', { attestation_ids: attestationIds }),
+  addEscalationChain: (campaignId: number, data: Record<string, unknown>) => apiClient.post(`/governance/attestation-campaigns/campaigns/${campaignId}/escalation-chains`, data),
+  deleteEscalationChain: (chainId: number) => apiClient.delete(`/governance/attestation-campaigns/escalation-chains/${chainId}`),
+  exportCampaignReport: (id: number) => apiClient.get(`/governance/reports/campaigns/${id}/export-csv`, { responseType: 'blob' }),
 };
 
 export const committeeApi = {

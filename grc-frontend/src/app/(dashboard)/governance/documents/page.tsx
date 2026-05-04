@@ -9,7 +9,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
-import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 import { 
   FileText,
   Loader2,
@@ -915,9 +915,7 @@ export default function GovernanceDocumentsPage() {
       <div className="cw-card overflow-hidden">
         {viewMode === 'hierarchy' ? (
           isHierarchyLoading ? (
-            <div className="flex h-64 items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-[var(--color-base)]" />
-            </div>
+            <PageLoader className="h-64" />
           ) : filteredHierarchyDocuments.length === 0 ? (
             <div className="empty-state h-64">
               <div className="empty-state-icon">
@@ -992,9 +990,7 @@ export default function GovernanceDocumentsPage() {
             </>
           )
         ) : isLoading ? (
-          <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-[var(--color-base)]" />
-          </div>
+          <PageLoader className="h-64" />
         ) : filteredDocuments.length === 0 ? (
           <div className="empty-state h-64">
             <div className="empty-state-icon">

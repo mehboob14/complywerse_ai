@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
-import { attestationApi } from '@/lib/api';
+import { attestationApi, governanceApi, adminApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 import {
@@ -18,6 +18,7 @@ import {
   CheckCircle,
   Clock,
   FileCheck,
+  FileText,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -57,11 +58,27 @@ export default function AttestationCampaignsPage() {
   const canDelete = hasPermission('governance:attestations:delete');
   const searchParams = useSearchParams();
   const showNewModal = searchParams.get('action') === 'new';
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(showNewModal);
   const queryClient = useQueryClient();
+
+  // Create form state
+  const [formLinkedDocId, setFormLinkedDocId] = useState<number | null>(null);
+  const [formTargetType, setFormTargetType] = useState<string>('all_users');
+  const [formTargetRoleIds, setFormTargetRoleIds] = useState<number[]>([]);
+  const [formTargetUserIds, setFormTargetUserIds] = useState<number[]>([]);
+  const [formAttestationText, setFormAttestationText] = useState<string>('');
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setFormLinkedDocId(null);
+    setFormTargetType('all_users');
+    setFormTargetRoleIds([]);
+    setFormTargetUserIds([]);
+    setFormAttestationText('');
+  };
 
   const { data: campaigns, isLoading } = useQuery({
     queryKey: ['attestation-campaigns', statusFilter],
@@ -81,11 +98,57 @@ export default function AttestationCampaignsPage() {
     },
   });
 
+  // Fetch governance documents for linking (all non-retired/archived)
+  const { data: documents } = useQuery({
+    queryKey: ['governance-documents-for-attestation'],
+    queryFn: async () => {
+      try {
+        const response = await governanceApi.getDocuments({ limit: 200 });
+        const raw = response.data as { items?: unknown[] } | unknown[];
+        const items = Array.isArray(raw) ? raw : ((raw as { items?: unknown[] }).items ?? []);
+        // Filter out retired/archived on the client side
+        const docs = (items as Array<{ id: number; title: string; document_type: string; status?: string }>)
+          .filter(d => d.status !== 'retired' && d.status !== 'archived');
+        return docs;
+      } catch {
+        return [] as Array<{ id: number; title: string; document_type: string }>;
+      }
+    },
+    enabled: isModalOpen,
+  });
+
+  // Prefetch roles and users as soon as the modal opens so they're ready instantly
+  const { data: roles, isLoading: rolesLoading } = useQuery({
+    queryKey: ['admin-roles'],
+    queryFn: async () => {
+      try {
+        const response = await adminApi.getRoles();
+        return (response.data || []) as Array<{ id: number; name: string }>;
+      } catch {
+        return [] as Array<{ id: number; name: string }>;
+      }
+    },
+    enabled: isModalOpen,
+  });
+
+  const { data: allUsers, isLoading: usersLoading } = useQuery({
+    queryKey: ['admin-users-list'],
+    queryFn: async () => {
+      try {
+        const response = await adminApi.getUsers();
+        return (response.data || []) as Array<{ id: number; display_name: string; email: string }>;
+      } catch {
+        return [] as Array<{ id: number; display_name: string; email: string }>;
+      }
+    },
+    enabled: isModalOpen,
+  });
+
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => attestationApi.createCampaign(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attestation-campaigns'] });
-      setIsModalOpen(false);
+      closeModal();
     },
   });
 
@@ -115,6 +178,45 @@ export default function AttestationCampaignsPage() {
                          (campaign.description?.toLowerCase() || '').includes(searchTerm.toLowerCase());
     return matchesSearch;
   });
+
+  const handleDocumentSelect = (docId: number) => {
+    setFormLinkedDocId(docId);
+    if (docId) {
+      const doc = (documents || []).find(d => d.id === docId);
+      if (doc && !formAttestationText) {
+        setFormAttestationText(
+          `I acknowledge that I have read, understood, and agree to comply with the ${doc.title}.`
+        );
+      }
+    } else {
+      setFormLinkedDocId(null);
+    }
+  };
+
+  const handleCreateSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    const payload: Record<string, unknown> = {
+      name: formData.get('name') as string,
+      description: (formData.get('description') as string) || undefined,
+      campaign_type: formData.get('attestation_type') as string,
+      attestation_text: formAttestationText || undefined,
+      start_date: new Date(formData.get('start_date') as string).toISOString(),
+      due_date: new Date(formData.get('end_date') as string).toISOString(),
+      requires_evidence: formData.get('requires_evidence') === 'on',
+      target_type: formTargetType,
+      linked_document_id: formLinkedDocId || undefined,
+    };
+
+    if (formTargetType === 'by_role' && formTargetRoleIds.length > 0) {
+      payload.target_role_ids = formTargetRoleIds;
+    } else if (formTargetType === 'custom' && formTargetUserIds.length > 0) {
+      payload.target_user_ids = formTargetUserIds;
+    }
+
+    createMutation.mutate(payload);
+  };
 
   if (isLoading) {
     return (
@@ -244,7 +346,7 @@ export default function AttestationCampaignsPage() {
                   <Eye className="h-4 w-4" />
                   View
                 </Link>
-                
+
                 {campaign.status === 'draft' && (
                   <button
                     onClick={() => {
@@ -258,7 +360,7 @@ export default function AttestationCampaignsPage() {
                     <Play className="h-4 w-4" />
                   </button>
                 )}
-                
+
                 {campaign.status === 'active' && (
                   <button
                     onClick={() => {
@@ -272,8 +374,8 @@ export default function AttestationCampaignsPage() {
                     <XCircle className="h-4 w-4" />
                   </button>
                 )}
-                
-                {campaign.status === 'draft' && (
+
+                {campaign.status === 'draft' && canDelete && (
                   <button
                     onClick={() => {
                       if (confirm('Are you sure you want to delete this campaign?')) {
@@ -312,30 +414,16 @@ export default function AttestationCampaignsPage() {
 
       <RightSlidePanel
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={closeModal}
         title="Create New Campaign"
         width="w-full max-w-lg"
       >
-        <form
-          id="create-campaign-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const formData = new FormData(e.currentTarget);
-            createMutation.mutate({
-              name: formData.get('name') as string,
-              description: (formData.get('description') as string) || undefined,
-              campaign_type: formData.get('attestation_type') as string,
-              attestation_text: (formData.get('attestation_text') as string) || undefined,
-              start_date: new Date(formData.get('start_date') as string).toISOString(),
-              due_date: new Date(formData.get('end_date') as string).toISOString(),
-              requires_evidence: formData.get('requires_evidence') === 'on',
-              target_type: 'all_users',
-            });
-          }}
-        >
-          <div className="space-y-4">
+        <form onSubmit={handleCreateSubmit}>
+          <div className="space-y-5">
+
+            {/* Basic Info */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Campaign Name</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Campaign Name <span className="text-rose-500">*</span></label>
               <input
                 type="text"
                 name="name"
@@ -354,7 +442,7 @@ export default function AttestationCampaignsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Attestation Type</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Attestation Type <span className="text-rose-500">*</span></label>
               <select name="attestation_type" className="input w-full" required>
                 <option value="">Select type</option>
                 {ATTESTATION_TYPES.map((type) => (
@@ -362,19 +450,63 @@ export default function AttestationCampaignsPage() {
                 ))}
               </select>
             </div>
+
+            {/* Linked Governance Document */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Attestation Text</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <span className="flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-primary-500" />
+                  Link Governance Document
+                  <span className="text-xs text-gray-400 font-normal">(optional)</span>
+                </span>
+              </label>
+              <select
+                className="input w-full"
+                value={formLinkedDocId ?? ''}
+                onChange={(e) => handleDocumentSelect(e.target.value ? Number(e.target.value) : 0)}
+              >
+                <option value="">— Select a policy/procedure document —</option>
+                {(documents || []).map((doc) => (
+                  <option key={doc.id} value={doc.id}>
+                    [{doc.document_type}] {doc.title}
+                  </option>
+                ))}
+              </select>
+              {(documents || []).length === 0 && !isModalOpen && null}
+              {isModalOpen && (documents || []).length === 0 && (
+                <p className="text-xs text-gray-400 mt-1">No documents available yet.</p>
+              )}
+              {formLinkedDocId && (
+                <p className="text-xs text-primary-600 mt-1">
+                  Attestation text has been auto-filled from the document. You can edit it below.
+                </p>
+              )}
+            </div>
+
+            {/* Attestation Text */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Attestation Text
+                {!formLinkedDocId && <span className="text-rose-500"> *</span>}
+              </label>
               <textarea
-                name="attestation_text"
                 className="input w-full"
                 rows={4}
-                required
-                placeholder="Enter the attestation statement that users must acknowledge..."
+                required={!formLinkedDocId}
+                value={formAttestationText}
+                onChange={(e) => setFormAttestationText(e.target.value)}
+                placeholder={
+                  formLinkedDocId
+                    ? 'Auto-generated from selected document. Edit if needed...'
+                    : 'Enter the statement that users must acknowledge...'
+                }
               />
             </div>
+
+            {/* Date Range */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date <span className="text-rose-500">*</span></label>
                 <input
                   type="date"
                   name="start_date"
@@ -383,7 +515,7 @@ export default function AttestationCampaignsPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date <span className="text-rose-500">*</span></label>
                 <input
                   type="date"
                   name="end_date"
@@ -392,6 +524,117 @@ export default function AttestationCampaignsPage() {
                 />
               </div>
             </div>
+
+            {/* Target Audience */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <span className="flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5 text-primary-500" />
+                  Target Audience <span className="text-rose-500">*</span>
+                </span>
+              </label>
+              <div className="space-y-2 p-3 bg-slate-50 rounded-lg border border-gray-200">
+                {[
+                  { value: 'all_users', label: 'All Users', desc: 'Every active user in the system' },
+                  { value: 'by_role', label: 'By Role', desc: 'Users with specific roles' },
+                  { value: 'custom', label: 'Custom', desc: 'Specific individuals' },
+                ].map((opt) => (
+                  <label key={opt.value} className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="target_type_radio"
+                      value={opt.value}
+                      checked={formTargetType === opt.value}
+                      onChange={() => {
+                        setFormTargetType(opt.value);
+                        setFormTargetRoleIds([]);
+                        setFormTargetUserIds([]);
+                      }}
+                      className="mt-0.5 text-primary-500 focus:ring-primary-500"
+                    />
+                    <div>
+                      <p className="text-sm text-black font-medium">{opt.label}</p>
+                      <p className="text-xs text-gray-500">{opt.desc}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              {/* By Role — multi-select */}
+              {formTargetType === 'by_role' && (
+                <div className="mt-3">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Select Roles <span className="text-rose-500">*</span></label>
+                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1 bg-white">
+                    {rolesLoading ? (
+                      <p className="text-xs text-gray-400 p-2">Loading roles...</p>
+                    ) : (roles || []).length === 0 ? (
+                      <p className="text-xs text-gray-400 p-2">No roles found.</p>
+                    ) : (
+                      (roles || []).map((role) => (
+                        <label key={role.id} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formTargetRoleIds.includes(role.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormTargetRoleIds([...formTargetRoleIds, role.id]);
+                              } else {
+                                setFormTargetRoleIds(formTargetRoleIds.filter(id => id !== role.id));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                          />
+                          <span className="text-sm text-black">{role.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  {formTargetRoleIds.length > 0 && (
+                    <p className="text-xs text-primary-600 mt-1">{formTargetRoleIds.length} role(s) selected</p>
+                  )}
+                </div>
+              )}
+
+              {/* Custom — user multi-select */}
+              {formTargetType === 'custom' && (
+                <div className="mt-3">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Select Users <span className="text-rose-500">*</span></label>
+                  <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1 bg-white">
+                    {usersLoading ? (
+                      <p className="text-xs text-gray-400 p-2">Loading users...</p>
+                    ) : (allUsers || []).length === 0 ? (
+                      <p className="text-xs text-gray-400 p-2">No users found.</p>
+                    ) : (
+                      (allUsers || []).map((user) => (
+                        <label key={user.id} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formTargetUserIds.includes(user.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormTargetUserIds([...formTargetUserIds, user.id]);
+                              } else {
+                                setFormTargetUserIds(formTargetUserIds.filter(id => id !== user.id));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                          />
+                          <div>
+                            <p className="text-sm text-black">{user.display_name}</p>
+                            <p className="text-xs text-gray-400">{user.email}</p>
+                          </div>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  {formTargetUserIds.length > 0 && (
+                    <p className="text-xs text-primary-600 mt-1">{formTargetUserIds.length} user(s) selected</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Options */}
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -400,12 +643,20 @@ export default function AttestationCampaignsPage() {
                 className="rounded border-gray-300 bg-white text-primary-500 focus:ring-primary-500"
               />
               <label htmlFor="requires_evidence" className="text-sm text-gray-700">
-                Require evidence upload
+                Require evidence upload from users
               </label>
             </div>
+
           </div>
+
+          {createMutation.isError && (
+            <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-sm">
+              Failed to create campaign. Please try again.
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 mt-6">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
+            <button type="button" onClick={closeModal} className="btn-secondary">
               Cancel
             </button>
             <button type="submit" className="btn-primary" disabled={createMutation.isPending}>

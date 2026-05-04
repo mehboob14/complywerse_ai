@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import apiClient from '@/lib/api';
 import { certificationsApi } from '@/lib/api';
+import { PageLoader } from '@/components/ui';
 import { 
   Loader2, 
   ArrowLeft,
@@ -173,11 +174,7 @@ export default function AuditorPortalPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-      </div>
-    );
+    return <PageLoader className="h-96" />;
   }
 
   if (error) {

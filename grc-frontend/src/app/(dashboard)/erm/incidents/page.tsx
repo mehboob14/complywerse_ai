@@ -29,7 +29,7 @@ import {
   Target,
   TrendingUp,
 } from 'lucide-react';
-import { MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
+import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 
 const SEVERITIES: { value: IncidentSeverity; label: string; color: string }[] = [
   { value: 'low', label: 'Low', color: 'bg-green-500/20 text-green-400' },
@@ -150,9 +150,7 @@ export default function IncidentsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

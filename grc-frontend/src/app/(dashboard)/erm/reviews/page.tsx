@@ -21,7 +21,7 @@ import {
   User,
 } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
+import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 
 interface TenantUserOption {
   id: number;
@@ -89,9 +89,7 @@ export default function ReviewsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

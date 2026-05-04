@@ -26,6 +26,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import { PageLoader } from '@/components/ui';
 
 const CATEGORY_COLORS: Record<string, string> = {
   strategic: '#8b5cf6',
@@ -79,9 +80,7 @@ export default function RiskAggregationPage() {
             <div className="h-4 w-72 bg-slate-100 rounded animate-pulse mt-2" />
           </div>
         </div>
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-slate-600" />
-        </div>
+        <PageLoader className="h-64" />
       </div>
     );
   }

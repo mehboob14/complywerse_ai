@@ -19,7 +19,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
-import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 
 interface DocumentItem {
   id: number;
@@ -254,9 +254,7 @@ export default function GovernanceMappingsPage() {
 
   if (documentsLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

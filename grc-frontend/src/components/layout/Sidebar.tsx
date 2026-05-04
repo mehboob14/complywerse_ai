@@ -131,7 +131,6 @@ const navigation: NavEntry[] = [
       { name: 'Pending Approvals', href: '/compliance/assessments/approvals', icon: Clock, requiredPermissions: ['compliance:assessments:*'] },
       { name: 'Evidence', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
       { name: 'Control Library', href: '/control-library', icon: Library, requiredPermissions: ['controls:control_library:*'] },
-      { name: 'Auditor Portal', href: '/auditor-portal', icon: BookOpen, requiredPermissions: ['compliance:certifications:*', 'compliance:frameworks:*'] },
     ],
   },
   {
@@ -408,12 +407,6 @@ export default function Sidebar() {
   const canAccessItem = (item: NavItem & { requiredModules?: string[]; adminOnly?: boolean }) => {
     if (item.adminOnly && !isAdmin) return false;
     if (!hasModuleAccess(item.requiredModules)) return false;
-
-    // Fallback for tenants where module access is populated but fine-grained permissions are empty/migrating
-    if (!isAdmin && allowedModules.length > 0 && allowedPermissions.length === 0) {
-      return true;
-    }
-
     return hasPermission(item.requiredPermissions);
   };
 

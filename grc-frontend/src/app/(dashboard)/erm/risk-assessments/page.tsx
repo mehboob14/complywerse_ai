@@ -22,6 +22,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import { PageLoader } from '@/components/ui';
 
 type AssessmentStatus = 'draft' | 'in_progress' | 'under_review' | 'approved' | 'closed';
 type AssessmentType = 'periodic' | 'annual' | 'ad_hoc' | 'triggered';
@@ -311,9 +312,7 @@ export default function RiskAssessmentsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

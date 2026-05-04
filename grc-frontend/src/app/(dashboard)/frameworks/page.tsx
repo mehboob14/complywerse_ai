@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import apiClient, { certificationsApi } from '@/lib/api';
 import { CertificationJourney } from '@/types';
-import { SearchInput } from '@/components/ui';
+import { SearchInput, PageLoader } from '@/components/ui';
 import {
   FileStack,
   Loader2,
@@ -200,9 +200,7 @@ export default function FrameworksPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-[var(--color-primary)]" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

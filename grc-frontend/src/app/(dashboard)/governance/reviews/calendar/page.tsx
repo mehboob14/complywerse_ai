@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import { PageLoader } from '@/components/ui';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -422,9 +423,7 @@ export default function ReviewCalendarPage() {
         </div>
 
         {calendarLoading ? (
-          <div className="flex h-96 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-          </div>
+          <PageLoader className="h-96" />
         ) : (
           <div className="p-4">
             <div className="grid grid-cols-7 gap-px mb-2">

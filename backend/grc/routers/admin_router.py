@@ -278,6 +278,28 @@ def get_current_tenant_user(
     return user
 
 
+def _get_or_create_permission(tenant_db: Session, perm_name: str) -> Optional[Permission]:
+    """Look up a Permission row by name; create it from the static matrix shape
+    (`module:submodule:action`) if missing. Tenant DBs aren't pre-seeded with
+    Permission rows, so without this RolePermission rows can't be created and
+    every newly-saved role ends up with 0 permissions."""
+    perm = tenant_db.query(Permission).filter(Permission.name == perm_name).first()
+    if perm:
+        return perm
+    parts = (perm_name or "").split(":")
+    if len(parts) != 3 or not all(parts):
+        return None
+    module, submodule, action = parts
+    perm = Permission(
+        name=perm_name,
+        resource=f"{module}:{submodule}",
+        action=action,
+    )
+    tenant_db.add(perm)
+    tenant_db.flush()  # populate perm.id for the immediate RolePermission insert
+    return perm
+
+
 def check_permission(user: TenantUser, tenant_db: Session, required_permission: str) -> bool:
     # Primary-contact bypass: the email registered as the tenant's primary
     # contact gets administrator-grade access without needing a UserRole row.
@@ -681,7 +703,7 @@ def create_role(
     tenant_db.refresh(role)
 
     for perm_name in data.permission_names:
-        perm = tenant_db.query(Permission).filter(Permission.name == perm_name).first()
+        perm = _get_or_create_permission(tenant_db, perm_name)
         if perm:
             rp = RolePermission(
                 role_id=role.id,
@@ -723,7 +745,7 @@ def update_role(
     if data.permission_names is not None:
         tenant_db.query(RolePermission).filter(RolePermission.role_id == role_id).delete()
         for perm_name in data.permission_names:
-            perm = tenant_db.query(Permission).filter(Permission.name == perm_name).first()
+            perm = _get_or_create_permission(tenant_db, perm_name)
             if perm:
                 rp = RolePermission(
                     role_id=role.id,

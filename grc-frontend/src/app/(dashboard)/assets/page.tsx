@@ -35,7 +35,7 @@ import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import { assetsApi } from '@/lib/api';
 import { ITAsset, AssetType } from '@/types';
-import { SearchInput, MultiSelectDropdown } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
 import {
   Server,
   Loader2,
@@ -333,9 +333,7 @@ export default function AssetsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 
@@ -349,7 +347,7 @@ export default function AssetsPage() {
   }
 
   return (
-    <div className="assets-light space-y-4 sm:space-y-5 px-1 sm:px-2 pt-1">
+    <div className="assets-light space-y-4 sm:space-y-5 px-3 sm:px-4 pt-3">
       {/* Visual overview — 3 chart panels */}
       <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
 

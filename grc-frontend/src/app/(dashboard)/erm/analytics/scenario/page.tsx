@@ -24,6 +24,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { SearchInput } from '@/components/ui/SearchInput';
+import { PageLoader } from '@/components/ui';
 
 interface ScenarioPreset {
   id: number;
@@ -240,9 +241,7 @@ export default function ScenarioAnalysisPage() {
 
   if (risksLoading || presetsLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

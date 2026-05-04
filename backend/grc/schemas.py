@@ -2718,6 +2718,25 @@ class RCSATemplateCreate(BaseModel):
     questions: List[RCSAQuestionCreate] = []
 
 
+class RCSAQuestionUpsert(BaseModel):
+    """Used when saving questions via PUT /templates/{id}.
+    id=None or a value that doesn't match an existing DB question means create new."""
+    id: Optional[int] = None
+    section: Optional[str] = None
+    category: Optional[str] = None          # frontend alias for section
+    question_order: Optional[int] = None
+    sequence: Optional[int] = None          # frontend alias for question_order
+    question_text: str
+    question_type: str = "text"
+    is_required: bool = True
+    options: Optional[List[str]] = None
+    risk_category: Optional[str] = None
+    control_objective: Optional[str] = None
+    guidance_text: Optional[str] = None
+    guidance: Optional[str] = None          # frontend alias for guidance_text
+    ai_suggestion_enabled: bool = True
+
+
 class RCSATemplateUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
@@ -2726,6 +2745,7 @@ class RCSATemplateUpdate(BaseModel):
     is_active: Optional[bool] = None
     risk_categories: Optional[List[str]] = None
     regulatory_mapping: Optional[Dict[str, Any]] = None
+    questions: Optional[List[RCSAQuestionUpsert]] = None
 
 
 class RCSATemplateResponse(BaseModel):

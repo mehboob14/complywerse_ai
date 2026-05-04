@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { regulatoryApi } from '@/lib/api';
-import { RightSlidePanel } from '@/components/ui';
+import { RightSlidePanel, PageLoader } from '@/components/ui';
 import {
   FileWarning,
   Loader2,
@@ -360,9 +360,7 @@ export default function RegulatoryChangeDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

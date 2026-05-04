@@ -20,6 +20,7 @@ import {
   Brain,
 } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import { PageLoader } from '@/components/ui';
 
 export default function BowTieAnalysisPage() {
   const [selectedRiskId, setSelectedRiskId] = useState<number | null>(null);
@@ -114,10 +115,7 @@ export default function BowTieAnalysisPage() {
       )}
 
       {selectedRiskId && bowTieLoading && (
-        <div className="flex h-64 items-center justify-center rounded-xl border border-slate-200 bg-white">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
-          <span className="ml-3 text-slate-600">Loading bow-tie analysis...</span>
-        </div>
+        <PageLoader className="h-64" label="Loading bow-tie analysis..." />
       )}
 
       {selectedRiskId && bowTieData && !bowTieLoading && (

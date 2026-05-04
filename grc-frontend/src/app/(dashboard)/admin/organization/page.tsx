@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { adminApi, OrganizationProfile } from '@/lib/api';
 import { authedFetch } from '@/lib/auth-fetch';
+import { PageLoader } from '@/components/ui';
 
 async function ensureTenantContext(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -84,9 +85,7 @@ export default function OrganizationProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

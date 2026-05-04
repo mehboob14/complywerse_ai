@@ -1,6 +1,7 @@
 ﻿'use client';
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { controlLibraryApi } from '@/lib/api';
 import { MultiSelectDropdown, SearchInput, PageLoader } from '@/components/ui';
@@ -11,6 +12,7 @@ import {
   Shield,
   Sparkles,
   ArrowRight,
+  ArrowLeft,
   AlertCircle,
   ChevronLeft,
   ChevronRight,
@@ -441,9 +443,14 @@ export default function FrameworkComparisonPage() {
   return (
     <div className="space-y-4 sm:space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Framework Comparison</h1>
-          <p className="mt-1 text-sm text-slate-600">Crosswalk mapping between regulatory frameworks</p>
+        <div className="flex items-center gap-3 min-w-0">
+          <Link href="/control-library" className="text-gray-500 hover:text-black flex-shrink-0">
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Framework Comparison</h1>
+            <p className="mt-1 text-sm text-slate-600">Crosswalk mapping between regulatory frameworks</p>
+          </div>
         </div>
         {crosswalkData?.crosswalk && crosswalkData.crosswalk.length > 0 && (
           <button

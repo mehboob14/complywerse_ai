@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
-import { DataTable, MultiSelectDropdown } from '@/components/ui';
+import { DataTable, MultiSelectDropdown, PageLoader } from '@/components/ui';
 import { adminApi } from '@/lib/api';
 
 interface AuditLogEntry {
@@ -529,11 +529,7 @@ export default function AuditLogsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading && logs.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
-      </div>
-    );
+    return <PageLoader className="h-64" />;
   }
 
   const actionItems  = availableActions.map((a) => ({ value: a, label: ACTION_CFG[a]?.label ?? a }));

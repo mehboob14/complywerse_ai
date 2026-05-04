@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { frameworkUploadApi } from '@/lib/api';
+import { PageLoader } from '@/components/ui';
 import {
   FileText,
   Loader2,
@@ -487,9 +488,7 @@ export default function ParsedControlsPage() {
         </div>
 
         {isLoading ? (
-          <div className="flex h-48 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
-          </div>
+          <PageLoader size="sm" className="h-48" />
         ) : filteredControls.length === 0 ? (
           <div className="flex h-48 flex-col items-center justify-center gap-2 text-slate-600">
             <FileText className="h-12 w-12" />

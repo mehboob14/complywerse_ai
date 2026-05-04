@@ -131,15 +131,17 @@ export default function TemplateDetailPage() {
   }, [template]);
 
   const saveMutation = useMutation({
-    mutationFn: (data: { questions: Question[] }) => rcsaApi.updateTemplate(templateId, data),
+    mutationFn: (data: { questions: Question[] }) => rcsaApi.updateTemplate(templateId, data as Record<string, unknown>),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rcsa-template', templateId] });
+      queryClient.invalidateQueries({ queryKey: ['rcsa-templates'] });
       setHasChanges(false);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     },
-    onError: () => {
+    onError: (err: unknown) => {
       setSaveStatus('error');
+      console.error('Template save failed:', err);
     },
   });
 
@@ -270,6 +272,12 @@ export default function TemplateDetailPage() {
               <span className="text-emerald-400 text-sm flex items-center gap-1">
                 <CheckCircle className="h-4 w-4" />
                 Saved
+              </span>
+            )}
+            {saveStatus === 'error' && (
+              <span className="text-rose-400 text-sm flex items-center gap-1">
+                <AlertCircle className="h-4 w-4" />
+                Save failed — check console
               </span>
             )}
             {isEditable && (

@@ -14,6 +14,7 @@ import {
   X,
   Calendar,
   Info,
+  ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -27,6 +28,11 @@ interface Attestation {
   due_date: string;
   requires_evidence: boolean;
   evidence_description?: string;
+}
+
+interface CampaignDetail {
+  linked_document_id?: number;
+  linked_document_title?: string;
 }
 
 export default function CompleteAttestationPage() {
@@ -59,6 +65,15 @@ export default function CompleteAttestationPage() {
         } as Attestation;
       }
     },
+  });
+
+  const { data: campaignDetail } = useQuery({
+    queryKey: ['attestation-campaign-detail', attestation?.campaign_id],
+    queryFn: async () => {
+      const response = await attestationApi.getCampaign(attestation!.campaign_id);
+      return response.data as CampaignDetail;
+    },
+    enabled: !!attestation?.campaign_id,
   });
 
   const completeMutation = useMutation({
@@ -174,6 +189,25 @@ export default function CompleteAttestationPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {campaignDetail?.linked_document_id && (
+          <div className="card p-4 border-primary-200 bg-primary-50/30">
+            <div className="flex items-center gap-2 mb-1">
+              <FileText className="h-4 w-4 text-primary-500" />
+              <span className="text-sm font-medium text-black">Referenced Document</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-600">{campaignDetail.linked_document_title}</p>
+              <Link
+                href={`/governance/documents/${campaignDetail.linked_document_id}`}
+                target="_blank"
+                className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium"
+              >
+                Read Document
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </div>
+          </div>
+        )}
         <div className="card p-4">
           <div className="flex items-center gap-2 mb-3">
             <div className="flex h-8 w-8 items-center justify-center rounded bg-primary-500/10">

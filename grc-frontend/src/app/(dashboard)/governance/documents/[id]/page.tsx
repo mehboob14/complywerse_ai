@@ -639,9 +639,7 @@ export default function PolicyDetailPage() {
 
   if (docLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 
@@ -1406,9 +1404,7 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
           <h3 className="font-medium text-black">Review History</h3>
         </div>
         {isLoading ? (
-          <div className="flex h-32 items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
-          </div>
+          <PageLoader size="sm" className="h-32" />
         ) : !reviewHistory || reviewHistory.length === 0 ? (
           <div className="flex h-32 flex-col items-center justify-center gap-2 text-gray-600">
             <Clock className="h-8 w-8" />
@@ -2582,11 +2578,7 @@ function ControlsTab({ mappings, mappingsLoading, documentId }: any) {
 
 function ComplianceSummarySection({ summary, loading }: { summary: any; loading: boolean }) {
   if (loading) {
-    return (
-      <div className="flex h-32 items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
-      </div>
-    );
+    return <PageLoader size="sm" className="h-32" />;
   }
 
   const frameworks = summary?.frameworks || summary?.framework_summaries || [];

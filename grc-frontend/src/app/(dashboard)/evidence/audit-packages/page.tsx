@@ -28,6 +28,7 @@ import {
   GripVertical,
   AlertTriangle,
 } from 'lucide-react';
+import { PageLoader } from '@/components/ui';
 
 interface Framework {
   id: number;
@@ -446,9 +447,7 @@ export default function AuditPackagesPage() {
         <div className={`${selectedPackage ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
           <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
             {isLoading ? (
-              <div className="flex h-64 items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-              </div>
+              <PageLoader className="h-64" />
             ) : filteredPackages.length === 0 ? (
               <div className="flex h-64 flex-col items-center justify-center gap-4 text-gray-600">
                 <Package className="h-12 w-12" />

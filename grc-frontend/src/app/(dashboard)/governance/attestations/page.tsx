@@ -236,6 +236,10 @@ export default function AttestationsPage() {
             <p className="mt-0.5 text-xs text-gray-500">Manage attestation campaigns and track compliance certifications</p>
           </div>
           <div className="flex items-center gap-3">
+            <Link href="/governance/attestations/my" className="btn-secondary flex items-center gap-2">
+              <ClipboardCheck className="h-4 w-4" />
+              My Attestations
+            </Link>
             <Link href="/governance/attestations/campaigns" className="btn-secondary flex items-center gap-2">
               <Eye className="h-4 w-4" />
               View All Campaigns
@@ -343,8 +347,8 @@ export default function AttestationsPage() {
                           href={`/governance/attestations/complete/${attestation.id}`}
                           className="btn-primary text-xs py-1 px-3 flex items-center gap-1.5"
                         >
-                          <Eye className="h-3.5 w-3.5" />
-                          View
+                          <ArrowRight className="h-3.5 w-3.5" />
+                          Complete Now
                         </Link>
                       </div>
                     </div>

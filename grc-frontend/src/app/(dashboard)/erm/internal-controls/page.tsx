@@ -26,6 +26,7 @@ import { SearchInput } from '@/components/ui/SearchInput';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { InlineLinkPicker } from '@/components/ui/InlineLinkPicker';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import { PageLoader } from '@/components/ui';
 
 const { ResponsiveContainer, PieChart, Pie, Tooltip } = {
   ResponsiveContainer: dynamic(
@@ -522,9 +523,7 @@ export default function InternalControlsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

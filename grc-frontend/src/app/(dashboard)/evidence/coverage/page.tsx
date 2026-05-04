@@ -22,6 +22,7 @@ import {
   TrendingDown,
   Info
 } from 'lucide-react';
+import { PageLoader } from '@/components/ui';
 
 interface EvidenceSummary {
   total_count: number;
@@ -313,9 +314,7 @@ export default function EvidenceCoverageDashboardPage() {
         </div>
         
         {coverageLoading ? (
-          <div className="flex h-64 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-          </div>
+          <PageLoader className="h-64" />
         ) : coverageError ? (
           <div className="flex h-64 flex-col items-center justify-center text-red-400">
             <AlertCircle className="mb-2 h-8 w-8" />

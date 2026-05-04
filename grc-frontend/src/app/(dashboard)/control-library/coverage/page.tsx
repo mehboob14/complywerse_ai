@@ -16,7 +16,9 @@ import {
   Layers,
   TrendingUp,
   BarChart3,
+  ArrowLeft,
 } from 'lucide-react';
+import Link from 'next/link';
 import { ProgressRing } from '@/components/ui';
 import {
   BarChart,
@@ -300,9 +302,14 @@ export default function CoverageMatrixPage() {
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-black sm:text-2xl">Compliance Coverage Matrix</h1>
-          <p className="text-sm text-gray-600">Evidence coverage across frameworks and categories</p>
+        <div className="flex items-center gap-3">
+          <Link href="/control-library" className="text-gray-500 hover:text-black flex-shrink-0">
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div>
+            <h1 className="text-xl font-semibold text-black sm:text-2xl">Compliance Coverage Matrix</h1>
+            <p className="text-sm text-gray-600">Evidence coverage across frameworks and categories</p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative">

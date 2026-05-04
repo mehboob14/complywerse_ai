@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { governanceApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { WorkflowDashboard, PendingApprovalItem } from '@/types';
-import { RightSlidePanel } from '@/components/ui';
+import { RightSlidePanel, PageLoader } from '@/components/ui';
 import {
   FileCheck,
   Loader2,
@@ -748,11 +748,7 @@ export default function GovernanceWorkflowsPage() {
   const isLoading = dashboardLoading || pendingLoading;
 
   if (isLoading && mainTab === 'approvals') {
-    return (
-      <div className="flex h-32 items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-primary-400" />
-      </div>
-    );
+    return <PageLoader size="sm" className="h-32" />;
   }
 
   return (

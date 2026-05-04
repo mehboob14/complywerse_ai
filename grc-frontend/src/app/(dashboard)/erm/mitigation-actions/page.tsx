@@ -23,7 +23,7 @@ import {
   UserCircle2,
 } from 'lucide-react';
 import Link from 'next/link';
-import { MultiSelectDropdown, RightSlidePanel, SearchInput } from '@/components/ui';
+import { MultiSelectDropdown, RightSlidePanel, SearchInput, PageLoader } from '@/components/ui';
 
 type ActionType = 'mitigate' | 'transfer' | 'avoid' | 'accept';
 type ActionStatus = 'open' | 'in_progress' | 'completed' | 'overdue' | 'cancelled';
@@ -164,9 +164,7 @@ export default function MitigationActionsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

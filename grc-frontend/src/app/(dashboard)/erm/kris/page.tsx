@@ -24,7 +24,7 @@ import {
   Upload,
   Sparkles,
 } from 'lucide-react';
-import { MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
+import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 
 const KRI_STATUS_COLORS = {
   green: 'bg-green-500',
@@ -103,9 +103,7 @@ export default function KRIsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
+      <PageLoader className="h-64" />
     );
   }
 

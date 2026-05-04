@@ -1,6 +1,21 @@
+import { Poppins, JetBrains_Mono } from 'next/font/google';
 import Providers from '@/components/Providers';
 import AuthHandoff from '@/components/AuthHandoff';
 import './globals.css';
+
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-poppins',
+  display: 'swap',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-mono',
+  display: 'swap',
+});
 
 export const metadata = {
   title: 'CompliverseAI',
@@ -19,7 +34,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-slate-50 text-slate-800">
+      <body className={`${poppins.variable} ${jetbrainsMono.variable} bg-slate-50 text-slate-800`}>
         <Providers>
           {/* Reads auth_token + tenant context from URL fragment on first mount,
               hydrates localStorage, then strips the fragment. Required for the

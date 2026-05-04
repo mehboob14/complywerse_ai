@@ -83,8 +83,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['Poppins', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        sans: ['var(--font-poppins)', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['var(--font-mono)', 'monospace'],
       },
       fontSize: {
         '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
