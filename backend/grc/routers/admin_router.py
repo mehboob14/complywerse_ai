@@ -278,6 +278,24 @@ def get_current_tenant_user(
     return user
 
 
+def _ensure_default_roles(tenant_db: Session) -> None:
+    """Make sure the tenant DB has the baseline 'Administrator' system role.
+    Idempotent — only inserts when missing. Tenant DBs aren't pre-seeded
+    with roles, so without this the role list is empty and there's no way
+    to grant a user full admin rights through the UI."""
+    admin_role = tenant_db.query(Role).filter(Role.name == "Administrator").first()
+    if admin_role:
+        return
+    tenant_row = tenant_db.query(Tenant).first()
+    tenant_db.add(Role(
+        tenant_id=tenant_row.id if tenant_row else None,
+        name="Administrator",
+        description="Full system access. Assignees bypass per-permission checks.",
+        is_system_role=True,
+    ))
+    tenant_db.commit()
+
+
 def _get_or_create_permission(tenant_db: Session, perm_name: str) -> Optional[Permission]:
     """Look up a Permission row by name; create it from the static matrix shape
     (`module:submodule:action`) if missing. Tenant DBs aren't pre-seeded with
@@ -635,6 +653,7 @@ def list_roles(
     user: TenantUser = Depends(require_permission("admin:users:view")),
     tenant_db: Session = Depends(get_tenant_db)
 ):
+    _ensure_default_roles(tenant_db)
     roles = tenant_db.query(Role).all()
 
     result = []
