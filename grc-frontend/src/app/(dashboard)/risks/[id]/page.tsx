@@ -45,6 +45,8 @@ interface RiskDetailData {
   linked_assets: Array<{id: number; asset_id: number; name: string; asset_type: string}>;
   linked_evidence: Array<{id: number; evidence_id: number; name: string; status: string}>;
   linked_governance: Array<{id: number; governance_objective_id: number; name: string; impact_level: string}>;
+  register_type?: string | null;
+  template_fields?: Record<string, unknown> | null;
 }
 
 const RISK_CATEGORIES: Record<string, { label: string; color: string }> = {
@@ -423,6 +425,7 @@ export default function RiskDetailPage() {
         <div className="flex items-center gap-2">
           {canEdit && (
           <button
+            onClick={() => router.push(`/erm/risks?edit=${risk.id}`)}
             className="flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-slate-900 hover:bg-slate-200"
           >
             <Edit className="h-4 w-4" />
@@ -681,8 +684,31 @@ export default function RiskDetailPage() {
 }
 
 function DetailsTab({ risk, formatDate }: { risk: RiskDetailData; formatDate: (d?: string) => string }) {
+  const isNca = (risk.register_type || '').toLowerCase().includes('nca');
+  const ncaFields = risk.template_fields && typeof risk.template_fields === 'object'
+    ? Object.entries(risk.template_fields).filter(([, v]) => v !== null && v !== '' && v !== undefined)
+    : [];
   return (
-    <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="space-y-4">
+      {isNca && ncaFields.length > 0 && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 mb-3">
+            <ClipboardCheck className="h-4 w-4 text-blue-600" />
+            NCA Template Fields
+          </h3>
+          <p className="text-xs text-slate-500 mb-3">All fields from the NCA Saudi cybersecurity risk register template. Owner and asset linking are managed via the platform pickers in the other tabs.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+            {ncaFields.map(([k, v]) => (
+              <div key={k}>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-0.5">{k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</p>
+                <p className="text-sm text-slate-800 whitespace-pre-wrap break-words">{String(v)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
       <div className="space-y-2">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
           <ClipboardCheck className="h-4 w-4 text-primary-400" />
@@ -722,6 +748,7 @@ function DetailsTab({ risk, formatDate }: { risk: RiskDetailData; formatDate: (d
           Risk Appetite
         </h3>
         <p className="text-sm text-slate-700">{risk.risk_appetite || 'Not defined'}</p>
+      </div>
       </div>
     </div>
   );

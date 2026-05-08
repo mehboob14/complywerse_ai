@@ -105,6 +105,8 @@ def _build_vulnerability_response(v: Vulnerability) -> VulnerabilityResponse:
         assignee_name=v.assignee.display_name if v.assignee else None,
         verifier_name=v.verifier.display_name if v.verifier else None,
         linked_assets=linked_assets,
+        template_type=getattr(v, "template_type", None),
+        template_fields=getattr(v, "template_fields", None) or None,
     )
 
 
@@ -124,6 +126,10 @@ def list_vulnerabilities(
     cve_id: Optional[str] = None,
     is_exception: Optional[bool] = None,
     is_overdue: Optional[bool] = None,
+    # Filter by template source. Used by the NCA register to surface only the
+    # vulnerabilities ingested from the NCA template (template_type="NCA Template").
+    # Special sentinel "_general" returns vulns with template_type IS NULL.
+    template_type: Optional[str] = None,
     # New: closed/mitigated vulnerabilities are hidden by default to keep the
     # operational register focused on what still needs work. Two toggles:
     #   include_closed=true → include closed/mitigated alongside open ones
@@ -169,6 +175,11 @@ def list_vulnerabilities(
         query = query.filter(Vulnerability.assigned_to == assigned_to)
     if cve_id:
         query = query.filter(Vulnerability.cve_id.ilike(f"%{cve_id}%"))
+    if template_type:
+        if template_type == "_general":
+            query = query.filter(Vulnerability.template_type.is_(None))
+        else:
+            query = query.filter(Vulnerability.template_type == template_type)
     if is_exception is not None:
         query = query.filter(Vulnerability.is_exception == is_exception)
     if is_overdue:
@@ -273,10 +284,41 @@ async def bulk_upload_vulnerabilities(
         else:
             import openpyxl
             wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
-            ws = wb.active
-            headers = [str(c.value).strip() if c.value is not None else "" for c in next(ws.iter_rows(min_row=1, max_row=1))]
-            for row in ws.iter_rows(min_row=2, values_only=True):
-                rows.append({headers[i]: (str(v).strip() if v is not None else "") for i, v in enumerate(row)})
+
+            # NCA-style workbooks ship with a Cover Page first; pick the sheet
+            # whose name suggests it is the data register, fall back to active.
+            preferred = None
+            for s in wb.sheetnames:
+                sl = s.lower()
+                if ("vulnerability" in sl or "register" in sl) and "legend" not in sl and "cover" not in sl:
+                    preferred = s
+                    break
+            ws = wb[preferred] if preferred else wb.active
+
+            # Scan first 20 rows for the actual header row — NCA template puts
+            # headers at row 11, generic CSV-style sheets at row 1.
+            all_rows = list(ws.iter_rows(min_row=1, max_row=20, values_only=True))
+            header_row_idx = 0
+            header_keywords = ("title", "vulnerability id", "cve")
+            for r_idx, raw_row in enumerate(all_rows):
+                joined = " ".join(str(c).lower() for c in raw_row if c is not None)
+                if any(k in joined for k in header_keywords):
+                    header_row_idx = r_idx
+                    break
+            headers = [str(c).strip() if c is not None else "" for c in all_rows[header_row_idx]]
+
+            # Iterate the remaining rows after the header
+            for raw_row in ws.iter_rows(min_row=header_row_idx + 2, values_only=True):
+                row_dict: dict = {}
+                for i, v in enumerate(raw_row):
+                    if i >= len(headers):
+                        continue
+                    key = headers[i]
+                    if not key:
+                        continue
+                    row_dict[key] = (str(v).strip() if v is not None else "")
+                if row_dict:
+                    rows.append(row_dict)
             wb.close()
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Could not parse file: {str(e)}. Ensure it matches the template format.")
@@ -288,35 +330,56 @@ async def bulk_upload_vulnerabilities(
     VALID_STATUSES = {"open", "in_progress", "remediated", "verified", "closed", "accepted", "false_positive"}
 
     created = 0
-    skipped = 0
+    skipped = 0  # rows with no usable title (usually trailing blank spreadsheet rows)
     errors: list[str] = []
+
+    # Case-insensitive, whitespace-tolerant column lookup so templates with
+    # `Title` / `TITLE` / ` title ` headers all work. Tolerates extra template
+    # columns by matching the first key whose normalized form starts with the
+    # requested name.
+    def _lookup(row: dict, *aliases: str):
+        if not row:
+            return None
+        norm_keys = {k: str(k).lower().strip() for k in row.keys()}
+        for alias in aliases:
+            target = alias.lower().strip()
+            for orig_key, norm in norm_keys.items():
+                if norm == target or norm.startswith(target):
+                    val = row.get(orig_key)
+                    if val is not None and str(val).strip():
+                        return str(val).strip()
+        return None
 
     # Calculate base count once so each row in this batch gets a unique ID
     existing_count = db.query(Vulnerability).filter(Vulnerability.tenant_id == tenant_id).count()
     id_counter = existing_count
 
     for idx, row in enumerate(rows, start=2):
-        title = (row.get("title") or "").strip()
+        title = _lookup(row, "title", "vulnerability title", "name", "summary") or ""
         if not title:
             skipped += 1
             continue
 
-        severity = (row.get("severity") or "medium").strip().lower()
+        severity = (_lookup(row, "severity", "risk severity", "risk level") or "medium").lower()
         if severity not in VALID_SEVERITIES:
             errors.append(f"Row {idx}: invalid severity '{severity}' — using 'medium'")
             severity = "medium"
 
-        vul_status = (row.get("status") or "open").strip().lower()
+        vul_status = (_lookup(row, "status", "remediation status") or "open").lower().replace(" ", "_")
         if vul_status not in VALID_STATUSES:
             vul_status = "open"
 
-        cvss_raw = row.get("cvss_score") or ""
+        cvss_raw = _lookup(row, "cvss_score", "cve score", "cvss") or ""
+        # Templates may store the score as 'CVSS:3.0 7.5' — extract the trailing
+        # decimal so the value still comes through.
+        import re as _re
+        score_matches = _re.findall(r"\d+(?:\.\d+)?", cvss_raw)
         try:
-            cvss_score = float(cvss_raw) if cvss_raw else None
+            cvss_score = float(score_matches[-1]) if score_matches else None
         except ValueError:
             cvss_score = None
 
-        due_date_raw = (row.get("due_date") or "").strip()
+        due_date_raw = _lookup(row, "due_date", "due date") or ""
         due_date = None
         if due_date_raw:
             for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"):
@@ -343,13 +406,13 @@ async def bulk_upload_vulnerabilities(
             tenant_id=tenant_id,
             vuln_id=vuln_id_str,
             title=title,
-            description=(row.get("description") or "").strip() or None,
+            description=_lookup(row, "description", "vulnerability description"),
             severity=severity,
             status=vul_status,
             cvss_score=cvss_score,
-            cve_id=(row.get("cve_id") or "").strip() or None,
-            affected_component=(row.get("affected_asset") or row.get("affected_component") or "").strip() or None,
-            recommendation=(row.get("remediation") or row.get("recommendation") or "").strip() or None,
+            cve_id=_lookup(row, "cve_id", "cve number", "cve"),
+            affected_component=_lookup(row, "affected_asset", "affected_component", "affected technology", "affected_assets", "affected assets"),
+            recommendation=_lookup(row, "remediation", "recommendation", "threat analysis"),
             discovered_at=datetime.utcnow(),
             due_date=due_date,
         )

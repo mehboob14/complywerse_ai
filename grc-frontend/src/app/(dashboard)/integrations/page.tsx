@@ -16,6 +16,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import Link from 'next/link';
+import { IdentityProvidersCard } from '@/components/integrations/IdentityProvidersCard';
 import {
   BarChart,
   Bar,
@@ -151,6 +152,8 @@ export default function IntegrationsDashboardPage() {
           </button>
         </div>
       </div>
+
+      <IdentityProvidersCard />
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         <StatCard label="Total Vulns" value={ov?.total_vulnerabilities || 0} icon={Shield} color="blue" />

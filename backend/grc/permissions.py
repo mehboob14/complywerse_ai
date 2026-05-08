@@ -344,6 +344,11 @@ PERMISSION_MATRIX = [
                 "name": "settings",
                 "display_name": "Settings",
                 "actions": ["view", "edit"]
+            },
+            {
+                "name": "integrations_sso",
+                "display_name": "Identity Providers (SSO)",
+                "actions": ["view", "manage"]
             }
         ]
     },

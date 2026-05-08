@@ -91,6 +91,34 @@ _COLUMN_ADDS = [
      "ix_grc_critical_tasks_linked_framework_id"),
     ("grc_critical_tasks", "linked_requirement_id", "INTEGER",
      "ix_grc_critical_tasks_linked_requirement_id"),
+    # DCC assessment item columns
+    ("grc_compliance_assessment_document_items", "control_source", "VARCHAR(50)", None),
+    ("grc_compliance_assessment_document_items", "control_type", "VARCHAR(20)", None),
+    ("grc_compliance_assessment_document_items", "subdomain_name", "TEXT", None),
+    # NCA risk register: platform-aware ownership + asset linking
+    ("grc_nca_risk_entries", "risk_owner_user_id", "INTEGER", None),
+    ("grc_nca_risk_entries", "treatment_owner_user_id", "INTEGER", None),
+    ("grc_nca_risk_entries", "linked_asset_ids", "JSON DEFAULT '[]'::json", None),
+    ("grc_nca_risk_entries", "linked_control_ids", "JSON DEFAULT '[]'::json", None),
+    ("grc_nca_risk_entries", "mitigation_actions", "JSON DEFAULT '[]'::json", None),
+    ("grc_nca_risk_entries", "lifecycle_status", "VARCHAR(30) DEFAULT 'open'", None),
+    ("grc_nca_risk_entries", "bridged_risk_id", "INTEGER",
+     "ix_grc_nca_risk_entries_bridged_risk_id"),
+    # NCA vuln register: parity feature columns
+    ("grc_nca_vuln_entries", "owner_user_id", "INTEGER", None),
+    ("grc_nca_vuln_entries", "linked_asset_ids", "JSON DEFAULT '[]'::json", None),
+    ("grc_nca_vuln_entries", "linked_control_ids", "JSON DEFAULT '[]'::json", None),
+    ("grc_nca_vuln_entries", "mitigation_actions", "JSON DEFAULT '[]'::json", None),
+    ("grc_nca_vuln_entries", "bridged_vulnerability_id", "INTEGER",
+     "ix_grc_nca_vuln_entries_bridged_vulnerability_id"),
+    # Tag general vulns with their template source (e.g. "NCA Template")
+    ("grc_vulnerabilities", "template_type", "VARCHAR(50)",
+     "ix_grc_vulnerabilities_template_type"),
+    # Verbatim NCA template fields preserved on bridged Vulnerability rows so
+    # the general detail page can render the full NCA register data.
+    ("grc_vulnerabilities", "template_fields", "JSON DEFAULT '{}'::json", None),
+    # Same for Risk — verbatim NCA template fields preserved on bridged Risk rows.
+    ("grc_risks", "template_fields", "JSON DEFAULT '{}'::json", None),
 ]
 
 
@@ -102,6 +130,15 @@ def _ensure_for_engine(engine: Engine) -> None:
     with _ensured_lock:
         if key in _ensured_engines:
             return
+
+        # Create any tables that are in the ORM models but missing from the DB.
+        # This handles new tables introduced after a tenant DB was provisioned.
+        try:
+            from ...models import Base
+            Base.metadata.create_all(engine, checkfirst=True)
+        except Exception:
+            logger.exception("Failed to create missing tables on engine %s", getattr(engine.url, "database", "?"))
+
         all_ok = True
         for table, column, ddl_type, index_name in _COLUMN_ADDS:
             ok = _ensure_column(engine, table=table, column=column, ddl_type=ddl_type)

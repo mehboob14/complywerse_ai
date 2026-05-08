@@ -54,6 +54,7 @@ import {
   RotateCcw,
   GitCompare,
 } from 'lucide-react';
+import NcaCompareModal from '@/components/governance/NcaCompareModal';
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   draft: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Draft' },
@@ -196,6 +197,7 @@ export default function PolicyDetailPage() {
 
   const [activeTab, setActiveTab] = useState<TabKey>('viewer');
   const [showGapModal, setShowGapModal] = useState(false);
+  const [showNcaCompareModal, setShowNcaCompareModal] = useState(false);
   const [selectedFrameworkIds, setSelectedFrameworkIds] = useState<number[]>([]);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [editingRow, setEditingRow] = useState<number | null>(null);
@@ -227,6 +229,24 @@ export default function PolicyDetailPage() {
       return response.data as any;
     },
     enabled: !!id,
+  });
+
+  // All platform documents for the compare-modal "Other Document" picker.
+  // Fetched lazily — only when the gap-analysis tab is active.
+  const { data: allDocumentsForCompare = [] } = useQuery({
+    queryKey: ['governance-documents-for-compare'],
+    queryFn: async () => {
+      const response = await governanceApi.getDocuments({
+        skip: 0,
+        limit: 1000,
+        sort_by: 'title',
+        sort_order: 'asc',
+      } as any);
+      const payload = response.data as any;
+      return (payload?.items || []) as Array<{ id: number; title: string; doc_type: string }>;
+    },
+    enabled: !!id && activeTab === 'gap-analysis',
+    staleTime: 60 * 1000,
   });
 
   const { data: htmlContent, isLoading: htmlLoading } = useQuery({
@@ -862,6 +882,28 @@ export default function PolicyDetailPage() {
 
       {activeTab === 'gap-analysis' && (
         <div className="space-y-4">
+          {/* Side-by-Side Document Compare Panel */}
+          <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="rounded-lg bg-blue-100 p-2 flex-shrink-0">
+                  <GitCompare className="h-5 w-5 text-blue-700" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-slate-900">Compare with Other Document</h3>
+                  <p className="text-xs text-slate-500">Compare this document against another platform document or a reference template, with AI gap analysis</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowNcaCompareModal(true)}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+              >
+                <GitCompare className="h-3.5 w-3.5" />
+                Compare with Other Document
+              </button>
+            </div>
+          </div>
+
           {/* Run Analysis Panel — neutral slate, compact */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1210,6 +1252,17 @@ export default function PolicyDetailPage() {
           </div>
         </div>
       )}
+
+      <NcaCompareModal
+        isOpen={showNcaCompareModal}
+        onClose={() => setShowNcaCompareModal(false)}
+        documents={allDocumentsForCompare.map(d => ({
+          id: d.id,
+          title: d.title,
+          doc_type: d.doc_type,
+        }))}
+        initialDocumentId={document?.id ?? null}
+      />
     </div>
   );
 }

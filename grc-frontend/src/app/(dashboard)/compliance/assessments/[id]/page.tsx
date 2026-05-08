@@ -8,6 +8,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import apiClient, { tenantApi } from '@/lib/api';
 import XlsxMaturityViewer from './XlsxMaturityViewer';
+import ArtifactsTab from '@/components/compliance/ArtifactsTab';
+import DCCAssessmentTab from '@/components/compliance/DCCAssessmentTab';
+import AuditPlanTab from '@/components/compliance/AuditPlanTab';
+import NcaTab from '@/components/compliance/NcaTab';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft,
@@ -35,6 +39,9 @@ import {
   RotateCcw,
   Send,
   FileUp,
+  Package,
+  Shield,
+  ClipboardList,
 } from 'lucide-react';
 
 interface EvidenceUpload {
@@ -246,6 +253,7 @@ export default function AssessmentDetailPage() {
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('compliance:assessments:edit');
 
+  const [activeTab, setActiveTab] = useState<'assessment' | 'nca' | 'artifacts' | 'doc_assessment' | 'audit_plan'>('assessment');
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
   const [expandedAuditItems, setExpandedAuditItems] = useState<Set<number>>(new Set());
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
@@ -920,7 +928,9 @@ export default function AssessmentDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+
+      {activeTab === 'assessment' && (
+      <><div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
             <div className="mb-2">
@@ -1770,6 +1780,7 @@ export default function AssessmentDetailPage() {
           )}
         </div>
       </div>
+      </>)}
     </div>
   );
 }

@@ -328,4 +328,113 @@ def ai_compare_frameworks(self, tenant_slug: str, run_id: int, db: Session = Non
         raise
 
 
-__all__ = ["ai_compare_frameworks"]
+# ─── AI Auto-grouping task ──────────────────────────────────────────────────
+
+
+@celery_app.task(
+    base=TenantTask,
+    bind=True,
+    name="grc.tasks.control_library.ai_auto_group",
+    max_retries=1,
+)
+def ai_auto_group(
+    self,
+    tenant_slug: str,
+    job_id: str,
+    framework_ids: List[int] = None,
+    user_id: int = None,
+    db: Session = None,
+) -> dict:
+    """Background AI auto-grouping for the control library.
+
+    Pulls all controls (filtered by framework_ids when provided), batches them
+    through OpenAI, and persists the resulting `CommonControlGroup` rows.
+    Status is published to job_status under namespace ``control_auto_group``
+    so the UI can poll without blocking on the AI call.
+    """
+    namespace = "control_auto_group"
+    logger.info(
+        "ai_auto_group START tenant=%s job=%s framework_ids=%s",
+        tenant_slug, job_id, framework_ids,
+    )
+
+    set_status(tenant_slug, namespace, job_id, {
+        "status": "running",
+        "phase": "loading_controls",
+        "message": "Loading controls from selected frameworks…",
+    })
+
+    try:
+        with tenant_lock(
+            tenant_slug, f"control_auto_group:{job_id}",
+            ttl_seconds=1800, owner=self.request.id,
+        ):
+            from ..modules.control_library.routers.groups import (
+                _fetch_controls_for_grouping,
+                ai_auto_group_controls,
+                persist_ai_groups,
+            )
+
+            # Resolve tenant id from slug
+            from ..models import Tenant
+            tenant = db.query(Tenant).filter(Tenant.slug == tenant_slug).first()
+            if not tenant:
+                raise RuntimeError(f"Tenant slug '{tenant_slug}' not found")
+
+            controls = _fetch_controls_for_grouping(db, tenant.id, framework_ids)
+            if len(controls) < 2:
+                set_status(tenant_slug, namespace, job_id, {
+                    "status": "failed",
+                    "error": "Not enough controls to perform auto-grouping",
+                })
+                return {"status": "failed", "reason": "no_controls"}
+
+            set_status(tenant_slug, namespace, job_id, {
+                "status": "running",
+                "phase": "ai_grouping",
+                "message": f"Asking AI to group {len(controls)} controls…",
+                "control_count": len(controls),
+            })
+
+            ai_groups = ai_auto_group_controls(controls)
+
+            set_status(tenant_slug, namespace, job_id, {
+                "status": "running",
+                "phase": "persisting",
+                "message": f"Saving {len(ai_groups)} groups to database…",
+                "control_count": len(controls),
+                "group_count": len(ai_groups),
+            })
+
+            summary = persist_ai_groups(db, tenant.id, user_id, ai_groups)
+
+            set_status(tenant_slug, namespace, job_id, {
+                "status": "completed",
+                "phase": "done",
+                "message": (
+                    f"Created {summary['created_count']} group(s), "
+                    f"merged {summary['merged_count']}, "
+                    f"linked {summary['mapping_count']} control(s)."
+                ),
+                "control_count": len(controls),
+                "group_count": len(ai_groups),
+                "summary": summary,
+            })
+            logger.info("ai_auto_group DONE tenant=%s job=%s summary=%s", tenant_slug, job_id, summary)
+            return {"status": "completed", "job_id": job_id, "summary": summary}
+    except LockNotAcquired:
+        set_status(tenant_slug, namespace, job_id, {
+            "status": "skipped",
+            "message": "Another grouping job is already running for this tenant.",
+        })
+        return {"status": "skipped", "job_id": job_id}
+    except Exception as exc:
+        logger.exception("ai_auto_group failed: %s", exc)
+        set_status(tenant_slug, namespace, job_id, {
+            "status": "failed",
+            "error": str(exc)[:500],
+        })
+        raise
+
+
+__all__ = ["ai_compare_frameworks", "ai_auto_group"]

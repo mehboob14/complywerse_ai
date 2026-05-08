@@ -15,6 +15,15 @@ from .compliance_assessments_router import router as compliance_assessments_rout
 from .critical_tasks_router import router as critical_tasks_router
 from .is_projects_router import router as is_projects_router
 from .tasks_router import router as tasks_router
+from .sso_router import router as sso_router, entra_router as entra_router
+from .artifacts_router import router as artifacts_router
+from .dcc_router import router as dcc_router
+from .audit_plan_router import router as audit_plan_router
+from .nca_risk_router import router as nca_risk_router
+from .nca_vuln_router import router as nca_vuln_router
+from .nca_container_router import router as nca_container_router
+from .nca_templates_router import router as nca_templates_router
+from .nca_kpi_router import router as nca_kpi_router
 
 __all__ = [
     "auth_router",
@@ -34,4 +43,7 @@ __all__ = [
     "critical_tasks_router",
     "is_projects_router",
     "tasks_router",
+    "sso_router",
+    "entra_router",
+    "artifacts_router",
 ]

@@ -53,8 +53,10 @@ import {
   Sparkles,
   Trash2,
   CheckCircle,
-  Unlink
+  Unlink,
+  Package,
 } from 'lucide-react';
+import ArtifactsTab from '@/components/compliance/ArtifactsTab';
 
 const EVIDENCE_TYPE_MAP: Record<string, { label: string; color: string }> = {
   policy: { label: 'Policy', color: 'bg-blue-50 text-blue-700' },
@@ -795,6 +797,7 @@ export default function CertificationJourneyPage() {
     { id: 'controls', label: 'Requirements' },
     { id: 'assigned-to-me' as TabType, label: 'Assigned to Me' },
     { id: 'applicability', label: 'Applicability' },
+    { id: 'artifacts' as TabType, label: 'Artifacts' },
   ];
 
   useEffect(() => {
@@ -2791,6 +2794,17 @@ export default function CertificationJourneyPage() {
         return renderCDEScopeTab();
       case 'applicability':
         return renderApplicabilityTab();
+      case 'artifacts':
+        return (
+          <ArtifactsTab
+            assessmentType={(journey as any)?.framework_name || journey?.name || ''}
+            tenantUsers={(assignmentTenantUsers || []).map((u: any) => ({
+              id: u.id,
+              label: u.display_name || u.email || String(u.id),
+              email: u.email,
+            }))}
+          />
+        );
       case 'training':
         return renderPlaceholderTab(
           'Training & Awareness',

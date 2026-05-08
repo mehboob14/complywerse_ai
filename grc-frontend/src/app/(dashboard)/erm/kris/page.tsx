@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { ermApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import NcaKpiSection from '@/components/risks/NcaKpiSection';
 import {
   RiskKRI,
   RiskKRICreate,
@@ -34,6 +35,9 @@ const KRI_STATUS_COLORS = {
 };
 
 export default function KRIsPage() {
+  // Register-type toggle: 'standard' shows the existing platform KRIs;
+  // 'nca' shows the NCA Saudi KPI Report Template register.
+  const [registerType, setRegisterType] = useState<'standard' | 'nca'>('standard');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showMeasureModal, setShowMeasureModal] = useState<RiskKRI | null>(null);
   const [editingKRI, setEditingKRI] = useState<RiskKRI | null>(null);
@@ -109,6 +113,25 @@ export default function KRIsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      {/* Register-type toggle: pick standard platform KRIs vs NCA Saudi KPI Report Template */}
+      <div className="flex items-center justify-between flex-wrap gap-3 -mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-600">Register Type:</span>
+          <select
+            value={registerType}
+            onChange={(e) => setRegisterType(e.target.value as 'standard' | 'nca')}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="standard">Standard KRIs</option>
+            <option value="nca">NCA KPI Report Template</option>
+          </select>
+        </div>
+      </div>
+
+      {registerType === 'nca' ? (
+        <NcaKpiSection />
+      ) : (
+      <>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div>
@@ -301,6 +324,8 @@ export default function KRIsPage() {
             )}
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
 from sqlalchemy import (
-    create_engine, Column, Integer, String, Text, ForeignKey, Boolean, 
-    Float, DateTime, JSON, Index, Table, UniqueConstraint, inspect, text
+    create_engine, Column, Integer, String, Text, ForeignKey, Boolean,
+    Float, DateTime, Date, JSON, Index, Table, UniqueConstraint, LargeBinary, inspect, text
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -166,6 +166,10 @@ class UserRole(Base):
     business_unit_id = Column(Integer, ForeignKey("grc_business_units.id"), nullable=True, index=True)
     assigned_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     assigned_at = Column(DateTime, default=datetime.utcnow)
+    # Origin of the assignment. NULL means manually assigned (legacy + admin UI).
+    # "sso" means it was applied by Entra group→role mapping; only those rows are
+    # reconciled on each SSO sign-in so manual assignments aren't clobbered.
+    source = Column(String(16), nullable=True, default=None)
 
     user = relationship("GRCUser", back_populates="user_roles", foreign_keys=[user_id])
     role = relationship("Role", back_populates="user_roles")
@@ -184,11 +188,13 @@ class UserRole(Base):
 
 class GRCUser(Base):
     __tablename__ = "grc_users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(100), unique=True, nullable=False, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
+    # Nullable to accommodate federated (SSO) users who never authenticate with a password.
+    # Local-password users still get a bcrypt hash here on creation/update — existing flows unchanged.
+    password_hash = Column(String(255), nullable=True)
     display_name = Column(String(255), nullable=True)
     department = Column(String(255), nullable=True)
     group = Column(String(255), nullable=True)
@@ -197,6 +203,13 @@ class GRCUser(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     last_login = Column(DateTime, nullable=True)
+    # Federated identity (e.g. Microsoft Entra ID). NULL for local-password users.
+    external_provider = Column(String(32), nullable=True, index=True)
+    external_id = Column(String(128), nullable=True, index=True)
+
+    __table_args__ = (
+        Index("ix_grc_users_external", "external_provider", "external_id"),
+    )
     
     tenant_users = relationship("TenantUser", back_populates="user", cascade="all, delete-orphan")
     user_roles = relationship(
@@ -220,6 +233,91 @@ class GRCUser(Base):
     asset_assessments = relationship("AssetRiskAssessment", back_populates="assessor")
     owned_programs = relationship("ComplianceProgram", back_populates="owner")
     compliance_assessments = relationship("GRCComplianceAssessment", back_populates="assessor")
+
+
+# =============================================================================
+# 3b. Identity Provider Integration (Microsoft Entra ID, etc.)
+# =============================================================================
+
+class IdentityProviderConfig(Base):
+    """Per-(GRC-tenant) SSO/identity-provider connection.
+
+    SaaS multi-tenant pattern: a single Compliverse-owned Azure app
+    registration (env vars ENTRA_CLIENT_ID / ENTRA_CLIENT_SECRET) is consented
+    to by each customer org. The tenant connection stores only the customer's
+    Microsoft directory ID (`entra_directory_id`, the `tid` claim) — that is
+    what binds a GRC tenant (e.g. ubl) to a specific Microsoft Entra
+    organization.
+
+    The legacy per-tenant Azure-app columns (azure_tenant_id, client_id,
+    client_secret_encrypted, redirect_uri) are kept as nullable for backwards
+    compatibility with any rows written under the previous design; the new
+    consent-based flow does not populate them.
+    """
+    __tablename__ = "grc_identity_provider_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    provider = Column(String(32), nullable=False)
+    is_enabled = Column(Boolean, default=False, nullable=False)
+
+    # SaaS multi-tenant: the customer's Microsoft directory `tid`
+    entra_directory_id = Column(String(64), nullable=True, index=True)
+    connected_at = Column(DateTime, nullable=True)
+    connected_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+
+    # LEGACY (per-tenant Azure-app pattern). New rows leave these NULL.
+    azure_tenant_id = Column(String(64), nullable=True)
+    client_id = Column(String(64), nullable=True)
+    client_secret_encrypted = Column(LargeBinary, nullable=True)
+    redirect_uri = Column(String(500), nullable=True)
+
+    # Provisioning behaviour
+    auto_provision_on_signin = Column(Boolean, default=True, nullable=False)
+    allowed_email_domains = Column(JSON, default=list)
+
+    # Connectivity status (populated by /sso/config/test)
+    last_tested_at = Column(DateTime, nullable=True)
+    last_test_status = Column(String(32), nullable=True)
+    last_test_message = Column(Text, nullable=True)
+
+    created_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "provider", name="uq_idp_tenant_provider"),
+    )
+
+
+class IdentityGroupRoleMapping(Base):
+    """Map an Entra security group to a GRC role.
+
+    Applied during SSO sign-in and during admin-triggered user provisioning.
+    Reconciliation only touches UserRole rows whose `source == 'sso'`, so
+    manually-assigned roles (source IS NULL) are never clobbered.
+    """
+    __tablename__ = "grc_identity_group_role_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    idp_config_id = Column(
+        Integer,
+        ForeignKey("grc_identity_provider_configs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    entra_group_id = Column(String(64), nullable=False)
+    entra_group_name = Column(String(255), nullable=True)
+    role_id = Column(Integer, ForeignKey("grc_roles.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "idp_config_id", "entra_group_id", "role_id",
+            name="uq_idp_group_role",
+        ),
+    )
 
 
 # =============================================================================
@@ -997,6 +1095,11 @@ class Risk(Base):
     risk_sub_category = Column(String(100), nullable=True)
     register_type = Column(String(100), nullable=True)  # PCI-DSS, ISO 27001, SOX, Internal, NIST, GDPR, etc.
     ubl_fields = Column(JSON, nullable=True)  # UBL template-specific structured fields
+    # NCA template-specific fields preserved verbatim on bridged risks
+    # (risk_cause, risk_analysis, threat, risk_area, treatment_*, residual_*,
+    # following_steps, last_evaluation_date, etc.). Rendered as a read-only
+    # panel on the general risk detail page so no NCA data is lost.
+    template_fields = Column(JSON, nullable=True)
     owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     business_owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     affected_department_ids = Column(JSON, default=[])
@@ -3864,10 +3967,19 @@ class Vulnerability(Base):
     
     workflow_template_id = Column(Integer, ForeignKey("grc_vuln_workflow_templates.id"), nullable=True, index=True)
     current_state_id = Column(Integer, ForeignKey("grc_vuln_workflow_states.id"), nullable=True, index=True)
-    
+
+    # Source / template tag — e.g. "NCA Template" for vulns ingested via the
+    # NCA cybersecurity vulnerability template. NULL means a regular vuln.
+    template_type = Column(String(50), nullable=True, index=True)
+    # Verbatim NCA template fields not represented elsewhere on this model
+    # (vendor_link, threat_severity, risk_likelihood, risk_severity,
+    # first_observation_date, resolution_date, comments, etc.). Surfaced as a
+    # read-only panel on the detail page so no NCA data is lost.
+    template_fields = Column(JSON, default=dict, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     report = relationship("VulnerabilityReport", back_populates="vulnerabilities")
     assignee = relationship("GRCUser", foreign_keys=[assigned_to])
     verifier = relationship("GRCUser", foreign_keys=[verified_by])
@@ -5294,6 +5406,10 @@ class ComplianceAssessmentDocumentItem(Base):
     remarks = Column(Text, nullable=True)
     ai_evidence_recommendation = Column(Text, nullable=True)
     ai_recommendation_generated_at = Column(DateTime, nullable=True)
+    # DCC-specific fields
+    control_source = Column(String(50), nullable=True)   # 'dcc' for DCC-1:2022 controls
+    control_type = Column(String(20), nullable=True)     # 'basic' or 'sub'
+    subdomain_name = Column(Text, nullable=True)         # DCC subdomain label
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -6807,6 +6923,276 @@ class NotificationPreference(Base):
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "user_id", name="uq_notification_pref_tenant_user"),
+    )
+
+
+# =============================================================================
+# Artifact Catalog & Tenant Artifacts
+# =============================================================================
+
+class ArtifactCatalogItem(Base):
+    """Master catalog of artifacts per framework, seeded from Excel catalog."""
+    __tablename__ = "grc_artifact_catalog_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    framework_key = Column(String(100), nullable=False, index=True)   # e.g. iso_27001_2022
+    framework_name = Column(String(255), nullable=False)
+    artifact_id = Column(String(50), nullable=False)                  # e.g. ISO27-001
+    stage = Column(String(100), nullable=False)                       # Stage 1: ...
+    stage_number = Column(Integer, nullable=True)
+    name = Column(String(500), nullable=False)
+    artifact_type = Column(String(100), nullable=False)               # Policy, Procedure, Register ...
+    control_ref = Column(String(255), nullable=True)
+    mandatory = Column(Boolean, default=False)
+    description = Column(Text, nullable=True)
+    format = Column(String(100), nullable=True)
+    owner = Column(String(255), nullable=True)
+    is_platform_native = Column(Boolean, default=False)               # True = link to real platform data
+    platform_data_type = Column(String(100), nullable=True)          # risk_register, asset_inventory
+
+    __table_args__ = (
+        UniqueConstraint("framework_key", "artifact_id", name="uq_artifact_catalog_fw_id"),
+        Index("ix_artifact_catalog_framework_key", "framework_key"),
+    )
+
+
+class AuditPlanEntry(Base):
+    """Cybersecurity audit plan entry linked to a compliance assessment."""
+    __tablename__ = "grc_audit_plan_entries"
+
+    id               = Column(Integer, primary_key=True, index=True)
+    assessment_id    = Column(Integer, ForeignKey("grc_compliance_assessment_documents.id"), nullable=False, index=True)
+    tenant_id        = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+
+    # Core audit plan fields (matching the NCA template columns)
+    entry_type       = Column(String(20),  default="Audit")    # Audit | Review
+    audit_id         = Column(String(30),  nullable=True)      # auto-generated: A001, R001 …
+    audit_name       = Column(String(500), nullable=True)
+    team_responsible = Column(String(200), nullable=True)      # Cybersecurity Org / Internal Audit / Third Party
+    lead_auditor     = Column(String(255), nullable=True)
+    audit_type       = Column(String(200), nullable=True)      # Design effectiveness / Operational / Both
+    scope            = Column(Text,        nullable=True)
+    methods          = Column(Text,        nullable=True)
+    criteria         = Column(Text,        nullable=True)
+    sampling         = Column(Text,        nullable=True)
+    evidence_needed  = Column(Text,        nullable=True)
+    duration         = Column(String(200), nullable=True)
+    schedule         = Column(Text,        nullable=True)
+    audit_start      = Column(Date,        nullable=True)
+    audit_end        = Column(Date,        nullable=True)
+    cost             = Column(String(100), nullable=True)
+    comment          = Column(Text,        nullable=True)
+
+    # Additional platform fields
+    status           = Column(String(50),  default="planned")  # planned | in_progress | completed | cancelled
+    priority         = Column(String(20),  nullable=True)      # critical | high | medium | low
+    ai_recommendation              = Column(Text,     nullable=True)
+    ai_recommendation_generated_at = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    assessment = relationship("ComplianceAssessmentDocument")
+    tenant     = relationship("Tenant")
+
+    __table_args__ = (
+        Index("ix_grc_audit_plan_entries_assessment", "assessment_id"),
+        Index("ix_grc_audit_plan_entries_tenant",     "tenant_id"),
+    )
+
+
+class NcaRiskEntry(Base):
+    """NCA Cybersecurity Risk Management register entry (NCA template v0.9)."""
+    __tablename__ = "grc_nca_risk_entries"
+
+    id                             = Column(Integer, primary_key=True, index=True)
+    tenant_id                      = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    risk_identifier                = Column(String(20),  nullable=True)   # RISK-001
+    risk_area                      = Column(String(100), nullable=True)   # IT assets / Business process / Personnel
+    risk_owner                     = Column(String(255), nullable=True)
+    date_identified                = Column(Date,        nullable=True)
+    description                    = Column(Text,        nullable=True)
+    risk_cause                     = Column(Text,        nullable=True)
+    threat                         = Column(String(255), nullable=True)
+    risk_analysis                  = Column(Text,        nullable=True)
+    date_analysis                  = Column(Date,        nullable=True)
+    inherent_likelihood            = Column(Integer,     nullable=True)   # 1-5
+    inherent_impact                = Column(Integer,     nullable=True)   # 1-5
+    inherent_rating_override       = Column(String(20),  nullable=True)   # manual override
+    treatment_type                 = Column(String(50),  nullable=True)   # Mitigation / Avoidance / Transfer / Acceptance
+    treatment_description          = Column(Text,        nullable=True)
+    treatment_owner                = Column(String(255), nullable=True)
+    treatment_deadline             = Column(Date,        nullable=True)
+    residual_description           = Column(Text,        nullable=True)
+    residual_likelihood            = Column(Integer,     nullable=True)   # 1-5
+    residual_impact                = Column(Integer,     nullable=True)   # 1-5
+    following_steps                = Column(Text,        nullable=True)
+    last_evaluation_date           = Column(Date,        nullable=True)
+    comment                        = Column(Text,        nullable=True)
+    risk_owner_user_id             = Column(Integer,     ForeignKey("grc_users.id"), nullable=True)
+    treatment_owner_user_id        = Column(Integer,     ForeignKey("grc_users.id"), nullable=True)
+    # Bridge to the general Risk record (auto-created so the NCA entry inherits the
+    # full ERM detail page: tabs, mitigations, asset/control/dept/workflow links, etc.)
+    bridged_risk_id                = Column(Integer,     ForeignKey("grc_risks.id"), nullable=True, index=True)
+    linked_asset_ids               = Column(JSON,        default=list, nullable=True)
+    linked_control_ids             = Column(JSON,        default=list, nullable=True)
+    # mitigation_actions is a list of objects:
+    # [{"id": str, "title": str, "owner": str, "owner_user_id": int|None,
+    #   "due_date": "YYYY-MM-DD"|None, "status": str, "notes": str,
+    #   "created_at": iso, "updated_at": iso}]
+    mitigation_actions             = Column(JSON,        default=list, nullable=True)
+    lifecycle_status               = Column(String(30),  default="open", nullable=True)  # open / in_progress / mitigated / accepted / closed
+    ai_recommendation              = Column(Text,        nullable=True)
+    ai_recommendation_generated_at = Column(DateTime,    nullable=True)
+    created_at                     = Column(DateTime,    default=datetime.utcnow)
+    updated_at                     = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+
+
+class NcaVulnEntry(Base):
+    """NCA Vulnerability Register entry."""
+    __tablename__ = "grc_nca_vuln_entries"
+
+    id                             = Column(Integer, primary_key=True, index=True)
+    tenant_id                      = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    vuln_identifier                = Column(String(20),  nullable=True)   # VULN-001
+    title                          = Column(String(255), nullable=True)
+    description                    = Column(Text,        nullable=True)
+    vendor_link                    = Column(String(500), nullable=True)
+    cve_number                     = Column(String(50),  nullable=True)
+    cve_score                      = Column(Float,       nullable=True)   # 0-10
+    affected_technology            = Column(Text,        nullable=True)
+    affected_assets                = Column(Text,        nullable=True)
+    threat_analysis                = Column(Text,        nullable=True)
+    threat_severity                = Column(Integer,     nullable=True)   # 1-5
+    risk_likelihood                = Column(Integer,     nullable=True)   # 1-5
+    risk_severity                  = Column(Integer,     nullable=True)   # 1-5
+    owner                          = Column(String(255), nullable=True)
+    status                         = Column(String(30),  default="OPEN")  # OPEN / IN PROGRESS / ON HOLD / RESOLVED
+    first_observation_date         = Column(Date,        nullable=True)
+    due_date                       = Column(Date,        nullable=True)
+    resolution_date                = Column(Date,        nullable=True)
+    comments                       = Column(Text,        nullable=True)
+    owner_user_id                  = Column(Integer,     ForeignKey("grc_users.id"), nullable=True)
+    # Bridge to the general Vulnerability record (auto-created so the NCA entry
+    # inherits the full vuln-management detail page: tabs, mitigations, asset/
+    # control/dept/workflow/escalation/exception infrastructure).
+    bridged_vulnerability_id       = Column(Integer,     ForeignKey("grc_vulnerabilities.id"), nullable=True, index=True)
+    linked_asset_ids               = Column(JSON,        default=list, nullable=True)
+    linked_control_ids             = Column(JSON,        default=list, nullable=True)
+    mitigation_actions             = Column(JSON,        default=list, nullable=True)
+    ai_recommendation              = Column(Text,        nullable=True)
+    ai_recommendation_generated_at = Column(DateTime,    nullable=True)
+    created_at                     = Column(DateTime,    default=datetime.utcnow)
+    updated_at                     = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+
+
+class NcaKpiEntry(Base):
+    """NCA Cybersecurity Key Performance Indicator (KPI) Report Template entry.
+
+    Captures both the KPI definition (KPI sheet) and its annual measurements
+    (Measurement table sheet) in a single flat row so the user can upload the
+    NCA template Excel as-is and edit everything in one form.
+    """
+    __tablename__ = "grc_nca_kpi_entries"
+
+    id                             = Column(Integer, primary_key=True, index=True)
+    tenant_id                      = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+
+    # ── KPI definition (KPI sheet columns B-I in the NCA template) ──────────
+    kpi_identifier                 = Column(String(20),  nullable=True)   # auto: KPI-001
+    cybersecurity_domain           = Column(String(255), nullable=True)   # e.g. "Asset Management", "Network Security"
+    kpi_name                       = Column(String(500), nullable=True)   # column D — Key Performance Indicator
+    kpi_description                = Column(Text,        nullable=True)   # column E
+    kpi_definition                 = Column(Text,        nullable=True)   # column F — formula/measurement
+    kpi_type                       = Column(String(50),  nullable=True)   # Percentage / Number / etc.
+    frequency                      = Column(String(50),  nullable=True)   # Quarterly / Weekly / Annually / Monthly / By-weekly
+    data_source                    = Column(String(255), nullable=True)   # devices / databases / business apps / etc.
+
+    # ── Reporting period + measurements (Measurement table sheet columns F-R) ─
+    reporting_year                 = Column(Integer,     nullable=True)   # e.g. 2024
+    prior_year_q4_actual           = Column(Float,       nullable=True)   # Prior Year Q4 Actual baseline
+
+    q1_target                      = Column(Float,       nullable=True)
+    q1_actual                      = Column(Float,       nullable=True)
+    q1_notes                       = Column(Text,        nullable=True)
+
+    q2_target                      = Column(Float,       nullable=True)
+    q2_actual                      = Column(Float,       nullable=True)
+    q2_notes                       = Column(Text,        nullable=True)
+
+    q3_target                      = Column(Float,       nullable=True)
+    q3_actual                      = Column(Float,       nullable=True)
+    q3_notes                       = Column(Text,        nullable=True)
+
+    q4_target                      = Column(Float,       nullable=True)
+    q4_actual                      = Column(Float,       nullable=True)
+    q4_notes                       = Column(Text,        nullable=True)
+
+    # ── Platform integration (matches the pattern used by NcaVulnEntry / NcaRiskEntry) ─
+    owner_user_id                  = Column(Integer,     ForeignKey("grc_users.id"), nullable=True)
+    linked_risk_ids                = Column(JSON,        default=list, nullable=True)
+    linked_control_ids             = Column(JSON,        default=list, nullable=True)
+    ai_recommendation              = Column(Text,        nullable=True)
+    ai_recommendation_generated_at = Column(DateTime,    nullable=True)
+    created_at                     = Column(DateTime,    default=datetime.utcnow)
+    updated_at                     = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+
+
+class TenantArtifact(Base):
+    """Tenant-specific artifact instance created from or linked to a catalog item."""
+    __tablename__ = "grc_tenant_artifacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    catalog_item_id = Column(Integer, ForeignKey("grc_artifact_catalog_items.id"), nullable=True, index=True)
+    assessment_id = Column(Integer, nullable=True, index=True)        # linked assessment (no FK — cross-table)
+    framework_key = Column(String(100), nullable=False, index=True)
+
+    # Artifact metadata (copied from catalog or user-provided)
+    name = Column(String(500), nullable=False)
+    artifact_type = Column(String(100), nullable=False)
+    stage = Column(String(100), nullable=True)
+    control_ref = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    format = Column(String(100), nullable=True)
+
+    # Content
+    content = Column(Text, nullable=True)                             # Editable rich-text / JSON content
+    file_path = Column(String(500), nullable=True)                    # Uploaded file path
+    file_name = Column(String(255), nullable=True)
+    file_size = Column(Integer, nullable=True)
+
+    # Status & ownership
+    status = Column(String(50), default="draft")                      # draft, in_review, approved, archived
+    assigned_to_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    created_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    reviewed_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    approved_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+
+    # Platform-native link
+    is_platform_native = Column(Boolean, default=False)
+    platform_data_type = Column(String(100), nullable=True)
+    platform_record_count = Column(Integer, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    catalog_item = relationship("ArtifactCatalogItem")
+    assigned_to = relationship("GRCUser", foreign_keys=[assigned_to_id])
+    created_by = relationship("GRCUser", foreign_keys=[created_by_id])
+    reviewed_by = relationship("GRCUser", foreign_keys=[reviewed_by_id])
+    approved_by = relationship("GRCUser", foreign_keys=[approved_by_id])
+
+    __table_args__ = (
+        Index("ix_tenant_artifact_tenant_framework", "tenant_id", "framework_key"),
+        Index("ix_tenant_artifact_assessment", "tenant_id", "assessment_id"),
     )
 
 

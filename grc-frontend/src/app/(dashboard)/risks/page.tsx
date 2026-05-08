@@ -28,6 +28,7 @@ import SearchInput from '@/components/ui/SearchInput';
 import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
+import NcaRiskRegisterTab from '@/components/risks/NcaRiskRegisterTab';
 
 type ScoreFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
 
@@ -78,6 +79,7 @@ export default function RisksPage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('risks:risk_register:create');
   const canDelete = hasPermission('risks:risk_register:delete');
+  const [registerType, setRegisterType] = useState<'standard' | 'nca'>('standard');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RiskStatus | 'all'>('all');
   const [categoryFilter, setCategoryFilter] = useState<RiskCategory | 'all'>('all');
@@ -280,6 +282,31 @@ export default function RisksPage() {
     });
   }, [risks, searchTerm, statusFilter, categoryFilter, scoreFilter, selectedHeatmapCell, heatmapType]);
 
+  if (registerType === 'nca') {
+    return (
+      <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">NCA Cybersecurity Risk Register</h1>
+            <p className="text-sm text-slate-600">Saudi NCA template — manual entry, Excel upload, AI-assisted recommendations</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-600">Register Type:</span>
+            <select
+              value={registerType}
+              onChange={(e) => setRegisterType(e.target.value as 'standard' | 'nca')}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="standard">Standard Risk Register</option>
+              <option value="nca">NCA Template</option>
+            </select>
+          </div>
+        </div>
+        <NcaRiskRegisterTab />
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <PageLoader className="h-64" />
@@ -298,9 +325,20 @@ export default function RisksPage() {
   return (
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Enterprise Risk Management</h1>
-          <p className="text-sm text-slate-600">Identify, assess, and manage organizational risks</p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Enterprise Risk Management</h1>
+            <p className="text-sm text-slate-600">Identify, assess, and manage organizational risks</p>
+          </div>
+          <select
+            value={registerType}
+            onChange={(e) => setRegisterType(e.target.value as 'standard' | 'nca')}
+            className="ml-3 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            title="Register Type"
+          >
+            <option value="standard">Standard Register</option>
+            <option value="nca">NCA Template</option>
+          </select>
         </div>
         <div className="flex gap-2">
           <Link

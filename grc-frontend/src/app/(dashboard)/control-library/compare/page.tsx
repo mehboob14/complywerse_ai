@@ -110,6 +110,18 @@ interface AiCompareItem {
   destinations: AiCompareDestination[];
 }
 
+interface PreviousRunSummary {
+  id: number;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  progress_percent: number;
+  model_used?: string;
+  completed_at?: string;
+  created_at?: string;
+  source_framework: { id: number; name: string; short_code?: string | null; version?: string | null };
+  destination_framework: { id: number; name: string; short_code?: string | null; version?: string | null };
+  mapping_count: number;
+}
+
 function dedupeComparisonFrameworks(frameworks: FrameworkInfo[]) {
   const map = new Map<string, FrameworkInfo>();
 
@@ -166,6 +178,43 @@ export default function FrameworkComparisonPage() {
     () => dedupeComparisonFrameworks(frameworksData?.frameworks || []),
     [frameworksData]
   );
+
+  const { data: previousRunsData, refetch: refetchPreviousRuns } = useQuery({
+    queryKey: ['ai-compare-runs'],
+    queryFn: async () => {
+      const response = await controlLibraryApi.comparison.aiCompareList();
+      return response.data as { runs: PreviousRunSummary[] };
+    },
+  });
+  const previousRuns = previousRunsData?.runs || [];
+
+  const openCachedRun = async (run: PreviousRunSummary) => {
+    setSourceFrameworkId(run.source_framework.id);
+    setDestFrameworkId(run.destination_framework.id);
+    setMode('ai');
+    setCompareTriggered(true);
+    setAiError('');
+    setAiItems([]);
+    setExpandedRows(new Set());
+    stopAiPolling();
+    // Hydrate the run summary so the header reflects the chosen pair while we load mappings
+    setAiRun({
+      id: run.id,
+      source_framework_id: run.source_framework.id,
+      dest_framework_id: run.destination_framework.id,
+      status: run.status,
+      progress_total: 0,
+      progress_done: 0,
+      progress_percent: run.progress_percent || (run.status === 'completed' ? 100 : 0),
+      model_used: run.model_used,
+      completed_at: run.completed_at,
+    });
+    if (run.status === 'completed') {
+      await fetchAiMappings(run.id);
+    } else if (run.status === 'queued' || run.status === 'running') {
+      startAiPolling(run.id);
+    }
+  };
 
   const { data: crosswalkData, isLoading: crosswalkLoading, isFetching: crosswalkFetching } = useQuery({
     queryKey: ['crosswalk', sourceFrameworkId, destFrameworkId, page, pageSize],
@@ -229,6 +278,7 @@ export default function FrameworkComparisonPage() {
         if (next.status === 'completed') {
           stopAiPolling();
           await fetchAiMappings(runId);
+          refetchPreviousRuns();
         } else if (next.status === 'failed') {
           stopAiPolling();
           setAiError(next.error_message || 'AI comparison failed');
@@ -257,6 +307,7 @@ export default function FrameworkComparisonPage() {
       setAiRun(run);
       if (run.status === 'completed') {
         await fetchAiMappings(run.id);
+        refetchPreviousRuns();
       } else if (run.status === 'queued' || run.status === 'running') {
         startAiPolling(run.id);
       } else if (run.status === 'failed') {
@@ -1000,16 +1051,73 @@ export default function FrameworkComparisonPage() {
       )}
 
       {!compareTriggered && (
-        <div className="card">
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <GitCompare className="mb-4 h-16 w-16 text-gray-400" />
-            <h3 className="text-xl font-medium text-black">Framework Crosswalk Comparison</h3>
-            <p className="mt-2 max-w-lg text-gray-600">
-              Select a source and destination framework above, then click Compare to generate a crosswalk
-              mapping showing how requirements align between the two frameworks with evidence recommendations.
-            </p>
+        <>
+          {previousRuns.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary-600" />
+                    Previously mapped pairs
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Click any row to open the cached AI mapping without re-running.
+                  </p>
+                </div>
+                <span className="text-xs text-slate-500">{previousRuns.length} run{previousRuns.length === 1 ? '' : 's'}</span>
+              </div>
+              <ul className="divide-y divide-slate-100">
+                {previousRuns.map((run) => {
+                  const completed = run.status === 'completed';
+                  const sourceLabel = run.source_framework.short_code || run.source_framework.name;
+                  const destLabel = run.destination_framework.short_code || run.destination_framework.name;
+                  const dateStr = run.completed_at || run.created_at;
+                  return (
+                    <li key={run.id}>
+                      <button
+                        type="button"
+                        onClick={() => openCachedRun(run)}
+                        className="flex w-full items-center justify-between gap-3 px-2 py-2 text-left text-sm hover:bg-slate-50 rounded"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-medium text-slate-800 truncate">{sourceLabel}</span>
+                          <ArrowRight className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                          <span className="font-medium text-slate-800 truncate">{destLabel}</span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            completed ? 'bg-emerald-100 text-emerald-700'
+                            : run.status === 'failed' ? 'bg-rose-100 text-rose-700'
+                            : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {completed ? `${run.mapping_count} match${run.mapping_count === 1 ? '' : 'es'}` : run.status}
+                          </span>
+                          {dateStr && (
+                            <span className="text-[11px] text-slate-400 whitespace-nowrap">
+                              {new Date(dateStr).toLocaleDateString()}
+                            </span>
+                          )}
+                          <ChevronRight className="h-4 w-4 text-slate-400" />
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          <div className="card">
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <GitCompare className="mb-4 h-16 w-16 text-gray-400" />
+              <h3 className="text-xl font-medium text-black">Framework Crosswalk Comparison</h3>
+              <p className="mt-2 max-w-lg text-gray-600">
+                Select a source and destination framework above, then click Compare to generate a crosswalk
+                mapping showing how requirements align between the two frameworks with evidence recommendations.
+              </p>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

@@ -24,7 +24,11 @@ from .routers import (
     critical_tasks_router,
     is_projects_router,
     tasks_router,
+    sso_router,
+    entra_router,
+    artifacts_router,
 )
+from .routers import dcc_router, audit_plan_router, nca_risk_router, nca_vuln_router, nca_container_router, nca_templates_router, nca_kpi_router
 
 
 from .routers.admin_router import router as admin_router
@@ -129,7 +133,19 @@ async def audit_log_middleware(request: Request, call_next):
         write_audit_log(request, Response(status_code=500), started_at, request_payload)
         raise
 
+# NCA routers MUST register BEFORE risks_router and vuln_management_router
+# because those expose parametric `/risks/{risk_id}` and `/vulnerabilities/{vuln_id}`
+# routes that would otherwise capture `/risks/nca` and `/vulnerabilities/nca`
+# and try to parse "nca" as an int (→ 422 Unprocessable Entity).
+app.include_router(nca_risk_router)
+app.include_router(nca_vuln_router)
+app.include_router(nca_container_router)
+app.include_router(nca_templates_router)
+app.include_router(nca_kpi_router)
+
 app.include_router(auth_router)
+app.include_router(sso_router)
+app.include_router(entra_router)
 app.include_router(admin_router)
 app.include_router(tenants_router)
 app.include_router(frameworks_router)
@@ -144,6 +160,9 @@ app.include_router(enriched_dashboard_router)
 app.include_router(certification_router)
 app.include_router(advanced_erm_router)
 app.include_router(compliance_assessments_router)
+app.include_router(artifacts_router)
+app.include_router(dcc_router)
+app.include_router(audit_plan_router)
 app.include_router(critical_tasks_router)
 app.include_router(is_projects_router)
 app.include_router(tasks_router)

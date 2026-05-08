@@ -2089,6 +2089,106 @@ def generate_policy_ai_draft(
     }
 
 
+class CompareWithDocumentBody(BaseModel):
+    target_document_id: int
+
+
+@router.post("/{document_id}/compare-with-document")
+def compare_with_document(
+    document_id: int,
+    body: CompareWithDocumentBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Side-by-side comparison of two governance documents owned by the tenant,
+    with an optional AI gap analysis when OpenAI is configured.
+
+    Mirrors the response shape of `/governance/nca-templates/{id}/compare` so
+    the frontend compare modal can render either source identically.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=403, detail="No tenant access")
+
+    source = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants),
+    ).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source document not found")
+
+    target = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == body.target_document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants),
+    ).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Target document not found")
+
+    if source.id == target.id:
+        raise HTTPException(status_code=400, detail="Cannot compare a document with itself")
+
+    source_content = (source.content or "").strip() or "(empty document)"
+    target_content = (target.content or "").strip() or "(empty document)"
+
+    gap_analysis = None
+    if AI_INTEGRATIONS_OPENAI_API_KEY:
+        try:
+            client_kwargs = {"api_key": AI_INTEGRATIONS_OPENAI_API_KEY}
+            if AI_INTEGRATIONS_OPENAI_BASE_URL:
+                client_kwargs["base_url"] = AI_INTEGRATIONS_OPENAI_BASE_URL
+            client = OpenAI(**client_kwargs)
+
+            prompt = f"""Compare two governance documents. Identify gaps, missing sections, redundancies, and areas where one is weaker or stronger than the other. Be concise and specific.
+
+SOURCE DOCUMENT ({source.title} — {source.doc_type}):
+{source_content[:8000]}
+
+TARGET DOCUMENT ({target.title} — {target.doc_type}):
+{target_content[:8000]}
+
+Return strict JSON with keys:
+- summary (2-3 sentences)
+- missing_from_source (array of items present in target but absent in source)
+- missing_from_target (array of items present in source but absent in target)
+- alignment_score (0-100 integer, how well the two documents align in scope and content)
+- recommended_additions (array of 3-7 specific clauses/sections the source should add to fully align with the target)
+"""
+
+            completion = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.3,
+            )
+            gap_raw = completion.choices[0].message.content or "{}"
+            gap_analysis = json.loads(gap_raw)
+            # Map to the same shape the NCA-template compare endpoint returns
+            if "missing_from_source" in gap_analysis:
+                gap_analysis["missing_from_user_document"] = gap_analysis.pop("missing_from_source")
+            if "missing_from_target" in gap_analysis:
+                gap_analysis["present_in_user_only"] = gap_analysis.pop("missing_from_target")
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("Document-vs-document AI gap analysis failed")
+
+    return {
+        # 'template' key kept for frontend shape parity with the NCA compare endpoint
+        "template": {
+            "id": f"doc-{target.id}",
+            "title": target.title,
+            "category": target.doc_type or "Document",
+            "content": target_content,
+        },
+        "document": {
+            "id": source.id,
+            "title": source.title,
+            "doc_type": source.doc_type,
+            "content": source_content,
+        },
+        "gap_analysis": gap_analysis,
+    }
+
+
 @router.get("/{document_id}/view-html")
 def get_document_html(
     document_id: int,

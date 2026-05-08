@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import apiClient, { frameworksApi } from '@/lib/api';
@@ -216,27 +216,91 @@ export default function ControlLibraryPage() {
   const [autoGroupResult, setAutoGroupResult] = useState<AutoGroupResult | null>(null);
   const [autoGroupLoading, setAutoGroupLoading] = useState(false);
   const [autoGroupError, setAutoGroupError] = useState<string | null>(null);
+  const [autoGroupProgress, setAutoGroupProgress] = useState<string | null>(null);
+  const [autoGroupPercent, setAutoGroupPercent] = useState<number>(0);
+  const [autoGroupPhase, setAutoGroupPhase] = useState<string | null>(null);
+  const autoGroupPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Stop polling when leaving the page so we don't leak intervals.
+  useEffect(() => {
+    return () => {
+      if (autoGroupPollRef.current) {
+        clearInterval(autoGroupPollRef.current);
+        autoGroupPollRef.current = null;
+      }
+    };
+  }, []);
 
   const autoGroupMutation = useMutation({
     mutationFn: async (frameworkIds: number[]) => {
       setAutoGroupLoading(true);
       setAutoGroupError(null);
-      const response = await apiClient.post('/control-library/groups/auto-group', {
+      setAutoGroupResult(null);
+      setAutoGroupProgress('Starting…');
+      setAutoGroupPercent(1);
+      setAutoGroupPhase('queued');
+      const dispatch = await apiClient.post('/control-library/groups/auto-group/dispatch', {
         framework_ids: frameworkIds.length > 0 ? frameworkIds : null,
       });
-      return response.data as AutoGroupResult;
+      const jobId = dispatch.data?.job_id;
+      if (!jobId) throw new Error('Dispatch did not return a job id');
+      return jobId as string;
     },
-    onSuccess: (data) => {
-      setAutoGroupResult(data);
-      setAutoGroupLoading(false);
-      queryClient.invalidateQueries({ queryKey: ['control-groups'] });
+    onSuccess: (jobId: string) => {
+      // Poll status every 1.5s. The dialog auto-closes 1.2s after the job
+      // finishes so the user sees the success/error state briefly.
+      if (autoGroupPollRef.current) clearInterval(autoGroupPollRef.current);
+      autoGroupPollRef.current = setInterval(async () => {
+        try {
+          const res = await apiClient.get(`/control-library/groups/auto-group/status/${jobId}`);
+          const data = res.data || {};
+          const status = data.status as string | undefined;
+          if (typeof data.progress_percent === 'number') {
+            setAutoGroupPercent(Math.max(1, Math.min(100, data.progress_percent)));
+          }
+          if (data.phase) setAutoGroupPhase(String(data.phase));
+          setAutoGroupProgress(data.message || status || 'Working…');
+
+          if (status === 'completed' || status === 'failed' || status === 'skipped') {
+            if (autoGroupPollRef.current) clearInterval(autoGroupPollRef.current);
+            autoGroupPollRef.current = null;
+            setAutoGroupLoading(false);
+            setAutoGroupPercent(100);
+            if (status === 'completed') {
+              const summary = data.summary || {};
+              setAutoGroupResult({
+                message: data.message || 'Auto-grouping completed',
+                groups_created: summary.created_count || 0,
+                groups_merged: summary.merged_count || 0,
+                groups: [],
+              } as AutoGroupResult);
+              queryClient.invalidateQueries({ queryKey: ['control-groups'] });
+            } else {
+              setAutoGroupError(data.error || data.message || 'Auto-grouping failed');
+            }
+            // Auto-close dialog after a brief delay so user sees the toast.
+            setTimeout(() => {
+              setShowAutoGroupModal(false);
+              setAutoGroupResult(null);
+              setAutoGroupError(null);
+              setAutoGroupProgress(null);
+              setAutoGroupPercent(0);
+              setAutoGroupPhase(null);
+            }, 1500);
+          }
+        } catch {
+          /* transient — try again on next tick */
+        }
+      }, 1500);
     },
     onError: (error: any) => {
       setAutoGroupLoading(false);
-      const errorMessage = error?.response?.data?.detail?.message 
-        || error?.response?.data?.detail 
-        || error?.response?.data?.message 
-        || error?.message 
+      setAutoGroupProgress(null);
+      setAutoGroupPercent(0);
+      const errorMessage = error?.response?.data?.detail?.message
+        || error?.response?.data?.detail
+        || error?.response?.data?.message
+        || error?.message
         || 'An error occurred while auto-grouping controls';
       setAutoGroupError(errorMessage);
     },
@@ -1075,10 +1139,27 @@ export default function ControlLibraryPage() {
                 </div>
               </div>
             ) : autoGroupLoading ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                <Loader2 className="mb-4 h-12 w-12 animate-spin text-blue-600" />
-                <p className="text-black">Analyzing controls with AI...</p>
-                <p className="mt-1 text-sm text-gray-600">This may take a moment</p>
+              <div className="flex flex-col items-center justify-center py-8 px-6">
+                <Loader2 className="mb-4 h-10 w-10 animate-spin text-blue-600" />
+                <p className="text-black font-medium">Analyzing controls with AI…</p>
+                <p className="mt-1 text-sm text-gray-600 text-center">
+                  {autoGroupProgress || 'Running in the background'}
+                </p>
+                <div className="w-full max-w-md mt-4">
+                  <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-600 transition-all duration-500 ease-out"
+                      style={{ width: `${autoGroupPercent}%` }}
+                    />
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between text-xs text-gray-500">
+                    <span>{autoGroupPhase ? autoGroupPhase.replace(/_/g, ' ') : 'queued'}</span>
+                    <span>{Math.round(autoGroupPercent)}%</span>
+                  </div>
+                </div>
+                <p className="mt-4 text-xs text-gray-400 text-center">
+                  Safe to close — the job keeps running. The dialog will close automatically when it's done.
+                </p>
               </div>
             ) : autoGroupResult ? (
               <div className="space-y-4">

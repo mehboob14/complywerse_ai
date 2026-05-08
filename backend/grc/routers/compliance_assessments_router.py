@@ -2120,9 +2120,12 @@ def list_assessments(
         return {"assessments": [], "total": 0, "summary": {}}
     
     query = db.query(ComplianceAssessmentDocument).filter(
-        ComplianceAssessmentDocument.tenant_id.in_(user_tenants)
+        ComplianceAssessmentDocument.tenant_id.in_(user_tenants),
+        # Hide the NCA singleton container — it's surfaced via its own top-level NCA tab
+        (ComplianceAssessmentDocument.assessment_format != "nca_container")
+        | (ComplianceAssessmentDocument.assessment_format.is_(None)),
     )
-    
+
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(ComplianceAssessmentDocument.tenant_id == tenant_id)

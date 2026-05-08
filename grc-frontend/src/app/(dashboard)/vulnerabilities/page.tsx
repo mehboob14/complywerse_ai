@@ -1,10 +1,15 @@
 ﻿'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import * as XLSX from 'xlsx';
 import { vulnManagementApi } from '@/lib/api';
+import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
+import NcaVulnRegisterTab from '@/components/vulnerabilities/NcaVulnRegisterTab';
+import NcaVulnQuickAddModal from '@/components/vulnerabilities/NcaVulnQuickAddModal';
 import {
   Upload,
   Bug,
@@ -24,6 +29,7 @@ import {
   Trash2,
   UserPlus,
   ChevronRight,
+  ChevronDown,
   Route,
   Save,
 } from 'lucide-react';
@@ -205,6 +211,10 @@ function getStatusStyle(status: string) {
 export default function VulnerabilitiesPage() {
   const { hasPermission } = usePermissions();
   const [activeTab, setActiveTab] = useState('vulnerabilities' as 'vulnerabilities' | 'departments' | 'sla');
+  const [registerType, setRegisterType] = useState<'standard' | 'nca'>('standard');
+
+  // (queryClient is declared further down; the backfill effect references it
+  // through a lazily-resolved import to avoid an out-of-order declaration.)
 
   // Vulnerabilities tab state
   const [searchTerm, setSearchTerm] = useState('');
@@ -217,9 +227,16 @@ export default function VulnerabilitiesPage() {
   const [sortBy, setSortBy] = useState<'created_at' | 'severity' | 'due_date' | 'title'>('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isNcaAddOpen, setIsNcaAddOpen] = useState(false);
+  const [ncaExpandedRows, setNcaExpandedRows] = useState<Set<number>>(new Set());
   const [bulkUploadState, setBulkUploadState] = useState<'idle'|'uploading'|'done'|'error'>('idle');
   const [bulkUploadMsg, setBulkUploadMsg] = useState<string|null>(null);
   const bulkFileRef = useRef<HTMLInputElement>(null);
+  // Template chooser shown before the file picker opens. 'standard' uses the
+  // generic vuln-management bulk endpoint; 'nca' parses the NCA template
+  // client-side and posts each row to /vulnerabilities/nca.
+  const [bulkTemplateChoice, setBulkTemplateChoice] = useState<'standard' | 'nca'>('standard');
+  const [showBulkChooser, setShowBulkChooser] = useState(false);
   const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
   const [selectedVulnIds, setSelectedVulnIds] = useState<Set<number>>(new Set());
 
@@ -237,6 +254,27 @@ export default function VulnerabilitiesPage() {
   const [editValues, setEditValues] = useState<{ remediation_days: number; notification_days?: number; escalation_days?: number }>({ remediation_days: 0 });
 
   const queryClient = useQueryClient();
+  const router = useRouter();
+
+  // When user toggles into the NCA template view, backfill bridges for any
+  // legacy NCA entries that pre-date the bridge column. Without this, those
+  // entries stay invisible in the general view because they have no backing
+  // Vulnerability tagged with template_type='NCA Template'.
+  useEffect(() => {
+    if (registerType !== 'nca') return;
+    let cancelled = false;
+    apiClient.post('/vulnerabilities/nca/backfill-bridges')
+      .then((res) => {
+        if (cancelled) return;
+        const newly = res.data?.newly_bridged ?? 0;
+        if (newly > 0) {
+          queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+          queryClient.invalidateQueries({ queryKey: ['vuln-dashboard'] });
+        }
+      })
+      .catch(() => { /* silent — best-effort */ });
+    return () => { cancelled = true; };
+  }, [registerType, queryClient]);
 
   const tabs = [
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
@@ -245,7 +283,7 @@ export default function VulnerabilitiesPage() {
   ];
 
   const { data: vulnerabilities, isLoading, error } = useQuery({
-    queryKey: ['vulnerabilities', statusFilter, severityFilter, showClosed],
+    queryKey: ['vulnerabilities', statusFilter, severityFilter, showClosed, registerType],
     queryFn: async () => {
       const params: Record<string, unknown> = {};
       if (statusFilter !== 'all') params.status = statusFilter;
@@ -256,8 +294,15 @@ export default function VulnerabilitiesPage() {
       if (statusFilter === 'all') {
         params.include_closed = showClosed;
       }
+      // Scope the list to the chosen register type. NCA Template surfaces only
+      // bridged NCA vulns; standard surfaces everything that isn't tagged.
+      if (registerType === 'nca') {
+        params.template_type = 'NCA Template';
+      } else {
+        params.template_type = '_general';
+      }
       const response = await vulnManagementApi.vulnerabilities.getAll(
-        params as { status?: string; severity?: string; include_closed?: boolean }
+        params as { status?: string; severity?: string; include_closed?: boolean; template_type?: string }
       );
       return response.data as Vulnerability[];
     },
@@ -629,6 +674,23 @@ export default function VulnerabilitiesPage() {
         </div>
 
         {activeTab === 'vulnerabilities' && (
+          <div className="mb-3 flex items-center gap-2">
+            <span className="text-sm cw-text-muted">Register Type:</span>
+            <select
+              value={registerType}
+              onChange={(e) => setRegisterType(e.target.value as 'standard' | 'nca')}
+              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="standard">Standard Register</option>
+              <option value="nca">NCA Template</option>
+            </select>
+          </div>
+        )}
+
+        {/* Both registerType values use the SAME general view — only the
+            template_type filter changes. NCA-specific entry points (Upload
+            NCA Excel, Create from NCA Template) live in the toolbar below. */}
+        {activeTab === 'vulnerabilities' && (
         <>
         {/* Visual overview strip — three chart panels */}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -845,13 +907,126 @@ export default function VulnerabilitiesPage() {
                   }
                   setBulkUploadState('uploading');
                   setBulkUploadMsg(null);
+
+                  // ─── NCA Template path — parse client-side, POST each row to /vulnerabilities/nca ───
+                  if (bulkTemplateChoice === 'nca') {
+                    try {
+                      const buf = await file.arrayBuffer();
+                      const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+
+                      // Pick the data sheet (skip Cover Page / Legend)
+                      let ws: XLSX.WorkSheet | null = null;
+                      const preferred = wb.SheetNames.find(n => {
+                        const s = n.toLowerCase();
+                        return s.includes('register') && !s.includes('legend');
+                      });
+                      if (preferred) ws = wb.Sheets[preferred];
+                      if (!ws) {
+                        for (const name of wb.SheetNames) {
+                          const cand = wb.Sheets[name];
+                          const probe: any[][] = XLSX.utils.sheet_to_json(cand, { header: 1, defval: '' }) as any;
+                          for (let r = 0; r < Math.min(probe.length, 20); r++) {
+                            const rowStr = (probe[r] || []).map(c => String(c || '').toLowerCase()).join(' ');
+                            if (rowStr.includes('vulnerability id') || rowStr.includes('cve number')) { ws = cand; break; }
+                          }
+                          if (ws) break;
+                        }
+                      }
+                      if (!ws) throw new Error('Could not find a Vulnerability Register sheet in this workbook');
+
+                      // Find the header row inside the chosen sheet
+                      const allRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any;
+                      let headerRowIdx = 0;
+                      for (let r = 0; r < Math.min(allRows.length, 25); r++) {
+                        const rowStr = (allRows[r] || []).map(c => String(c || '').toLowerCase()).join(' ');
+                        if (rowStr.includes('vulnerability id') || rowStr.includes('cve number') || (rowStr.includes('title') && rowStr.includes('owner'))) {
+                          headerRowIdx = r;
+                          break;
+                        }
+                      }
+                      const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '', range: headerRowIdx, raw: false });
+
+                      let created = 0;
+                      const errors: string[] = [];
+
+                      for (let i = 0; i < rows.length; i++) {
+                        const r = rows[i];
+                        const keys = Object.keys(r);
+                        const ci = (name: string) => {
+                          const norm = name.toLowerCase().replace(/\s+/g, ' ').trim();
+                          const key = keys.find(k => k.toLowerCase().replace(/\s+/g, ' ').trim().startsWith(norm));
+                          return key ? r[key] : undefined;
+                        };
+                        const toStr = (v: any) => (v === null || v === undefined || v === '') ? null : String(v).trim() || null;
+                        const toInt = (v: any) => { const n = parseInt(v); return isNaN(n) ? null : n; };
+                        const toScore = (v: any) => {
+                          if (v === null || v === undefined || v === '') return null;
+                          const matches = String(v).match(/(\d+(?:\.\d+)?)/g);
+                          if (!matches || matches.length === 0) return null;
+                          const n = parseFloat(matches[matches.length - 1]);
+                          return isNaN(n) ? null : n;
+                        };
+                        const toDate = (v: any) => {
+                          if (!v) return null;
+                          if (v instanceof Date) return v.toISOString().split('T')[0];
+                          const d = new Date(v);
+                          return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
+                        };
+
+                        const payload = {
+                          title:                  toStr(ci('title') ?? ci('vulnerability title')),
+                          description:            toStr(ci('vulnerability description') ?? ci('description')),
+                          vendor_link:            toStr(ci('vendor link')),
+                          cve_number:             toStr(ci('cve number') ?? ci('cve')),
+                          cve_score:              toScore(ci('cve score') ?? ci('cvss')),
+                          affected_technology:    toStr(ci('affected technology')),
+                          affected_assets:        toStr(ci('affected assets')),
+                          threat_analysis:        toStr(ci('threat analysis')),
+                          threat_severity:        toInt(ci('threat severity')),
+                          risk_likelihood:        toInt(ci('risk likelihood')),
+                          risk_severity:          toInt(ci('risk severity')),
+                          owner:                  toStr(ci('owner')),
+                          status:                 toStr(ci('status')) || 'OPEN',
+                          first_observation_date: toDate(ci('first observation date')),
+                          due_date:               toDate(ci('due date')),
+                          resolution_date:        toDate(ci('resolution date')),
+                          comments:               toStr(ci('comments')),
+                        };
+
+                        const meaningful = [payload.title, payload.description, payload.cve_number, payload.affected_technology, payload.threat_analysis, payload.cve_score, payload.threat_severity, payload.risk_likelihood, payload.risk_severity, payload.owner];
+                        if (!meaningful.some(v => v !== null && v !== '' && v !== undefined)) continue;
+
+                        try {
+                          await apiClient.post('/vulnerabilities/nca', payload);
+                          created++;
+                        } catch {
+                          errors.push(`Row ${headerRowIdx + i + 2}`);
+                        }
+                      }
+
+                      queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+                      queryClient.invalidateQueries({ queryKey: ['vuln-dashboard'] });
+                      queryClient.invalidateQueries({ queryKey: ['nca-vuln-entries'] });
+                      setBulkUploadState('done');
+                      setBulkUploadMsg(`NCA template: imported ${created} vulnerabilit${created === 1 ? 'y' : 'ies'}${errors.length ? ` · ${errors.length} row error${errors.length > 1 ? 's' : ''}` : ''}.`);
+                    } catch (err: any) {
+                      setBulkUploadState('error');
+                      setBulkUploadMsg(err?.message || 'NCA template upload failed. Please check the file format.');
+                    } finally {
+                      if (bulkFileRef.current) bulkFileRef.current.value = '';
+                      setTimeout(() => { setBulkUploadState('idle'); setBulkUploadMsg(null); }, 7000);
+                    }
+                    return;
+                  }
+
+                  // ─── Standard path — server-side bulk upload ────────────────────────
                   try {
                     const res = await vulnManagementApi.vulnerabilities.bulkUpload(file);
                     const d = res.data;
                     queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
                     queryClient.invalidateQueries({ queryKey: ['vuln-dashboard'] });
                     setBulkUploadState('done');
-                    setBulkUploadMsg(`Successfully imported ${d.created} vulnerabilit${d.created === 1 ? 'y' : 'ies'}${d.skipped ? ` · ${d.skipped} skipped (duplicates)` : ''}${d.errors?.length ? ` · ${d.errors.length} row error${d.errors.length > 1 ? 's' : ''}: ${d.errors.slice(0,2).join('; ')}` : ''}.`);
+                    setBulkUploadMsg(`Successfully imported ${d.created} vulnerabilit${d.created === 1 ? 'y' : 'ies'}${d.skipped ? ` · ${d.skipped} blank/incomplete row${d.skipped === 1 ? '' : 's'} skipped` : ''}${d.errors?.length ? ` · ${d.errors.length} row error${d.errors.length > 1 ? 's' : ''}: ${d.errors.slice(0,2).join('; ')}` : ''}.`);
                   } catch (err: unknown) {
                     setBulkUploadState('error');
                     const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -889,16 +1064,32 @@ export default function VulnerabilitiesPage() {
                 Template
               </button>
               <button
-                onClick={() => bulkFileRef.current?.click()}
+                onClick={() => {
+                  // Default the chooser to whichever register is currently active
+                  setBulkTemplateChoice(registerType === 'nca' ? 'nca' : 'standard');
+                  setShowBulkChooser(true);
+                }}
                 disabled={bulkUploadState === 'uploading'}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-60"
               >
                 {bulkUploadState === 'uploading' ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                 Bulk Upload
               </button>
-              <button onClick={() => setIsModalOpen(true)} className="cw-btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-opacity">
+              <button
+                onClick={() => {
+                  // NCA register → use the NCA-specific add modal so the form
+                  // covers every NCA template column. Standard register → use
+                  // the existing Add Vulnerability slide-over.
+                  if (registerType === 'nca') {
+                    setIsNcaAddOpen(true);
+                  } else {
+                    setIsModalOpen(true);
+                  }
+                }}
+                className="cw-btn-primary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-opacity"
+              >
                 <Plus size={14} />
-                Add Vulnerability
+                {registerType === 'nca' ? 'Add NCA Entry' : 'Add Vulnerability'}
               </button>
             </>
           )}
@@ -927,6 +1118,118 @@ export default function VulnerabilitiesPage() {
             {(searchTerm || statusFilter !== 'all' || severityFilter !== 'all') && (
               <p className="cw-text-muted text-sm mt-2">Try adjusting your search or filters</p>
             )}
+          </div>
+        ) : registerType === 'nca' ? (
+          // NCA Template view — compact rows with chevron toggle that reveals
+          // every NCA template field for a row. Data sourced from the bridged
+          // Vulnerability + the NCA-specific fields on `template_fields` JSON.
+          <div className="cw-card rounded-lg overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-[var(--color-subtle)] border-b border-[var(--color-border)]">
+                  <tr>
+                    <th className="px-2 py-2 w-8"></th>
+                    <th className="px-3 py-2 text-left font-semibold cw-text-muted uppercase tracking-wider whitespace-nowrap">Vuln ID</th>
+                    <th className="px-3 py-2 text-left font-semibold cw-text-muted uppercase tracking-wider">Title</th>
+                    <th className="px-3 py-2 text-left font-semibold cw-text-muted uppercase tracking-wider whitespace-nowrap">CVE</th>
+                    <th className="px-3 py-2 text-left font-semibold cw-text-muted uppercase tracking-wider whitespace-nowrap">Risk Level</th>
+                    <th className="px-3 py-2 text-left font-semibold cw-text-muted uppercase tracking-wider whitespace-nowrap">Status</th>
+                    <th className="px-3 py-2 text-left font-semibold cw-text-muted uppercase tracking-wider">Owner</th>
+                    <th className="px-3 py-2 text-left font-semibold cw-text-muted uppercase tracking-wider whitespace-nowrap">Due Date</th>
+                    <th className="px-3 py-2 text-left font-semibold cw-text-muted uppercase tracking-wider whitespace-nowrap">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-border)]">
+                  {filteredVulnerabilities.map((vuln) => {
+                    const tf = ((vuln as any).template_fields ?? {}) as Record<string, any>;
+                    const severityStyle = getSeverityStyle(vuln.severity);
+                    const statusStyle = getStatusStyle(vuln.status);
+                    const ncaStatus = tf.status || vuln.status;
+                    const expanded = ncaExpandedRows.has(vuln.id);
+                    const toggleRow = () => setNcaExpandedRows((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(vuln.id)) next.delete(vuln.id); else next.add(vuln.id);
+                      return next;
+                    });
+                    const fmtDate = (d: any) => (d ? new Date(d).toLocaleDateString() : '—');
+                    const detailFields: Array<[string, any]> = [
+                      ['Vulnerability Description', vuln.description],
+                      ['Vendor Link', tf.vendor_link],
+                      ['CVE Number', vuln.cve_id],
+                      ['CVE Score', vuln.cvss_score],
+                      ['Affected Technology', vuln.affected_component],
+                      ['Affected Assets', (vuln.linked_assets && vuln.linked_assets.length > 0 ? vuln.linked_assets.join(', ') : (vuln.affected_host || tf.affected_assets_text))],
+                      ['Threat Analysis', tf.threat_analysis],
+                      ['Threat Severity', tf.threat_severity],
+                      ['Risk Likelihood', tf.risk_likelihood],
+                      ['Risk Severity', tf.risk_severity],
+                      ['Risk Level', tf.risk_level],
+                      ['Owner', vuln.assignee_name],
+                      ['Status', ncaStatus],
+                      ['First Observation Date', fmtDate(tf.first_observation_date)],
+                      ['Due Date', fmtDate(vuln.due_date || tf.due_date)],
+                      ['Resolution Date', fmtDate(tf.resolution_date)],
+                      ['Comments', tf.comments],
+                    ];
+                    return (
+                      <Fragment key={vuln.id}>
+                        <tr className="bg-white hover:bg-[var(--color-hover)] transition-colors">
+                          <td className="px-2 py-2 align-middle">
+                            <button onClick={toggleRow} className="text-gray-400 hover:text-gray-700 inline-flex items-center justify-center w-6 h-6 rounded hover:bg-gray-100" aria-label={expanded ? 'Collapse' : 'Expand'}>
+                              {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 font-mono cw-text-muted whitespace-nowrap">{tf.vuln_identifier || `VULN-${vuln.id}`}</td>
+                          <td className="px-3 py-2 max-w-[300px]">
+                            <Link href={`/vulnerabilities/${vuln.id}`} className="text-sm cw-text font-medium hover:text-[var(--color-base)] transition-colors line-clamp-1">
+                              {vuln.title}
+                            </Link>
+                          </td>
+                          <td className="px-3 py-2 cw-text-muted whitespace-nowrap font-mono">{vuln.cve_id || '—'}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${severityStyle.bg} ${severityStyle.text}`}>
+                              {tf.risk_level || severityStyle.label}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${statusStyle.bg} ${statusStyle.text}`}>{ncaStatus}</span>
+                          </td>
+                          <td className="px-3 py-2 cw-text-muted whitespace-nowrap">{vuln.assignee_name ?? <span className="italic">—</span>}</td>
+                          <td className="px-3 py-2 cw-text-muted whitespace-nowrap">{fmtDate(vuln.due_date || tf.due_date)}</td>
+                          <td className="px-3 py-2">
+                            <Link href={`/vulnerabilities/${vuln.id}`} className="inline-flex items-center justify-center rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-[var(--color-base)] transition-colors" title="View Details" aria-label="View Details">
+                              <Eye size={16} />
+                            </Link>
+                          </td>
+                        </tr>
+                        {expanded && (
+                          <tr className="bg-blue-50/30">
+                            <td></td>
+                            <td colSpan={8} className="px-4 py-3">
+                              <div className="rounded-lg border border-blue-100 bg-white p-3">
+                                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-2">NCA Template Fields</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2">
+                                  {detailFields.filter(([, v]) => v !== null && v !== undefined && v !== '' && v !== '—').map(([label, value]) => (
+                                    <div key={label}>
+                                      <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">{label}</p>
+                                      {label === 'Vendor Link' && typeof value === 'string' ? (
+                                        <a href={value} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline break-all">{value}</a>
+                                      ) : (
+                                        <p className="text-xs text-gray-800 whitespace-pre-wrap break-words">{String(value)}</p>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : (
           <div className="cw-card rounded-lg overflow-hidden shadow-sm">
@@ -1559,6 +1862,84 @@ export default function VulnerabilitiesPage() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Bulk-upload template chooser */}
+      <NcaVulnQuickAddModal
+        isOpen={isNcaAddOpen}
+        onClose={() => setIsNcaAddOpen(false)}
+        onCreated={(_entryId, bridgedId) => {
+          setIsNcaAddOpen(false);
+          queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+          queryClient.invalidateQueries({ queryKey: ['vuln-dashboard'] });
+          queryClient.invalidateQueries({ queryKey: ['nca-vuln-entries'] });
+          // If a bridged Vulnerability was created, jump straight into its
+          // detail page so the user can immediately work mitigations / assets / etc.
+          if (bridgedId) {
+            router.push(`/vulnerabilities/${bridgedId}`);
+          }
+        }}
+      />
+
+      {showBulkChooser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-gray-900">Choose template</h2>
+              <button onClick={() => setShowBulkChooser(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-gray-600 mb-4">
+              Pick the template format of the file you're about to upload. The parser will adapt to that template's column layout.
+            </p>
+            <div className="space-y-2">
+              <label className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer ${bulkTemplateChoice === 'standard' ? 'border-blue-500 bg-blue-50/50' : 'border-gray-200 hover:border-gray-300'}`}>
+                <input
+                  type="radio"
+                  name="bulk-template"
+                  checked={bulkTemplateChoice === 'standard'}
+                  onChange={() => setBulkTemplateChoice('standard')}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900">Standard Vulnerability Register</p>
+                  <p className="text-xs text-gray-500 mt-0.5">CSV or Excel with columns: title, description, severity, status, cvss_score, cve_id, etc.</p>
+                </div>
+              </label>
+              <label className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer ${bulkTemplateChoice === 'nca' ? 'border-blue-500 bg-blue-50/50' : 'border-gray-200 hover:border-gray-300'}`}>
+                <input
+                  type="radio"
+                  name="bulk-template"
+                  checked={bulkTemplateChoice === 'nca'}
+                  onChange={() => setBulkTemplateChoice('nca')}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900">NCA Vulnerability Template</p>
+                  <p className="text-xs text-gray-500 mt-0.5">NCA Saudi cybersecurity template (Vulnerability ID, CVE Score, Threat Severity, etc.)</p>
+                </div>
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => setShowBulkChooser(false)}
+                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowBulkChooser(false);
+                  setTimeout(() => bulkFileRef.current?.click(), 0);
+                }}
+                className="px-4 py-2 text-sm text-white bg-blue-600 rounded-lg hover:bg-blue-700 inline-flex items-center gap-1.5"
+              >
+                <Upload size={14} /> Choose file
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

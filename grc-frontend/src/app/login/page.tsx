@@ -49,6 +49,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [tenantSlug, setTenantSlug] = useState<string | null>(null);
   const [tenantName, setTenantName] = useState<string | null>(null);
+  const [ssoEnabled, setSsoEnabled] = useState(false);
 
   useEffect(() => {
     const slug = getTenantSlug();
@@ -62,7 +63,54 @@ export default function LoginPage() {
       if (prefill) setEmail(prefill);
       setInfo("Account created. Sign in with the password you just set.");
     }
+
+    // Surface SSO callback errors (e.g. domain not allowed, token exchange failure)
+    const ssoErr = searchParams?.get('error');
+    if (ssoErr) {
+      const map: Record<string, string> = {
+        sso_not_provisioned: "Your Microsoft account isn't allowed to sign in to this organization. Contact your administrator.",
+        sso_state_mismatch: "Sign-in expired or was tampered with. Please try again.",
+        sso_state_expired: "Sign-in expired. Please try again.",
+        sso_invalid_callback: "Microsoft sign-in failed (invalid callback).",
+        sso_provider_error: "Microsoft returned an error. Please try again.",
+        sso_token_exchange_failed: "Microsoft rejected the sign-in request. Contact your administrator.",
+        sso_id_token_invalid: "Microsoft sign-in could not be verified. Contact your administrator.",
+        sso_disabled: "Microsoft sign-in is not enabled for this organization.",
+        sso_tenant_lost: "Could not resolve your organization. Please try again.",
+      };
+      setError(map[ssoErr] || 'Microsoft sign-in failed.');
+    }
+
+    // Check if SSO is configured for this tenant
+    (async () => {
+      try {
+        const headers: Record<string, string> = {};
+        const slugForHeader = getTenantSlugFromHost() || slug;
+        if (slugForHeader) headers['X-Tenant-Slug'] = slugForHeader;
+        const res = await fetch('/api/auth/entra/availability', { headers, credentials: 'include' });
+        if (!res.ok) {
+          setSsoEnabled(false);
+          return;
+        }
+        const data = await res.json();
+        setSsoEnabled(!!data?.enabled);
+      } catch {
+        setSsoEnabled(false);
+      }
+    })();
   }, [searchParams]);
+
+  const handleSsoSignIn = () => {
+    // Backend resolves tenant via subdomain or X-Tenant-Slug; we can't set
+    // headers on a top-level navigation, so rely on the subdomain (or pass
+    // ?tenant_slug= as a fallback). Backend reads X-Tenant-Slug from
+    // TenantMiddleware which falls back to the URL host.
+    const slug = getTenantSlugFromHost() || tenantSlug;
+    const url = slug
+      ? `/api/auth/entra/login?tenant_slug=${encodeURIComponent(slug)}`
+      : '/api/auth/entra/login';
+    window.location.href = url;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,31 +281,54 @@ export default function LoginPage() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
 
-          {/* Microsoft SSO — locked */}
-          <button
-            type="button"
-            disabled
-            title="Microsoft SSO coming soon. Contact support to enable."
-            className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-500 cursor-not-allowed opacity-60 mb-5"
-          >
-            {/* Official Microsoft logo SVG */}
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 23 23">
-              <path fill="#f3f3f3" d="M0 0h23v23H0z"/>
-              <path fill="#f35325" d="M1 1h10v10H1z"/>
-              <path fill="#81bc06" d="M12 1h10v10H12z"/>
-              <path fill="#05a6f0" d="M1 12h10v10H1z"/>
-              <path fill="#ffba08" d="M12 12h10v10H12z"/>
-            </svg>
-            <span>Sign in with Microsoft</span>
-            <Lock size={13} className="ml-auto opacity-60" />
-          </button>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 mb-5">
-            <div className="flex-1 h-px bg-slate-100" />
-            <span className="text-[11px] text-slate-400 font-medium">or sign in with email</span>
-            <div className="flex-1 h-px bg-slate-100" />
-          </div>
+          {/* Microsoft SSO */}
+          {ssoEnabled ? (
+            <>
+              <button
+                type="button"
+                onClick={handleSsoSignIn}
+                className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 mb-5"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 23 23">
+                  <path fill="#f3f3f3" d="M0 0h23v23H0z"/>
+                  <path fill="#f35325" d="M1 1h10v10H1z"/>
+                  <path fill="#81bc06" d="M12 1h10v10H12z"/>
+                  <path fill="#05a6f0" d="M1 12h10v10H1z"/>
+                  <path fill="#ffba08" d="M12 12h10v10H12z"/>
+                </svg>
+                <span>Sign in with Microsoft</span>
+              </button>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="flex-1 h-px bg-slate-100" />
+                <span className="text-[11px] text-slate-400 font-medium">or sign in with email</span>
+                <div className="flex-1 h-px bg-slate-100" />
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled
+                title="Microsoft SSO is not enabled for this organization."
+                className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-500 cursor-not-allowed opacity-60 mb-5"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 23 23">
+                  <path fill="#f3f3f3" d="M0 0h23v23H0z"/>
+                  <path fill="#f35325" d="M1 1h10v10H1z"/>
+                  <path fill="#81bc06" d="M12 1h10v10H12z"/>
+                  <path fill="#05a6f0" d="M1 12h10v10H1z"/>
+                  <path fill="#ffba08" d="M12 12h10v10H12z"/>
+                </svg>
+                <span>Sign in with Microsoft</span>
+                <Lock size={13} className="ml-auto opacity-60" />
+              </button>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="flex-1 h-px bg-slate-100" />
+                <span className="text-[11px] text-slate-400 font-medium">or sign in with email</span>
+                <div className="flex-1 h-px bg-slate-100" />
+              </div>
+            </>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {info && !error && (

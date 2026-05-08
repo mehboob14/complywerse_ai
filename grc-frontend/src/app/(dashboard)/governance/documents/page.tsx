@@ -10,7 +10,7 @@ import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
-import { 
+import {
   FileText,
   Loader2,
   AlertCircle,
@@ -41,6 +41,7 @@ import {
   Globe,
   Users,
 } from 'lucide-react';
+import NcaTemplateSelect, { NcaTemplateMeta } from '@/components/governance/NcaTemplateSelect';
 
 interface TenantUser {
   id: number;
@@ -427,8 +428,43 @@ export default function GovernanceDocumentsPage() {
   });
 
   const aiDraftMutation = useMutation({
-    mutationFn: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; parent_document_id?: number }) =>
-      governanceApi.generatePolicyDraft(data),
+    mutationFn: async (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; parent_document_id?: number; nca_template_id?: string }) => {
+      // If user picked an NCA reference template, route through the NCA-template
+      // AI-draft endpoint so the template content is used as the backbone.
+      if (data.nca_template_id) {
+        const orgContext = data.description
+          ? `Document description: ${data.description}`
+          : '';
+        const requirements: string[] = [];
+        if (data.framework_ids && data.framework_ids.length > 0) {
+          requirements.push(`Align with framework IDs: ${data.framework_ids.join(', ')}`);
+        }
+        const res = await apiClient.post(
+          `/governance/nca-templates/${data.nca_template_id}/ai-draft`,
+          {
+            title: data.title,
+            organization_context: orgContext || undefined,
+            additional_requirements: requirements.length > 0 ? requirements.join('\n') : undefined,
+            doc_type: data.doc_type,
+            save_as_document: false,
+          }
+        );
+        // Adapt the NCA endpoint shape to what AIDraftPolicyModal expects
+        const r = res.data || {};
+        const wc = r.word_count || (r.generated_content?.split(/\s+/).length ?? 0);
+        return {
+          data: {
+            generated_content: r.generated_content || '',
+            suggested_title: data.title,
+            suggested_sections: [],
+            framework_alignment: [],
+            word_count: wc,
+            estimated_review_time: `${Math.max(5, Math.floor(wc / 100))} minutes`,
+          },
+        };
+      }
+      return governanceApi.generatePolicyDraft(data);
+    },
     onSuccess: (response) => {
       setAIDraftResult(response.data as typeof aiDraftResult);
       toast({
@@ -1420,6 +1456,7 @@ export default function GovernanceDocumentsPage() {
           result={aiDraftResult}
         />
       )}
+
     </div>
   );
 }
@@ -1879,6 +1916,49 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
     expiry_date: document?.expiry_date?.split('T')[0] || '',
   });
 
+  // NCA template prefill — only available on create (not edit) so existing
+  // content is never silently overwritten on an edit.
+  const isCreating = !document?.id;
+  const [ncaTemplateId, setNcaTemplateId] = useState<string | null>(null);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
+  const [templateLoadError, setTemplateLoadError] = useState<string | null>(null);
+
+  const NCA_CATEGORY_TO_DOC_TYPE: Record<string, string> = {
+    Policy: 'policy',
+    Standard: 'standard',
+    Procedure: 'procedure',
+    Program: 'program',
+    Checklist: 'checklist',
+    Form: 'form',
+    Report: 'report',
+    'Cybersecurity Foundation': 'policy',
+  };
+
+  const handleSelectNcaTemplate = async (id: string | null, meta: NcaTemplateMeta | null) => {
+    setNcaTemplateId(id);
+    setTemplateLoadError(null);
+    if (!id || !meta) return;
+    setLoadingTemplate(true);
+    try {
+      const res = await apiClient.get(`/governance/nca-templates/${id}/content`);
+      const tplContent = (res.data?.content as string) || '';
+      setFormData(prev => ({
+        ...prev,
+        // Only fill blank fields — don't trample what the user already typed
+        title: prev.title || meta.title,
+        content: prev.content || tplContent,
+        description: prev.description || `Created from NCA template: ${meta.title}`,
+        doc_type: prev.doc_type === 'policy'
+          ? (NCA_CATEGORY_TO_DOC_TYPE[meta.category] || 'policy')
+          : prev.doc_type,
+      }));
+    } catch (e: any) {
+      setTemplateLoadError('Could not load template content. You can still write the document manually.');
+    } finally {
+      setLoadingTemplate(false);
+    }
+  };
+
   const availableParentDocuments = parentDocuments.filter((docOption) => docOption.id !== document?.id);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -1924,6 +2004,25 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
       }
     >
       <form id="document-form" onSubmit={handleSubmit} className="space-y-4">
+          {isCreating && (
+            <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+              <NcaTemplateSelect
+                value={ncaTemplateId}
+                onChange={handleSelectNcaTemplate}
+                label="Templates"
+              />
+              {loadingTemplate && (
+                <p className="text-xs text-blue-700 mt-2 flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Loading template content…
+                </p>
+              )}
+              {templateLoadError && (
+                <p className="text-xs text-rose-700 mt-2">{templateLoadError}</p>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-800 mb-1">Title *</label>
             <input
@@ -2356,7 +2455,7 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
 interface AIDraftPolicyModalProps {
   parentDocuments: DocumentItem[];
   onClose: () => void;
-  onGenerate: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; parent_document_id?: number }) => void;
+  onGenerate: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; parent_document_id?: number; nca_template_id?: string }) => void;
   onUseContent: (content: string, title: string, docType?: string, description?: string, parentDocumentId?: number) => void;
   isLoading: boolean;
   result: {
@@ -2377,6 +2476,7 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
   });
   const [selectedFrameworkIds, setSelectedFrameworkIds] = useState<number[]>([]);
   const [selectedParentDocumentId, setSelectedParentDocumentId] = useState<number | null>(null);
+  const [selectedNcaTemplateId, setSelectedNcaTemplateId] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<any[] | null>(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -2455,6 +2555,7 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
       framework_ids: selectedFrameworkIds.length > 0 ? selectedFrameworkIds : undefined,
       description: formData.description || undefined,
       parent_document_id: selectedParentDocumentId || undefined,
+      nca_template_id: selectedNcaTemplateId || undefined,
     });
   };
 
@@ -2592,6 +2693,14 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
                     forceSearch
                   />
                 </div>
+              </div>
+
+              <div>
+                <NcaTemplateSelect
+                  value={selectedNcaTemplateId}
+                  onChange={(id) => setSelectedNcaTemplateId(id)}
+                  label="Templates"
+                />
               </div>
 
               <div>

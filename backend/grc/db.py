@@ -122,6 +122,13 @@ def get_tenant_engine(slug: str) -> Engine:
                 # query path will surface a clear error if the column is
                 # genuinely missing.
                 logger.exception("schema self-heal failed for slug=%s", slug)
+            try:
+                from .modules.identity.schema_migrations import (
+                    _ensure_for_engine as _ensure_identity_for_engine,
+                )
+                _ensure_identity_for_engine(engine)
+            except Exception:
+                logger.exception("identity schema self-heal failed for slug=%s", slug)
         return _tenant_engines[slug]
 
 

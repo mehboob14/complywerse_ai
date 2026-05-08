@@ -1,15 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { Building2, Users as UsersIcon, ShieldCheck, ScrollText, Bot, GitPullRequest } from 'lucide-react';
+import { Building2, Users as UsersIcon, ShieldCheck, ScrollText, Bot, GitPullRequest, KeyRound } from 'lucide-react';
 import OrganizationProfilePage from './organization/page';
 import UsersManagementPage from './users/page';
 import RolesManagementPage from './roles/page';
 import AuditLogsPage from './audit-logs/page';
 import IntegrationsConnectionsPage from '../integrations/connections/page';
 import WorkflowEnginePage from '../workflow-engine/page';
+import { IdentityProvidersCard } from '@/components/integrations/IdentityProvidersCard';
 
-type AdminTab = 'company' | 'users' | 'roles' | 'integrations' | 'workflow' | 'audit';
+type AdminTab = 'company' | 'users' | 'roles' | 'integrations' | 'identity' | 'workflow' | 'audit';
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('company');
@@ -19,6 +20,7 @@ export default function AdminPage() {
     { id: 'users', label: 'User Management', icon: UsersIcon },
     { id: 'roles', label: 'Role Management', icon: ShieldCheck },
     { id: 'integrations', label: 'Integrations', icon: Bot },
+    { id: 'identity', label: 'Identity Providers', icon: KeyRound },
     { id: 'workflow', label: 'Workflow Engine', icon: GitPullRequest },
     { id: 'audit', label: 'Audit Logs', icon: ScrollText },
   ];
@@ -53,6 +55,7 @@ export default function AdminPage() {
         {activeTab === 'users' && <UsersManagementPage />}
         {activeTab === 'roles' && <RolesManagementPage />}
         {activeTab === 'integrations' && <IntegrationsConnectionsPage />}
+        {activeTab === 'identity' && <IdentityProvidersCard />}
         {activeTab === 'workflow' && <WorkflowEnginePage />}
         {activeTab === 'audit' && <AuditLogsPage />}
       </div>

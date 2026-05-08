@@ -20,7 +20,10 @@ import {
   Sparkles,
   LayoutDashboard,
   ClipboardCheck,
+  Shield,
 } from 'lucide-react';
+import NcaTab from '@/components/compliance/NcaTab';
+import { assetsApi } from '@/lib/api';
 import {
   ResponsiveContainer,
   RadialBarChart,
@@ -220,7 +223,29 @@ export default function AssessmentsPage() {
   const [assessmentToDelete, setAssessmentToDelete] = useState<Assessment | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [chartsReady, setChartsReady] = useState(false);
-  const [activeView, setActiveView] = useState<'overview' | 'assessment'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'assessment' | 'nca'>('overview');
+
+  // NCA singleton container fetch — created lazily on first NCA tab visit
+  const { data: ncaContainer } = useQuery<{ id: number; tenant_id: number }>({
+    queryKey: ['nca-container'],
+    queryFn: async () => (await apiClient.get('/compliance/nca/container')).data,
+    enabled: activeView === 'nca',
+    staleTime: 60_000,
+  });
+
+  const { data: ncaTenantUsers = [] } = useQuery<Array<{ id: number; label: string; email: string | null }>>({
+    queryKey: ['nca-tenant-users'],
+    queryFn: async () => {
+      const r = await assetsApi.getTenantUsers();
+      return (r.data as any[]).map(u => ({
+        id: u.id,
+        label: u.display_name || u.email || `User ${u.id}`,
+        email: u.email || null,
+      }));
+    },
+    enabled: activeView === 'nca',
+    staleTime: 60_000,
+  });
 
   const queryClient = useQueryClient();
 
@@ -651,6 +676,7 @@ export default function AssessmentsPage() {
           {[
             { id: 'overview' as const, label: 'Overview', icon: LayoutDashboard },
             { id: 'assessment' as const, label: 'Assessment', icon: ClipboardCheck },
+            { id: 'nca' as const, label: 'NCA', icon: Shield },
           ].map(({ id, label, icon: Icon }) => {
             const isActive = activeView === id;
             return (
@@ -723,6 +749,19 @@ export default function AssessmentsPage() {
             </button>
           )}
         </div>
+      )}
+
+      {activeView === 'nca' && (
+        ncaContainer ? (
+          <NcaTab
+            assessmentId={ncaContainer.id}
+            tenantUsers={ncaTenantUsers}
+          />
+        ) : (
+          <div className="flex items-center justify-center py-24">
+            <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
+          </div>
+        )
       )}
 
       {activeView === 'overview' && (

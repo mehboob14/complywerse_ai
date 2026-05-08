@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
+import * as XLSX from 'xlsx';
 import { adminApi, assetsApi, ermApi } from '@/lib/api';
+import apiClient from '@/lib/api';
 import { ITAsset, Risk, RiskCategory, RiskStatus, RiskDashboard, HeatmapCell } from '@/types';
 import {
   AlertTriangle,
@@ -24,9 +26,11 @@ import {
   ListTodo,
   Sparkles,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Check,
   Zap,
+  Eye,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRef } from 'react';
@@ -34,6 +38,9 @@ import { SearchInput } from '@/components/ui/SearchInput';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
+import NcaRiskRegisterTab from '@/components/risks/NcaRiskRegisterTab';
+import NcaRiskQuickAddModal from '@/components/risks/NcaRiskQuickAddModal';
+import { useRouter as useNextRouter, useSearchParams } from 'next/navigation';
 
 type ScoreFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
 const UBL_TEMPLATE_REGISTER_TYPE = 'UBL Template';
@@ -370,8 +377,11 @@ const UBL_DEFAULT_FIELD_SECTIONS: UBLFieldSection[] = [
   },
 ];
 
+const NCA_TEMPLATE_REGISTER_TYPE = 'NCA Template';
+
 const REGISTER_TYPES = [
   { value: UBL_TEMPLATE_REGISTER_TYPE, label: 'Template' },
+  { value: NCA_TEMPLATE_REGISTER_TYPE, label: 'NCA Template' },
   { value: 'PCI-DSS', label: 'PCI-DSS' },
   { value: 'ISO 27001', label: 'ISO 27001' },
   { value: 'SOX', label: 'SOX' },
@@ -407,6 +417,9 @@ const filterValuesMatch = (left: string | null | undefined, right: string | null
 
 const isUBLRegisterTypeValue = (value: string | null | undefined) =>
   canonicalFilterValue(value) === canonicalFilterValue(UBL_TEMPLATE_REGISTER_TYPE);
+
+const isNcaRegisterTypeValue = (value: string | null | undefined) =>
+  canonicalFilterValue(value) === canonicalFilterValue(NCA_TEMPLATE_REGISTER_TYPE);
 
 const isUBLAllowedCategoryValue = (value: string | null | undefined) =>
   UBL_ONLY_RISK_CATEGORIES.some((allowed) => filterValuesMatch(value, allowed));
@@ -605,6 +618,9 @@ export default function ERMRisksPage() {
   const [heatmapType, setHeatmapType] = useState<'inherent' | 'residual'>('inherent');
   const [selectedHeatmapCell, setSelectedHeatmapCell] = useState<{l: number, i: number} | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isNcaAddOpen, setIsNcaAddOpen] = useState(false);
+  // When set, the NCA modal opens in EDIT mode bound to this bridged Risk id.
+  const [ncaEditBridgedId, setNcaEditBridgedId] = useState<number | null>(null);
   const [editingRisk, setEditingRisk] = useState<Risk | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [selectedRegisterType, setSelectedRegisterType] = useState<string>('');
@@ -613,7 +629,9 @@ export default function ERMRisksPage() {
   const [expandedRiskRows, setExpandedRiskRows] = useState<Record<number, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+  const ncaAddRouter = useNextRouter();
   const isUBLFilterSelected = isUBLRegisterTypeValue(registerTypeFilter);
+  const isNcaFilterSelected = isNcaRegisterTypeValue(registerTypeFilter);
 
   useEffect(() => {
     if (!isUBLFilterSelected) return;
@@ -623,6 +641,27 @@ export default function ERMRisksPage() {
     }
   }, [isUBLFilterSelected, categoryFilter]);
 
+  // When the user picks the NCA Template filter, backfill bridges for any
+  // legacy NCA risk entries that pre-date the bridge column. Without this,
+  // those entries have no backing Risk record tagged with
+  // register_type='NCA Template' and so stay invisible in this list.
+  useEffect(() => {
+    if (!isNcaFilterSelected) return;
+    let cancelled = false;
+    apiClient.post('/risks/nca/backfill-bridges')
+      .then((res) => {
+        if (cancelled) return;
+        const newly = res.data?.newly_bridged ?? 0;
+        if (newly > 0) {
+          queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
+          queryClient.invalidateQueries({ queryKey: ['erm-risks-dashboard'] });
+          queryClient.invalidateQueries({ queryKey: ['erm-risks-heatmap'] });
+        }
+      })
+      .catch(() => { /* silent — best-effort */ });
+    return () => { cancelled = true; };
+  }, [isNcaFilterSelected, queryClient]);
+
   const { data: risks, isLoading, error } = useQuery({
     queryKey: ['erm-risks'],
     queryFn: async () => {
@@ -631,6 +670,25 @@ export default function ERMRisksPage() {
     },
     placeholderData: keepPreviousData,
   });
+
+  // Open the edit modal directly when arriving with `?edit=<risk_id>` in the URL.
+  // Used by the "Edit" button on the general risk detail page (/risks/[id]) so
+  // users can modify a risk without leaving the navigation flow.
+  const searchParams = useSearchParams();
+  const editIdParam = searchParams?.get('edit');
+  useEffect(() => {
+    if (!editIdParam || !risks || isModalOpen) return;
+    const targetId = Number(editIdParam);
+    if (!targetId) return;
+    const target = (risks as Risk[]).find((r) => r.id === targetId);
+    if (target) {
+      setEditingRisk(target);
+      setIsModalOpen(true);
+      // Clean the URL so re-renders don't re-open the modal after the user closes it
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [editIdParam, risks, isModalOpen]);
 
   const { data: dashboard } = useQuery({
     queryKey: ['erm-risks-dashboard'],
@@ -682,10 +740,143 @@ export default function ERMRisksPage() {
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    
+
     setIsUploading(true);
     setUploadResult(null);
-    
+
+    // ─── NCA Template path — parse client-side, POST each row to /risks/nca ─
+    // The backend `upload_risk_register` is UBL-format-specific (looks for
+    // sheets named "Technology Risk Register", etc.) and will skip every row
+    // of an NCA template. Route NCA uploads through the NCA endpoint, which
+    // also auto-bridges into the general Risk register.
+    if (isNcaRegisterTypeValue(selectedRegisterType)) {
+      try {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+
+        // Pick the data sheet (skip Cover Page / Legend / Heat map / etc.)
+        let ws: XLSX.WorkSheet | null = null;
+        const preferred = wb.SheetNames.find((n) => {
+          const s = n.toLowerCase();
+          return s.includes('risk register') && !s.includes('legend');
+        });
+        if (preferred) ws = wb.Sheets[preferred];
+        if (!ws) {
+          for (const name of wb.SheetNames) {
+            const cand = wb.Sheets[name];
+            const probe: any[][] = XLSX.utils.sheet_to_json(cand, { header: 1, defval: '' }) as any;
+            for (let r = 0; r < Math.min(probe.length, 20); r++) {
+              const rowStr = (probe[r] || []).map((c) => String(c || '').toLowerCase()).join(' ');
+              if (rowStr.includes('risk identifier') && rowStr.includes('threat')) { ws = cand; break; }
+            }
+            if (ws) break;
+          }
+        }
+        if (!ws) throw new Error('Could not find a Risk Register sheet in this workbook');
+
+        // Find the header row (NCA puts it at row 11 / idx 10)
+        const allRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }) as any;
+        let headerRowIdx = 0;
+        for (let r = 0; r < Math.min(allRows.length, 25); r++) {
+          const rowStr = (allRows[r] || []).map((c) => String(c || '').toLowerCase()).join(' ');
+          if (rowStr.includes('risk identifier') || (rowStr.includes('risk owner') && rowStr.includes('threat'))) {
+            headerRowIdx = r;
+            break;
+          }
+        }
+        const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '', range: headerRowIdx, raw: false });
+
+        let created = 0;
+        const errors: string[] = [];
+
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i];
+          const keys = Object.keys(r);
+          const ci = (name: string) => {
+            const norm = name.toLowerCase().replace(/\s+/g, ' ').trim();
+            const key = keys.find((k) => k.toLowerCase().replace(/\s+/g, ' ').trim().startsWith(norm));
+            return key ? r[key] : undefined;
+          };
+          const toStr = (v: any) => (v === null || v === undefined || v === '') ? null : String(v).trim() || null;
+          const toInt = (v: any) => { const n = parseInt(v); return isNaN(n) ? null : n; };
+          const toDate = (v: any) => {
+            if (!v) return null;
+            if (v instanceof Date) return v.toISOString().split('T')[0];
+            const d = new Date(v);
+            return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
+          };
+          const stripPlaceholder = (v: string | null): string | null => {
+            if (!v) return null;
+            if (/^please\s+select/i.test(v.trim())) return null;
+            return v;
+          };
+
+          const payload = {
+            risk_area:                stripPlaceholder(toStr(ci('risk area'))),
+            risk_owner:               stripPlaceholder(toStr(ci('risk owner'))),
+            date_identified:          toDate(ci('date of risk identification')),
+            description:              toStr(ci('description of the risk') ?? ci('description')),
+            risk_cause:               toStr(ci('risk cause')),
+            threat:                   stripPlaceholder(toStr(ci('threat'))),
+            risk_analysis:            toStr(ci('risk analysis and consequences') ?? ci('risk analysis')),
+            date_analysis:            toDate(ci('date of risk analysis')),
+            inherent_likelihood:      toInt(ci('inherent risk likelihood')),
+            inherent_impact:          toInt(ci('inherent risk magnitude') ?? ci('inherent risk impact')),
+            inherent_rating_override: stripPlaceholder(toStr(ci('updated overall inherent risk rating') ?? ci('updated inherent risk rating'))),
+            treatment_type:           stripPlaceholder(toStr(ci('type of treatment action'))),
+            treatment_description:    toStr(ci('risk treatment description')),
+            treatment_owner:          stripPlaceholder(toStr(ci('owner of the treatment') ?? ci('owner of treatment') ?? ci('treatment owner'))),
+            treatment_deadline:       toDate(ci('deadline for action')),
+            residual_description:     toStr(ci('residual risk description')),
+            residual_likelihood:      toInt(ci('residual risk likelihood')),
+            residual_impact:          toInt(ci('residual risk magnitude') ?? ci('residual risk impact')),
+            following_steps:          toStr(ci('following steps description') ?? ci('following steps')),
+            last_evaluation_date:     toDate(ci('last evaluation date')),
+            comment:                  toStr(ci('comment')),
+          };
+
+          const meaningful = [
+            payload.description, payload.risk_owner, payload.threat,
+            payload.risk_cause, payload.risk_analysis, payload.treatment_description,
+            payload.risk_area,
+          ];
+          if (!meaningful.some((v) => v !== null && v !== '' && v !== undefined)) continue;
+
+          try {
+            await apiClient.post('/risks/nca', payload);
+            created++;
+          } catch {
+            errors.push(`Row ${headerRowIdx + i + 2}`);
+          }
+        }
+
+        setUploadResult({
+          message: `NCA template: imported ${created} risk${created === 1 ? '' : 's'}`,
+          created,
+          skipped: 0,
+          errors,
+        });
+        queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
+        queryClient.invalidateQueries({ queryKey: ['erm-risks-dashboard'] });
+        queryClient.invalidateQueries({ queryKey: ['erm-risks-heatmap'] });
+        queryClient.invalidateQueries({ queryKey: ['nca-risk-entries'] });
+        setIsUploadModalOpen(false);
+        setSelectedRegisterType('');
+      } catch (err: any) {
+        setUploadResult({
+          message: err?.message || 'NCA template upload failed',
+          created: 0,
+          skipped: 0,
+          errors: [err?.message || 'Upload failed'],
+        });
+      } finally {
+        setIsUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // ─── Standard / UBL path ────────────────────────────────────────────
     try {
       const response = await ermApi.risks.uploadRiskRegister(file, selectedRegisterType || undefined);
       setUploadResult(response.data);
@@ -925,6 +1116,11 @@ export default function ERMRisksPage() {
     );
   }
 
+  // Note: when isNcaFilterSelected is true, the standard view stays mounted —
+  // the existing register_type filter naturally narrows the table to NCA-bridged
+  // risks (register_type="NCA Template"). This keeps the heatmap, KPI cards,
+  // search, filters, and table identical to the general view.
+
   return (
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       {uploadResult && (
@@ -1118,18 +1314,218 @@ export default function ERMRisksPage() {
           {canCreate && (
             <button
               onClick={() => {
-                setEditingRisk(null);
-                setIsModalOpen(true);
+                // NCA filter active → open the NCA-specific add modal so the
+                // form covers every NCA template column. Otherwise → open the
+                // standard Add Risk slide-over.
+                if (isNcaFilterSelected) {
+                  setIsNcaAddOpen(true);
+                } else {
+                  setEditingRisk(null);
+                  setIsModalOpen(true);
+                }
               }}
               className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-3 sm:px-4 py-2 text-sm font-medium"
             >
               <Plus size={16} />
-              Add Risk
+              {isNcaFilterSelected ? 'Add NCA Risk' : 'Add Risk'}
             </button>
           )}
         </div>
       </div>
 
+      {/* NCA Template view — compact table with chevron-expandable detail rows.
+          Shows all NCA risk template columns; data sourced from `template_fields`
+          JSON populated by the bridge. Standard view stays mounted below. */}
+      {isNcaFilterSelected ? (
+        filteredRisks.length === 0 ? (
+          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+            <AlertTriangle className="mx-auto h-10 w-10 text-slate-500" />
+            <p className="mt-2 text-slate-600">No NCA risks found. Add one or upload the NCA template.</p>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="px-2 py-2 w-8"></th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Risk ID</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider">Description</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Risk Area</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider">Threat</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Inherent Rating</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Treatment</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Residual Rating</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider">Owner</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {filteredRisks.map((risk) => {
+                    const tf = ((risk as any).template_fields ?? {}) as Record<string, any>;
+                    const expanded = !!expandedRiskRows[risk.id];
+                    const toggle = () => setExpandedRiskRows((prev) => ({ ...prev, [risk.id]: !prev[risk.id] }));
+                    const inherentRating = tf.inherent_rating_override
+                      || (() => {
+                          const s = (tf.inherent_likelihood || 0) * (tf.inherent_impact || 0);
+                          if (!s) return null;
+                          if (s >= 20) return 'Critical';
+                          if (s >= 12) return 'High';
+                          if (s >= 6) return 'Medium';
+                          if (s >= 3) return 'Low';
+                          return 'Very Low';
+                        })();
+                    const residualRating = (() => {
+                      const s = (tf.residual_likelihood || 0) * (tf.residual_impact || 0);
+                      if (!s) return null;
+                      if (s >= 20) return 'Critical';
+                      if (s >= 12) return 'High';
+                      if (s >= 6) return 'Medium';
+                      if (s >= 3) return 'Low';
+                      return 'Very Low';
+                    })();
+                    const ratingClass = (r: string | null) => {
+                      switch (r) {
+                        case 'Critical':  return 'bg-rose-100 text-rose-700';
+                        case 'High':      return 'bg-orange-100 text-orange-700';
+                        case 'Medium':    return 'bg-amber-100 text-amber-700';
+                        case 'Low':       return 'bg-green-100 text-green-700';
+                        case 'Very Low':  return 'bg-gray-100 text-gray-600';
+                        default:          return 'bg-gray-100 text-gray-500';
+                      }
+                    };
+                    const fmtDate = (d: any) => (d ? new Date(d).toLocaleDateString() : '—');
+                    const truncate = (s: any, n: number) =>
+                      s ? (String(s).length > n ? String(s).slice(0, n) + '…' : String(s)) : '—';
+                    const ownerName = risk.owner_name || tf.risk_owner;
+                    const detailFields: Array<[string, any]> = [
+                      ['Risk Identifier', tf.risk_identifier || `RISK-${risk.id}`],
+                      ['Risk Area (Scope)', tf.risk_area],
+                      ['Risk Owner', ownerName],
+                      ['Date of Risk Identification', fmtDate(tf.date_identified)],
+                      ['Description of the Risk', risk.description || tf.description],
+                      ['Risk Cause', tf.risk_cause],
+                      ['Threat', tf.threat],
+                      ['Risk Analysis and Consequences', tf.risk_analysis],
+                      ['Date of Risk Analysis', fmtDate(tf.date_analysis)],
+                      ['Inherent Likelihood', tf.inherent_likelihood],
+                      ['Inherent Impact', tf.inherent_impact],
+                      ['Overall Inherent Rating', inherentRating],
+                      ['Updated Inherent Rating (override)', tf.inherent_rating_override],
+                      ['Type of Treatment Action', tf.treatment_type],
+                      ['Risk Treatment Description', tf.treatment_description],
+                      ['Deadline for Action', fmtDate(tf.treatment_deadline)],
+                      ['Residual Risk Description', tf.residual_description],
+                      ['Residual Likelihood', tf.residual_likelihood],
+                      ['Residual Impact', tf.residual_impact],
+                      ['Overall Residual Rating', residualRating],
+                      ['Following Steps Description', tf.following_steps],
+                      ['Last Evaluation Date', fmtDate(tf.last_evaluation_date)],
+                      ['Comment', tf.comment],
+                    ];
+                    return (
+                      <Fragment key={risk.id}>
+                        <tr className="bg-white hover:bg-slate-50 transition-colors">
+                          <td className="px-2 py-2 align-middle">
+                            <button
+                              onClick={toggle}
+                              className="text-slate-400 hover:text-slate-700 inline-flex items-center justify-center w-6 h-6 rounded hover:bg-slate-100"
+                              aria-label={expanded ? 'Collapse' : 'Expand'}
+                            >
+                              {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 font-mono text-slate-600 whitespace-nowrap">{tf.risk_identifier || `RISK-${risk.id}`}</td>
+                          <td className="px-3 py-2 max-w-[280px]">
+                            <Link href={`/risks/${risk.id}`} className="text-sm text-slate-900 font-medium hover:text-primary-600 line-clamp-1">
+                              {truncate(risk.description || risk.title, 80)}
+                            </Link>
+                          </td>
+                          <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{tf.risk_area || '—'}</td>
+                          <td className="px-3 py-2 text-slate-600 max-w-[180px] truncate" title={tf.threat || ''}>{tf.threat || '—'}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${ratingClass(inherentRating)}`}>
+                              {inherentRating || '—'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{tf.treatment_type || '—'}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${ratingClass(residualRating)}`}>
+                              {residualRating || '—'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{ownerName || <span className="italic text-slate-400">—</span>}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-0.5">
+                              <Link
+                                href={`/risks/${risk.id}`}
+                                className="inline-flex items-center justify-center rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary-600"
+                                title="View Details"
+                                aria-label="View Details"
+                              >
+                                <Eye size={16} />
+                              </Link>
+                              {canEdit && (
+                                <button
+                                  onClick={() => {
+                                    // NCA row → open the NCA modal in edit mode
+                                    // so all NCA template fields appear (the
+                                    // general RiskModal only has a subset).
+                                    setNcaEditBridgedId(risk.id);
+                                    setIsNcaAddOpen(true);
+                                  }}
+                                  className="inline-flex items-center justify-center rounded p-1.5 text-slate-500 hover:bg-blue-50 hover:text-blue-600"
+                                  title="Edit"
+                                  aria-label="Edit"
+                                >
+                                  <Edit2 size={16} />
+                                </button>
+                              )}
+                              {canDelete && (
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm(`Delete risk "${risk.title || tf.risk_identifier}"? This cannot be undone.`)) {
+                                      deleteMutation.mutate(risk.id);
+                                    }
+                                  }}
+                                  disabled={deleteMutation.isPending}
+                                  className="inline-flex items-center justify-center rounded p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                                  title="Delete"
+                                  aria-label="Delete"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                        {expanded && (
+                          <tr className="bg-blue-50/30">
+                            <td></td>
+                            <td colSpan={9} className="px-4 py-3">
+                              <div className="rounded-lg border border-blue-100 bg-white p-3">
+                                <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-2">NCA Template Fields</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2">
+                                  {detailFields.filter(([, v]) => v !== null && v !== undefined && v !== '' && v !== '—').map(([label, value]) => (
+                                    <div key={label}>
+                                      <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">{label}</p>
+                                      <p className="text-xs text-slate-800 whitespace-pre-wrap break-words">{String(value)}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      ) : (
       <div className="space-y-3">
             {filteredRisks.length === 0 ? (
               <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
@@ -1343,6 +1739,7 @@ export default function ERMRisksPage() {
               })
             )}
           </div>
+      )}
 
       {isModalOpen && (
         <RiskModal
@@ -1431,6 +1828,29 @@ export default function ERMRisksPage() {
           </button>
         </div>
       </RightSlidePanel>
+
+      <NcaRiskQuickAddModal
+        isOpen={isNcaAddOpen}
+        onClose={() => {
+          setIsNcaAddOpen(false);
+          setNcaEditBridgedId(null);
+        }}
+        editBridgedRiskId={ncaEditBridgedId}
+        onCreated={(_entryId, bridgedRiskId) => {
+          const wasEdit = ncaEditBridgedId !== null;
+          setIsNcaAddOpen(false);
+          setNcaEditBridgedId(null);
+          queryClient.invalidateQueries({ queryKey: ['erm-risks'] });
+          queryClient.invalidateQueries({ queryKey: ['erm-risks-dashboard'] });
+          queryClient.invalidateQueries({ queryKey: ['erm-risks-heatmap'] });
+          queryClient.invalidateQueries({ queryKey: ['nca-risk-entries'] });
+          // Only navigate to the detail page on CREATE — edit should stay on
+          // the list so the user can keep working through other rows.
+          if (!wasEdit && bridgedRiskId) {
+            ncaAddRouter.push(`/risks/${bridgedRiskId}`);
+          }
+        }}
+      />
     </div>
   );
 }

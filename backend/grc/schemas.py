@@ -496,6 +496,7 @@ class RiskResponse(BaseModel):
     risk_sub_category: Optional[str] = None
     register_type: Optional[str] = None
     ubl_fields: Optional[Dict[str, Any]] = None
+    template_fields: Optional[Dict[str, Any]] = None
     owner_id: Optional[int]
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = []
@@ -1967,6 +1968,8 @@ class VulnerabilityResponse(BaseModel):
     assignee_name: Optional[str] = None
     verifier_name: Optional[str] = None
     linked_assets: List[str] = []
+    template_type: Optional[str] = None
+    template_fields: Optional[dict] = None
 
     class Config:
         from_attributes = True

@@ -1,12 +1,19 @@
 import os
 import json
-from typing import List, Optional
+import uuid
+import logging
+import threading
+from typing import List, Optional, Dict, Any
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func, distinct
 from pydantic import BaseModel
 from openai import OpenAI
+
+from ....job_status import set_status as set_job_status, get_status as get_job_status
+
+_jobs_logger = logging.getLogger(__name__)
 
 from ....models import (
     CommonControlGroup, CommonControlGroupMapping, NormalizedControl,
@@ -157,51 +164,145 @@ Return JSON:
         )
 
 
+# Tunables for AI grouping. Single-shot calls work well up to ~80 controls; for
+# anything larger we batch + merge so the model never runs out of output tokens
+# and silently drops controls (the original bug — `[:100]` slice + max_tokens=4000
+# meant ~70% of selected frameworks' controls never made it into a group).
+_AI_GROUP_BATCH_SIZE = 60
+_AI_GROUP_MAX_TOKENS = 8000
+
+
+def _build_grouping_prompt(controls_text: str, target_groups_hint: str) -> str:
+    return (
+        "Analyze these compliance controls and group them by common purpose/theme.\n"
+        "Create logical groups that cluster controls addressing similar requirements.\n\n"
+        "STRICT RULES:\n"
+        "1. EVERY control listed below MUST appear in exactly one group. Do not skip any.\n"
+        "2. Use the integer ID and exact type tag (normalized | parsed) when emitting control_ids.\n"
+        "3. Pick a clear category and domain — controls with the same NCA / ISO / NIST domain "
+        "should generally land in the same group.\n"
+        f"4. {target_groups_hint}\n\n"
+        f"Controls:\n{controls_text}\n\n"
+        "Return JSON with groups:\n"
+        "{\n"
+        '  "groups": [\n'
+        "    {\n"
+        '      "code": "<short code like CCG-001>",\n'
+        '      "name": "<group name>",\n'
+        '      "description": "<group description>",\n'
+        '      "category": "<category like Access Control, Data Protection, etc>",\n'
+        '      "domain": "<domain like Security, Privacy, etc>",\n'
+        '      "keywords": ["keyword1", "keyword2"],\n'
+        '      "control_ids": [ {"id": <control_id>, "type": "normalized|parsed"} ]\n'
+        "    }\n"
+        "  ]\n"
+        "}\n"
+    )
+
+
+def _format_controls_block(controls_list: List[dict]) -> str:
+    return "\n\n".join([
+        f"Control {i+1} (ID: {c['id']}, Type: {c['type']}, Framework: {c.get('framework', 'N/A')}):\n"
+        f"Code: {c['code']}\nName: {c['name']}\nStatement: {(c.get('statement') or '')[:400]}"
+        for i, c in enumerate(controls_list)
+    ])
+
+
+def _ai_group_single_batch(client, controls_list: List[dict], target_groups_hint: str) -> List[dict]:
+    controls_text = _format_controls_block(controls_list)
+    prompt = _build_grouping_prompt(controls_text, target_groups_hint)
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {"role": "system", "content": "You are a compliance expert grouping related controls. Every control provided MUST appear in exactly one group. Respond only with valid JSON."},
+            {"role": "user", "content": prompt},
+        ],
+        response_format={"type": "json_object"},
+        max_tokens=_AI_GROUP_MAX_TOKENS,
+        temperature=0.2,
+    )
+    result = json.loads(response.choices[0].message.content or '{"groups": []}')
+    return result.get("groups", [])
+
+
+def _merge_ai_groups(group_batches: List[List[dict]]) -> List[dict]:
+    """Merge groups produced from separate batches by canonicalised name.
+    Preserves the union of control_ids across batches so identical themes
+    coming from different frameworks consolidate cleanly.
+    """
+    merged: Dict[str, dict] = {}
+    for batch in group_batches:
+        for g in batch:
+            name = (g.get("name") or "").strip()
+            if not name:
+                continue
+            key = name.lower()
+            if key not in merged:
+                merged[key] = {
+                    "code": g.get("code"),
+                    "name": name,
+                    "description": g.get("description"),
+                    "category": g.get("category"),
+                    "domain": g.get("domain"),
+                    "keywords": list(g.get("keywords") or []),
+                    "control_ids": [],
+                }
+            existing = merged[key]
+            # Union of control_ids — dedupe on (id, type)
+            seen = {(c.get("id"), c.get("type")) for c in existing["control_ids"]}
+            for c in g.get("control_ids") or []:
+                tup = (c.get("id"), c.get("type"))
+                if tup not in seen and c.get("id") is not None:
+                    existing["control_ids"].append(c)
+                    seen.add(tup)
+            # Union of keywords
+            for kw in g.get("keywords") or []:
+                if kw not in existing["keywords"]:
+                    existing["keywords"].append(kw)
+            # Backfill missing optional fields
+            for fld in ("description", "category", "domain"):
+                if not existing.get(fld) and g.get(fld):
+                    existing[fld] = g[fld]
+    return list(merged.values())
+
+
 def ai_auto_group_controls(controls_list: List[dict]) -> List[dict]:
+    """Group an arbitrarily large list of controls via OpenAI.
+
+    Honors every control passed in (no silent truncation). Batches the AI
+    calls so output never gets cut by max_tokens, then merges by group name
+    so themes consolidate across batches.
+    """
+    if not controls_list:
+        return []
     try:
         client = get_openai_client()
-        controls_text = "\n\n".join([
-            f"Control {i+1} (ID: {c['id']}, Type: {c['type']}, Framework: {c.get('framework', 'N/A')}):\nCode: {c['code']}\nName: {c['name']}\nStatement: {c['statement'][:300]}"
-            for i, c in enumerate(controls_list[:100])
-        ])
 
-        prompt = f"""Analyze these compliance controls and group them by common purpose/theme.
-Create logical groups that cluster controls addressing similar requirements.
+        total = len(controls_list)
+        if total <= _AI_GROUP_BATCH_SIZE:
+            # Single shot — let the model pick the right number of groups.
+            target_hint = (
+                f"Produce as many groups as the {total} controls naturally cluster into "
+                "(typically 4-15 groups; aim for ~8-15 controls per group)."
+            )
+            return _ai_group_single_batch(client, controls_list, target_hint)
 
-Controls:
-{controls_text}
-
-Return JSON with groups:
-{{
-    "groups": [
-        {{
-            "code": "<short code like CCG-001>",
-            "name": "<group name>",
-            "description": "<group description>",
-            "category": "<category like Access Control, Data Protection, etc>",
-            "domain": "<domain like Security, Privacy, etc>",
-            "keywords": ["keyword1", "keyword2"],
-            "control_ids": [
-                {{"id": <control_id>, "type": "<normalized|framework|parsed>"}}
-            ]
-        }}
-    ]
-}}
-
-Create 3-8 meaningful groups based on control similarities."""
-
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are a compliance expert grouping related controls. Respond only with valid JSON."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=4000,
-            temperature=0.3
+        # Batch the controls and merge results. Group themes that recur across
+        # batches are consolidated by `_merge_ai_groups`.
+        batches: List[List[dict]] = [
+            controls_list[i:i + _AI_GROUP_BATCH_SIZE]
+            for i in range(0, total, _AI_GROUP_BATCH_SIZE)
+        ]
+        target_hint = (
+            "Produce groups that match common compliance themes (NCA / ISO / NIST domains). "
+            "Aim for 4-10 groups per batch with ~6-15 controls each, but cover ALL controls."
         )
-        result = json.loads(response.choices[0].message.content or '{"groups": []}')
-        return result.get("groups", [])
+        batch_results: List[List[dict]] = []
+        for batch in batches:
+            batch_results.append(_ai_group_single_batch(client, batch, target_hint))
+        return _merge_ai_groups(batch_results)
+    except HTTPException:
+        raise
     except Exception as e:
         error_msg = str(e)
         if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
@@ -213,6 +314,164 @@ Create 3-8 meaningful groups based on control similarities."""
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"AI auto-grouping failed: {error_msg}"
         )
+
+
+# ─── Reusable helpers for auto-grouping (used by both the sync route and the
+#     Celery worker task) ────────────────────────────────────────────────────
+
+def _fetch_controls_for_grouping(
+    db: Session, tenant_id: int, framework_ids: Optional[List[int]] = None
+) -> List[dict]:
+    """Return the canonical control payload list that feeds AI auto-grouping.
+    Honours `framework_ids` filter — when set, only that subset is included
+    (and normalized controls are excluded so they don't pollute the run).
+    """
+    controls_list: List[dict] = []
+    framework_ids = list(framework_ids or [])
+    framework_filter_active = bool(framework_ids)
+
+    if not framework_filter_active:
+        for nc in db.query(NormalizedControl).all():
+            controls_list.append({
+                "id": nc.id,
+                "type": "normalized",
+                "code": nc.code,
+                "name": nc.name,
+                "statement": nc.statement or nc.objective or "",
+                "framework": "Normalized",
+            })
+
+    parsed_query = db.query(ParsedFrameworkControl).join(
+        UploadedFramework, ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
+    ).filter(
+        or_(UploadedFramework.tenant_id == tenant_id, UploadedFramework.tenant_id.is_(None))
+    )
+    if framework_filter_active:
+        parsed_query = parsed_query.filter(
+            ParsedFrameworkControl.uploaded_framework_id.in_(framework_ids)
+        )
+    parsed_controls = parsed_query.all()
+
+    fw_id_to_name: Dict[int, str] = {}
+    if parsed_controls:
+        framework_ids_seen = list({pc.uploaded_framework_id for pc in parsed_controls})
+        for fw in db.query(UploadedFramework).filter(UploadedFramework.id.in_(framework_ids_seen)).all():
+            fw_id_to_name[fw.id] = fw.name
+
+    for pc in parsed_controls:
+        controls_list.append({
+            "id": pc.id,
+            "type": "parsed",
+            "code": pc.original_reference or pc.control_id,
+            "name": pc.title,
+            "statement": pc.description or (pc.full_text[:400] if pc.full_text else ""),
+            "framework": fw_id_to_name.get(pc.uploaded_framework_id, "Unknown"),
+        })
+    return controls_list
+
+
+def _coerce_int(val: Any) -> Optional[int]:
+    """Some LLM responses return numeric ids as strings. Normalise so the
+    DB filter doesn't silently miss the row."""
+    if val is None:
+        return None
+    if isinstance(val, int):
+        return val
+    try:
+        return int(str(val).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def persist_ai_groups(
+    db: Session, tenant_id: int, user_id: Optional[int], ai_groups: List[dict]
+) -> Dict[str, Any]:
+    """Take the raw AI-suggested groups and persist them as `CommonControlGroup`
+    + `CommonControlGroupMapping` rows. Idempotent on (tenant, group name) and
+    (group, control) — re-running an identical grouping won't duplicate rows.
+    Returns a summary dict with counts + the affected group ids.
+    """
+    created_groups: List[CommonControlGroup] = []
+    merged_groups: List[CommonControlGroup] = []
+    mapping_count = 0
+
+    for group_data in ai_groups:
+        group_name = (group_data.get("name") or "").strip() or "Auto-generated Group"
+
+        existing_by_name = db.query(CommonControlGroup).filter(
+            CommonControlGroup.tenant_id == tenant_id,
+            func.lower(CommonControlGroup.name) == group_name.lower()
+        ).first()
+
+        if existing_by_name:
+            group = existing_by_name
+            merged_groups.append(group)
+        else:
+            code = (group_data.get("code") or f"CCG-{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}").strip()
+            existing_code = db.query(CommonControlGroup).filter(
+                CommonControlGroup.tenant_id == tenant_id,
+                CommonControlGroup.code == code
+            ).first()
+            if existing_code:
+                code = f"{code}-{datetime.utcnow().strftime('%f')}"
+
+            group = CommonControlGroup(
+                tenant_id=tenant_id,
+                code=code,
+                name=group_name,
+                description=group_data.get("description"),
+                category=group_data.get("category"),
+                domain=group_data.get("domain"),
+                keywords=group_data.get("keywords") or [],
+                created_by=user_id,
+            )
+            db.add(group)
+            db.flush()
+            created_groups.append(group)
+
+        for ctrl in group_data.get("control_ids") or []:
+            ctrl_id = _coerce_int(ctrl.get("id"))
+            ctrl_type = (ctrl.get("type") or "").strip().lower()
+            if ctrl_id is None:
+                continue
+
+            if ctrl_type == "normalized":
+                exists_q = db.query(CommonControlGroupMapping).filter(
+                    CommonControlGroupMapping.group_id == group.id,
+                    CommonControlGroupMapping.normalized_control_id == ctrl_id,
+                ).first()
+                if not exists_q:
+                    db.add(CommonControlGroupMapping(
+                        group_id=group.id,
+                        normalized_control_id=ctrl_id,
+                        mapping_source="ai",
+                        mapping_confidence=0.8,
+                    ))
+                    mapping_count += 1
+            elif ctrl_type in ("parsed", "framework"):
+                # The old prompt allowed "framework"; we still accept it for
+                # backwards-compat but always store it as a parsed mapping.
+                exists_q = db.query(CommonControlGroupMapping).filter(
+                    CommonControlGroupMapping.group_id == group.id,
+                    CommonControlGroupMapping.parsed_control_id == ctrl_id,
+                ).first()
+                if not exists_q:
+                    db.add(CommonControlGroupMapping(
+                        group_id=group.id,
+                        parsed_control_id=ctrl_id,
+                        mapping_source="ai",
+                        mapping_confidence=0.8,
+                    ))
+                    mapping_count += 1
+
+    db.commit()
+    return {
+        "created_count": len(created_groups),
+        "merged_count": len(merged_groups),
+        "mapping_count": mapping_count,
+        "created_group_ids": [g.id for g in created_groups],
+        "merged_group_ids": [g.id for g in merged_groups],
+    }
 
 
 def serialize_group(group: CommonControlGroup, db: Session, include_controls: bool = False) -> dict:
@@ -683,6 +942,198 @@ def remove_control_from_group(
     return None
 
 
+# ─── Async dispatch + status polling for AI auto-grouping ──────────────────
+# Long-running grouping was blocking the request thread for minutes. We now
+# run the work in a Python background thread (no separate Celery worker
+# process required) and write progress to Redis-backed job_status so the UI
+# can poll. The Celery task in `tasks/control_library.py` is still available
+# for environments that prefer to scale work onto a worker pool.
+
+
+def _run_auto_grouping_threaded(
+    tenant_slug: str,
+    job_id: str,
+    framework_ids: List[int],
+    user_id: Optional[int],
+) -> None:
+    """Background worker — opens a dedicated tenant session, runs the full
+    auto-grouping pipeline, and reports progress via job_status. Designed to
+    be launched from a daemon thread so a long AI call doesn't block the
+    request thread or require a separate Celery worker.
+    """
+    namespace = "control_auto_group"
+    db_session = None
+    try:
+        # Acquire a tenant-scoped DB session that lives independently of the
+        # request that started the job.
+        from ....db import get_tenant_session_factory
+        from ....models import Tenant
+
+        SessionLocal = get_tenant_session_factory(tenant_slug)
+        db_session = SessionLocal()
+
+        tenant = db_session.query(Tenant).filter(Tenant.slug == tenant_slug).first()
+        if not tenant:
+            raise RuntimeError(f"Tenant slug '{tenant_slug}' not found")
+
+        _jobs_logger.info("[auto_group] tenant=%s job=%s — loading controls", tenant_slug, job_id)
+        set_job_status(tenant_slug, namespace, job_id, {
+            "status": "running",
+            "phase": "loading_controls",
+            "message": "Loading controls from selected frameworks…",
+            "progress_percent": 5,
+        })
+
+        controls = _fetch_controls_for_grouping(db_session, tenant.id, framework_ids)
+        if len(controls) < 2:
+            set_job_status(tenant_slug, namespace, job_id, {
+                "status": "failed",
+                "phase": "loading_controls",
+                "error": "Not enough controls to perform auto-grouping (need at least 2).",
+                "progress_percent": 100,
+            })
+            return
+
+        _jobs_logger.info(
+            "[auto_group] tenant=%s job=%s — calling AI on %d controls",
+            tenant_slug, job_id, len(controls),
+        )
+        set_job_status(tenant_slug, namespace, job_id, {
+            "status": "running",
+            "phase": "ai_grouping",
+            "message": f"Asking AI to cluster {len(controls)} controls…",
+            "control_count": len(controls),
+            "progress_percent": 25,
+        })
+
+        ai_groups = ai_auto_group_controls(controls)
+
+        _jobs_logger.info(
+            "[auto_group] tenant=%s job=%s — persisting %d groups",
+            tenant_slug, job_id, len(ai_groups),
+        )
+        set_job_status(tenant_slug, namespace, job_id, {
+            "status": "running",
+            "phase": "persisting",
+            "message": f"Saving {len(ai_groups)} group(s) to the database…",
+            "control_count": len(controls),
+            "group_count": len(ai_groups),
+            "progress_percent": 80,
+        })
+
+        summary = persist_ai_groups(db_session, tenant.id, user_id, ai_groups)
+
+        _jobs_logger.info(
+            "[auto_group] tenant=%s job=%s — DONE created=%d merged=%d mappings=%d",
+            tenant_slug, job_id,
+            summary["created_count"], summary["merged_count"], summary["mapping_count"],
+        )
+        set_job_status(tenant_slug, namespace, job_id, {
+            "status": "completed",
+            "phase": "done",
+            "message": (
+                f"Created {summary['created_count']} group(s), "
+                f"merged {summary['merged_count']}, "
+                f"linked {summary['mapping_count']} control(s)."
+            ),
+            "control_count": len(controls),
+            "group_count": len(ai_groups),
+            "summary": summary,
+            "progress_percent": 100,
+        })
+    except Exception as exc:
+        _jobs_logger.exception("[auto_group] tenant=%s job=%s FAILED", tenant_slug, job_id)
+        set_job_status(tenant_slug, namespace, job_id, {
+            "status": "failed",
+            "phase": "error",
+            "error": str(exc)[:500],
+            "progress_percent": 100,
+        })
+    finally:
+        if db_session is not None:
+            try:
+                db_session.close()
+            except Exception:
+                pass
+
+
+@router.post("/auto-group/dispatch")
+def auto_group_dispatch(
+    request: AutoGroupRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="User has no tenant assigned")
+    if not check_ai_available():
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "AI features unavailable",
+                "message": "OpenAI API key is not configured.",
+                "fallback_available": True,
+            },
+        )
+
+    tenant_slug = getattr(http_request.state, "tenant_slug", None)
+    if not tenant_slug:
+        from ....models import Tenant
+        t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        tenant_slug = t.slug if t else None
+    if not tenant_slug:
+        raise HTTPException(status_code=400, detail="Could not resolve tenant slug")
+
+    job_id = uuid.uuid4().hex
+    framework_ids = list(request.framework_ids or [])
+
+    set_job_status(tenant_slug, "control_auto_group", job_id, {
+        "status": "queued",
+        "phase": "queued",
+        "message": "Starting…",
+        "progress_percent": 1,
+        "framework_ids": framework_ids,
+    })
+
+    # Run the work in a daemon thread so the dispatch endpoint returns
+    # immediately and we don't depend on a separate Celery worker process.
+    # Status updates flow through Redis-backed job_status so the polling
+    # endpoint always returns a fresh snapshot.
+    user_id = current_user.id
+    thread = threading.Thread(
+        target=_run_auto_grouping_threaded,
+        args=(tenant_slug, job_id, framework_ids, user_id),
+        name=f"auto_group:{job_id}",
+        daemon=True,
+    )
+    thread.start()
+    _jobs_logger.info(
+        "[auto_group] DISPATCH tenant=%s job=%s framework_ids=%s — thread started",
+        tenant_slug, job_id, framework_ids,
+    )
+
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.get("/auto-group/status/{job_id}")
+def auto_group_status(
+    job_id: str,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_slug = getattr(http_request.state, "tenant_slug", None)
+    if not tenant_slug:
+        from ....models import Tenant
+        tenant_id = get_user_primary_tenant(current_user, db)
+        t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        tenant_slug = t.slug if t else None
+    if not tenant_slug:
+        raise HTTPException(status_code=400, detail="Could not resolve tenant slug")
+    return get_job_status(tenant_slug, "control_auto_group", job_id)
+
+
 @router.post("/auto-group")
 def auto_group_controls(
     request: AutoGroupRequest,
@@ -707,37 +1158,7 @@ def auto_group_controls(
             }
         )
     
-    controls_list = []
-    
-    normalized_controls = db.query(NormalizedControl).limit(100).all()
-    for nc in normalized_controls:
-        controls_list.append({
-            "id": nc.id,
-            "type": "normalized",
-            "code": nc.code,
-            "name": nc.name,
-            "statement": nc.statement or nc.objective or "",
-            "framework": "Normalized"
-        })
-    
-    parsed_controls = db.query(ParsedFrameworkControl).join(
-        UploadedFramework, ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
-    ).filter(
-        or_(UploadedFramework.tenant_id == tenant_id, UploadedFramework.tenant_id.is_(None))
-    ).all()
-    
-    for pc in parsed_controls:
-        fw = db.query(UploadedFramework).filter(UploadedFramework.id == pc.uploaded_framework_id).first()
-        framework_name = fw.name if fw else "Unknown"
-        controls_list.append({
-            "id": pc.id,
-            "type": "parsed",
-            "code": pc.original_reference or pc.control_id,
-            "name": pc.title,
-            "statement": pc.description or (pc.full_text[:300] if pc.full_text else ""),
-            "framework": framework_name
-        })
-    
+    controls_list = _fetch_controls_for_grouping(db, tenant_id, request.framework_ids)
     if len(controls_list) < 2:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -745,94 +1166,16 @@ def auto_group_controls(
         )
     
     ai_groups = ai_auto_group_controls(controls_list)
-    
-    created_groups = []
-    merged_groups = []
-    for group_data in ai_groups:
-        group_name = group_data.get("name", "Auto-generated Group")
-        
-        existing_by_name = db.query(CommonControlGroup).filter(
-            CommonControlGroup.tenant_id == tenant_id,
-            func.lower(CommonControlGroup.name) == group_name.lower()
-        ).first()
-        
-        if existing_by_name:
-            group = existing_by_name
-            merged_groups.append(group)
-        else:
-            code = group_data.get("code", f"CCG-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}")
-            existing_code = db.query(CommonControlGroup).filter(
-                CommonControlGroup.tenant_id == tenant_id,
-                CommonControlGroup.code == code
-            ).first()
-            if existing_code:
-                code = f"{code}-{datetime.utcnow().strftime('%f')}"
-            
-            group = CommonControlGroup(
-                tenant_id=tenant_id,
-                code=code,
-                name=group_name,
-                description=group_data.get("description"),
-                category=group_data.get("category"),
-                domain=group_data.get("domain"),
-                keywords=group_data.get("keywords", []),
-                created_by=current_user.id
-            )
-            db.add(group)
-            db.flush()
-            created_groups.append(group)
-        
-        control_ids = group_data.get("control_ids", [])
-        for ctrl in control_ids:
-            ctrl_id = ctrl.get("id")
-            ctrl_type = ctrl.get("type")
-            
-            if ctrl_type == "normalized":
-                existing_mapping = db.query(CommonControlGroupMapping).filter(
-                    CommonControlGroupMapping.group_id == group.id,
-                    CommonControlGroupMapping.normalized_control_id == ctrl_id
-                ).first()
-                if not existing_mapping:
-                    mapping = CommonControlGroupMapping(
-                        group_id=group.id,
-                        normalized_control_id=ctrl_id,
-                        mapping_source="ai",
-                        mapping_confidence=0.8
-                    )
-                    db.add(mapping)
-            elif ctrl_type == "parsed":
-                existing_mapping = db.query(CommonControlGroupMapping).filter(
-                    CommonControlGroupMapping.group_id == group.id,
-                    CommonControlGroupMapping.parsed_control_id == ctrl_id
-                ).first()
-                if not existing_mapping:
-                    mapping = CommonControlGroupMapping(
-                        group_id=group.id,
-                        parsed_control_id=ctrl_id,
-                        mapping_source="ai",
-                        mapping_confidence=0.8
-                    )
-                    db.add(mapping)
-            elif ctrl_type == "framework":
-                existing_mapping = db.query(CommonControlGroupMapping).filter(
-                    CommonControlGroupMapping.group_id == group.id,
-                    CommonControlGroupMapping.framework_control_id == ctrl_id
-                ).first()
-                if not existing_mapping:
-                    mapping = CommonControlGroupMapping(
-                        group_id=group.id,
-                        framework_control_id=ctrl_id,
-                        mapping_source="ai",
-                        mapping_confidence=0.8
-                    )
-                    db.add(mapping)
-    
-    db.commit()
-    
-    all_groups = created_groups + merged_groups
+    summary = persist_ai_groups(db, tenant_id, current_user.id, ai_groups)
+
+    all_group_ids = (summary.get("created_group_ids") or []) + (summary.get("merged_group_ids") or [])
+    all_groups = db.query(CommonControlGroup).filter(CommonControlGroup.id.in_(all_group_ids)).all() if all_group_ids else []
     return {
-        "message": f"Created {len(created_groups)} control groups, merged into {len(merged_groups)} existing groups",
-        "groups": [serialize_group(g, db, include_controls=True) for g in all_groups]
+        "message": (
+            f"Created {summary['created_count']} control groups, "
+            f"merged into {summary['merged_count']} existing groups"
+        ),
+        "groups": [serialize_group(g, db, include_controls=True) for g in all_groups],
     }
 
 

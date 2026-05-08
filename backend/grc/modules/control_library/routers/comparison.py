@@ -1450,6 +1450,69 @@ def _serialize_mappings(run_id: int, db: Session) -> dict:
     return {"items": items, "total": len(items)}
 
 
+@router.get("/ai-compare/runs")
+def ai_compare_list_runs(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """List previously-run AI comparisons for the current tenant.
+
+    Used by the compare page to surface a "previously mapped" history strip.
+    Each row carries enough info (framework names, status, mapping count,
+    timestamps) for the UI to render a clickable shortcut without extra
+    round-trips. Clicking a row in the UI re-uses the existing cached run."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"runs": []}
+
+    runs = (
+        db.query(ControlComparisonRun)
+        .filter(ControlComparisonRun.tenant_id.in_(user_tenants))
+        .order_by(ControlComparisonRun.updated_at.desc().nullslast(),
+                  ControlComparisonRun.id.desc())
+        .all()
+    )
+    if not runs:
+        return {"runs": []}
+
+    fw_ids = {r.source_framework_id for r in runs} | {r.dest_framework_id for r in runs}
+    fw_lookup = {
+        fw.id: fw
+        for fw in db.query(UploadedFramework).filter(UploadedFramework.id.in_(fw_ids)).all()
+    }
+
+    run_ids = [r.id for r in runs]
+    mapping_counts = dict(
+        db.query(
+            ControlComparisonMapping.run_id,
+            func.count(ControlComparisonMapping.id),
+        )
+        .filter(ControlComparisonMapping.run_id.in_(run_ids))
+        .group_by(ControlComparisonMapping.run_id)
+        .all()
+    ) if run_ids else {}
+
+    def _fw_label(fw_id: int) -> dict:
+        fw = fw_lookup.get(fw_id)
+        if not fw:
+            return {"id": fw_id, "name": "Unknown framework", "short_code": None, "version": None}
+        return {
+            "id": fw.id,
+            "name": getattr(fw, "name", None) or "Unknown framework",
+            "short_code": getattr(fw, "short_code", None),
+            "version": getattr(fw, "version", None),
+        }
+
+    out = []
+    for r in runs:
+        payload = _serialize_run(r)
+        payload["source_framework"] = _fw_label(r.source_framework_id)
+        payload["destination_framework"] = _fw_label(r.dest_framework_id)
+        payload["mapping_count"] = int(mapping_counts.get(r.id, 0))
+        out.append(payload)
+    return {"runs": out}
+
+
 @router.get("/ai-compare/lookup")
 def ai_compare_lookup(
     source_framework_id: int = Query(...),

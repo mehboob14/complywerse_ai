@@ -1525,6 +1525,9 @@ export const vulnManagementApi = {
       // them back in, or `closed_only=true` to show only closed/mitigated.
       include_closed?: boolean;
       closed_only?: boolean;
+      // Filter by template source. "NCA Template" → only NCA-bridged vulns,
+      // "_general" → only non-template vulns, omit/undefined → all.
+      template_type?: string;
     }) =>
       apiClient.get('/vuln-management/vulnerabilities', {
         params: params ? {
@@ -1534,6 +1537,7 @@ export const vulnManagementApi = {
           search: params.search,
           include_closed: params.include_closed,
           closed_only: params.closed_only,
+          template_type: params.template_type,
         } : undefined
       }),
     getById: (id: number) => apiClient.get(`/vuln-management/vulnerabilities/${id}`),
@@ -2053,6 +2057,8 @@ export const controlLibraryApi = {
       apiClient.get(`/control-library/comparison/ai-compare/runs/${runId}`),
     aiCompareMappings: (runId: number) =>
       apiClient.get(`/control-library/comparison/ai-compare/runs/${runId}/mappings`),
+    aiCompareList: () =>
+      apiClient.get('/control-library/comparison/ai-compare/runs'),
   },
 
   // Coverage Module
@@ -2188,9 +2194,65 @@ export const adminApi = {
   getPermissions: () => apiClient.get<{ name: string; module: string; submodule: string; action: string; description: string }[]>('/admin/permissions'),
   getPermissionMatrix: () => apiClient.get<PermissionModule[]>('/admin/permissions/matrix'),
 
-  getAuditLogs: (params?: { limit?: number; offset?: number; action?: string; module?: string; user_id?: number; start_date?: string; end_date?: string }) => 
+  getAuditLogs: (params?: { limit?: number; offset?: number; action?: string; module?: string; user_id?: number; start_date?: string; end_date?: string }) =>
     apiClient.get('/admin/audit-logs', { params }),
   getAuditLogFilters: () => apiClient.get<{ actions: string[]; modules: string[]; date_presets: string[] }>('/admin/audit-logs/filters'),
+};
+
+export interface IdpConfig {
+  configured?: boolean;
+  connected?: boolean;
+  id?: number;
+  provider?: string;
+  is_enabled?: boolean;
+  // SaaS multi-tenant fields
+  entra_directory_id?: string | null;
+  connected_at?: string | null;
+  // Preferences
+  auto_provision_on_signin?: boolean;
+  allowed_email_domains?: string[];
+  // Connection-test status
+  last_tested_at?: string | null;
+  last_test_status?: string | null;
+  last_test_message?: string | null;
+  updated_at?: string | null;
+}
+
+export interface IdpConfigUpsert {
+  is_enabled?: boolean;
+  auto_provision_on_signin?: boolean;
+  allowed_email_domains?: string[];
+}
+
+export interface IdpGroupMapping {
+  id: number;
+  entra_group_id: string;
+  entra_group_name?: string | null;
+  role_id: number;
+  role_name?: string | null;
+  created_at?: string | null;
+}
+
+export interface IdpGraphGroup {
+  id: string;
+  display_name: string;
+}
+
+export const ssoApi = {
+  getConfig: () => apiClient.get<IdpConfig>('/sso/config'),
+  updateConfig: (data: IdpConfigUpsert) => apiClient.put<IdpConfig>('/sso/config', data),
+  deleteConfig: () => apiClient.delete<{ deleted: boolean }>('/sso/config'),
+  testConfig: () => apiClient.post<{ ok: boolean; last_test_status: string; last_tested_at: string }>('/sso/config/test'),
+  connectInit: () => apiClient.post<{ authorize_url: string }>('/sso/connect/init'),
+  provisionUsers: () => apiClient.post<{ created: number; skipped: number; roles_applied: number }>('/sso/provision'),
+  // Public-friendly: backend doesn't require auth, but the axios interceptor still attaches X-Tenant-Slug.
+  getAvailability: () => apiClient.get<{ enabled: boolean }>('/sso/availability'),
+  searchGroups: (q: string) =>
+    apiClient.get<{ groups: IdpGraphGroup[] }>('/sso/graph/groups', { params: { q } }),
+  listGroupMappings: () => apiClient.get<{ mappings: IdpGroupMapping[] }>('/sso/group-mappings'),
+  createGroupMapping: (data: { entra_group_id: string; entra_group_name?: string; role_id: number }) =>
+    apiClient.post<{ id: number; created?: boolean; duplicate?: boolean }>('/sso/group-mappings', data),
+  deleteGroupMapping: (id: number) => apiClient.delete<{ deleted: boolean }>(`/sso/group-mappings/${id}`),
 };
 
 export const tenantAuthApi = {

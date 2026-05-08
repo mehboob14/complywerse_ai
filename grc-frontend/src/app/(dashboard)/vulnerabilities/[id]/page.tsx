@@ -53,6 +53,8 @@ interface VulnerabilityDetail {
   ai_recommendation?: string;
   created_at: string;
   updated_at?: string;
+  template_type?: string | null;
+  template_fields?: Record<string, unknown> | null;
 }
 
 interface Mitigation {
@@ -588,6 +590,25 @@ export default function VulnerabilityDetailPage() {
                 {vulnerability.description || 'No description provided.'}
               </p>
             </div>
+
+            {/* NCA Template Fields — verbatim register data preserved on the bridge */}
+            {vulnerability.template_type === 'NCA Template' && vulnerability.template_fields && Object.keys(vulnerability.template_fields).length > 0 && (
+              <div className="cw-card p-4">
+                <h2 className="text-sm font-semibold cw-text mb-3 flex items-center gap-1.5">
+                  <FileText className="h-4 w-4 text-blue-600" />
+                  NCA Template Fields
+                </h2>
+                <p className="text-xs text-slate-500 mb-3">All fields from the NCA Saudi vulnerability register template. Owner and assets are managed via platform pickers in the other tabs.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  {Object.entries(vulnerability.template_fields).filter(([, v]) => v !== null && v !== '' && v !== undefined).map(([k, v]) => (
+                    <div key={k}>
+                      <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-0.5">{k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</p>
+                      <p className="text-sm text-slate-800 whitespace-pre-wrap break-words">{String(v)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {vulnerability.ai_recommendation && (
               <div className="rounded-xl border border-primary-200 bg-primary-50 p-4">

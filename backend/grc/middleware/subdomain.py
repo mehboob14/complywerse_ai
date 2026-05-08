@@ -85,6 +85,15 @@ class TenantMiddleware(BaseHTTPMiddleware):
         host = request.headers.get("host", "")
         subdomain = extract_subdomain(host)
         x_tenant_slug = request.headers.get("X-Tenant-Slug")
+        # Top-level navigations (e.g. SSO `/auth/entra/connect/start`) can't set
+        # custom headers, and when proxied via Next.js the backend sees
+        # Host=127.0.0.1 — no subdomain to extract. Accept `?tenant_slug=` as a
+        # last-resort fallback. JWT cookie still wins when present, so this
+        # cannot be used to override an authenticated session's tenant.
+        try:
+            qp_tenant_slug = request.query_params.get("tenant_slug")
+        except Exception:
+            qp_tenant_slug = None
 
         request.state.subdomain = subdomain
         request.state.tenant = None
@@ -110,7 +119,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
         # which is exactly what those flows need.
         cookie_slug = _slug_from_auth_cookie(request)
 
-        chosen_slug = cookie_slug or x_tenant_slug
+        chosen_slug = cookie_slug or x_tenant_slug or qp_tenant_slug
         if subdomain or chosen_slug:
             db = MasterSession()
             try:

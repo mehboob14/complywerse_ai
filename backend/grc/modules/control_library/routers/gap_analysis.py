@@ -8,7 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, func, and_, not_, exists
+from sqlalchemy import or_, func, and_, not_, exists, select
 from pydantic import BaseModel
 from openai import OpenAI
 
@@ -178,14 +178,14 @@ def serialize_parsed_control(pc: ParsedFrameworkControl) -> dict:
 
 
 def calculate_uploaded_framework_coverage(db: Session, tenant_id: int, uploaded_framework_id: int) -> dict:
-    tenant_evidence_ids = db.query(Evidence.id).filter(
+    tenant_evidence_ids = select(Evidence.id).where(
         Evidence.tenant_id == tenant_id
-    ).subquery()
-    
-    controls_with_evidence = db.query(EvidenceControlMapping.parsed_control_id).filter(
+    )
+
+    controls_with_evidence = select(EvidenceControlMapping.parsed_control_id).where(
         EvidenceControlMapping.evidence_id.in_(tenant_evidence_ids),
         EvidenceControlMapping.parsed_control_id.isnot(None)
-    ).distinct().subquery()
+    ).distinct()
     
     total = db.query(ParsedFrameworkControl).filter(
         ParsedFrameworkControl.uploaded_framework_id == uploaded_framework_id
@@ -1080,26 +1080,28 @@ def get_gap_analysis_dashboard(
     ).filter(UploadedFramework.is_active == True).count()
     total_controls = total_normalized + total_framework + total_parsed
     
-    tenant_group_ids = db.query(CommonControlGroup.id).filter(
+    # Wrap subqueries in `select()` so SQLAlchemy 2.x doesn't warn about
+    # implicit Subquery -> Select coercion in `.in_()` clauses.
+    tenant_group_ids = select(CommonControlGroup.id).where(
         or_(
             CommonControlGroup.tenant_id.in_(user_tenants),
             CommonControlGroup.tenant_id.is_(None)
         )
-    ).subquery()
-    
-    mapped_normalized_ids = db.query(CommonControlGroupMapping.normalized_control_id).filter(
+    )
+
+    mapped_normalized_ids = select(CommonControlGroupMapping.normalized_control_id).where(
         CommonControlGroupMapping.normalized_control_id.isnot(None),
         CommonControlGroupMapping.group_id.in_(tenant_group_ids)
-    ).distinct().subquery()
-    mapped_framework_ids = db.query(CommonControlGroupMapping.framework_control_id).filter(
+    ).distinct()
+    mapped_framework_ids = select(CommonControlGroupMapping.framework_control_id).where(
         CommonControlGroupMapping.framework_control_id.isnot(None),
         CommonControlGroupMapping.group_id.in_(tenant_group_ids)
-    ).distinct().subquery()
-    mapped_parsed_ids = db.query(CommonControlGroupMapping.parsed_control_id).filter(
+    ).distinct()
+    mapped_parsed_ids = select(CommonControlGroupMapping.parsed_control_id).where(
         CommonControlGroupMapping.parsed_control_id.isnot(None),
         CommonControlGroupMapping.group_id.in_(tenant_group_ids)
-    ).distinct().subquery()
-    
+    ).distinct()
+
     mapped_normalized = db.query(NormalizedControl).filter(
         NormalizedControl.id.in_(mapped_normalized_ids)
     ).count()
@@ -1111,21 +1113,21 @@ def get_gap_analysis_dashboard(
     ).count()
     mapped_controls = mapped_normalized + mapped_framework + mapped_parsed
     unmapped_controls = total_controls - mapped_controls
-    
-    tenant_evidence_ids = db.query(Evidence.id).filter(
+
+    tenant_evidence_ids = select(Evidence.id).where(
         Evidence.tenant_id.in_(user_tenants)
-    ).subquery()
-    
+    )
+
     nc_with_evidence = db.query(EvidenceControlMapping.normalized_control_id).filter(
         EvidenceControlMapping.evidence_id.in_(tenant_evidence_ids),
         EvidenceControlMapping.normalized_control_id.isnot(None)
     ).distinct().count()
-    
+
     fc_with_evidence = db.query(EvidenceControlMapping.framework_control_id).filter(
         EvidenceControlMapping.evidence_id.in_(tenant_evidence_ids),
         EvidenceControlMapping.framework_control_id.isnot(None)
     ).distinct().count()
-    
+
     pc_with_evidence = db.query(EvidenceControlMapping.parsed_control_id).filter(
         EvidenceControlMapping.evidence_id.in_(tenant_evidence_ids),
         EvidenceControlMapping.parsed_control_id.isnot(None)
