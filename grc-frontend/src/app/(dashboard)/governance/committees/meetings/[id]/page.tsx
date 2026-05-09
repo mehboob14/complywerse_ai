@@ -23,6 +23,12 @@ import {
   Scale,
   Lightbulb,
   Link as LinkIcon,
+  Pencil,
+  Trash2,
+  Upload,
+  Download,
+  Paperclip,
+  Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
@@ -109,6 +115,24 @@ interface TenantUser {
   user?: { id?: number; display_name?: string; username?: string; email?: string };
 }
 
+interface MeetingAttachment {
+  id: number;
+  meeting_id: number;
+  file_name: string;
+  file_type?: string | null;
+  file_size?: number | null;
+  description?: string | null;
+  uploaded_by_name?: string | null;
+  uploaded_at?: string | null;
+}
+
+function formatFileSize(bytes?: number | null) {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const MEETING_TYPE_STYLES: Record<string, { label: string; bg: string; text: string }> = {
@@ -145,10 +169,24 @@ const SOURCE_TYPE_CONFIG: Record<string, { label: string; icon: React.ElementTyp
 };
 
 const ACTION_TYPES = [
-  { value: 'follow_up',      label: 'Follow Up'      },
-  { value: 'policy_approval',label: 'Policy Approval'},
-  { value: 'risk_review',    label: 'Risk Review'    },
-  { value: 'audit_response', label: 'Audit Response' },
+  { value: 'follow_up',          label: 'Follow Up'           },
+  { value: 'policy_approval',    label: 'Policy Approval'     },
+  { value: 'risk_review',        label: 'Risk Review'         },
+  { value: 'audit_response',     label: 'Audit Response'      },
+  { value: 'corrective_action',  label: 'Corrective Action'   },
+  { value: 'preventive_action',  label: 'Preventive Action'   },
+  { value: 'investigation',      label: 'Investigation'       },
+  { value: 'escalation',         label: 'Escalation'          },
+  { value: 'decision_record',    label: 'Decision Record'     },
+  { value: 'recommendation',     label: 'Recommendation'      },
+  { value: 'training',           label: 'Training'            },
+  { value: 'monitoring',         label: 'Monitoring'          },
+  { value: 'vendor_review',      label: 'Vendor Review'       },
+  { value: 'incident_review',    label: 'Incident Review'     },
+  { value: 'compliance_review',  label: 'Compliance Review'   },
+  { value: 'communication',      label: 'Communication'       },
+  { value: 'documentation',      label: 'Documentation'       },
+  { value: 'other',              label: 'Other'               },
 ];
 
 const ITEM_TYPES = [
@@ -202,6 +240,19 @@ export default function MeetingDetailPage() {
     title: '', description: '', action_type: 'follow_up', due_date: '', assigned_to: '',
   });
 
+  // Edit-agenda-item state. Holds the full draft so we can populate the same
+  // RightSlidePanel used for adding (no separate component) and submit a PUT.
+  const [editingAgendaId, setEditingAgendaId] = useState<number | null>(null);
+  const [editAgendaDraft, setEditAgendaDraft] = useState({
+    title: '', description: '', time_allocated_minutes: 15, item_type: 'discussion',
+  });
+
+  // Meeting attachments — file upload state and the optional description for the
+  // file the user is about to upload.
+  const [attachmentDescription, setAttachmentDescription] = useState('');
+  const [pendingAttachment, setPendingAttachment]         = useState<File | null>(null);
+  const [isUploadAttachmentOpen, setIsUploadAttachmentOpen] = useState(false);
+
   // ─── Queries ──────────────────────────────────────────────────────────────
 
   const { data: meeting, isLoading: meetingLoading, error: meetingError } = useQuery({
@@ -240,6 +291,15 @@ export default function MeetingDetailPage() {
       const data = res.data as any;
       const items: Action[] = Array.isArray(data) ? data : (data?.items ?? []);
       return items.filter((a) => a.meeting_id === meetingId);
+    },
+    enabled: !!meeting,
+  });
+
+  const { data: attachments = [] } = useQuery<MeetingAttachment[]>({
+    queryKey: ['meeting-attachments', meetingId],
+    queryFn: async () => {
+      const res = await committeeApi.getMeetingAttachments(meetingId);
+      return Array.isArray(res.data) ? res.data : [];
     },
     enabled: !!meeting,
   });
@@ -289,6 +349,79 @@ export default function MeetingDetailPage() {
       toast({ title: 'Failed to add agenda item', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
     },
   });
+
+  const updateAgendaMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => committeeApi.updateAgendaItem(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meeting-agenda', meetingId] });
+      setEditingAgendaId(null);
+      toast({ title: 'Agenda item updated', type: 'success' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed to update agenda item', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
+    },
+  });
+
+  const deleteAgendaMutation = useMutation({
+    mutationFn: (id: number) => committeeApi.deleteAgendaItem(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meeting-agenda', meetingId] });
+      toast({ title: 'Agenda item removed', type: 'success' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed to remove agenda item', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
+    },
+  });
+
+  const uploadAttachmentMutation = useMutation({
+    mutationFn: async () => {
+      if (!pendingAttachment) throw new Error('No file selected');
+      const formData = new FormData();
+      formData.append('file', pendingAttachment);
+      if (attachmentDescription.trim()) {
+        formData.append('description', attachmentDescription.trim());
+      }
+      return committeeApi.uploadMeetingAttachment(meetingId, formData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meeting-attachments', meetingId] });
+      setIsUploadAttachmentOpen(false);
+      setPendingAttachment(null);
+      setAttachmentDescription('');
+      toast({ title: 'Attachment uploaded', type: 'success' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Upload failed', message: err?.response?.data?.detail || err?.message || 'Please try again', type: 'error' });
+    },
+  });
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: (id: number) => committeeApi.deleteMeetingAttachment(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meeting-attachments', meetingId] });
+      toast({ title: 'Attachment removed', type: 'success' });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Failed to remove attachment', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
+    },
+  });
+
+  const handleDownloadAttachment = async (attachmentId: number, fileName: string) => {
+    try {
+      const res = await committeeApi.downloadMeetingAttachment(attachmentId);
+      const blob = new Blob([res.data]);
+      const url  = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: 'Download failed', message: err?.message || 'Please try again', type: 'error' });
+    }
+  };
 
   const createActionMutation = useMutation({
     mutationFn: (data: any) => committeeApi.createAction(meetingId, data),
@@ -487,7 +620,7 @@ export default function MeetingDetailPage() {
                 ].filter(Boolean) as { type: string; title: string; icon: React.ElementType }[];
 
                 return (
-                  <div key={item.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                  <div key={item.id} className="px-6 py-4 hover:bg-gray-50 transition-colors group">
                     <div className="flex items-start gap-4">
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-medium text-gray-600">
                         {item.item_number}
@@ -500,6 +633,39 @@ export default function MeetingDetailPage() {
                               <span className={`text-xs font-medium ${sourceConfig?.text}`}>{sourceConfig?.label}</span>
                             )}
                             <Badge {...statusStyle} />
+                            {canCreate && (
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingAgendaId(item.id);
+                                    setEditAgendaDraft({
+                                      title: item.title,
+                                      description: item.description ?? '',
+                                      time_allocated_minutes: item.time_allocated_minutes ?? 15,
+                                      item_type: item.item_type ?? 'discussion',
+                                    });
+                                  }}
+                                  className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                                  title="Edit agenda item"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (confirm(`Remove agenda item "${item.title}"? This cannot be undone.`)) {
+                                      deleteAgendaMutation.mutate(item.id);
+                                    }
+                                  }}
+                                  disabled={deleteAgendaMutation.isPending}
+                                  className="rounded p-1 text-gray-500 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                                  title="Remove agenda item"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                         {item.description && (
@@ -627,6 +793,93 @@ export default function MeetingDetailPage() {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Documents / Attachments */}
+          <div className="rounded-xl border border-gray-200 bg-white">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h3 className="font-medium text-black flex items-center gap-2">
+                <Paperclip className="h-5 w-5 text-purple-500" />
+                Documents
+                <span className="text-xs font-normal text-gray-500">({attachments.length})</span>
+              </h3>
+              {canCreate && (
+                <button
+                  onClick={() => setIsUploadAttachmentOpen(true)}
+                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload
+                </button>
+              )}
+            </div>
+
+            <div className="divide-y divide-gray-100">
+              {attachments.length === 0 ? (
+                <div className="flex flex-col items-center py-10 text-center">
+                  <Paperclip className="h-9 w-9 text-gray-300 mb-2" />
+                  <p className="text-gray-600 font-medium">No documents attached yet</p>
+                  <p className="text-xs text-gray-500 mt-1">Upload agenda packets, briefing decks, spreadsheets, or supporting material</p>
+                  {canCreate && (
+                    <button
+                      onClick={() => setIsUploadAttachmentOpen(true)}
+                      className="mt-2 text-sm text-blue-600 hover:underline"
+                    >
+                      Upload the first document
+                    </button>
+                  )}
+                </div>
+              ) : attachments.map((att) => (
+                <div key={att.id} className="px-6 py-4 hover:bg-gray-50 transition-colors group">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50">
+                      <FileText className="h-5 w-5 text-purple-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-black truncate">{att.file_name}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {att.file_type ? `${att.file_type.toUpperCase()} · ` : ''}
+                            {formatFileSize(att.file_size ?? undefined)}
+                            {att.uploaded_by_name ? ` · Uploaded by ${att.uploaded_by_name}` : ''}
+                            {att.uploaded_at ? ` · ${formatDate(att.uploaded_at)}` : ''}
+                          </p>
+                          {att.description && (
+                            <p className="text-xs text-gray-600 mt-1">{att.description}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadAttachment(att.id, att.file_name)}
+                            className="rounded p-1.5 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
+                            title="Download"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                          {canCreate && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`Remove "${att.file_name}" from this meeting?`)) {
+                                  deleteAttachmentMutation.mutate(att.id);
+                                }
+                              }}
+                              disabled={deleteAttachmentMutation.isPending}
+                              className="rounded p-1.5 text-gray-500 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                              title="Remove"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -963,6 +1216,179 @@ export default function MeetingDetailPage() {
             </div>
           </div>
         </form>
+      </RightSlidePanel>
+
+      {/* Edit Agenda Item Panel */}
+      <RightSlidePanel
+        isOpen={editingAgendaId !== null}
+        onClose={() => setEditingAgendaId(null)}
+        title="Edit Agenda Item"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setEditingAgendaId(null)}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="edit-agenda-form"
+              disabled={!editAgendaDraft.title.trim() || updateAgendaMutation.isPending}
+              className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+            >
+              {updateAgendaMutation.isPending ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        }
+      >
+        <form
+          id="edit-agenda-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (editingAgendaId === null) return;
+            updateAgendaMutation.mutate({
+              id: editingAgendaId,
+              data: {
+                title: editAgendaDraft.title,
+                description: editAgendaDraft.description || null,
+                time_allocated_minutes: editAgendaDraft.time_allocated_minutes,
+                item_type: editAgendaDraft.item_type,
+              },
+            });
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Title <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={editAgendaDraft.title}
+              onChange={(e) => setEditAgendaDraft({ ...editAgendaDraft, title: e.target.value })}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Description</label>
+            <textarea
+              value={editAgendaDraft.description}
+              onChange={(e) => setEditAgendaDraft({ ...editAgendaDraft, description: e.target.value })}
+              rows={3}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-black mb-1">Type</label>
+              <MultiSelectDropdown
+                title="Type"
+                items={ITEM_TYPES}
+                selectedValues={[editAgendaDraft.item_type]}
+                onApply={(values) => setEditAgendaDraft({ ...editAgendaDraft, item_type: values[0] || 'discussion' })}
+                multiSelect={false}
+                triggerVariant="input"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-black mb-1">Duration (min)</label>
+              <input
+                type="number"
+                min={1}
+                value={editAgendaDraft.time_allocated_minutes}
+                onChange={(e) => setEditAgendaDraft({ ...editAgendaDraft, time_allocated_minutes: parseInt(e.target.value) || 15 })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        </form>
+      </RightSlidePanel>
+
+      {/* Upload Document Panel */}
+      <RightSlidePanel
+        isOpen={isUploadAttachmentOpen}
+        onClose={() => {
+          setIsUploadAttachmentOpen(false);
+          setPendingAttachment(null);
+          setAttachmentDescription('');
+        }}
+        title={
+          <span className="flex items-center gap-2">
+            <Upload className="h-5 w-5 text-purple-500" />
+            Upload Document
+          </span>
+        }
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setIsUploadAttachmentOpen(false);
+                setPendingAttachment(null);
+                setAttachmentDescription('');
+              }}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-black hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => uploadAttachmentMutation.mutate()}
+              disabled={!pendingAttachment || uploadAttachmentMutation.isPending}
+              className="flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+            >
+              {uploadAttachmentMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Uploading…
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4" />
+                  Upload
+                </>
+              )}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Attach agenda packets, briefing decks, supporting spreadsheets, or any meeting documents (PDF, DOCX, XLSX, PPTX, images, etc.).
+          </p>
+
+          <label className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 px-6 py-10 cursor-pointer hover:border-purple-400 hover:bg-purple-50/40 transition-colors">
+            <Upload className="h-8 w-8 text-gray-400 mb-2" />
+            {pendingAttachment ? (
+              <>
+                <p className="text-sm font-medium text-black">{pendingAttachment.name}</p>
+                <p className="text-xs text-gray-500 mt-1">{formatFileSize(pendingAttachment.size)} · click to choose a different file</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-black">Click to choose a file</p>
+                <p className="text-xs text-gray-500 mt-1">PDF, DOCX, XLSX, PPTX, images and more</p>
+              </>
+            )}
+            <input
+              type="file"
+              className="hidden"
+              onChange={(e) => setPendingAttachment(e.target.files?.[0] || null)}
+            />
+          </label>
+
+          <div>
+            <label className="block text-sm font-medium text-black mb-1">Description <span className="text-xs font-normal text-gray-500">(optional)</span></label>
+            <textarea
+              value={attachmentDescription}
+              onChange={(e) => setAttachmentDescription(e.target.value)}
+              rows={3}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+              placeholder="Short note about what this document contains…"
+            />
+          </div>
+        </div>
       </RightSlidePanel>
     </div>
   );

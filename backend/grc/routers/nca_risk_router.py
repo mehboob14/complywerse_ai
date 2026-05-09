@@ -27,10 +27,6 @@ _RATING_TO_CATEGORY = "operational"  # NCA template doesn't carry an ERM categor
 
 
 def _ensure_bridged_risk(entry: NcaRiskEntry, db: Session) -> Risk:
-    """Create or update the backing general Risk so the NCA entry inherits the
-    full ERM detail page (mitigations, asset/control/dept links, KRIs, reviews).
-    Idempotent.
-    """
     inherent_score = (
         (entry.inherent_likelihood or 0) * (entry.inherent_impact or 0)
         if entry.inherent_likelihood and entry.inherent_impact else None

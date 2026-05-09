@@ -72,8 +72,11 @@ interface Charter {
   version: string;
   status: 'draft' | 'active' | 'superseded';
   effective_date: string;
-  approved_by?: string;
+  approved_by?: number;
+  approver_name?: string | null;
   approved_at?: string;
+  created_by?: number;
+  creator_name?: string | null;
   file_path?: string;
   file_name?: string;
   file_type?: string;
@@ -267,6 +270,16 @@ export default function CommitteeDetailPage() {
   const [actionUploadFile, setActionUploadFile] = useState<File | null>(null);
   const queryClient = useQueryClient();
 
+  // Edit-committee state. Holds the editable copy of name/description/etc.
+  // until the user saves; close the panel and we discard the draft.
+  const [isEditCommitteeOpen, setIsEditCommitteeOpen] = useState(false);
+  const [editCommitteeDraft, setEditCommitteeDraft] = useState({
+    name: '', description: '', committee_type: 'custom',
+    chair_id: '' as number | '' | string,
+    secretary_id: '' as number | '' | string,
+    meeting_frequency: 'monthly',
+  });
+
   const [aiCharterResult, setAiCharterResult] = useState<AICharterResult | null>(null);
   const [showAiCharterPanel, setShowAiCharterPanel] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
@@ -390,8 +403,19 @@ export default function CommitteeDetailPage() {
     mutationFn: (data: { user_id: number; role: string }) => committeeApi.addMember(committeeId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['committee-members', committeeId] });
+      // Adding a chair/secretary now also updates committee.chair_id /
+      // secretary_id on the backend, so refresh the committee header too.
+      queryClient.invalidateQueries({ queryKey: ['committee', committeeId] });
       setIsAddMemberModalOpen(false);
       setNewMember({ user_id: '', role: 'member' });
+    },
+  });
+
+  const updateCommitteeMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => committeeApi.updateCommittee(committeeId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['committee', committeeId] });
+      setIsEditCommitteeOpen(false);
     },
   });
 
@@ -399,6 +423,9 @@ export default function CommitteeDetailPage() {
     mutationFn: (userId: number) => committeeApi.removeMember(committeeId, userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['committee-members', committeeId] });
+      // Backend clears committee.chair_id/secretary_id when a chair/secretary
+      // member is removed — refresh the committee header to drop the name.
+      queryClient.invalidateQueries({ queryKey: ['committee', committeeId] });
     },
   });
 
@@ -551,6 +578,35 @@ export default function CommitteeDetailPage() {
     }
   };
 
+  // For AI-drafted (or any text-only) charters that have no uploaded file yet,
+  // build a downloadable Markdown file straight from the stored content. Saves
+  // a round-trip to the server and lets the user grab the draft right away.
+  const handleDownloadCharterContent = (charter: Charter) => {
+    const safeName = (charter.title || 'charter').replace(/[^a-z0-9_\- ]/gi, '_').trim() || 'charter';
+    const versionTag = charter.version ? `_v${charter.version}` : '';
+    const filename = `${safeName}${versionTag}.md`;
+    const header = [
+      `# ${charter.title || 'Committee Charter'}`,
+      charter.version ? `**Version:** ${charter.version}` : '',
+      charter.status ? `**Status:** ${charter.status}` : '',
+      charter.effective_date ? `**Effective Date:** ${new Date(charter.effective_date).toLocaleDateString()}` : '',
+      charter.approver_name ? `**Approved By:** ${charter.approver_name}` : '',
+      '',
+      '---',
+      '',
+    ].filter(Boolean).join('\n');
+    const body = charter.content || '_No content provided._';
+    const blob = new Blob([`${header}\n${body}\n`], { type: 'text/markdown;charset=utf-8' });
+    const url  = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return '';
     if (bytes < 1024) return `${bytes} B`;
@@ -663,6 +719,27 @@ export default function CommitteeDetailPage() {
               )}
             </div>
           </div>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditCommitteeDraft({
+                  name: committee.name,
+                  description: committee.description ?? '',
+                  committee_type: committee.committee_type,
+                  chair_id: committee.chair_id ?? '',
+                  secretary_id: committee.secretary_id ?? '',
+                  meeting_frequency: committee.meeting_frequency ?? 'monthly',
+                });
+                setIsEditCommitteeOpen(true);
+              }}
+              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              title="Edit committee details"
+            >
+              <Edit2 className="h-4 w-4" />
+              Edit Committee
+            </button>
+          )}
         </div>
       </div>
 
@@ -709,14 +786,42 @@ export default function CommitteeDetailPage() {
           <div className="space-y-4">
             {activeCharter && (
               <div className="card p-4 border-emerald-500/30">
-                <p className="text-xs text-emerald-400 font-medium uppercase tracking-wider mb-2">
-                  Active Charter
-                </p>
-                <p className="text-black font-medium">{activeCharter.title}</p>
-                <div className="flex items-center gap-4 mt-2 text-sm text-black">
-                  <span>v{activeCharter.version}</span>
-                  <span>{new Date(activeCharter.effective_date).toLocaleDateString()}</span>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs text-emerald-400 font-medium uppercase tracking-wider mb-2">
+                      Active Charter
+                    </p>
+                    <p className="text-black font-medium">{activeCharter.title}</p>
+                    <div className="flex items-center gap-4 mt-2 text-sm text-black">
+                      <span>v{activeCharter.version}</span>
+                      <span>{new Date(activeCharter.effective_date).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  {activeCharter.file_name ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadFile(activeCharter.id, activeCharter.file_name!)}
+                      className="flex items-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-500/30"
+                      title={`Download ${activeCharter.file_name}`}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download
+                    </button>
+                  ) : activeCharter.content ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadCharterContent(activeCharter)}
+                      className="flex items-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-500/30"
+                      title="Download AI-drafted charter as Markdown"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Download Draft
+                    </button>
+                  ) : null}
                 </div>
+                {activeCharter.file_name && (
+                  <p className="text-xs text-slate-500 mt-3 truncate">{activeCharter.file_name}</p>
+                )}
               </div>
             )}
             <div className="card p-4">
@@ -1009,9 +1114,19 @@ export default function CommitteeDetailPage() {
                         <button
                           onClick={() => handleDownloadFile(charter.id, charter.file_name!)}
                           className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors text-sm"
+                          title={`Download ${charter.file_name}`}
                         >
                           <Download className="h-4 w-4" />
                           Download
+                        </button>
+                      ) : charter.content ? (
+                        <button
+                          onClick={() => handleDownloadCharterContent(charter)}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors text-sm"
+                          title="Download draft as Markdown"
+                        >
+                          <Download className="h-4 w-4" />
+                          Download Draft
                         </button>
                       ) : null}
                       <label className="flex items-center gap-2 px-3 py-1.5 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 transition-colors cursor-pointer text-sm">
@@ -1071,7 +1186,12 @@ export default function CommitteeDetailPage() {
                   
                   <div className="flex items-center gap-6 mt-4 text-sm text-slate-500">
                     <span>Effective: {new Date(charter.effective_date).toLocaleDateString()}</span>
-                    {charter.approved_by && <span>Approved by: {charter.approved_by}</span>}
+                    {(charter.approver_name || charter.approved_by) && (
+                      <span>Approved by: {charter.approver_name || `User #${charter.approved_by}`}</span>
+                    )}
+                    {charter.creator_name && !charter.approver_name && (
+                      <span>Created by: {charter.creator_name}</span>
+                    )}
                   </div>
                 </>
               )}
@@ -1260,10 +1380,24 @@ export default function CommitteeDetailPage() {
               <MultiSelectDropdown
                 title="Action Type"
                 items={[
-                  { value: 'follow_up', label: 'Follow Up' },
-                  { value: 'policy_approval', label: 'Policy Approval' },
-                  { value: 'risk_review', label: 'Risk Review' },
-                  { value: 'audit_response', label: 'Audit Response' },
+                  { value: 'follow_up',         label: 'Follow Up'         },
+                  { value: 'policy_approval',   label: 'Policy Approval'   },
+                  { value: 'risk_review',       label: 'Risk Review'       },
+                  { value: 'audit_response',    label: 'Audit Response'    },
+                  { value: 'corrective_action', label: 'Corrective Action' },
+                  { value: 'preventive_action', label: 'Preventive Action' },
+                  { value: 'investigation',     label: 'Investigation'     },
+                  { value: 'escalation',        label: 'Escalation'        },
+                  { value: 'decision_record',   label: 'Decision Record'   },
+                  { value: 'recommendation',    label: 'Recommendation'    },
+                  { value: 'training',          label: 'Training'          },
+                  { value: 'monitoring',        label: 'Monitoring'        },
+                  { value: 'vendor_review',     label: 'Vendor Review'     },
+                  { value: 'incident_review',   label: 'Incident Review'   },
+                  { value: 'compliance_review', label: 'Compliance Review' },
+                  { value: 'communication',     label: 'Communication'     },
+                  { value: 'documentation',     label: 'Documentation'     },
+                  { value: 'other',             label: 'Other'             },
                 ]}
                 selectedValues={[newAction.action_type]}
                 onApply={(values) => setNewAction({ ...newAction, action_type: values[0] || 'follow_up' })}
@@ -1719,6 +1853,136 @@ export default function CommitteeDetailPage() {
             </div>
           )}
         </div>
+      </RightSlidePanel>
+
+      {/* Edit Committee Panel */}
+      <RightSlidePanel
+        isOpen={isEditCommitteeOpen}
+        onClose={() => setIsEditCommitteeOpen(false)}
+        title="Edit Committee"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => setIsEditCommitteeOpen(false)}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="edit-committee-form"
+              disabled={!editCommitteeDraft.name.trim() || updateCommitteeMutation.isPending}
+              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+            >
+              {updateCommitteeMutation.isPending ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        }
+      >
+        <form
+          id="edit-committee-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            updateCommitteeMutation.mutate({
+              name: editCommitteeDraft.name,
+              description: editCommitteeDraft.description || null,
+              committee_type: editCommitteeDraft.committee_type,
+              chair_id: editCommitteeDraft.chair_id ? Number(editCommitteeDraft.chair_id) : null,
+              secretary_id: editCommitteeDraft.secretary_id ? Number(editCommitteeDraft.secretary_id) : null,
+              meeting_frequency: editCommitteeDraft.meeting_frequency,
+            });
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Name <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={editCommitteeDraft.name}
+              onChange={(e) => setEditCommitteeDraft({ ...editCommitteeDraft, name: e.target.value })}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+            <textarea
+              value={editCommitteeDraft.description}
+              onChange={(e) => setEditCommitteeDraft({ ...editCommitteeDraft, description: e.target.value })}
+              rows={3}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Committee Type</label>
+            <MultiSelectDropdown
+              title="Committee Type"
+              items={[
+                { value: 'board',                label: 'Board'                },
+                { value: 'risk_committee',       label: 'Risk Committee'       },
+                { value: 'audit_committee',      label: 'Audit Committee'      },
+                { value: 'compliance_committee', label: 'Compliance Committee' },
+                { value: 'it_steering',          label: 'IT Steering'          },
+                { value: 'custom',               label: 'Custom'               },
+              ]}
+              selectedValues={[editCommitteeDraft.committee_type]}
+              onApply={(values) => setEditCommitteeDraft({ ...editCommitteeDraft, committee_type: values[0] || 'custom' })}
+              multiSelect={false}
+              triggerVariant="input"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Chair</label>
+              <MultiSelectDropdown
+                title="Chair"
+                items={normalizedTenantUsers.map((u) => ({ value: String(u.id), label: u.name }))}
+                selectedValues={editCommitteeDraft.chair_id ? [String(editCommitteeDraft.chair_id)] : []}
+                onApply={(values) => setEditCommitteeDraft({ ...editCommitteeDraft, chair_id: values[0] || '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                forceSearch
+                placeholder="Select chair"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Secretary</label>
+              <MultiSelectDropdown
+                title="Secretary"
+                items={normalizedTenantUsers.map((u) => ({ value: String(u.id), label: u.name }))}
+                selectedValues={editCommitteeDraft.secretary_id ? [String(editCommitteeDraft.secretary_id)] : []}
+                onApply={(values) => setEditCommitteeDraft({ ...editCommitteeDraft, secretary_id: values[0] || '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                forceSearch
+                placeholder="Select secretary"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Meeting Frequency</label>
+            <MultiSelectDropdown
+              title="Meeting Frequency"
+              items={[
+                { value: 'weekly',    label: 'Weekly'    },
+                { value: 'bi-weekly', label: 'Bi-Weekly' },
+                { value: 'monthly',   label: 'Monthly'   },
+                { value: 'quarterly', label: 'Quarterly' },
+                { value: 'annually',  label: 'Annually'  },
+                { value: 'ad_hoc',    label: 'Ad-hoc'    },
+              ]}
+              selectedValues={[editCommitteeDraft.meeting_frequency]}
+              onApply={(values) => setEditCommitteeDraft({ ...editCommitteeDraft, meeting_frequency: values[0] || 'monthly' })}
+              multiSelect={false}
+              triggerVariant="input"
+            />
+          </div>
+        </form>
       </RightSlidePanel>
     </div>
   );

@@ -53,6 +53,7 @@ import {
   History,
   RotateCcw,
   GitCompare,
+  Sparkles,
 } from 'lucide-react';
 import NcaCompareModal from '@/components/governance/NcaCompareModal';
 
@@ -221,6 +222,21 @@ export default function PolicyDetailPage() {
   const [statusUpdateForm, setStatusUpdateForm] = useState('');
   const [showEditForm, setShowEditForm] = useState(false);
   const [editForm, setEditForm] = useState({ title: '', description: '', classification: '', doc_type: '' });
+
+  // Address-Gap modal state. The AI may either:
+  //   - propose REPLACING an existing block of policy text (mode='replace'):
+  //     `addressGapOriginal` holds the verbatim slice the AI matched; the
+  //     left pane shows it read-only, the right pane shows the editable
+  //     proposed replacement.
+  //   - propose APPENDING a brand-new clause (mode='append'): only the
+  //     right pane is shown; `addressGapHeading` controls the section
+  //     heading the new clause is added under.
+  const [addressGapFinding, setAddressGapFinding] = useState<any | null>(null);
+  const [addressGapMode, setAddressGapMode] = useState<'replace' | 'append'>('append');
+  const [addressGapOriginal, setAddressGapOriginal] = useState<string>('');
+  const [addressGapDraft, setAddressGapDraft] = useState<string>('');
+  const [addressGapHeading, setAddressGapHeading] = useState<string>('');
+  const [addressGapReason, setAddressGapReason] = useState<string>('');
 
   const { data: document, isLoading: docLoading, error: docError } = useQuery({
     queryKey: ['governance-document', id],
@@ -491,6 +507,72 @@ export default function PolicyDetailPage() {
     },
     onError: (error: any) => {
       toast({ type: 'error', title: 'Update Failed', message: error?.response?.data?.detail || 'Failed to update document.' });
+    },
+  });
+
+  // Two-step Apply Fix flow. generate-fix calls AI to draft the clause text;
+  // apply-fix appends the (user-approved, possibly edited) text to the
+  // document content and marks the finding as remediated.
+  const generateGapFixMutation = useMutation({
+    mutationFn: (findingId: number) => governanceApi.generateGapFix(findingId),
+    onSuccess: (response: any) => {
+      const data = response?.data || {};
+      const mode = (data.mode === 'replace' || data.mode === 'append') ? data.mode : 'append';
+      setAddressGapMode(mode);
+      setAddressGapOriginal(data.current_text || '');
+      setAddressGapDraft(data.proposed_text || data.suggested_clause_text || '');
+      // Backend persists the draft on the finding row, so refresh the table
+      // — even if the user closes the modal, the draft is now stored and
+      // re-opening will pre-fill it instantly without another AI call.
+      queryClient.invalidateQueries({ queryKey: ['document-gap-findings', id] });
+    },
+    onError: (error: any) => {
+      toast({
+        type: 'error',
+        title: 'AI draft failed',
+        message: error?.response?.data?.detail || 'Could not generate a clause draft. Please try again.'
+      });
+    },
+  });
+
+  const applyGapFixMutation = useMutation({
+    mutationFn: (
+      { findingId, data }:
+      { findingId: number; data: {
+        mode: 'replace' | 'append';
+        proposed_text: string;
+        current_text?: string | null;
+        section_heading?: string;
+        change_reason?: string;
+      }; }
+    ) => governanceApi.applyGapFix(findingId, data),
+    onSuccess: (response: any) => {
+      const v = response?.data?.applied_version_number;
+      toast({
+        type: 'success',
+        title: 'Gap closed',
+        message: v
+          ? `Document updated — version ${v} saved with the prior content archived.`
+          : 'The document has been updated.'
+      });
+      // Refresh findings (status=closed), document content (new clause),
+      // and version-history list.
+      queryClient.invalidateQueries({ queryKey: ['document-gap-findings', id] });
+      queryClient.invalidateQueries({ queryKey: ['governance-document', id] });
+      queryClient.invalidateQueries({ queryKey: ['document-versions', id] });
+      setAddressGapFinding(null);
+      setAddressGapMode('append');
+      setAddressGapOriginal('');
+      setAddressGapDraft('');
+      setAddressGapHeading('');
+      setAddressGapReason('');
+    },
+    onError: (error: any) => {
+      toast({
+        type: 'error',
+        title: 'Apply failed',
+        message: error?.response?.data?.detail || 'Could not apply the fix to the document.'
+      });
     },
   });
 
@@ -1119,6 +1201,23 @@ export default function PolicyDetailPage() {
                             onUpdateFinding={(findingId: number, data: any) => updateFindingMutation.mutate({ findingId, data })}
                             onOverride={(findingId: number, data: any) => overrideMutation.mutate({ findingId, data })}
                             onAcceptRisk={(findingId: number, data: any) => acceptRiskMutation.mutate({ findingId, data })}
+                            onAddressGap={(f: any) => {
+                              setAddressGapFinding(f);
+                              // Pre-fill with whatever the backend already has
+                              // stashed on this finding (could be empty if
+                              // the user has never clicked "Generate" before).
+                              const mode = (f.replacement_mode === 'replace' || f.replacement_mode === 'append')
+                                ? f.replacement_mode
+                                : 'append';
+                              setAddressGapMode(mode);
+                              setAddressGapOriginal(f.original_clause_text || '');
+                              setAddressGapDraft(f.suggested_clause_text || '');
+                              const heading = [f.framework_name, f.clause_reference, f.clause_title]
+                                .filter(Boolean)
+                                .join(' — ');
+                              setAddressGapHeading(heading);
+                              setAddressGapReason('');
+                            }}
                             isPending={updateFindingMutation.isPending || overrideMutation.isPending || acceptRiskMutation.isPending}
                           />
                         );
@@ -1162,6 +1261,213 @@ export default function PolicyDetailPage() {
 
       {activeTab === 'review-history' && (
         <ReviewHistoryTab documentId={id} document={document} />
+      )}
+
+      {/* Address-Gap Modal — review/edit the AI-drafted clause text and apply
+          it to the document. Two layouts:
+            - mode='replace': side-by-side. Left = current text (read-only),
+              right = editable proposed replacement.
+            - mode='append': single editable proposed-clause area + an
+              optional section-heading field.
+          On apply, the previous content is snapshotted into a version row
+          so the change is auditable. */}
+      {addressGapFinding && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-6xl mx-4 max-h-[92vh] flex flex-col rounded-xl border border-gray-300 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-200">
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold text-black flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-blue-600" />
+                  Address Gap
+                  {addressGapMode === 'replace' && (
+                    <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                      Replacing existing clause
+                    </span>
+                  )}
+                  {addressGapMode === 'append' && (
+                    <span className="ml-2 inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                      Adding new clause
+                    </span>
+                  )}
+                </h3>
+                <p className="text-xs text-gray-600 mt-0.5 truncate">
+                  {addressGapFinding.framework_name && (
+                    <span className="font-medium">{addressGapFinding.framework_name} · </span>
+                  )}
+                  <span className="font-mono text-gray-800">{addressGapFinding.clause_reference || '—'}</span>
+                  {addressGapFinding.clause_title && <> · {addressGapFinding.clause_title}</>}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setAddressGapFinding(null);
+                  setAddressGapMode('append');
+                  setAddressGapOriginal('');
+                  setAddressGapDraft('');
+                  setAddressGapHeading('');
+                  setAddressGapReason('');
+                }}
+                className="p-2 text-gray-600 hover:text-black rounded-lg hover:bg-gray-100 flex-shrink-0"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              {addressGapFinding.gap_description && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <label className="text-xs font-medium uppercase tracking-wider text-amber-800 block mb-1">Gap</label>
+                  <p className="text-sm text-amber-900">{addressGapFinding.gap_description}</p>
+                </div>
+              )}
+              {addressGapFinding.remediation_recommendation && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                  <label className="text-xs font-medium uppercase tracking-wider text-blue-800 block mb-1">AI Remediation Recommendation</label>
+                  <p className="text-sm text-blue-900">{addressGapFinding.remediation_recommendation}</p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                <div className="text-xs text-gray-500">
+                  {addressGapMode === 'replace'
+                    ? 'AI matched an existing clause in the document. Review the proposed replacement on the right.'
+                    : 'AI proposed a new clause to append to the document.'}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => generateGapFixMutation.mutate(addressGapFinding.id)}
+                  disabled={generateGapFixMutation.isPending}
+                  className="flex items-center gap-1.5 rounded-md border border-blue-300 bg-white px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                  title={addressGapDraft ? 'Re-draft with AI' : 'Draft clause text with AI'}
+                >
+                  {generateGapFixMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  {generateGapFixMutation.isPending
+                    ? 'Drafting…'
+                    : (addressGapDraft ? 'Re-draft with AI' : 'Generate with AI')}
+                </button>
+              </div>
+
+              {addressGapMode === 'replace' ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-800 block mb-1.5">
+                      Current text in document <span className="text-xs font-normal text-gray-500">(read-only)</span>
+                    </label>
+                    <textarea
+                      value={addressGapOriginal}
+                      readOnly
+                      rows={14}
+                      className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-700 resize-y font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-800 block mb-1.5">
+                      Proposed replacement <span className="text-xs font-normal text-gray-500">(editable)</span>
+                    </label>
+                    <textarea
+                      value={addressGapDraft}
+                      onChange={(e) => setAddressGapDraft(e.target.value)}
+                      rows={14}
+                      placeholder='Click "Generate with AI" to draft a replacement, or write your own.'
+                      className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 resize-y"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-sm font-medium text-gray-800 block mb-1.5">
+                    Proposed new clause <span className="text-xs font-normal text-gray-500">(editable)</span>
+                  </label>
+                  <textarea
+                    value={addressGapDraft}
+                    onChange={(e) => setAddressGapDraft(e.target.value)}
+                    rows={12}
+                    placeholder='Click "Generate with AI" to draft a clause that closes this gap, or write your own.'
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-y"
+                  />
+                </div>
+              )}
+
+              {addressGapMode === 'append' && (
+                <div>
+                  <label className="text-sm font-medium text-gray-800 block mb-1.5">
+                    Section heading <span className="text-xs font-normal text-gray-500">(optional — defaults to framework + clause)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={addressGapHeading}
+                    onChange={(e) => setAddressGapHeading(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    The clause will be appended under <code className="font-mono text-gray-700">## {addressGapHeading || 'Compliance Update'}</code>.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="text-sm font-medium text-gray-800 block mb-1.5">
+                  Change reason <span className="text-xs font-normal text-gray-500">(optional — saved to version history)</span>
+                </label>
+                <input
+                  type="text"
+                  value={addressGapReason}
+                  onChange={(e) => setAddressGapReason(e.target.value)}
+                  placeholder='e.g. "Closing PCI-DSS Req 1.2 gap during Q1 audit prep"'
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <p className="text-xs text-gray-500 italic">
+                Applying creates a new document version. The current content is preserved in version history before the change.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setAddressGapFinding(null);
+                  setAddressGapMode('append');
+                  setAddressGapOriginal('');
+                  setAddressGapDraft('');
+                  setAddressGapHeading('');
+                  setAddressGapReason('');
+                }}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => applyGapFixMutation.mutate({
+                  findingId: addressGapFinding.id,
+                  data: {
+                    mode: addressGapMode,
+                    proposed_text: addressGapDraft,
+                    current_text: addressGapMode === 'replace' ? addressGapOriginal : undefined,
+                    section_heading: addressGapMode === 'append' ? (addressGapHeading || undefined) : undefined,
+                    change_reason: addressGapReason || undefined,
+                  },
+                })}
+                disabled={
+                  !addressGapDraft.trim()
+                  || applyGapFixMutation.isPending
+                  || (addressGapMode === 'replace' && !addressGapOriginal.trim())
+                }
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {applyGapFixMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Applying…</>
+                ) : (
+                  <><Check className="h-4 w-4" /> {addressGapMode === 'replace' ? 'Save replacement' : 'Append clause'}</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Gap Analysis Framework Selection Modal */}
@@ -2674,7 +2980,7 @@ function GapFindingRow({
   tenantUsers, overrideForm, setOverrideForm, acceptRiskForm, setAcceptRiskForm,
   assignOwnerForm, setAssignOwnerForm, targetDateForm, setTargetDateForm,
   statusUpdateForm, setStatusUpdateForm,
-  onUpdateFinding, onOverride, onAcceptRisk, isPending,
+  onUpdateFinding, onOverride, onAcceptRisk, onAddressGap, isPending,
 }: any) {
   return (
     <>
@@ -2805,6 +3111,24 @@ function GapFindingRow({
               <div className="space-y-3">
                 <label className="text-xs font-medium uppercase tracking-wider text-gray-600 block">Actions</label>
                 <div className="flex flex-wrap gap-2">
+                  {onAddressGap
+                    && (finding.compliance_status === 'not_addressed' || finding.compliance_status === 'partially_compliant')
+                    && finding.remediation_status !== 'closed'
+                    && !finding.applied_at
+                    && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onAddressGap(finding); }}
+                        className="flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                        title="Draft a clause with AI and apply it to the document"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" /> Address Gap
+                      </button>
+                    )}
+                  {finding.applied_at && (
+                    <span className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-700">
+                      <Check className="h-3.5 w-3.5" /> Clause applied
+                    </span>
+                  )}
                   <button
                     onClick={(e) => { e.stopPropagation(); onSetEditAction(editAction === 'assign-owner' ? null : 'assign-owner'); }}
                     className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-gray-100 px-3 py-1.5 text-sm text-gray-800 hover:text-black hover:bg-gray-200"

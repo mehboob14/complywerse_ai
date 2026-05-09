@@ -453,6 +453,23 @@ export const governanceApi = {
       risk_acceptance_justification: data.justification,
       risk_acceptance_expiry_date: data.expiry_date || null
     }),
+  // Apply-fix workflow: AI drafts the clause text (replacing an existing
+  // section or appending), user reviews/edits in a side-by-side popup, then
+  // applies. The apply step also snapshots the prior document state into a
+  // version row so the change is auditable.
+  generateGapFix: (findingId: number) =>
+    apiClient.post(`/governance/gap-analysis/findings/${findingId}/generate-fix`, {}, { timeout: 60000 }),
+  applyGapFix: (
+    findingId: number,
+    data: {
+      mode: 'replace' | 'append';
+      proposed_text: string;
+      current_text?: string | null;
+      section_heading?: string;
+      change_reason?: string;
+    }
+  ) =>
+    apiClient.post(`/governance/gap-analysis/findings/${findingId}/apply-fix`, data),
   getTenantUsers: (tenantId: number) =>
     apiClient.get(`/tenants/${tenantId}/users`),
   
@@ -762,10 +779,17 @@ export const certificationsApi = {
   
   getControls: (id: number, params?: { status?: string; domain_id?: number }) => 
     apiClient.get(`/certifications/${id}/controls`, { params }),
-  getControlDetail: (journeyId: number, controlId: number) => 
+  getControlDetail: (journeyId: number, controlId: number) =>
     apiClient.get(`/certifications/${journeyId}/controls/${controlId}`),
-  updateControl: (journeyId: number, controlId: number, data: { status?: string; notes?: string; priority?: number; is_applicable?: boolean }) => 
+  updateControl: (journeyId: number, controlId: number, data: { status?: string; notes?: string; priority?: number; is_applicable?: boolean }) =>
     apiClient.patch(`/certifications/${journeyId}/controls/${controlId}`, data),
+  // Critical-clause AI analysis. POST kicks off a synchronous classification
+  // pass over the framework's parsed controls; GET returns whatever has been
+  // persisted (cheap DB read, used to render the panel).
+  analyzeCriticalControls: (journeyId: number) =>
+    apiClient.post(`/certifications/${journeyId}/analyze-critical`),
+  getCriticalControls: (journeyId: number) =>
+    apiClient.get(`/certifications/${journeyId}/critical-controls`),
   
   uploadEvidence: (journeyId: number, controlId: number, formData: FormData) => 
     apiClient.post(`/certifications/${journeyId}/controls/${controlId}/evidence`, formData, {
@@ -1859,7 +1883,18 @@ export const committeeApi = {
   updateMeeting: (meetingId: number, data: any) => apiClient.put(`/governance/committees/meetings/${meetingId}`, data),
   getAgenda: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}/agenda`),
   addAgendaItem: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/agenda`, data),
-  updateAgendaItem: (itemId: number, data: any) => apiClient.put(`/governance/committees/agenda/${itemId}`, data),
+  updateAgendaItem: (itemId: number, data: any) => apiClient.put(`/governance/committees/meetings/agenda/${itemId}`, data),
+  deleteAgendaItem: (itemId: number) => apiClient.delete(`/governance/committees/meetings/agenda/${itemId}`),
+  getMeetingAttachments: (meetingId: number) =>
+    apiClient.get(`/governance/committees/meetings/${meetingId}/attachments`),
+  uploadMeetingAttachment: (meetingId: number, formData: FormData) =>
+    apiClient.post(`/governance/committees/meetings/${meetingId}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  downloadMeetingAttachment: (attachmentId: number) =>
+    apiClient.get(`/governance/committees/meetings/attachments/${attachmentId}/download`, { responseType: 'blob' }),
+  deleteMeetingAttachment: (attachmentId: number) =>
+    apiClient.delete(`/governance/committees/meetings/attachments/${attachmentId}`),
   createMinutes: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/minutes`, data),
   updateMinutes: (minutesId: number, data: any) => apiClient.put(`/governance/committees/minutes/${minutesId}`, data),
   createAction: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/actions`, data),

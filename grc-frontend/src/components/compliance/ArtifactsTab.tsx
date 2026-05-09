@@ -31,7 +31,7 @@ import {
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-interface CatalogItem {
+export interface CatalogItem {
   id: number;
   artifact_id: string;
   stage: string;
@@ -54,7 +54,7 @@ interface CatalogData {
   stages: string[];
 }
 
-interface TenantArtifact {
+export interface TenantArtifact {
   id: number;
   catalog_item_id: number | null;
   assessment_id: number | null;
@@ -78,7 +78,7 @@ interface TenantArtifact {
   updated_at: string | null;
 }
 
-interface TenantUser {
+export interface TenantUser {
   id: number;
   label: string;
   email: string | null;
@@ -233,7 +233,7 @@ function EditPreviewToggle({
 
 // ─── Create Modal ─────────────────────────────────────────────────────────────
 
-function CreateArtifactModal({
+export function CreateArtifactModal({
   item,
   frameworkKey,
   frameworkName,
@@ -410,7 +410,7 @@ function CreateArtifactModal({
 
 // ─── Edit Modal ───────────────────────────────────────────────────────────────
 
-function EditArtifactModal({
+export function EditArtifactModal({
   artifact,
   tenantUsers,
   onSave,

@@ -119,6 +119,26 @@ _COLUMN_ADDS = [
     ("grc_vulnerabilities", "template_fields", "JSON DEFAULT '{}'::json", None),
     # Same for Risk — verbatim NCA template fields preserved on bridged Risk rows.
     ("grc_risks", "template_fields", "JSON DEFAULT '{}'::json", None),
+    # AI-driven criticality flags on parsed framework controls. Populated on
+    # demand via /certifications/{journey_id}/analyze-critical and consumed by
+    # the applicability flow (critical = no self-approve, must go through
+    # reviewer approval).
+    ("grc_parsed_framework_controls", "is_critical", "BOOLEAN DEFAULT FALSE",
+     "ix_parsed_control_critical"),
+    ("grc_parsed_framework_controls", "criticality_reason", "TEXT", None),
+    ("grc_parsed_framework_controls", "criticality_analyzed_at", "TIMESTAMP", None),
+    # Gap-analysis remediation: AI-drafted clause text + apply-to-document
+    # audit columns. Populated via /gap-analysis/findings/{id}/generate-fix
+    # and /apply-fix endpoints with human-in-the-loop edit/approve.
+    ("grc_policy_gap_findings", "suggested_clause_text", "TEXT", None),
+    ("grc_policy_gap_findings", "suggested_clause_generated_at", "TIMESTAMP", None),
+    ("grc_policy_gap_findings", "applied_at", "TIMESTAMP", None),
+    ("grc_policy_gap_findings", "applied_by", "INTEGER", None),
+    ("grc_policy_gap_findings", "applied_clause_text", "TEXT", None),
+    # Side-by-side replace flow + version-id link for audit trail.
+    ("grc_policy_gap_findings", "replacement_mode", "VARCHAR(20)", None),
+    ("grc_policy_gap_findings", "original_clause_text", "TEXT", None),
+    ("grc_policy_gap_findings", "applied_version_id", "INTEGER", None),
 ]
 
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { certificationsApi, governanceApi, assetsApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -56,7 +57,13 @@ import {
   Unlink,
   Package,
 } from 'lucide-react';
-import ArtifactsTab from '@/components/compliance/ArtifactsTab';
+import ArtifactsTab, {
+  CreateArtifactModal,
+  EditArtifactModal,
+  type CatalogItem as ArtifactCatalogItemT,
+  type TenantArtifact as TenantArtifactT,
+  type TenantUser as ArtifactTenantUserT,
+} from '@/components/compliance/ArtifactsTab';
 
 const EVIDENCE_TYPE_MAP: Record<string, { label: string; color: string }> = {
   policy: { label: 'Policy', color: 'bg-blue-50 text-blue-700' },
@@ -176,6 +183,283 @@ type ScopingSubTab = 'definition' | 'locations' | 'exclusions' | 'departments';
 type SoaSubTab = 'controls' | 'summary' | 'export';
 type ControlsSubTab = 'library' | 'policies' | 'evidence';
 
+// ---------------------------------------------------------------------------
+// RequirementArtifactsSection
+//
+// Inline per-requirement view of compliance artifacts: catalog items the
+// framework recommends for this specific clause, plus any tenant artifacts
+// already created against it. Lets the user create a tenant artifact from a
+// catalog template without leaving the requirement row.
+//
+// Hidden when:
+//   - The framework has no artifact catalog (e.g. NCA, custom uploads)
+//   - The catalog has no entries matching this clause's control_ref
+//
+// Backend filters with token-equal matching on control_ref strings — see
+// `_ref_matches_any()` in artifacts_router.py.
+// ---------------------------------------------------------------------------
+
+function RequirementArtifactsSection({
+  control,
+  frameworkLabel,
+  tenantUsers,
+}: {
+  control: CertificationControl;
+  frameworkLabel: string;
+  tenantUsers: ArtifactTenantUserT[];
+}) {
+  const queryClient = useQueryClient();
+  // Collapsed by default — only fetch + render when the user explicitly opens
+  // the section. Avoids fan-out queries when many requirement rows are
+  // expanded for evidence/applicability work.
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Modal state: a catalog item triggers Create modal; an existing tenant
+  // artifact triggers the Edit modal. Same modals as the dedicated
+  // Artifacts tab so behaviour, download, upload, edit are all identical.
+  const [creatingFromCatalog, setCreatingFromCatalog] = useState<ArtifactCatalogItemT | null>(null);
+  const [editingArtifact, setEditingArtifact] = useState<TenantArtifactT | null>(null);
+
+  // Build the comma-separated reference string for the backend filter. The
+  // requirement may carry multiple identifiers (original/system codes) —
+  // try them all so a catalog ref like "Cl. 5.1 / A.5.1" still matches.
+  const refTokens = useMemo(() => {
+    const tokens: string[] = [];
+    const candidates = [
+      (control as any).original_control_code,
+      (control as any).system_control_code,
+      (control as any).control_code,
+      (control as any).original_reference,
+    ];
+    for (const c of candidates) {
+      if (c && typeof c === 'string' && !tokens.includes(c)) tokens.push(c);
+    }
+    return tokens;
+  }, [control]);
+
+  const enabled = isOpen && !!frameworkLabel && refTokens.length > 0;
+  const queryKey = ['requirement-artifacts', frameworkLabel, refTokens.join(',')];
+
+  const { data, isLoading } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const res = await apiClient.get('/artifacts/by-control', {
+        params: {
+          assessment_type: frameworkLabel,
+          control_ref: refTokens.join(','),
+        },
+      });
+      return res.data as {
+        framework_key: string | null;
+        framework_name?: string | null;
+        control_ref: string;
+        catalog: ArtifactCatalogItemT[];
+        artifacts: TenantArtifactT[];
+      };
+    },
+    enabled,
+    staleTime: 30_000,
+  });
+
+  // Same wire payload as the existing Artifacts tab → same backend → same
+  // result, so nothing about creation behaviour drifts between the two
+  // surfaces.
+  const createMutation = useMutation({
+    mutationFn: async (payload: Record<string, unknown>) => {
+      const res = await apiClient.post('/artifacts', payload);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      // Also refresh the dedicated Artifacts tab (its own query key is
+      // ['tenant-artifacts', ...] — invalidate the prefix to cover all
+      // assessment ids).
+      queryClient.invalidateQueries({ queryKey: ['tenant-artifacts'] });
+      setCreatingFromCatalog(null);
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data: patch }: { id: number; data: Partial<TenantArtifactT> }) => {
+      const res = await apiClient.put(`/artifacts/${id}`, patch);
+      return res.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: ['tenant-artifacts'] });
+      setEditingArtifact(null);
+    },
+  });
+
+  const catalog = data?.catalog || [];
+  const artifacts = data?.artifacts || [];
+  // Map catalog id → already-created tenant artifact (if any), so each
+  // catalog row can show "Create" or "View" inline.
+  const createdByCatalogId = new Map<number, TenantArtifactT>();
+  for (const a of artifacts) {
+    if (a.catalog_item_id) createdByCatalogId.set(a.catalog_item_id, a);
+  }
+  const orphanArtifacts = artifacts.filter((a) => !a.catalog_item_id);
+  const summary = isOpen
+    ? `${catalog.length} recommended${artifacts.length > 0 ? `, ${artifacts.length} created` : ''}`
+    : 'Click to view';
+
+  return (
+    <div className="mb-6 rounded-lg border border-purple-200 bg-purple-50/40">
+      <button
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-purple-100/60 rounded-lg"
+        aria-expanded={isOpen}
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold text-purple-900">
+          {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          <Package className="h-4 w-4 text-purple-600" />
+          Compliance Artifacts
+          <span className="text-xs font-normal text-purple-700">({summary})</span>
+        </span>
+        {isOpen && isLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600" />}
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-purple-200 p-3 space-y-3">
+          {!isLoading && catalog.length === 0 && artifacts.length === 0 && (
+            <p className="text-xs text-gray-600 italic">
+              No artifact catalog entries match this requirement{frameworkLabel ? ` for ${frameworkLabel}` : ''}.
+            </p>
+          )}
+
+          {catalog.length > 0 && (
+            <ul className="space-y-1.5">
+              {catalog.map((item) => {
+                const created = createdByCatalogId.get(item.id);
+                return (
+                  <li
+                    key={item.id}
+                    className="flex items-start gap-3 rounded-md border border-purple-200 bg-white px-3 py-2"
+                  >
+                    <FileText className="h-4 w-4 text-purple-500 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-black">{item.name}</span>
+                        {item.mandatory && (
+                          <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
+                            Mandatory
+                          </span>
+                        )}
+                        {item.is_platform_native && (
+                          <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                            Platform-native
+                          </span>
+                        )}
+                        <span className="text-[10px] text-gray-500 capitalize">{item.artifact_type}</span>
+                      </div>
+                      {item.description && (
+                        <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{item.description}</p>
+                      )}
+                      <div className="mt-0.5 flex items-center gap-3 text-[10px] text-gray-500">
+                        {item.control_ref && <span className="font-mono">{item.control_ref}</span>}
+                        {item.stage && <span>{item.stage}</span>}
+                        {item.format && <span>· {item.format}</span>}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0">
+                      {created ? (
+                        <button
+                          type="button"
+                          onClick={() => setEditingArtifact(created)}
+                          className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                          title="View / edit / download / upload"
+                        >
+                          <Check className="h-3 w-3" />
+                          View
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setCreatingFromCatalog(item)}
+                          className="inline-flex items-center gap-1 rounded-md border border-purple-300 bg-white px-2.5 py-1 text-xs font-medium text-purple-700 hover:bg-purple-50"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Create
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {/* Tenant artifacts not linked to a catalog item (manually created) —
+              surface them too so a user who added something custom for this
+              requirement can still see it here. Click to open the same
+              edit/download/upload modal. */}
+          {orphanArtifacts.length > 0 && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-purple-700 mb-1.5">Other artifacts</p>
+              <ul className="space-y-1">
+                {orphanArtifacts.map((a) => (
+                  <li key={a.id}>
+                    <button
+                      type="button"
+                      onClick={() => setEditingArtifact(a)}
+                      className="w-full flex items-center gap-2 rounded-md border border-purple-200 bg-white px-3 py-1.5 text-xs text-left hover:bg-purple-50"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-purple-500" />
+                      <span className="text-black flex-1 truncate">{a.name}</span>
+                      <span className="text-gray-500 capitalize">{a.artifact_type}</span>
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] ${
+                        a.status === 'approved' ? 'bg-emerald-100 text-emerald-700'
+                        : a.status === 'in_review' ? 'bg-amber-100 text-amber-700'
+                        : 'bg-gray-100 text-gray-700'
+                      }`}>{a.status}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {createMutation.isError && (
+            <p className="text-xs text-rose-700">
+              Could not create artifact: {(createMutation.error as any)?.response?.data?.detail || 'Please try again.'}
+            </p>
+          )}
+          {updateMutation.isError && (
+            <p className="text-xs text-rose-700">
+              Could not save changes: {(updateMutation.error as any)?.response?.data?.detail || 'Please try again.'}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Reuse the exact same modals the Artifacts tab uses, so the create
+          and edit/download/upload flows are identical across surfaces. */}
+      {creatingFromCatalog && data?.framework_key && (
+        <CreateArtifactModal
+          item={creatingFromCatalog}
+          frameworkKey={data.framework_key}
+          frameworkName={data.framework_name || frameworkLabel}
+          tenantUsers={tenantUsers}
+          onConfirm={(payload) => createMutation.mutate(payload)}
+          onClose={() => setCreatingFromCatalog(null)}
+          isPending={createMutation.isPending}
+        />
+      )}
+      {editingArtifact && (
+        <EditArtifactModal
+          artifact={editingArtifact}
+          tenantUsers={tenantUsers}
+          onSave={(patch) => updateMutation.mutate({ id: editingArtifact.id, data: patch })}
+          onClose={() => setEditingArtifact(null)}
+          isPending={updateMutation.isPending}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function CertificationJourneyPage() {
   const params = useParams();
   const router = useRouter();
@@ -238,6 +522,39 @@ export default function CertificationJourneyPage() {
       return response.data as CertificationControl[];
     },
     enabled: !!journeyId,
+  });
+
+  // Critical-clause AI analysis. Loaded lazily — the GET is cheap (DB read of
+  // already-flagged rows) and powers the "Critical Items" panel; the POST
+  // mutation re-runs GPT-4o classification across the framework's parsed
+  // controls and persists results.
+  const { data: criticalData } = useQuery({
+    queryKey: ['critical-controls', journeyId],
+    queryFn: async () => {
+      const res = await certificationsApi.getCriticalControls(journeyId);
+      return res.data as {
+        framework_id: number | null;
+        analyzed_at: string | null;
+        items: Array<{
+          parsed_control_id: number;
+          control_code: string;
+          title: string;
+          domain?: string | null;
+          category?: string | null;
+          reason?: string | null;
+        }>;
+      };
+    },
+    enabled: !!journeyId,
+  });
+
+  const analyzeCriticalMutation = useMutation({
+    mutationFn: async () => certificationsApi.analyzeCriticalControls(journeyId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['critical-controls', journeyId] });
+      // Controls list also carries `is_critical` per row — refresh it so badges appear.
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+    },
   });
 
   const uploadEvidenceMutation = useMutation({
@@ -364,6 +681,7 @@ export default function CertificationJourneyPage() {
   const [reviewingRecord, setReviewingRecord] = useState<any>(null);
   const [reviewComment, setReviewComment] = useState('');
   const [applicabilityStatusFilter, setApplicabilityStatusFilter] = useState<string>('all');
+  const [criticalExpanded, setCriticalExpanded] = useState<boolean>(false);
 
   const generateReportMutation = useMutation({
     mutationFn: async () => {
@@ -566,6 +884,9 @@ export default function CertificationJourneyPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['applicability'] });
       queryClient.invalidateQueries({ queryKey: ['applicability-audit-log'] });
+      // Backend now self-approves and syncs ControlImplementation.is_applicable
+      // — refresh controls so the badge flips and the row hides/shows.
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
       setShowApplicabilityModal(false);
       setApplicabilityJustification('');
       setApplicabilityModalControl(null);
@@ -579,6 +900,9 @@ export default function CertificationJourneyPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['applicability'] });
       queryClient.invalidateQueries({ queryKey: ['applicability-audit-log'] });
+      // Approving an applicability decision flips ControlImplementation.is_applicable,
+      // which the main Requirements view filters on — refresh it so the row hides/shows.
+      queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
       setShowReviewModal(false);
       setReviewingRecord(null);
       setReviewComment('');
@@ -708,9 +1032,12 @@ export default function CertificationJourneyPage() {
   };
 
   const filteredControls = controls?.filter((control: CertificationControl) => {
+    // Hide controls that have been approved as Not Applicable.
+    // They remain accessible (and reversible) from the Applicability tab.
+    if (control.is_applicable === false) return false;
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      const matchesSearch = 
+      const matchesSearch =
         control.control_code?.toLowerCase().includes(query) ||
         control.control_name?.toLowerCase().includes(query) ||
         control.control_statement?.toLowerCase().includes(query);
@@ -819,6 +1146,15 @@ export default function CertificationJourneyPage() {
     } else {
       setCardsCollapsed(true);
     }
+    // Dismiss any open applicability/review modals when navigating between
+    // tabs — they belong to the originating tab's row click and should not
+    // bleed into the next view.
+    setShowApplicabilityModal(false);
+    setApplicabilityModalControl(null);
+    setApplicabilityJustification('');
+    setShowReviewModal(false);
+    setReviewingRecord(null);
+    setReviewComment('');
   }, [activeTab]);
 
   if (isLoading) {
@@ -1508,9 +1844,22 @@ export default function CertificationJourneyPage() {
     
     return (
       <div id={`control-${control.id}`} key={control.id} className="rounded-lg border border-gray-200 bg-white">
-        <button
+        {/* Accordion toggle is a <div role="button"> rather than a <button>
+            because the row contains nested interactive elements (the
+            applicability badge). HTML disallows interactive descendants inside
+            a <button>, which causes browsers to drop click handlers on those
+            nested controls. Keyboard support is preserved via tabIndex + Enter/Space. */}
+        <div
+          role="button"
+          tabIndex={0}
           onClick={() => toggleControl(control.id)}
-          className="flex w-full items-center justify-between p-4 text-left"
+          onKeyDown={(e) => {
+            if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+              e.preventDefault();
+              toggleControl(control.id);
+            }
+          }}
+          className="flex w-full items-center justify-between p-4 text-left cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-lg"
         >
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {isExpanded ? (
@@ -1531,14 +1880,37 @@ export default function CertificationJourneyPage() {
                     System: {control.system_control_code || control.control_code}
                   </span>
                 </div>
-              <p className="text-sm text-gray-500 mt-0.5 whitespace-pre-wrap break-words">{control.control_statement}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+            {control.is_critical && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-1 text-xs font-medium text-rose-700"
+                title={control.criticality_reason || 'AI-flagged critical clause — requires reviewer approval to mark Not Applicable'}
+              >
+                <AlertTriangle className="h-3 w-3" />
+                Critical
+              </span>
+            )}
             <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-700">{category}</span>
-            <span className={`rounded-lg px-2 py-1 text-xs ${control.is_applicable ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-700'}`}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setApplicabilityModalControl(control);
+                setApplicabilityIsApplicable(!control.is_applicable);
+                setApplicabilityJustification('');
+                setShowApplicabilityModal(true);
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              title={control.is_applicable ? 'Click to mark as Not Applicable' : 'Click to mark as Applicable'}
+              className={`relative z-10 rounded-lg px-2 py-1 text-xs transition-colors cursor-pointer ${control.is_applicable
+                ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:ring-1 hover:ring-emerald-300'
+                : 'bg-gray-50 text-gray-700 hover:bg-gray-100 hover:ring-1 hover:ring-gray-300'}`}
+            >
               {control.is_applicable ? 'Applicable' : 'N/A'}
-            </span>
+            </button>
             <span className={`rounded-lg px-2 py-1 text-xs ${status.color}`}>{status.label}</span>
             <span className="text-xs text-gray-500">{approvedEvidenceCount}/{requiredEvidenceCount || '—'} approved</span>
             <span className="text-xs text-gray-500">{evidenceCount}/{requiredEvidenceCount || '—'} evidence</span>
@@ -1547,9 +1919,30 @@ export default function CertificationJourneyPage() {
               <span className="text-[10px] text-gray-500">{Math.round(evidenceCoverageValue * 100)}%</span>
             </div>
           </div>
-        </button>
+        </div>
         {isExpanded && (
           <div className="border-t border-gray-200 p-4">
+            {control.control_statement && (
+              <p className="mb-4 text-sm text-gray-600 whitespace-pre-wrap break-words">
+                {control.control_statement}
+              </p>
+            )}
+
+            {/* Compliance Artifacts — inline per-requirement view of catalog
+                items + tenant-created artifacts that match this clause's
+                control_ref. Hidden when the framework has no artifact catalog
+                or no items match this clause. Only mounted when the row is
+                expanded so we don't fan out N queries on initial render. */}
+            <RequirementArtifactsSection
+              control={control}
+              frameworkLabel={(journey as any)?.framework_name || journey?.name || ''}
+              tenantUsers={(assignmentTenantUsers || []).map((u: any) => ({
+                id: u.id,
+                label: u.display_name || u.email || String(u.id),
+                email: u.email ?? null,
+              }))}
+            />
+
             {/* Sub-controls section - recursive hierarchy */}
             {/* {control.sub_controls && control.sub_controls.length > 0 && (
               <div className="mb-6">
@@ -1560,7 +1953,7 @@ export default function CertificationJourneyPage() {
                 {renderSubControlsRecursive(control.sub_controls, 0)}
               </div>
             )} */}
-            
+
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               {/* Linked Evidence - Now appears FIRST (left column) */}
               <div>
@@ -1729,10 +2122,21 @@ export default function CertificationJourneyPage() {
                         <div key={ev.id} className="rounded-lg bg-gray-50 border border-gray-200 p-3">
                           <div className="flex items-center gap-3">
                             <Paperclip className="h-4 w-4 text-gray-600 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm text-black truncate">{ev.file_name || 'Evidence file'}</p>
-                              <p className="text-xs text-gray-500">{ev.uploaded_at ? new Date(ev.uploaded_at).toLocaleDateString() : ''}</p>
-                            </div>
+                            {ev.linked_evidence_id ? (
+                              <Link
+                                href={`/evidence/${ev.linked_evidence_id}`}
+                                className="flex-1 min-w-0 group"
+                                title="Open evidence detail"
+                              >
+                                <p className="text-sm text-black truncate group-hover:text-blue-600 group-hover:underline">{ev.file_name || 'Evidence file'}</p>
+                                <p className="text-xs text-gray-500">{ev.uploaded_at ? new Date(ev.uploaded_at).toLocaleDateString() : ''}</p>
+                              </Link>
+                            ) : (
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-black truncate">{ev.file_name || 'Evidence file'}</p>
+                                <p className="text-xs text-gray-500">{ev.uploaded_at ? new Date(ev.uploaded_at).toLocaleDateString() : ''}</p>
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <span className={`rounded px-2 py-0.5 text-xs ${aiBadge.className}`} title={ev.ai_assessment_summary || ''}>
                                 {aiBadge.label}
@@ -2124,6 +2528,96 @@ export default function CertificationJourneyPage() {
 
   const renderControlsTab = () => (
     <div className="space-y-4">
+      {/* Critical Items panel — surfaces AI-flagged red-flag clauses for this
+          framework (e.g. PCI network segmentation, MFA on privileged access).
+          Hidden until the analysis has been run at least once and found any. */}
+      {(() => {
+        const critical = criticalData?.items ?? [];
+        const analyzed = !!criticalData?.analyzed_at;
+        const isAnalyzing = analyzeCriticalMutation.isPending;
+        if (!analyzed && critical.length === 0) {
+          // First-time state — invite user to run analysis.
+          return (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-amber-900">Critical-Clause Analysis</p>
+                  <p className="text-xs text-amber-800 mt-0.5">
+                    Run an AI scan to flag red-flag clauses in this framework that may require special attention during review.
+                  </p>
+                </div>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => analyzeCriticalMutation.mutate()}
+                    disabled={isAnalyzing}
+                    className="flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {isAnalyzing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    {isAnalyzing ? 'Analyzing…' : 'Run AI analysis'}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-4">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-rose-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-rose-900">
+                    Critical Items <span className="text-rose-700 font-normal">({critical.length})</span>
+                  </p>
+                  <p className="text-xs text-rose-800 mt-0.5">
+                    These clauses require reviewer approval before being marked Not Applicable.
+                    {criticalData?.analyzed_at ? ` Last analyzed ${new Date(criticalData.analyzed_at).toLocaleDateString()}.` : ''}
+                  </p>
+                </div>
+              </div>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => analyzeCriticalMutation.mutate()}
+                  disabled={isAnalyzing}
+                  className="flex items-center gap-1.5 rounded-md border border-rose-300 bg-white px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                  title="Re-run AI critical-clause analysis"
+                >
+                  {isAnalyzing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                  {isAnalyzing ? 'Re-analyzing…' : 'Re-analyze'}
+                </button>
+              )}
+            </div>
+            {critical.length === 0 ? (
+              <p className="text-xs text-rose-800 italic">No critical clauses identified for this framework.</p>
+            ) : (
+              <>
+                <ul className="space-y-1.5">
+                  {(criticalExpanded ? critical : critical.slice(0, 8)).map((c) => (
+                    <li key={c.parsed_control_id} className="flex items-start gap-2 text-xs">
+                      <span className="font-mono text-rose-700 flex-shrink-0">{c.control_code}</span>
+                      <span className="text-rose-900">{c.title}</span>
+                      {c.reason && <span className="text-rose-700/80 truncate">— {c.reason}</span>}
+                    </li>
+                  ))}
+                </ul>
+                {critical.length > 8 && (
+                  <button
+                    type="button"
+                    onClick={() => setCriticalExpanded((v) => !v)}
+                    className="mt-2 text-xs font-medium text-rose-700 hover:text-rose-900 hover:underline"
+                  >
+                    {criticalExpanded ? 'View less' : `View all ${critical.length} →`}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        );
+      })()}
+
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
         <div className="mb-2 flex items-center justify-between text-sm">
           <span className="text-gray-600">Evidence Readiness</span>
@@ -2392,9 +2886,12 @@ export default function CertificationJourneyPage() {
 
   const handleSetApplicability = () => {
     if (!applicabilityModalControl || !journey?.framework_id) return;
-    if (!applicabilityIsApplicable && !applicabilityJustification.trim()) return;
+    // Backend stores applicability against ParsedFrameworkControl.id, not the
+    // per-journey ControlImplementation.id. Prefer parsed_control_id when
+    // present (controls coming from the journey controls endpoint).
+    const parsedControlId = applicabilityModalControl.parsed_control_id ?? applicabilityModalControl.id;
     setApplicabilityMutation.mutate({
-      control_id: applicabilityModalControl.id,
+      control_id: parsedControlId,
       uploaded_framework_id: journey.framework_id,
       is_applicable: applicabilityIsApplicable,
       justification: applicabilityJustification,
@@ -2411,13 +2908,17 @@ export default function CertificationJourneyPage() {
 
   const renderApplicabilityTab = () => {
     const applicabilityRecords = (applicabilityData as any)?.records || [];
+    // Records are keyed by ParsedFrameworkControl.id, but controls coming from
+    // the journey endpoint expose that under `parsed_control_id`. Look up by
+    // parsed_control_id (with `id` as a fallback for any direct-parsed lists).
     const applicabilityMap = new Map<number, any>();
     applicabilityRecords.forEach((r: any) => applicabilityMap.set(r.control_id, r));
+    const lookupRecord = (c: any) => applicabilityMap.get(c.parsed_control_id ?? c.id);
 
     const allControls = controls || [];
     const filteredApplicabilityControls = allControls.filter((c: any) => {
       if (applicabilityStatusFilter === 'all') return true;
-      const record = applicabilityMap.get(c.id);
+      const record = lookupRecord(c);
       if (applicabilityStatusFilter === 'pending') return record?.status === 'pending';
       if (applicabilityStatusFilter === 'approved') return record?.status === 'approved';
       if (applicabilityStatusFilter === 'rejected') return record?.status === 'rejected';
@@ -2527,7 +3028,7 @@ export default function CertificationJourneyPage() {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredApplicabilityControls.map((control: any) => {
-                  const record = applicabilityMap.get(control.id);
+                  const record = lookupRecord(control);
                   const isApplicable = record ? record.is_applicable : true;
                   const status = record?.status || null;
 
@@ -2591,30 +3092,15 @@ export default function CertificationJourneyPage() {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
-                          {canEdit && (!record || record.is_applicable ? (
+                          {canEdit && record?.status === 'pending' ? (
                             <button
-                              onClick={() => openApplicabilityModal(control, false)}
-                              className="rounded-lg bg-orange-50 border border-orange-200 px-2.5 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100 transition-colors"
+                              onClick={() => { setReviewingRecord(record); setReviewComment(''); setShowReviewModal(true); }}
+                              className="rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
                             >
-                              Mark N/A
+                              Review
                             </button>
                           ) : (
-                            <button
-                              onClick={() => openApplicabilityModal(control, true)}
-                              className="rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
-                            >
-                              Mark Applicable
-                            </button>
-                          ))}
-                          {canEdit && record?.status === 'pending' && (
-                            <>
-                              <button
-                                onClick={() => { setReviewingRecord(record); setReviewComment(''); setShowReviewModal(true); }}
-                                className="rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
-                              >
-                                Review
-                              </button>
-                            </>
+                            <span className="text-xs text-gray-400">—</span>
                           )}
                         </div>
                       </td>
@@ -2655,111 +3141,6 @@ export default function CertificationJourneyPage() {
           </div>
         )}
 
-        {showApplicabilityModal && applicabilityModalControl && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="flex h-[70vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
-              <div className="flex-1 overflow-y-auto p-6">
-                <h3 className="mb-1 text-lg font-semibold text-black">
-                  {applicabilityIsApplicable ? 'Mark as Applicable' : 'Mark as Not Applicable'}
-                </h3>
-                <p className="mb-4 text-sm text-gray-600">
-                  Control: <span className="font-mono text-blue-600">{applicabilityModalControl.control_code || applicabilityModalControl.original_reference || applicabilityModalControl.control_id}</span>
-                  {' — '}
-                  {applicabilityModalControl.control_name || applicabilityModalControl.title}
-                </p>
-                <div className="mb-4">
-                  <label className="mb-2 block text-sm font-medium text-gray-700">
-                    Justification {!applicabilityIsApplicable && <span className="text-rose-600">*</span>}
-                  </label>
-                  <textarea
-                    value={applicabilityJustification}
-                    onChange={(e) => setApplicabilityJustification(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
-                    rows={4}
-                    placeholder={applicabilityIsApplicable ? 'Provide justification for re-applying this control...' : 'Explain why this clause is not applicable to your organization...'}
-                  />
-                  {!applicabilityIsApplicable && !applicabilityJustification.trim() && (
-                    <p className="mt-1 text-xs text-rose-600">Justification is required when marking a clause as Not Applicable</p>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-3 border-t border-gray-200 p-6 pt-4">
-                <button
-                  onClick={() => { setShowApplicabilityModal(false); setApplicabilityModalControl(null); }}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSetApplicability}
-                  disabled={setApplicabilityMutation.isPending || (!applicabilityIsApplicable && !applicabilityJustification.trim())}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-                >
-                  {setApplicabilityMutation.isPending ? (
-                    <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Saving...</span>
-                  ) : 'Save'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showReviewModal && reviewingRecord && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="flex h-[70vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
-              <div className="flex-1 overflow-y-auto p-6">
-                <h3 className="mb-1 text-lg font-semibold text-black">Review Applicability Decision</h3>
-                <p className="mb-2 text-sm text-gray-600">
-                  Control: <span className="font-mono text-blue-600">{reviewingRecord.control_reference}</span>
-                  {' — '}
-                  {reviewingRecord.control_title}
-                </p>
-                <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <p className="mb-1 text-xs text-gray-600">Decision</p>
-                  <p className="text-sm text-black">{reviewingRecord.is_applicable ? 'Applicable' : 'Not Applicable'}</p>
-                  <p className="mb-1 mt-2 text-xs text-gray-600">Justification</p>
-                  <p className="text-sm text-gray-700">{reviewingRecord.justification}</p>
-                  <p className="mb-1 mt-2 text-xs text-gray-600">Requested By</p>
-                  <p className="text-sm text-gray-700">{reviewingRecord.requested_by_name} on {reviewingRecord.requested_at ? new Date(reviewingRecord.requested_at).toLocaleDateString() : ''}</p>
-                </div>
-                <div className="mb-4">
-                  <label className="mb-2 block text-sm font-medium text-gray-700">Review Comment</label>
-                  <textarea
-                    value={reviewComment}
-                    onChange={(e) => setReviewComment(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
-                    rows={3}
-                    placeholder="Add a review comment (optional)..."
-                  />
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-3 border-t border-gray-200 p-6 pt-4">
-                <button
-                  onClick={() => { setShowReviewModal(false); setReviewingRecord(null); }}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleReviewApplicability('rejected')}
-                  disabled={reviewApplicabilityMutation.isPending}
-                  className="rounded-lg bg-rose-50 border border-rose-200 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 transition-colors disabled:opacity-50"
-                >
-                  Reject
-                </button>
-                <button
-                  onClick={() => handleReviewApplicability('approved')}
-                  disabled={reviewApplicabilityMutation.isPending}
-                  className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                >
-                  {reviewApplicabilityMutation.isPending ? (
-                    <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Processing...</span>
-                  ) : 'Approve'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   };
@@ -3022,6 +3403,135 @@ export default function CertificationJourneyPage() {
           journeyId={journeyId}
           control={selectedControl}
         />
+      )}
+
+      {/* Applicability modals are mounted at the page root so they can be
+          opened from any tab (the badge on Requirements, the Review button on
+          the Applicability tab, etc.) without depending on which tab's render
+          tree is currently mounted. */}
+      {showApplicabilityModal && applicabilityModalControl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+            <div className="flex-1 overflow-y-auto p-6">
+              <h3 className="mb-1 text-lg font-semibold text-black">
+                {applicabilityIsApplicable ? 'Mark as Applicable' : 'Mark as Not Applicable'}
+              </h3>
+              <p className="mb-4 text-sm text-gray-600">
+                Control: <span className="font-mono text-blue-600">{applicabilityModalControl.control_code || applicabilityModalControl.original_reference || applicabilityModalControl.control_id}</span>
+                {' — '}
+                {applicabilityModalControl.control_name || applicabilityModalControl.title}
+              </p>
+              {applicabilityModalControl.is_critical && (
+                <div className="mb-4 flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-rose-900">
+                    <p className="font-semibold">Critical clause — reviewer approval required.</p>
+                    <p className="mt-0.5 text-rose-800">
+                      This clause was AI-flagged as a red-flag control. Your request will be saved as
+                      <span className="font-medium"> pending</span> and applied only after a reviewer approves it
+                      from the Applicability tab. The control will remain {applicabilityModalControl.is_applicable ? 'Applicable' : 'Not Applicable'} until then.
+                    </p>
+                    {applicabilityModalControl.criticality_reason && (
+                      <p className="mt-1 italic text-rose-700">Why: {applicabilityModalControl.criticality_reason}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="mb-4">
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  Justification {applicabilityModalControl.is_critical
+                    ? <span className="text-xs font-normal text-rose-600">(recommended for reviewer)</span>
+                    : <span className="text-xs font-normal text-gray-500">(optional)</span>}
+                </label>
+                <textarea
+                  value={applicabilityJustification}
+                  onChange={(e) => setApplicabilityJustification(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  rows={4}
+                  placeholder={applicabilityIsApplicable ? 'Optionally explain why this control is being re-applied...' : 'Optionally explain why this clause is not applicable to your organization...'}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-gray-200 p-6 pt-4">
+              <button
+                onClick={() => { setShowApplicabilityModal(false); setApplicabilityModalControl(null); }}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSetApplicability}
+                disabled={setApplicabilityMutation.isPending}
+                className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 ${
+                  applicabilityIsApplicable
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-rose-600 hover:bg-rose-700'
+                }`}
+              >
+                {setApplicabilityMutation.isPending ? (
+                  <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Saving...</span>
+                ) : applicabilityIsApplicable ? 'Mark Applicable' : 'Mark Not Applicable'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showReviewModal && reviewingRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+            <div className="flex-1 overflow-y-auto p-6">
+              <h3 className="mb-1 text-lg font-semibold text-black">Review Applicability Decision</h3>
+              <p className="mb-2 text-sm text-gray-600">
+                Control: <span className="font-mono text-blue-600">{reviewingRecord.control_reference}</span>
+                {' — '}
+                {reviewingRecord.control_title}
+              </p>
+              <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <p className="mb-1 text-xs text-gray-600">Decision</p>
+                <p className="text-sm text-black">{reviewingRecord.is_applicable ? 'Applicable' : 'Not Applicable'}</p>
+                <p className="mb-1 mt-2 text-xs text-gray-600">Justification</p>
+                <p className="text-sm text-gray-700">{reviewingRecord.justification || '(no justification provided)'}</p>
+                <p className="mb-1 mt-2 text-xs text-gray-600">Requested By</p>
+                <p className="text-sm text-gray-700">{reviewingRecord.requested_by_name} on {reviewingRecord.requested_at ? new Date(reviewingRecord.requested_at).toLocaleDateString() : ''}</p>
+              </div>
+              <div className="mb-4">
+                <label className="mb-2 block text-sm font-medium text-gray-700">Review Comment</label>
+                <textarea
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
+                  rows={3}
+                  placeholder="Add a review comment (optional)..."
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-gray-200 p-6 pt-4">
+              <button
+                onClick={() => { setShowReviewModal(false); setReviewingRecord(null); }}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleReviewApplicability('rejected')}
+                disabled={reviewApplicabilityMutation.isPending}
+                className="rounded-lg bg-rose-50 border border-rose-200 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 transition-colors disabled:opacity-50"
+              >
+                Reject
+              </button>
+              <button
+                onClick={() => handleReviewApplicability('approved')}
+                disabled={reviewApplicabilityMutation.isPending}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
+              >
+                {reviewApplicabilityMutation.isPending ? (
+                  <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Processing...</span>
+                ) : 'Approve'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

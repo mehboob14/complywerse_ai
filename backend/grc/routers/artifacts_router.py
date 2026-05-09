@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -286,6 +287,54 @@ def _resolve_framework_key(raw: str) -> Optional[str]:
     return best
 
 
+# ---------------------------------------------------------------------------
+# Control-ref fuzzy matching
+# ---------------------------------------------------------------------------
+# Catalog/tenant `control_ref` values are free-form strings ("Cl. 5.1",
+# "A.5.9", "Cl. 6.1.2 / 8.2"). To surface a catalog item next to a parsed
+# framework requirement, we compare normalized identifiers token-by-token.
+#
+# Examples handled correctly:
+#   catalog "Cl. 5.1" + requirement "5.1"        → match
+#   catalog "Cl. 6.1.2 / 8.2" + requirement "8.2" → match (split on / and ,)
+#   catalog "A.5.9" + requirement "A.5.9"          → match
+#   catalog "5.1" + requirement "5.10"            → NO match (token-equal,
+#                                                    not substring — guards
+#                                                    against false positives)
+# ---------------------------------------------------------------------------
+
+_REF_PREFIX_RE = re.compile(r'^(cl\.|clause|cl|c\.|control)\s*', re.IGNORECASE)
+
+
+def _normalize_ref(s: Optional[str]) -> str:
+    if not s:
+        return ""
+    out = s.strip().lower()
+    out = _REF_PREFIX_RE.sub("", out)
+    out = re.sub(r"\s+", "", out)
+    return out
+
+
+def _split_catalog_ref(s: Optional[str]) -> List[str]:
+    """A single catalog control_ref may bundle multiple references with
+    `/` or `,` separators. Return the normalized tokens for each.
+    """
+    if not s:
+        return []
+    parts = re.split(r"[/,]\s*", s)
+    return [n for n in (_normalize_ref(p) for p in parts) if n]
+
+
+def _ref_matches_any(catalog_ref: Optional[str], requirement_codes: List[str]) -> bool:
+    catalog_tokens = set(_split_catalog_ref(catalog_ref))
+    if not catalog_tokens:
+        return False
+    for code in requirement_codes:
+        if _normalize_ref(code) in catalog_tokens:
+            return True
+    return False
+
+
 def _artifact_out(artifact: TenantArtifact) -> dict:
     assigned_name = None
     if artifact.assigned_to:
@@ -372,6 +421,94 @@ def get_catalog(
             for i in items
         ],
         "stages": stages,
+    }
+
+
+@router.get("/by-control")
+def list_artifacts_by_control(
+    framework_key: Optional[str] = Query(None),
+    assessment_type: Optional[str] = Query(None),
+    control_ref: str = Query(..., description="Comma-separated requirement reference(s) — e.g. '5.1' or 'A.5.9' or '5.1,5.2'"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Return catalog items + tenant artifacts whose `control_ref` matches
+    the provided requirement reference(s). Used to render an inline
+    "Compliance Artifacts" section per requirement on the framework detail
+    page, so users can see and create artifacts without leaving the row.
+
+    Empty result (`catalog: []`) is normal — most parsed-framework
+    requirements don't have a corresponding artifact catalog entry, and the
+    UI hides the section in that case.
+    """
+    _ensure_catalog_seeded(db)
+    tenant_id = get_user_primary_tenant(current_user, db)
+
+    resolved_key = framework_key
+    if not resolved_key and assessment_type:
+        resolved_key = _resolve_framework_key(assessment_type)
+    if not resolved_key:
+        return {
+            "framework_key": None,
+            "control_ref": control_ref,
+            "catalog": [],
+            "artifacts": [],
+        }
+
+    requirement_codes = [c.strip() for c in (control_ref or "").split(",") if c.strip()]
+    if not requirement_codes:
+        return {
+            "framework_key": resolved_key,
+            "control_ref": control_ref,
+            "catalog": [],
+            "artifacts": [],
+        }
+
+    catalog_items = (
+        db.query(ArtifactCatalogItem)
+        .filter(ArtifactCatalogItem.framework_key == resolved_key)
+        .all()
+    )
+    matched_catalog = [
+        i for i in catalog_items
+        if _ref_matches_any(i.control_ref, requirement_codes)
+    ]
+
+    tenant_artifacts = (
+        db.query(TenantArtifact)
+        .filter(
+            TenantArtifact.tenant_id == tenant_id,
+            TenantArtifact.framework_key == resolved_key,
+        )
+        .all()
+    )
+    matched_tenant = [
+        a for a in tenant_artifacts
+        if _ref_matches_any(a.control_ref, requirement_codes)
+    ]
+
+    return {
+        "framework_key": resolved_key,
+        "control_ref": control_ref,
+        "catalog": [
+            {
+                "id": i.id,
+                "artifact_id": i.artifact_id,
+                "stage": i.stage,
+                "stage_number": i.stage_number,
+                "name": i.name,
+                "artifact_type": i.artifact_type,
+                "control_ref": i.control_ref,
+                "mandatory": i.mandatory,
+                "description": i.description,
+                "format": i.format,
+                "owner": i.owner,
+                "is_platform_native": i.is_platform_native,
+                "platform_data_type": i.platform_data_type,
+            }
+            for i in matched_catalog
+        ],
+        "artifacts": [_artifact_out(a) for a in matched_tenant],
     }
 
 

@@ -1863,23 +1863,308 @@ Return a JSON object with:
         )
 
 
+def _normalize_doc_title(s: str) -> str:
+    """Normalize a document title for fuzzy duplicate detection.
+
+    Lowercase, drop everything that isn't a letter or digit, collapse runs.
+    "ISO 27001 Information Security Policy v2.0" → "iso27001informationsecuritypolicy".
+    Used as the first-pass exact-match guard before the semantic dedup AI call.
+    """
+    return "".join(ch for ch in (s or "").lower() if ch.isalnum())
+
+
+# Words to strip when computing a token-based similarity score. They appear
+# in nearly every governance-document title and would inflate match scores
+# for unrelated titles otherwise.
+_TITLE_STOPWORDS = {
+    "the", "and", "of", "for", "on", "in", "to", "a", "an", "is", "or", "by",
+    "with", "from", "as", "at", "policy", "policies", "procedure", "procedures",
+    "standard", "standards", "guideline", "guidelines", "charter", "framework",
+    "document", "documents", "v", "version", "iso", "nist", "soc", "pci", "dss",
+    "hipaa", "gdpr", "sama", "nca", "sbp",
+}
+
+# Common security/governance abbreviations expanded so a title using the
+# acronym is still tokenized in a way that overlaps with the spelled-out
+# form. e.g. "ISMS Policy" → tokens {information, security, management,
+# system}; "Information Security Management System" → same set.
+_TITLE_SYNONYMS = {
+    "isms": "information security management system",
+    "infosec": "information security",
+    "infosecurity": "information security",
+    "bcp": "business continuity plan",
+    "bcm": "business continuity management",
+    "drp": "disaster recovery plan",
+    "dr": "disaster recovery",
+    "iam": "identity access management",
+    "mfa": "multi factor authentication",
+    "2fa": "two factor authentication",
+    "ir": "incident response",
+    "irm": "incident response management",
+    "ac": "access control",
+    "acm": "access control management",
+    "cm": "change management",
+    "vm": "vulnerability management",
+    "tprm": "third party risk management",
+    "vrm": "vendor risk management",
+    "dlp": "data loss prevention",
+    "byod": "bring your own device",
+    "soc": "security operations centre",
+    "soa": "statement of applicability",
+    "ai": "artificial intelligence",
+    "rmp": "risk management plan",
+    "ssp": "system security plan",
+    "appsec": "application security",
+    "siem": "security information event management",
+}
+
+
+def _title_token_set(title: str) -> set:
+    """Tokenize a title for similarity comparison: lowercase, expand synonyms,
+    drop stopwords and short tokens. Returns a set of meaningful words.
+
+    "ISMS Policy v2" → {information, security, management, system}
+    "Information Security Management System Policy" → {information, security, management, system}
+    """
+    if not title:
+        return set()
+    raw = title.lower()
+    # Replace non-alphanumerics with spaces, then split.
+    cleaned = "".join(ch if ch.isalnum() else " " for ch in raw)
+    tokens = []
+    for tok in cleaned.split():
+        # Expand abbreviations into their constituent words.
+        expansion = _TITLE_SYNONYMS.get(tok)
+        if expansion:
+            tokens.extend(expansion.split())
+        else:
+            tokens.append(tok)
+    # Drop stopwords + 1-char numerics like "v2" leftover digits.
+    return {
+        t for t in tokens
+        if t not in _TITLE_STOPWORDS and len(t) > 1 and not t.isdigit()
+    }
+
+
+def _title_similarity(a: str, b: str) -> float:
+    """Jaccard similarity over the tokenized representations. 1.0 = identical
+    meaningful tokens, 0.0 = nothing in common."""
+    ta, tb = _title_token_set(a), _title_token_set(b)
+    if not ta or not tb:
+        return 0.0
+    inter = ta & tb
+    union = ta | tb
+    return len(inter) / len(union) if union else 0.0
+
+
+# When a suggestion's tokenized similarity to ANY existing title is at or
+# above this threshold, treat it as a duplicate without calling the AI again.
+# Tuned empirically: "Information Security Policy" vs "ISMS Policy" → 1.0
+# (identical token set after synonym expansion); "Access Control Policy"
+# vs "Access Management Procedure" → 0.5 (same primary topic — should
+# dedupe); unrelated titles (e.g. "Cryptographic Controls Standard" vs
+# "Information Security Policy") fall well below 0.4. Threshold lowered
+# from 0.6 → 0.5 after observed false-negatives where AI suggested
+# trivially renamed versions of existing docs.
+_TITLE_SIMILARITY_HARD_DUP = 0.5
+
+
+# Document statuses that count as "the org already has this on the books".
+# Drafts and pending-review docs count too, because the user is actively
+# building them — re-suggesting them would be noise. Archived/expired/exception
+# rows are intentionally excluded so a retired policy gets re-recommended.
+_EXISTING_DOC_STATUSES = {
+    "draft", "pending_review", "pending_approval", "approved", "published"
+}
+
+
+def _semantic_dedup_against_existing(
+    client: OpenAI,
+    suggestions: List[Dict],
+    existing_documents: List[Dict],
+) -> Tuple[set, List[str]]:
+    """Ask GPT-4o which of the new suggestions are substantially equivalent
+    to a document the tenant already has.
+
+    Returns (set_of_indices_to_drop, list_of_dropped_titles). Failure-mode is
+    "drop nothing" — we never want a flaky AI call to silently remove
+    legitimate suggestions, so any error returns empty results.
+    """
+    if not suggestions or not existing_documents:
+        return set(), []
+
+    suggestion_payload = [
+        {
+            "i": idx,
+            "title": str(s.get("title") or "").strip(),
+            "doc_type": str(s.get("doc_type") or "").strip(),
+            "description": str(s.get("description") or "")[:300],
+        }
+        for idx, s in enumerate(suggestions)
+    ]
+    existing_payload = [
+        {
+            "title": d.get("title") or "",
+            "doc_type": d.get("doc_type") or "",
+        }
+        for d in existing_documents
+    ]
+
+    system_msg = (
+        "You are a governance librarian. You output ONLY strict JSON. Your "
+        "job is to AGGRESSIVELY identify duplicate document suggestions. "
+        "When in doubt, mark as duplicate — the user is frustrated when the "
+        "system suggests something they already have. False-positive (over-"
+        "deduplicating) is preferable to false-negative (re-suggesting an "
+        "existing doc)."
+    )
+    user_msg = f"""Two lists below: NEW (suggested documents to potentially add) and EXISTING (documents the organisation already maintains).
+
+For each NEW item, decide whether it COVERS THE SAME PRIMARY TOPIC as ANY EXISTING item. If yes → duplicate, drop it.
+
+DUPLICATE (drop) when ANY of these is true:
+- Same subject, different abbreviation: "Information Security Policy" vs "InfoSec Policy" vs "ISMS Policy" vs "ISMS Manual"
+- Same subject, reordered words: "Access Control Policy" vs "Policy on Access Control" vs "User Access Management Policy"
+- Same subject, different doc_type label: existing "Access Control Procedure" vs new "Access Control Policy" — same scope, drop
+- Sub-topic the parent obviously covers: existing "Information Security Policy" vs new "Password Policy" / "Encryption Policy" / "Acceptable Use Policy" → drop unless the new one is a deeply specialised standard/procedure with operational detail beyond the parent
+- Renamed equivalent: "Disaster Recovery Plan" vs "Business Continuity Plan" when only one of the two would normally be maintained
+- Singular/plural, hyphen, casing, version variants: "Risk Management Policy" vs "Risk Management Policies"
+- Localized variants: "Data Protection Policy" vs "Privacy Policy" vs "GDPR Policy" — same primary topic
+- Standards covering same domain: existing "Cryptographic Controls Standard" vs new "Encryption Standard" — same topic
+
+NOT duplicate (keep):
+- Genuinely distinct primary topics: "Acceptable Use Policy" vs "Vendor Risk Management Policy"
+- Materially narrower OPERATIONAL document with concrete procedure not in the parent: existing "Information Security Policy" vs new "Vulnerability Scanning Procedure" → keep, the procedure has operational steps the policy doesn't
+- Different lifecycle phase: existing "Incident Response Policy" vs new "Incident Response Tabletop Exercise Procedure" → keep
+
+Return STRICT JSON ONLY:
+{{"duplicates": [{{"i": <int index from NEW>, "matches_existing_title": "<existing title>", "reason": "<one short sentence>"}}]}}
+
+Only include entries that ARE duplicates. Use the integer "i" from NEW exactly as given.
+
+EXISTING:
+{json.dumps(existing_payload, ensure_ascii=False)}
+
+NEW:
+{json.dumps(suggestion_payload, ensure_ascii=False)}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            response_format={"type": "json_object"},
+            temperature=0.0,
+            max_tokens=2000,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+        )
+        raw = response.choices[0].message.content or "{}"
+        parsed = json.loads(raw)
+        dropped_indices: set = set()
+        dropped_titles: List[str] = []
+        for entry in (parsed.get("duplicates") or []):
+            try:
+                idx = int(entry.get("i"))
+            except (TypeError, ValueError):
+                continue
+            if 0 <= idx < len(suggestions):
+                dropped_indices.add(idx)
+                title = suggestions[idx].get("title") or ""
+                if title:
+                    dropped_titles.append(title)
+        return dropped_indices, dropped_titles
+    except Exception:
+        # Defensive: never let a flaky dedup call hide real suggestions.
+        return set(), []
+
+
+def _fetch_existing_documents_for_frameworks(
+    framework_ids: List[int],
+    tenant_ids: List[int],
+    requested_doc_type: Optional[str],
+    db: Session,
+) -> List[Dict]:
+    """Return active documents in the tenant's library, used as the
+    deduplication pool for AI policy suggestions.
+
+    Important: we intentionally do NOT filter by framework_ids here. Many
+    tenants upload policies/procedures without tagging them to a specific
+    framework, so a framework-scoped query would miss "Information Security
+    Policy" sitting untagged in the library and the AI would happily
+    re-suggest it. Dedup against the WHOLE library; the cost is small (a
+    tenant rarely has more than a few hundred docs) and the false-negative
+    cost (re-suggesting a doc that already exists) is what the user is
+    complaining about.
+
+    Documents tagged to one of the requested frameworks are surfaced first
+    in the response (so the UI's "Already covered" panel still shows the
+    framework-relevant ones at the top).
+    """
+    if not tenant_ids:
+        return []
+
+    query = db.query(GovernanceDocument).filter(
+        GovernanceDocument.tenant_id.in_(tenant_ids),
+    )
+    if requested_doc_type:
+        query = query.filter(GovernanceDocument.doc_type == requested_doc_type)
+
+    rows = query.all()
+    fid_set = set(framework_ids or [])
+    out: List[Dict] = []
+    for d in rows:
+        if (d.status or "").lower() not in _EXISTING_DOC_STATUSES:
+            continue
+        # Best-effort normalize JSON framework_ids. Tolerant of stringy ids
+        # stored in older rows.
+        normalized: set = set()
+        for v in (d.framework_ids or []):
+            try:
+                normalized.add(int(v))
+            except (TypeError, ValueError):
+                continue
+        # Whether this doc is tagged to one of the requested frameworks
+        # (used purely for ranking — it's still in the dedup pool either way).
+        is_framework_tagged = bool(fid_set & normalized) if fid_set else False
+        out.append({
+            "id": d.id,
+            "title": d.title,
+            "doc_type": d.doc_type,
+            "status": d.status,
+            "framework_ids": list(normalized),
+            "is_framework_tagged": is_framework_tagged,
+        })
+    # Surface framework-tagged docs first, then everything else. Stable order
+    # within each group.
+    out.sort(key=lambda d: (0 if d["is_framework_tagged"] else 1, d["title"] or ""))
+    return out
+
+
 @router.post("/ai-suggest-policies")
 def suggest_policies_for_framework(
     request: PolicySuggestRequest,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Given framework IDs, use AI to suggest what policies, procedures, and standards can be developed"""
+    """Given framework IDs, use AI to suggest what policies, procedures, and standards can be developed.
+
+    The suggestion is gap-aware: existing tenant documents linked to the same
+    framework(s) are listed in the prompt as "already covered", and any AI
+    suggestion whose normalized title collides with an existing title is
+    filtered out before the response is returned.
+    """
     if not request.framework_ids:
         raise HTTPException(status_code=400, detail="At least one framework must be selected")
-    
+
     frameworks = db.query(UploadedFramework).filter(
         UploadedFramework.id.in_(request.framework_ids)
     ).all()
-    
+
     if not frameworks:
         raise HTTPException(status_code=404, detail="No frameworks found")
-    
+
     controls_summary, framework_alignment, domain_context = build_framework_control_context(frameworks, db)
     
     if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
@@ -1902,6 +2187,31 @@ def suggest_policies_for_framework(
             detail=f"Unsupported doc_type '{request.doc_type}'. Allowed values: {', '.join(sorted(allowed_doc_types))}"
         )
 
+    # Pull the documents the tenant already has covering these framework(s)
+    # so we can both (a) tell the model not to re-suggest them and (b) hard
+    # filter any near-duplicates the model emits anyway.
+    user_tenant_ids = get_user_tenants(current_user, db)
+    existing_documents = _fetch_existing_documents_for_frameworks(
+        request.framework_ids, user_tenant_ids, requested_doc_type, db
+    )
+    existing_normalized_titles = {
+        _normalize_doc_title(d["title"]) for d in existing_documents if d.get("title")
+    }
+    existing_documents_section = ""
+    if existing_documents:
+        # Compact representation — title + type is enough to dedupe against.
+        # Group by doc_type so the prompt reads cleanly even with 200+ rows.
+        grouped: Dict[str, List[str]] = {}
+        for d in existing_documents:
+            grouped.setdefault(d.get("doc_type") or "document", []).append(d["title"])
+        lines = []
+        for dt, titles in sorted(grouped.items()):
+            lines.append(f"- {dt}s ({len(titles)}): " + "; ".join(sorted(set(titles))))
+        existing_documents_section = (
+            "\n\nDOCUMENTS THE ORG ALREADY HAS (do NOT re-suggest these or close paraphrases):\n"
+            + "\n".join(lines)
+        )
+
     doc_type_instruction = (
         f"Suggest only {requested_doc_type} documents. Do not include any other document types."
         if requested_doc_type
@@ -1912,14 +2222,15 @@ def suggest_policies_for_framework(
         if requested_doc_type
         else "Provide 18-30 suggestions covering policies, procedures, standards, and guidelines. Order by priority (high first) and ensure the list covers the major domains implied by the controls. The output must be domain-balanced rather than over-indexed on generic information security titles."
     )
-    
+
     prompt = f"""You are an expert governance and compliance consultant. Based on the following regulatory framework controls, suggest the governance documents an organization should create to achieve domain-specific compliance coverage.
 
-{controls_summary}
+{controls_summary}{existing_documents_section}
 
 Analysis requirements:
 - Cluster the controls into governance domains before suggesting documents.
 - Suggest documents only when they are justified by the control themes.
+- DO NOT suggest a document that is already on the "DOCUMENTS THE ORG ALREADY HAS" list above. Skip it AND skip close paraphrases (e.g. if "Information Security Policy" exists, do not suggest "ISMS Policy" or "InfoSec Policy"; if "Access Control Policy" exists, do not suggest "User Access Management Policy"). Treat the existing list as the canonical coverage for those topics — only propose documents that fill genuine gaps.
 - Prefer specific domain-aware titles over generic titles.
 - {doc_type_instruction}
 - Avoid duplicate or overlapping suggestions unless one is clearly a parent policy and another is a detailed procedure.
@@ -1978,9 +2289,82 @@ Return a JSON object with this structure:
                     for suggestion in result.get("suggestions", [])
                     if str(suggestion.get("doc_type", "")).strip().lower() == requested_doc_type
                 ]
-                result["total_suggestions"] = len(result["suggestions"])
+
+            raw_suggestions = result.get("suggestions", [])
+
+            # Three-stage dedup pipeline against the tenant's existing
+            # documents:
+            #  1. Exact normalized-title match — covers casing/punctuation/
+            #     version-suffix variants. Free, cheap.
+            #  2. Token-set Jaccard with synonym expansion — covers cases
+            #     like "ISMS Policy" ≈ "Information Security Policy" and
+            #     "InfoSec Policy" ≈ "Information Security Policy". Free.
+            #  3. Semantic AI dedup — for the remaining suggestions, ask
+            #     GPT-4o whether each is substantially equivalent to any
+            #     existing document. Catches the long-tail cases the
+            #     heuristics miss without AI hallucinations.
+            existing_titles_for_compare = [d["title"] for d in existing_documents if d.get("title")]
+            existing_norm_lookup = {
+                _normalize_doc_title(d["title"]): d for d in existing_documents if d.get("title")
+            }
+
+            after_stage1: List[Dict] = []
+            skipped_as_existing: List[str] = []
+
+            for suggestion in raw_suggestions:
+                title = str(suggestion.get("title") or "")
+                norm = _normalize_doc_title(title)
+                if norm and norm in existing_norm_lookup:
+                    skipped_as_existing.append(title)
+                    continue
+                after_stage1.append(suggestion)
+
+            after_stage2: List[Dict] = []
+            for suggestion in after_stage1:
+                title = str(suggestion.get("title") or "")
+                hard_dup = False
+                for existing_title in existing_titles_for_compare:
+                    if _title_similarity(title, existing_title) >= _TITLE_SIMILARITY_HARD_DUP:
+                        skipped_as_existing.append(title)
+                        hard_dup = True
+                        break
+                if not hard_dup:
+                    after_stage2.append(suggestion)
+
+            # Stage 3: semantic dedup pass. Skip the call entirely when
+            # there's nothing to compare against or no remaining
+            # suggestions — saves a round-trip and tokens.
+            after_stage3 = after_stage2
+            semantic_skipped: List[str] = []
+            if existing_titles_for_compare and after_stage2:
+                semantic_skip_ids, semantic_skip_titles = _semantic_dedup_against_existing(
+                    client=client,
+                    suggestions=after_stage2,
+                    existing_documents=existing_documents,
+                )
+                if semantic_skip_ids:
+                    after_stage3 = [s for i, s in enumerate(after_stage2) if i not in semantic_skip_ids]
+                    semantic_skipped = semantic_skip_titles
+                    skipped_as_existing.extend(semantic_skip_titles)
+
+            result["suggestions"] = after_stage3
+            result["total_suggestions"] = len(after_stage3)
+
             result["framework_alignment"] = framework_alignment
             result["domains_covered"] = domain_context
+            # Surface the gap-awareness summary so the UI can show "12 already
+            # covered" alongside "18 missing documents to create".
+            result["already_covered"] = [
+                {"id": d["id"], "title": d["title"], "doc_type": d["doc_type"], "status": d["status"]}
+                for d in existing_documents
+            ]
+            result["already_covered_count"] = len(existing_documents)
+            result["skipped_duplicate_titles"] = skipped_as_existing
+            result["skipped_breakdown"] = {
+                "exact_normalized": len(raw_suggestions) - len(after_stage1),
+                "token_overlap": len(after_stage1) - len(after_stage2),
+                "semantic": len(semantic_skipped),
+            }
         return result
     
     except json.JSONDecodeError as e:

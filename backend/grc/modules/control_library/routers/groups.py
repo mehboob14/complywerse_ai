@@ -172,23 +172,86 @@ _AI_GROUP_BATCH_SIZE = 60
 _AI_GROUP_MAX_TOKENS = 8000
 
 
-def _build_grouping_prompt(controls_text: str, target_groups_hint: str) -> str:
+import re as _re_mod  # local alias to avoid clashing with module-level re uses
+
+
+def _canonicalize_group_name(name: str) -> str:
+    """Strict canonical form for cross-batch group merging.
+    'Access Control', 'access-control', 'Access  Control!' → 'accesscontrol'.
+    Without this, 'Identity & Access Management' and 'Identity and Access Management'
+    stay separate after merging — which is why each framework's controls were
+    landing in their own siloed group.
+    """
+    if not name:
+        return ""
+    s = name.lower().replace("&", "and")
+    return _re_mod.sub(r"[^a-z0-9]+", "", s)
+
+
+def _interleave_by_framework(controls_list: List[dict]) -> List[dict]:
+    """Round-robin interleave controls so each batch sees representation from
+    every selected framework. Without this, batches were sequential by
+    framework (60 from framework A → 60 from framework B → …) and the AI
+    produced framework-siloed groups since each batch only saw one source.
+    """
+    by_fw: Dict[str, List[dict]] = {}
+    fw_order: List[str] = []
+    for c in controls_list:
+        fw = c.get("framework") or "Unknown"
+        if fw not in by_fw:
+            by_fw[fw] = []
+            fw_order.append(fw)
+        by_fw[fw].append(c)
+    interleaved: List[dict] = []
+    cursors = {fw: 0 for fw in fw_order}
+    while True:
+        progressed = False
+        for fw in fw_order:
+            idx = cursors[fw]
+            if idx < len(by_fw[fw]):
+                interleaved.append(by_fw[fw][idx])
+                cursors[fw] = idx + 1
+                progressed = True
+        if not progressed:
+            break
+    return interleaved
+
+
+def _build_grouping_prompt(
+    controls_text: str,
+    target_groups_hint: str,
+    framework_summary: str,
+    existing_themes: Optional[List[str]] = None,
+) -> str:
+    existing_block = ""
+    if existing_themes:
+        bullets = "\n".join(f"  - {t}" for t in existing_themes[:25])
+        existing_block = (
+            "\nEXISTING GROUP THEMES from earlier batches (REUSE these names verbatim "
+            "when they fit — do not invent a near-duplicate):\n"
+            f"{bullets}\n"
+        )
     return (
-        "Analyze these compliance controls and group them by common purpose/theme.\n"
-        "Create logical groups that cluster controls addressing similar requirements.\n\n"
+        "Analyze these compliance controls and group them by common cybersecurity "
+        "purpose/theme. Create CROSS-FRAMEWORK groups: a single group should pull "
+        "in semantically equivalent controls from every framework that has them.\n\n"
+        f"Frameworks present in this set: {framework_summary}\n"
         "STRICT RULES:\n"
         "1. EVERY control listed below MUST appear in exactly one group. Do not skip any.\n"
         "2. Use the integer ID and exact type tag (normalized | parsed) when emitting control_ids.\n"
-        "3. Pick a clear category and domain — controls with the same NCA / ISO / NIST domain "
-        "should generally land in the same group.\n"
-        f"4. {target_groups_hint}\n\n"
+        "3. PREFER cross-framework groups. If two frameworks both cover 'access control', "
+        "their controls go in the SAME group — never split into two groups by framework.\n"
+        "4. Pick stable, generic group names (e.g. 'Access Control', 'Logging & Monitoring', "
+        "'Vulnerability Management') so the same name is used across batches.\n"
+        f"5. {target_groups_hint}\n"
+        f"{existing_block}\n"
         f"Controls:\n{controls_text}\n\n"
         "Return JSON with groups:\n"
         "{\n"
         '  "groups": [\n'
         "    {\n"
         '      "code": "<short code like CCG-001>",\n'
-        '      "name": "<group name>",\n'
+        '      "name": "<stable, generic group name>",\n'
         '      "description": "<group description>",\n'
         '      "category": "<category like Access Control, Data Protection, etc>",\n'
         '      "domain": "<domain like Security, Privacy, etc>",\n'
@@ -208,13 +271,33 @@ def _format_controls_block(controls_list: List[dict]) -> str:
     ])
 
 
-def _ai_group_single_batch(client, controls_list: List[dict], target_groups_hint: str) -> List[dict]:
+def _summarize_frameworks(controls_list: List[dict]) -> str:
+    counts: Dict[str, int] = {}
+    for c in controls_list:
+        fw = c.get("framework") or "Unknown"
+        counts[fw] = counts.get(fw, 0) + 1
+    return ", ".join(f"{fw} ({n})" for fw, n in sorted(counts.items()))
+
+
+def _ai_group_single_batch(
+    client,
+    controls_list: List[dict],
+    target_groups_hint: str,
+    existing_themes: Optional[List[str]] = None,
+) -> List[dict]:
     controls_text = _format_controls_block(controls_list)
-    prompt = _build_grouping_prompt(controls_text, target_groups_hint)
+    framework_summary = _summarize_frameworks(controls_list)
+    prompt = _build_grouping_prompt(controls_text, target_groups_hint, framework_summary, existing_themes)
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "You are a compliance expert grouping related controls. Every control provided MUST appear in exactly one group. Respond only with valid JSON."},
+            {"role": "system", "content": (
+                "You are a compliance expert grouping related controls across multiple "
+                "regulatory frameworks. Every control provided MUST appear in exactly one "
+                "group. PREFER cross-framework groups — semantically equivalent controls "
+                "from different frameworks belong in the SAME group. Respond only with "
+                "valid JSON."
+            )},
             {"role": "user", "content": prompt},
         ],
         response_format={"type": "json_object"},
@@ -226,9 +309,9 @@ def _ai_group_single_batch(client, controls_list: List[dict], target_groups_hint
 
 
 def _merge_ai_groups(group_batches: List[List[dict]]) -> List[dict]:
-    """Merge groups produced from separate batches by canonicalised name.
-    Preserves the union of control_ids across batches so identical themes
-    coming from different frameworks consolidate cleanly.
+    """Merge groups produced from separate batches by canonicalized name.
+    Uses a strict alphanumeric-only canonical key so 'Access Control',
+    'access-control', and 'Access & Control' all collapse to one group.
     """
     merged: Dict[str, dict] = {}
     for batch in group_batches:
@@ -236,7 +319,9 @@ def _merge_ai_groups(group_batches: List[List[dict]]) -> List[dict]:
             name = (g.get("name") or "").strip()
             if not name:
                 continue
-            key = name.lower()
+            key = _canonicalize_group_name(name)
+            if not key:
+                continue
             if key not in merged:
                 merged[key] = {
                     "code": g.get("code"),
@@ -248,18 +333,15 @@ def _merge_ai_groups(group_batches: List[List[dict]]) -> List[dict]:
                     "control_ids": [],
                 }
             existing = merged[key]
-            # Union of control_ids — dedupe on (id, type)
             seen = {(c.get("id"), c.get("type")) for c in existing["control_ids"]}
             for c in g.get("control_ids") or []:
                 tup = (c.get("id"), c.get("type"))
                 if tup not in seen and c.get("id") is not None:
                     existing["control_ids"].append(c)
                     seen.add(tup)
-            # Union of keywords
             for kw in g.get("keywords") or []:
                 if kw not in existing["keywords"]:
                     existing["keywords"].append(kw)
-            # Backfill missing optional fields
             for fld in ("description", "category", "domain"):
                 if not existing.get(fld) and g.get(fld):
                     existing[fld] = g[fld]
@@ -269,9 +351,11 @@ def _merge_ai_groups(group_batches: List[List[dict]]) -> List[dict]:
 def ai_auto_group_controls(controls_list: List[dict]) -> List[dict]:
     """Group an arbitrarily large list of controls via OpenAI.
 
-    Honors every control passed in (no silent truncation). Batches the AI
-    calls so output never gets cut by max_tokens, then merges by group name
-    so themes consolidate across batches.
+    Honors every control passed in (no silent truncation). Interleaves
+    controls round-robin by framework BEFORE batching so each batch sees
+    cross-framework variety; passes existing themes from earlier batches
+    into later ones so the model reuses names verbatim; merges by canonical
+    name so identical themes consolidate.
     """
     if not controls_list:
         return []
@@ -280,26 +364,45 @@ def ai_auto_group_controls(controls_list: List[dict]) -> List[dict]:
 
         total = len(controls_list)
         if total <= _AI_GROUP_BATCH_SIZE:
-            # Single shot — let the model pick the right number of groups.
             target_hint = (
                 f"Produce as many groups as the {total} controls naturally cluster into "
-                "(typically 4-15 groups; aim for ~8-15 controls per group)."
+                "(typically 4-15 groups; aim for ~8-15 controls per group). "
+                "Each group should mix controls from every framework that has matching content."
             )
             return _ai_group_single_batch(client, controls_list, target_hint)
 
-        # Batch the controls and merge results. Group themes that recur across
-        # batches are consolidated by `_merge_ai_groups`.
+        # Round-robin interleave by framework so each batch contains controls
+        # from every selected framework (the original bug was sequential
+        # batching → each batch only saw 1-2 frameworks → siloed groups).
+        controls_list = _interleave_by_framework(controls_list)
+
+        # Batch the (now interleaved) controls and merge results.
         batches: List[List[dict]] = [
             controls_list[i:i + _AI_GROUP_BATCH_SIZE]
             for i in range(0, total, _AI_GROUP_BATCH_SIZE)
         ]
         target_hint = (
             "Produce groups that match common compliance themes (NCA / ISO / NIST domains). "
-            "Aim for 4-10 groups per batch with ~6-15 controls each, but cover ALL controls."
+            "Aim for 4-10 groups per batch with ~6-15 controls each, but cover ALL controls. "
+            "Within a single group, mix controls from EVERY framework whose controls match the theme."
         )
         batch_results: List[List[dict]] = []
+        existing_theme_names: List[str] = []
+        seen_theme_keys: set = set()
         for batch in batches:
-            batch_results.append(_ai_group_single_batch(client, batch, target_hint))
+            # Pass canonical theme names from earlier batches so the model
+            # reuses them verbatim instead of inventing near-duplicates that
+            # the merger then has to chase down.
+            groups = _ai_group_single_batch(
+                client, batch, target_hint, existing_themes=existing_theme_names or None,
+            )
+            batch_results.append(groups)
+            for g in groups:
+                nm = (g.get("name") or "").strip()
+                key = _canonicalize_group_name(nm)
+                if nm and key and key not in seen_theme_keys:
+                    existing_theme_names.append(nm)
+                    seen_theme_keys.add(key)
         return _merge_ai_groups(batch_results)
     except HTTPException:
         raise

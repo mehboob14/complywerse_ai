@@ -2804,19 +2804,28 @@ class ParsedFrameworkControl(Base):
     is_verified = Column(Boolean, default=False)  # Human-verified
     verified_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     verified_at = Column(DateTime, nullable=True)
-    
+
+    # AI-driven criticality assessment. Populated on demand by the
+    # /certifications/{journey_id}/analyze-critical endpoint. When True the
+    # control is treated as a red-flag clause: the applicability self-approve
+    # path is suppressed and the request stays pending for reviewer approval.
+    is_critical = Column(Boolean, default=False, nullable=True)
+    criticality_reason = Column(Text, nullable=True)
+    criticality_analyzed_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     uploaded_framework = relationship("UploadedFramework", back_populates="parsed_controls")
     verifier = relationship("GRCUser", foreign_keys=[verified_by])
     evidence_mappings = relationship("ControlEvidenceMapping", back_populates="parsed_control", cascade="all, delete-orphan")
     alignments = relationship("FrameworkControlAlignment", back_populates="parsed_control", cascade="all, delete-orphan")
     assessment_items = relationship("AssessmentItem", back_populates="parsed_control", cascade="all, delete-orphan")
-    
+
     __table_args__ = (
         Index("ix_parsed_control_framework", "uploaded_framework_id"),
         Index("ix_parsed_control_domain", "domain"),
+        Index("ix_parsed_control_critical", "is_critical"),
     )
 
 
@@ -3388,6 +3397,25 @@ class PolicyGapFinding(Base):
     overridden_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     overridden_at = Column(DateTime, nullable=True)
 
+    # AI-drafted clause text proposed to close this gap. Populated on demand
+    # via the /findings/{id}/generate-fix endpoint and shown to the user in a
+    # human-in-the-loop modal where they can edit it before applying.
+    suggested_clause_text = Column(Text, nullable=True)
+    suggested_clause_generated_at = Column(DateTime, nullable=True)
+    # Side-by-side replace flow: the AI may identify a specific block of
+    # existing policy text that the proposed clause should *replace* (rather
+    # than appending). `replacement_mode` is "replace" or "append";
+    # `original_clause_text` is the verbatim slice from document.content the
+    # AI matched against (null when mode == "append").
+    replacement_mode = Column(String(20), nullable=True)
+    original_clause_text = Column(Text, nullable=True)
+    # Audit fields populated when the user applies the (possibly edited)
+    # suggestion to the document content.
+    applied_at = Column(DateTime, nullable=True)
+    applied_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    applied_clause_text = Column(Text, nullable=True)
+    applied_version_id = Column(Integer, ForeignKey("grc_governance_document_versions.id"), nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -3397,6 +3425,7 @@ class PolicyGapFinding(Base):
     assigned_owner = relationship("GRCUser", foreign_keys=[assigned_owner_id])
     risk_acceptance_approver = relationship("GRCUser", foreign_keys=[risk_acceptance_approved_by])
     override_user = relationship("GRCUser", foreign_keys=[overridden_by])
+    applier = relationship("GRCUser", foreign_keys=[applied_by])
     risk_register_entry = relationship("Risk", foreign_keys=[risk_register_id], uselist=False)
 
     __table_args__ = (
@@ -5229,6 +5258,7 @@ class CommitteeMeeting(Base):
     agenda_items = relationship("MeetingAgendaItem", back_populates="meeting", cascade="all, delete-orphan")
     minutes = relationship("MeetingMinutes", back_populates="meeting", uselist=False, cascade="all, delete-orphan")
     oversight_actions = relationship("OversightAction", back_populates="meeting")
+    attachments = relationship("MeetingAttachment", back_populates="meeting", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("ix_committee_meeting_tenant", "tenant_id"),
@@ -5296,6 +5326,31 @@ class MeetingMinutes(Base):
     __table_args__ = (
         Index("ix_meeting_minutes_tenant", "tenant_id"),
         Index("ix_meeting_minutes_status", "status"),
+    )
+
+
+class MeetingAttachment(Base):
+    """Files attached to a committee meeting (agendas, briefing docs, presentations, supporting material)."""
+    __tablename__ = "grc_meeting_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    meeting_id = Column(Integer, ForeignKey("grc_committee_meetings.id"), nullable=False, index=True)
+    file_name = Column(String(500), nullable=False)
+    file_path = Column(String(1000), nullable=False)
+    file_type = Column(String(50), nullable=True)
+    file_size = Column(Integer, nullable=True)
+    description = Column(Text, nullable=True)
+    uploaded_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    meeting = relationship("CommitteeMeeting", back_populates="attachments")
+    uploader = relationship("GRCUser", foreign_keys=[uploaded_by])
+
+    __table_args__ = (
+        Index("ix_meeting_attachment_tenant", "tenant_id"),
+        Index("ix_meeting_attachment_meeting", "meeting_id"),
     )
 
 

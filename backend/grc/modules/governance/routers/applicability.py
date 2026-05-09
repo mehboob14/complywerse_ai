@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from ....models import (
     ClauseApplicability, ParsedFrameworkControl, UploadedFramework,
-    GRCUser, AuditLog, get_db
+    GRCUser, AuditLog, ControlImplementation, CertificationJourney, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -17,7 +17,7 @@ class ApplicabilityRequest(BaseModel):
     control_id: int
     uploaded_framework_id: int
     is_applicable: bool
-    justification: str
+    justification: Optional[str] = ""
 
 
 class ApplicabilityReviewRequest(BaseModel):
@@ -99,52 +99,100 @@ def set_clause_applicability(
     if not control:
         raise HTTPException(status_code=404, detail="Control not found in this framework")
     
-    if not request.is_applicable and not request.justification.strip():
-        raise HTTPException(status_code=400, detail="Justification is required when marking a clause as Not Applicable")
-    
+    justification = (request.justification or "").strip()
+
     existing = db.query(ClauseApplicability).filter(
         ClauseApplicability.control_id == request.control_id,
         ClauseApplicability.tenant_id == framework.tenant_id
     ).first()
-    
+
+    now = datetime.utcnow()
+
+    # Clauses that the AI flagged as critical (e.g. PCI network segmentation,
+    # MFA on privileged access, encryption-at-rest) cannot be self-approved as
+    # Not Applicable — they must go through reviewer approval. Marking them
+    # back to Applicable also stays pending so reviewers can validate the
+    # rationale before the row reappears in the requirements list.
+    is_critical_clause = bool(getattr(control, "is_critical", False))
+    auto_approve = not is_critical_clause
+
     if existing:
         existing.is_applicable = request.is_applicable
-        existing.justification = request.justification
-        existing.status = "pending"
+        existing.justification = justification
+        if auto_approve:
+            existing.status = "approved"
+            existing.reviewed_by = current_user.id
+            existing.reviewed_at = now
+            existing.review_comment = "Self-approved on save"
+        else:
+            existing.status = "pending"
+            existing.reviewed_by = None
+            existing.reviewed_at = None
+            existing.review_comment = None
         existing.requested_by = current_user.id
-        existing.requested_at = datetime.utcnow()
-        existing.reviewed_by = None
-        existing.reviewed_at = None
-        existing.review_comment = None
-        existing.updated_at = datetime.utcnow()
+        existing.requested_at = now
+        existing.updated_at = now
         record = existing
     else:
-        record = ClauseApplicability(
-            tenant_id=framework.tenant_id,
-            uploaded_framework_id=request.uploaded_framework_id,
-            control_id=request.control_id,
-            is_applicable=request.is_applicable,
-            justification=request.justification,
-            status="pending",
-            requested_by=current_user.id,
-            requested_at=datetime.utcnow()
-        )
+        if auto_approve:
+            record = ClauseApplicability(
+                tenant_id=framework.tenant_id,
+                uploaded_framework_id=request.uploaded_framework_id,
+                control_id=request.control_id,
+                is_applicable=request.is_applicable,
+                justification=justification,
+                status="approved",
+                requested_by=current_user.id,
+                requested_at=now,
+                reviewed_by=current_user.id,
+                reviewed_at=now,
+                review_comment="Self-approved on save",
+            )
+        else:
+            record = ClauseApplicability(
+                tenant_id=framework.tenant_id,
+                uploaded_framework_id=request.uploaded_framework_id,
+                control_id=request.control_id,
+                is_applicable=request.is_applicable,
+                justification=justification,
+                status="pending",
+                requested_by=current_user.id,
+                requested_at=now,
+            )
         db.add(record)
-    
+
     db.flush()
-    
+
+    # Only propagate to ControlImplementation when the decision is final
+    # (auto-approved). Critical clauses stay in their previous applicable state
+    # until a reviewer approves the request via /review.
+    if auto_approve:
+        journey_ids = [
+            j.id for j in db.query(CertificationJourney.id)
+            .filter(CertificationJourney.tenant_id == framework.tenant_id)
+            .all()
+        ]
+        if journey_ids:
+            db.query(ControlImplementation).filter(
+                ControlImplementation.parsed_control_id == request.control_id,
+                ControlImplementation.journey_id.in_(journey_ids)
+            ).update(
+                {"is_applicable": request.is_applicable},
+                synchronize_session=False
+            )
+
     audit = AuditLog(
         tenant_id=framework.tenant_id,
         user_id=current_user.id,
         action="applicability_change",
         resource_type="clause_applicability",
         resource_id=record.id,
-        changes={"detail": f"Marked control {control.original_reference or control.control_id} as {'Applicable' if request.is_applicable else 'Not Applicable'}: {request.justification[:200]}"}
+        changes={"detail": f"Marked control {control.original_reference or control.control_id} as {'Applicable' if request.is_applicable else 'Not Applicable'}: {justification[:200] or '(no justification)'}"}
     )
     db.add(audit)
     db.commit()
     db.refresh(record)
-    
+
     return serialize_applicability(record, db)
 
 
@@ -176,7 +224,25 @@ def review_applicability(
     record.reviewed_at = datetime.utcnow()
     record.review_comment = request.review_comment
     record.updated_at = datetime.utcnow()
-    
+
+    if request.status == "approved":
+        # Propagate the decision to every ControlImplementation row for this clause
+        # within the tenant's certification journeys, so the main requirements view
+        # hides (or restores) the control everywhere.
+        journey_ids = [
+            j.id for j in db.query(CertificationJourney.id)
+            .filter(CertificationJourney.tenant_id == record.tenant_id)
+            .all()
+        ]
+        if journey_ids:
+            db.query(ControlImplementation).filter(
+                ControlImplementation.parsed_control_id == record.control_id,
+                ControlImplementation.journey_id.in_(journey_ids)
+            ).update(
+                {"is_applicable": record.is_applicable},
+                synchronize_session=False
+            )
+
     audit = AuditLog(
         tenant_id=record.tenant_id,
         user_id=current_user.id,

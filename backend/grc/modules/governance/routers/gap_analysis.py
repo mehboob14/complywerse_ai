@@ -15,9 +15,9 @@ from openai import OpenAI
 
 from ....db import open_tenant_session
 from ....models import (
-    GovernanceDocument, PolicyGapAnalysisRun, PolicyGapFinding,
-    UploadedFramework, ParsedFrameworkControl, GRCUser, get_db,
-    Risk
+    GovernanceDocument, GovernanceDocumentVersion, PolicyGapAnalysisRun,
+    PolicyGapFinding, UploadedFramework, ParsedFrameworkControl, GRCUser,
+    get_db, Risk
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 from .policy_parser import extract_text_from_file
@@ -322,6 +322,15 @@ def serialize_finding(finding: PolicyGapFinding, db: Session) -> dict:
         "override_justification": finding.override_justification,
         "overridden_by": finding.overridden_by,
         "overridden_at": finding.overridden_at.isoformat() if finding.overridden_at else None,
+        # Remediation fix workflow — AI clause draft + apply audit.
+        "suggested_clause_text": finding.suggested_clause_text,
+        "suggested_clause_generated_at": finding.suggested_clause_generated_at.isoformat() if finding.suggested_clause_generated_at else None,
+        "replacement_mode": finding.replacement_mode,  # "replace" | "append" | null
+        "original_clause_text": finding.original_clause_text,
+        "applied_at": finding.applied_at.isoformat() if finding.applied_at else None,
+        "applied_by": finding.applied_by,
+        "applied_clause_text": finding.applied_clause_text,
+        "applied_version_id": finding.applied_version_id,
         "created_at": finding.created_at.isoformat() if finding.created_at else None,
         "updated_at": finding.updated_at.isoformat() if finding.updated_at else None,
     }
@@ -796,6 +805,423 @@ def get_run_findings(
         "total": total,
         "skip": skip,
         "limit": limit
+    }
+
+
+# ---------------------------------------------------------------------------
+# Apply-fix workflow: AI drafts the actual clause text needed to close a gap;
+# user reviews/edits in a popup; on approve the document content is updated
+# and the finding is marked as remediated. Two-step so the user always sees
+# (and can edit) the proposed text before it lands in the document.
+# ---------------------------------------------------------------------------
+
+
+class ApplyFixRequest(BaseModel):
+    """Body of POST /findings/{id}/apply-fix.
+
+    `mode` chooses splice strategy:
+      - "replace" — `current_text` MUST appear verbatim somewhere in the
+        document; that exact slice is replaced with `proposed_text`.
+      - "append" — `proposed_text` is appended under a new section heading;
+        `current_text` is ignored.
+
+    We don't trust the stored draft — we use the text the user actually
+    approves at the moment of application.
+    """
+    mode: str = "append"
+    proposed_text: str
+    current_text: Optional[str] = None
+    section_heading: Optional[str] = None
+    change_reason: Optional[str] = None  # optional commit-style note for the version row
+
+
+def _generate_clause_fix(document: GovernanceDocument, finding: PolicyGapFinding) -> dict:
+    """Ask GPT-4o to either:
+      (a) identify a specific existing block of policy text that should be
+          REPLACED to close the gap, returning that exact verbatim slice
+          plus the proposed replacement, OR
+      (b) recommend APPENDING a brand-new clause when no existing block is
+          a good candidate.
+
+    Returns: { mode, current_text|None, proposed_text }
+    Raises HTTPException on misconfiguration / AI failure.
+    """
+    if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OpenAI integration not configured"
+        )
+
+    client = OpenAI(
+        api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
+        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
+    )
+
+    full_content = document.content or ""
+    # Cap to keep the prompt within model budget. Most policies fit; truncated
+    # tail is rarely the right place to splice anyway.
+    existing_text_excerpt = full_content[:12000]
+
+    system_msg = (
+        "You are a senior policy writer for a GRC team. Given a policy "
+        "document and a compliance gap, you decide whether the gap is best "
+        "closed by REPLACING an existing paragraph/clause (when one is "
+        "partially relevant but incomplete) or by APPENDING a brand-new "
+        "clause (when nothing in the policy is close to the gap topic). "
+        "If you choose REPLACE, you MUST quote the original verbatim — "
+        "exactly as it appears in the document, including punctuation and "
+        "newlines — so the application can locate and substitute it. Output "
+        "STRICT JSON only, no prose."
+    )
+    user_msg = f"""DOCUMENT TITLE: "{document.title or 'Untitled'}"
+DOCUMENT TYPE: {document.doc_type or 'policy'}
+
+FRAMEWORK: {finding.framework_name or 'unknown framework'}
+FRAMEWORK CLAUSE REFERENCE: {finding.clause_reference or 'n/a'}
+FRAMEWORK CLAUSE TITLE: {finding.clause_title or 'n/a'}
+FRAMEWORK CLAUSE REQUIREMENT TEXT:
+\"\"\"
+{finding.clause_requirement_text or '(not provided)'}
+\"\"\"
+
+GAP DESCRIPTION:
+\"\"\"
+{finding.gap_description or '(not provided)'}
+\"\"\"
+
+MISSING REQUIREMENT:
+\"\"\"
+{finding.missing_requirement or '(not provided)'}
+\"\"\"
+
+REMEDIATION RECOMMENDATION (advisory):
+\"\"\"
+{finding.remediation_recommendation or '(not provided)'}
+\"\"\"
+
+EXISTING POLICY DOCUMENT CONTENT (this is the source — for "replace" mode, current_text MUST be a verbatim substring of this):
+\"\"\"
+{existing_text_excerpt}
+\"\"\"
+
+Choose mode:
+- "replace" — pick this when the document already has a paragraph/clause that addresses the same topic but is incomplete or wrong. Quote it VERBATIM as `current_text` (must be a literal substring of the document). Provide the full revised paragraph as `proposed_text` (preserving the surrounding tone, voice, and formatting style).
+- "append" — pick this when no existing paragraph is a reasonable candidate. Set `current_text` to null and provide a self-contained new clause as `proposed_text`.
+
+Return STRICT JSON ONLY in this exact shape:
+{{
+  "mode": "replace" | "append",
+  "current_text": "<verbatim substring from the document, or null when mode is append>",
+  "proposed_text": "<the new or revised clause>"
+}}
+
+Rules for proposed_text:
+- 3–10 sentences typical
+- No markdown headings (the application adds the heading)
+- Use "shall" / "must" for mandatory requirements
+- Match the tone of the existing policy
+- For "replace" mode, `proposed_text` should be a strict superset/correction of `current_text` (don't drop content that was correct; expand or fix what was missing)
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2,
+            max_completion_tokens=1500,
+        )
+        raw = response.choices[0].message.content or "{}"
+        parsed = json.loads(raw)
+
+        mode = (parsed.get("mode") or "append").strip().lower()
+        if mode not in ("replace", "append"):
+            mode = "append"
+        proposed_text = (parsed.get("proposed_text") or "").strip()
+        current_text = parsed.get("current_text")
+        if isinstance(current_text, str):
+            current_text = current_text.strip("\r\n").rstrip()
+            # Sanity: enforce the rule that for replace mode the quoted text
+            # must actually appear in the document. If the AI hallucinated,
+            # fall back to append mode rather than failing — the user will
+            # see "append" in the UI and can still edit/approve.
+            if mode == "replace" and (not current_text or current_text not in full_content):
+                mode = "append"
+                current_text = None
+        else:
+            current_text = None
+            if mode == "replace":
+                mode = "append"
+
+        if not proposed_text:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="AI returned an empty proposed clause"
+            )
+
+        return {
+            "mode": mode,
+            "current_text": current_text,
+            "proposed_text": proposed_text,
+        }
+    except HTTPException:
+        raise
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI returned invalid JSON: {str(e)}"
+        )
+    except Exception as e:
+        msg = str(e)
+        if "FREE_CLOUD_BUDGET_EXCEEDED" in msg:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail="Cloud budget exceeded. Please upgrade your plan."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI clause-draft failed: {msg}"
+        )
+
+
+@router.post("/findings/{finding_id}/generate-fix")
+def generate_finding_fix(
+    finding_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Draft (or re-draft) the AI clause text for closing this gap. Persists
+    `suggested_clause_text` on the finding row so the popup can render it
+    immediately on subsequent opens without re-paying for the AI call.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+
+    finding = db.query(PolicyGapFinding).filter(
+        PolicyGapFinding.id == finding_id,
+        PolicyGapFinding.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not finding:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Finding not found or access denied"
+        )
+
+    if finding.compliance_status not in ("not_addressed", "partially_compliant"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only not_addressed or partially_compliant findings can be remediated with a clause draft."
+        )
+
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == finding.document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants),
+    ).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source document not found"
+        )
+
+    drafted = _generate_clause_fix(document, finding)
+    finding.suggested_clause_text = drafted["proposed_text"]
+    finding.replacement_mode = drafted["mode"]
+    finding.original_clause_text = drafted["current_text"]
+    finding.suggested_clause_generated_at = datetime.utcnow()
+    finding.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(finding)
+
+    return {
+        "finding_id": finding.id,
+        "mode": finding.replacement_mode,
+        "current_text": finding.original_clause_text,
+        "proposed_text": finding.suggested_clause_text,
+        # Backwards-compat: prior frontend reads `suggested_clause_text`.
+        "suggested_clause_text": finding.suggested_clause_text,
+        "suggested_clause_generated_at": finding.suggested_clause_generated_at.isoformat()
+            if finding.suggested_clause_generated_at else None,
+    }
+
+
+def _bump_minor_version(current: Optional[str]) -> str:
+    """1.0 → 1.1, 1.9 → 1.10, 2.3 → 2.4. Best-effort — falls back to "1.0"
+    if the existing value isn't a recognisable major.minor pair."""
+    if not current:
+        return "1.0"
+    try:
+        parts = current.strip().split(".")
+        if len(parts) >= 2:
+            major = int(parts[0])
+            minor = int(parts[1])
+            return f"{major}.{minor + 1}"
+        if len(parts) == 1:
+            return f"{int(parts[0])}.1"
+    except (TypeError, ValueError):
+        pass
+    return "1.0"
+
+
+@router.post("/findings/{finding_id}/apply-fix")
+def apply_finding_fix(
+    finding_id: int,
+    body: ApplyFixRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Apply the (user-approved) clause to the document. Two modes:
+      - "replace" — splice `proposed_text` in for the verbatim `current_text`
+      - "append" — append `proposed_text` under a new section heading
+
+    BEFORE modifying, snapshot the current document content into a
+    `GovernanceDocumentVersion` row (status='superseded') for audit. The
+    document's `current_version` string is bumped (1.0 → 1.1). The finding
+    is marked closed with a link back to the new version row.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+
+    proposed_text = (body.proposed_text or "").strip()
+    if not proposed_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Proposed clause text cannot be empty"
+        )
+    mode = (body.mode or "append").strip().lower()
+    if mode not in ("replace", "append"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="mode must be 'replace' or 'append'"
+        )
+
+    finding = db.query(PolicyGapFinding).filter(
+        PolicyGapFinding.id == finding_id,
+        PolicyGapFinding.tenant_id.in_(user_tenants)
+    ).first()
+    if not finding:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Finding not found or access denied"
+        )
+
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == finding.document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants),
+    ).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source document not found"
+        )
+
+    original_content = document.content or ""
+    original_version_label = document.current_version or "1.0"
+
+    # ---- Snapshot the pre-change document state into a version row. -----
+    # Mark any prior "current" version superseded so only the latest snapshot
+    # holds that status. (We avoid touching version status on file uploads
+    # which already manage their own version lifecycle.)
+    db.query(GovernanceDocumentVersion).filter(
+        GovernanceDocumentVersion.document_id == document.id,
+        GovernanceDocumentVersion.status == "current",
+    ).update({"status": "superseded"}, synchronize_session=False)
+
+    snapshot = GovernanceDocumentVersion(
+        document_id=document.id,
+        version_number=original_version_label,
+        change_type="minor",
+        title=document.title or "",
+        content=original_content,
+        change_summary=(
+            f"Pre-fix snapshot — about to {mode} for gap "
+            f"{finding.framework_name or ''} {finding.clause_reference or ''}".strip()
+        ),
+        change_reason=body.change_reason or None,
+        status="superseded",
+        created_by=current_user.id,
+    )
+    db.add(snapshot)
+    db.flush()  # gives us snapshot.id
+
+    # ---- Compute the new content. --------------------------------------
+    if mode == "replace":
+        current_text = (body.current_text or "").rstrip()
+        if not current_text:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="current_text is required for replace mode"
+            )
+        if current_text not in original_content:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="The original text could not be found in the document — it may have been edited since the AI draft was generated. Please regenerate the fix."
+            )
+        new_content = original_content.replace(current_text, proposed_text, 1)
+    else:
+        # Append under a heading anchored to the framework clause.
+        heading_parts: List[str] = []
+        if body.section_heading and body.section_heading.strip():
+            heading_parts.append(body.section_heading.strip())
+        else:
+            if finding.framework_name:
+                heading_parts.append(finding.framework_name)
+            if finding.clause_reference:
+                heading_parts.append(finding.clause_reference)
+            if finding.clause_title:
+                heading_parts.append(finding.clause_title)
+        heading = " — ".join(heading_parts) if heading_parts else "Compliance Update"
+        new_content = original_content + f"\n\n## {heading}\n\n{proposed_text}\n"
+
+    # ---- Write the new document state and a "current" version row. -----
+    new_version_label = _bump_minor_version(original_version_label)
+    new_version = GovernanceDocumentVersion(
+        document_id=document.id,
+        version_number=new_version_label,
+        change_type="minor",
+        title=document.title or "",
+        content=new_content,
+        change_summary=(
+            f"Gap remediation ({mode}) for "
+            f"{finding.framework_name or 'framework'} {finding.clause_reference or ''}".strip()
+            + (f" — {finding.clause_title}" if finding.clause_title else "")
+        ),
+        change_reason=body.change_reason or None,
+        status="current",
+        created_by=current_user.id,
+    )
+    db.add(new_version)
+    db.flush()
+
+    document.content = new_content
+    document.current_version = new_version_label
+    document.updated_at = datetime.utcnow()
+
+    now = datetime.utcnow()
+    finding.applied_clause_text = proposed_text
+    finding.replacement_mode = mode
+    finding.original_clause_text = body.current_text if mode == "replace" else None
+    finding.applied_at = now
+    finding.applied_by = current_user.id
+    finding.applied_version_id = new_version.id
+    finding.remediation_status = "closed"
+    finding.actual_close_date = now
+    finding.updated_at = now
+
+    db.commit()
+    db.refresh(finding)
+    db.refresh(document)
+
+    return {
+        "finding_id": finding.id,
+        "document_id": document.id,
+        "mode": mode,
+        "applied_at": finding.applied_at.isoformat() if finding.applied_at else None,
+        "remediation_status": finding.remediation_status,
+        "applied_version_id": new_version.id,
+        "applied_version_number": new_version_label,
+        "previous_version_number": original_version_label,
     }
 
 

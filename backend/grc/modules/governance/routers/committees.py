@@ -18,7 +18,7 @@ from ....models import (
     GovernanceCommittee, CommitteeMember, CommitteeCharter, CommitteeMeeting,
     MeetingAgendaItem, MeetingMinutes, OversightAction, GovernanceDocument,
     Risk, RegulatoryChange, GRCUser, Tenant, get_db, Exception,
-    UploadedFramework, ParsedFrameworkControl
+    UploadedFramework, ParsedFrameworkControl, MeetingAttachment
 )
 from ....schemas import (
     GovernanceCommitteeCreate, GovernanceCommitteeUpdate, GovernanceCommitteeResponse,
@@ -836,7 +836,7 @@ def update_agenda_item(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    
+
     item = db.query(MeetingAgendaItem).options(
         joinedload(MeetingAgendaItem.presenter),
         joinedload(MeetingAgendaItem.linked_document),
@@ -846,18 +846,194 @@ def update_agenda_item(
         MeetingAgendaItem.id == item_id,
         MeetingAgendaItem.tenant_id.in_(user_tenants)
     ).first()
-    
+
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agenda item not found")
-    
+
     update_data = item_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(item, key, value)
-    
+
     db.commit()
     db.refresh(item)
-    
+
     return serialize_agenda_item(item)
+
+
+@router.delete("/meetings/agenda/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_agenda_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    item = db.query(MeetingAgendaItem).filter(
+        MeetingAgendaItem.id == item_id,
+        MeetingAgendaItem.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agenda item not found")
+
+    db.delete(item)
+    db.commit()
+    return None
+
+
+# =============================================================================
+# Meeting Attachments Endpoints
+# =============================================================================
+
+MEETING_ATTACHMENT_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))),
+    "uploads",
+    "meeting_attachments"
+)
+
+
+def _serialize_meeting_attachment(att: MeetingAttachment) -> dict:
+    return {
+        "id": att.id,
+        "meeting_id": att.meeting_id,
+        "file_name": att.file_name,
+        "file_type": att.file_type,
+        "file_size": att.file_size,
+        "description": att.description,
+        "uploaded_by": att.uploaded_by,
+        "uploaded_by_name": att.uploader.display_name if att.uploader else None,
+        "uploaded_at": att.uploaded_at.isoformat() if att.uploaded_at else None,
+    }
+
+
+@router.get("/meetings/{meeting_id}/attachments")
+def list_meeting_attachments(
+    meeting_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    meeting = db.query(CommitteeMeeting).filter(
+        CommitteeMeeting.id == meeting_id,
+        CommitteeMeeting.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not meeting:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
+
+    attachments = db.query(MeetingAttachment).options(
+        joinedload(MeetingAttachment.uploader)
+    ).filter(
+        MeetingAttachment.meeting_id == meeting_id
+    ).order_by(MeetingAttachment.uploaded_at.desc()).all()
+
+    return [_serialize_meeting_attachment(a) for a in attachments]
+
+
+@router.post("/meetings/{meeting_id}/attachments", status_code=status.HTTP_201_CREATED)
+async def upload_meeting_attachment(
+    meeting_id: int,
+    file: UploadFile = File(...),
+    description: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    meeting = db.query(CommitteeMeeting).filter(
+        CommitteeMeeting.id == meeting_id,
+        CommitteeMeeting.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not meeting:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
+
+    tenant_dir = os.path.join(MEETING_ATTACHMENT_DIR, str(meeting.tenant_id), str(meeting_id))
+    os.makedirs(tenant_dir, exist_ok=True)
+
+    file_ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    unique_filename = f"{uuid.uuid4().hex}{file_ext}"
+    file_path = os.path.join(tenant_dir, unique_filename)
+
+    content = await file.read()
+    file_size = len(content)
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    attachment = MeetingAttachment(
+        tenant_id=meeting.tenant_id,
+        meeting_id=meeting_id,
+        file_name=file.filename or unique_filename,
+        file_path=file_path,
+        file_type=file_ext.lstrip(".") if file_ext else None,
+        file_size=file_size,
+        description=description,
+        uploaded_by=current_user.id,
+    )
+    db.add(attachment)
+    db.commit()
+    # eager-load uploader for serialization
+    attachment = db.query(MeetingAttachment).options(
+        joinedload(MeetingAttachment.uploader)
+    ).filter(MeetingAttachment.id == attachment.id).first()
+
+    return _serialize_meeting_attachment(attachment)
+
+
+@router.get("/meetings/attachments/{attachment_id}/download")
+def download_meeting_attachment(
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    attachment = db.query(MeetingAttachment).filter(
+        MeetingAttachment.id == attachment_id,
+        MeetingAttachment.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not attachment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+
+    if not attachment.file_path or not os.path.exists(attachment.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found on disk")
+
+    return FileResponse(
+        path=attachment.file_path,
+        filename=attachment.file_name,
+        media_type="application/octet-stream",
+    )
+
+
+@router.delete("/meetings/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_meeting_attachment(
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    attachment = db.query(MeetingAttachment).filter(
+        MeetingAttachment.id == attachment_id,
+        MeetingAttachment.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not attachment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+
+    # Best-effort file removal — DB record is the source of truth
+    try:
+        if attachment.file_path and os.path.exists(attachment.file_path):
+            os.remove(attachment.file_path)
+    except OSError:
+        logger.warning("Failed to remove attachment file %s", attachment.file_path, exc_info=True)
+
+    db.delete(attachment)
+    db.commit()
+    return None
 
 
 @router.get("/meetings/{meeting_id}/suggested-agenda-items")
@@ -1547,9 +1723,18 @@ def add_committee_member(
         role=member.role,
     )
     db.add(db_member)
+
+    # Mirror chair/secretary roles onto the committee record so that adding a
+    # chair after creation is reflected on the overview header (chair_name,
+    # secretary_name come from these denormalized FKs in serialize_committee).
+    if member.role == "chair":
+        committee.chair_id = member.user_id
+    elif member.role == "secretary":
+        committee.secretary_id = member.user_id
+
     db.commit()
     db.refresh(db_member)
-    
+
     return serialize_member(db_member)
 
 
@@ -1581,8 +1766,16 @@ def remove_committee_member(
     
     member.is_active = False
     member.left_at = datetime.utcnow()
+
+    # Clear the denormalized chair/secretary FK if the user being removed was
+    # in that role; otherwise the committee header would keep showing them.
+    if member.role == "chair" and committee.chair_id == user_id:
+        committee.chair_id = None
+    elif member.role == "secretary" and committee.secretary_id == user_id:
+        committee.secretary_id = None
+
     db.commit()
-    
+
     return {"message": "Member removed from committee", "id": member.id}
 
 

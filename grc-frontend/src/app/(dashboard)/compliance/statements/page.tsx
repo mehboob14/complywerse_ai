@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { complianceApi, evidenceApi, governanceApi } from '@/lib/api';
 import { authedFetch } from '@/lib/auth-fetch';
@@ -882,10 +883,15 @@ export default function PolicyStatementsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Linked Evidence</label>
                   <div className="space-y-2">
                     {selectedStatement.evidence.map((ev) => (
-                      <div key={ev.id} className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 p-2 rounded-lg">
+                      <Link
+                        key={ev.id}
+                        href={`/evidence/${ev.id}`}
+                        className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 p-2 rounded-lg transition-colors group"
+                        title="Open evidence detail"
+                      >
                         <CheckCircle className="h-4 w-4 text-emerald-600" />
-                        <span className="text-sm text-gray-700">{ev.name}</span>
-                      </div>
+                        <span className="text-sm text-gray-700 group-hover:text-emerald-800 group-hover:underline">{ev.name}</span>
+                      </Link>
                     ))}
                   </div>
                 </div>

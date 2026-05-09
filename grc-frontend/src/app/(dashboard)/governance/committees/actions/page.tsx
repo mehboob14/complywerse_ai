@@ -269,10 +269,24 @@ export default function ActionsPage() {
     { value: 'overdue', label: 'Overdue' },
   ];
   const actionTypeItems = [
-    { value: 'follow_up', label: 'Follow Up' },
-    { value: 'policy_approval', label: 'Policy Approval' },
-    { value: 'risk_review', label: 'Risk Review' },
-    { value: 'audit_response', label: 'Audit Response' },
+    { value: 'follow_up',         label: 'Follow Up'         },
+    { value: 'policy_approval',   label: 'Policy Approval'   },
+    { value: 'risk_review',       label: 'Risk Review'       },
+    { value: 'audit_response',    label: 'Audit Response'    },
+    { value: 'corrective_action', label: 'Corrective Action' },
+    { value: 'preventive_action', label: 'Preventive Action' },
+    { value: 'investigation',     label: 'Investigation'     },
+    { value: 'escalation',        label: 'Escalation'        },
+    { value: 'decision_record',   label: 'Decision Record'   },
+    { value: 'recommendation',    label: 'Recommendation'    },
+    { value: 'training',          label: 'Training'          },
+    { value: 'monitoring',        label: 'Monitoring'        },
+    { value: 'vendor_review',     label: 'Vendor Review'     },
+    { value: 'incident_review',   label: 'Incident Review'   },
+    { value: 'compliance_review', label: 'Compliance Review' },
+    { value: 'communication',     label: 'Communication'     },
+    { value: 'documentation',     label: 'Documentation'     },
+    { value: 'other',             label: 'Other'             },
   ];
 
   return (

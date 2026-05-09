@@ -36,6 +36,7 @@ import {
   Paperclip,
   Wand2,
   CheckCircle,
+  CheckCircle2,
   ExternalLink,
   Send,
   Globe,
@@ -2480,6 +2481,12 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
   const [suggestions, setSuggestions] = useState<any[] | null>(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  // Documents the tenant already has covering the selected framework(s).
+  // Backend returns these so the user can see what was skipped from AI
+  // suggestions ("12 already covered" / "18 missing to create").
+  const [alreadyCovered, setAlreadyCovered] = useState<Array<{ id: number; title: string; doc_type: string; status: string }>>([]);
+  const [skippedDuplicateTitles, setSkippedDuplicateTitles] = useState<string[]>([]);
+  const [showAlreadyCoveredAll, setShowAlreadyCoveredAll] = useState(false);
   const { toast } = useToast();
 
   const { data: frameworks } = useQuery({
@@ -2500,6 +2507,9 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
     );
     setSuggestions(null);
     setShowSuggestions(false);
+    setAlreadyCovered([]);
+    setSkippedDuplicateTitles([]);
+    setShowAlreadyCoveredAll(false);
   };
 
   const selectedFrameworks = (frameworks || []).filter((f: any) => selectedFrameworkIds.includes(f.id));
@@ -2518,7 +2528,11 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
         framework_ids: selectedFrameworkIds,
         doc_type: formData.doc_type,
       });
-      setSuggestions((response.data as any)?.suggestions || []);
+      const payload = (response.data as any) || {};
+      setSuggestions(payload.suggestions || []);
+      setAlreadyCovered(Array.isArray(payload.already_covered) ? payload.already_covered : []);
+      setSkippedDuplicateTitles(Array.isArray(payload.skipped_duplicate_titles) ? payload.skipped_duplicate_titles : []);
+      setShowAlreadyCoveredAll(false);
     } catch (error: any) {
       toast({
         type: 'error',
@@ -2526,6 +2540,8 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
         message: error?.response?.data?.detail || 'Failed to get AI suggestions.',
       });
       setSuggestions([]);
+      setAlreadyCovered([]);
+      setSkippedDuplicateTitles([]);
     } finally {
       setSuggestionsLoading(false);
     }
@@ -2772,7 +2788,7 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
                     <div className="flex items-center gap-2">
                       <Wand2 className="h-4 w-4 text-blue-700" />
                       <span className="text-sm font-medium text-blue-700">
-                        AI-Suggested Documents
+                        Missing — AI-suggested
                         {filteredSuggestions && <span className="ml-1 text-blue-600">({filteredSuggestions.length})</span>}
                       </span>
                     </div>

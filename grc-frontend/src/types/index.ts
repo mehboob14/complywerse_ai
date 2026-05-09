@@ -540,6 +540,8 @@ export interface CertificationControl {
   verified_date?: string;
   is_applicable: boolean;
   priority: number;
+  is_critical?: boolean;
+  criticality_reason?: string | null;
   sub_controls: SubControlWithEvidence[];
   evidence_requirements: EvidenceRequirement[];
   evidence_recommendations?: string[];

@@ -703,9 +703,20 @@ export default function EvidenceDetailPage() {
       <div className="border-b border-[var(--color-border)] px-4 py-3 sm:px-6">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex items-start gap-3">
-            <Link href="/evidence" className="mt-0.5 rounded-md p-1.5 text-gray-600 hover:bg-gray-50 hover:text-black">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  router.back();
+                } else {
+                  router.push('/evidence');
+                }
+              }}
+              className="mt-0.5 rounded-md p-1.5 text-gray-600 hover:bg-gray-50 hover:text-black"
+              title="Go back"
+            >
               <ArrowLeft className="h-4 w-4" />
-            </Link>
+            </button>
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
               <TypeIcon className="h-5 w-5" />
             </div>

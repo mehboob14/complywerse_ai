@@ -1118,6 +1118,8 @@ def list_journey_controls(
             "verified_date": impl.verified_date.isoformat() if impl.verified_date else None,
             "is_applicable": impl.is_applicable,
             "priority": impl.priority,
+            "is_critical": bool(getattr(parsed_control, "is_critical", False)) if parsed_control else False,
+            "criticality_reason": getattr(parsed_control, "criticality_reason", None) if parsed_control else None,
             "assigned_to_user_id": assigned_to_user_id,
             "assignee_name": assignee_name,
             "assignee_email": assignee_email,
@@ -2855,8 +2857,313 @@ def get_framework_phases(
     from uploaded documents processed by the AI parser.
     """
     logger.warning(f"Deprecated endpoint /frameworks/{framework_id}/phases called - use /certifications/uploaded-frameworks/{framework_id}/phases instead")
-    
+
     raise HTTPException(
         status_code=status.HTTP_410_GONE,
         detail="This endpoint is no longer supported. Pre-seeded frameworks have been removed. Use /certifications/uploaded-frameworks/{framework_id}/phases instead."
     )
+
+
+# =============================================================================
+# Critical-Control AI Analysis
+# =============================================================================
+#
+# The journey detail page exposes a "Critical Items" panel that highlights
+# clauses the AI considers high-risk red flags (e.g. PCI-DSS network
+# segmentation, MFA-on-admin-access, encryption-at-rest, logging coverage).
+# Two endpoints power it:
+#
+#   POST /certifications/{journey_id}/analyze-critical
+#       Runs GPT-4o on the journey framework's parsed controls in batches and
+#       persists `is_critical` + `criticality_reason` on each clause. Returns
+#       a summary of how many were flagged.
+#
+#   GET  /certifications/{journey_id}/critical-controls
+#       Lists clauses currently flagged critical. Cheap — pure DB read.
+#
+# Critical clauses are then enforced in the applicability flow (see
+# `set_clause_applicability` in governance/routers/applicability.py): a critical
+# clause cannot be self-approved as Not Applicable; the request stays pending
+# until a reviewer approves it explicitly.
+# =============================================================================
+
+_CRITICAL_BATCH_SIZE = 40
+_CRITICAL_MODEL = "gpt-4o"
+
+# Hard cap on the fraction of a framework that may be flagged critical. If the
+# AI returns more than this, we keep only the top-N by reason length / order
+# — a safety net so a noisy classifier can't fail-open to "everything is
+# critical".
+_CRITICAL_MAX_RATIO = 0.15
+
+
+_CRITICAL_SYSTEM_PROMPT = (
+    "You are a senior compliance auditor (QSA / CISSP / lead ISO 27001 auditor). "
+    "You output ONLY strict JSON. You are deliberately CONSERVATIVE about what "
+    "you flag as critical: you would rather under-flag than over-flag, because a "
+    "false positive blocks legitimate scoping decisions and erodes trust in the "
+    "tool. Roughly 10–15% of clauses in a typical framework are critical — if "
+    "you find yourself flagging more than 15%, you are wrong and must re-rank."
+)
+
+
+def _critical_classifier_prompt(framework_name: str, controls_batch: List[dict], batch_idx: int, total_batches: int) -> str:
+    return f"""Framework: "{framework_name}" (batch {batch_idx + 1} of {total_batches}, batch size {len(controls_batch)})
+
+Apply the published rubric for each framework:
+
+- PCI DSS v4 — critical = clauses implementing one of the 12 top-level
+  requirements with technical enforcement: network segmentation between CDE
+  and untrusted networks (Req 1.x), strong cryptography on cardholder data
+  in transit/at rest (Req 3-4), MFA on all admin/remote access into the CDE
+  (Req 8.4-8.5), quarterly vulnerability scans + ASV (Req 11.3), log
+  centralization and daily review (Req 10), incident response with notify
+  obligations (Req 12.10).
+- ISO 27001:2022 — critical = Annex A controls that directly enforce
+  confidentiality/integrity/availability of information at scale: access
+  control (A.5.15-5.18), cryptography (A.8.24), logging/monitoring
+  (A.8.15-8.16), incident management (A.5.24-5.27), business continuity
+  (A.5.29-5.30), secure development (A.8.25-8.28).
+- NIST 800-53 — critical = HIGH-impact baseline only: AC-2, AC-6, AU-2,
+  IA-2(1)(2), SC-7, SC-8, SC-13, SI-2, SI-3, SI-4, IR-4, CM-7, CP-9.
+- HIPAA Security Rule — critical = REQUIRED (not Addressable) standards on
+  ePHI access, transmission, breach notification (164.308(a)(1)(ii)(D),
+  164.312(a)(1), 164.312(e)(1), 164.404).
+- SOC 2 / TSC — critical = system-boundary criteria: CC6.1, CC6.6, CC6.7,
+  CC7.2, CC7.3, CC8.1.
+- SAMA CSF / SBP / NCA / similar regional frameworks — apply the same
+  rubric: technical/process controls that gate cyber-security outcomes are
+  critical; governance, training, doc-review cadence, and awareness clauses
+  are not.
+
+A clause is CRITICAL only if ALL THREE are true:
+  1. Failure would directly cause severe harm: data breach of regulated
+     data, regulatory fine ≥ $100k, prolonged outage of a production
+     system, or material financial misstatement.
+  2. It is a TECHNICAL or PROCESS control that gates a security/compliance
+     outcome — NOT a documentation, training, awareness, communication,
+     scheduling, role-description, or review-frequency clause.
+  3. It is a top-level requirement, not a sub-bullet about formatting,
+     naming conventions, document version control, or meeting cadence.
+
+EXAMPLES OF CRITICAL (flag = true):
+  • "Implement firewalls between the cardholder data environment and any
+     other network." → PCI Req 1: segmentation.
+  • "Require multi-factor authentication for all administrative access to
+     systems processing cardholder data." → PCI Req 8.4: MFA on admin.
+  • "Encrypt cardholder data using strong cryptography during transmission
+     over open, public networks." → PCI Req 4: encryption in transit.
+  • "Establish a security incident response plan including notification
+     to affected parties within 72 hours." → ISO A.5.24 / GDPR Art 33.
+
+EXAMPLES OF NOT CRITICAL (flag = false):
+  • "Conduct annual security awareness training for all personnel." →
+     Awareness clause, not a gating control.
+  • "Maintain a written information security policy reviewed annually." →
+     Documentation cadence.
+  • "Document the names and titles of personnel responsible for security." →
+     Role-description bookkeeping.
+  • "Display a security policy poster in employee common areas." →
+     Awareness.
+  • "Perform quarterly internal audits of compliance documentation." →
+     Audit cadence, not a gating control.
+  • "All meetings of the security committee shall be minuted." →
+     Meeting hygiene.
+  • "Use a consistent naming convention for log files." → Naming.
+
+Return STRICT JSON ONLY (no prose, no markdown):
+{{"results":[{{"id":<int>,"is_critical":<bool>,"reason":"<≤200 chars, cite framework requirement number; empty string if not critical>"}}]}}
+
+Every control id below MUST appear in `results` exactly once. Default to
+`is_critical=false` when in doubt.
+
+Controls to classify:
+{json.dumps(controls_batch, ensure_ascii=False)}
+"""
+
+
+def _classify_controls_batch(client, framework_name: str, controls_batch: List[dict], batch_idx: int, total_batches: int) -> dict:
+    """Single AI call per batch. Returns {id: {is_critical, reason}}."""
+    try:
+        response = client.chat.completions.create(
+            model=_CRITICAL_MODEL,
+            response_format={"type": "json_object"},
+            temperature=0.0,
+            max_tokens=4000,
+            messages=[
+                {"role": "system", "content": _CRITICAL_SYSTEM_PROMPT},
+                {"role": "user", "content": _critical_classifier_prompt(framework_name, controls_batch, batch_idx, total_batches)},
+            ],
+        )
+        raw = response.choices[0].message.content or "{}"
+        parsed = json.loads(raw)
+        results = parsed.get("results") or []
+        out = {}
+        for r in results:
+            try:
+                cid = int(r.get("id"))
+            except (TypeError, ValueError):
+                continue
+            out[cid] = {
+                "is_critical": bool(r.get("is_critical")),
+                "reason": (r.get("reason") or "").strip()[:500],
+            }
+        return out
+    except Exception as exc:
+        logger.exception("Critical classifier batch failed: %s", exc)
+        return {}
+
+
+@router.post("/{journey_id}/analyze-critical")
+def analyze_critical_controls(
+    journey_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Run AI criticality classification across all parsed controls of the
+    journey's framework. Persists results on `ParsedFrameworkControl`.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+
+    journey = db.query(CertificationJourney).filter(
+        CertificationJourney.id == journey_id,
+        CertificationJourney.tenant_id.in_(user_tenants)
+    ).first()
+    if not journey:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Journey not found")
+
+    # Critical analysis only applies to journeys backed by an uploaded
+    # framework (which has parsed controls). Legacy seeded frameworks don't
+    # populate ParsedFrameworkControl.
+    framework_id = getattr(journey, "uploaded_framework_id", None)
+    if not framework_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This journey is not linked to an uploaded framework — critical analysis is unavailable."
+        )
+
+    framework = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+    if not framework:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Framework not found")
+
+    parsed_controls = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework_id
+    ).all()
+
+    if not parsed_controls:
+        return {"analyzed": 0, "critical": 0, "framework_id": framework_id}
+
+    client = get_openai_client()
+
+    # Build a compact representation per control for the AI. Truncate long text
+    # so we stay well under context limits even with large frameworks.
+    payloads = []
+    for c in parsed_controls:
+        payloads.append({
+            "id": c.id,
+            "ref": c.original_reference or c.control_id,
+            "title": (c.title or "")[:200],
+            "domain": c.domain,
+            "text": (c.full_text or c.description or "")[:600],
+        })
+
+    total_batches = (len(payloads) + _CRITICAL_BATCH_SIZE - 1) // _CRITICAL_BATCH_SIZE
+    classifications: dict = {}
+    for i in range(0, len(payloads), _CRITICAL_BATCH_SIZE):
+        batch = payloads[i:i + _CRITICAL_BATCH_SIZE]
+        batch_idx = i // _CRITICAL_BATCH_SIZE
+        result = _classify_controls_batch(client, framework.name or "Framework", batch, batch_idx, total_batches)
+        classifications.update(result)
+
+    # Safety net: if the classifier returned more than _CRITICAL_MAX_RATIO of
+    # the framework as critical, keep only the longest-reason ones (the ones
+    # the AI argued for most explicitly) and demote the rest. This guards
+    # against silent over-flagging from a model regression or a noisy run.
+    flagged_ids = [cid for cid, cls in classifications.items() if cls.get("is_critical")]
+    cap = max(1, int(len(parsed_controls) * _CRITICAL_MAX_RATIO))
+    if len(flagged_ids) > cap:
+        logger.info(
+            "Critical classifier flagged %d/%d (%.0f%%) for framework %s — capping to top %d",
+            len(flagged_ids), len(parsed_controls),
+            100.0 * len(flagged_ids) / max(1, len(parsed_controls)),
+            framework.name, cap,
+        )
+        ranked = sorted(
+            flagged_ids,
+            key=lambda cid: len(classifications[cid].get("reason") or ""),
+            reverse=True,
+        )
+        keep = set(ranked[:cap])
+        for cid in flagged_ids:
+            if cid not in keep:
+                classifications[cid] = {"is_critical": False, "reason": ""}
+
+    now = datetime.utcnow()
+    critical_count = 0
+    for c in parsed_controls:
+        cls = classifications.get(c.id)
+        if not cls:
+            # Unclassified — leave existing value. (Don't blindly clear.)
+            continue
+        c.is_critical = cls["is_critical"]
+        c.criticality_reason = cls["reason"] if cls["is_critical"] else None
+        c.criticality_analyzed_at = now
+        if cls["is_critical"]:
+            critical_count += 1
+
+    db.commit()
+
+    return {
+        "framework_id": framework_id,
+        "analyzed": len(classifications),
+        "total_controls": len(parsed_controls),
+        "critical": critical_count,
+    }
+
+
+@router.get("/{journey_id}/critical-controls")
+def list_critical_controls(
+    journey_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    journey = db.query(CertificationJourney).filter(
+        CertificationJourney.id == journey_id,
+        CertificationJourney.tenant_id.in_(user_tenants)
+    ).first()
+    if not journey:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Journey not found")
+
+    framework_id = getattr(journey, "uploaded_framework_id", None)
+    if not framework_id:
+        return {"framework_id": None, "analyzed_at": None, "items": []}
+
+    rows = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework_id,
+        ParsedFrameworkControl.is_critical == True,
+    ).order_by(ParsedFrameworkControl.original_reference).all()
+
+    # Latest analysis timestamp across the framework — surfaces "last analyzed"
+    # in the UI without a separate column on the framework row.
+    last_at = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == framework_id,
+        ParsedFrameworkControl.criticality_analyzed_at.isnot(None),
+    ).order_by(ParsedFrameworkControl.criticality_analyzed_at.desc()).first()
+
+    return {
+        "framework_id": framework_id,
+        "analyzed_at": last_at.criticality_analyzed_at.isoformat() if last_at and last_at.criticality_analyzed_at else None,
+        "items": [
+            {
+                "parsed_control_id": r.id,
+                "control_code": r.original_reference or r.control_id,
+                "title": r.title,
+                "domain": r.domain,
+                "category": r.category,
+                "reason": r.criticality_reason,
+            }
+            for r in rows
+        ],
+    }
