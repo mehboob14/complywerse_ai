@@ -456,6 +456,12 @@ class RiskBase(BaseModel):
     owner_id: Optional[int] = None
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = []
+    # Provenance — manual | register_import | assessment | incident | rcsa | framework_gap | ubl_import | nca_import
+    source_type: Optional[str] = None
+    source_assessment_id: Optional[int] = None
+    source_incident_id: Optional[int] = None
+    source_rcsa_finding_id: Optional[int] = None
+    source_reference: Optional[str] = None
 
 
 class RiskCreate(RiskBase):
@@ -485,6 +491,11 @@ class RiskUpdate(BaseModel):
     status: Optional[str] = None
     closure_status: Optional[str] = None
     closure_notes: Optional[str] = None
+    source_type: Optional[str] = None
+    source_assessment_id: Optional[int] = None
+    source_incident_id: Optional[int] = None
+    source_rcsa_finding_id: Optional[int] = None
+    source_reference: Optional[str] = None
 
 
 class RiskResponse(BaseModel):
@@ -513,6 +524,11 @@ class RiskResponse(BaseModel):
     closed_at: Optional[datetime] = None
     closed_by: Optional[int] = None
     closure_notes: Optional[str] = None
+    source_type: Optional[str] = None
+    source_assessment_id: Optional[int] = None
+    source_incident_id: Optional[int] = None
+    source_rcsa_finding_id: Optional[int] = None
+    source_reference: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

@@ -221,6 +221,176 @@ def list_risk_assessments(
     ]
 
 
+@router.get("/dashboard")
+def get_risk_assessment_dashboard(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Aggregate metrics for the Risk Assessments dashboard.
+
+    Returns total counts by status (draft / in_progress / under_review /
+    approved / closed), totals by assessment type, top lead-assessors by
+    workload, and a 12-month creation trend.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {
+            "total": 0,
+            "by_status": {},
+            "by_type": {},
+            "by_methodology": {},
+            "top_assessors": [],
+            "monthly_trend": [],
+            "risks_per_assessment_avg": 0,
+        }
+
+    assessments = db.query(RiskAssessment).filter(
+        RiskAssessment.tenant_id.in_(user_tenants)
+    ).all()
+
+    # Status buckets — keep all five canonical states even when empty so the
+    # frontend can render zero-bars deterministically.
+    by_status: dict = {"draft": 0, "in_progress": 0, "under_review": 0, "approved": 0, "closed": 0}
+    by_type: dict = {}
+    by_methodology: dict = {}
+    assessor_counts: dict = {}
+    monthly: dict = {}
+    total_risks_assessed = 0
+
+    assessor_ids = {a.lead_assessor_id for a in assessments if a.lead_assessor_id}
+    assessors_by_id: dict = {}
+    if assessor_ids:
+        for u in db.query(GRCUser).filter(GRCUser.id.in_(assessor_ids)).all():
+            assessors_by_id[u.id] = (
+                getattr(u, "display_name", None)
+                or getattr(u, "username", None)
+                or getattr(u, "email", None)
+                or f"User #{u.id}"
+            )
+
+    for a in assessments:
+        st = (a.status or "draft").strip().lower()
+        if st not in by_status:
+            by_status[st] = 0
+        by_status[st] += 1
+
+        t = (a.assessment_type or "periodic").strip().lower()
+        by_type[t] = by_type.get(t, 0) + 1
+
+        m = (a.methodology or "unspecified").strip()
+        by_methodology[m] = by_methodology.get(m, 0) + 1
+
+        if a.lead_assessor_id:
+            label = assessors_by_id.get(a.lead_assessor_id, f"User #{a.lead_assessor_id}")
+            assessor_counts[label] = assessor_counts.get(label, 0) + 1
+
+        if a.created_at:
+            key = a.created_at.strftime("%Y-%m")
+            monthly[key] = monthly.get(key, 0) + 1
+
+        total_risks_assessed += len(a.assessed_risks or [])
+
+    top_assessors = [
+        {"assessor": name, "count": cnt}
+        for name, cnt in sorted(assessor_counts.items(), key=lambda kv: kv[1], reverse=True)[:10]
+    ]
+    monthly_trend = [
+        {"month": k, "count": v}
+        for k, v in sorted(monthly.items())
+    ]
+
+    return {
+        "total": len(assessments),
+        "by_status": by_status,
+        "by_type": by_type,
+        "by_methodology": by_methodology,
+        "top_assessors": top_assessors,
+        "monthly_trend": monthly_trend,
+        "risks_per_assessment_avg": round(total_risks_assessed / len(assessments), 1) if assessments else 0,
+        "total_risks_assessed": total_risks_assessed,
+    }
+
+
+@router.get("/{assessment_id}/risk-breakdown")
+def get_risk_assessment_breakdown(
+    assessment_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Per-assessment chart data: rating mix, treatment decisions, control
+    effectiveness, score-band distribution. Drives the Analytics sub-tab on
+    the assessment detail page."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk assessment not found")
+
+    assessment = db.query(RiskAssessment).filter(
+        RiskAssessment.id == assessment_id,
+        RiskAssessment.tenant_id.in_(user_tenants),
+    ).first()
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk assessment not found")
+
+    items = db.query(RiskAssessmentRisk).filter(
+        RiskAssessmentRisk.assessment_id == assessment_id
+    ).all()
+
+    by_rating: dict = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    by_treatment: dict = {"accept": 0, "mitigate": 0, "transfer": 0, "avoid": 0}
+    by_effectiveness: dict = {"effective": 0, "partially_effective": 0, "ineffective": 0, "unrated": 0}
+    by_score_range: dict = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    inherent_total = 0.0
+    inherent_count = 0
+    residual_total = 0.0
+    residual_count = 0
+
+    for it in items:
+        r = (it.risk_rating or "").strip().lower()
+        if r in by_rating:
+            by_rating[r] += 1
+        td = (it.treatment_decision or "").strip().lower()
+        if td in by_treatment:
+            by_treatment[td] += 1
+        eff = (it.control_effectiveness or "unrated").strip().lower()
+        if eff in by_effectiveness:
+            by_effectiveness[eff] += 1
+        else:
+            by_effectiveness["unrated"] += 1
+
+        score = it.residual_score or it.inherent_score or 0
+        if score >= 20:
+            by_score_range["critical"] += 1
+        elif score >= 12:
+            by_score_range["high"] += 1
+        elif score >= 6:
+            by_score_range["medium"] += 1
+        else:
+            by_score_range["low"] += 1
+
+        if it.inherent_score:
+            inherent_total += float(it.inherent_score)
+            inherent_count += 1
+        if it.residual_score:
+            residual_total += float(it.residual_score)
+            residual_count += 1
+
+    return {
+        "assessment_id": assessment_id,
+        "assessment_name": assessment.name,
+        "status": assessment.status,
+        "total_risks": len(items),
+        "by_rating": by_rating,
+        "by_treatment": by_treatment,
+        "by_effectiveness": by_effectiveness,
+        "by_score_range": by_score_range,
+        "avg_inherent_score": round(inherent_total / inherent_count, 2) if inherent_count else 0,
+        "avg_residual_score": round(residual_total / residual_count, 2) if residual_count else 0,
+        "score_reduction": round(
+            (inherent_total / inherent_count) - (residual_total / residual_count), 2
+        ) if (inherent_count and residual_count) else 0,
+    }
+
+
 @router.get("/{assessment_id}")
 def get_risk_assessment_detail(
     assessment_id: int,

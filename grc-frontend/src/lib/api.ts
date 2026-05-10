@@ -23,6 +23,7 @@ import {
   RiskIncidentUpdate,
   RiskReview,
   RiskReviewCreate,
+  FrameworkMethodology,
   RiskReviewUpdate,
   RiskDependency,
   RiskDependencyCreate,
@@ -831,6 +832,27 @@ export const ermApi = {
     getById: (id: number) => apiClient.get<Risk>(`/erm/risks/${id}`),
     getDetail: (id: number) => apiClient.get<RiskDetail>(`/erm/risks/${id}/detail`),
     getDashboard: () => apiClient.get<RiskDashboard>('/erm/risks/dashboard'),
+    getDashboardByRegister: () => apiClient.get<{
+      total_risks: number;
+      registers: Array<{
+        register_type: string;
+        total: number;
+        by_status: { open: number; in_treatment: number; mitigated: number; accepted: number; closed: number };
+        by_category: Record<string, number>;
+        by_score_range: { critical: number; high: number; medium: number; low: number };
+        top_owners: Array<{ owner: string; count: number }>;
+        contributors: number;
+        avg_residual_score: number;
+      }>;
+    }>('/erm/risks/dashboard/by-register'),
+    getDashboardBySource: () => apiClient.get<{
+      total_risks: number;
+      sources: Array<{
+        source_type: string;
+        total: number;
+        by_status: { open: number; in_treatment: number; mitigated: number; accepted: number; closed: number };
+      }>;
+    }>('/erm/risks/dashboard/by-source'),
     getHeatmap: (riskType?: string) => apiClient.get<HeatmapCell[]>(`/erm/risks/heatmap${riskType ? `?risk_type=${riskType}` : ''}`),
     create: (data: Partial<Risk>) => apiClient.post<Risk>('/erm/risks', data),
     update: (id: number, data: Partial<Risk>) => apiClient.put<Risk>(`/erm/risks/${id}`, data),
@@ -1201,7 +1223,29 @@ export const ermApi = {
     aiSuggestRisk: (assessmentId: number, assessmentRiskId: number) =>
       apiClient.post(`/erm/risk-assessments/${assessmentId}/risks/${assessmentRiskId}/ai-suggest`),
     getSummary: (id: number) => apiClient.get(`/erm/risk-assessments/${id}/summary`),
-    getDashboard: () => apiClient.get('/erm/risk-assessments/dashboard'),
+    getDashboard: () => apiClient.get<{
+      total: number;
+      by_status: { draft: number; in_progress: number; under_review: number; approved: number; closed: number; [k: string]: number };
+      by_type: Record<string, number>;
+      by_methodology: Record<string, number>;
+      top_assessors: Array<{ assessor: string; count: number }>;
+      monthly_trend: Array<{ month: string; count: number }>;
+      risks_per_assessment_avg: number;
+      total_risks_assessed: number;
+    }>('/erm/risk-assessments/dashboard'),
+    getRiskBreakdown: (id: number) => apiClient.get<{
+      assessment_id: number;
+      assessment_name: string;
+      status: string;
+      total_risks: number;
+      by_rating: { critical: number; high: number; medium: number; low: number };
+      by_treatment: { accept: number; mitigate: number; transfer: number; avoid: number };
+      by_effectiveness: { effective: number; partially_effective: number; ineffective: number; unrated: number };
+      by_score_range: { critical: number; high: number; medium: number; low: number };
+      avg_inherent_score: number;
+      avg_residual_score: number;
+      score_reduction: number;
+    }>(`/erm/risk-assessments/${id}/risk-breakdown`),
     uploadExcel: (formData: FormData) =>
       apiClient.post<{
         assessment_id: number;
@@ -1220,18 +1264,50 @@ export const ermApi = {
     getAll: () => apiClient.get('/erm/framework-risk-assessments'),
     getMyAssignedQuestions: () => apiClient.get('/erm/framework-risk-assessments/my-assigned-questions'),
     getAvailableFrameworks: () => apiClient.get('/erm/framework-risk-assessments/available-frameworks'),
+    getMethodologies: () => apiClient.get<{ methodologies: FrameworkMethodology[] }>(
+      '/erm/framework-risk-assessments/methodologies'
+    ),
+    detectMethodology: (uploadedFrameworkId: number) =>
+      apiClient.get<{
+        framework_id: number;
+        framework_name: string;
+        methodology: FrameworkMethodology | null;
+        fallback_will_use_ai: boolean;
+      }>(`/erm/framework-risk-assessments/available-frameworks/${uploadedFrameworkId}/methodology`),
     getById: (id: number) => apiClient.get(`/erm/framework-risk-assessments/${id}`),
     create: (data: Record<string, unknown>) => apiClient.post('/erm/framework-risk-assessments', data),
     update: (id: number, data: Record<string, unknown>) => apiClient.put(`/erm/framework-risk-assessments/${id}`, data),
     delete: (id: number) => apiClient.delete(`/erm/framework-risk-assessments/${id}`),
-    generateQuestions: (id: number, data?: { count?: number; replace_existing?: boolean }) =>
-      apiClient.post(`/erm/framework-risk-assessments/${id}/generate-questions`, data || {}),
+    generateQuestions: (
+      id: number,
+      data?: {
+        count?: number;
+        replace_existing?: boolean;
+        scope?: 'full' | 'sample';
+        methodology_code?: string;
+      }
+    ) => apiClient.post(`/erm/framework-risk-assessments/${id}/generate-questions`, data || {}),
     addQuestion: (id: number, data: Record<string, unknown>) =>
       apiClient.post(`/erm/framework-risk-assessments/${id}/questions`, data),
     updateQuestion: (assessmentId: number, questionId: number, data: Record<string, unknown>) =>
       apiClient.put(`/erm/framework-risk-assessments/${assessmentId}/questions/${questionId}`, data),
     moveQuestionToRiskRegister: (assessmentId: number, questionId: number, data?: Record<string, unknown>) =>
       apiClient.post(`/erm/framework-risk-assessments/${assessmentId}/questions/${questionId}/move-to-risk-register`, data || {}),
+    aiSuggestQuestion: (assessmentId: number, questionId: number, contextHint?: string) =>
+      apiClient.post<{
+        methodology_code: string;
+        suggestions: Record<string, string>;
+        recommendations: string;
+        rationale: string;
+        recommended_scores: {
+          inherent_likelihood: number | null;
+          inherent_impact: number | null;
+          residual_likelihood: number | null;
+          residual_impact: number | null;
+        };
+      }>(`/erm/framework-risk-assessments/${assessmentId}/questions/${questionId}/ai-suggest`, {
+        context_hint: contextHint,
+      }),
     deleteQuestion: (assessmentId: number, questionId: number) =>
       apiClient.delete(`/erm/framework-risk-assessments/${assessmentId}/questions/${questionId}`),
     uploadEvidence: (assessmentId: number, questionId: number, formData: FormData) =>

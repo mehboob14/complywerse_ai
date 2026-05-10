@@ -9,7 +9,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft, Save, Plus, Trash2, Loader2, AlertTriangle, Activity,
   AlertCircle, FileText, ChevronDown, ChevronUp, CheckCircle, XCircle,
-  Shield, Edit2, X, ClipboardCheck, Link2, Sparkles,
+  Shield, Edit2, X, ClipboardCheck, Link2, Sparkles, BarChart3,
 } from 'lucide-react';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
@@ -387,6 +387,13 @@ export default function RiskAssessmentDetailPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/erm/risk-assessments/${assessment.id}/analytics`}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+          >
+            <BarChart3 size={14} />
+            Analytics
+          </Link>
           {isEditable && canEdit && (
             <button
               onClick={() => setShowEditModal(true)}

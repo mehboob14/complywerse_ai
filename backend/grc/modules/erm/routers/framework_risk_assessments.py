@@ -18,6 +18,13 @@ from ....models import (
     GRCUser, TenantUser, Evidence, Risk, get_db, UploadedFramework, ParsedFrameworkControl
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ..framework_methodologies import (
+    Methodology,
+    all_methodologies,
+    generate_questions as generate_methodology_questions,
+    get_methodology,
+    match_methodology,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +68,20 @@ class FrameworkRiskQuestionUpdate(BaseModel):
     residual_impact: Optional[int] = None
     is_risk_accepted: Optional[bool] = None
     acceptance_notes: Optional[str] = None
+    # Methodology-specific freeform fields keyed by Methodology.fields[*].key
+    methodology_fields: Optional[dict] = None
 
 
 class GenerateQuestionsRequest(BaseModel):
+    # When the framework matches a methodology, scope is honored:
+    #   "full"   -> one question per parsed control (questions_per_control applied).
+    #   "sample" -> ``count`` evenly-spaced controls.
+    # When the framework has no methodology, behaviour is the legacy AI flow
+    # which uses ``count`` directly.
     count: Optional[int] = DEFAULT_QUESTION_COUNT
     replace_existing: Optional[bool] = True
+    scope: Optional[str] = None  # "full" | "sample"; if None, methodology default
+    methodology_code: Optional[str] = None  # explicit override of auto-match
 
 
 class MoveQuestionToRiskRegisterRequest(BaseModel):
@@ -183,6 +199,11 @@ def _serialize_question(q: FrameworkRiskQuestion) -> dict:
         "linked_risk_id": q.linked_risk_id,
         "moved_to_risk_register_at": q.moved_to_risk_register_at.isoformat() if q.moved_to_risk_register_at else None,
         "order_index": q.order_index,
+        "methodology_code": getattr(q, "methodology_code", None),
+        "phase_code": getattr(q, "phase_code", None),
+        "clause_reference": getattr(q, "clause_reference", None),
+        "methodology_fields": getattr(q, "methodology_fields", None),
+        "source_quote": getattr(q, "source_quote", None),
         "created_by": q.created_by,
         "created_at": q.created_at.isoformat() if q.created_at else None,
         "updated_at": q.updated_at.isoformat() if q.updated_at else None,
@@ -574,6 +595,46 @@ def _generate_questions_with_ai(framework: Framework, controls: List[dict], coun
     )
 
 
+@router.get("/methodologies")
+def list_methodologies():
+    """Public registry of risk-assessment methodologies the platform knows.
+
+    The frontend uses this to render the methodology badge on the create
+    form, the per-question methodology-field card on the detail page, and
+    the methodology-specific likelihood / impact scale labels.
+    """
+    return {"methodologies": [m.to_dict() for m in all_methodologies()]}
+
+
+@router.get("/available-frameworks/{uploaded_framework_id}/methodology")
+def detect_methodology_for_framework(
+    uploaded_framework_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Tell the frontend which methodology will be applied for a given
+    uploaded framework — so the create form can show "PCI DSS v4.0 TRA
+    will be used" rather than a generic 'AI will generate questions'."""
+    user_tenants = get_user_tenants(current_user, db)
+    fw = db.query(UploadedFramework).filter(
+        UploadedFramework.id == uploaded_framework_id,
+        or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.is_shared == True,  # noqa: E712
+        ),
+    ).first()
+    if not fw:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Framework not found")
+
+    methodology = match_methodology(fw.name, getattr(fw, "short_code", None))
+    return {
+        "framework_id": fw.id,
+        "framework_name": fw.name,
+        "methodology": methodology.to_dict() if methodology else None,
+        "fallback_will_use_ai": methodology is None,
+    }
+
+
 @router.get("/available-frameworks")
 def list_available_frameworks_for_risk_assessment(
     db: Session = Depends(get_db),
@@ -789,12 +850,24 @@ def generate_framework_questions(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    """Generate the assessment's question set.
+
+    Generation strategy (highest-priority first):
+      1. If the framework matches a registered methodology (ISO 27001/27005,
+         PCI DSS v4.0 TRA, NIST 800-30, SOC 2 TSC), the methodology-driven
+         generator emits one or more grounded questions per parsed control,
+         carrying methodology_code, phase_code, clause_reference, source_quote
+         and an empty methodology_fields dict for the assessor to fill in.
+      2. Otherwise, fall back to the existing AI generator (gpt-4o), which
+         is itself backed by a deterministic template fallback if the LLM
+         is unreachable.
+    """
     user_tenants = get_user_tenants(current_user, db)
     assessment = _get_assessment_or_404(assessment_id, user_tenants, db)
 
     count = data.count or DEFAULT_QUESTION_COUNT
-    if count < 1 or count > 50:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question count must be between 1 and 50")
+    if count < 1 or count > 200:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Question count must be between 1 and 200")
 
     if data.replace_existing:
         existing_questions = db.query(FrameworkRiskQuestion).options(
@@ -822,37 +895,98 @@ def generate_framework_questions(
     framework = context["framework"]
     controls = context["controls"]
 
-    generation_source = "ai"
-    generation_warning = None
-    try:
-        questions = _generate_questions_with_ai(framework, controls, count)
-    except HTTPException as e:
-        logger.warning(f"AI question generation unavailable, using fallback: {e.detail}")
-        generation_source = "fallback"
-        generation_warning = e.detail
-        questions = _generate_questions_fallback(framework, controls, count)
-    except Exception as e:
-        logger.error(f"AI question generation failed, using fallback: {e}")
-        generation_source = "fallback"
-        generation_warning = "AI question generation failed; fallback questions were generated."
-        questions = _generate_questions_fallback(framework, controls, count)
+    # ------------------------------------------------------------------
+    # Choose generator: methodology-driven if a match exists (or was
+    # explicitly selected by the caller), otherwise legacy AI flow.
+    methodology: Optional[Methodology] = None
+    if data.methodology_code:
+        methodology = get_methodology(data.methodology_code)
+        if methodology is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown methodology_code: {data.methodology_code}",
+            )
+    else:
+        methodology = match_methodology(
+            getattr(framework, "name", None),
+            getattr(framework, "short_code", None),
+        )
 
-    if len(questions) < count:
-        fallback_needed = count - len(questions)
-        for i in range(fallback_needed):
-            questions.append(f"Describe how your organization addresses key risks related to {framework.name} requirement #{i + 1}.")
+    generation_source = "ai"
+    generation_warning: Optional[str] = None
+    methodology_payloads: List[dict] = []
+
+    if methodology is not None:
+        scope = (data.scope or methodology.default_scope or "full").lower()
+        full_coverage = scope == "full"
+        sample_size = None if full_coverage else max(1, count)
+        try:
+            methodology_payloads = generate_methodology_questions(
+                methodology,
+                framework,
+                controls,
+                full_coverage=full_coverage,
+                sample_size=sample_size,
+            )
+            generation_source = f"methodology:{methodology.code}"
+        except Exception as e:
+            logger.exception("Methodology generation failed; falling back to AI: %s", e)
+            generation_source = "ai"
+            generation_warning = "Methodology generator failed; falling back to AI."
+            methodology = None
+
+    questions: List[str] = []
+    if methodology is None:
+        # Legacy AI / template path — questions remain plain strings.
+        try:
+            questions = _generate_questions_with_ai(framework, controls, count)
+        except HTTPException as e:
+            logger.warning(f"AI question generation unavailable, using fallback: {e.detail}")
+            generation_source = "fallback"
+            generation_warning = e.detail
+            questions = _generate_questions_fallback(framework, controls, count)
+        except Exception as e:
+            logger.error(f"AI question generation failed, using fallback: {e}")
+            generation_source = "fallback"
+            generation_warning = "AI question generation failed; fallback questions were generated."
+            questions = _generate_questions_fallback(framework, controls, count)
+
+        if len(questions) < count:
+            fallback_needed = count - len(questions)
+            for i in range(fallback_needed):
+                questions.append(
+                    f"Describe how your organization addresses key risks related to "
+                    f"{framework.name} requirement #{i + 1}."
+                )
 
     created = []
-    for idx, q in enumerate(questions[:count], start=1):
-        question = FrameworkRiskQuestion(
-            assessment_id=assessment_id,
-            question_text=q,
-            status="not_started",
-            order_index=idx,
-            created_by=current_user.id,
-        )
-        db.add(question)
-        created.append(question)
+    if methodology is not None:
+        for idx, payload in enumerate(methodology_payloads, start=1):
+            question = FrameworkRiskQuestion(
+                assessment_id=assessment_id,
+                question_text=payload["question_text"],
+                status="not_started",
+                order_index=idx,
+                created_by=current_user.id,
+                methodology_code=methodology.code,
+                phase_code=payload.get("phase_code"),
+                clause_reference=payload.get("clause_reference"),
+                methodology_fields=payload.get("methodology_fields") or {},
+                source_quote=payload.get("source_quote"),
+            )
+            db.add(question)
+            created.append(question)
+    else:
+        for idx, q in enumerate(questions[:count], start=1):
+            question = FrameworkRiskQuestion(
+                assessment_id=assessment_id,
+                question_text=q,
+                status="not_started",
+                order_index=idx,
+                created_by=current_user.id,
+            )
+            db.add(question)
+            created.append(question)
 
     db.commit()
 
@@ -962,6 +1096,178 @@ def update_framework_question(
     ).filter(FrameworkRiskQuestion.id == question.id).first()
 
     return _serialize_question(question)
+
+
+class AISuggestRequest(BaseModel):
+    # Optional caller-supplied hint to steer suggestions (e.g. "we use AWS,
+    # tenant has 200 employees, no PII processing"). Helps the model give
+    # context-aware drafts instead of generic ones.
+    context_hint: Optional[str] = None
+
+
+@router.post("/{assessment_id}/questions/{question_id}/ai-suggest")
+def ai_suggest_question_fields(
+    assessment_id: int,
+    question_id: int,
+    data: AISuggestRequest = AISuggestRequest(),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Ask the LLM for draft values for each methodology field on this question.
+
+    Returns suggestions keyed by the methodology's field keys plus optional
+    `recommendations` (free-text guidance) and `rationale` (why the model
+    picked these drafts). The frontend lets the user review and apply each
+    suggestion individually rather than overwriting their work.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    assessment = _get_assessment_or_404(assessment_id, user_tenants, db)
+    question = _get_question_or_404(assessment_id, question_id, db)
+
+    # Resolve methodology context. Methodology-driven questions carry
+    # `methodology_code`; AI-generated / manual questions don't, in which
+    # case we still try to infer from the framework so the user gets useful
+    # output even on legacy questions.
+    methodology = None
+    if question.methodology_code:
+        methodology = get_methodology(question.methodology_code)
+    if methodology is None:
+        # Fall back to detection from the framework on the assessment.
+        fw_ref_id = assessment.uploaded_framework_id or assessment.framework_id
+        if fw_ref_id:
+            try:
+                ctx = _fetch_framework_context(fw_ref_id, db)
+                methodology = match_methodology(
+                    getattr(ctx["framework"], "name", None),
+                    getattr(ctx["framework"], "short_code", None),
+                )
+            except Exception:
+                methodology = None
+
+    if methodology is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No methodology mapped for this question; AI suggestions need a methodology to know which fields to populate.",
+        )
+
+    fields_payload = [
+        {
+            "key": f.key,
+            "label": f.label,
+            "field_type": f.field_type,
+            "options": f.options,
+            "required": f.required,
+            "help_text": f.help_text,
+            "current_value": (question.methodology_fields or {}).get(f.key, ""),
+        }
+        for f in methodology.fields
+    ]
+    phase = next((p for p in methodology.phases if p.code == question.phase_code), None)
+
+    prompt_payload = {
+        "task": "Suggest concise draft values for each field a risk-assessment user must fill in for this question.",
+        "rules": [
+            "Use plain, professional language in your own words; do not quote the standard verbatim.",
+            "Each suggestion should be 1–3 short sentences (or a single line for select / short-text fields).",
+            "If a field has options, return one of the option strings exactly.",
+            "If you genuinely cannot suggest a value, return an empty string for that field.",
+            "Output strict JSON matching the schema; no extra prose outside the JSON object.",
+        ],
+        "methodology": {
+            "code": methodology.code,
+            "display_name": methodology.display_name,
+            "reference_standard": methodology.reference_standard,
+        },
+        "phase": (
+            {"code": phase.code, "name": phase.name, "description": phase.description}
+            if phase
+            else None
+        ),
+        "question": {
+            "id": question.id,
+            "question_text": question.question_text,
+            "clause_reference": question.clause_reference,
+            "source_quote": question.source_quote,
+        },
+        "fields_to_suggest": fields_payload,
+        "context_hint": (data.context_hint or "").strip() or None,
+        "output_schema": {
+            "suggestions": "object keyed by field key, value is the suggested string",
+            "recommendations": "1–3 sentences of practical guidance for the assessor",
+            "rationale": "1–2 sentences on why these drafts fit",
+            "recommended_inherent_likelihood": "integer 1-5 or null",
+            "recommended_inherent_impact": "integer 1-5 or null",
+            "recommended_residual_likelihood": "integer 1-5 or null",
+            "recommended_residual_impact": "integer 1-5 or null",
+        },
+    }
+
+    system_msg = (
+        "You are a senior GRC analyst helping practitioners fill in a "
+        "risk-assessment question. Produce useful drafts the assessor can "
+        "edit; never copy text from any published standard."
+    )
+    user_msg = json.dumps(prompt_payload, ensure_ascii=False)
+
+    model = os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL", "gpt-4o-mini")
+    last_error: Optional[Exception] = None
+    for client in _iter_openai_client_candidates():
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                temperature=0.2,
+                max_tokens=1200,
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg},
+                ],
+            )
+            content = response.choices[0].message.content or "{}"
+            parsed = json.loads(content)
+            break
+        except Exception as e:
+            last_error = e
+            logger.warning("AI suggest attempt failed: %s", e)
+            parsed = None
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"AI suggest unavailable: {last_error}",
+        )
+
+    if not isinstance(parsed, dict):
+        parsed = {}
+
+    # Normalise and only return suggestions for fields the methodology
+    # actually defines — protects against the model hallucinating field keys.
+    valid_keys = {f.key for f in methodology.fields}
+    raw_suggestions = parsed.get("suggestions") or {}
+    suggestions = {
+        k: ("" if v is None else str(v))
+        for k, v in raw_suggestions.items()
+        if k in valid_keys
+    }
+
+    def _coerce_scale(v):
+        try:
+            iv = int(v)
+            return iv if 1 <= iv <= 5 else None
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "methodology_code": methodology.code,
+        "suggestions": suggestions,
+        "recommendations": (parsed.get("recommendations") or "").strip(),
+        "rationale": (parsed.get("rationale") or "").strip(),
+        "recommended_scores": {
+            "inherent_likelihood": _coerce_scale(parsed.get("recommended_inherent_likelihood")),
+            "inherent_impact": _coerce_scale(parsed.get("recommended_inherent_impact")),
+            "residual_likelihood": _coerce_scale(parsed.get("recommended_residual_likelihood")),
+            "residual_impact": _coerce_scale(parsed.get("recommended_residual_impact")),
+        },
+    }
 
 
 @router.post("/{assessment_id}/questions/{question_id}/move-to-risk-register")

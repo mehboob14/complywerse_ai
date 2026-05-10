@@ -21,7 +21,7 @@ from ....models import (
     NormalizedControl, FrameworkControl, ITAsset, Evidence,
     GovernanceObjective, Issue, GRCUser, Tenant, get_db,
     ParsedFrameworkControl, UploadedFramework, RiskMitigationAction,
-    Vulnerability, VulnerabilityAssetLink,
+    Vulnerability, VulnerabilityAssetLink, RiskAssessmentRisk,
 )
 from ....schemas import (
     RiskCreate, RiskUpdate, RiskResponse,
@@ -1126,6 +1126,187 @@ def get_risk_dashboard(
         "open_risks": by_status.get("open", 0),
         "risks_needing_review": sum(1 for r in risks if r.review_date and r.review_date < datetime.utcnow())
     }
+
+
+RISK_STATUS_BUCKETS = ("open", "in_treatment", "mitigated", "accepted", "closed")
+
+
+def _bucket_status(raw: Optional[str]) -> str:
+    """Normalize Risk.status into one of the five canonical UI buckets.
+
+    Canonical: open, in_treatment, mitigated, accepted, closed.
+    Anything unrecognized falls back to "open" so it's still surfaced rather
+    than silently dropped from the dashboard counts.
+    """
+    s = (raw or "open").strip().lower().replace(" ", "_")
+    if s in ("closed", "resolved", "cancelled", "canceled"):
+        return "closed"
+    if s in ("in_treatment", "treating", "under_treatment", "in_progress", "under_review", "mitigating"):
+        # "mitigating" reads as in-progress treatment; reserve "mitigated" for completed
+        return "in_treatment" if s != "mitigating" else "in_treatment"
+    if s == "mitigated":
+        return "mitigated"
+    if s == "accepted":
+        return "accepted"
+    return "open"
+
+
+@router.get("/dashboard/by-register")
+def get_risk_dashboard_by_register(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Per-register-type breakdown for the Risk Register dashboard.
+
+    Returns one entry per distinct register_type (NULL bucketed as "Standard"),
+    each with totals, status mix (open/in_progress/closed/pending), category
+    mix, and assignee workload (top 10 owners by count + total contributors).
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"registers": [], "total_risks": 0}
+
+    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        query = query.filter(Risk.tenant_id == tenant_id)
+
+    risks = query.all()
+
+    # Pre-fetch owner names in one round-trip
+    owner_ids = {r.owner_id for r in risks if r.owner_id}
+    owners_by_id: Dict[int, str] = {}
+    if owner_ids:
+        for u in db.query(GRCUser).filter(GRCUser.id.in_(owner_ids)).all():
+            owners_by_id[u.id] = (getattr(u, "display_name", None) or getattr(u, "username", None) or getattr(u, "email", None) or f"User #{u.id}")
+
+    buckets: Dict[str, Dict[str, Any]] = {}
+    for risk in risks:
+        key = (risk.register_type or "Standard").strip() or "Standard"
+        b = buckets.setdefault(key, {
+            "register_type": key,
+            "total": 0,
+            "by_status": {s: 0 for s in RISK_STATUS_BUCKETS},
+            "by_category": {},
+            "by_owner": {},
+            "by_score_range": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+            "owner_ids": set(),
+            "avg_residual_score": 0.0,
+            "_residual_total": 0.0,
+            "_residual_count": 0,
+        })
+        b["total"] += 1
+        b["by_status"][_bucket_status(risk.status)] += 1
+        cat = risk.risk_category or risk.category or "operational"
+        b["by_category"][cat] = b["by_category"].get(cat, 0) + 1
+        if risk.owner_id:
+            label = owners_by_id.get(risk.owner_id, f"User #{risk.owner_id}")
+            b["by_owner"][label] = b["by_owner"].get(label, 0) + 1
+            b["owner_ids"].add(risk.owner_id)
+        score = risk.residual_score or risk.inherent_score or 0
+        if score >= 20:
+            b["by_score_range"]["critical"] += 1
+        elif score >= 12:
+            b["by_score_range"]["high"] += 1
+        elif score >= 6:
+            b["by_score_range"]["medium"] += 1
+        else:
+            b["by_score_range"]["low"] += 1
+        if risk.residual_score:
+            b["_residual_total"] += float(risk.residual_score)
+            b["_residual_count"] += 1
+
+    out = []
+    for key, b in buckets.items():
+        owners_sorted = sorted(b["by_owner"].items(), key=lambda kv: kv[1], reverse=True)[:10]
+        avg = (b["_residual_total"] / b["_residual_count"]) if b["_residual_count"] else 0.0
+        out.append({
+            "register_type": b["register_type"],
+            "total": b["total"],
+            "by_status": b["by_status"],
+            "by_category": b["by_category"],
+            "by_score_range": b["by_score_range"],
+            "top_owners": [{"owner": name, "count": cnt} for name, cnt in owners_sorted],
+            "contributors": len(b["owner_ids"]),
+            "avg_residual_score": round(avg, 2),
+        })
+    out.sort(key=lambda x: x["total"], reverse=True)
+    return {"registers": out, "total_risks": len(risks)}
+
+
+def _infer_source_type(risk: Risk, assessed_risk_ids: set) -> str:
+    """Best-effort provenance for risks created before source_type was tracked.
+
+    Reads only signals already on the row (register_type, presence in an
+    assessment join) — no DB writes. Once the writers start populating
+    source_type on new risks, those values win and this fallback is skipped.
+    """
+    explicit = (getattr(risk, "source_type", None) or "").strip()
+    if explicit:
+        return explicit
+    rt = (risk.register_type or "").strip().lower()
+    if rt in ("ubl template", "ubltemplate", "ubl"):
+        return "ubl_import"
+    if rt in ("nca template", "ncatemplate", "nca"):
+        return "nca_import"
+    if risk.id in assessed_risk_ids:
+        return "assessment"
+    if rt:
+        # Any other named register (PCI-DSS, ISO 27001, SOX, NIST, GDPR, …)
+        return "register_import"
+    return "manual"
+
+
+@router.get("/dashboard/by-source")
+def get_risk_dashboard_by_source(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Provenance dashboard — counts grouped by source_type with status mix.
+
+    For risks created before provenance tracking, source_type is inferred
+    from register_type and assessment membership rather than shown as
+    "Unspecified". Explicit source_type on the row always wins.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"sources": [], "total_risks": 0}
+
+    query = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        query = query.filter(Risk.tenant_id == tenant_id)
+
+    risks = query.all()
+
+    # Single batched lookup of every risk_id that appears in any assessment,
+    # so the per-row inference is O(1).
+    assessed_risk_ids: set = set()
+    if risks:
+        risk_ids = [r.id for r in risks]
+        rows = (
+            db.query(RiskAssessmentRisk.risk_id)
+            .filter(RiskAssessmentRisk.risk_id.in_(risk_ids))
+            .distinct()
+            .all()
+        )
+        assessed_risk_ids = {row[0] for row in rows}
+
+    buckets: Dict[str, Dict[str, Any]] = {}
+    for risk in risks:
+        key = _infer_source_type(risk, assessed_risk_ids)
+        b = buckets.setdefault(key, {
+            "source_type": key,
+            "total": 0,
+            "by_status": {s: 0 for s in RISK_STATUS_BUCKETS},
+        })
+        b["total"] += 1
+        b["by_status"][_bucket_status(risk.status)] += 1
+
+    sources = sorted(buckets.values(), key=lambda x: x["total"], reverse=True)
+    return {"sources": sources, "total_risks": len(risks)}
 
 
 @router.get("/heatmap")

@@ -31,6 +31,7 @@ import {
   Check,
   Zap,
   Eye,
+  BarChart3,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRef } from 'react';
@@ -54,6 +55,21 @@ type UBLFieldDef = {
   placeholder?: string;
 };
 type UBLFieldSection = { id: string; title: string; keys: string[] };
+
+const SOURCE_LABELS: Record<string, string> = {
+  manual: 'Manual',
+  register_import: 'Register import',
+  assessment: 'Assessment',
+  incident: 'Incident',
+  rcsa: 'RCSA',
+  framework_gap: 'Framework gap',
+  ubl_import: 'UBL register',
+  nca_import: 'NCA register',
+};
+const formatSourceLabel = (raw?: string | null): string => {
+  if (!raw) return 'Unspecified';
+  return SOURCE_LABELS[raw] || raw.replace(/_/g, ' ');
+};
 
 const STANDARD_RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgColor: string }[] = [
   { value: 'strategic', label: 'Strategic', color: 'text-purple-400', bgColor: 'bg-purple-500/20' },
@@ -1292,6 +1308,13 @@ export default function ERMRisksPage() {
             accept=".xlsx,.xls"
             className="hidden"
           />
+          <Link
+            href="/erm/risks/dashboard"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <BarChart3 size={16} />
+            Dashboard
+          </Link>
           <button
             onClick={() => setIsUploadModalOpen(true)}
             disabled={isUploading}
@@ -1575,6 +1598,14 @@ export default function ERMRisksPage() {
                             }`}>
                               {risk.closure_status === 'closed' ? <Lock size={10} /> : <Unlock size={10} />}
                               {risk.closure_status === 'closed' ? 'Closed' : 'Pending Closure'}
+                            </span>
+                          )}
+                          {risk.source_type && (
+                            <span
+                              className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600"
+                              title={`Originated from: ${formatSourceLabel(risk.source_type)}${risk.source_reference ? ` (${risk.source_reference})` : ''}`}
+                            >
+                              {formatSourceLabel(risk.source_type)}
                             </span>
                           )}
                           {(risk.mitigation_actions?.length || 0) > 0 && (

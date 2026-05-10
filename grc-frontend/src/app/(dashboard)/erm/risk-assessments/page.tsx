@@ -17,6 +17,7 @@ import {
   Upload,
   FileSpreadsheet,
   CheckCircle2,
+  BarChart3,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -335,6 +336,13 @@ export default function RiskAssessmentsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            href="/erm/risk-assessments/dashboard"
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <BarChart3 size={18} />
+            Dashboard
+          </Link>
           <Link
             href="/erm/risk-assessments/framework"
             className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium text-slate-700 hover:bg-slate-50"

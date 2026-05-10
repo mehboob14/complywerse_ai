@@ -258,6 +258,12 @@ export interface Risk {
   review_date?: string;
   gap_finding_id?: number;
   mitigation_actions?: RiskMitigationAction[];
+  // Provenance — where this risk originated.
+  source_type?: 'manual' | 'register_import' | 'assessment' | 'incident' | 'rcsa' | 'framework_gap' | 'ubl_import' | 'nca_import' | string;
+  source_assessment_id?: number;
+  source_incident_id?: number;
+  source_rcsa_finding_id?: number;
+  source_reference?: string;
   created_at: string;
   updated_at: string;
 }
@@ -1142,4 +1148,59 @@ export interface AssessmentRemediation {
   notes?: string;
   created_at: string;
   updated_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Framework risk-assessment methodologies
+// Mirrors the Python registry under backend/grc/modules/erm/framework_methodologies.
+
+export interface MethodologyScalePoint {
+  value: number;
+  label: string;
+  description: string;
+}
+
+export interface MethodologyPhase {
+  code: string;
+  name: string;
+  description: string;
+  order: number;
+}
+
+export interface MethodologyField {
+  key: string;
+  label: string;
+  field_type: 'text' | 'textarea' | 'select';
+  placeholder?: string | null;
+  options?: string[] | null;
+  required: boolean;
+  help_text?: string | null;
+}
+
+export interface MethodologyTreatmentOption {
+  value: string;
+  label: string;
+  description: string;
+}
+
+export interface FrameworkMethodology {
+  code: string;
+  display_name: string;
+  short_description: string;
+  reference_standard: string;
+  phases: MethodologyPhase[];
+  fields: MethodologyField[];
+  likelihood_scale: MethodologyScalePoint[];
+  impact_scale: MethodologyScalePoint[];
+  treatment_options: MethodologyTreatmentOption[];
+  questions_per_control: number;
+  default_scope: 'full' | 'sample';
+}
+
+export interface FrameworkRiskQuestionMethodologyMeta {
+  methodology_code?: string | null;
+  phase_code?: string | null;
+  clause_reference?: string | null;
+  methodology_fields?: Record<string, string> | null;
+  source_quote?: string | null;
 }

@@ -6,8 +6,9 @@ import { ermApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ClipboardCheck, Loader2, Plus, Sparkles, ListTodo, ChevronRight, Trash2, ArrowLeft } from 'lucide-react';
+import { ClipboardCheck, Loader2, Plus, Sparkles, ListTodo, ChevronRight, Trash2, ArrowLeft, BookOpen, ShieldCheck } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import type { FrameworkMethodology } from '@/types';
 
 interface FrameworkOption {
   id: number;
@@ -59,6 +60,7 @@ export default function FrameworkRiskAssessmentsPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [questionCount, setQuestionCount] = useState('20');
+  const [scope, setScope] = useState<'full' | 'sample'>('full');
 
   const { data: frameworks, isLoading: frameworksLoading } = useQuery({
     queryKey: ['erm-available-frameworks'],
@@ -84,6 +86,23 @@ export default function FrameworkRiskAssessmentsPage() {
     },
   });
 
+  // Auto-detect which methodology will apply for the picked framework so we
+  // can preview "ISO 27005 will be used" before the user hits Create.
+  // The backend re-runs the same detection on generate, so there's no
+  // need to pass the code explicitly.
+  const { data: methodologyDetection } = useQuery({
+    queryKey: ['framework-methodology-detect', frameworkId],
+    queryFn: async () => {
+      if (!frameworkId) return null;
+      const res = await ermApi.frameworkRiskAssessments.detectMethodology(Number(frameworkId));
+      return res.data;
+    },
+    enabled: !!frameworkId,
+  });
+
+  const detectedMethodology: FrameworkMethodology | null = methodologyDetection?.methodology ?? null;
+  const effectiveMethodology = detectedMethodology;
+
   const createMutation = useMutation({
     mutationFn: async () => {
       return ermApi.frameworkRiskAssessments.create({
@@ -97,6 +116,7 @@ export default function FrameworkRiskAssessmentsPage() {
       await ermApi.frameworkRiskAssessments.generateQuestions(assessmentId, {
         count: Number(questionCount) || 20,
         replace_existing: true,
+        scope: effectiveMethodology ? scope : undefined,
       });
       await queryClient.invalidateQueries({ queryKey: ['framework-risk-assessments'] });
       await queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment-assigned-questions'] });
@@ -173,22 +193,36 @@ export default function FrameworkRiskAssessmentsPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Question Count</label>
+            <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Coverage</label>
             <MultiSelectDropdown
-              title="Question Count"
+              title="Coverage"
               triggerVariant="input"
               multiSelect={false}
-              selectedValues={[questionCount]}
-              onApply={(vals) => setQuestionCount(vals[0] || '20')}
-              items={QUESTION_COUNT_OPTIONS.map((count) => ({
-                value: String(count),
-                label: `${count} questions`,
-              }))}
+              selectedValues={[scope]}
+              onApply={(vals) => setScope((vals[0] as 'full' | 'sample') || 'full')}
+              items={[
+                { value: 'full', label: 'Full coverage (one per control)' },
+                { value: 'sample', label: 'Sample subset' },
+              ]}
             />
+            {scope === 'sample' && (
+              <div className="mt-2">
+                <label className="mb-1 block text-xs font-medium text-[var(--color-muted)]">Sample size</label>
+                <MultiSelectDropdown
+                  title="Sample size"
+                  triggerVariant="input"
+                  multiSelect={false}
+                  selectedValues={[questionCount]}
+                  onApply={(vals) => setQuestionCount(vals[0] || '20')}
+                  items={QUESTION_COUNT_OPTIONS.map((count) => ({
+                    value: String(count),
+                    label: `${count} controls (evenly sampled)`,
+                  }))}
+                />
+              </div>
+            )}
           </div>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] px-4 py-3 text-xs text-[var(--color-muted)]">
-            Default is 20. AI generation is now framework-grounded and uses the selected framework's control context instead of generic security prompts.
-          </div>
+          <MethodologyPreview methodology={effectiveMethodology} hasFramework={!!frameworkId} />
         </div>
         <div>
           <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Description</label>
@@ -197,12 +231,14 @@ export default function FrameworkRiskAssessmentsPage() {
             rows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Optional context for this assessment, such as business scope, environment, critical systems, or areas of concern. This context helps shape higher-quality questions."
+            placeholder="Optional notes — scope, business unit, environment, or anything else helpful for assessors."
           />
         </div>
         <div className="flex flex-col gap-3 border-t border-[var(--color-border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs text-[var(--color-muted)]">
-            The generator produces focused questions about implementation, ownership, evidence, exceptions, monitoring, and control effectiveness for the chosen framework.
+            {effectiveMethodology
+              ? `Questions follow the ${effectiveMethodology.display_name} methodology — one per parsed control, with phase-aware fields the assessor completes during review.`
+              : 'No methodology selected — questions will be generated by AI using the framework\'s parsed control text as context.'}
           </div>
           <button
             className="cw-btn-primary inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium"
@@ -210,7 +246,9 @@ export default function FrameworkRiskAssessmentsPage() {
             disabled={!canCreate || !canCreatePermission}
           >
             {createMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
-            Create & Generate {Number(questionCount) || 20} Questions
+            {scope === 'full'
+              ? `Create & generate (full coverage)`
+              : `Create & generate (${Number(questionCount) || 20} sampled)`}
           </button>
         </div>
       </div>
@@ -294,6 +332,7 @@ export default function FrameworkRiskAssessmentsPage() {
             </>
           )}
 
+          {/* methodology preview component is defined below the page export */}
           {activeTab === 'assigned' && (
             <>
               <div className="mb-4 flex items-center justify-between">
@@ -330,6 +369,57 @@ export default function FrameworkRiskAssessmentsPage() {
             </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MethodologyPreview({
+  methodology,
+  hasFramework,
+}: {
+  methodology: FrameworkMethodology | null;
+  hasFramework: boolean;
+}) {
+  if (!hasFramework) {
+    return (
+      <div className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-subtle)] px-4 py-3 text-xs text-[var(--color-muted)]">
+        Pick a framework to see which assessment methodology will apply.
+      </div>
+    );
+  }
+  if (!methodology) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+        <div className="flex items-center gap-1.5 font-semibold">
+          <Sparkles size={13} /> AI-generated questions
+        </div>
+        <div className="mt-1 text-amber-700">
+          No mapped methodology for this framework — questions will be AI-generated using the framework&apos;s parsed controls as context.
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+      <div className="flex items-center gap-1.5 font-semibold">
+        <ShieldCheck size={13} /> {methodology.display_name}
+      </div>
+      <div className="mt-1 text-blue-800">{methodology.short_description}</div>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {methodology.phases.map((p) => (
+          <span
+            key={p.code}
+            className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-medium text-blue-700"
+            title={p.description}
+          >
+            <BookOpen size={9} />
+            {p.order}. {p.name}
+          </span>
+        ))}
+      </div>
+      <div className="mt-2 text-[11px] text-blue-700">
+        Reference: {methodology.reference_standard}
       </div>
     </div>
   );
