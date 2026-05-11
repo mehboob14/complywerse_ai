@@ -293,6 +293,14 @@ def login(
     """
     is_email_login = bool(request.username and "@" in request.username)
 
+    # ---- TEMP DIAG (login 401 on docker) — remove once root-caused ----
+    import sys as _diag_sys
+    def _dlog(msg):
+        print(f"[LOGIN-DIAG] {msg}", flush=True, file=_diag_sys.stderr)
+    _dlog(f"username={request.username!r} is_email_login={is_email_login} x_tenant_slug={x_tenant_slug!r}")
+    _dlog(f"middleware-resolved tenant_slug on request.state = {getattr(http_request.state, 'tenant_slug', None)!r}")
+    # -------------------------------------------------------------------
+
     # Resolution priority for LOGIN (different from the global middleware,
     # which prioritises cookies for authenticated traffic):
     #
@@ -321,8 +329,10 @@ def login(
             Tenant.is_active.is_(True),
             Tenant.primary_contact_email.ilike(f"%@{email_domain}"),
         ).all()
+        _dlog(f"primary domain matches for @{email_domain}: count={len(domain_matches)} slugs={[t.slug for t in domain_matches]}")
         if len(domain_matches) == 1:
             slug = domain_matches[0].slug
+            _dlog(f"slug set by PRIMARY domain match -> {slug!r}")
         elif len(domain_matches) > 1:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -338,16 +348,22 @@ def login(
         # ever accepted as a tenant slug.
         if not slug:
             derived = _slug_from_email(request.username)
+            _dlog(f"secondary fallback: _slug_from_email={derived!r}")
             if derived:
                 tenant_by_slug = master.query(Tenant).filter(
                     Tenant.is_active.is_(True),
                     ((Tenant.slug == derived) | (Tenant.subdomain == derived)),
                 ).first()
+                _dlog(f"secondary lookup tenant_by_slug={tenant_by_slug.slug if tenant_by_slug else None!r}")
                 if tenant_by_slug:
                     slug = tenant_by_slug.slug
+                    _dlog(f"slug set by SECONDARY -> {slug!r}")
 
     if not slug:
         slug = getattr(http_request.state, "tenant_slug", None)
+        _dlog(f"slug set from middleware state -> {slug!r}")
+
+    _dlog(f"FINAL slug = {slug!r}")
 
     if not slug:
         raise HTTPException(
@@ -359,11 +375,13 @@ def login(
         ((Tenant.slug == slug) | (Tenant.subdomain == slug)),
         Tenant.is_active.is_(True),
     ).first()
+    _dlog(f"tenant resolved: id={getattr(tenant,'id',None)} slug={getattr(tenant,'slug',None)} active={getattr(tenant,'is_active',None)}")
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
 
     tdb = open_tenant_session(tenant.slug)
     try:
+        _dlog(f"opened tenant session for slug={tenant.slug!r}")
         if is_email_login:
             user = tdb.query(GRCUser).filter(GRCUser.email == request.username).first()
         else:
@@ -371,7 +389,22 @@ def login(
                 (GRCUser.username == request.username) | (GRCUser.email == request.username)
             ).first()
 
+        _dlog(
+            f"user lookup result: found={user is not None} "
+            f"id={getattr(user,'id',None)} username={getattr(user,'username',None)!r} "
+            f"email={getattr(user,'email',None)!r} active={getattr(user,'is_active',None)} "
+            f"hash_len={len(user.password_hash) if user and user.password_hash else 0}"
+        )
+
+        if user and user.password_hash:
+            try:
+                _vp = verify_password(request.password, user.password_hash)
+            except Exception as _e:
+                _vp = f"ERROR: {_e!r}"
+            _dlog(f"verify_password = {_vp!r} (password_len={len(request.password) if request.password else 0})")
+
         if not user or not verify_password(request.password, user.password_hash):
+            _dlog("RAISING 401 — user missing OR verify_password False")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
         if not user.is_active:
