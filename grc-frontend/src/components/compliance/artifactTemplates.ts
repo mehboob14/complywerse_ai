@@ -1336,30 +1336,986 @@ ${reviewTable()}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Main dispatch function
+// Configuration / Hardening Template
+// Used for technical baseline documents — system hardening guides, secure
+// configuration standards, build manifests. Skips the generic "Purpose"
+// lead; opens with system identification + baseline tables so it doesn't
+// read like a policy.
 // ─────────────────────────────────────────────────────────────────────────────
 
+function buildConfigurationTemplate(meta: ArtifactMeta): string {
+  const name = meta.name.toLowerCase();
+
+  let baselineTable = '';
+  if (name.includes('firewall') || name.includes('network')) {
+    baselineTable = `### 2.2 Network / Firewall Baseline
+
+| Setting | Required Value | Rationale |
+|---|---|---|
+| Default inbound policy | DENY | Implicit deny — only documented flows permitted |
+| Default outbound policy | DENY (logged) | Block known C2 / exfil paths |
+| Stateful inspection | ON | Required for return-traffic correlation |
+| Logging level | INFO + DENY events | Feeds SIEM correlation rules |
+| Management plane | Out-of-band / dedicated VRF | Prevents lateral movement |
+| Default admin account | DISABLED | Replace with named accounts |
+| SNMP community | Per-device random string | No "public"/"private" defaults |
+| Time source | Internal NTP pool (≥2 sources) | Forensic correlation |
+| Config backup | Daily, off-device, encrypted | RTO < 4h |`;
+  } else if (name.includes('os') || name.includes('server') || name.includes('endpoint') || name.includes('workstation')) {
+    baselineTable = `### 2.2 Operating-System Baseline
+
+| Setting | Required Value | Rationale |
+|---|---|---|
+| OS version | Vendor-supported, current LTS | No EOL OS |
+| Patch cadence | Critical: 7 days · High: 30 days | Closes CVE window |
+| Disk encryption | FDE enabled (AES-256) | Lost/stolen device control |
+| Local admin rights | Removed for standard users | Reduces blast radius |
+| Endpoint protection agent | Installed, real-time on, telemetry to SIEM | Detect + respond |
+| Firewall | ON, default-deny inbound | Reduces attack surface |
+| USB mass storage | Blocked by policy / DLP allow-list | Prevents data exfil |
+| Screen lock | ≤ 15 min inactivity | Tailgating defence |
+| Boot integrity (Secure Boot / Measured Boot) | Enabled | Prevents pre-OS rootkits |
+| Logging | Forwarding to SIEM | Detective coverage |`;
+  } else if (name.includes('cloud') || name.includes('aws') || name.includes('azure') || name.includes('gcp')) {
+    baselineTable = `### 2.2 Cloud Tenant Baseline
+
+| Setting | Required Value | Rationale |
+|---|---|---|
+| Root / master account | MFA-required, hardware token, used only for break-glass | Most-privileged identity protection |
+| Default region | Approved region(s) only | Data residency |
+| Encryption at rest | KMS-managed keys with rotation | Confidentiality |
+| Encryption in transit | TLS 1.2+ enforced | Eavesdropping defence |
+| Logging | All API actions to audit log; immutable bucket; 1+ yr retention | Forensic / audit |
+| Public storage buckets | Explicit allow-list only | Data exfil protection |
+| IAM | No long-lived access keys; SSO + roles only | Credential theft defence |
+| Network egress | NAT gateway / proxy; egress monitoring | C2 detection |
+| Vulnerability scanning | Continuous (CSPM) | Drift detection |`;
+  } else if (name.includes('database') || name.includes('db')) {
+    baselineTable = `### 2.2 Database Baseline
+
+| Setting | Required Value | Rationale |
+|---|---|---|
+| Authentication | Integrated / SSO (no shared accounts) | Identity provenance |
+| Privileged access | Just-in-time, audited | Insider risk |
+| Encryption at rest (TDE) | Enabled | Confidentiality |
+| Encryption in transit (TLS) | Required, validated certs | Eavesdropping |
+| Default users / sample DBs | Removed | Attack-surface reduction |
+| Backup encryption | Enabled, separate key | Backup integrity |
+| Audit log | All DDL + privileged DML | Compliance traceability |
+| Vulnerability patches | Critical within 7 days | CVE window |`;
+  } else {
+    baselineTable = `### 2.2 Baseline Settings
+
+| Setting | Required Value | Rationale |
+|---|---|---|
+| [Setting] | [Value] | [Why this matters] |
+| [Setting] | [Value] | [Why this matters] |
+| [Setting] | [Value] | [Why this matters] |
+| [Setting] | [Value] | [Why this matters] |
+| [Setting] | [Value] | [Why this matters] |`;
+  }
+
+  return `${docHeader(meta)}
+## 1. System Identification
+
+| Field | Value |
+|---|---|
+| System / Component | ${meta.name} |
+| Owner | ${meta.owner || '[Assign owner]'} |
+| Environment | Production / Staging / Dev / DR (delete as appropriate) |
+| Hosting | On-premises / Cloud / Hybrid |
+| Baseline Version | 1.0 |
+| Baseline Date | ${today()} |
+| Tested By | [Engineer name] |
+| Approved By | [Role] |
+
+---
+
+## 2. Configuration Baseline
+
+### 2.1 Source of Authority
+
+This baseline is anchored to **${meta.frameworkName}**${meta.controlRef ? ` ${meta.controlRef}` : ''} and the vendor's hardening guide. Where the two diverge, the more restrictive setting applies.
+
+${baselineTable}
+
+---
+
+## 3. Validation Evidence
+
+For each setting above, capture **one** of:
+
+- ✏️ Configuration export (e.g., \`show running-config\`, \`Get-MpPreference\`, IaC manifest)
+- 📸 Screenshot of the management console showing the setting
+- 🧪 Output of a validation command run on the live system
+
+> Validation evidence must be dated, attributed to the engineer, and stored alongside this document. Re-capture at every change-window or at minimum annually.
+
+### Validation Log
+
+| Setting | Method | Evidence Reference | Captured By | Date | Result |
+|---|---|---|---|---|---|
+| [Setting] | Screenshot | [filename / DMS link] | | ${today()} | Pass / Fail |
+| [Setting] | Config export | | | | |
+
+---
+
+## 4. Deviations & Exceptions
+
+| Setting | Required | Actual | Justification | Compensating Control | Approver | Review Date |
+|---|---|---|---|---|---|---|
+| | | | | | | |
+
+> Any deviation must be ticketed in the Exception Register before deployment.
+
+---
+
+## 5. Change Control
+
+Configuration drift detection is performed by **[tool/owner]** every **[frequency]**. Detected drift must:
+
+1. Be logged in the Change Register within 24 hours.
+2. Be assessed for risk impact.
+3. Be remediated to baseline OR formally accepted with a documented exception (Section 4).
+
+---
+
+## 6. Retirement
+
+When the system reaches end-of-life:
+
+- [ ] Final configuration export retained for the records-retention period
+- [ ] All credentials and secrets rotated / revoked
+- [ ] Data sanitised per the Data Disposal Procedure
+
+---
+
+${reviewTable()}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Guidelines Template
+// Advisory, recommendation-shaped doc — distinct from a Policy (mandatory).
+// Opens with guiding principles rather than scope.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildGuidelinesTemplate(meta: ArtifactMeta): string {
+  return `${docHeader(meta)}
+## 1. Guiding Principles
+
+The following principles underpin every recommendation in this document. When in doubt, default to them.
+
+1. **Least privilege** — grant the minimum access required for the task.
+2. **Defence in depth** — layer controls so that no single failure exposes the asset.
+3. **Fail safely** — when a control fails, the system should reach a more secure state.
+4. **Document the why** — every deviation needs a recorded rationale.
+5. **Validate, don't assume** — control existence is not control effectiveness.
+
+---
+
+## 2. When This Applies
+
+These guidelines should be consulted whenever you are:
+
+- Designing, building or modifying systems in the scope of **${meta.frameworkName}**${meta.controlRef ? ` ${meta.controlRef}` : ''}.
+- Procuring third-party services that process organisational data.
+- Reviewing exceptions to standing policies.
+- Onboarding a new team or supplier.
+
+${meta.description ? `**Context:** ${meta.description}\n` : ''}
+---
+
+## 3. Recommendations
+
+### 3.1 Strongly Recommended (Do)
+
+- ✅ [Concrete recommendation that should normally be followed]
+- ✅ [Concrete recommendation]
+- ✅ [Concrete recommendation]
+- ✅ [Concrete recommendation]
+
+### 3.2 Avoid (Don't)
+
+- ❌ [Practice to avoid, with the risk it creates]
+- ❌ [Practice to avoid, with the risk it creates]
+- ❌ [Practice to avoid, with the risk it creates]
+
+### 3.3 Use Judgement (It Depends)
+
+- ⚖️ [Practice that's situational — note the deciding factors]
+- ⚖️ [Practice that's situational — note the deciding factors]
+
+---
+
+## 4. Worked Examples
+
+### Example A — [Common scenario]
+
+**Situation:** [Describe a typical situation]
+
+**Recommended approach:** [What to do]
+
+**Why:** [The reasoning, including which principle in §1 it supports]
+
+### Example B — [Edge case]
+
+**Situation:** [Describe an edge case]
+
+**Recommended approach:** [What to do, including any specific carve-outs]
+
+**Why:** [The reasoning]
+
+---
+
+## 5. Deviating from These Guidelines
+
+These are guidelines, not policy — but deviation should still be deliberate.
+
+| Step | Action |
+|---|---|
+| 1 | Document the reason in writing |
+| 2 | Identify compensating controls |
+| 3 | Time-box the deviation (max 12 months) |
+| 4 | Notify the document owner |
+| 5 | Track to closure in the Exception Register |
+
+---
+
+## 6. References
+
+| Document | Type | Why |
+|---|---|---|
+| [Related policy] | Policy | Sets the mandatory baseline |
+| ${meta.frameworkName} ${meta.controlRef || ''} | Standard | Authoritative source |
+| [Related procedure] | Procedure | Step-by-step execution |
+
+---
+
+${reviewTable()}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Standard Template
+// Technical / operational standard — what's mandatory at a technology level.
+// More prescriptive than Guidelines, narrower than a Policy.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildStandardTemplate(meta: ArtifactMeta): string {
+  return `${docHeader(meta)}
+## 1. Statement
+
+This standard defines the **mandatory** technical requirements for **${meta.name.toLowerCase()}** within the scope of **${meta.frameworkName}**${meta.controlRef ? ` (${meta.controlRef})` : ''}.
+
+Compliance with this standard is not optional. Any deviation requires documented exception approval (Section 5).
+
+${meta.description ? `**Context:** ${meta.description}\n` : ''}
+---
+
+## 2. Mandatory Requirements
+
+| # | Requirement | Verification Method |
+|---|---|---|
+| R-01 | [Specific, measurable requirement] | Automated scan / Manual check / Code review |
+| R-02 | [Specific, measurable requirement] | |
+| R-03 | [Specific, measurable requirement] | |
+| R-04 | [Specific, measurable requirement] | |
+| R-05 | [Specific, measurable requirement] | |
+
+---
+
+## 3. Approved & Restricted
+
+### 3.1 Approved
+
+| Item | Version / Tier | Notes |
+|---|---|---|
+| [Technology / product] | [Version constraint] | [Approval reference] |
+| [Technology / product] | | |
+
+### 3.2 Restricted (do not deploy without exception)
+
+| Item | Reason | Last Reviewed |
+|---|---|---|
+| [Technology / product] | [Risk / EOL / regulatory] | |
+| [Technology / product] | | |
+
+### 3.3 Prohibited
+
+| Item | Reason | Remediation Path |
+|---|---|---|
+| [Technology / product] | [Reason — e.g. unsupported, known compromise] | Migrate to [alternative] by [date] |
+
+---
+
+## 4. Compliance Verification
+
+| Verification | Frequency | Owner | Evidence Type |
+|---|---|---|---|
+| Automated scan against this standard | Daily | [Tool / Team] | Scan report |
+| Sample audit | Quarterly | Internal Audit | Audit working paper |
+| Self-attestation | Annual | System owners | Signed attestation |
+
+---
+
+## 5. Exceptions
+
+Exceptions to this standard must be:
+
+- Logged in the Exception Register before deployment
+- Risk-assessed (likelihood × impact, with compensating controls)
+- Time-limited (max **12 months**, renewable)
+- Approved by **[Approver role]**
+
+| Exception ID | Requirement | Justification | Compensating Control | Expiry | Approver |
+|---|---|---|---|---|---|
+| | | | | | |
+
+---
+
+## 6. Related Documents
+
+| Document | Type | Relationship |
+|---|---|---|
+| [Parent policy] | Policy | Mandates this standard |
+| [Implementation procedure] | Procedure | How to apply the standard |
+| ${meta.frameworkName} ${meta.controlRef || ''} | Framework | Source of the requirement |
+
+---
+
+${reviewTable()}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Matrix Template
+// RACI / risk / coverage matrices. Mostly table content, very little prose.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildMatrixTemplate(meta: ArtifactMeta): string {
+  const name = meta.name.toLowerCase();
+  let matrixBody = '';
+
+  if (name.includes('raci') || name.includes('responsibility')) {
+    matrixBody = `## 4. RACI Matrix
+
+**Legend:** R = Responsible · A = Accountable · C = Consulted · I = Informed
+
+| Activity / Decision | Process Owner | Operations | Security | Risk | Compliance | Legal | Senior Mgmt |
+|---|---|---|---|---|---|---|---|
+| Define requirement | A | R | C | C | C | C | I |
+| Implement control | C | R | A | C | I | I | I |
+| Operate control | C | A/R | C | I | I | I | I |
+| Monitor & report | C | R | A | C | I | I | I |
+| Escalate exception | I | R | C | A | C | C | I |
+| Sign-off audit findings | C | C | C | C | R | C | A |
+| Review annually | C | R | A | C | C | I | I |`;
+  } else if (name.includes('control') || name.includes('mapping') || name.includes('coverage')) {
+    matrixBody = `## 4. Control Mapping Matrix
+
+| ${meta.frameworkName} Ref | Control Title | Implementing Control(s) | Document Reference | Status | Owner |
+|---|---|---|---|---|---|
+| ${meta.controlRef || 'A.x.y'} | [Control name] | [Internal control name(s)] | [Policy/Procedure ID] | Implemented | |
+| | | | | | |
+| | | | | | |
+| | | | | | |
+| | | | | | |
+
+### Coverage Summary
+
+| Status | Count | % |
+|---|---|---|
+| Implemented | | |
+| Partially Implemented | | |
+| Planned | | |
+| Not Applicable | | |
+| **Total** | | 100% |`;
+  } else if (name.includes('risk')) {
+    matrixBody = `## 4. Risk Matrix
+
+| | **Impact 1 (Negligible)** | **Impact 2 (Minor)** | **Impact 3 (Moderate)** | **Impact 4 (Major)** | **Impact 5 (Critical)** |
+|---|---|---|---|---|---|
+| **Likelihood 5 (Almost Certain)** | 5 – Medium | 10 – High | 15 – Critical | 20 – Critical | 25 – Critical |
+| **Likelihood 4 (Likely)** | 4 – Low | 8 – Medium | 12 – High | 16 – Critical | 20 – Critical |
+| **Likelihood 3 (Possible)** | 3 – Low | 6 – Medium | 9 – High | 12 – High | 15 – Critical |
+| **Likelihood 2 (Unlikely)** | 2 – Low | 4 – Low | 6 – Medium | 8 – Medium | 10 – High |
+| **Likelihood 1 (Rare)** | 1 – Low | 2 – Low | 3 – Low | 4 – Low | 5 – Medium |
+
+### Acceptance Thresholds
+
+| Band | Score Range | Treatment |
+|---|---|---|
+| Low | 1 – 4 | Accept with monitoring |
+| Medium | 5 – 9 | Mitigate or accept with risk-owner sign-off |
+| High | 10 – 14 | Mitigate; escalate to CISO |
+| Critical | 15 – 25 | Mitigate immediately; executive sign-off required |`;
+  } else {
+    matrixBody = `## 4. Matrix Content
+
+| Row Dimension | Col A | Col B | Col C | Col D | Col E |
+|---|---|---|---|---|---|
+| [Row 1] | | | | | |
+| [Row 2] | | | | | |
+| [Row 3] | | | | | |
+| [Row 4] | | | | | |
+| [Row 5] | | | | | |
+
+### Legend
+
+| Value | Meaning |
+|---|---|
+| | |
+| | |`;
+  }
+
+  return `${docHeader(meta)}
+## 1. Overview
+
+This matrix consolidates **${meta.name.toLowerCase()}** information in a single view, supporting **${meta.frameworkName}**${meta.controlRef ? ` ${meta.controlRef}` : ''} oversight.
+
+${meta.description ? `**Context:** ${meta.description}\n` : ''}
+---
+
+## 2. How to Read
+
+- Each row represents [row dimension — e.g., a control, a process, an activity].
+- Each column represents [column dimension — e.g., a role, a status, a framework].
+- A cell value indicates [meaning of the intersection].
+- Empty cells mean [meaning of an empty cell — e.g., not applicable, not yet assessed].
+
+---
+
+## 3. Maintenance
+
+| Field | Detail |
+|---|---|
+| Matrix Owner | ${meta.owner || '[Owner]'} |
+| Update Trigger | New control / role / process change · Quarterly review |
+| Review Frequency | Quarterly |
+| Storage | [DMS path] |
+
+---
+
+${matrixBody}
+
+---
+
+${reviewTable()}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Screenshot / Visual Evidence Template
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildScreenshotTemplate(meta: ArtifactMeta): string {
+  return `${docHeader(meta, 'Confidential')}
+## 1. Capture Context
+
+| Field | Value |
+|---|---|
+| Evidence Title | ${meta.name} |
+| What this proves | ${meta.description || `Compliance with ${meta.frameworkName}${meta.controlRef ? ` ${meta.controlRef}` : ''}`} |
+| System / Application | [System name + version] |
+| Environment | Production / Staging / DR |
+| Capture Date | ${today()} |
+| Captured By | [Name / Role] |
+| Capture Method | Screenshot · Screen recording · Console output |
+| Chain of Custody | Stored in [DMS path]; SHA-256 hash on file |
+
+---
+
+## 2. Capture Instructions (re-run if evidence is contested)
+
+1. Log in to **[system / URL]** as **[role — never use a shared account]**.
+2. Navigate to **[exact menu path]**.
+3. Apply filters: **[any filter values needed to make the evidence reproducible]**.
+4. Capture the full screen (not a partial crop) so the URL, user, and date/time are visible.
+5. Re-name the file using the convention \`{control_ref}_{system}_{YYYYMMDD}.png\`.
+6. Compute SHA-256 hash; record in the table below.
+
+---
+
+## 3. Evidence
+
+> **Embed the screenshot here.** Markdown supports image embedding via \`![alt](path)\`. Use the DMS URL or attach the file to this artifact in the platform.
+
+**Filename:** \`[control_ref]_[system]_${today().replace(/-/g, '')}.png\`
+**SHA-256:** \`[paste hash here]\`
+
+\`![${meta.name}](path/to/screenshot.png)\`
+
+---
+
+## 4. Annotations
+
+| # | Region of screenshot | Observation | Why it matters |
+|---|---|---|---|
+| 1 | Top-right corner | Logged in as **[role]** | Confirms privileged-access path |
+| 2 | URL bar | TLS padlock + correct hostname | Rules out spoofing |
+| 3 | Setting panel | **[Setting] = [Value]** | Demonstrates control is active |
+| 4 | Footer / status bar | Timestamp matches capture date | Anti-staleness |
+
+---
+
+## 5. Validation
+
+| Check | Result | Reviewer | Date |
+|---|---|---|---|
+| Screenshot is full-resolution (not cropped) | Pass / Fail | | |
+| Date/time stamps visible | Pass / Fail | | |
+| User identity visible | Pass / Fail | | |
+| Setting under test is clearly readable | Pass / Fail | | |
+| Hash on file matches stored file | Pass / Fail | | |
+
+---
+
+## 6. Mapping to Requirement
+
+This evidence supports compliance with **${meta.frameworkName}${meta.controlRef ? ` ${meta.controlRef}` : ''}** by demonstrating:
+
+- [What specific requirement element this evidence shows]
+- [What gap or risk this evidence retires]
+
+---
+
+${reviewTable()}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Training Record Template
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildTrainingTemplate(meta: ArtifactMeta): string {
+  return `${docHeader(meta)}
+## 1. Programme Overview
+
+| Field | Value |
+|---|---|
+| Training Title | ${meta.name} |
+| Framework Alignment | ${meta.frameworkName}${meta.controlRef ? ` (${meta.controlRef})` : ''} |
+| Target Audience | [All staff / Engineers / Managers / Privileged users / Contractors] |
+| Delivery Method | In-person · e-learning · Instructor-led virtual · Blended |
+| Duration | [Hours] |
+| Frequency | Once on join · Annual refresh · Event-triggered |
+| Provider | Internal · External (specify) |
+| Pass Threshold | [e.g., ≥ 80%] |
+
+${meta.description ? `**Purpose:** ${meta.description}\n` : ''}
+---
+
+## 2. Learning Objectives
+
+By the end of this training, participants will be able to:
+
+1. [Observable, testable outcome — e.g., "Identify a phishing email by recognising sender-domain spoofing"]
+2. [Observable, testable outcome]
+3. [Observable, testable outcome]
+4. [Observable, testable outcome]
+
+---
+
+## 3. Module Content
+
+| # | Module | Duration | Key Topics | Assessment Item |
+|---|---|---|---|---|
+| 1 | [Module title] | [min] | [Topics covered] | Quiz Q1 – Q5 |
+| 2 | [Module title] | [min] | | Quiz Q6 – Q10 |
+| 3 | [Module title] | [min] | | Practical exercise |
+
+---
+
+## 4. Attendance & Completion Register
+
+| # | Employee ID | Name | Role | Department | Start Date | Completion Date | Score | Pass/Fail | Certificate # | Next Due |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | EMP-001 | [Name] | [Role] | [Dept] | ${today()} | ${today()} | [%] | Pass | CERT-YYYY-NNNN | ${new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().split('T')[0]} |
+| 2 | | | | | | | | | | |
+| 3 | | | | | | | | | | |
+
+---
+
+## 5. Completion Summary
+
+| Metric | Target | Actual |
+|---|---|---|
+| In-scope population | — | |
+| Completed | ≥ 95% | |
+| Passed first attempt | ≥ 90% | |
+| Re-takes required | — | |
+| Outstanding (overdue) | 0 | |
+
+---
+
+## 6. Effectiveness Review
+
+| Indicator | Method | Observed Trend |
+|---|---|---|
+| Phishing-simulation click rate | Monthly campaign | [Trend up / down] |
+| Incident reports from trained staff | Incident register | [Trend up / down] |
+| Audit findings related to awareness | Internal audit | [Trend up / down] |
+
+---
+
+## 7. Records Retention
+
+- Attendance roster, scores and certificates retained for **[period — e.g., 7 years]** per the Records Retention Schedule.
+- Stored in **[DMS path / HR system]**; access restricted to HR + Compliance.
+
+---
+
+${reviewTable()}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contract / Agreement Template
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildContractTemplate(meta: ArtifactMeta): string {
+  return `${docHeader(meta, 'Confidential')}
+## 1. Agreement Identification
+
+| Field | Value |
+|---|---|
+| Agreement Title | ${meta.name} |
+| Counterparty | [Legal entity name] |
+| Counterparty Type | Supplier · Customer · Partner · Processor · Sub-processor |
+| Internal Owner | ${meta.owner || '[Business owner]'} |
+| Legal Owner | [Legal team contact] |
+| Procurement Reference | [PO / contract ID] |
+| Framework Driver | ${meta.frameworkName}${meta.controlRef ? ` (${meta.controlRef})` : ''} |
+
+${meta.description ? `**Purpose:** ${meta.description}\n` : ''}
+---
+
+## 2. Term & Renewal
+
+| Date Field | Value |
+|---|---|
+| Signature Date | |
+| Effective Date | |
+| Initial Term End | |
+| Renewal Type | Auto-renew · Manual renew · Fixed term |
+| Renewal Notice Period | [days] |
+| Next Review Date | |
+
+---
+
+## 3. Security & Compliance Obligations
+
+The following obligations are **mandatory** under this agreement and tie back to **${meta.frameworkName}**${meta.controlRef ? ` ${meta.controlRef}` : ''}:
+
+| # | Obligation | Counterparty Commitment | Evidence Required | Review Cadence |
+|---|---|---|---|---|
+| 1 | Information security baseline | [e.g., ISO 27001 cert · SOC 2 Type II] | Annual cert / report | Annual |
+| 2 | Data handling | Process data only per documented purpose | DPA executed | Annual |
+| 3 | Sub-processor management | Maintain list + prior approval for changes | Updated list | Per change |
+| 4 | Incident notification | ≤ 24h for confirmed incidents impacting our data | Notification log | Per incident |
+| 5 | Right to audit | Pre-arranged audit + on-incident audit | Audit report | On request |
+| 6 | Data return / destruction at termination | Verified destruction certificate | Destruction cert | At termination |
+
+---
+
+## 4. Service Levels (where applicable)
+
+| Metric | Target | Penalty / Remedy |
+|---|---|---|
+| Availability | [e.g., 99.9%] | [Service credit / SLA breach process] |
+| Incident response | [Time] | |
+| Support response | [P1 / P2 / P3 times] | |
+
+---
+
+## 5. Key Contacts
+
+| Role | Name | Email | Phone |
+|---|---|---|---|
+| Counterparty primary | | | |
+| Counterparty security | | | |
+| Counterparty escalation | | | |
+| Internal owner | | | |
+| Internal legal | | | |
+
+---
+
+## 6. Risk Assessment Outcome
+
+| Field | Value |
+|---|---|
+| Vendor Risk Tier | Critical · High · Medium · Low |
+| Due-Diligence Date | |
+| Outstanding Findings | [Reference] |
+| Required Mitigations | [List] |
+
+---
+
+## 7. Termination Conditions
+
+- **For convenience:** [notice period]
+- **For cause:** [breach types — security incident, insolvency, regulatory action]
+- **Exit obligations:** Data return / destruction within [days]; cooperation with transition.
+
+---
+
+## 8. Records & Storage
+
+| Field | Detail |
+|---|---|
+| Executed copy | [DMS path — restricted to Legal + Procurement + Owner] |
+| Retention Period | [Per Records Retention Schedule — typically term + 7 years] |
+
+---
+
+${reviewTable()}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Assessment Template (SoA, audit findings, control assessment, etc.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildAssessmentTemplate(meta: ArtifactMeta): string {
+  const name = meta.name.toLowerCase();
+
+  let bodySection = '';
+  if (name.includes('vendor') || name.includes('supplier') || name.includes('third-party') || name.includes('third party')) {
+    bodySection = `## 4. Vendor / Third-Party Findings
+
+| Domain | Question | Vendor Response | Evidence Reviewed | Risk Rating | Action |
+|---|---|---|---|---|---|
+| Information Security | Holds ISO 27001 / SOC 2? | | Cert / report | Low / Med / High | |
+| Data Protection | Processes personal data? | | DPA, sub-processor list | | |
+| Business Continuity | Tested BCP/DR within 12 months? | | Test report | | |
+| Incident Management | 24h breach-notification commitment? | | Contract clause | | |
+| Encryption | Data at rest + in transit encrypted? | | Tech docs | | |
+| Access Control | MFA + RBAC enforced? | | Policy / screenshot | | |
+| Sub-Processors | List provided & approved? | | List | | |
+| Right to Audit | Granted in contract? | | Contract | | |
+
+### Risk Tier Decision
+
+| Field | Value |
+|---|---|
+| Inherent Risk | [Tier based on data sensitivity × access scope] |
+| Residual Risk | [Tier after controls] |
+| Approved By | |
+| Next Reassessment | |`;
+  } else if (name.includes('privacy') || name.includes('dpia') || name.includes('data protection impact')) {
+    bodySection = `## 4. Privacy Impact Assessment
+
+### 4.1 Processing Description
+
+| Field | Value |
+|---|---|
+| Purpose | |
+| Lawful basis | Consent · Contract · Legal obligation · Vital interests · Public task · Legitimate interests |
+| Data categories | [Personal · Special · Children · Financial · Health · etc.] |
+| Volume (subjects) | |
+| Retention period | |
+| Cross-border transfer | Yes / No (mechanism) |
+
+### 4.2 Necessity & Proportionality
+
+[Why the processing is necessary, and why it cannot be achieved with less data.]
+
+### 4.3 Risks to Data Subjects
+
+| # | Risk | Likelihood | Severity | Mitigations | Residual |
+|---|---|---|---|---|---|
+| 1 | [e.g., unauthorised disclosure] | | | | |
+| 2 | | | | | |
+
+### 4.4 Outcome
+
+| Field | Value |
+|---|---|
+| Recommendation | Proceed · Proceed with mitigations · Do not proceed |
+| DPO consulted | Yes / No (date) |
+| Supervisory authority consultation required | Yes / No |`;
+  } else if (name.includes('soa') || name.includes('statement of applicability')) {
+    bodySection = `## 4. Statement of Applicability
+
+### 4.1 Summary
+
+| Status | Count | % of Total |
+|---|---|---|
+| Applicable & Implemented | | |
+| Applicable & Planned | | |
+| Not Applicable (with justification) | | |
+| **Total Controls** | | 100% |
+
+### 4.2 Control Listing
+
+| Control Ref | Control Title | Applicable? | Justification (if N/A) | Implementation Status | Evidence Reference |
+|---|---|---|---|---|---|
+| ${meta.controlRef || 'A.5.1'} | [Control] | Yes | — | Implemented | [Doc ID] |
+| | | | | | |
+| | | | | | |
+
+*(Repeat for every control in **${meta.frameworkName}**)*`;
+  } else {
+    bodySection = `## 4. Assessment Findings
+
+### 4.1 Methodology
+
+| Method | Description |
+|---|---|
+| Document Review | [What was inspected] |
+| Interviews | [Who was spoken to, key questions] |
+| Technical Testing | [Scans / probes / config reviews performed] |
+| Observation | [What was observed in operation] |
+
+### 4.2 Findings
+
+| Finding ID | Requirement | Observed State | Gap | Severity | Recommended Action | Owner | Due |
+|---|---|---|---|---|---|---|---|
+| F-01 | ${meta.controlRef || '[Ref]'} | [What was found] | [Delta from requirement] | Major · Minor · OFI | [Action] | | |
+| F-02 | | | | | | | |
+
+### 4.3 Maturity Rating
+
+| Level | Definition | This Assessment |
+|---|---|---|
+| 1 – Non-Existent | No control in place | |
+| 2 – Initial | Ad hoc, undocumented | |
+| 3 – Defined | Documented, not consistently followed | |
+| 4 – Managed | Implemented and monitored | |
+| 5 – Optimised | Continually improved | |
+
+**Overall Rating:** \`[X.X / 5.0]\``;
+  }
+
+  return `${docHeader(meta, 'Restricted')}
+## 1. Assessment Identification
+
+| Field | Value |
+|---|---|
+| Assessment | ${meta.name} |
+| Framework | ${meta.frameworkName}${meta.controlRef ? ` (${meta.controlRef})` : ''} |
+| Assessor | [Name / Role / Org] |
+| Independence | Internal · External · Self |
+| Assessment Period | [From] – [To] |
+| Issue Date | ${today()} |
+| Distribution | [Audience] |
+
+${meta.description ? `**Context:** ${meta.description}\n` : ''}
+---
+
+## 2. Scope
+
+**In Scope:**
+- [Systems / locations / processes covered]
+
+**Out of Scope:**
+- [Explicit exclusions with justification]
+
+---
+
+## 3. Executive Summary
+
+[Three to five sentences: what was assessed, what was found, what's next.]
+
+### Key Conclusions
+
+1. [Top finding or affirmation]
+2. [Second-priority finding]
+3. [Third priority]
+
+---
+
+${bodySection}
+
+---
+
+## 5. Recommendations
+
+| Priority | Recommendation | Owner | Target Date | Linked Finding(s) |
+|---|---|---|---|---|
+| High | | | | F-01 |
+| Medium | | | | |
+| Low | | | | |
+
+---
+
+## 6. Sign-Off
+
+| Role | Name | Signature | Date |
+|---|---|---|---|
+| Assessor | | | |
+| Reviewer | | | |
+| Owner | | | |
+
+---
+
+${reviewTable()}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main dispatch function — case-insensitive with synonym handling.
+// Anything we don't recognise falls back to the structured Evidence template
+// (a generic-but-useful frame) rather than the policy template, which was
+// the source of the "everything looks like a policy" complaint.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function normalizeArtifactType(raw: string): string {
+  const k = (raw || '').toLowerCase().replace(/[_/\-\s]+/g, ' ').trim();
+
+  // Direct hits first — fast path.
+  if (k === 'policy' || k === 'policies') return 'policy';
+  if (k === 'procedure' || k === 'procedures' || k === 'process' || k === 'sop') return 'procedure';
+  if (k === 'register' || k === 'inventory' || k === 'log register') return 'register';
+  if (k === 'plan' || k === 'roadmap' || k === 'charter') return 'plan';
+  if (k === 'report' || k === 'audit report' || k === 'gap analysis') return 'report';
+  if (k === 'evidence' || k === 'evidence pack') return 'evidence';
+  if (k === 'record' || k === 'log' || k === 'record log' || k === 'minutes') return 'record';
+  if (k === 'form' || k === 'template' || k === 'form template' || k === 'checklist') return 'form';
+  if (k === 'attestation' || k === 'declaration' || k === 'certificate') return 'attestation';
+  if (k === 'configuration' || k === 'config' || k === 'baseline' || k === 'hardening guide') return 'configuration';
+  if (k === 'guideline' || k === 'guidelines' || k === 'guidance') return 'guidelines';
+  if (k === 'standard' || k === 'technical standard') return 'standard';
+  if (k === 'matrix' || k === 'raci' || k === 'mapping') return 'matrix';
+  if (k === 'screenshot' || k === 'screen capture' || k === 'image' || k === 'observation') return 'screenshot';
+  if (k === 'training' || k === 'training record' || k === 'awareness record' || k === 'competence record') return 'training';
+  if (k === 'contract' || k === 'agreement' || k === 'dpa' || k === 'sla' || k === 'mou' || k === 'nda') return 'contract';
+  if (k === 'assessment' || k === 'self assessment' || k === 'interview' || k === 'soa' || k === 'statement of applicability') return 'assessment';
+
+  // Substring fall-backs — broader synonyms.
+  if (k.includes('policy')) return 'policy';
+  if (k.includes('procedure') || k.includes('process')) return 'procedure';
+  if (k.includes('register') || k.includes('inventory')) return 'register';
+  if (k.includes('plan')) return 'plan';
+  if (k.includes('report')) return 'report';
+  if (k.includes('evidence')) return 'evidence';
+  if (k.includes('record') || k.includes('log') || k.includes('minutes')) return 'record';
+  if (k.includes('form') || k.includes('template') || k.includes('checklist')) return 'form';
+  if (k.includes('attest') || k.includes('certificate')) return 'attestation';
+  if (k.includes('config') || k.includes('baseline') || k.includes('hardening')) return 'configuration';
+  if (k.includes('guidelin') || k.includes('guidance')) return 'guidelines';
+  if (k.includes('standard')) return 'standard';
+  if (k.includes('matrix') || k.includes('raci') || k.includes('mapping')) return 'matrix';
+  if (k.includes('screenshot') || k.includes('screen capture') || k.includes('image') || k.includes('observ')) return 'screenshot';
+  if (k.includes('training') || k.includes('awareness') || k.includes('competence')) return 'training';
+  if (k.includes('contract') || k.includes('agreement') || k.includes('dpa') || k.includes('sla')) return 'contract';
+  if (k.includes('assessment') || k.includes('interview') || k.includes('soa') || k.includes('applicability')) return 'assessment';
+
+  return 'evidence';
+}
+
 export function buildArtifactTemplate(meta: ArtifactMeta): string {
-  switch (meta.artifactType) {
-    case 'Policy':
-      return buildPolicyTemplate(meta);
-    case 'Procedure':
-      return buildProcedureTemplate(meta);
-    case 'Register':
-      return buildRegisterTemplate(meta);
-    case 'Plan':
-      return buildPlanTemplate(meta);
-    case 'Report':
-      return buildReportTemplate(meta);
-    case 'Evidence':
-      return buildEvidenceTemplate(meta);
-    case 'Record/Log':
-      return buildRecordLogTemplate(meta);
-    case 'Form/Template':
-      return buildFormTemplate(meta);
-    case 'Attestation':
-      return buildAttestationTemplate(meta);
-    default:
-      return buildPolicyTemplate(meta);
+  switch (normalizeArtifactType(meta.artifactType)) {
+    case 'policy':         return buildPolicyTemplate(meta);
+    case 'procedure':      return buildProcedureTemplate(meta);
+    case 'register':       return buildRegisterTemplate(meta);
+    case 'plan':           return buildPlanTemplate(meta);
+    case 'report':         return buildReportTemplate(meta);
+    case 'evidence':       return buildEvidenceTemplate(meta);
+    case 'record':         return buildRecordLogTemplate(meta);
+    case 'form':           return buildFormTemplate(meta);
+    case 'attestation':    return buildAttestationTemplate(meta);
+    case 'configuration':  return buildConfigurationTemplate(meta);
+    case 'guidelines':     return buildGuidelinesTemplate(meta);
+    case 'standard':       return buildStandardTemplate(meta);
+    case 'matrix':         return buildMatrixTemplate(meta);
+    case 'screenshot':     return buildScreenshotTemplate(meta);
+    case 'training':       return buildTrainingTemplate(meta);
+    case 'contract':       return buildContractTemplate(meta);
+    case 'assessment':     return buildAssessmentTemplate(meta);
+    default:               return buildEvidenceTemplate(meta);
   }
 }

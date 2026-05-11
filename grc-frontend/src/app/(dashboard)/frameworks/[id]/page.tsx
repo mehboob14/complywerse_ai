@@ -291,17 +291,93 @@ function RequirementArtifactsSection({
     },
   });
 
-  const catalog = data?.catalog || [];
+  const realCatalog = data?.catalog || [];
   const artifacts = data?.artifacts || [];
+
+  // Virtual catalog items derived from the requirement's own
+  // evidence_requirements field. Ensures every requirement shows at least
+  // N artifact slots, where N = number of expected evidence items — even
+  // when the seeded artifact catalog has no entry for this clause. Virtual
+  // items use negative ids so they never collide with real catalog ids,
+  // and carry the same shape as ArtifactCatalogItemT so the existing
+  // render loop and Create modal accept them unchanged.
+  const evidenceReqs = ((control as any).evidence_requirements || []) as Array<{
+    type?: string;
+    title?: string;
+    description?: string;
+    is_required?: boolean;
+    format?: string;
+  }>;
+  const realNames = new Set(
+    realCatalog.map((c) => (c.name || '').toLowerCase().trim()).filter(Boolean),
+  );
+  const refForVirtual = refTokens[0] || null;
+  const inferArtifactType = (t?: string): string => {
+    const key = (t || '').toLowerCase();
+    if (!key) return 'Evidence';
+    if (key.includes('policy')) return 'Policy';
+    if (key.includes('procedure')) return 'Procedure';
+    if (key.includes('config')) return 'Configuration';
+    if (key.includes('log')) return 'Log';
+    if (key.includes('report')) return 'Report';
+    if (key.includes('contract')) return 'Contract';
+    if (key.includes('attest')) return 'Attestation';
+    if (key.includes('register') || key.includes('inventory')) return 'Register';
+    if (key.includes('matrix')) return 'Matrix';
+    if (key.includes('plan')) return 'Plan';
+    if (key.includes('screenshot')) return 'Screenshot';
+    if (key.includes('training')) return 'Training Record';
+    if (key.includes('assessment')) return 'Assessment';
+    // Title-case fallback so the badge reads naturally.
+    return key.charAt(0).toUpperCase() + key.slice(1);
+  };
+  const virtualCatalog: ArtifactCatalogItemT[] = evidenceReqs
+    .filter((ev) => {
+      const name = (ev.title || '').toLowerCase().trim();
+      return name && !realNames.has(name);
+    })
+    .map((ev, idx) => ({
+      id: -(idx + 1),
+      artifact_id: `virtual_${idx + 1}`,
+      stage: 'Auto-suggested',
+      stage_number: null,
+      name: (ev.title || `Evidence ${idx + 1}`).trim(),
+      artifact_type: inferArtifactType(ev.type),
+      control_ref: refForVirtual,
+      mandatory: !!ev.is_required,
+      description: ev.description || '',
+      format: (ev.format || 'DOCX').toUpperCase(),
+      owner: '',
+      is_platform_native: false,
+      platform_data_type: null,
+    }));
+
+  // Final catalog the section renders: real seeded items first (best
+  // curated), then virtual items filling any evidence-requirement gaps.
+  const catalog: ArtifactCatalogItemT[] = [...realCatalog, ...virtualCatalog];
+
   // Map catalog id → already-created tenant artifact (if any), so each
-  // catalog row can show "Create" or "View" inline.
+  // catalog row can show "Create" or "View" inline. Real items match by
+  // catalog_item_id; virtual items match by normalized name + control_ref
+  // because they have no FK link.
   const createdByCatalogId = new Map<number, TenantArtifactT>();
   for (const a of artifacts) {
     if (a.catalog_item_id) createdByCatalogId.set(a.catalog_item_id, a);
   }
   const orphanArtifacts = artifacts.filter((a) => !a.catalog_item_id);
+  const createdByVirtualKey = new Map<string, TenantArtifactT>();
+  for (const a of orphanArtifacts) {
+    const key = `${(a.name || '').toLowerCase().trim()}|${(a.control_ref || '').toLowerCase()}`;
+    if (key.trim()) createdByVirtualKey.set(key, a);
+  }
+  const isCreated = (item: ArtifactCatalogItemT): TenantArtifactT | undefined => {
+    if (item.id > 0) return createdByCatalogId.get(item.id);
+    const key = `${(item.name || '').toLowerCase().trim()}|${(item.control_ref || '').toLowerCase()}`;
+    return createdByVirtualKey.get(key);
+  };
+
   const summary = isOpen
-    ? `${catalog.length} recommended${artifacts.length > 0 ? `, ${artifacts.length} created` : ''}`
+    ? `${catalog.length} expected${artifacts.length > 0 ? `, ${artifacts.length} created` : ''}`
     : 'Click to view';
 
   return (
@@ -332,7 +408,7 @@ function RequirementArtifactsSection({
           {catalog.length > 0 && (
             <ul className="space-y-1.5">
               {catalog.map((item) => {
-                const created = createdByCatalogId.get(item.id);
+                const created = isCreated(item);
                 return (
                   <li
                     key={item.id}

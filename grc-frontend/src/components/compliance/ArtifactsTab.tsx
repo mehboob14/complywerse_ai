@@ -382,7 +382,11 @@ export function CreateArtifactModal({
             </button>
             <button
               onClick={() => onConfirm({
-                catalog_item_id: item.id,
+                // Virtual catalog items (auto-generated from a requirement's
+                // evidence_requirements) use a negative synthetic id and
+                // have no row in grc_artifact_catalog_items, so we must
+                // not pass that fake id as a FK.
+                ...(item.id > 0 ? { catalog_item_id: item.id } : {}),
                 assessment_id: assessmentId,
                 framework_key: frameworkKey,
                 name,
@@ -484,7 +488,35 @@ export function EditArtifactModal({
           </div>
 
           {artifact.is_platform_native && artifact.platform_data_type ? (
-            <PlatformDataPanel dataType={artifact.platform_data_type} />
+            <>
+              <PlatformDataPanel dataType={artifact.platform_data_type} />
+              <div className="flex justify-end">
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await apiClient.get(
+                        `/artifacts/${artifact.id}/export`,
+                        { responseType: 'blob' },
+                      );
+                      const url = window.URL.createObjectURL(new Blob([res.data]));
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${(artifact.name || 'artifact').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80)}.xlsx`;
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                      window.URL.revokeObjectURL(url);
+                    } catch (e) {
+                      console.error('Platform artifact export failed', e);
+                      alert('Download failed — see console for details.');
+                    }
+                  }}
+                  className="text-xs text-purple-700 hover:text-purple-900 flex items-center gap-1 px-3 py-1.5 border border-purple-200 bg-purple-50 rounded-lg hover:bg-purple-100"
+                >
+                  <Download className="h-3 w-3" /> Download live data as XLSX
+                </button>
+              </div>
+            </>
           ) : (
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -909,6 +941,37 @@ export default function ArtifactsTab({
                               onClick={() => downloadAsFormat(artifact.name, artifact.content!, artifact.format, artifact.artifact_type)}
                               className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
                               title="Download"
+                            >
+                              <Download className="h-4 w-4" />
+                            </button>
+                          )}
+                          {artifact.is_platform_native && (
+                            <button
+                              onClick={async () => {
+                                // Platform-native artifacts (risk register,
+                                // asset inventory, …) are exported server-side
+                                // because their content is live data, not the
+                                // markdown stored in `artifact.content`.
+                                try {
+                                  const res = await apiClient.get(
+                                    `/artifacts/${artifact.id}/export`,
+                                    { responseType: 'blob' },
+                                  );
+                                  const url = window.URL.createObjectURL(new Blob([res.data]));
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = `${(artifact.name || 'artifact').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80)}.xlsx`;
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  a.remove();
+                                  window.URL.revokeObjectURL(url);
+                                } catch (e) {
+                                  console.error('Platform artifact export failed', e);
+                                  alert('Download failed — see console for details.');
+                                }
+                              }}
+                              className="p-1.5 rounded-lg text-purple-500 hover:bg-purple-50 transition-colors"
+                              title="Download live platform data as XLSX"
                             >
                               <Download className="h-4 w-4" />
                             </button>

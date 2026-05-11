@@ -7,9 +7,11 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from io import BytesIO
 
 from ..models import (
     ArtifactCatalogItem,
@@ -570,6 +572,186 @@ def get_platform_asset_inventory(
             for a in assets
         ],
     }
+
+
+def _safe_filename(name: str) -> str:
+    """Make a filename safe for Content-Disposition headers."""
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", (name or "artifact").strip())
+    return cleaned[:80] or "artifact"
+
+
+def _build_risk_register_xlsx(db: Session, tenant_id: int, title: str) -> BytesIO:
+    """Generate an XLSX workbook containing the tenant's full risk register.
+
+    Pulls every Risk row for the tenant (not just the latest 200 like the
+    preview endpoint) so the exported file is a complete snapshot suitable
+    for evidence / audit consumption.
+    """
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Risk Register"
+
+    headers = [
+        "ID", "Title", "Description", "Category", "Sub-Category",
+        "Register Type", "Status", "Owner", "Business Owner",
+        "Inherent Likelihood", "Inherent Impact", "Inherent Score",
+        "Residual Likelihood", "Residual Impact", "Residual Score",
+        "Risk Appetite", "Treatment Plan", "Source Type",
+        "Due Date", "Review Date", "Created At", "Updated At",
+    ]
+    ws.append(headers)
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill("solid", fgColor="1F2937")
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="left", vertical="center")
+
+    risks = (
+        db.query(Risk)
+        .filter(Risk.tenant_id == tenant_id)
+        .order_by(Risk.id.asc())
+        .all()
+    )
+    for r in risks:
+        owner_name = getattr(getattr(r, "owner", None), "display_name", None) \
+            or getattr(getattr(r, "owner", None), "username", None) or ""
+        bo_name = getattr(getattr(r, "business_owner", None), "display_name", None) \
+            or getattr(getattr(r, "business_owner", None), "username", None) or ""
+        ws.append([
+            r.id, r.title, r.description, r.risk_category or r.category,
+            r.risk_sub_category, r.register_type, r.status, owner_name, bo_name,
+            r.inherent_likelihood, r.inherent_impact, r.inherent_score,
+            r.residual_likelihood, r.residual_impact, r.residual_score,
+            r.risk_appetite, r.treatment_plan, getattr(r, "source_type", None),
+            r.due_date.isoformat() if r.due_date else None,
+            r.review_date.isoformat() if r.review_date else None,
+            r.created_at.isoformat() if r.created_at else None,
+            r.updated_at.isoformat() if r.updated_at else None,
+        ])
+
+    # Reasonable default column widths so the file is readable as-shipped.
+    widths = [6, 40, 60, 16, 22, 18, 12, 22, 22, 10, 10, 10, 10, 10, 10, 14, 50, 16, 12, 12, 22, 22]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+    ws.freeze_panes = "A2"
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+def _build_asset_inventory_xlsx(db: Session, tenant_id: int, title: str) -> BytesIO:
+    """Generate an XLSX workbook containing the tenant's full IT asset inventory."""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Asset Inventory"
+
+    headers = [
+        "ID", "Name", "Asset Type", "Criticality", "Status",
+        "Owner", "Location", "Description",
+        "Created At", "Updated At",
+    ]
+    ws.append(headers)
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill("solid", fgColor="1F2937")
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="left", vertical="center")
+
+    assets = (
+        db.query(ITAsset)
+        .filter(ITAsset.tenant_id == tenant_id)
+        .order_by(ITAsset.id.asc())
+        .all()
+    )
+    for a in assets:
+        ws.append([
+            a.id,
+            a.name,
+            a.asset_type,
+            a.criticality,
+            a.status,
+            getattr(a, "owner_name", None),
+            getattr(a, "location", None),
+            getattr(a, "description", None),
+            a.created_at.isoformat() if a.created_at else None,
+            getattr(a, "updated_at", None).isoformat() if getattr(a, "updated_at", None) else None,
+        ])
+
+    widths = [6, 35, 18, 14, 12, 22, 22, 50, 22, 22]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+    ws.freeze_panes = "A2"
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+@router.get("/{artifact_id}/export")
+def export_artifact(
+    artifact_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Download a tenant artifact as a file.
+
+    For platform-native artifacts (risk register, asset inventory, …) we
+    generate an XLSX from the live tenant data so the exported file always
+    reflects the current state of the source — not a cached snapshot.
+
+    For non-platform artifacts the caller already has the ``content`` field
+    and renders the file client-side; this endpoint returns 400 to make
+    that explicit.
+    """
+    tenant_id = get_user_primary_tenant(current_user, db)
+    artifact = (
+        db.query(TenantArtifact)
+        .filter(TenantArtifact.id == artifact_id, TenantArtifact.tenant_id == tenant_id)
+        .first()
+    )
+    if not artifact:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found")
+
+    if not artifact.is_platform_native:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This artifact is not a platform-native data export. The "
+                "frontend renders its content directly via the existing "
+                "download helper — call /artifacts/{id} for the content."
+            ),
+        )
+
+    pdt = (artifact.platform_data_type or "").strip().lower()
+    title = artifact.name or "artifact"
+
+    if pdt == "risk_register":
+        buf = _build_risk_register_xlsx(db, tenant_id, title)
+    elif pdt == "asset_inventory":
+        buf = _build_asset_inventory_xlsx(db, tenant_id, title)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=f"Export not implemented for platform_data_type='{pdt}'",
+        )
+
+    filename = f"{_safe_filename(title)}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("")
