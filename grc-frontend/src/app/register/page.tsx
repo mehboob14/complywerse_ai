@@ -235,20 +235,33 @@ export default function RegisterPage() {
         // login page so they can authenticate explicitly.
         localStorage.clear();
 
-        // Send the user to the new tenant's /login URL. We pre-fill the email
-        // via query param so they only need to type the password they just set.
+        // Decide whether the new tenant's login URL lives on a different
+        // hostname (acme.example.com vs current example.com) or on the
+        // current origin (bare IP, pure `localhost`, single-tenant Docker).
+        // Cross-host redirect to a non-existent subdomain (e.g.
+        // `layeron.68.183.198.54` or `acme.localhost` with no resolver) is
+        // what was producing the "An error occurred" toast — the browser
+        // failed the nav, and `formData.password` was lost in the process.
         const subdomain = data.tenant?.subdomain || data.tenant?.slug;
-        if (subdomain) {
-          const { protocol, hostname, port } = window.location;
+        const { protocol, hostname, port } = window.location;
+        const isBareIPv4 = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
+        const isPureLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+        const isDottedHost = hostname.includes('.') && !isBareIPv4;
+        const canRedirectCrossSubdomain =
+          !!subdomain && !isBareIPv4 && !isPureLocalhost && isDottedHost;
+
+        if (canRedirectCrossSubdomain) {
           const baseHost = hostname.endsWith('.localhost')
-            ? hostname.split('.').slice(-1)[0]
+            ? 'localhost'
             : hostname.split('.').slice(-2).join('.');
           const emailParam = encodeURIComponent(formData.email);
           const target = `${protocol}//${subdomain}.${baseHost}${port ? ':' + port : ''}/login?registered=1&email=${emailParam}`;
           window.location.href = target;
           return;
         }
-        // No subdomain in response — fall back to the same-host login.
+        // Same-origin login (single-tenant or IP-only deployment). The
+        // login form's email-domain match will route to the new tenant
+        // automatically, so no host change is needed.
         router.push(`/login?registered=1&email=${encodeURIComponent(formData.email)}`);
       } else {
         const data = await response.json();

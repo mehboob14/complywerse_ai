@@ -292,9 +292,24 @@ def login(
     tenant matches the user's email domain, that tenant is used.
     """
     is_email_login = bool(request.username and "@" in request.username)
-    slug = x_tenant_slug or getattr(http_request.state, "tenant_slug", None)
 
-    # Convenience: if no slug, try to resolve by email domain against master.
+    # Resolution priority for LOGIN (different from the global middleware,
+    # which prioritises cookies for authenticated traffic):
+    #
+    #   1. X-Tenant-Slug header  (explicit caller intent)
+    #   2. Email-domain match    (the email itself is the most authoritative
+    #                             signal a user can provide at the login form)
+    #   3. Middleware-resolved   (cookie / subdomain / query / DEFAULT_TENANT_SLUG)
+    #
+    # Why email-domain wins over middleware: on bare-IP / single-tenant
+    # deployments, DEFAULT_TENANT_SLUG fills request.state.tenant_slug for
+    # any anonymous request. Before this re-ordering, that fallback was
+    # routing every cookie-less login to the wrong DB — the user's account
+    # lives in their own tenant DB (grc_layeron, grc_company, …), not in
+    # grc_default. Stale JWT cookies from a prior session caused the same
+    # symptom across tenant switches.
+    slug = x_tenant_slug
+
     if not slug and is_email_login:
         email_domain = request.username.split("@")[-1].lower().strip()
         domain_matches = master.query(Tenant).filter(
@@ -308,6 +323,9 @@ def login(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Multiple organizations found for this domain. Please login with your tenant slug.",
             )
+
+    if not slug:
+        slug = getattr(http_request.state, "tenant_slug", None)
 
     if not slug:
         raise HTTPException(
