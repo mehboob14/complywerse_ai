@@ -41,5 +41,26 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.js ./next.config.js
 
+# Runtime entrypoint: rewrites the `routes-manifest.json` destination so
+# the /api/* proxy points at the backend service name on the Docker
+# network, regardless of what was baked at build time. Next.js evaluates
+# rewrites destinations at request time (the manifest is just a config
+# file), so this is safe to run on every container start.
+COPY <<'EOF' /app/entrypoint.sh
+#!/bin/sh
+set -e
+MANIFEST=/app/.next/routes-manifest.json
+TARGET="${BACKEND_URL:-http://backend:4000}"
+if [ -f "$MANIFEST" ]; then
+  # Replace any pre-baked http(s)://host:port prefix that's followed by
+  # /grc/ with the runtime BACKEND_URL value. Matches both the docker
+  # service name we want AND any leaked NEXT_PUBLIC_BACKEND_URL value.
+  sed -i -E "s|https?://[^\"/]+/grc/|${TARGET}/grc/|g" "$MANIFEST"
+  echo "[entrypoint] routes-manifest patched: /api/* -> ${TARGET}/grc/*"
+fi
+exec npm start
+EOF
+RUN chmod +x /app/entrypoint.sh
+
 EXPOSE 3000
-CMD ["npm", "start"]
+ENTRYPOINT ["/app/entrypoint.sh"]

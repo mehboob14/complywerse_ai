@@ -5,10 +5,16 @@ import { useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, Building2, Lock } from 'lucide-react';
 
+// Bare IPv4 hosts (e.g. 68.183.198.54 in IP-only deployments) split into
+// 4 numeric parts — without the guard below, parts[0] would be treated
+// as a tenant slug ("68"), which is obviously wrong.
+const _IPV4_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+
 function getTenantSlugFromHost(): string | null {
   if (typeof window === 'undefined') return null;
   const host = window.location.hostname.toLowerCase();
   if (host === 'localhost' || host === '127.0.0.1') return null;
+  if (_IPV4_RE.test(host)) return null;
   if (host.endsWith('.localhost')) {
     const parts = host.split('.');
     if (parts.length === 2) return parts[0];
@@ -183,7 +189,8 @@ export default function LoginPage() {
         if (host.endsWith('.localhost')) {
           const parts = host.split('.');
           if (parts.length === 2) currentSub = parts[0];
-        } else if (host !== 'localhost' && host !== '127.0.0.1') {
+        } else if (host !== 'localhost' && host !== '127.0.0.1' && !_IPV4_RE.test(host)) {
+          // Skip IPv4 — first octet isn't a tenant slug.
           const parts = host.split('.');
           if (parts.length >= 3) currentSub = parts[0];
         }
