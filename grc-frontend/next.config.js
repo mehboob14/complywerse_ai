@@ -1,7 +1,11 @@
 const path = require('path');
 
 /** @type {import('next').NextConfig} */
-const BACKEND_URL = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:4000').replace(/\/$/, '');
+// Server-side rewrite target. Falls back to the Docker service name so
+// staging deployments don't accidentally loop the proxy back through the
+// public URL via NEXT_PUBLIC_BACKEND_URL. For local dev, set BACKEND_URL
+// explicitly (e.g. http://127.0.0.1:4000 in .env.local).
+const BACKEND_URL = (process.env.BACKEND_URL || 'http://backend:4000').replace(/\/$/, '');
 
 const nextConfig = {
   eslint: {
