@@ -200,13 +200,20 @@ export default function LoginPage() {
         // eslint-disable-next-line no-console
         console.log('[login] currentSub=%s targetSub=%s host=%s', currentSub, targetSub, host);
 
-        if (targetSub && currentSub !== targetSub) {
-          // Cross-subdomain redirect. localStorage on the destination is a
-          // SEPARATE storage area (per-origin), so we hand off the token + tenant
-          // context via URL fragment. Fragments are not sent to the server, so
-          // the token never leaks via access logs / proxies. The destination's
-          // root layout reads the fragment, hydrates its own localStorage, then
-          // strips the fragment from the URL.
+        // Cross-subdomain redirect only makes sense when we're already on
+        // a subdomain that differs from the authenticated tenant. On a
+        // bare IP host (currentSub === null) there's no subdomain to
+        // diverge from — prefixing the IP with the tenant slug would
+        // produce an unreachable hostname like `company.68.183.198.54`.
+        // For IP-only / single-tenant deployments, skip the cross-host
+        // hand-off entirely and just go to /dashboard on the same origin.
+        if (targetSub && currentSub && currentSub !== targetSub) {
+          // localStorage on the destination is a SEPARATE storage area
+          // (per-origin), so we hand off the token + tenant context via
+          // URL fragment. Fragments are not sent to the server, so the
+          // token never leaks via access logs / proxies. The destination's
+          // root layout reads the fragment, hydrates its own localStorage,
+          // then strips the fragment from the URL.
           const params = new URLSearchParams();
           if (data.access_token) params.set('auth_token', data.access_token);
           if (data.tenant?.slug) params.set('tenant_slug', data.tenant.slug);
@@ -217,7 +224,8 @@ export default function LoginPage() {
           window.location.href = dest;
           return;
         }
-        // Same tenant — still do a full nav to wipe React state.
+        // Same tenant, OR bare-IP host where we can't redirect cross-subdomain —
+        // still do a full nav to wipe React state.
         window.location.href = `${protocol}//${host}${port ? ':' + port : ''}/dashboard`;
         return;
       } else {
