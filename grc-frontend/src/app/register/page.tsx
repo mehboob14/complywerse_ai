@@ -261,11 +261,21 @@ export default function RegisterPage() {
           });
           errorMessage = messages.join('. ');
         } else if (typeof data.detail === 'string') {
-          if (data.detail.includes('email') || data.detail.includes('domain')) {
-            errorMessage = 'Please use a corporate email address. Free email providers are not accepted.';
-          } else {
-            errorMessage = data.detail;
-          }
+          // Only relabel as "use a corporate email" when the backend
+          // *explicitly* rejected the domain as a free provider. Anything
+          // else (duplicate user, tenant slug taken, malformed input,
+          // server bug, etc.) should surface the actual message — the
+          // previous catch-all of "any error mentioning 'email'" was
+          // masking real failures.
+          const detailLower = data.detail.toLowerCase();
+          const isFreeDomainRejection =
+            detailLower.includes('free email') ||
+            detailLower.includes('corporate email') ||
+            detailLower.includes('not a corporate') ||
+            detailLower.includes('disposable email');
+          errorMessage = isFreeDomainRejection
+            ? 'Please use a corporate email address. Free email providers are not accepted.'
+            : data.detail;
         }
         
         setError(errorMessage);
