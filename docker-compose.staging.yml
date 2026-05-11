@@ -25,7 +25,11 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
-      retries: 20
+      retries: 30
+      # First-boot initdb on a small / busy droplet can easily take 60+ s.
+      # start_period gives Postgres that window before failing healthchecks
+      # start counting toward the retry limit.
+      start_period: 90s
     networks: [grc-stg-net]
 
   redis:
@@ -76,8 +80,14 @@ services:
       AI_INTEGRATIONS_OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
 
       # ---- Background workers — keep light for staging ----
-      DISABLE_EMBEDDED_WORKFLOW_RUNTIME: "0"
-      DISABLE_COMPLYCHAT_EMBED_WORKER: "1"
+      # Defaults match prod; override per-deploy via .env.staging.
+      DISABLE_EMBEDDED_WORKFLOW_RUNTIME: "${DISABLE_EMBEDDED_WORKFLOW_RUNTIME:-0}"
+      DISABLE_COMPLYCHAT_EMBED_WORKER: "${DISABLE_COMPLYCHAT_EMBED_WORKER:-1}"
+
+      # ---- Tenant routing ----
+      # Resolves every IP-only request to this tenant when no subdomain /
+      # X-Tenant-Slug / cookie is present. Leave empty for multi-tenant.
+      DEFAULT_TENANT_SLUG: "${DEFAULT_TENANT_SLUG:-}"
     volumes:
       - backend_uploads:/app/uploads
     expose:
@@ -94,10 +104,13 @@ services:
     build:
       context: ./grc-frontend
       dockerfile: Dockerfile
-      # NEXT_PUBLIC_* values are baked at build time, so they go in args, not env.
+      # NEXT_PUBLIC_* values are baked at build time, so they go in args.
+      # BACKEND_URL is also baked because next.config.js rewrites store the
+      # resolved destination in routes-manifest.json during `next build`.
       args:
         NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
         NEXT_PUBLIC_API_BASE_URL: /api
+        BACKEND_URL: http://backend:4000
     image: grc-stg-frontend:latest
     container_name: grc-stg-frontend
     restart: unless-stopped
