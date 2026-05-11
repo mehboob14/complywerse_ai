@@ -16,7 +16,9 @@ from ....models import (
     RiskAssessment, RiskAssessmentRisk, RiskAssessmentKRI,
     RiskAssessmentIncident, RiskAssessmentRCSAFinding,
     Risk, RiskKRI, RiskIncident, RCSAFinding,
-    GRCUser, BusinessUnit, Framework, get_db
+    GRCUser, BusinessUnit, Framework,
+    FrameworkRiskAssessment, FrameworkRiskQuestion,
+    UploadedFramework, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -233,6 +235,15 @@ def get_risk_assessment_dashboard(
     workload, and a 12-month creation trend.
     """
     user_tenants = get_user_tenants(current_user, db)
+    empty_frameworks = {
+        "total": 0,
+        "by_status": {"in_progress": 0, "completed": 0, "archived": 0},
+        "by_framework": [],
+        "top_creators": [],
+        "monthly_trend": [],
+        "questions_total": 0,
+        "questions_per_assessment_avg": 0,
+    }
     if not user_tenants:
         return {
             "total": 0,
@@ -242,6 +253,8 @@ def get_risk_assessment_dashboard(
             "top_assessors": [],
             "monthly_trend": [],
             "risks_per_assessment_avg": 0,
+            "frameworks": empty_frameworks,
+            "combined_total": 0,
         }
 
     assessments = db.query(RiskAssessment).filter(
@@ -299,7 +312,106 @@ def get_risk_assessment_dashboard(
         for k, v in sorted(monthly.items())
     ]
 
+    # ------------------------------------------------------------------
+    # Framework-driven risk assessments (separate table, separate lifecycle).
+    # Aggregated alongside manual assessments so the unified dashboard
+    # actually reflects the platform's full risk-assessment activity —
+    # previously it counted only RiskAssessment rows and read zero on
+    # tenants who only used the framework-driven flow.
+    # ------------------------------------------------------------------
+    fw_assessments = db.query(FrameworkRiskAssessment).filter(
+        FrameworkRiskAssessment.tenant_id.in_(user_tenants)
+    ).all()
+
+    fw_by_status: dict = {"in_progress": 0, "completed": 0, "archived": 0}
+    fw_by_framework_counts: dict = {}
+    fw_creator_counts: dict = {}
+    fw_monthly: dict = {}
+    fw_assessment_ids = [a.id for a in fw_assessments]
+
+    creator_ids = {a.created_by for a in fw_assessments if a.created_by}
+    creators_by_id: dict = {}
+    if creator_ids:
+        for u in db.query(GRCUser).filter(GRCUser.id.in_(creator_ids)).all():
+            creators_by_id[u.id] = (
+                getattr(u, "display_name", None)
+                or getattr(u, "username", None)
+                or getattr(u, "email", None)
+                or f"User #{u.id}"
+            )
+
+    # Resolve framework display names in one batched lookup. Framework risk
+    # assessments may reference either the legacy published Framework table
+    # OR an UploadedFramework — fetch both maps to cover either case.
+    fw_pub_ids = {a.framework_id for a in fw_assessments if a.framework_id}
+    fw_upl_ids = {a.uploaded_framework_id for a in fw_assessments if a.uploaded_framework_id}
+    pub_names: dict = {}
+    upl_names: dict = {}
+    if fw_pub_ids:
+        for f in db.query(Framework).filter(Framework.id.in_(fw_pub_ids)).all():
+            pub_names[f.id] = getattr(f, "name", None) or f"Framework #{f.id}"
+    if fw_upl_ids:
+        for f in db.query(UploadedFramework).filter(UploadedFramework.id.in_(fw_upl_ids)).all():
+            upl_names[f.id] = getattr(f, "name", None) or f"Framework #{f.id}"
+
+    for a in fw_assessments:
+        st = (a.status or "in_progress").strip().lower()
+        if st not in fw_by_status:
+            fw_by_status[st] = 0
+        fw_by_status[st] += 1
+
+        # Prefer the uploaded framework's name when both are populated —
+        # that's the modern path; framework_id is kept for legacy seeded rows.
+        fw_label = (
+            upl_names.get(a.uploaded_framework_id)
+            or pub_names.get(a.framework_id)
+            or "Unknown framework"
+        )
+        fw_by_framework_counts[fw_label] = fw_by_framework_counts.get(fw_label, 0) + 1
+
+        if a.created_by:
+            label = creators_by_id.get(a.created_by, f"User #{a.created_by}")
+            fw_creator_counts[label] = fw_creator_counts.get(label, 0) + 1
+
+        if a.created_at:
+            key = a.created_at.strftime("%Y-%m")
+            fw_monthly[key] = fw_monthly.get(key, 0) + 1
+
+    fw_questions_total = 0
+    if fw_assessment_ids:
+        fw_questions_total = (
+            db.query(func.count(FrameworkRiskQuestion.id))
+            .filter(FrameworkRiskQuestion.assessment_id.in_(fw_assessment_ids))
+            .scalar()
+            or 0
+        )
+
+    fw_by_framework = [
+        {"framework": k, "count": v}
+        for k, v in sorted(fw_by_framework_counts.items(), key=lambda kv: kv[1], reverse=True)
+    ]
+    fw_top_creators = [
+        {"creator": k, "count": v}
+        for k, v in sorted(fw_creator_counts.items(), key=lambda kv: kv[1], reverse=True)[:10]
+    ]
+    fw_monthly_trend = [
+        {"month": k, "count": v} for k, v in sorted(fw_monthly.items())
+    ]
+
+    frameworks_payload = {
+        "total": len(fw_assessments),
+        "by_status": fw_by_status,
+        "by_framework": fw_by_framework,
+        "top_creators": fw_top_creators,
+        "monthly_trend": fw_monthly_trend,
+        "questions_total": fw_questions_total,
+        "questions_per_assessment_avg": (
+            round(fw_questions_total / len(fw_assessments), 1) if fw_assessments else 0
+        ),
+    }
+
     return {
+        # ---- Manual risk assessments (existing behaviour) ----
         "total": len(assessments),
         "by_status": by_status,
         "by_type": by_type,
@@ -308,6 +420,10 @@ def get_risk_assessment_dashboard(
         "monthly_trend": monthly_trend,
         "risks_per_assessment_avg": round(total_risks_assessed / len(assessments), 1) if assessments else 0,
         "total_risks_assessed": total_risks_assessed,
+        # ---- Framework risk assessments (new section, additive) ----
+        "frameworks": frameworks_payload,
+        # ---- Cross-section roll-up for the headline KPI strip ----
+        "combined_total": len(assessments) + len(fw_assessments),
     }
 
 

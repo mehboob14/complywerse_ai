@@ -78,29 +78,76 @@ logger = logging.getLogger(__name__)
 # disambiguation (especially within a regulator family like SBP) explicit
 # specific aliases avoid false matches.
 _ALIAS_OVERRIDES: Dict[str, List[str]] = {
-    "aramco_ccc": ["aramco ccc", "sacs-002", "sacs 002", "saudi aramco cybersecurity"],
-    "cis_controls": ["cis controls", "cis v8", "cis v8.1", "cis critical security", "center for internet security"],
-    "cobit": ["cobit", "cobit 2019", "cobit 5", "isaca cobit"],
+    "aramco_ccc": [
+        "aramco ccc", "sacs-002", "sacs 002", "saudi aramco cybersecurity",
+        # Broader catches — uploaded framework names rarely match the full
+        # canonical title verbatim. "aramco" / "saudi aramco" alone are
+        # specific enough to never collide with another methodology.
+        "aramco", "saudi aramco", "third party cybersecurity",
+    ],
+    "cis_controls": [
+        "cis controls", "cis v8", "cis v8.1", "cis critical security",
+        "center for internet security", "cis benchmark",
+    ],
+    "cobit": ["cobit", "cobit 2019", "cobit 5", "isaca cobit", "edm03", "apo12"],
     "dora": ["dora", "digital operational resilience"],
-    "gdpr": ["gdpr", "dpia", "data protection impact"],
-    "hipaa": ["hipaa", "hitech", "ocr risk analysis", "hhs sra"],
+    "gdpr": [
+        "gdpr", "dpia", "data protection impact",
+        "general data protection", "regulation 2016/679", "eu 2016/679",
+    ],
+    "hipaa": [
+        "hipaa", "hitech", "ocr risk analysis", "hhs sra",
+        "health insurance portability",
+    ],
     "iso_22301": ["iso 22301", "iso/iec 22301", "iso22301", "business continuity management"],
     "iso_27001": ["iso 27001", "iso/iec 27001", "iso27001", "isms", "iso 27002", "iso 27005"],
-    "mas_trm": ["mas trm", "mas technology risk", "monetary authority of singapore"],
-    "nis2": ["nis2", "nis 2", "nis-2"],
-    "nist_800_53": ["nist 800-53", "nist sp 800-53", "nist800-53"],
+    "mas_trm": [
+        "mas trm", "mas technology risk", "monetary authority of singapore",
+        "trm guidelines",
+    ],
+    "nis2": ["nis2", "nis 2", "nis-2", "nis directive"],
+    "nist_800_53": ["nist 800-53", "nist sp 800-53", "nist800-53", "nist 80053"],
     "nist_csf": ["nist csf", "nist cybersecurity framework", "csf 2.0", "csf v2"],
-    "pci_dss": ["pci dss", "pci-dss", "pcidss", "payment card industry"],
+    "pci_dss": [
+        "pci dss", "pci-dss", "pcidss",
+        "payment card industry", "payment card data security",
+        "pci data security",
+    ],
     "sabic_cybertrust": ["sabic cybertrust", "sabic cyber trust", "sabic"],
-    "sama_csf": ["sama csf", "sama cyber", "saudi arabian monetary", "saudi central bank"],
+    "sama_csf": [
+        "sama csf", "sama cyber", "saudi arabian monetary",
+        "saudi central bank", "saudi banking cybersecurity",
+    ],
     # SBP family — each gets very specific aliases so they never collide.
-    "sbp_cloud": ["outsourcing to cloud", "sbp cloud", "bprd 01 of 2023"],
-    "sbp_etgrmf": ["etgrmf", "enterprise technology governance", "bprd 05 of 2017"],
-    "sbp_internet_banking": ["sbp internet banking", "security of internet banking", "psd 2015"],
-    "sl_csf": ["cbsl", "sri lanka cybersecurity", "sri lanka csf"],
-    "soc2": ["soc 2", "soc2", "trust services criteria", "trust service criteria"],
-    "sox": ["sox", "sarbanes-oxley", "icfr", "internal controls over financial reporting"],
-    "swift_cscf": ["swift cscf", "swift customer security"],
+    "sbp_cloud": [
+        "outsourcing to cloud", "sbp cloud", "bprd 01 of 2023",
+        "state bank pakistan cloud", "sbp cloud computing",
+    ],
+    "sbp_etgrmf": [
+        "etgrmf", "enterprise technology governance",
+        "bprd 05 of 2017", "sbp risk management framework",
+    ],
+    "sbp_internet_banking": [
+        "sbp internet banking", "security of internet banking",
+        "psd 2015", "internet banking pakistan",
+    ],
+    "sl_csf": [
+        "cbsl", "sri lanka cybersecurity", "sri lanka csf",
+        # Most permissive — "sri lanka" alone is uniquely identifying.
+        "sri lanka", "central bank of sri lanka",
+    ],
+    "soc2": [
+        "soc 2", "soc2", "trust services criteria", "trust service criteria",
+        "soc ii",
+    ],
+    "sox": [
+        "sox", "sarbanes-oxley", "icfr",
+        "internal controls over financial reporting", "sarbanes oxley",
+    ],
+    "swift_cscf": [
+        "swift cscf", "swift customer security",
+        "customer security controls framework",
+    ],
 }
 
 

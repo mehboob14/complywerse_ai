@@ -1239,6 +1239,17 @@ export const ermApi = {
       monthly_trend: Array<{ month: string; count: number }>;
       risks_per_assessment_avg: number;
       total_risks_assessed: number;
+      // ---- Framework-driven assessments (added Issue #2 fix) ----
+      frameworks: {
+        total: number;
+        by_status: { in_progress: number; completed: number; archived: number; [k: string]: number };
+        by_framework: Array<{ framework: string; count: number }>;
+        top_creators: Array<{ creator: string; count: number }>;
+        monthly_trend: Array<{ month: string; count: number }>;
+        questions_total: number;
+        questions_per_assessment_avg: number;
+      };
+      combined_total: number;
     }>('/erm/risk-assessments/dashboard'),
     getRiskBreakdown: (id: number) => apiClient.get<{
       assessment_id: number;
