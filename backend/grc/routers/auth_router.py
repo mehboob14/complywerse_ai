@@ -312,6 +312,11 @@ def login(
 
     if not slug and is_email_login:
         email_domain = request.username.split("@")[-1].lower().strip()
+
+        # Primary email→tenant resolution: tenants whose primary_contact_email
+        # matches the same domain. Registration always populates this field
+        # (see tenant_manager.full_tenant_provisioning), so newly-created
+        # tenants resolve here without needing the secondary fallback.
         domain_matches = master.query(Tenant).filter(
             Tenant.is_active.is_(True),
             Tenant.primary_contact_email.ilike(f"%@{email_domain}"),
@@ -323,6 +328,23 @@ def login(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Multiple organizations found for this domain. Please login with your tenant slug.",
             )
+
+        # Secondary fallback — slug derived from the email's domain prefix
+        # (e.g. mehboob@layeron.com -> "layeron"). Registration uses the
+        # same derivation, so any tenant that came in through the normal
+        # signup flow can still resolve here even when primary_contact_email
+        # is stale, empty, or has been edited away. Public-mail providers
+        # (_slug_from_email returns None) short-circuit so "gmail" isn't
+        # ever accepted as a tenant slug.
+        if not slug:
+            derived = _slug_from_email(request.username)
+            if derived:
+                tenant_by_slug = master.query(Tenant).filter(
+                    Tenant.is_active.is_(True),
+                    ((Tenant.slug == derived) | (Tenant.subdomain == derived)),
+                ).first()
+                if tenant_by_slug:
+                    slug = tenant_by_slug.slug
 
     if not slug:
         slug = getattr(http_request.state, "tenant_slug", None)
