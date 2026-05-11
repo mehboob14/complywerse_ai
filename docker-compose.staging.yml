@@ -1,0 +1,129 @@
+# Staging stack — runs alongside an existing production deployment on the
+# same droplet with zero shared state. Postgres, Redis, the API and the
+# Next.js frontend all live on a private Docker network (grc-stg-net);
+# only the frontend's HTTP port is exposed to the host (configurable via
+# PUBLIC_PORT, default 8080).
+#
+# Bring up:        docker compose -p grc-stg --env-file .env.staging -f docker-compose.staging.yml up -d --build
+# Tear down:       docker compose -p grc-stg --env-file .env.staging -f docker-compose.staging.yml down
+# Wipe & restart:  add -v to `down` to drop the postgres + uploads volumes.
+
+name: grc-stg
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: grc-stg-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [grc-stg-net]
+
+  redis:
+    image: redis:7-alpine
+    container_name: grc-stg-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "no", "--save", ""]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [grc-stg-net]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: grc-stg-backend:latest
+    container_name: grc-stg-backend
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+    environment:
+      # ---- Database (Docker-internal hostname `postgres`) ----
+      MASTER_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TENANT_DB_URL_TEMPLATE: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/grc_{slug}
+      POSTGRES_ADMIN_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/postgres
+
+      # ---- Redis ----
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+
+      # ---- Auth / cookies ----
+      SESSION_SECRET: ${SESSION_SECRET}
+      AUTH_COOKIE_DOMAIN: ""
+      REPL_DEPLOYMENT: "0"
+
+      # ---- CORS — accept the staging origin (IP:port) ----
+      ALLOWED_ORIGIN_REGEX: ${ALLOWED_ORIGIN_REGEX}
+
+      # ---- AI / LLM (optional but required for AI-assist features) ----
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      AI_INTEGRATIONS_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AI_INTEGRATIONS_OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+
+      # ---- Background workers — keep light for staging ----
+      DISABLE_EMBEDDED_WORKFLOW_RUNTIME: "0"
+      DISABLE_COMPLYCHAT_EMBED_WORKER: "1"
+    volumes:
+      - backend_uploads:/app/uploads
+    expose:
+      - "4000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4000/grc/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [grc-stg-net]
+
+  frontend:
+    build:
+      context: ./grc-frontend
+      dockerfile: Dockerfile
+      # NEXT_PUBLIC_* values are baked at build time, so they go in args, not env.
+      args:
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
+        NEXT_PUBLIC_API_BASE_URL: /api
+    image: grc-stg-frontend:latest
+    container_name: grc-stg-frontend
+    restart: unless-stopped
+    depends_on:
+      backend: { condition: service_started }
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      # Server-side proxy target for /api/* — uses the Docker DNS name.
+      BACKEND_URL: http://backend:4000
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
+      NEXT_PUBLIC_API_BASE_URL: /api
+    ports:
+      # ONLY port exposed to the host. Change PUBLIC_PORT in .env.staging
+      # if 8080 is already taken.
+      - "${PUBLIC_PORT:-8080}:3000"
+    networks: [grc-stg-net]
+
+volumes:
+  pg_data:
+    name: grc-stg-pg-data
+  backend_uploads:
+    name: grc-stg-backend-uploads
+
+networks:
+  grc-stg-net:
+    name: grc-stg-net
+    driver: bridge

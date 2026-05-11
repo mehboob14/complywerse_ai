@@ -860,7 +860,7 @@ def generate_framework_questions(
          and an empty methodology_fields dict for the assessor to fill in.
       2. Otherwise, fall back to the existing AI generator (gpt-4o), which
          is itself backed by a deterministic template fallback if the LLM
-         is unreachable.
+         is unreachable\]
     """
     user_tenants = get_user_tenants(current_user, db)
     assessment = _get_assessment_or_404(assessment_id, user_tenants, db)
