@@ -90,6 +90,13 @@ services:
       DEFAULT_TENANT_SLUG: "${DEFAULT_TENANT_SLUG:-}"
     volumes:
       - backend_uploads:/app/uploads
+      # NCA reference templates live at the repo root and are intentionally
+      # NOT in the backend build context (which is ./backend), so the image
+      # itself doesn't ship them. Mount the host directory read-only so the
+      # templates catalogue endpoint can enumerate the .docx/.xlsx files;
+      # _resolve_templates_dir() walks up from /app/grc/routers/... and
+      # finds /app/NCA_Templates without any code change.
+      - ./NCA_Templates:/app/NCA_Templates:ro
     expose:
       - "4000"
     healthcheck:

@@ -8,13 +8,13 @@ import {
   Users,
   AlertTriangle,
   Loader2,
-  ListChecks,
   Upload,
   Plus,
   Activity,
   Database,
   ShieldCheck,
 } from 'lucide-react';
+import RiskViewSwitcher from '@/components/risks/RiskViewSwitcher';
 import {
   BarChart,
   Bar,
@@ -189,20 +189,19 @@ export default function RiskRegisterDashboardPage() {
     <div className="space-y-6">
       {/* ============== Header ============== */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Risk Register — Dashboard</h1>
-          <p className="text-sm text-gray-500">
-            Per-register breakdown, severity mix, provenance and assignee workload. Use the filters below to drill in.
-          </p>
+        <div className="flex items-start gap-3">
+          {/* Same dropdown the register list uses, so users can flip
+              between the two views from either side without hunting for
+              a separate "view all risks" link. */}
+          <RiskViewSwitcher active="dashboard" />
+          <div>
+            <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Risk Register — Dashboard</h1>
+            <p className="text-sm text-gray-500">
+              Per-register breakdown, severity mix, provenance and assignee workload. Use the filters below to drill in.
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/erm/risks/list"
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <ListChecks size={16} />
-            View all risks
-          </Link>
           <Link
             href="/erm/risks/list?upload=1"
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"

@@ -31,7 +31,6 @@ import {
   Check,
   Zap,
   Eye,
-  BarChart3,
   PenLine,
   FileSpreadsheet,
   ClipboardCheck,
@@ -45,6 +44,7 @@ import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
 import NcaRiskRegisterTab from '@/components/risks/NcaRiskRegisterTab';
 import NcaRiskQuickAddModal from '@/components/risks/NcaRiskQuickAddModal';
+import RiskViewSwitcher from '@/components/risks/RiskViewSwitcher';
 import { useRouter as useNextRouter, useSearchParams } from 'next/navigation';
 
 type ScoreFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
@@ -1213,6 +1213,14 @@ export default function ERMRisksPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
+      {/* View switcher — replaces the inline Dashboard button that used to
+          live in the filters row. Lets the user flip between the flat
+          register and the dashboard from a single dropdown that always
+          reflects the current view. */}
+      <div className="flex items-center justify-between gap-3">
+        <RiskViewSwitcher active="list" />
+      </div>
+
       {uploadResult && (
         <div className={`rounded-xl border p-4 ${uploadResult.errors.length > 0 ? 'border-red-500/50 bg-white' : 'border-green-500/50 bg-white'}`}>
           <div className="flex items-start justify-between">
@@ -1382,13 +1390,9 @@ export default function ERMRisksPage() {
             accept=".xlsx,.xls"
             className="hidden"
           />
-          <Link
-            href="/erm/risks/dashboard"
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            <BarChart3 size={16} />
-            Dashboard
-          </Link>
+          {/* The Dashboard link previously lived here; it's now part of the
+              view-switcher dropdown at the top of the page so users see one
+              clear way to flip between the register and the dashboard. */}
           <button
             onClick={() => setIsUploadModalOpen(true)}
             disabled={isUploading}

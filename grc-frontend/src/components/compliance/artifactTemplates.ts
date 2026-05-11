@@ -2297,7 +2297,122 @@ function normalizeArtifactType(raw: string): string {
   return 'evidence';
 }
 
+// Pure-table builder used when the artifact format is XLSX so the
+// downloaded spreadsheet is actual rows/columns instead of a prose
+// document with one buried table. Columns vary by artifact type so a
+// register, matrix, plan, training log, etc. each get an appropriate
+// header row plus a sample data row the user can replicate.
+//
+// The output is markdown (no prose) — `downloadAsXlsx` looks for `|` table
+// blocks and writes them straight to a sheet. The Create/Edit modals also
+// render markdown tables nicely in the preview, so the user sees the same
+// columns they'll get in the .xlsx without any extra plumbing.
+function buildXlsxArtifactTemplate(meta: ArtifactMeta): string {
+  const t = normalizeArtifactType(meta.artifactType);
+  const dueDate = new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString().split('T')[0];
+
+  // ⚠ No leading `#` heading prose — downloadAsXlsx ignores non-table
+  // lines, but the modal preview also renders them as document chrome
+  // which is exactly the look we're trying to avoid here.
+
+  type Spec = { headers: string[]; samples: string[][] };
+  const specs: Record<string, Spec> = {
+    register: {
+      headers: ['ID', 'Item', 'Description', 'Category', 'Owner', 'Status', 'Date Identified', 'Review Date', 'Notes'],
+      samples: [
+        ['REG-001', 'Sample entry', 'Replace with the real description', 'Operational', 'CISO', 'Open', today(), dueDate, ''],
+        ['REG-002', '', '', '', '', '', '', '', ''],
+      ],
+    },
+    matrix: {
+      headers: ['Activity / Item', 'Responsible (R)', 'Accountable (A)', 'Consulted (C)', 'Informed (I)', 'Last Reviewed'],
+      samples: [
+        ['Sample activity', 'Process Owner', 'Department Head', 'Legal, Compliance', 'CISO, CIO', today()],
+        ['', '', '', '', '', ''],
+      ],
+    },
+    plan: {
+      headers: ['Phase / Milestone', 'Task', 'Owner', 'Start Date', 'End Date', 'Dependencies', 'Status', 'Notes'],
+      samples: [
+        ['Phase 1', 'Sample task', 'Owner name', today(), dueDate, '', 'Not Started', ''],
+        ['', '', '', '', '', '', '', ''],
+      ],
+    },
+    training: {
+      headers: ['Employee Name', 'Employee ID', 'Department', 'Course', 'Completion Date', 'Score', 'Renewal Due'],
+      samples: [
+        ['Jane Doe', 'EMP-0001', 'Engineering', 'Sample course', today(), '95%', dueDate],
+        ['', '', '', '', '', '', ''],
+      ],
+    },
+    assessment: {
+      headers: ['Control / Question', 'Reference', 'Response', 'Evidence', 'Reviewer', 'Date'],
+      samples: [
+        ['Sample control', meta.controlRef || '—', 'Compliant', '', '', today()],
+        ['', '', '', '', '', ''],
+      ],
+    },
+    record: {
+      headers: ['Timestamp', 'Event / Action', 'Actor', 'Reference', 'Outcome', 'Notes'],
+      samples: [
+        [today(), 'Sample event', 'system', '', 'Success', ''],
+        ['', '', '', '', '', ''],
+      ],
+    },
+    report: {
+      headers: ['Section', 'Finding', 'Severity', 'Owner', 'Recommendation', 'Status', 'Target Date'],
+      samples: [
+        ['Section 1', 'Sample finding', 'Medium', 'Owner', 'Sample recommendation', 'Open', dueDate],
+        ['', '', '', '', '', '', ''],
+      ],
+    },
+    configuration: {
+      headers: ['Setting / Parameter', 'Expected Value', 'Actual Value', 'Compliant?', 'Evidence', 'Last Checked'],
+      samples: [
+        ['Sample setting', 'enabled', 'enabled', 'Yes', '', today()],
+        ['', '', '', '', '', ''],
+      ],
+    },
+  };
+
+  // Sensible default header set for any type we haven't specialised.
+  const spec: Spec = specs[t] || {
+    headers: ['ID', 'Item', 'Description', 'Owner', 'Status', 'Date', 'Reference', 'Notes'],
+    samples: [
+      ['001', 'Sample entry', 'Replace with the real description', 'Owner', 'Open', today(), meta.controlRef || '—', ''],
+      ['', '', '', '', '', '', '', ''],
+    ],
+  };
+
+  const headerRow = `| ${spec.headers.join(' | ')} |`;
+  const separator = `|${spec.headers.map(() => '---').join('|')}|`;
+  const dataRows = spec.samples.map((row) => {
+    // Pad/truncate to match the header column count so the resulting
+    // sheet stays rectangular even if a spec drifts out of sync.
+    const padded = [...row];
+    while (padded.length < spec.headers.length) padded.push('');
+    padded.length = spec.headers.length;
+    return `| ${padded.join(' | ')} |`;
+  });
+
+  return [headerRow, separator, ...dataRows].join('\n');
+}
+
+function isXlsxFormat(format: string | null | undefined): boolean {
+  if (!format) return false;
+  const f = format.toUpperCase();
+  const first = f.split(/[/,\s]/)[0].trim();
+  return first === 'XLSX';
+}
+
 export function buildArtifactTemplate(meta: ArtifactMeta): string {
+  // XLSX-format artifacts get a pure-table template regardless of artifact
+  // type so the downloaded .xlsx is a real spreadsheet, not a Word-style
+  // doc with prose. Applies across every framework — same path users hit
+  // for ADHICS, ISO 27001, PCI DSS, etc.
+  if (isXlsxFormat(meta.format)) {
+    return buildXlsxArtifactTemplate(meta);
+  }
   switch (normalizeArtifactType(meta.artifactType)) {
     case 'policy':         return buildPolicyTemplate(meta);
     case 'procedure':      return buildProcedureTemplate(meta);

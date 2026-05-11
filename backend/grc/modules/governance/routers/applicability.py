@@ -77,7 +77,13 @@ def get_framework_applicability(
     }
 
 
-@router.post("/")
+# Registered at both "" and "/" so the route is hit directly regardless of
+# whether the caller includes a trailing slash. Previously only "/" was
+# registered, which made `/governance/applicability` (no slash) 307-redirect
+# to `/governance/applicability/`. The browser CORS preflight failed across
+# that redirect and the POST blew up with `OPTIONS ... 400 Bad Request`.
+@router.post("/", include_in_schema=False)
+@router.post("")
 def set_clause_applicability(
     request: ApplicabilityRequest,
     db: Session = Depends(get_db),

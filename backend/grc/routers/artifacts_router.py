@@ -19,6 +19,8 @@ from ..models import (
     GRCUser,
     ITAsset,
     Risk,
+    UploadedFramework,
+    ParsedFrameworkControl,
     get_db,
 )
 from .auth_router import require_auth, get_user_primary_tenant
@@ -107,6 +109,11 @@ ASSESSMENT_TYPE_MAP: dict[str, str] = {
     "nis_2": "nis2",
     "nis 2": "nis2",
     "nis2 directive": "nis2",
+    # ADHICS
+    "adhics": "adhics",
+    "abu dhabi healthcare": "adhics",
+    "abu dhabi healthcare information and cyber security standard": "adhics",
+    "abu dhabi healthcare information and cyber security": "adhics",
 }
 
 # Artifact names that map to real platform data
@@ -337,6 +344,181 @@ def _ref_matches_any(catalog_ref: Optional[str], requirement_codes: List[str]) -
     return False
 
 
+def _infer_artifact_type_from_evidence(name: str, filetype: Optional[str]) -> str:
+    """Derive a logical artifact type (Policy / Register / ...) from an
+    evidence requirement's name + filetype. Used when no seeded catalog
+    entry exists, so the dynamic top-level catalog still gets sensible
+    type badges — matching the inline per-requirement view's behaviour.
+    """
+    combined = (name or "").lower()
+    if "policy" in combined:
+        return "Policy"
+    if "procedure" in combined:
+        return "Procedure"
+    if "register" in combined or "inventory" in combined:
+        return "Register"
+    if "matrix" in combined:
+        return "Matrix"
+    if "plan" in combined:
+        return "Plan"
+    if "contract" in combined or "agreement" in combined or "nda" in combined:
+        return "Contract"
+    if "attest" in combined or "acknowledg" in combined:
+        return "Attestation"
+    if "config" in combined:
+        return "Configuration"
+    if "screenshot" in combined:
+        return "Screenshot"
+    if "training" in combined or "awareness" in combined:
+        return "Training Record"
+    if "audit" in combined or "assessment" in combined:
+        return "Assessment"
+    if "report" in combined:
+        return "Report"
+    if "log" in combined or "minute" in combined or "email" in combined:
+        return "Record/Log"
+    if "certificate" in combined:
+        return "Evidence"
+    ft = (filetype or "").upper()
+    if ft == "XLSX":
+        return "Register"
+    if ft == "EML":
+        return "Record/Log"
+    return "Evidence"
+
+
+def _derive_catalog_from_framework(
+    db: Session,
+    *,
+    tenant_id: int,
+    assessment_type: str,
+) -> Optional[dict]:
+    """Build a virtual catalog from a tenant's uploaded framework when no
+    seeded `ArtifactCatalogItem` rows exist for the framework.
+
+    Aggregates the `evidence_requirements` JSON across every parsed control
+    on the matching `UploadedFramework`, deduplicates by name (case-folded),
+    and tags each row with the controls (and their domains) where it was
+    asked for. Lets the user see and create the same set of artifacts from
+    the top-level Artifacts tab that they'd otherwise have to dig into each
+    requirement to find.
+
+    Returns ``None`` when no framework matches the caller's
+    `assessment_type` — the catalog endpoint then falls back to the empty
+    seed-catalog response so the UI message stays explicit.
+    """
+    if not assessment_type:
+        return None
+    needle = assessment_type.strip()
+    if not needle:
+        return None
+
+    # Match by exact name first, then case-insensitive contains. Restrict to
+    # this tenant's frameworks plus shared library frameworks (tenant_id is
+    # NULL on shared rows in some deployments).
+    fw_q = db.query(UploadedFramework).filter(
+        UploadedFramework.is_active.is_(True),
+        ((UploadedFramework.tenant_id == tenant_id) | (UploadedFramework.tenant_id.is_(None))),
+    )
+    framework = fw_q.filter(UploadedFramework.name == needle).first()
+    if not framework:
+        framework = fw_q.filter(UploadedFramework.name.ilike(f"%{needle}%")).first()
+    if not framework:
+        return None
+
+    controls = (
+        db.query(ParsedFrameworkControl)
+        .filter(ParsedFrameworkControl.uploaded_framework_id == framework.id)
+        .all()
+    )
+    if not controls:
+        return None
+
+    # Aggregate by lowercased name so HR/IT/etc. domains don't each produce
+    # their own copy of "Roles and responsibilities matrix".
+    by_key: dict[str, dict] = {}
+    for c in controls:
+        evs = c.evidence_requirements or []
+        if not isinstance(evs, list):
+            continue
+        for ev in evs:
+            if not isinstance(ev, dict):
+                continue
+            ev_name = (ev.get("name") or ev.get("title") or "").strip()
+            if not ev_name:
+                continue
+            key = ev_name.lower()
+            file_type = (ev.get("filetype") or ev.get("format") or "DOCX").upper()
+            entry = by_key.get(key)
+            ref = c.original_reference or c.control_id or ""
+            domain = c.domain or "General"
+            if entry is None:
+                by_key[key] = {
+                    "name": ev_name,
+                    "description": (ev.get("description") or "").strip(),
+                    "format": file_type,
+                    "artifact_type": _infer_artifact_type_from_evidence(ev_name, file_type),
+                    "control_refs": {ref} if ref else set(),
+                    "domains": {domain},
+                    "mandatory": bool(c.is_mandatory),
+                }
+            else:
+                if ref:
+                    entry["control_refs"].add(ref)
+                entry["domains"].add(domain)
+                # Keep the longest non-empty description we see.
+                desc = (ev.get("description") or "").strip()
+                if desc and len(desc) > len(entry["description"]):
+                    entry["description"] = desc
+                # Promote to mandatory if any control flags it so.
+                if c.is_mandatory:
+                    entry["mandatory"] = True
+
+    if not by_key:
+        return None
+
+    # Domain → stage mapping so the catalog renders grouped tabs even
+    # though the framework JSON itself isn't staged. The stage label is the
+    # control's `domain` field with a stable index for sorting.
+    domain_order: dict[str, int] = {}
+    for c in controls:
+        d = c.domain or "General"
+        if d not in domain_order:
+            domain_order[d] = len(domain_order) + 1
+
+    items: List[dict] = []
+    # Stable iteration order: by domain index, then name.
+    for idx, (key, entry) in enumerate(
+        sorted(by_key.items(), key=lambda kv: (min(domain_order.get(d, 999) for d in kv[1]["domains"]), kv[0])),
+        start=1,
+    ):
+        primary_domain = sorted(entry["domains"], key=lambda d: domain_order.get(d, 999))[0]
+        stage_num = domain_order.get(primary_domain, idx)
+        items.append({
+            "id": -idx,  # negative ids — virtual, no DB row
+            "artifact_id": f"virtual_{idx:03d}",
+            "stage": f"Stage {stage_num}: {primary_domain}",
+            "stage_number": stage_num,
+            "name": entry["name"],
+            "artifact_type": entry["artifact_type"],
+            "control_ref": ", ".join(sorted(entry["control_refs"])) if entry["control_refs"] else None,
+            "mandatory": entry["mandatory"],
+            "description": entry["description"] or None,
+            "format": entry["format"],
+            "owner": None,
+            "is_platform_native": False,
+            "platform_data_type": None,
+        })
+
+    stages = sorted({i["stage"] for i in items}, key=lambda s: int(s.split(" ")[1].rstrip(":")) if s.startswith("Stage ") else 999)
+    return {
+        "framework_key": (framework.name or assessment_type).lower().replace(" ", "_")[:64],
+        "framework_name": framework.name or assessment_type,
+        "items": items,
+        "stages": stages,
+    }
+
+
 def _artifact_out(artifact: TenantArtifact) -> dict:
     assigned_name = None
     if artifact.assigned_to:
@@ -387,20 +569,48 @@ def get_catalog(
 ):
     """List catalog items for a framework. Accept either framework_key or assessment_type."""
     _ensure_catalog_seeded(db)
+    tenant_id = get_user_primary_tenant(current_user, db)
     resolved_key = framework_key
     if not resolved_key and assessment_type:
         resolved_key = _resolve_framework_key(assessment_type)
+
+    # If the framework is mapped, return its seeded catalog rows.
+    items: list = []
+    if resolved_key:
+        items = (
+            db.query(ArtifactCatalogItem)
+            .filter(ArtifactCatalogItem.framework_key == resolved_key)
+            .order_by(ArtifactCatalogItem.stage_number, ArtifactCatalogItem.artifact_id)
+            .all()
+        )
+
+    # Dynamic fallback: when no seeded rows are returned (either because the
+    # framework isn't in `ASSESSMENT_TYPE_MAP`, or because it is mapped but
+    # `artifact_catalog.json` doesn't curate it yet — ADHICS is the
+    # canonical example), build a virtual catalog from the tenant's parsed
+    # framework controls so the top-level Artifacts tab matches what the
+    # inline per-requirement compliance-artifacts section already shows.
+    if not items and assessment_type:
+        derived = _derive_catalog_from_framework(
+            db, tenant_id=tenant_id, assessment_type=assessment_type,
+        )
+        if derived:
+            return derived
+
     if not resolved_key:
         return {"framework_key": None, "framework_name": None, "items": [], "stages": []}
 
-    items = (
-        db.query(ArtifactCatalogItem)
-        .filter(ArtifactCatalogItem.framework_key == resolved_key)
-        .order_by(ArtifactCatalogItem.stage_number, ArtifactCatalogItem.artifact_id)
-        .all()
-    )
     stages = sorted({i.stage for i in items}, key=lambda s: (s.split(" ")[1] if s.startswith("Stage ") else s))
-    fw_name = items[0].framework_name if items else resolved_key
+    # Prefer the framework_name from a seeded catalog row; otherwise echo the
+    # caller's `assessment_type` so the UI displays "Abu Dhabi Healthcare ..."
+    # instead of the bare slug ("adhics") when a framework is mapped but has
+    # no curated catalog entries yet.
+    if items:
+        fw_name = items[0].framework_name
+    elif assessment_type:
+        fw_name = assessment_type
+    else:
+        fw_name = resolved_key
     return {
         "framework_key": resolved_key,
         "framework_name": fw_name,

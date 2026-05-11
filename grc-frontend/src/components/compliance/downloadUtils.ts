@@ -32,10 +32,12 @@ export function resolveDownloadFormat(
     (first === '' && f.includes('XLSX') && ['Register', 'Plan'].includes(artifactType))
   ) return 'xlsx';
 
-  // Logs / raw text formats
-  if (['LOGS', 'CONFIGS', 'CONSOLE'].includes(first)) return 'txt';
+  // EML, raw logs, and similar plain-text containers
+  if (['LOGS', 'CONFIGS', 'CONSOLE', 'EML', 'TXT'].includes(first)) return 'txt';
 
-  // Everything else: generate Word (covers DOCX, PDF, PPTX, Form, Dashboard, etc.)
+  // Everything else (DOCX, PDF, PPTX, Form, Dashboard, ...) → Word.
+  // PDF is intentionally rendered as DOCX since we don't bundle a PDF
+  // engine client-side; the user can convert to PDF from Word.
   return 'docx';
 }
 

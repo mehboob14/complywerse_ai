@@ -301,56 +301,74 @@ function RequirementArtifactsSection({
   // items use negative ids so they never collide with real catalog ids,
   // and carry the same shape as ArtifactCatalogItemT so the existing
   // render loop and Create modal accept them unchanged.
+  // Framework JSON shape is { name, description, filetype } per evidence
+  // requirement (see seed_data/frameworks/*.json). Older drafts used
+  // title/type/format — accept both so we don't silently regress on any
+  // framework whose seed data hasn't been migrated yet.
   const evidenceReqs = ((control as any).evidence_requirements || []) as Array<{
-    type?: string;
+    name?: string;
     title?: string;
+    type?: string;
     description?: string;
     is_required?: boolean;
     format?: string;
+    filetype?: string;
   }>;
   const realNames = new Set(
     realCatalog.map((c) => (c.name || '').toLowerCase().trim()).filter(Boolean),
   );
   const refForVirtual = refTokens[0] || null;
-  const inferArtifactType = (t?: string): string => {
-    const key = (t || '').toLowerCase();
-    if (!key) return 'Evidence';
-    if (key.includes('policy')) return 'Policy';
-    if (key.includes('procedure')) return 'Procedure';
-    if (key.includes('config')) return 'Configuration';
-    if (key.includes('log')) return 'Log';
-    if (key.includes('report')) return 'Report';
-    if (key.includes('contract')) return 'Contract';
-    if (key.includes('attest')) return 'Attestation';
-    if (key.includes('register') || key.includes('inventory')) return 'Register';
-    if (key.includes('matrix')) return 'Matrix';
-    if (key.includes('plan')) return 'Plan';
-    if (key.includes('screenshot')) return 'Screenshot';
-    if (key.includes('training')) return 'Training Record';
-    if (key.includes('assessment')) return 'Assessment';
-    // Title-case fallback so the badge reads naturally.
-    return key.charAt(0).toUpperCase() + key.slice(1);
+  // Infer the artifact's logical type (Policy / Procedure / Register / ...)
+  // from whatever signal we have — explicit `type`, the document name, or
+  // the required filetype as a last resort. Without this, every evidence
+  // item collapsed to "Evidence" because the seed JSON has no `type` key.
+  const inferArtifactType = (typeHint?: string, nameHint?: string, fileHint?: string): string => {
+    const combined = `${typeHint || ''} ${nameHint || ''}`.toLowerCase();
+    if (combined.includes('policy')) return 'Policy';
+    if (combined.includes('procedure')) return 'Procedure';
+    if (combined.includes('register') || combined.includes('inventory')) return 'Register';
+    if (combined.includes('matrix')) return 'Matrix';
+    if (combined.includes('plan')) return 'Plan';
+    if (combined.includes('contract') || combined.includes('agreement') || combined.includes('nda')) return 'Contract';
+    if (combined.includes('attest') || combined.includes('acknowledg')) return 'Attestation';
+    if (combined.includes('config')) return 'Configuration';
+    if (combined.includes('screenshot')) return 'Screenshot';
+    if (combined.includes('training') || combined.includes('awareness')) return 'Training Record';
+    if (combined.includes('audit') || combined.includes('assessment')) return 'Assessment';
+    if (combined.includes('report')) return 'Report';
+    if (combined.includes('log')) return 'Log';
+    if (combined.includes('minute') || combined.includes('email') || (fileHint || '').toUpperCase() === 'EML') return 'Record/Log';
+    if (combined.includes('certificate')) return 'Evidence';
+    // Sensible defaults by filetype if name didn't help.
+    const ft = (fileHint || '').toUpperCase();
+    if (ft === 'XLSX') return 'Register';
+    if (ft === 'EML') return 'Record/Log';
+    return 'Evidence';
   };
   const virtualCatalog: ArtifactCatalogItemT[] = evidenceReqs
     .filter((ev) => {
-      const name = (ev.title || '').toLowerCase().trim();
+      const name = ((ev.name ?? ev.title) || '').toLowerCase().trim();
       return name && !realNames.has(name);
     })
-    .map((ev, idx) => ({
-      id: -(idx + 1),
-      artifact_id: `virtual_${idx + 1}`,
-      stage: 'Auto-suggested',
-      stage_number: null,
-      name: (ev.title || `Evidence ${idx + 1}`).trim(),
-      artifact_type: inferArtifactType(ev.type),
-      control_ref: refForVirtual,
-      mandatory: !!ev.is_required,
-      description: ev.description || '',
-      format: (ev.format || 'DOCX').toUpperCase(),
-      owner: '',
-      is_platform_native: false,
-      platform_data_type: null,
-    }));
+    .map((ev, idx) => {
+      const fileType = (ev.filetype || ev.format || 'DOCX').toUpperCase();
+      const docName = (ev.name ?? ev.title ?? `Evidence ${idx + 1}`).trim();
+      return {
+        id: -(idx + 1),
+        artifact_id: `virtual_${idx + 1}`,
+        stage: 'Auto-suggested',
+        stage_number: null,
+        name: docName,
+        artifact_type: inferArtifactType(ev.type, docName, fileType),
+        control_ref: refForVirtual,
+        mandatory: !!ev.is_required,
+        description: ev.description || '',
+        format: fileType,
+        owner: '',
+        is_platform_native: false,
+        platform_data_type: null,
+      };
+    });
 
   // Final catalog the section renders: real seeded items first (best
   // curated), then virtual items filling any evidence-requirement gaps.

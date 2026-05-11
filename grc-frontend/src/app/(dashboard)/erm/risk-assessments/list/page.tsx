@@ -17,7 +17,7 @@ import {
   Upload,
   FileSpreadsheet,
   CheckCircle2,
-  BarChart3,
+  ArrowLeft,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -329,36 +329,36 @@ export default function RiskAssessmentsPage() {
   return (
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Assessments</h2>
-          <p className="text-sm text-slate-600">
-            Manage and track risk assessment activities
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3">
           <Link
             href="/erm/risk-assessments/dashboard"
-            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium text-slate-700 hover:bg-slate-50"
+            className="mt-0.5 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+            title="Back to Risk Assessments dashboard"
           >
-            <BarChart3 size={18} />
-            Dashboard
+            <ArrowLeft className="h-4 w-4" />
           </Link>
-          <Link
-            href="/erm/risk-assessments/framework"
-            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 font-medium text-slate-700 hover:bg-slate-50"
-          >
-            <ClipboardCheck size={18} />
-            Framework Risk Assessment
-          </Link>
+          <div>
+            <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Risk Assessments</h2>
+            <p className="text-sm text-slate-600">
+              Manage and track risk assessment activities
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {/* Dashboard + Framework Risk Assessment shortcuts intentionally
+              omitted here — both are already reachable from the Risk
+              Assessments overview at /erm/risk-assessments, which is the
+              default landing for this nav entry. Duplicating them on the
+              list page just adds visual noise. */}
           {canCreate && (
           <button
             onClick={() => {
               resetUploadForm();
               setIsUploadModalOpen(true);
             }}
-            className="flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-4 py-2 font-medium text-blue-700 hover:bg-blue-50"
+            className="flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50"
           >
-            <Upload size={18} />
+            <Upload size={16} />
             Upload Risk Assessment
           </button>
           )}
@@ -368,9 +368,9 @@ export default function RiskAssessmentsPage() {
               resetForm();
               setIsModalOpen(true);
             }}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 sm:px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
           >
-            <Plus size={18} />
+            <Plus size={16} />
             New Assessment
           </button>
           )}
