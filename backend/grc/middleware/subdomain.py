@@ -6,6 +6,7 @@ looks it up in the master catalog, and stashes the result on `request.state` so
 downstream dependencies (`get_tenant_db`) can resolve to the right per-tenant DB.
 """
 
+import os
 import re
 from typing import Optional
 
@@ -119,7 +120,13 @@ class TenantMiddleware(BaseHTTPMiddleware):
         # which is exactly what those flows need.
         cookie_slug = _slug_from_auth_cookie(request)
 
-        chosen_slug = cookie_slug or x_tenant_slug or qp_tenant_slug
+        # Single-tenant / IP-only deployment fallback: when nothing in the
+        # request identifies a tenant and DEFAULT_TENANT_SLUG is set, resolve
+        # to that tenant. Useful for staging-on-IP and pure single-tenant
+        # installs where there's no subdomain to extract.
+        default_slug = (os.environ.get("DEFAULT_TENANT_SLUG") or "").strip() or None
+
+        chosen_slug = cookie_slug or x_tenant_slug or qp_tenant_slug or default_slug
         if subdomain or chosen_slug:
             db = MasterSession()
             try:
