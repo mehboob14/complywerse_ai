@@ -107,6 +107,80 @@ services:
       start_period: 30s
     networks: [grc-stg-net]
 
+  # Celery worker for the `parsing` queue. Mirrors the local invocation
+  # `python -m celery -A grc.celery_app worker --queues=parsing --pool=solo
+  # --loglevel=info --hostname=parsing-worker@%h`, packaged as a service so it
+  # restarts on its own and survives reboots. Reuses the already-built backend
+  # image (grc-stg-backend:latest) — no separate Dockerfile, no extra build
+  # pass — and re-states the same env block so the worker reads the same
+  # Redis broker + per-tenant DB URLs the API does.
+  celery-parsing:
+    image: grc-stg-backend:latest
+    container_name: grc-stg-celery-parsing
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+      # Wait for the backend so the init_master_db() bootstrap has run before
+      # the worker tries to touch the schema. Workers can technically run
+      # standalone, but staging benefits from the simpler ordering.
+      backend:  { condition: service_started }
+    environment:
+      # ---- Database (same URLs the API uses) ----
+      MASTER_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TENANT_DB_URL_TEMPLATE: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/grc_{slug}
+      POSTGRES_ADMIN_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/postgres
+
+      # ---- Redis / broker (same DB indices the API points at) ----
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+
+      # ---- Required-at-import secrets ----
+      # auth_router.py is imported transitively by celery task modules
+      # (audit_logger -> auth_router) and raises at import if this is missing.
+      SESSION_SECRET: ${SESSION_SECRET}
+
+      # ---- AI / LLM — parsing tasks call OpenAI for control extraction ----
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      AI_INTEGRATIONS_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AI_INTEGRATIONS_OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+
+      # ---- Embedded runtime flags ----
+      # The worker process never serves HTTP, so the embedded FastAPI
+      # workflow runtime would be wasted threads here. Force it off
+      # regardless of what the backend service is set to.
+      DISABLE_EMBEDDED_WORKFLOW_RUNTIME: "1"
+      DISABLE_COMPLYCHAT_EMBED_WORKER: "${DISABLE_COMPLYCHAT_EMBED_WORKER:-1}"
+
+      DEFAULT_TENANT_SLUG: "${DEFAULT_TENANT_SLUG:-}"
+    volumes:
+      # Same uploads volume the API writes to — parsing tasks read the
+      # uploaded PDF/DOCX files from /app/uploads/.
+      - backend_uploads:/app/uploads
+    command:
+      - "celery"
+      - "-A"
+      - "grc.celery_app"
+      - "worker"
+      - "--queues=parsing"
+      - "--pool=solo"
+      - "--loglevel=info"
+      - "--hostname=parsing-worker@%h"
+    # No host port — the worker is broker-driven and has no HTTP surface.
+    healthcheck:
+      # `celery inspect ping` round-trips a message through the broker, so
+      # exit-0 proves the worker AND its redis connection are both alive.
+      # No `-d` filter — any worker on the broker counts, which keeps the
+      # check robust to hostname/container-id changes on recreate.
+      test: ["CMD-SHELL", "celery -A grc.celery_app inspect ping >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks: [grc-stg-net]
+
   frontend:
     build:
       context: ./grc-frontend
