@@ -579,12 +579,18 @@ export default function CommitteeDetailPage() {
   };
 
   // For AI-drafted (or any text-only) charters that have no uploaded file yet,
-  // build a downloadable Markdown file straight from the stored content. Saves
-  // a round-trip to the server and lets the user grab the draft right away.
-  const handleDownloadCharterContent = (charter: Charter) => {
+  // build a downloadable Word document straight from the stored content.
+  // Reuses the existing markdown-to-docx helper from the compliance module so
+  // every download path in the app produces the same formatting (headings,
+  // tables, bullet lists). Users get a `.docx` they can open in Word /
+  // LibreOffice / Google Docs without any conversion step.
+  const handleDownloadCharterContent = async (charter: Charter) => {
+    // Lazy import — the docx generator pulls in ~150KB of code we don't want
+    // on the initial bundle for users who never download a charter.
+    const { downloadAsDocx } = await import('@/components/compliance/downloadUtils');
     const safeName = (charter.title || 'charter').replace(/[^a-z0-9_\- ]/gi, '_').trim() || 'charter';
     const versionTag = charter.version ? `_v${charter.version}` : '';
-    const filename = `${safeName}${versionTag}.md`;
+    const filename = `${safeName}${versionTag}`;  // .docx appended by downloadAsDocx
     const header = [
       `# ${charter.title || 'Committee Charter'}`,
       charter.version ? `**Version:** ${charter.version}` : '',
@@ -596,15 +602,7 @@ export default function CommitteeDetailPage() {
       '',
     ].filter(Boolean).join('\n');
     const body = charter.content || '_No content provided._';
-    const blob = new Blob([`${header}\n${body}\n`], { type: 'text/markdown;charset=utf-8' });
-    const url  = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    await downloadAsDocx(filename, `${header}\n${body}\n`);
   };
 
   const formatFileSize = (bytes?: number) => {

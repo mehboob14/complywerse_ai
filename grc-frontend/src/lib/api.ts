@@ -1674,8 +1674,18 @@ export const vulnManagementApi = {
     delete: (id: number) => apiClient.delete(`/vuln-management/vulnerabilities/${id}`),
     assign: (id: number, userId: number) => 
       apiClient.post(`/vuln-management/vulnerabilities/${id}/assign`, { user_id: userId }),
-    changeStatus: (id: number, status: string, notes?: string) => 
+    changeStatus: (id: number, status: string, notes?: string) =>
       apiClient.post(`/vuln-management/vulnerabilities/${id}/status`, { status, notes }),
+    // Threat-intelligence enrichment: pulls NVD canonical metadata, EPSS
+    // exploit probability, and CISA KEV flag for the vuln's CVE-ID, then
+    // recomputes composite_priority. Idempotent — safe to call repeatedly.
+    enrich: (id: number) =>
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/enrich`),
+    // Bulk backfill: queues a Celery job to enrich every open vuln in the
+    // tenant. Returns immediately with {queued, task_id}. Used by the
+    // "Enrich all" button on the list page after rolling out the feature.
+    enrichAll: () =>
+      apiClient.post(`/vuln-management/vulnerabilities/enrich-all`),
   },
   mitigations: {
     list: (vulnId: number) => 
@@ -2319,6 +2329,44 @@ export const adminApi = {
     permission_names?: string[] 
   }) => apiClient.put(`/admin/roles/${id}`, data),
   deleteRole: (id: number) => apiClient.delete(`/admin/roles/${id}`),
+  // Drill-down: returns the users assigned to a role with assignment metadata.
+  // Used by the Role Management page's "view members" button.
+  getRoleMembers: (id: number) =>
+    apiClient.get<{
+      role_id: number;
+      role_name: string;
+      member_count: number;
+      members: Array<{
+        user_id: number;
+        username: string;
+        email: string;
+        display_name: string | null;
+        is_active: boolean;
+        assigned_at: string | null;
+        assigned_by_user_id: number | null;
+        user_role_id: number;
+      }>;
+    }>(`/admin/roles/${id}/members`),
+
+  // Password / lockout policy ─ used by the Administration → Password Policy
+  // page and by the dashboard's idle-timeout sentinel.
+  getPasswordPolicy: () =>
+    apiClient.get<{
+      id: number;
+      min_length: number;
+      require_uppercase: boolean;
+      require_lowercase: boolean;
+      require_digit: boolean;
+      require_special: boolean;
+      lockout_threshold: number;
+      lockout_minutes: number;
+      session_idle_timeout_minutes: number;
+      password_history_count: number;
+      max_password_age_days: number;
+      updated_at: string | null;
+    }>('/admin/password-policy'),
+  updatePasswordPolicy: (data: Record<string, unknown>) =>
+    apiClient.put('/admin/password-policy', data),
 
   getPermissions: () => apiClient.get<{ name: string; module: string; submodule: string; action: string; description: string }[]>('/admin/permissions'),
   getPermissionMatrix: () => apiClient.get<PermissionModule[]>('/admin/permissions/matrix'),

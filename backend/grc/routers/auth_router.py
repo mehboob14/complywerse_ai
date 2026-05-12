@@ -183,6 +183,45 @@ def require_auth(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
+
+    # ---- Inactive-session enforcement ----------------------------------------
+    # Read the policy lazily so any failure (table missing, transient error)
+    # falls back to "no idle check" — auth must never break because of policy
+    # plumbing. The frontend also kicks the user out at idle; this is the
+    # belt-and-braces server-side enforcement that catches forgotten-open
+    # tabs even if the browser tab never made the logout call.
+    try:
+        from ..services.password_policy import (
+            get_active_password_policy,
+            is_session_idle,
+            touch_last_activity,
+        )
+        policy = get_active_password_policy(db)
+        if is_session_idle(user, policy):
+            # Force a fresh login. Reset activity so the user can immediately
+            # log in again without hitting the locked-account path.
+            user.last_activity_at = None
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session expired due to inactivity. Please log in again.",
+            )
+        # Bump activity. To keep this cheap on read-heavy endpoints we only
+        # write to the DB once per ~60s per user — the in-memory ORM state
+        # is updated every call, but the COMMIT is rate-limited.
+        from datetime import datetime as _dt, timedelta as _td
+        last = getattr(user, "last_activity_at", None)
+        if last is None or (_dt.utcnow() - last) > _td(seconds=60):
+            touch_last_activity(user, db, commit=True)
+    except HTTPException:
+        raise
+    except Exception:
+        # Never let policy plumbing break a real request.
+        pass
+
     return user
 
 
@@ -403,13 +442,45 @@ def login(
                 _vp = f"ERROR: {_e!r}"
             _dlog(f"verify_password = {_vp!r} (password_len={len(request.password) if request.password else 0})")
 
+        # ---- Lockout gate ---------------------------------------------------
+        # Load the tenant's password policy once; same object drives both the
+        # lockout decision below and the failed-attempt bookkeeping. Wrapped
+        # in try/except so any failure here falls back to safe defaults — auth
+        # must never break because the policy table is in a weird state.
+        from ..services.password_policy import (
+            get_active_password_policy,
+            is_account_locked,
+            register_failed_login,
+            register_successful_login,
+        )
+        policy = get_active_password_policy(tdb)
+        if user and is_account_locked(user):
+            _dlog("RAISING 423 — account is locked")
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail=(
+                    "Account is temporarily locked due to repeated failed login attempts. "
+                    f"Try again after {user.locked_until.isoformat()} UTC."
+                ),
+            )
+
         if not user or not verify_password(request.password, user.password_hash):
             _dlog("RAISING 401 — user missing OR verify_password False")
+            # Only meaningful when the user actually exists — we don't want
+            # to lock out a guessed-at email. The counter is per-user.
+            if user is not None:
+                register_failed_login(user, policy, tdb)
+                try:
+                    tdb.commit()
+                except Exception:
+                    tdb.rollback()
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
 
+        # Reset counters + bump last_activity on success.
+        register_successful_login(user, tdb)
         user.last_login = datetime.utcnow()
         tdb.commit()
 
@@ -636,6 +707,16 @@ def register_organization(
         suffix = str(counter)
         subdomain = (base_subdomain[: 20 - len(suffix)] + suffix)
         counter += 1
+
+    # Complexity check against the platform default policy. The about-to-be-
+    # created tenant DB doesn't have a PasswordPolicy row yet, so we use the
+    # in-memory DEFAULT_POLICY constant — same rules every brand-new tenant
+    # gets seeded with, so the first password is held to the same bar as
+    # any later admin-created user.
+    from ..services.password_policy import DEFAULT_POLICY, validate_password
+    pw_ok, pw_err = validate_password(request.password, DEFAULT_POLICY)
+    if not pw_ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=pw_err)
 
     username = request.email.split("@")[0]
     password_hash = hash_password(request.password)

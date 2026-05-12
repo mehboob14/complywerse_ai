@@ -107,6 +107,18 @@ def _build_vulnerability_response(v: Vulnerability) -> VulnerabilityResponse:
         linked_assets=linked_assets,
         template_type=getattr(v, "template_type", None),
         template_fields=getattr(v, "template_fields", None) or None,
+        # Threat-intelligence enrichment — all None on un-enriched rows. The
+        # frontend hides each chip/badge when the value is None so rows without
+        # a CVE-ID render exactly as before.
+        epss_score=getattr(v, "epss_score", None),
+        epss_percentile=getattr(v, "epss_percentile", None),
+        kev_flag=getattr(v, "kev_flag", None),
+        kev_date_added=getattr(v, "kev_date_added", None),
+        nvd_published_at=getattr(v, "nvd_published_at", None),
+        nvd_last_modified_at=getattr(v, "nvd_last_modified_at", None),
+        nvd_last_synced_at=getattr(v, "nvd_last_synced_at", None),
+        exploit_references=list(getattr(v, "exploit_references", None) or []) or None,
+        composite_priority=getattr(v, "composite_priority", None),
     )
 
 
@@ -567,3 +579,88 @@ def change_vulnerability_status(
     ).filter(Vulnerability.id == vuln.id).first()
 
     return _build_vulnerability_response(vuln)
+
+
+# ---------------------------------------------------------------------------
+# Threat-intelligence enrichment
+# ---------------------------------------------------------------------------
+# Pulls EPSS exploit-probability, CISA KEV flag, and NVD canonical metadata
+# from free public APIs, writes them to the vuln row, and recomputes
+# composite_priority. Synchronous and best-effort — every external call has
+# its own try/except inside the service, so this endpoint never 5xx's because
+# a third-party service is slow or down.
+
+
+@router.post("/vulnerabilities/{vuln_id}/enrich", response_model=VulnerabilityResponse)
+def enrich_vulnerability_endpoint(
+    vuln_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Run NVD + EPSS + CISA KEV enrichment for one vuln. Returns the
+    updated record. Idempotent — calling repeatedly just refreshes the
+    enrichment fields (EPSS especially changes daily)."""
+    user_tenants = get_user_tenants(current_user, db)
+    vuln = get_vuln_or_404(vuln_id, user_tenants, db)
+
+    # Lazy import keeps the optional `requests` + redis deps out of this
+    # module's import path for callers that never hit the enrich endpoint.
+    from ..enrichment import enrich_vulnerability
+
+    try:
+        enrich_vulnerability(vuln, db)
+    except Exception:
+        # The service is designed never to raise; this catch is paranoia.
+        # Don't fail the request — return whatever state the row is in.
+        import logging
+        logging.getLogger(__name__).exception(
+            "Unexpected exception during enrichment for vuln %s", vuln.id
+        )
+
+    db.refresh(vuln)
+    vuln = db.query(Vulnerability).options(
+        joinedload(Vulnerability.assignee),
+        joinedload(Vulnerability.verifier),
+        joinedload(Vulnerability.asset_links).joinedload(VulnerabilityAssetLink.asset),
+    ).filter(Vulnerability.id == vuln.id).first()
+    return _build_vulnerability_response(vuln)
+
+
+@router.post("/vulnerabilities/enrich-all")
+def bulk_enrich_endpoint(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Queue a bulk-enrichment Celery job for the caller's tenant. Returns
+    immediately — actual work runs in the worker. Use this to backfill
+    EPSS/KEV/NVD on rows that pre-date the enrichment feature."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    # Resolve slug for TenantTask. Lazy import keeps Celery deps out of the
+    # request path until someone actually clicks the button.
+    from ....db import MasterSession
+    from ....models import Tenant as _Tenant
+
+    master = MasterSession()
+    try:
+        row = master.query(_Tenant.slug).filter(_Tenant.id == tenant_id).first()
+    finally:
+        master.close()
+
+    if not row or not row[0]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not resolve tenant slug for bulk enrichment.",
+        )
+
+    try:
+        from ...tasks.vulnerabilities import bulk_enrich_open_vulns
+        result = bulk_enrich_open_vulns.delay(tenant_slug=row[0], only_with_cve=True)
+        return {"queued": True, "task_id": result.id}
+    except Exception as exc:
+        # Broker down — give the user a clear message instead of a 500.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Could not queue bulk enrichment: {exc}",
+        )

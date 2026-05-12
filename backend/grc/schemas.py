@@ -1986,6 +1986,18 @@ class VulnerabilityResponse(BaseModel):
     linked_assets: List[str] = []
     template_type: Optional[str] = None
     template_fields: Optional[dict] = None
+    # Threat-intelligence enrichment (NVD / EPSS / CISA KEV). All optional so
+    # un-enriched rows render unchanged in the UI; the frontend hides each
+    # field when None.
+    epss_score: Optional[float] = None
+    epss_percentile: Optional[float] = None
+    kev_flag: Optional[bool] = None
+    kev_date_added: Optional[datetime] = None
+    nvd_published_at: Optional[datetime] = None
+    nvd_last_modified_at: Optional[datetime] = None
+    nvd_last_synced_at: Optional[datetime] = None
+    exploit_references: Optional[List[str]] = None
+    composite_priority: Optional[float] = None
 
     class Config:
         from_attributes = True

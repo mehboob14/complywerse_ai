@@ -319,6 +319,23 @@ class SyncService:
                 "ip_address": getattr(a, "ip_address", "") or "",
             } for a in fallback_assets]
 
+        # Resolve the tenant's slug ONCE so we can fan out async enrichment
+        # tasks per new/updated vuln. If anything goes wrong here, enrichment
+        # is silently skipped for this sync — the sync itself still succeeds
+        # and the daily Celery refresh will catch the un-enriched rows.
+        tenant_slug_for_enrich: Optional[str] = None
+        try:
+            from ...db import MasterSession  # local import — avoids circulars
+            from ...models import Tenant as _MasterTenant
+            _m = MasterSession()
+            try:
+                _row = _m.query(_MasterTenant.slug).filter(_MasterTenant.id == tenant_id).first()
+                tenant_slug_for_enrich = _row[0] if _row else None
+            finally:
+                _m.close()
+        except Exception:
+            logger.warning("Could not resolve tenant slug for enrichment (tenant_id=%s)", tenant_id)
+
         seen_vuln_ids = set()
         vuln_detail_cache: Dict[str, Dict] = {}
 
@@ -430,6 +447,24 @@ class SyncService:
                                 impact_on_asset="Detected by scanner on linked asset",
                                 created_by=None,
                             ))
+
+                        # Fan out enrichment for any vuln that has a CVE-ID.
+                        # Wrapped in try/except so a broker/redis issue can
+                        # never poison the sync — the daily refresh task
+                        # will catch anything that slips through here.
+                        if tenant_slug_for_enrich and db_vuln.cve_id:
+                            try:
+                                from ...tasks.vulnerabilities import enrich_vuln as _enrich_vuln_task
+                                _enrich_vuln_task.delay(
+                                    tenant_slug=tenant_slug_for_enrich,
+                                    vuln_id=db_vuln.id,
+                                )
+                            except Exception:
+                                logger.warning(
+                                    "Could not dispatch enrichment for vuln %s",
+                                    db_vuln.id,
+                                    exc_info=False,
+                                )
 
                         if is_nessus:
                             sol_detail = merged

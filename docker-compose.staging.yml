@@ -181,6 +181,57 @@ services:
       start_period: 60s
     networks: [grc-stg-net]
 
+  # Celery beat — the periodic-task scheduler. Owns ONE responsibility: fire
+  # the daily vulnerability-enrichment refresh on the schedule defined in
+  # `celery_app.py:beat_schedule`. The actual work runs on the `celery-parsing`
+  # worker; beat just dispatches the message at the right time. Tiny resource
+  # footprint (~30-50 MB idle).
+  #
+  # Why a separate container: running `--beat` inside the worker has the
+  # well-known caveat that workers reset their schedule on restart, and a
+  # double-`--beat` (two workers each with `-B`) causes duplicate task firings.
+  # A dedicated beat container is the documented Celery production pattern.
+  celery-beat:
+    image: grc-stg-backend:latest
+    container_name: grc-stg-celery-beat
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis:    { condition: service_healthy }
+      backend:  { condition: service_started }
+    environment:
+      MASTER_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      TENANT_DB_URL_TEMPLATE: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/grc_{slug}
+      POSTGRES_ADMIN_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/postgres
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      SESSION_SECRET: ${SESSION_SECRET}
+      DISABLE_EMBEDDED_WORKFLOW_RUNTIME: "1"
+      DISABLE_COMPLYCHAT_EMBED_WORKER: "1"
+      DEFAULT_TENANT_SLUG: "${DEFAULT_TENANT_SLUG:-}"
+      # Optional NVD API key — without it, NVD allows 5 req/30s. With it,
+      # 50 req/30s. The 7-day Redis cache makes this rarely the bottleneck.
+      NVD_API_KEY: "${NVD_API_KEY:-}"
+    command:
+      - "celery"
+      - "-A"
+      - "grc.celery_app"
+      - "beat"
+      - "--loglevel=info"
+      # Store the schedule file outside /tmp so it survives a container
+      # restart and beat doesn't refire missed tasks at boot.
+      - "--schedule=/app/celerybeat-schedule.db"
+    healthcheck:
+      # beat doesn't expose a health endpoint; pgrep ensures the process is
+      # alive. The 60s start period gives Python time to import grc.*.
+      test: ["CMD-SHELL", "pgrep -f 'celery .* beat' >/dev/null || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks: [grc-stg-net]
+
   frontend:
     build:
       context: ./grc-frontend

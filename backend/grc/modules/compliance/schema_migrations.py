@@ -158,6 +158,29 @@ _COLUMN_ADDS = [
     ("grc_framework_risk_questions", "clause_reference", "VARCHAR(100)", None),
     ("grc_framework_risk_questions", "methodology_fields", "JSON", None),
     ("grc_framework_risk_questions", "source_quote", "TEXT", None),
+    # Vulnerability enrichment columns — NVD / EPSS / CISA KEV. All nullable
+    # with conservative defaults so existing rows stay valid; populated on
+    # demand via /vulnerabilities/{id}/enrich, on ingest via Celery, and by
+    # the daily refresh task.
+    ("grc_vulnerabilities", "epss_score", "DOUBLE PRECISION", None),
+    ("grc_vulnerabilities", "epss_percentile", "DOUBLE PRECISION",
+     "ix_vuln_epss_percentile"),
+    ("grc_vulnerabilities", "kev_flag", "BOOLEAN DEFAULT FALSE",
+     "ix_vuln_kev_flag"),
+    ("grc_vulnerabilities", "kev_date_added", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "nvd_published_at", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "nvd_last_modified_at", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "nvd_last_synced_at", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "exploit_references", "JSON DEFAULT '[]'::json", None),
+    ("grc_vulnerabilities", "composite_priority", "DOUBLE PRECISION",
+     "ix_vuln_composite_priority"),
+    # Account lockout + activity tracking on grc_users. All nullable so the
+    # column adds are pure no-ops for existing users; login handler treats
+    # NULL as "0 failed attempts / no lock / never seen activity yet".
+    ("grc_users", "failed_login_attempts", "INTEGER DEFAULT 0", None),
+    ("grc_users", "locked_until", "TIMESTAMP", "ix_grc_users_locked_until"),
+    ("grc_users", "last_activity_at", "TIMESTAMP", None),
+    ("grc_users", "password_changed_at", "TIMESTAMP", None),
 ]
 
 

@@ -1301,7 +1301,10 @@ def _extract_cloud_controls_from_lines(lines: List[str]) -> List[dict]:
             "control_description": merged_description,
             "compliance_status": "in_progress",
             "priority": "medium",
-            "remarks": "Framework: Saudi NCA Cloud Cybersecurity Controls (CCC-2:2024)",
+            # Remarks left blank — assessors fill their own notes here. The
+            # framework banner that used to occupy this field was redundant
+            # with the assessment-level metadata.
+            "remarks": None,
         })
         seen_ids.add(current_id)
         current_id = None
@@ -1334,11 +1337,146 @@ def _extract_cloud_controls_from_lines(lines: List[str]) -> List[dict]:
     return controls
 
 
+def _ccc_sort_key(code: str) -> Tuple[int, int, int, int, int]:
+    """Order CCC items deterministically — domain, subdomain, party (P before
+    T), main control, subcontrol. Codes that fall outside this shape sort
+    last so we never crash on a stray identifier."""
+    parts = (code or "").split("-")
+    def _i(value: str, fallback: int = 999) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return fallback
+    party_order = {"P": 0, "T": 1}
+    domain = _i(parts[0]) if len(parts) > 0 else 999
+    subdomain = _i(parts[1]) if len(parts) > 1 else 999
+    party = party_order.get(parts[2].upper(), 9) if len(parts) > 2 else 9
+    main_ctrl = _i(parts[3]) if len(parts) > 3 else 0
+    sub_ctrl = _i(parts[4]) if len(parts) > 4 else 0
+    return (domain, subdomain, party, main_ctrl, sub_ctrl)
+
+
+def _apply_curated_ccc_text(items: List[dict]) -> List[dict]:
+    """Override extracted CCC descriptions with curated official text and
+    inject any curated codes the PDF extractor missed entirely.
+
+    Curated text wins over the line-by-line PyPDF extraction because the
+    extractor regularly produces fragments / partial sentences on the
+    CCC-2:2024 PDF — the source document is dense with bullet lists that
+    don't survive plain-text extraction cleanly. Codes not in the curated
+    file keep whatever the extractor produced (no regression for items
+    we haven't transcribed yet).
+    """
+    curated = _get_ccc_curated_text()
+    if not curated:
+        return items
+
+    seen_codes = {item.get("item_number") for item in items if item.get("item_number")}
+
+    for item in items:
+        code = (item.get("item_number") or "").strip().upper()
+        # Re-key against the curated map's casing convention (P/T are upper).
+        if code in curated:
+            item["control_description"] = curated[code]
+        elif code.upper() in curated:
+            item["control_description"] = curated[code.upper()]
+
+    provider_tenant_map = {"P": "CSP", "T": "CST"}
+    domain_map = {
+        "1": "Cybersecurity Governance",
+        "2": "Cybersecurity Defense",
+        "3": "Cybersecurity Resilience",
+        "4": "Third-Party Cybersecurity",
+    }
+    for code, text in curated.items():
+        if code in seen_codes:
+            continue
+        id_parts = code.split("-")
+        main_domain_no = id_parts[0] if id_parts else ""
+        party_code = id_parts[2].upper() if len(id_parts) >= 3 else ""
+        party_label = provider_tenant_map.get(party_code)
+        domain_label = domain_map.get(main_domain_no, f"Domain {main_domain_no}" if main_domain_no else "Cloud Cybersecurity Controls")
+        if party_label:
+            domain_label = f"{domain_label} ({party_label})"
+        items.append({
+            "item_number": code,
+            "area_domain": domain_label,
+            "control_description": text,
+            "compliance_status": "in_progress",
+            "priority": "medium",
+            # See note above: leave remarks blank for assessor input.
+            "remarks": None,
+        })
+        seen_codes.add(code)
+
+    items.sort(key=lambda it: _ccc_sort_key(it.get("item_number") or ""))
+    return items
+
+
 DCC_DOMAIN_LABELS: Dict[int, str] = {
     1: "Cybersecurity Governance",
     2: "Cybersecurity Defense",
     3: "Third-Party and Cloud Computing Cybersecurity",
 }
+
+
+# ---------------------------------------------------------------------------
+# Curated NCA control text
+# ---------------------------------------------------------------------------
+# The DCC and CCC PDFs render their control clauses as flowing text with
+# nested bullets, so PyPDF2 text extraction (and even OCR) routinely produces
+# misaligned fragments. Rather than depend on that, we ship hand-transcribed
+# clauses from the official NCA documents and use them as the *primary* text
+# source. The PDF/OCR path remains as a fallback, so anything we haven't
+# transcribed yet still gets the best-effort extraction it had before.
+#
+# Files are read once per process and cached.
+# ---------------------------------------------------------------------------
+
+_NCA_TEXT_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "seed_data", "nca_control_text",
+)
+_DCC_CONTROL_TEXT_PATH = os.path.join(_NCA_TEXT_DIR, "dcc_control_text.json")
+_CCC_CONTROL_TEXT_PATH = os.path.join(_NCA_TEXT_DIR, "ccc_control_text.json")
+
+_DCC_CONTROL_TEXT_CACHE: Optional[Dict[str, str]] = None
+_CCC_CONTROL_TEXT_CACHE: Optional[Dict[str, str]] = None
+
+
+def _load_curated_control_text(path: str) -> Dict[str, str]:
+    """Read the `{code: text}` map from a curated NCA JSON file.
+
+    Returns an empty dict on any failure so the upload path falls through
+    cleanly to OCR/text-extraction rather than 500ing.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            payload = json.load(fh) or {}
+    except Exception:
+        return {}
+    controls = payload.get("controls") if isinstance(payload, dict) else None
+    if not isinstance(controls, dict):
+        return {}
+    out: Dict[str, str] = {}
+    for code, text in controls.items():
+        if isinstance(code, str) and isinstance(text, str) and text.strip():
+            out[code.strip()] = text.strip()
+    return out
+
+
+def _get_dcc_curated_text() -> Dict[str, str]:
+    global _DCC_CONTROL_TEXT_CACHE
+    if _DCC_CONTROL_TEXT_CACHE is None:
+        _DCC_CONTROL_TEXT_CACHE = _load_curated_control_text(_DCC_CONTROL_TEXT_PATH)
+    return _DCC_CONTROL_TEXT_CACHE
+
+
+def _get_ccc_curated_text() -> Dict[str, str]:
+    global _CCC_CONTROL_TEXT_CACHE
+    if _CCC_CONTROL_TEXT_CACHE is None:
+        _CCC_CONTROL_TEXT_CACHE = _load_curated_control_text(_CCC_CONTROL_TEXT_PATH)
+    return _CCC_CONTROL_TEXT_CACHE
 
 
 def _dcc_code_sort_key(code: str) -> Tuple[int, int, int, int]:
@@ -1491,11 +1629,15 @@ def _extract_dcc_control_descriptions_from_ocr(file_content: bytes) -> Dict[str,
 
 def _build_dcc_full_control_items(file_content: bytes) -> List[dict]:
     expected_catalog = _build_dcc_expected_code_catalog()
-    description_map = _extract_dcc_control_descriptions_from_ocr(file_content)
+    # Curated text from the official PDF — primary source. OCR remains as a
+    # secondary signal so any code the curated file doesn't cover yet still
+    # gets best-effort text rather than only a placeholder.
+    curated = _get_dcc_curated_text()
+    ocr_map = _extract_dcc_control_descriptions_from_ocr(file_content) if not curated else {}
     items: List[dict] = []
 
     for code, domain in expected_catalog:
-        description = description_map.get(code)
+        description = curated.get(code) or ocr_map.get(code)
         if not description:
             if len(code.split("-")) == 3:
                 description = f"Saudi NCA DCC control requirement {code}."
@@ -1508,7 +1650,10 @@ def _build_dcc_full_control_items(file_content: bytes) -> List[dict]:
             "control_description": description,
             "compliance_status": "in_progress",
             "priority": "medium",
-            "remarks": "Framework: Saudi NCA Data Cybersecurity Controls (DCC-1:2022). Full control-level extraction.",
+            # Remarks intentionally left blank so the assessor's own notes
+            # land here when they fill the row in; the framework banner that
+            # used to pre-fill this field was just visual noise.
+            "remarks": None,
         })
 
     return items
@@ -1626,6 +1771,10 @@ def parse_cis_windows_server_2012_r2_pdf(file_content: bytes, file_name: str) ->
 
     if _contains_pdf_signature(probe_text, nca_cloud_signatures):
         cloud_items = _extract_cloud_controls_from_lines(all_lines)
+        # Override per-control descriptions with curated official text and
+        # backfill any codes the line-by-line extractor missed. Falls through
+        # cleanly to the raw extraction when the curated JSON is absent.
+        cloud_items = _apply_curated_ccc_text(cloud_items or [])
         if not cloud_items:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

@@ -571,6 +571,34 @@ function WorkflowEngineContent() {
 
   useEffect(() => { if (nodes.length === 0 && edges.length === 0) resetDraft(); }, []); // eslint-disable-line
 
+  // ─── Cancel / discard unsaved changes ───────────────────────────────────────
+  // For an open existing workflow → re-apply the canonical DB version onto the
+  // canvas (drops every unsaved edit). For a brand-new untitled draft → just
+  // reset the canvas to the start/end skeleton. Both branches confirm with the
+  // user first so an accidental click doesn't blow away their work.
+  const discardChanges = useCallback(() => {
+    const message = selectedDefinition
+      ? `Discard all unsaved changes to "${selectedDefinition.name || 'this workflow'}"? The canvas will be reset to the last saved version.`
+      : 'Discard this draft? The canvas will be reset to an empty Start → End workflow.';
+    if (!confirm(message)) return;
+    if (selectedDefinition) {
+      setName(selectedDefinition.name || '');
+      setDescription(selectedDefinition.description || '');
+      setTriggerEvent(selectedDefinition.trigger_event || 'manual.trigger');
+      setIsActive(selectedDefinition.is_active ?? true);
+      setTriggerConditionsText(JSON.stringify(selectedDefinition.trigger_conditions || {}, null, 2));
+      setDefinitionJsonText(JSON.stringify(selectedDefinition.definition_json || {}, null, 2));
+      const rawNodes = (selectedDefinition.nodes || []) as BackendNode[];
+      const rawEdges = (selectedDefinition.edges || []) as BackendEdge[];
+      setNodes(toFlowNodes(rawNodes, selectedDefinition.definition_json as Record<string, unknown>));
+      setEdges(toFlowEdges(rawEdges));
+      setSelectedNodeId(null);
+      setSelectedEdgeId(null);
+    } else {
+      resetDraft();
+    }
+  }, [selectedDefinition, resetDraft, setNodes, setEdges]);
+
   // ─── Canvas serialization ─────────────────────────────────────────────────
   const serializeCanvas = useCallback(() => {
     const positions: Record<string, { x: number; y: number }> = {};
@@ -1325,6 +1353,7 @@ function WorkflowEngineContent() {
         onNameChange={setName}
         onToggleActive={() => setIsActive((v) => !v)}
         onSave={saveDefinition}
+        onCancel={discardChanges}
         onTrigger={() => triggerSelected()}
         onDelete={deleteDefinition}
         onNewWorkflow={resetDraft}

@@ -32,6 +32,7 @@ import {
   ChevronDown,
   Route,
   Save,
+  Shield,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -166,6 +167,18 @@ interface Vulnerability {
   report_id?: number;
   report_name?: string;
   created_at: string;
+  // Threat-intelligence enrichment (NVD / EPSS / CISA KEV). All optional —
+  // when the backend hasn't enriched a row yet these are absent and the UI
+  // hides each chip/badge cleanly.
+  epss_score?: number;            // 0.0 - 1.0
+  epss_percentile?: number;       // 0.0 - 1.0
+  kev_flag?: boolean;
+  kev_date_added?: string;
+  nvd_published_at?: string;
+  nvd_last_modified_at?: string;
+  nvd_last_synced_at?: string;
+  exploit_references?: string[];
+  composite_priority?: number;    // 0.0 - 10.0
 }
 
 interface DashboardData {
@@ -1075,6 +1088,26 @@ export default function VulnerabilitiesPage() {
                 {bulkUploadState === 'uploading' ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                 Bulk Upload
               </button>
+              {/* Enrich All — queues a Celery job that runs NVD + EPSS +
+                  CISA KEV against every open vuln in the tenant. Used for
+                  backfilling rows that pre-date the enrichment feature.
+                  Returns immediately; actual work streams through the
+                  parsing worker over the next few minutes. */}
+              <button
+                onClick={async () => {
+                  try {
+                    const r = await vulnManagementApi.vulnerabilities.enrichAll();
+                    alert(`Queued bulk enrichment (task ${r.data?.task_id ?? 'unknown'}). Refresh in a minute or two to see updated scores.`);
+                  } catch {
+                    alert('Could not queue bulk enrichment. Check the worker is running.');
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+                title="Run NVD + EPSS + CISA KEV against every open vuln in this tenant"
+              >
+                <Shield size={14} />
+                Enrich All
+              </button>
               <button
                 onClick={() => {
                   // NCA register → use the NCA-specific add modal so the form
@@ -1240,6 +1273,11 @@ export default function VulnerabilitiesPage() {
                     <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">ID</th>
                     <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Title</th>
                     <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Severity</th>
+                    {/* Priority column = composite of CVSS + EPSS + KEV +
+                        asset criticality. Sortable by user click (handler
+                        wired below). Default sort stays by created_at so
+                        existing UX is preserved. */}
+                    <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider" title="Composite priority: CVSS + EPSS + KEV + asset criticality">Priority</th>
                     <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Status</th>
                     <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Due Date</th>
                     <th className="px-3 py-2 text-left text-xs font-semibold cw-text-muted uppercase tracking-wider">Assigned To</th>
@@ -1268,10 +1306,53 @@ export default function VulnerabilitiesPage() {
                           )}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${severityStyle.bg} ${severityStyle.text}`}>
-                            {severityStyle.label}
-                            {vuln.cvss_score && <span className="ml-1 opacity-75">({vuln.cvss_score})</span>}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${severityStyle.bg} ${severityStyle.text}`}>
+                              {severityStyle.label}
+                              {vuln.cvss_score && <span className="ml-1 opacity-75">({vuln.cvss_score})</span>}
+                            </span>
+                            {/* CISA KEV — actively exploited in the wild. The
+                                strongest "do this now" signal you can show. */}
+                            {vuln.kev_flag && (
+                              <span
+                                className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-bold bg-red-100 text-red-800 border border-red-300"
+                                title="CISA Known Exploited Vulnerability — actively exploited in the wild"
+                              >
+                                KEV
+                              </span>
+                            )}
+                            {/* EPSS percentile — likelihood of exploitation. */}
+                            {typeof vuln.epss_percentile === 'number' && (
+                              <span
+                                className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200"
+                                title={`EPSS percentile — ${(vuln.epss_percentile * 100).toFixed(0)}% of CVEs score lower. Probability ${(vuln.epss_score ?? 0).toFixed(3)}.`}
+                              >
+                                EPSS {(vuln.epss_percentile * 100).toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          {typeof vuln.composite_priority === 'number' ? (
+                            (() => {
+                              // Bucket the composite priority for colour. Keeps
+                              // the column visually similar to Severity without
+                              // duplicating it.
+                              const p = vuln.composite_priority;
+                              const bucket =
+                                p >= 9 ? { bg: 'bg-red-100',    text: 'text-red-800',    label: 'Critical' } :
+                                p >= 7 ? { bg: 'bg-orange-100', text: 'text-orange-800', label: 'High' } :
+                                p >= 4 ? { bg: 'bg-amber-50',   text: 'text-amber-700',  label: 'Medium' } :
+                                         { bg: 'bg-slate-100',  text: 'text-slate-700',  label: 'Low' };
+                              return (
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${bucket.bg} ${bucket.text}`}>
+                                  {p.toFixed(1)} · {bucket.label}
+                                </span>
+                              );
+                            })()
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">—</span>
+                          )}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>

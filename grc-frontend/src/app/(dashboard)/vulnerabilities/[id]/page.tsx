@@ -55,6 +55,18 @@ interface VulnerabilityDetail {
   updated_at?: string;
   template_type?: string | null;
   template_fields?: Record<string, unknown> | null;
+  // Threat-intelligence enrichment fields. The Threat Intelligence panel
+  // below renders only when at least one is populated, so un-enriched rows
+  // look identical to before.
+  epss_score?: number;
+  epss_percentile?: number;
+  kev_flag?: boolean;
+  kev_date_added?: string;
+  nvd_published_at?: string;
+  nvd_last_modified_at?: string;
+  nvd_last_synced_at?: string;
+  exploit_references?: string[];
+  composite_priority?: number;
 }
 
 interface Mitigation {
@@ -685,6 +697,12 @@ export default function VulnerabilityDetailPage() {
                 </div>
               </dl>
             </div>
+
+            {/* Threat Intelligence — populated by the on-demand Enrich
+                button or the background daily refresh. Renders even when
+                empty so the Enrich button is always reachable for any vuln
+                with a CVE-ID. */}
+            <ThreatIntelPanel vulnerability={vulnerability} />
           </div>
         </div>
       )}
@@ -1433,6 +1451,159 @@ export default function VulnerabilityDetailPage() {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// ThreatIntelPanel
+// ---------------------------------------------------------------------------
+// Renders NVD canonical metadata + EPSS exploit probability + CISA KEV
+// flag, plus an "Enrich" button that triggers /vulnerabilities/{id}/enrich.
+// All fields are optional — un-enriched rows show only the Enrich button.
+// The panel is hidden entirely for vulns with no CVE-ID since there's
+// nothing the enrichment service can look up.
+
+function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetail }) {
+  const qc = useQueryClient();
+  const enrichMutation = useMutation({
+    mutationFn: () => vulnManagementApi.vulnerabilities.enrich(vulnerability.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vulnerability', vulnerability.id] });
+    },
+  });
+
+  // If there's no CVE-ID, enrichment can't do anything — skip the whole
+  // panel. Keeps the right column compact for manual/internal findings.
+  if (!vulnerability.cve_id) return null;
+
+  const hasEnrichment =
+    vulnerability.kev_flag ||
+    typeof vulnerability.epss_score === 'number' ||
+    !!vulnerability.nvd_last_synced_at ||
+    (vulnerability.exploit_references && vulnerability.exploit_references.length > 0);
+
+  const fmt = (iso?: string) =>
+    iso ? new Date(iso).toLocaleDateString() : '—';
+
+  return (
+    <div className="cw-card p-4">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-sm font-semibold cw-text flex items-center gap-1.5">
+          <Shield className="h-4 w-4 text-slate-600" />
+          Threat Intelligence
+        </h2>
+        <button
+          onClick={() => enrichMutation.mutate()}
+          disabled={enrichMutation.isPending}
+          className="inline-flex items-center gap-1.5 text-xs rounded-md border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          title="Pull latest NVD + EPSS + CISA KEV for this CVE"
+        >
+          {enrichMutation.isPending ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <RefreshCw size={12} />
+          )}
+          {hasEnrichment ? 'Re-enrich' : 'Enrich'}
+        </button>
+      </div>
+
+      {!hasEnrichment && !enrichMutation.isSuccess && (
+        <p className="text-xs text-slate-500 italic">
+          Click <strong>Enrich</strong> to pull CISA KEV, EPSS, and NVD
+          metadata for {vulnerability.cve_id}.
+        </p>
+      )}
+
+      {hasEnrichment && (
+        <dl className="space-y-2">
+          {/* CISA KEV — strongest signal, render first when present. */}
+          {vulnerability.kev_flag && (
+            <div className="rounded-md border border-red-300 bg-red-50 p-2.5">
+              <dt className="text-xs font-bold text-red-800 uppercase tracking-wider flex items-center gap-1.5">
+                <AlertCircle size={12} />
+                CISA Known Exploited
+              </dt>
+              <dd className="text-xs text-red-700 mt-1">
+                Listed in the CISA KEV catalogue — actively exploited in the wild.
+                {vulnerability.kev_date_added && (
+                  <> Added <strong>{fmt(vulnerability.kev_date_added)}</strong>.</>
+                )}
+              </dd>
+            </div>
+          )}
+
+          {typeof vulnerability.epss_score === 'number' && (
+            <div>
+              <dt className="text-sm text-slate-600">EPSS</dt>
+              <dd className="cw-text text-sm">
+                <span className="font-medium">{vulnerability.epss_score.toFixed(4)}</span>
+                {typeof vulnerability.epss_percentile === 'number' && (
+                  <span className="text-slate-500 ml-1.5">
+                    ({(vulnerability.epss_percentile * 100).toFixed(1)}th percentile)
+                  </span>
+                )}
+              </dd>
+            </div>
+          )}
+
+          {typeof vulnerability.composite_priority === 'number' && (
+            <div>
+              <dt className="text-sm text-slate-600">Priority</dt>
+              <dd className="cw-text text-sm font-medium">
+                {vulnerability.composite_priority.toFixed(2)} / 10
+                <span className="text-slate-500 ml-1.5 text-xs">
+                  (CVSS + EPSS + KEV + asset)
+                </span>
+              </dd>
+            </div>
+          )}
+
+          {vulnerability.nvd_published_at && (
+            <div>
+              <dt className="text-sm text-slate-600">NVD Published</dt>
+              <dd className="cw-text text-sm">{fmt(vulnerability.nvd_published_at)}</dd>
+            </div>
+          )}
+
+          {vulnerability.nvd_last_synced_at && (
+            <div>
+              <dt className="text-sm text-slate-600">Last Synced</dt>
+              <dd className="cw-text text-xs text-slate-500">
+                {new Date(vulnerability.nvd_last_synced_at).toLocaleString()}
+              </dd>
+            </div>
+          )}
+
+          {vulnerability.exploit_references && vulnerability.exploit_references.length > 0 && (
+            <div>
+              <dt className="text-sm text-slate-600 mb-1">References</dt>
+              <dd className="space-y-1">
+                {vulnerability.exploit_references.slice(0, 6).map((url, idx) => (
+                  <a
+                    key={idx}
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-xs text-blue-600 hover:underline truncate"
+                    title={url}
+                  >
+                    <ExternalLink size={10} className="inline mr-1" />
+                    {url.replace(/^https?:\/\//, '').slice(0, 60)}
+                    {url.replace(/^https?:\/\//, '').length > 60 ? '…' : ''}
+                  </a>
+                ))}
+                {vulnerability.exploit_references.length > 6 && (
+                  <p className="text-xs text-slate-500">
+                    + {vulnerability.exploit_references.length - 6} more
+                  </p>
+                )}
+              </dd>
+            </div>
+          )}
+        </dl>
       )}
     </div>
   );

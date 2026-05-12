@@ -1,6 +1,7 @@
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import AuthGuard from '@/components/AuthGuard';
+import IdleLogout from '@/components/IdleLogout';
 
 export default function DashboardLayout({
   children,
@@ -17,6 +18,9 @@ export default function DashboardLayout({
             {children}
           </main>
         </div>
+        {/* Idle-timeout sentinel — reads the tenant's policy and logs the
+            user out after the configured window of no activity. */}
+        <IdleLogout />
       </div>
     </AuthGuard>
   );

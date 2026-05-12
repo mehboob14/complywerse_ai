@@ -14,6 +14,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Trash2,
+  X,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
@@ -32,6 +33,9 @@ type Props = {
   onNameChange: (name: string) => void;
   onToggleActive: () => void;
   onSave: () => void;
+  // Cancel/discard handler. Optional so existing callers that don't pass it
+  // still compile — the button is only rendered when this prop is supplied.
+  onCancel?: () => void;
   onTrigger: () => void;
   onDelete: () => void;
   onNewWorkflow: () => void;
@@ -55,6 +59,7 @@ export function TopToolbar({
   onNameChange,
   onToggleActive,
   onSave,
+  onCancel,
   onTrigger,
   onDelete,
   onNewWorkflow,
@@ -212,6 +217,23 @@ export function TopToolbar({
             <Trash2 size={14} />
           </button>}
         </>
+      )}
+
+      {/* Cancel — discards unsaved changes. For an open workflow this reverts
+          the canvas to the last-saved version; for a new draft this resets
+          the canvas to an empty Start → End skeleton. Always asks for
+          confirmation before throwing work away. Hidden when the editor is
+          locked (no way to make changes that would need cancelling). */}
+      {onCancel && !locked && (canCreate || canEdit) && (
+        <button
+          onClick={onCancel}
+          disabled={saving}
+          className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          title={selectedId ? 'Discard unsaved changes to this workflow' : 'Discard this draft and start over'}
+        >
+          <X size={13} />
+          Cancel
+        </button>
       )}
 
       {(canCreate || canEdit) && <button

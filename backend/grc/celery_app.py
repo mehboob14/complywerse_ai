@@ -55,6 +55,10 @@ celery_app = Celery(
         "grc.tasks.governance",
         "grc.tasks.frameworks",
         "grc.tasks.control_library",
+        # Vulnerability enrichment — dispatched by ingestion adapters and the
+        # daily beat refresh. Runs on the existing `parsing` queue so no new
+        # worker service is required.
+        "grc.tasks.vulnerabilities",
     ],
 )
 
@@ -99,6 +103,22 @@ celery_app.conf.update(
         "grc.tasks.governance.parse_policy_document": {"queue": "parsing"},
         "grc.tasks.governance.run_gap_analysis": {"queue": "parsing"},
         "grc.tasks.control_library.ai_compare_frameworks": {"queue": "parsing"},
+        # Vuln enrichment shares the parsing queue — same worker can handle
+        # it; the work is light (HTTP calls + a small DB write per row).
+        "grc.tasks.vulnerabilities.*": {"queue": "parsing"},
+    },
+
+    # ── Beat schedule ────────────────────────────────────────────────────────
+    # Daily 02:30 UTC: re-download CISA KEV, then dispatch per-tenant bulk
+    # enrichment to refresh EPSS scores (which change daily) and recompute
+    # composite priority. Runs in a dedicated `celery-beat` container so a
+    # restart of the worker doesn't lose the schedule.
+    beat_schedule={
+        "vuln-enrichment-daily-refresh": {
+            "task": "grc.tasks.vulnerabilities.daily_refresh",
+            "schedule": 24 * 60 * 60,   # 24h cadence (Python int seconds)
+            "options": {"queue": "parsing"},
+        },
     },
 
     # ── Retry policy ─────────────────────────────────────────────────────────

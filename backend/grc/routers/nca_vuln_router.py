@@ -111,6 +111,27 @@ def _ensure_bridged_vulnerability(entry: NcaVulnEntry, db: Session) -> Vulnerabi
         if entry.due_date is not None:
             bridged.due_date = datetime.combine(entry.due_date, datetime.min.time())
         bridged.template_fields = template_fields_payload
+
+    # Fan out async enrichment when the bridged row has a CVE-ID. Best
+    # effort — broker/redis failure here never blocks the bridge. The daily
+    # Celery refresh will pick up anything that slips through.
+    if bridged.cve_id:
+        try:
+            from ..db import MasterSession as _MS
+            from ..models import Tenant as _MT
+            from ..tasks.vulnerabilities import enrich_vuln as _enrich_vuln_task
+            _m = _MS()
+            try:
+                _row = _m.query(_MT.slug).filter(_MT.id == entry.tenant_id).first()
+            finally:
+                _m.close()
+            if _row and _row[0]:
+                _enrich_vuln_task.delay(tenant_slug=_row[0], vuln_id=bridged.id)
+        except Exception:
+            # Logged at debug — bridge success is what matters; the daily
+            # refresh closes the loop on any missed enrichments.
+            pass
+
     return bridged
 
 logger = logging.getLogger(__name__)

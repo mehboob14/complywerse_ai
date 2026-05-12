@@ -103,6 +103,39 @@ class BusinessUnit(Base):
 
 
 # =============================================================================
+# 1b. Password / session policy (per-tenant, single row)
+# =============================================================================
+# One row per tenant DB holds the active password complexity rules, account
+# lockout thresholds, and inactive-session timeout. The admin "Password
+# Policy" page reads + writes this row. The login handler reads it via
+# `get_active_password_policy(db)` to enforce complexity on registration /
+# change-password and to gate lockout on failed login.
+
+class PasswordPolicy(Base):
+    __tablename__ = "grc_password_policies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # Complexity
+    min_length = Column(Integer, default=12, nullable=False)
+    require_uppercase = Column(Boolean, default=True, nullable=False)
+    require_lowercase = Column(Boolean, default=True, nullable=False)
+    require_digit = Column(Boolean, default=True, nullable=False)
+    require_special = Column(Boolean, default=True, nullable=False)
+    # Account lockout
+    lockout_threshold = Column(Integer, default=5, nullable=False)   # failed attempts before lock
+    lockout_minutes = Column(Integer, default=30, nullable=False)    # how long to lock for
+    # Inactive session timeout — used by the login handler to refuse very old
+    # tokens whose user hasn't touched the API in this long.
+    session_idle_timeout_minutes = Column(Integer, default=30, nullable=False)
+    # Password reuse + age (informational for now; enforcement is opt-in)
+    password_history_count = Column(Integer, default=5, nullable=False)
+    max_password_age_days = Column(Integer, default=90, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# =============================================================================
 # 2. RBAC Models
 # =============================================================================
 
@@ -207,8 +240,24 @@ class GRCUser(Base):
     external_provider = Column(String(32), nullable=True, index=True)
     external_id = Column(String(128), nullable=True, index=True)
 
+    # ---- Account lockout state (Admin → Password Policy controls thresholds) ----
+    # Increment on each failed login, reset on success. When the count crosses
+    # the policy's `lockout_threshold`, `locked_until` is set to now() +
+    # policy.lockout_minutes. Login is blocked while `locked_until` > now().
+    # All nullable so existing rows behave unchanged.
+    failed_login_attempts = Column(Integer, default=0, nullable=True)
+    locked_until = Column(DateTime, nullable=True)
+    # Bumped on every authenticated request by the audit middleware. The login
+    # handler refuses old tokens when `now - last_activity_at` > policy idle
+    # timeout, so a forgotten-open tab is logged out server-side.
+    last_activity_at = Column(DateTime, nullable=True)
+    # Bumped whenever the user changes their password. Used by the future
+    # "max password age" enforcement; safe to ignore for now.
+    password_changed_at = Column(DateTime, nullable=True)
+
     __table_args__ = (
         Index("ix_grc_users_external", "external_provider", "external_id"),
+        Index("ix_grc_users_locked_until", "locked_until"),
     )
     
     tenant_users = relationship("TenantUser", back_populates="user", cascade="all, delete-orphan")
@@ -4030,6 +4079,23 @@ class Vulnerability(Base):
     # read-only panel on the detail page so no NCA data is lost.
     template_fields = Column(JSON, default=dict, nullable=True)
 
+    # --- Threat-intelligence enrichment (NVD / EPSS / CISA KEV) ---
+    # Populated by enrichment_service on a CVE-bearing vuln. All nullable so
+    # un-enriched rows render unchanged in the UI; the frontend hides each
+    # field when NULL rather than treating absence as 0.
+    epss_score = Column(Float, nullable=True)             # 0.0 - 1.0 probability
+    epss_percentile = Column(Float, nullable=True)        # 0.0 - 1.0 percentile rank
+    kev_flag = Column(Boolean, default=False, nullable=True)  # CISA Known Exploited
+    kev_date_added = Column(DateTime, nullable=True)      # When CISA added to KEV
+    nvd_published_at = Column(DateTime, nullable=True)    # CVE publication date
+    nvd_last_modified_at = Column(DateTime, nullable=True)  # CVE last NVD update
+    nvd_last_synced_at = Column(DateTime, nullable=True)  # When we last enriched
+    exploit_references = Column(JSON, default=list, nullable=True)  # NVD references URLs
+    # Composite priority = 0.4·CVSS + 0.3·(EPSS×10) + 0.2·(KEV?10:0) + 0.1·asset.
+    # Separate from cvss_score so existing CVSS-driven sort/SLA logic is
+    # untouched; surfaced as an opt-in sortable column on the list page.
+    composite_priority = Column(Float, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -4054,6 +4120,11 @@ class Vulnerability(Base):
         Index("ix_vuln_status", "status"),
         Index("ix_vuln_report", "report_id"),
         Index("ix_vuln_workflow_state", "current_state_id"),
+        # Enrichment-driven indexes — used by the daily Celery refresh
+        # (scan-all-open-vulns) and the Priority column sort.
+        Index("ix_vuln_kev_flag", "kev_flag"),
+        Index("ix_vuln_composite_priority", "composite_priority"),
+        Index("ix_vuln_epss_percentile", "epss_percentile"),
     )
 
 

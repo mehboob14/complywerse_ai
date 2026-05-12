@@ -542,6 +542,13 @@ def create_user(
     if existing:
         raise HTTPException(status_code=400, detail="Username or email already exists")
 
+    # Enforce this tenant's password complexity policy. The admin "Password
+    # Policy" page writes the policy row that get_active_password_policy reads.
+    from ..services.password_policy import get_active_password_policy, validate_password
+    _pw_ok, _pw_err = validate_password(data.password, get_active_password_policy(tenant_db))
+    if not _pw_ok:
+        raise HTTPException(status_code=400, detail=_pw_err)
+
     new_user = TenantUser(
         username=data.username,
         email=data.email,
@@ -929,4 +936,171 @@ def get_audit_log_filters(
         "actions": actions,
         "modules": modules,
         "date_presets": ["all", "today", "last_7_days", "last_30_days"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Password / lockout policy
+# ---------------------------------------------------------------------------
+# Single-row-per-tenant `PasswordPolicy` rules. The admin page reads + writes
+# these; the auth flow + middleware enforce them. All fields have safe
+# defaults so a tenant with no row (or a partial row) still authenticates.
+
+class _PasswordPolicyPayload(BaseModel):
+    """All fields optional so the admin page can patch one at a time. We
+    apply only the fields the caller actually supplied."""
+    min_length: Optional[int] = None
+    require_uppercase: Optional[bool] = None
+    require_lowercase: Optional[bool] = None
+    require_digit: Optional[bool] = None
+    require_special: Optional[bool] = None
+    lockout_threshold: Optional[int] = None
+    lockout_minutes: Optional[int] = None
+    session_idle_timeout_minutes: Optional[int] = None
+    password_history_count: Optional[int] = None
+    max_password_age_days: Optional[int] = None
+
+
+def _serialize_policy(p) -> dict:
+    return {
+        "id": p.id,
+        "min_length": p.min_length,
+        "require_uppercase": p.require_uppercase,
+        "require_lowercase": p.require_lowercase,
+        "require_digit": p.require_digit,
+        "require_special": p.require_special,
+        "lockout_threshold": p.lockout_threshold,
+        "lockout_minutes": p.lockout_minutes,
+        "session_idle_timeout_minutes": p.session_idle_timeout_minutes,
+        "password_history_count": p.password_history_count,
+        "max_password_age_days": p.max_password_age_days,
+        "updated_at": p.updated_at.isoformat() if getattr(p, "updated_at", None) else None,
+    }
+
+
+@router.get("/password-policy")
+def get_password_policy(
+    tenant_db: Session = Depends(get_tenant_db),
+    user: GRCUser = Depends(require_auth),
+):
+    """Return the active password policy for this tenant (auto-creates the row
+    on first call). Read-only for any authenticated user — UI uses this to
+    render the password-strength meter on signup forms."""
+    from ..services.password_policy import get_active_password_policy
+    return _serialize_policy(get_active_password_policy(tenant_db))
+
+
+@router.put("/password-policy")
+def update_password_policy(
+    payload: _PasswordPolicyPayload,
+    tenant_db: Session = Depends(get_tenant_db),
+    user: GRCUser = Depends(require_auth),
+):
+    """Patch the password policy. Only superuser / org admin should reach
+    this in practice; the frontend hides the page from other roles.
+
+    Validation rules:
+      - min_length 8..128 (NIST minimum 8; cap stops accidental DoS)
+      - lockout_threshold 3..50, lockout_minutes 1..1440 (24h)
+      - session_idle_timeout_minutes 5..1440
+    """
+    from ..models import PasswordPolicy as _PP
+    from ..services.password_policy import get_active_password_policy
+
+    policy = get_active_password_policy(tenant_db)
+    # Defensive: get_active_password_policy might return the DEFAULT_POLICY
+    # in-memory object if the table doesn't exist yet. Persist it so we have
+    # something to update.
+    if policy.id is None:
+        try:
+            new_row = _PP(
+                min_length=policy.min_length,
+                require_uppercase=policy.require_uppercase,
+                require_lowercase=policy.require_lowercase,
+                require_digit=policy.require_digit,
+                require_special=policy.require_special,
+                lockout_threshold=policy.lockout_threshold,
+                lockout_minutes=policy.lockout_minutes,
+                session_idle_timeout_minutes=policy.session_idle_timeout_minutes,
+                password_history_count=policy.password_history_count,
+                max_password_age_days=policy.max_password_age_days,
+            )
+            tenant_db.add(new_row)
+            tenant_db.commit()
+            tenant_db.refresh(new_row)
+            policy = new_row
+        except Exception:
+            tenant_db.rollback()
+            raise HTTPException(status_code=500, detail="Could not initialise password policy row")
+
+    data = payload.dict(exclude_unset=True)
+
+    # Range checks — clamp obviously-bad inputs with a 400 so the UI can show
+    # the user which field is wrong.
+    if "min_length" in data and not (8 <= data["min_length"] <= 128):
+        raise HTTPException(status_code=400, detail="min_length must be between 8 and 128.")
+    if "lockout_threshold" in data and not (3 <= data["lockout_threshold"] <= 50):
+        raise HTTPException(status_code=400, detail="lockout_threshold must be between 3 and 50.")
+    if "lockout_minutes" in data and not (1 <= data["lockout_minutes"] <= 24 * 60):
+        raise HTTPException(status_code=400, detail="lockout_minutes must be between 1 and 1440.")
+    if "session_idle_timeout_minutes" in data and not (5 <= data["session_idle_timeout_minutes"] <= 24 * 60):
+        raise HTTPException(status_code=400, detail="session_idle_timeout_minutes must be between 5 and 1440.")
+
+    for field, value in data.items():
+        setattr(policy, field, value)
+
+    try:
+        tenant_db.commit()
+        tenant_db.refresh(policy)
+    except Exception:
+        tenant_db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to save password policy.")
+
+    return _serialize_policy(policy)
+
+
+# ---------------------------------------------------------------------------
+# Role members — drill-down for the "Role Management" page
+# ---------------------------------------------------------------------------
+
+@router.get("/roles/{role_id}/members")
+def list_role_members(
+    role_id: int,
+    tenant_db: Session = Depends(get_tenant_db),
+    user: GRCUser = Depends(require_auth),
+):
+    """Return the users assigned to this role, with assignment metadata.
+
+    Used by the Role Management page to expand a role and show *who* has it.
+    """
+    role = tenant_db.query(Role).filter(Role.id == role_id).first()
+    if not role:
+        raise HTTPException(status_code=404, detail="Role not found")
+
+    rows = (
+        tenant_db.query(UserRole, TenantUser)
+        .join(TenantUser, TenantUser.id == UserRole.user_id)
+        .filter(UserRole.role_id == role_id)
+        .order_by(UserRole.assigned_at.desc().nullslast(), TenantUser.email.asc())
+        .all()
+    )
+
+    members = []
+    for ur, u in rows:
+        members.append({
+            "user_id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "display_name": u.display_name,
+            "is_active": bool(u.is_active),
+            "assigned_at": ur.assigned_at.isoformat() if getattr(ur, "assigned_at", None) else None,
+            "assigned_by_user_id": getattr(ur, "assigned_by", None),
+            "user_role_id": ur.id,
+        })
+
+    return {
+        "role_id": role.id,
+        "role_name": role.name,
+        "member_count": len(members),
+        "members": members,
     }

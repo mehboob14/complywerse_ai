@@ -78,6 +78,14 @@ logger = logging.getLogger(__name__)
 # disambiguation (especially within a regulator family like SBP) explicit
 # specific aliases avoid false matches.
 _ALIAS_OVERRIDES: Dict[str, List[str]] = {
+    "adhics": [
+        "adhics", "abu dhabi healthcare", "doh abu dhabi",
+        "abu dhabi healthcare information and cyber security",
+        "abu dhabi healthcare information and cyber security standard",
+        # Permissive catches — the standard is unique enough by region that
+        # these won't collide with anything else in the catalog.
+        "department of health abu dhabi", "abu dhabi health information",
+    ],
     "aramco_ccc": [
         "aramco ccc", "sacs-002", "sacs 002", "saudi aramco cybersecurity",
         # Broader catches — uploaded framework names rarely match the full

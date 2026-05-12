@@ -62,14 +62,6 @@ app = FastAPI(
 )
 
 def _build_cors_kwargs() -> dict:
-    """Mirror the outer wrapper's env-driven CORS resolution.
-
-    The outer FastAPI app in `backend/main.py` mounts this sub-app at
-    `/grc`, so its CORS middleware is the primary line of defence. We
-    still configure CORS here as defence-in-depth — and so this module is
-    safe to import / run in isolation (tests, scripts) without exposing
-    a wide-open `*` origin policy.
-    """
     regex = (os.getenv("ALLOWED_ORIGIN_REGEX") or "").strip()
     if regex:
         return {"allow_origin_regex": regex, "allow_origins": []}

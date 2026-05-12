@@ -2,9 +2,28 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { DataTable, IfPermission, SearchInput, PageLoader } from '@/components/ui';
-import { Edit2, Eye, Plus, Trash2 } from 'lucide-react';
+import { Edit2, Eye, Plus, Trash2, Users, X } from 'lucide-react';
 import { adminApi, AdminRole, PermissionModule } from '@/lib/api';
 import { authedFetch } from '@/lib/auth-fetch';
+
+// Shape of the GET /admin/roles/{id}/members response — kept local because
+// only this page consumes it.
+interface RoleMember {
+  user_id: number;
+  username: string;
+  email: string;
+  display_name: string | null;
+  is_active: boolean;
+  assigned_at: string | null;
+  assigned_by_user_id: number | null;
+  user_role_id: number;
+}
+interface RoleMembersResponse {
+  role_id: number;
+  role_name: string;
+  member_count: number;
+  members: RoleMember[];
+}
 
 async function ensureTenantContext(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -44,6 +63,29 @@ export default function RolesManagementPage() {
   });
   const [saving, setSaving] = useState(false);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
+  // Members drill-down — clicking the user count opens a modal with the
+  // actual list of users assigned to that role.
+  const [membersForRole, setMembersForRole] = useState<RoleMembersResponse | null>(null);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState<string | null>(null);
+
+  const handleViewMembers = async (role: AdminRole) => {
+    setMembersForRole({ role_id: role.id, role_name: role.name, member_count: role.user_count ?? 0, members: [] });
+    setMembersError(null);
+    setMembersLoading(true);
+    try {
+      const res = await adminApi.getRoleMembers(role.id);
+      setMembersForRole(res.data);
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        (err as { message?: string })?.message ||
+        'Failed to load role members';
+      setMembersError(msg);
+    } finally {
+      setMembersLoading(false);
+    }
+  };
 
   useEffect(() => {
     const init = async () => {
@@ -223,7 +265,21 @@ export default function RolesManagementPage() {
       id: 'users',
       header: 'Users',
       accessor: (role: AdminRole) => (
-        <span className="text-slate-600">{role.user_count}</span>
+        // Clickable count opens the members modal. Falls back to a plain
+        // span when there are zero members so the cell isn't visually noisy.
+        (role.user_count ?? 0) > 0 ? (
+          <button
+            type="button"
+            onClick={() => handleViewMembers(role)}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-slate-700 hover:bg-slate-100 hover:text-primary-600 transition-colors"
+            title="View users assigned to this role"
+          >
+            <Users size={14} />
+            <span>{role.user_count}</span>
+          </button>
+        ) : (
+          <span className="text-slate-400">0</span>
+        )
       ),
     },
     {
@@ -482,6 +538,83 @@ export default function RolesManagementPage() {
             </form>
           </div>
         </>
+      )}
+
+      {/* Role members modal — opened by clicking the user count in the table.
+          Read-only list of users assigned to the role with assignment date.
+          Closing the modal does not refresh the table (the count is already
+          there); we only need it open while the admin checks who has access. */}
+      {membersForRole && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setMembersForRole(null)}
+            aria-hidden="true"
+          />
+          <div className="relative z-10 w-full max-w-xl rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-black flex items-center gap-2">
+                  <Users size={16} className="text-slate-600" />
+                  Members of <span className="text-primary-700">{membersForRole.role_name}</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {membersForRole.member_count} user{membersForRole.member_count === 1 ? '' : 's'} assigned
+                </p>
+              </div>
+              <button
+                onClick={() => setMembersForRole(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto px-5 py-4">
+              {membersLoading && (
+                <p className="text-sm text-slate-500 italic">Loading members…</p>
+              )}
+              {membersError && (
+                <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {membersError}
+                </p>
+              )}
+              {!membersLoading && !membersError && membersForRole.members.length === 0 && (
+                <p className="text-sm text-slate-500 italic">No users are currently assigned to this role.</p>
+              )}
+              {!membersLoading && membersForRole.members.length > 0 && (
+                <ul className="divide-y divide-slate-100">
+                  {membersForRole.members.map((m) => (
+                    <li key={m.user_role_id} className="flex items-center justify-between py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-black">
+                          {m.display_name || m.username}
+                          {!m.is_active && (
+                            <span className="ml-2 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-slate-600">
+                              Inactive
+                            </span>
+                          )}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">{m.email}</p>
+                      </div>
+                      <p className="ml-3 flex-shrink-0 text-xs text-slate-400">
+                        {m.assigned_at ? new Date(m.assigned_at).toLocaleDateString() : '—'}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="flex items-center justify-end border-t border-slate-100 bg-slate-50 px-5 py-3 rounded-b-2xl">
+              <button
+                onClick={() => setMembersForRole(null)}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
