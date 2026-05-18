@@ -1,0 +1,2191 @@
+{
+  "metadata": {
+    "name": "ISO/IEC 42001:2023 AI Management System",
+    "description": "ISO/IEC 42001:2023 specifies the requirements and provides guidance for establishing, implementing, maintaining and continually improving an Artificial Intelligence Management System (AIMS) within the context of an organization. It is intended for use by any organization providing or using products or services that utilize AI systems, to help them develop, provide or use AI systems responsibly in pursuing their objectives and meet applicable requirements, obligations related to interested parties and expectations from them.",
+    "version": "First edition 2023-12",
+    "source_organization": "ISO/IEC (International Organization for Standardization / International Electrotechnical Commission) — Joint Technical Committee ISO/IEC JTC 1, Information technology, Subcommittee SC 42, Artificial intelligence",
+    "effective_date": "2023-12-01",
+    "classification": "compliance",
+    "framework_type": "international_standard",
+    "classification_confidence": 0.99,
+    "classification_reasoning": "ISO/IEC 42001:2023 is the world's first international management system standard for artificial intelligence. It applies the harmonized high-level structure (HLS) common to all ISO management system standards (e.g., ISO 9001, ISO/IEC 27001) and is intended for certification of an organization's AI Management System (AIMS). Annex A provides normative reference control objectives and controls, and Annex B provides normative implementation guidance.",
+    "framework_purpose": "To help organizations responsibly develop, provide, use, monitor or supply AI systems by establishing requirements for an AI Management System (AIMS) covering context, leadership, planning, support, operation, performance evaluation, improvement and a comprehensive set of AI-specific control objectives and controls (Annex A) addressing AI policy, internal organization, resources, AI system impact assessment, AI system life cycle, data, information for interested parties, use of AI systems and third-party/customer relationships.",
+    "framework_scope": "Applicable to any organization, regardless of size, type and nature, that provides or uses products or services that utilize AI systems. Covers AI providers, AI producers (developers, designers, operators, testers, evaluators, deployers, impact assessors, procurers, governance and oversight professionals), AI customers and users, AI partners (system integrators, data providers), AI subjects and relevant authorities.",
+    "framework_objectives": [
+      "Establish, implement, maintain and continually improve an AI Management System (AIMS) within the context of the organization",
+      "Determine external and internal issues, interested parties, requirements and the AIMS scope (context of the organization)",
+      "Demonstrate leadership and commitment, establish an AI policy and assign roles, responsibilities and authorities for AI",
+      "Plan actions to address AI risks and opportunities, including AI risk assessment, AI risk treatment and AI system impact assessment",
+      "Set AI objectives consistent with the AI policy and plan to achieve them",
+      "Provide resources, ensure competence, awareness, communication and documented information needed for the AIMS",
+      "Plan, implement and control operations including AI risk assessment, AI risk treatment and AI system impact assessment",
+      "Evaluate performance through monitoring, measurement, analysis, evaluation, internal audit and management review",
+      "Continually improve the AIMS and address nonconformities through corrective action",
+      "Provide management direction and support for AI systems through documented and reviewed AI policies",
+      "Establish accountability within the organization for AI through defined AI roles, responsibilities and a process to report concerns",
+      "Identify and document resources (data, tooling, system/computing, human) required across the AI system life cycle",
+      "Assess and document AI system impacts to individuals, groups of individuals and societies throughout the life cycle",
+      "Implement management guidance and life-cycle controls for responsible design, development, verification/validation, deployment, operation, monitoring, technical documentation and event logging of AI systems",
+      "Manage data for AI systems including acquisition, quality, provenance and preparation",
+      "Provide necessary information to users, enable external reporting of adverse impacts, communicate incidents and inform interested parties",
+      "Ensure responsible use of AI systems through processes, objectives and adherence to intended use",
+      "Allocate responsibilities across third parties, suppliers and customers in the AI system life cycle"
+    ],
+    "target_audience": "Top management, governing bodies, AI governance and oversight professionals, CISOs, CIOs, CTOs, Chief AI Officers, AI risk managers, AI developers, AI deployers, AI operators, AI impact assessors, privacy/security/safety/quality functions, internal audit, legal & compliance, procurement, and any role involved in the design, provision, use or governance of AI systems in any organization.",
+    "certification_body": "Accredited third-party certification bodies operating under ISO/IEC 17021-1 and (where applicable) ISO/IEC 17065 are expected to provide certification against ISO/IEC 42001:2023.",
+    "certification_validity_period": "Typically a 3-year certification cycle with annual surveillance audits and recertification at year 3, consistent with ISO management system certification practice.",
+    "certification_levels": null,
+    "certification_lifecycle": "Stage 1 (documentation review) and Stage 2 (implementation audit) initial certification audits, followed by annual surveillance audits and recertification audit every three years.",
+    "required_artifacts": [
+      "Scope of the AI Management System (documented information)",
+      "AI policy (documented information)",
+      "Documented information on actions taken to identify and address AI risks and AI opportunities",
+      "Documented information about the AI risk assessment process",
+      "Documented information about the AI risk treatment process and AI risk treatment plan",
+      "Statement of Applicability (SoA) referencing Annex A controls with justification for inclusion/exclusion",
+      "Documented information of the results of AI risk assessments, AI risk treatments and AI system impact assessments",
+      "AI objectives (documented information) and planning to achieve them",
+      "Documented information of competence",
+      "Documented information necessary for the effectiveness of the AIMS, including external-origin documents",
+      "Documented information as evidence of monitoring, measurement, analysis and evaluation results",
+      "Documented information as evidence of the audit programme(s) and audit results",
+      "Documented information as evidence of management review results",
+      "Documented information as evidence of nonconformities, subsequent actions and corrective actions"
+    ],
+    "regulatory_authority": "ISO/IEC (issuing bodies). National regulators and jurisdictions may reference or require ISO/IEC 42001 as evidence of responsible AI governance; specific legal requirements remain those of the applicable jurisdiction.",
+    "compliance_deadline": null,
+    "penalty_for_non_compliance": "ISO/IEC 42001 is a voluntary international standard; non-conformity does not in itself attract regulatory penalty. However, loss or denial of certification, contractual penalties from customers requiring certification, and reputational impact may result. Where regulators or contracts mandate ISO/IEC 42001 conformance, the applicable legal/contractual penalties apply.",
+    "adoption_approach": "Risk-based and proportionate. The organization defines the AIMS scope based on its context, role (provider/producer/customer/partner/subject) and the AI systems within scope. Controls in Annex A are selected via the AI risk treatment process and documented in a Statement of Applicability with justification for inclusion or exclusion. The AIMS is integrated with other management systems where relevant (e.g., ISO/IEC 27001, ISO/IEC 27701, ISO 9001).",
+    "hierarchy_structure": {
+      "levels": [
+        "Clause/Annex",
+        "Sub-clause",
+        "Requirement/Control"
+      ],
+      "numbering_pattern": "N.N or N.N.N (main clauses); A.N.N or A.N.N.N (Annex A controls)"
+    },
+    "document_structure": {
+      "sections": [
+        "4. Context of the organization",
+        "5. Leadership",
+        "6. Planning",
+        "7. Support",
+        "8. Operation",
+        "9. Performance evaluation",
+        "10. Improvement",
+        "Annex A.2 Policies related to AI",
+        "Annex A.3 Internal organization",
+        "Annex A.4 Resources for AI systems",
+        "Annex A.5 Assessing impacts of AI systems",
+        "Annex A.6 AI system life cycle",
+        "Annex A.7 Data for AI systems",
+        "Annex A.8 Information for interested parties of AI systems",
+        "Annex A.9 Use of AI systems",
+        "Annex A.10 Third-party and customer relationships"
+      ],
+      "control_patterns": {
+        "primary_pattern": "N.N",
+        "secondary_patterns": [
+          "N.N.N",
+          "A.N.N",
+          "A.N.N.N"
+        ],
+        "examples": [
+          "4.1",
+          "6.1.2",
+          "A.2.2",
+          "A.6.2.4"
+        ]
+      },
+      "requirement_indicators": {
+        "mandatory_keywords": [
+          "shall",
+          "must",
+          "required"
+        ],
+        "advisory_keywords": [
+          "should",
+          "may",
+          "can",
+          "recommended"
+        ]
+      },
+      "total_expected_controls": 70
+    },
+    "exported_at": "2026-05-18T00:00:00.000000",
+    "source_framework_id": null,
+    "total_controls": 70
+  },
+  "controls": [
+    {
+      "control_id": "1.1",
+      "original_reference": "4.1",
+      "title": "Understanding the Organization and Its Context",
+      "description": "The organization shall determine external and internal issues relevant to its purpose that affect its ability to achieve the intended results of its AI management system, including whether climate change is a relevant issue, the intended purpose of AI systems, and the organization's roles with respect to those AI systems.",
+      "full_text": "The organization shall determine external and internal issues that are relevant to its purpose and that affect its ability to achieve the intended result(s) of its AI management system. The organization shall determine whether climate change is a relevant issue. The organization shall consider the intended purpose of the AI systems that are developed, provided or used by the organization. The organization shall determine its roles with respect to these AI systems.",
+      "domain": "Governance",
+      "category": "Context of the Organization",
+      "section_number": "4.1",
+      "parent_section": "4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AIMS Context Analysis Document",
+          "description": "Documented analysis of external and internal issues relevant to the organization's purpose and ability to achieve intended AIMS outcomes, including a climate-change relevance assessment.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI Roles Determination Record",
+          "description": "Document identifying the organization's roles (AI provider, producer, customer, partner, subject, relevant authority) relative to each in-scope AI system, with rationale.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI Systems Inventory with Intended Purpose",
+          "description": "Inventory listing AI systems developed, provided or used by the organization with their intended purpose and the organization's role for each.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "PESTLE / Context Analysis Worksheet",
+          "description": "PESTLE or equivalent worksheet capturing legal, regulatory, cultural, competitive and other external/internal factors driving the AIMS context.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "1.2",
+      "original_reference": "4.2",
+      "title": "Understanding the Needs and Expectations of Interested Parties",
+      "description": "The organization shall determine the interested parties relevant to the AI management system, their relevant requirements, and which of these requirements will be addressed through the AI management system.",
+      "full_text": "The organization shall determine: the interested parties that are relevant to the AI management system; the relevant requirements of these interested parties; which of these requirements will be addressed through the AI management system. NOTE Relevant interested parties can have requirements related to climate change.",
+      "domain": "Governance",
+      "category": "Context of the Organization",
+      "section_number": "4.2",
+      "parent_section": "4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Interested Parties Register",
+          "description": "Register of interested parties (including AI subjects, customers, regulators, employees, suppliers) with their relevant AIMS requirements and whether/how each is addressed.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Stakeholder Requirements Mapping",
+          "description": "Mapping document linking interested-party requirements (including climate-change related expectations) to AIMS processes and controls that address them.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Stakeholder Engagement Records",
+          "description": "Records of consultations, surveys or meetings with interested parties used to elicit requirements.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "1.3",
+      "original_reference": "4.3",
+      "title": "Determining the Scope of the AI Management System",
+      "description": "The organization shall determine the boundaries and applicability of the AI management system, considering external/internal issues and interested-party requirements; the scope shall be available as documented information and determine activities related to leadership, planning, support, operation, performance, evaluation, improvement, controls and objectives.",
+      "full_text": "The organization shall determine the boundaries and applicability of the AI management system to establish its scope. When determining this scope, the organization shall consider: the external and internal issues referred to in 4.1; the requirements referred to in 4.2. The scope shall be available as documented information. The scope of the AI management system shall determine the organization's activities with respect to this document's requirements on the AI management system, leadership, planning, support, operation, performance, evaluation, improvement, controls and objectives.",
+      "domain": "Governance",
+      "category": "Context of the Organization",
+      "section_number": "4.3",
+      "parent_section": "4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AIMS Scope Statement",
+          "description": "Formal, documented AIMS scope statement defining boundaries, locations, AI systems, organizational units, products/services and life-cycle stages included, with rationale for any exclusions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Scope Boundary Diagram",
+          "description": "Diagram or model showing in-scope organizational units, AI systems, sites and interfaces to out-of-scope areas.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Scope Approval Record",
+          "description": "Top-management approval record (memo / minutes) authorising the AIMS scope.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "1.4",
+      "original_reference": "4.4",
+      "title": "AI Management System",
+      "description": "The organization shall establish, implement, maintain, continually improve and document an AI management system, including the processes needed and their interactions, in accordance with the requirements of this document.",
+      "full_text": "The organization shall establish, implement, maintain, continually improve and document an AI management system, including the processes needed and their interactions, in accordance with the requirements of this document.",
+      "domain": "Governance",
+      "category": "AI Management System",
+      "section_number": "4.4",
+      "parent_section": "4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AIMS Manual / Framework Document",
+          "description": "Top-level AIMS manual or framework document describing the AI management system, its processes, interactions and how it conforms to ISO/IEC 42001:2023.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Process Interaction Map",
+          "description": "Process map showing AIMS processes (risk, impact assessment, life cycle, data, supplier, operation) and their interactions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AIMS Implementation Plan",
+          "description": "Implementation plan with milestones, owners and continual-improvement cycles for the AIMS.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "2.1",
+      "original_reference": "5.1",
+      "title": "Leadership and Commitment",
+      "description": "Top management shall demonstrate leadership and commitment with respect to the AI management system by ensuring AI policy/objectives, integration into business processes, availability of resources, communication of importance, achievement of intended results, support, continual improvement and support of other relevant roles.",
+      "full_text": "Top management shall demonstrate leadership and commitment with respect to the AI management system by: ensuring that the AI policy (see 5.2) and AI objectives (see 6.2) are established and are compatible with the strategic direction of the organization; ensuring the integration of the AI management system requirements into the organization's business processes; ensuring that the resources needed for the AI management system are available; communicating the importance of effective AI management and of conforming to the AI management system requirements; ensuring that the AI management system achieves its intended result(s); directing and supporting persons to contribute to the effectiveness of the AI management system; promoting continual improvement; supporting other relevant roles to demonstrate their leadership as it applies to their areas of responsibility.",
+      "domain": "Leadership",
+      "category": "Leadership and Commitment",
+      "section_number": "5.1",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Top-Management Commitment Statement",
+          "description": "Signed top-management statement of commitment to the AIMS, AI policy and AI objectives, aligned with strategic direction.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AIMS Resource Allocation Records",
+          "description": "Budget/resource allocations (financial, human, infrastructure) provisioned for the AIMS and its initiatives.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Leadership Communications Log",
+          "description": "Log of internal communications (town halls, memos, emails) by top management on AI management importance and AIMS conformance.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Top-Management Meeting Minutes",
+          "description": "Minutes of executive/management meetings where AIMS performance, decisions and continual improvement are discussed and decided.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.2",
+      "original_reference": "5.2",
+      "title": "AI Policy",
+      "description": "Top management shall establish an AI policy that is appropriate to the organization's purpose, provides a framework for AI objectives, commits to applicable requirements and continual improvement; the policy shall be documented, referenced to other policies, communicated internally and available to interested parties as appropriate.",
+      "full_text": "Top management shall establish an AI policy that: a) is appropriate to the purpose of the organization; b) provides a framework for setting AI objectives (see 6.2); c) includes a commitment to meet applicable requirements; d) includes a commitment to continual improvement of the AI management system. The AI policy shall: be available as documented information; refer as relevant to other organizational policies; be communicated within the organization; be available to interested parties, as appropriate. Control objectives and controls for establishing an AI policy are provided in A.2 in Table A.1. Implementation guidance for these controls is provided in B.2. NOTE Considerations for organizations when developing AI policies are provided in ISO/IEC 38507.",
+      "domain": "Leadership",
+      "category": "AI Policy",
+      "section_number": "5.2",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Approved AI Policy",
+          "description": "Top-management approved AI policy meeting all 4 commitments (purpose, framework for objectives, applicable requirements, continual improvement).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI Policy Cross-Reference Matrix",
+          "description": "Matrix cross-referencing the AI policy with other organizational policies (security, privacy, quality, risk).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AI Policy Communication Records",
+          "description": "Records (intranet posts, emails, training sessions) showing communication of the AI policy across the organization.",
+          "filetype": "EML"
+        },
+        {
+          "name": "External Availability Evidence",
+          "description": "Evidence (e.g., public web page, customer portal) that the AI policy is available to interested parties as appropriate.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "2.3",
+      "original_reference": "5.3",
+      "title": "Roles, Responsibilities and Authorities",
+      "description": "Top management shall ensure responsibilities and authorities for relevant roles are assigned and communicated, including responsibility/authority for AIMS conformity to this document and reporting on AIMS performance to top management.",
+      "full_text": "Top management shall ensure that the responsibilities and authorities for relevant roles are assigned and communicated within the organization. Top management shall assign the responsibility and authority for: a) ensuring that the AI management system conforms to the requirements of this document; b) reporting on the performance of the AI management system to top management. NOTE A control for defining and allocating roles and responsibilities is provided in A.3.2 in Table A.1. Implementation guidance for this control is provided in B.3.2.",
+      "domain": "Leadership",
+      "category": "Roles, Responsibilities and Authorities",
+      "section_number": "5.3",
+      "parent_section": "5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Roles & Responsibilities Charter",
+          "description": "Charter or terms of reference assigning AIMS responsibilities and authorities including conformity assurance and performance reporting.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AIMS RACI Matrix",
+          "description": "RACI matrix detailing responsibility, accountability, consulted and informed parties across AIMS processes and AI life-cycle activities.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Role Communication Evidence",
+          "description": "Communications confirming assigned roles and authorities to staff, including formal appointment letters or org-chart updates.",
+          "filetype": "EML"
+        },
+        {
+          "name": "AIMS Performance Reporting Templates",
+          "description": "Templates and sample reports used to report AIMS performance to top management.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "3.1",
+      "original_reference": "6.1.1",
+      "title": "Actions to Address Risks and Opportunities — General",
+      "description": "When planning the AIMS, the organization shall consider context and interested-party requirements; determine risks/opportunities to give assurance, prevent undesired effects and enable continual improvement; establish AI risk criteria; determine risks/opportunities by domain, intended use and context; plan actions, integration and evaluation; and retain documented information.",
+      "full_text": "When planning for the AI management system, the organization shall consider the issues referred to in 4.1 and the requirements referred to in 4.2 and determine the risks and opportunities that need to be addressed to: give assurance that the AI management system can achieve its intended result(s); prevent or reduce undesired effects; achieve continual improvement. The organization shall establish and maintain AI risk criteria that support: distinguishing acceptable from non-acceptable risks; performing AI risk assessments; conducting AI risk treatment; assessing AI risk impacts. The organization shall determine the risks and opportunities according to: the domain and application context of an AI system; the intended use; the external and internal context described in 4.1. The organization shall plan: a) actions to address these risks and opportunities; b) how to: 1) integrate and implement the actions into its AI management system processes; 2) evaluate the effectiveness of these actions. The organization shall retain documented information on actions taken to identify and address AI risks and AI opportunities.",
+      "domain": "Risk Management",
+      "category": "Planning — Risks and Opportunities",
+      "section_number": "6.1.1",
+      "parent_section": "6.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Risk Criteria Document",
+          "description": "Documented AI risk criteria covering acceptance thresholds, assessment, treatment and impact-assessment criteria.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI Risk & Opportunity Register",
+          "description": "Register listing AI risks and opportunities by domain, application context and intended use with planned actions and effectiveness evaluation.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AI Risk Action Plan",
+          "description": "Action plan integrating risk-treatment actions into AIMS processes with owners, timelines and effectiveness measures.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Documented Actions Log",
+          "description": "Log retaining documented information on actions taken to identify and address AI risks and opportunities.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "3.2",
+      "original_reference": "6.1.2",
+      "title": "AI Risk Assessment",
+      "description": "The organization shall define and establish an AI risk assessment process that is informed by the AI policy and objectives, produces consistent/valid/comparable results, identifies risks affecting AI objectives, analyses risks (consequences, likelihood, levels) and evaluates risks against criteria with prioritization for treatment; retain documented information about the process.",
+      "full_text": "The organization shall define and establish an AI risk assessment process that: a) is informed by and aligned with the AI policy (see 5.2) and AI objectives (see 6.2); NOTE When assessing the consequences as part of 6.1.2 d) 1), the organization can utilize an AI system impact assessment as indicated in 6.1.4. b) is designed such that repeated AI risk assessments can produce consistent, valid and comparable results; c) identifies risks that aid or prevent achieving its AI objectives; d) analyses the AI risks to: 1) assess the potential consequences to the organization, individuals and societies that would result if the identified risks were to materialize; 2) assess, where applicable, the realistic likelihood of the identified risks; 3) determine the levels of risk; e) evaluates the AI risks to: 1) compare the results of the risk analysis with the risk criteria (see 6.1.1); 2) prioritize the assessed risks for risk treatment. The organization shall retain documented information about the AI risk assessment process.",
+      "domain": "Risk Management",
+      "category": "AI Risk Assessment",
+      "section_number": "6.1.2",
+      "parent_section": "6.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Risk Assessment Methodology",
+          "description": "Documented AI risk assessment methodology covering identification, analysis (consequences to organization/individuals/societies, likelihood, levels) and evaluation against criteria.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI Risk Assessment Reports",
+          "description": "Completed AI risk assessment reports per AI system with consequence analysis, likelihood, level and prioritization for treatment.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI Risk Register",
+          "description": "Master AI risk register with risk IDs, descriptions, analysis results, evaluation, prioritization and link to treatment plans.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Repeatability/Consistency Validation",
+          "description": "Records (e.g., calibration sessions, inter-rater checks) demonstrating that repeated assessments produce consistent, valid and comparable results.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "3.3",
+      "original_reference": "6.1.3",
+      "title": "AI Risk Treatment",
+      "description": "Taking risk-assessment results into account, the organization shall define an AI risk treatment process to select treatment options, determine necessary controls (comparing with Annex A), consider Annex A controls, identify additional controls, use Annex B guidance, produce a Statement of Applicability with justification for inclusion/exclusion, formulate an AI risk treatment plan, obtain management approval and acceptance of residual risk, align controls to objectives, document, communicate and retain documented information.",
+      "full_text": "Taking the risk assessment results into account, the organization shall define an AI risk treatment process to: a) select appropriate AI risk treatment options; b) determine all controls that are necessary to implement the AI risk treatment options chosen and compare the controls with those in Annex A to verify that no necessary controls have been omitted; NOTE 1 Annex A provides reference controls for meeting organizational objectives and addressing risks related to the design and use of AI systems. c) consider the controls from Annex A that are relevant for the implementation of the AI risk treatment options; d) identify if additional controls are necessary beyond those in Annex A in order to implement all risk treatment options; e) consider the guidance in Annex B for the implementation of controls determined in b) and c); NOTE 2 Control objectives are implicitly included in the controls chosen. The organization can select an appropriate set of control objectives and controls from Annex A. The Annex A controls are not exhaustive and additional control objectives and controls can be needed. If different or additional controls are necessary beyond those in Annex A, the organization can design such controls or take them from existing sources. AI risk management can be integrated in other management systems, if applicable. f) produce a statement of applicability that contains the necessary controls [see b), c) and d)] and provide justification for inclusion and exclusion of controls. Justification for exclusion can include where the controls are not deemed necessary by the risk assessment and where they are not required by (or are subject to exceptions under) applicable external requirements. NOTE 3 The organization can provide documented justifications for excluding any control objectives in general or for specific AI systems, whether those listed in Annex A or established by the organization itself. g) formulate an AI risk treatment plan. The organization shall obtain approval from the designated management for the AI risk treatment plan and for acceptance of the residual AI risks. The necessary controls shall be: aligned to the objectives in 6.2; available as documented information; communicated within the organization; available to interested parties, as appropriate. The organization shall retain documented information about the AI risk treatment process.",
+      "domain": "Risk Management",
+      "category": "AI Risk Treatment",
+      "section_number": "6.1.3",
+      "parent_section": "6.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Risk Treatment Process Document",
+          "description": "Documented AI risk treatment process covering option selection, control determination, Annex A comparison, additional controls and SoA production.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Statement of Applicability (SoA)",
+          "description": "Statement of Applicability listing all necessary controls (including Annex A) with justification for inclusion and exclusion.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AI Risk Treatment Plan",
+          "description": "AI risk treatment plan with selected options, controls, owners, deadlines and residual risk acceptance records.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Residual Risk Acceptance Approval",
+          "description": "Management approval records for the AI risk treatment plan and acceptance of residual AI risks.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Control Communication Records",
+          "description": "Records of communicating the necessary controls within the organization and to relevant interested parties.",
+          "filetype": "EML"
+        }
+      ]
+    },
+    {
+      "control_id": "3.4",
+      "original_reference": "6.1.4",
+      "title": "AI System Impact Assessment",
+      "description": "The organization shall define a process for assessing potential consequences for individuals or groups of individuals, or both, and societies from the development, provision or use of AI systems; address deployment, intended use and foreseeable misuse; account for technical/societal context and jurisdictions; document and (where appropriate) make available to interested parties; consider results in the risk assessment.",
+      "full_text": "The organization shall define a process for assessing the potential consequences for individuals or groups of individuals, or both, and societies that can result from the development, provision or use of AI systems. The AI system impact assessment shall determine the potential consequences an AI system's deployment, intended use and foreseeable misuse has on individuals or groups of individuals, or both, and societies. The AI system impact assessment shall take into account the specific technical and societal context where the AI system is deployed and applicable jurisdictions. The result of the AI system impact assessment shall be documented. Where appropriate, the result of the system impact assessment can be made available to relevant interested parties as defined by the organization. The organization shall consider the results of the AI system impact assessment in the risk assessment (see 6.1.2). A.5 in Table A.1 provides controls for assessing impacts of AI systems. NOTE In some contexts (such as safety or privacy critical AI systems), the organization can require that discipline-specific AI system impact assessments (e.g. safety, privacy or security impact) be performed as part of the overall risk management activities of an organization.",
+      "domain": "Risk Management",
+      "category": "AI System Impact Assessment",
+      "section_number": "6.1.4",
+      "parent_section": "6.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI System Impact Assessment Procedure",
+          "description": "Documented procedure for AI system impact assessments covering deployment, intended use, foreseeable misuse, technical/societal context and jurisdictions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI System Impact Assessment Reports",
+          "description": "Completed AI system impact assessment reports per AI system with consequences to individuals, groups and societies.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Impact-to-Risk Integration Evidence",
+          "description": "Evidence that impact assessment results feed into the AI risk assessment process (e.g., linked entries, methodology cross-reference).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Interested Party Disclosure Records",
+          "description": "Where appropriate, records demonstrating that impact assessment results have been made available to relevant interested parties.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "3.5",
+      "original_reference": "6.2",
+      "title": "AI Objectives and Planning to Achieve Them",
+      "description": "The organization shall establish AI objectives at relevant functions and levels that are consistent with the AI policy, measurable (if practicable), take applicable requirements into account, monitored, communicated, updated and documented; and plan what will be done, resources, responsibility, completion and evaluation.",
+      "full_text": "The organization shall establish AI objectives at relevant functions and levels. The AI objectives shall: a) be consistent with the AI policy (see 5.2); b) be measurable (if practicable); c) take into account applicable requirements; d) be monitored; e) be communicated; f) be updated as appropriate; g) be available as documented information. When planning how to achieve its AI objectives, the organization shall determine: what will be done; what resources will be required; who will be responsible; when it will be completed; how the results will be evaluated. NOTE A non-exclusive list of AI objectives relating to risk management is provided in Annex C. Control objectives and controls for identifying objectives for responsible development and use of AI systems and measures to achieve them are provided in A.6.1 and A.9.3 in Table A.1. Implementation guidance for these controls is provided in B.6.1 and B.9.3.",
+      "domain": "Risk Management",
+      "category": "AI Objectives",
+      "section_number": "6.2",
+      "parent_section": "6",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Objectives Register",
+          "description": "Register of AI objectives at relevant functions and levels with measurability, requirements, monitoring frequency, communication and update history.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AI Objectives Achievement Plan",
+          "description": "Plan specifying what will be done, resources required, responsibility, completion dates and result-evaluation method for each AI objective.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AI Objectives Monitoring Dashboard",
+          "description": "Dashboard tracking AI objective progress and measurement results, used for management reporting.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI Objectives Communication Records",
+          "description": "Evidence (intranet, emails, town halls) of AI objectives being communicated within the organization.",
+          "filetype": "EML"
+        }
+      ]
+    },
+    {
+      "control_id": "3.6",
+      "original_reference": "6.3",
+      "title": "Planning of Changes",
+      "description": "When the organization determines the need for changes to the AI management system, the changes shall be carried out in a planned manner.",
+      "full_text": "When the organization determines the need for changes to the AI management system, the changes shall be carried out in a planned manner.",
+      "domain": "Risk Management",
+      "category": "Planning of Changes",
+      "section_number": "6.3",
+      "parent_section": "6",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "AIMS Change Management Procedure",
+          "description": "Documented procedure for planning and controlling changes to the AIMS, including impact analysis and approvals.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AIMS Change Register",
+          "description": "Register of AIMS changes with rationale, impact, plan, approvals and post-implementation review.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Change Approval Records",
+          "description": "Approval records for AIMS changes signed by designated management.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "4.1",
+      "original_reference": "7.1",
+      "title": "Resources",
+      "description": "The organization shall determine and provide the resources needed for the establishment, implementation, maintenance and continual improvement of the AI management system.",
+      "full_text": "The organization shall determine and provide the resources needed for the establishment, implementation, maintenance and continual improvement of the AI management system. NOTE Control objectives and controls for AI resources are provided in A.4 in Table A.1. Implementation guidance for these controls is provided in Clause B.4.",
+      "domain": "Support",
+      "category": "Resources",
+      "section_number": "7.1",
+      "parent_section": "7",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AIMS Resource Plan",
+          "description": "Plan identifying resources (financial, human, infrastructure, tooling) required across AIMS establishment, implementation, maintenance and continual improvement.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Resource Allocation Approvals",
+          "description": "Budget approvals and allocation records confirming provisioning of required AIMS resources.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Resource Utilization Reports",
+          "description": "Periodic reports showing actual resource utilization against plan, with variances and corrective actions.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "4.2",
+      "original_reference": "7.2",
+      "title": "Competence",
+      "description": "The organization shall determine necessary competence of persons doing work affecting AI performance, ensure competence through education/training/experience, take actions to acquire competence where applicable and evaluate effectiveness; appropriate documented information shall be available as evidence of competence.",
+      "full_text": "The organization shall: determine the necessary competence of person(s) doing work under its control that affects its AI performance; ensure that these persons are competent on the basis of appropriate education, training or experience; where applicable, take actions to acquire the necessary competence, and evaluate the effectiveness of the actions taken. Appropriate documented information shall be available as evidence of competence. NOTE 1 Implementation guidance for human resources including consideration of necessary expertise is provided in B.4.6. NOTE 2 Applicable actions can include, for example: the provision of training to, the mentoring of, or the re-assignment of currently employed persons; or the hiring or contracting of competent persons.",
+      "domain": "Support",
+      "category": "Competence",
+      "section_number": "7.2",
+      "parent_section": "7",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Competence Matrix",
+          "description": "Competence matrix mapping AI-related roles to required education, training, experience and skill levels.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Training Records",
+          "description": "Training records, certificates and learning-management-system extracts evidencing competence acquisition.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Competence Evaluation Records",
+          "description": "Records evaluating effectiveness of competence actions (assessments, performance reviews, recertifications).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Job Descriptions / Position Profiles",
+          "description": "Updated job descriptions specifying AI competence requirements for in-scope roles.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "4.3",
+      "original_reference": "7.3",
+      "title": "Awareness",
+      "description": "Persons doing work under the organization's control shall be aware of the AI policy, their contribution to AIMS effectiveness (including benefits of improved AI performance), and the implications of not conforming with AIMS requirements.",
+      "full_text": "Persons doing work under the organization's control shall be aware of: the AI policy (see 5.2); their contribution to the effectiveness of the AI management system, including the benefits of improved AI performance; the implications of not conforming with the AI management system requirements.",
+      "domain": "Support",
+      "category": "Awareness",
+      "section_number": "7.3",
+      "parent_section": "7",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "AI Awareness Programme",
+          "description": "Documented AI awareness programme covering AI policy, individual contribution and implications of non-conformance.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Awareness Training Attendance Records",
+          "description": "Attendance and completion records for AI awareness training across the workforce.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Awareness Communication Artefacts",
+          "description": "Posters, newsletters, e-learning modules, intranet content used to raise AI awareness.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "4.4",
+      "original_reference": "7.4",
+      "title": "Communication",
+      "description": "The organization shall determine the internal and external communications relevant to the AI management system, including what to communicate, when, with whom and how.",
+      "full_text": "The organization shall determine the internal and external communications relevant to the AI management system including: what it will communicate; when to communicate; with whom to communicate; how to communicate.",
+      "domain": "Support",
+      "category": "Communication",
+      "section_number": "7.4",
+      "parent_section": "7",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "AIMS Communication Plan",
+          "description": "Communication plan specifying what, when, with whom and how AIMS-relevant communications are made (internal and external).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Communication Schedule / Calendar",
+          "description": "Schedule of recurring AIMS communications (newsletters, town halls, regulator updates).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Sample Communication Outputs",
+          "description": "Examples of executed AIMS communications (newsletter editions, public posts, incident notices).",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "4.5",
+      "original_reference": "7.5.1",
+      "title": "Documented Information — General",
+      "description": "The organization's AI management system shall include documented information required by this document and documented information determined by the organization as necessary for the AIMS effectiveness.",
+      "full_text": "The organization's AI management system shall include: a) documented information required by this document; b) documented information determined by the organization as being necessary for the effectiveness of the AI management system. NOTE The extent of documented information for an AI management system can differ from one organization to another due to: the size of organization and its type of activities, processes, products and services; the complexity of processes and their interactions; the competence of persons.",
+      "domain": "Support",
+      "category": "Documented Information",
+      "section_number": "7.5.1",
+      "parent_section": "7.5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AIMS Documented Information Index",
+          "description": "Master index listing all documented information required by ISO/IEC 42001 and additional information deemed necessary for AIMS effectiveness.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Documented Information Repository",
+          "description": "Centralized repository (e.g., DMS link) holding all AIMS documented information.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "4.6",
+      "original_reference": "7.5.2",
+      "title": "Creating and Updating Documented Information",
+      "description": "When creating and updating documented information, the organization shall ensure appropriate identification and description, format and media, and review and approval for suitability and adequacy.",
+      "full_text": "When creating and updating documented information, the organization shall ensure appropriate: identification and description (e.g. a title, date, author or reference number); format (e.g. language, software version, graphics) and media (e.g. paper, electronic); review and approval for suitability and adequacy.",
+      "domain": "Support",
+      "category": "Documented Information",
+      "section_number": "7.5.2",
+      "parent_section": "7.5",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "Document Control Procedure",
+          "description": "Procedure governing creation and updating of documented information including identification, format and review/approval requirements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Document Template Library",
+          "description": "Approved template library enforcing identification (title, date, author, reference), format and review fields.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Review & Approval Records",
+          "description": "Review and approval records (workflow logs, signatures) for AIMS documents.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "4.7",
+      "original_reference": "7.5.3",
+      "title": "Control of Documented Information",
+      "description": "Documented information required by the AIMS and this document shall be controlled to ensure availability, suitability for use, and adequate protection; control shall address distribution/access/retrieval/use, storage/preservation, control of changes, retention/disposition; external-origin documents necessary for planning/operation shall be identified and controlled.",
+      "full_text": "Documented information required by the AI management system and by this document shall be controlled to ensure: a) it is available and suitable for use, where and when it is needed; b) it is adequately protected (e.g. from loss of confidentiality, improper use or loss of integrity). For the control of documented information, the organization shall address the following activities, as applicable: distribution, access, retrieval and use; storage and preservation, including preservation of legibility; control of changes (e.g. version control); retention and disposition. Documented information of external origin determined by the organization to be necessary for the planning and operation of the AI management system shall be identified as appropriate and controlled. NOTE Access can imply a decision regarding the permission to view the documented information only, or the permission and authority to view and change the documented information.",
+      "domain": "Support",
+      "category": "Documented Information",
+      "section_number": "7.5.3",
+      "parent_section": "7.5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Document Control Policy",
+          "description": "Policy and procedure for control of documented information covering availability, protection, distribution, version control, retention and disposition.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Access Control Records (DMS)",
+          "description": "Document management system access control settings and audit logs.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Retention & Disposition Schedule",
+          "description": "Schedule specifying retention periods and disposition methods for AIMS documented information.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "External-Origin Document Register",
+          "description": "Register identifying and controlling external-origin documents necessary for AIMS planning and operation.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "5.1",
+      "original_reference": "8.1",
+      "title": "Operational Planning and Control",
+      "description": "The organization shall plan, implement and control processes needed to meet requirements and implement Clause 6 actions by establishing criteria and implementing process control; implement controls per 6.1.3; monitor effectiveness; consider corrective actions; retain documented information; control planned and unintended changes; and control externally provided processes, products or services relevant to the AIMS.",
+      "full_text": "The organization shall plan, implement and control the processes needed to meet requirements, and to implement the actions determined in Clause 6, by: establishing criteria for the processes; implementing control of the processes in accordance with the criteria. The organization shall implement the controls determined according to 6.1.3 that are related to the operation of the AI management system (e.g. AI system development and usage life cycle related controls). The effectiveness of these controls shall be monitored and corrective actions shall be considered if the intended results are not achieved. Annex A lists reference controls and Annex B provides implementation guidance for them. Documented information shall be available to the extent necessary to have confidence that the processes have been carried out as planned. The organization shall control planned changes and review the consequences of unintended changes, taking action to mitigate any adverse effects, as necessary. The organization shall ensure that externally provided processes, products or services that are relevant to the AI management system are controlled.",
+      "domain": "Operation",
+      "category": "Operational Planning and Control",
+      "section_number": "8.1",
+      "parent_section": "8",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Operational Process Catalogue",
+          "description": "Catalogue of AIMS operational processes with criteria, control points and ownership.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Control Effectiveness Monitoring Records",
+          "description": "Records (KPIs, KRIs, audit notes) monitoring effectiveness of implemented controls and any corrective actions.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Change Control Records",
+          "description": "Records of planned changes and reviews of consequences of unintended changes with mitigation actions.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "External Provider Control Register",
+          "description": "Register of externally provided processes, products and services relevant to the AIMS with associated controls.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "5.2",
+      "original_reference": "8.2",
+      "title": "AI Risk Assessment — Operation",
+      "description": "The organization shall perform AI risk assessments in accordance with 6.1.2 at planned intervals or when significant changes are proposed or occur; retain documented information of the results of all AI risk assessments.",
+      "full_text": "The organization shall perform AI risk assessments in accordance with 6.1.2 at planned intervals or when significant changes are proposed or occur. The organization shall retain documented information of the results of all AI risk assessments.",
+      "domain": "Operation",
+      "category": "AI Risk Assessment",
+      "section_number": "8.2",
+      "parent_section": "8",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Risk Assessment Schedule",
+          "description": "Schedule defining planned intervals for AI risk assessments and triggers (significant changes).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Executed AI Risk Assessment Records",
+          "description": "Documented results of all executed AI risk assessments per cycle and per significant change.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "5.3",
+      "original_reference": "8.3",
+      "title": "AI Risk Treatment — Operation",
+      "description": "The organization shall implement the AI risk treatment plan per 6.1.3 and verify its effectiveness; new risks identified by assessments shall undergo the 6.1.3 process; ineffective treatment options shall be reviewed/revalidated and the plan updated; retain documented information on results of all AI risk treatments.",
+      "full_text": "The organization shall implement the AI risk treatment plan according to 6.1.3 and verify its effectiveness. When risk assessments identify new risks that require treatment, a risk treatment process in accordance with 6.1.3 shall be performed for these risks. When risk treatment options as defined by the risk treatment plan are not effective, these treatment options shall be reviewed and revalidated following the risk treatment process according to 6.1.3 and the risk treatment plan shall be updated. The organization shall retain documented information of the results of all AI risk treatments.",
+      "domain": "Operation",
+      "category": "AI Risk Treatment",
+      "section_number": "8.3",
+      "parent_section": "8",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Risk Treatment Implementation Tracker",
+          "description": "Tracker showing implementation status and effectiveness verification of AI risk treatment plan items.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "New-Risk Treatment Records",
+          "description": "Records evidencing application of the 6.1.3 process to newly identified risks.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Plan Revalidation Records",
+          "description": "Records of review/revalidation of ineffective treatment options and corresponding plan updates.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "5.4",
+      "original_reference": "8.4",
+      "title": "AI System Impact Assessment — Operation",
+      "description": "The organization shall perform AI system impact assessments per 6.1.4 at planned intervals or when significant changes are proposed to occur; retain documented information of the results of all AI system impact assessments.",
+      "full_text": "The organization shall perform AI system impact assessments according to 6.1.4 at planned intervals or when significant changes are proposed to occur. The organization shall retain documented information of the results of all AI system impact assessments.",
+      "domain": "Operation",
+      "category": "AI System Impact Assessment",
+      "section_number": "8.4",
+      "parent_section": "8",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AISIA Schedule",
+          "description": "Schedule of AI system impact assessments with planned intervals and change-driven triggers.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AISIA Result Repository",
+          "description": "Repository of all executed AI system impact assessment results.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "6.1",
+      "original_reference": "9.1",
+      "title": "Monitoring, Measurement, Analysis and Evaluation",
+      "description": "The organization shall determine what to monitor/measure, the methods, when to perform monitoring/measurement, and when to analyse/evaluate; documented information shall be available as evidence; evaluate performance and effectiveness of the AIMS.",
+      "full_text": "The organization shall determine: what needs to be monitored and measured; the methods for monitoring, measurement, analysis and evaluation, as applicable, to ensure valid results; when the monitoring and measuring shall be performed; when the results from monitoring and measurement shall be analysed and evaluated. Documented information shall be available as evidence of the results. The organization shall evaluate the performance and the effectiveness of the AI management system.",
+      "domain": "Performance Evaluation",
+      "category": "Monitoring, Measurement, Analysis and Evaluation",
+      "section_number": "9.1",
+      "parent_section": "9",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Monitoring & Measurement Plan",
+          "description": "Plan specifying what is monitored/measured, methods, frequency and timing of analysis/evaluation.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AIMS Performance KPI Dashboard",
+          "description": "Dashboard of AIMS KPIs and KRIs with trend analysis and evaluation commentary.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Performance & Effectiveness Evaluation Report",
+          "description": "Periodic report evaluating AIMS performance and effectiveness against objectives and risk criteria.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "6.2",
+      "original_reference": "9.2.1",
+      "title": "Internal Audit — General",
+      "description": "The organization shall conduct internal audits at planned intervals to provide information on whether the AIMS conforms to the organization's own requirements and the requirements of this document, and is effectively implemented and maintained.",
+      "full_text": "The organization shall conduct internal audits at planned intervals to provide information on whether the AI management system: a) conforms to: 1) the organization's own requirements for its AI management system; 2) the requirements of this document; b) is effectively implemented and maintained.",
+      "domain": "Performance Evaluation",
+      "category": "Internal Audit",
+      "section_number": "9.2.1",
+      "parent_section": "9.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Internal Audit Plan",
+          "description": "Internal audit plan covering AIMS conformity to own requirements and to ISO/IEC 42001 at planned intervals.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Internal Audit Reports",
+          "description": "Completed internal audit reports with findings on conformity and effective implementation.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "6.3",
+      "original_reference": "9.2.2",
+      "title": "Internal Audit Programme",
+      "description": "The organization shall plan, establish, implement and maintain audit programmes (frequency, methods, responsibilities, planning, reporting), considering process importance and previous audit results; define audit objectives/criteria/scope, select objective and impartial auditors, ensure results are reported to relevant managers; retain documented information as evidence of programme implementation and audit results.",
+      "full_text": "The organization shall plan, establish, implement and maintain (an) audit programme(s), including the frequency, methods, responsibilities, planning requirements and reporting. When establishing the internal audit programme(s), the organization shall consider the importance of the processes concerned and the results of previous audits. The organization shall: a) define the audit objectives, criteria and scope for each audit; b) select auditors and conduct audits to ensure objectivity and the impartiality of the audit process; c) ensure that the results of audits are reported to relevant managers. Documented information shall be available as evidence of the implementation of the audit programme(s) and the audit results.",
+      "domain": "Performance Evaluation",
+      "category": "Internal Audit Programme",
+      "section_number": "9.2.2",
+      "parent_section": "9.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Internal Audit Programme Document",
+          "description": "Multi-year internal audit programme with frequency, methods, responsibilities, planning and reporting requirements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Audit Charter / Auditor Independence Records",
+          "description": "Auditor selection criteria and independence/impartiality records.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Audit Objectives, Criteria & Scope per Audit",
+          "description": "Per-audit documentation of objectives, criteria and scope.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Audit Result Distribution Records",
+          "description": "Records confirming audit results were reported to relevant managers.",
+          "filetype": "EML"
+        }
+      ]
+    },
+    {
+      "control_id": "6.4",
+      "original_reference": "9.3.1",
+      "title": "Management Review — General",
+      "description": "Top management shall review the organization's AI management system at planned intervals to ensure its continuing suitability, adequacy and effectiveness.",
+      "full_text": "Top management shall review the organization's AI management system, at planned intervals, to ensure its continuing suitability, adequacy and effectiveness.",
+      "domain": "Performance Evaluation",
+      "category": "Management Review",
+      "section_number": "9.3.1",
+      "parent_section": "9.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Management Review Calendar",
+          "description": "Calendar of planned top-management reviews of the AIMS.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Management Review Procedure",
+          "description": "Procedure defining frequency, inputs, outputs and participants of management reviews.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "6.5",
+      "original_reference": "9.3.2",
+      "title": "Management Review Inputs",
+      "description": "The management review shall include status of actions from previous management reviews; changes in external/internal issues; changes in needs/expectations of interested parties; information on AIMS performance (nonconformities and corrective actions trends, monitoring and measurement results, audit results); and opportunities for continual improvement.",
+      "full_text": "The management review shall include: a) the status of actions from previous management reviews; b) changes in external and internal issues that are relevant to the AI management system; c) changes in needs and expectations of interested parties that are relevant to the AI management system; d) information on the AI management system performance, including trends in: 1) nonconformities and corrective actions; 2) monitoring and measurement results; 3) audit results; e) opportunities for continual improvement.",
+      "domain": "Performance Evaluation",
+      "category": "Management Review Inputs",
+      "section_number": "9.3.2",
+      "parent_section": "9.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Management Review Input Pack",
+          "description": "Compiled review pack containing all required inputs: prior action status, context/IP changes, performance trends (NCs, monitoring, audits) and improvement opportunities.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Trend Analysis Reports",
+          "description": "Trend analyses on nonconformities/corrective actions, monitoring/measurement and audit results.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "6.6",
+      "original_reference": "9.3.3",
+      "title": "Management Review Results",
+      "description": "The results of the management review shall include decisions related to continual improvement opportunities and any need for changes to the AI management system; documented information shall be available as evidence of management review results.",
+      "full_text": "The results of the management review shall include decisions related to continual improvement opportunities and any need for changes to the AI management system. Documented information shall be available as evidence of the results of management reviews.",
+      "domain": "Performance Evaluation",
+      "category": "Management Review Results",
+      "section_number": "9.3.3",
+      "parent_section": "9.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Management Review Minutes & Decisions",
+          "description": "Approved minutes of management reviews recording decisions on continual improvement and AIMS changes.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Management Review Action Tracker",
+          "description": "Action tracker capturing decisions, owners, due dates and completion status.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "7.1",
+      "original_reference": "10.1",
+      "title": "Continual Improvement",
+      "description": "The organization shall continually improve the suitability, adequacy and effectiveness of the AI management system.",
+      "full_text": "The organization shall continually improve the suitability, adequacy and effectiveness of the AI management system.",
+      "domain": "Improvement",
+      "category": "Continual Improvement",
+      "section_number": "10.1",
+      "parent_section": "10",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Continual Improvement Register",
+          "description": "Register of improvement opportunities, initiatives, owners, status and realised benefits.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Improvement Initiative Reports",
+          "description": "Periodic reports describing improvement initiatives implemented and their effect on AIMS suitability, adequacy and effectiveness.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "7.2",
+      "original_reference": "10.2",
+      "title": "Nonconformity and Corrective Action",
+      "description": "When a nonconformity occurs, the organization shall react (control/correct, deal with consequences), evaluate the need to eliminate causes (review NC, determine causes, identify similar NCs), implement actions, review effectiveness, and make AIMS changes if necessary; corrective actions shall be appropriate to the effects; documented information shall be available as evidence of the nature of NCs/subsequent actions and the results of corrective action.",
+      "full_text": "When a nonconformity occurs, the organization shall: a) react to the nonconformity and as applicable: 1) take action to control and correct it; 2) deal with the consequences; b) evaluate the need for action to eliminate the cause(s) of the nonconformity, so that it does not recur or occur elsewhere, by: 1) reviewing the nonconformity; 2) determining the causes of the nonconformity; 3) determining if similar nonconformities exist or can potentially occur; c) implement any action needed; d) review the effectiveness of any corrective action taken; e) make changes to the AI management system, if necessary. Corrective actions shall be appropriate to the effects of the nonconformities encountered. Documented information shall be available as evidence of: the nature of the nonconformities and any subsequent actions taken; the results of any corrective action.",
+      "domain": "Improvement",
+      "category": "Nonconformity and Corrective Action",
+      "section_number": "10.2",
+      "parent_section": "10",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Nonconformity Management Procedure",
+          "description": "Procedure defining handling of nonconformities including reaction, root-cause analysis, corrective action and effectiveness review.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Nonconformity & Corrective Action Log",
+          "description": "Log of all nonconformities with cause analysis, similar-NC checks, actions taken and effectiveness review.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Root Cause Analysis Records",
+          "description": "Root cause analyses (e.g., 5-Whys, fishbone) performed for material nonconformities.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Effectiveness Review Records",
+          "description": "Records reviewing the effectiveness of corrective actions and any resulting AIMS changes.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "8.1",
+      "original_reference": "A.2.2",
+      "title": "AI Policy (Annex A Control)",
+      "description": "The organization shall document a policy for the development or use of AI systems.",
+      "full_text": "The organization shall document a policy for the development or use of AI systems.",
+      "domain": "AI Policy",
+      "category": "Policies Related to AI",
+      "section_number": "A.2.2",
+      "parent_section": "A.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Documented AI Policy",
+          "description": "Documented AI policy for the development or use of AI systems informed by business strategy, organizational values, risk environment and impact to interested parties.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI Policy Approval Records",
+          "description": "Approval records for the AI policy by designated management.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Topic-Specific Sub-Policies",
+          "description": "Sub-policies referenced by or supporting the AI policy (AI resources, AI system impact assessments, AI system development).",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "8.2",
+      "original_reference": "A.2.3",
+      "title": "Alignment with Other Organizational Policies",
+      "description": "The organization shall determine where other policies can be affected by or apply to the organization's objectives with respect to AI systems.",
+      "full_text": "The organization shall determine where other policies can be affected by or apply to, the organization's objectives with respect to AI systems.",
+      "domain": "AI Policy",
+      "category": "Policies Related to AI",
+      "section_number": "A.2.3",
+      "parent_section": "A.2",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "Policy Intersection Analysis",
+          "description": "Analysis identifying intersections between AI policy and other policies (quality, security, safety, privacy) and required updates or cross-references.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Updated Cross-Domain Policies",
+          "description": "Updated quality/security/privacy/safety policies reflecting AI-specific provisions where necessary.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "8.3",
+      "original_reference": "A.2.4",
+      "title": "Review of the AI Policy",
+      "description": "The AI policy shall be reviewed at planned intervals or additionally as needed to ensure its continuing suitability, adequacy and effectiveness.",
+      "full_text": "The AI policy shall be reviewed at planned intervals or additionally as needed to ensure its continuing suitability, adequacy and effectiveness.",
+      "domain": "AI Policy",
+      "category": "Policies Related to AI",
+      "section_number": "A.2.4",
+      "parent_section": "A.2",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "AI Policy Review Schedule",
+          "description": "Schedule of planned AI policy reviews with trigger conditions for ad-hoc reviews.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AI Policy Review Records",
+          "description": "Review records, version history and approval evidence for AI policy updates.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Policy Owner Appointment",
+          "description": "Record assigning a management-approved role responsible for AI policy development, review and evaluation.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "9.1",
+      "original_reference": "A.3.2",
+      "title": "AI Roles and Responsibilities",
+      "description": "Roles and responsibilities for AI shall be defined and allocated according to the needs of the organization.",
+      "full_text": "Roles and responsibilities for AI shall be defined and allocated according to the needs of the organization.",
+      "domain": "Internal Organization",
+      "category": "Internal Organization",
+      "section_number": "A.3.2",
+      "parent_section": "A.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Roles & Responsibilities Charter",
+          "description": "Charter defining AI roles and responsibilities across risk management, impact assessments, asset/resource management, security, safety, privacy, development, performance, human oversight, supplier relationships, legal compliance and data quality management.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI RACI Matrix",
+          "description": "RACI matrix mapping AI activities to responsible/accountable roles.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Role Allocation Communication",
+          "description": "Communications and appointment letters allocating AI roles to specific persons.",
+          "filetype": "EML"
+        }
+      ]
+    },
+    {
+      "control_id": "9.2",
+      "original_reference": "A.3.3",
+      "title": "Reporting of Concerns",
+      "description": "The organization shall define and put in place a process to report concerns about the organization's role with respect to an AI system throughout its life cycle.",
+      "full_text": "The organization shall define and put in place a process to report concerns about the organization's role with respect to an AI system throughout its life cycle.",
+      "domain": "Internal Organization",
+      "category": "Internal Organization",
+      "section_number": "A.3.3",
+      "parent_section": "A.3",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Concerns Reporting Procedure",
+          "description": "Documented procedure providing confidentiality/anonymity options, qualified staffing, investigation/resolution powers, timely management escalation, protection from reprisals and timely responses.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Reporting Channel Implementation Evidence",
+          "description": "Evidence of operational reporting channels (hotline, portal, ombudsperson) and their availability to employed/contracted persons.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI Concerns Register",
+          "description": "Register of reported AI concerns with status, investigation outcome and resolution.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "10.1",
+      "original_reference": "A.4.2",
+      "title": "Resource Documentation",
+      "description": "The organization shall identify and document relevant resources required for the activities at given AI system life cycle stages and other AI-related activities relevant for the organization.",
+      "full_text": "The organization shall identify and document relevant resources required for the activities at given AI system life cycle stages and other AI-related activities relevant for the organization.",
+      "domain": "Resources for AI Systems",
+      "category": "Resources for AI Systems",
+      "section_number": "A.4.2",
+      "parent_section": "A.4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Resource Inventory",
+          "description": "Inventory of resources (AI system components, data, tooling, system/computing, human) per AI life-cycle stage and AI-related activity.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "AI System / Data Flow Diagrams",
+          "description": "Architecture and data-flow diagrams documenting resources of each AI system.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Resource Availability Assessment",
+          "description": "Assessment of resource availability and any required changes to AI system design or deployment requirements.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "10.2",
+      "original_reference": "A.4.3",
+      "title": "Data Resources",
+      "description": "As part of resource identification, the organization shall document information about the data resources utilized for the AI system.",
+      "full_text": "As part of resource identification, the organization shall document information about the data resources utilized for the AI system.",
+      "domain": "Resources for AI Systems",
+      "category": "Resources for AI Systems",
+      "section_number": "A.4.3",
+      "parent_section": "A.4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Data Resource Documentation",
+          "description": "Documentation covering data provenance, last update/modification date, ML data categories (training/validation/test/production), data categories (per ISO/IEC 19944-1), labelling process, intended use, data quality (per ISO/IEC 5259 series), retention/disposal policies, known/potential bias issues and data preparation.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Dataset Cards / Datasheets",
+          "description": "Dataset cards (datasheets for datasets) for each significant dataset used in AI systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Inventory Register",
+          "description": "Register tracking data resources, owners, source, sensitivity and life-cycle stage of use.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "10.3",
+      "original_reference": "A.4.4",
+      "title": "Tooling Resources",
+      "description": "As part of resource identification, the organization shall document information about the tooling resources utilized for the AI system.",
+      "full_text": "As part of resource identification, the organization shall document information about the tooling resources utilized for the AI system.",
+      "domain": "Resources for AI Systems",
+      "category": "Resources for AI Systems",
+      "section_number": "A.4.4",
+      "parent_section": "A.4",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "AI Tooling Inventory",
+          "description": "Inventory of algorithm types and ML models, data-conditioning tools, optimization methods, evaluation methods, provisioning tools, model-development tools and AI design/development/deployment software/hardware.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Tool Approval Register",
+          "description": "Register of approved AI tools with version, license and ownership.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "10.4",
+      "original_reference": "A.4.5",
+      "title": "System and Computing Resources",
+      "description": "As part of resource identification, the organization shall document information about the system and computing resources utilized for the AI system.",
+      "full_text": "As part of resource identification, the organization shall document information about the system and computing resources utilized for the AI system.",
+      "domain": "Resources for AI Systems",
+      "category": "Resources for AI Systems",
+      "section_number": "A.4.5",
+      "parent_section": "A.4",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "System & Computing Resource Inventory",
+          "description": "Inventory of compute resource requirements, location (on-premises, cloud, edge), processing/network/storage resources and hardware environmental/cost impacts.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Infrastructure Architecture Diagrams",
+          "description": "Architecture diagrams of compute, network and storage infrastructure supporting AI systems.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Environmental Impact Estimate",
+          "description": "Estimate of environmental impact (energy, water, hardware lifecycle) of AI system computing resources.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "10.5",
+      "original_reference": "A.4.6",
+      "title": "Human Resources",
+      "description": "As part of resource identification, the organization shall document information about the human resources and their competences utilized for the development, deployment, operation, change management, maintenance, transfer and decommissioning, as well as verification and integration of the AI system.",
+      "full_text": "As part of resource identification, the organization shall document information about the human resources and their competences utilized for the development, deployment, operation, change management, maintenance, transfer and decommissioning, as well as verification and integration of the AI system.",
+      "domain": "Resources for AI Systems",
+      "category": "Resources for AI Systems",
+      "section_number": "A.4.6",
+      "parent_section": "A.4",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Human Resources Register",
+          "description": "Register of human resources (data scientists, human oversight roles, trustworthiness experts, AI researchers/specialists, domain experts) and their competences per life-cycle stage.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Diversity & Expertise Plan",
+          "description": "Plan ensuring diverse expertise and inclusion of relevant demographic groups where required by AI system design.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Competence Evidence Pack",
+          "description": "Documented education, training and experience for personnel involved in AI activities.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "11.1",
+      "original_reference": "A.5.2",
+      "title": "AI System Impact Assessment Process",
+      "description": "The organization shall establish a process to assess the potential consequences for individuals or groups of individuals, or both, and societies that can result from the AI system throughout its life cycle.",
+      "full_text": "The organization shall establish a process to assess the potential consequences for individuals or groups of individuals, or both, and societies that can result from the AI system throughout its life cycle.",
+      "domain": "Impact Assessment",
+      "category": "Assessing Impacts of AI Systems",
+      "section_number": "A.5.2",
+      "parent_section": "A.5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI System Impact Assessment Process",
+          "description": "Documented AISIA process covering circumstances, elements (identification, analysis, evaluation, treatment, documentation), performers, utilization and impacted parties.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AISIA Methodology Templates",
+          "description": "Standard templates for performing and documenting AI system impact assessments.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Triggers / Criteria Register",
+          "description": "Register of triggers and criteria (criticality, complexity, sensitivity) that initiate or rescope an AISIA.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "11.2",
+      "original_reference": "A.5.3",
+      "title": "Documentation of AI System Impact Assessments",
+      "description": "The organization shall document the results of AI system impact assessments and retain results for a defined period.",
+      "full_text": "The organization shall document the results of AI system impact assessments and retain results for a defined period.",
+      "domain": "Impact Assessment",
+      "category": "Assessing Impacts of AI Systems",
+      "section_number": "A.5.3",
+      "parent_section": "A.5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AISIA Results Repository",
+          "description": "Repository of completed AI system impact assessments with intended use, positive/negative impacts, predictable failures, demographic applicability, complexity, human oversight role and employment/skilling impacts.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AISIA Retention Policy",
+          "description": "Retention policy defining the period for which AISIA results are retained.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "11.3",
+      "original_reference": "A.5.4",
+      "title": "Assessing AI System Impact on Individuals or Groups of Individuals",
+      "description": "The organization shall assess and document the potential impacts of AI systems to individuals or groups of individuals throughout the system's life cycle.",
+      "full_text": "The organization shall assess and document the potential impacts of AI systems to individuals or groups of individuals throughout the system's life cycle.",
+      "domain": "Impact Assessment",
+      "category": "Assessing Impacts of AI Systems",
+      "section_number": "A.5.4",
+      "parent_section": "A.5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Individual/Group Impact Assessments",
+          "description": "Assessments covering fairness, accountability, transparency/explainability, security/privacy, safety/health, financial consequences, accessibility and human rights, including protection needs of children, impaired/elderly persons and workers.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Expert Consultation Records",
+          "description": "Records of consultations with researchers, subject-matter experts and users to fully understand potential impacts.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "11.4",
+      "original_reference": "A.5.5",
+      "title": "Assessing Societal Impacts of AI Systems",
+      "description": "The organization shall assess and document the potential societal impacts of their AI systems throughout their life cycle.",
+      "full_text": "The organization shall assess and document the potential societal impacts of their AI systems throughout their life cycle.",
+      "domain": "Impact Assessment",
+      "category": "Assessing Impacts of AI Systems",
+      "section_number": "A.5.5",
+      "parent_section": "A.5",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Societal Impact Assessment Report",
+          "description": "Documented societal impact assessment covering environmental sustainability, economic, government, health/safety and norms/traditions/culture/values impacts (positive and negative).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Environmental Sustainability Analysis",
+          "description": "Analysis of environmental sustainability impacts of AI systems (greenhouse gases, water, land, flora/fauna) aligned with organizational sustainability strategy.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Misuse & Historical Bias Analysis",
+          "description": "Analysis of misuse risks and reinforcement of unwanted historical social biases.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "12.1",
+      "original_reference": "A.6.1.2",
+      "title": "Objectives for Responsible Development of AI System",
+      "description": "The organization shall identify and document objectives to guide the responsible development of AI systems, and take those objectives into account and integrate measures to achieve them in the development life cycle.",
+      "full_text": "The organization shall identify and document objectives to guide the responsible development AI systems, and take those objectives into account and integrate measures to achieve them in the development life cycle.",
+      "domain": "AI Lifecycle",
+      "category": "Management Guidance for AI System Development",
+      "section_number": "A.6.1.2",
+      "parent_section": "A.6.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Responsible Development Objectives Document",
+          "description": "Documented objectives (e.g., fairness, accountability, transparency, robustness, safety, security, privacy) integrated into requirements, data acquisition, training, V&V, etc.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Objectives-to-Lifecycle Mapping",
+          "description": "Mapping of each objective to specific measures (tools, methods, requirements) applied in each AI life-cycle stage.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "12.2",
+      "original_reference": "A.6.1.3",
+      "title": "Processes for Responsible AI System Design and Development",
+      "description": "The organization shall define and document the specific processes for the responsible design and development of the AI system.",
+      "full_text": "The organization shall define and document the specific processes for the responsible design and development of the AI system.",
+      "domain": "AI Lifecycle",
+      "category": "Management Guidance for AI System Development",
+      "section_number": "A.6.1.3",
+      "parent_section": "A.6.1",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Development Process Document",
+          "description": "Documented AI design/development process covering life-cycle stages, testing requirements and means, human oversight requirements, AISIA stages, training-data expectations, expertise/training, release criteria, approvals/sign-offs, change control, usability/controllability and interested-party engagement.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Development Lifecycle SOPs",
+          "description": "SOPs supporting each stage of the responsible AI development process.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "13.1",
+      "original_reference": "A.6.2.2",
+      "title": "AI System Requirements and Specification",
+      "description": "The organization shall specify and document requirements for new AI systems or material enhancements to existing systems.",
+      "full_text": "The organization shall specify and document requirements for new AI systems or material enhancements to existing systems.",
+      "domain": "AI Lifecycle",
+      "category": "AI System Life Cycle",
+      "section_number": "A.6.2.2",
+      "parent_section": "A.6.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI System Requirements Specifications",
+          "description": "Documented requirements/specifications for new AI systems or material enhancements, including rationale (business case, customer request, regulation) and training/data requirements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Requirements Traceability Matrix",
+          "description": "Traceability matrix linking requirements to design, development, testing and deployment artefacts.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "13.2",
+      "original_reference": "A.6.2.3",
+      "title": "Documentation of AI System Design and Development",
+      "description": "The organization shall document the AI system design and development based on organizational objectives, documented requirements and specification criteria.",
+      "full_text": "The organization shall document the AI system design and development based on organizational objectives, documented requirements and specification criteria.",
+      "domain": "AI Lifecycle",
+      "category": "AI System Life Cycle",
+      "section_number": "A.6.2.3",
+      "parent_section": "A.6.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI System Design Document",
+          "description": "Design documentation covering ML approach, learning algorithm/model, training plan and data quality, evaluation/refinement, hardware/software components, security threats (data poisoning, model stealing, model inversion), interfaces, human interaction, interoperability and portability.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Final System Architecture",
+          "description": "Final system architecture document, including security threat model.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "13.3",
+      "original_reference": "A.6.2.4",
+      "title": "AI System Verification and Validation",
+      "description": "The organization shall define and document verification and validation measures for the AI system and specify criteria for their use.",
+      "full_text": "The organization shall define and document verification and validation measures for the AI system and specify criteria for their use.",
+      "domain": "AI Lifecycle",
+      "category": "AI System Life Cycle",
+      "section_number": "A.6.2.4",
+      "parent_section": "A.6.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "V&V Plan",
+          "description": "Verification and validation plan covering testing methodologies/tools, selection and representativeness of test data, release criteria, reliability/safety requirements, error rates, operational factors and acceptable performance limits.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "V&V Test Results",
+          "description": "Verification and validation test results including evaluation of components and whole AI system for risks/impacts to individuals/groups/societies.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Performance Evaluation Records",
+          "description": "Records of performance evaluation against documented evaluation criteria, including handling of poor performance factors.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "13.4",
+      "original_reference": "A.6.2.5",
+      "title": "AI System Deployment",
+      "description": "The organization shall document a deployment plan and ensure that appropriate requirements are met prior to deployment.",
+      "full_text": "The organization shall document a deployment plan and ensure that appropriate requirements are met prior to deployment.",
+      "domain": "AI Lifecycle",
+      "category": "AI System Life Cycle",
+      "section_number": "A.6.2.5",
+      "parent_section": "A.6.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI System Deployment Plan",
+          "description": "Deployment plan covering development vs deployment environments, component-level deployment, release criteria (V&V, performance metrics, user testing) and management approvals/sign-offs.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Pre-Deployment Approval Records",
+          "description": "Approval records confirming pre-deployment requirements are met and impacts to interested parties considered.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "13.5",
+      "original_reference": "A.6.2.6",
+      "title": "AI System Operation and Monitoring",
+      "description": "The organization shall define and document the necessary elements for the ongoing operation of the AI system. At the minimum this should include system and performance monitoring, repairs, updates and support.",
+      "full_text": "The organization shall define and document the necessary elements for the ongoing operation of the AI system. At the minimum, this should include system and performance monitoring, repairs, updates and support.",
+      "domain": "AI Lifecycle",
+      "category": "AI System Life Cycle",
+      "section_number": "A.6.2.6",
+      "parent_section": "A.6.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Operations Runbook",
+          "description": "Runbook documenting system and performance monitoring (including for continuous-learning systems and concept/data drift), error/failure response, repairs, updates, change control and support arrangements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Performance Monitoring Dashboards",
+          "description": "Operational dashboards monitoring AI system technical performance and alignment with interested-party expectations/legal requirements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI-Specific Threat Catalogue",
+          "description": "Catalogue of AI-specific information security threats (data poisoning, model stealing, model inversion) and corresponding monitoring/treatment.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Support & SLA Records",
+          "description": "Support arrangements (internal/external), SLAs and metrics records for AI system support.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "13.6",
+      "original_reference": "A.6.2.7",
+      "title": "AI System Technical Documentation",
+      "description": "The organization shall determine what AI system technical documentation is needed for each relevant category of interested parties, such as users, partners, supervisory authorities, and provide the technical documentation to them in the appropriate form.",
+      "full_text": "The organization shall determine what AI system technical documentation is needed for each relevant category of interested parties, such as users, partners, supervisory authorities, and provide the technical documentation to them in the appropriate form.",
+      "domain": "AI Lifecycle",
+      "category": "AI System Life Cycle",
+      "section_number": "A.6.2.7",
+      "parent_section": "A.6.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI System Technical Documentation Pack",
+          "description": "Technical documentation covering general description, intended purpose, usage instructions, technical assumptions, technical limitations, monitoring capabilities, design/architecture, development data, data quality assumptions, risk management activities, V&V records, in-operation changes and impact assessments.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Failure Management Plan",
+          "description": "Plan for managing failures including rollback, feature toggling, update process, customer/user notification and updated failure information.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Operations Personnel Roles & Approvals",
+          "description": "Documentation of operations personnel roles, accountability (especially handling failures or updates) and management approvals.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "13.7",
+      "original_reference": "A.6.2.8",
+      "title": "AI System Recording of Event Logs",
+      "description": "The organization shall determine at which phases of the AI system life cycle, record keeping of event logs should be enabled, but at the minimum when the AI system is in use.",
+      "full_text": "The organization shall determine at which phases of the AI system life cycle, record keeping of event logs should be enabled, but at the minimum when the AI system is in use.",
+      "domain": "AI Lifecycle",
+      "category": "AI System Life Cycle",
+      "section_number": "A.6.2.8",
+      "parent_section": "A.6.2",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Event Logging Standard",
+          "description": "Standard specifying logging across AI life-cycle phases (minimum: in-use), covering traceability and detection of out-of-condition performance.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Event Log Samples",
+          "description": "Sample event logs (time/date of use, input production data, out-of-range outputs) demonstrating logging implementation.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Log Retention Policy",
+          "description": "Retention policy aligned with intended use, organizational retention policies and applicable legal requirements (e.g., biometric identification).",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "14.1",
+      "original_reference": "A.7.2",
+      "title": "Data for Development and Enhancement of AI System",
+      "description": "The organization shall define, document and implement data management processes related to the development of AI systems.",
+      "full_text": "The organization shall define, document and implement data management processes related to the development of AI systems.",
+      "domain": "Data Management",
+      "category": "Data for AI Systems",
+      "section_number": "A.7.2",
+      "parent_section": "A.7",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Data Management Procedure",
+          "description": "Documented data management processes addressing privacy/security implications, security/safety threats arising from data-dependent AI development, transparency/explainability (including provenance), representativeness vs operational domain, accuracy and integrity of data.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Management Implementation Evidence",
+          "description": "Evidence of operational implementation (e.g., data pipelines, validation jobs, access controls).",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "14.2",
+      "original_reference": "A.7.3",
+      "title": "Acquisition of Data",
+      "description": "The organization shall determine and document details about the acquisition and selection of the data used in AI systems.",
+      "full_text": "The organization shall determine and document details about the acquisition and selection of the data used in AI systems.",
+      "domain": "Data Management",
+      "category": "Data for AI Systems",
+      "section_number": "A.7.3",
+      "parent_section": "A.7",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Data Acquisition Register",
+          "description": "Register documenting categories of data needed, quantity, sources (internal/purchased/shared/open/synthetic), source characteristics, data subject demographics, prior handling, data rights, metadata and provenance for each AI system.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Data Selection Rationale Document",
+          "description": "Documented rationale for data selection including suitability for intended AI task.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Sourcing Contracts / Licenses",
+          "description": "Contracts and licenses for purchased/shared data including PII and copyright terms.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "14.3",
+      "original_reference": "A.7.4",
+      "title": "Quality of Data for AI Systems",
+      "description": "The organization shall define and document requirements for data quality and ensure that data used to develop and operate the AI system meet those requirements.",
+      "full_text": "The organization shall define and document requirements for data quality and ensure that data used to develop and operate the AI system meet those requirements.",
+      "domain": "Data Management",
+      "category": "Data for AI Systems",
+      "section_number": "A.7.4",
+      "parent_section": "A.7",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Data Quality Requirements Document",
+          "description": "Documented data quality requirements for training, validation, test and production data (aligned with ISO/IEC 25024 / ISO/IEC 5259 series).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Quality Measurement Reports",
+          "description": "Reports measuring data quality and bias against requirements, with adjustments to model/data to improve performance and fairness.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "14.4",
+      "original_reference": "A.7.5",
+      "title": "Data Provenance",
+      "description": "The organization shall define and document a process for recording the provenance of data used in its AI systems over the life cycles of the data and the AI system.",
+      "full_text": "The organization shall define and document a process for recording the provenance of data used in its AI systems over the life cycles of the data and the AI system.",
+      "domain": "Data Management",
+      "category": "Data for AI Systems",
+      "section_number": "A.7.5",
+      "parent_section": "A.7",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Data Provenance Process",
+          "description": "Documented process for recording data provenance (creation, update, transcription, abstraction, validation, control transfer, sharing, transformation) per ISO 8000-2.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Provenance Records",
+          "description": "Provenance records (lineage logs, transformation history) for data used in AI systems.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "14.5",
+      "original_reference": "A.7.6",
+      "title": "Data Preparation",
+      "description": "The organization shall define and document its criteria for selecting data preparations and the data preparation methods to be used.",
+      "full_text": "The organization shall define and document its criteria for selecting data preparations and the data preparation methods to be used.",
+      "domain": "Data Management",
+      "category": "Data for AI Systems",
+      "section_number": "A.7.6",
+      "parent_section": "A.7",
+      "is_mandatory": true,
+      "priority": "medium",
+      "evidence_requirements": [
+        {
+          "name": "Data Preparation Criteria & Methods Document",
+          "description": "Documented criteria and methods for data preparation (statistical exploration, cleaning, imputation, normalization, scaling, target-variable labelling, encoding) for each AI task.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Data Preparation Logs",
+          "description": "Logs of preparation steps applied to datasets used in development and operation of AI systems.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "15.1",
+      "original_reference": "A.8.2",
+      "title": "System Documentation and Information for Users",
+      "description": "The organization shall determine and provide the necessary information to users of the AI system.",
+      "full_text": "The organization shall determine and provide the necessary information to users of the AI system.",
+      "domain": "Information for Interested Parties",
+      "category": "Information for Interested Parties of AI Systems",
+      "section_number": "A.8.2",
+      "parent_section": "A.8",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "User Documentation Pack",
+          "description": "User documentation covering purpose, notification of AI interaction, how to interact/override, technical requirements/limitations/expected lifetime, human-oversight needs, accuracy/performance information, impact assessment information (including demographic context), revisions to benefit claims, updates/changes, contact information and educational materials.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Information Determination Criteria",
+          "description": "Documented criteria for what information is provided (intended use, reasonably foreseeable misuse, user expertise, specific impact).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Information Validation Records",
+          "description": "Records validating user access to, completeness, accuracy and currency of provided information.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "15.2",
+      "original_reference": "A.8.3",
+      "title": "External Reporting",
+      "description": "The organization shall provide capabilities for interested parties to report adverse impacts of the AI system.",
+      "full_text": "The organization shall provide capabilities for interested parties to report adverse impacts of the AI system.",
+      "domain": "Information for Interested Parties",
+      "category": "Information for Interested Parties of AI Systems",
+      "section_number": "A.8.3",
+      "parent_section": "A.8",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "External Adverse-Impact Reporting Channel",
+          "description": "Documented and operational reporting channel (web form, email, hotline) for interested parties to report adverse impacts (e.g., unfairness).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Adverse-Impact Report Register",
+          "description": "Register of received adverse-impact reports with status, investigation and resolution.",
+          "filetype": "XLSX"
+        }
+      ]
+    },
+    {
+      "control_id": "15.3",
+      "original_reference": "A.8.4",
+      "title": "Communication of Incidents",
+      "description": "The organization shall determine and document a plan for communicating incidents to users of the AI system.",
+      "full_text": "The organization shall determine and document a plan for communicating incidents to users of the AI system.",
+      "domain": "Information for Interested Parties",
+      "category": "Information for Interested Parties of AI Systems",
+      "section_number": "A.8.4",
+      "parent_section": "A.8",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Incident Communication Plan",
+          "description": "Plan covering types of incidents to communicate, timeline for notification, authorities to notify and required details, integrated with overall incident management.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident Communication Templates",
+          "description": "Templates for notifying users and other interested parties of incidents (including AI-specific and PII data breach scenarios).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Incident Communication Records",
+          "description": "Records of incident communications executed per plan.",
+          "filetype": "EML"
+        }
+      ]
+    },
+    {
+      "control_id": "15.4",
+      "original_reference": "A.8.5",
+      "title": "Information for Interested Parties",
+      "description": "The organization shall determine and document their obligations to reporting information about the AI system to interested parties.",
+      "full_text": "The organization shall determine and document their obligations to reporting information about the AI system to interested parties.",
+      "domain": "Information for Interested Parties",
+      "category": "Information for Interested Parties of AI Systems",
+      "section_number": "A.8.5",
+      "parent_section": "A.8",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Reporting Obligations Register",
+          "description": "Register of reporting obligations to authorities, customers, regulators and other interested parties, including timeframes and content (technical documentation, datasets, algorithmic justifications, V&V records, risks, AISIA results, logs).",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Sample Reports / Notifications",
+          "description": "Examples of executed reports to interested parties (regulators, customers).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Law Enforcement Information Handling Procedure",
+          "description": "Procedure addressing jurisdictional requirements for information shared with law enforcement authorities.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "16.1",
+      "original_reference": "A.9.2",
+      "title": "Processes for Responsible Use of AI Systems",
+      "description": "The organization shall define and document the processes for the responsible use of AI systems.",
+      "full_text": "The organization shall define and document the processes for the responsible use of AI systems.",
+      "domain": "Use of AI Systems",
+      "category": "Use of AI Systems",
+      "section_number": "A.9.2",
+      "parent_section": "A.9",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Responsible AI Use Procedure",
+          "description": "Documented procedure for the responsible use of AI systems including required approvals, cost, approved sourcing requirements and applicable legal requirements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI Use Approval Records",
+          "description": "Approval records evidencing application of the responsible-use procedure prior to using particular AI systems.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "16.2",
+      "original_reference": "A.9.3",
+      "title": "Objectives for Responsible Use of AI System",
+      "description": "The organization shall identify and document objectives to guide the responsible use of AI systems.",
+      "full_text": "The organization shall identify and document objectives to guide the responsible use of AI systems.",
+      "domain": "Use of AI Systems",
+      "category": "Use of AI Systems",
+      "section_number": "A.9.3",
+      "parent_section": "A.9",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Responsible Use Objectives Document",
+          "description": "Documented objectives (fairness, accountability, transparency, explainability, reliability, safety, robustness/redundancy, privacy/security, accessibility) for responsible AI use.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Human Oversight Plan",
+          "description": "Plan defining where and how meaningful human oversight is incorporated in the AI system life cycle (review/override authority, monitoring, reporting of concerns, automated-decision appropriateness).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Human Oversight Personnel Training Records",
+          "description": "Training records and instructions for personnel performing human-oversight activities related to the AI system.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "16.3",
+      "original_reference": "A.9.4",
+      "title": "Intended Use of the AI System",
+      "description": "The organization shall ensure that the AI system is used according to the intended uses of the AI system and its accompanying documentation.",
+      "full_text": "The organization shall ensure that the AI system is used according to the intended uses of the AI system and its accompanying documentation.",
+      "domain": "Use of AI Systems",
+      "category": "Use of AI Systems",
+      "section_number": "A.9.4",
+      "parent_section": "A.9",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Intended-Use Conformance Procedure",
+          "description": "Procedure ensuring AI system deployment and use align with associated documentation, including required human oversight and data alignment.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Misuse / Concern Escalation Records",
+          "description": "Records of concerns communicated to internal personnel and to third-party suppliers regarding impact or legal-requirement concerns from intended deployment.",
+          "filetype": "EML"
+        },
+        {
+          "name": "Use Event Logs & Documentation",
+          "description": "Event logs and other documentation demonstrating use as intended and supporting concern communication; retained per intended use and applicable legal/data-retention requirements.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "17.1",
+      "original_reference": "A.10.2",
+      "title": "Allocating Responsibilities",
+      "description": "The organization shall ensure that responsibilities within their AI system life cycle are allocated between the organization, its partners, suppliers, customers and third parties.",
+      "full_text": "The organization shall ensure that responsibilities within their AI system life cycle are allocated between the organization, its partners, suppliers, customers and third parties.",
+      "domain": "Third-Party Management",
+      "category": "Third-Party and Customer Relationships",
+      "section_number": "A.10.2",
+      "parent_section": "A.10",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Life-Cycle Responsibility Allocation Document",
+          "description": "Document allocating AI life-cycle responsibilities between the organization, partners, suppliers, customers and third parties (including data, algorithms/models, development and use).",
+          "filetype": "PDF"
+        },
+        {
+          "name": "PII Controller/Processor Determination",
+          "description": "Where PII is processed, determination of PII controller / joint PII controller / PII processor roles per ISO/IEC 29100 and ISO/IEC 27701.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI System Documentation Delivery Records",
+          "description": "Records demonstrating delivery of necessary technical/user documentation to relevant interested parties and third parties receiving the AI system.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "17.2",
+      "original_reference": "A.10.3",
+      "title": "Suppliers",
+      "description": "The organization shall establish a process to ensure that its usage of services, products or materials provided by suppliers aligns with the organization's approach to the responsible development and use of AI systems.",
+      "full_text": "The organization shall establish a process to ensure that its usage of services, products or materials provided by suppliers aligns with the organization's approach to the responsible development and use of AI systems.",
+      "domain": "Third-Party Management",
+      "category": "Third-Party and Customer Relationships",
+      "section_number": "A.10.3",
+      "parent_section": "A.10",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "AI Supplier Management Procedure",
+          "description": "Procedure for selecting AI suppliers (datasets, models, libraries, complete AI systems) considering supplier type and risk, with requirements, ongoing monitoring and evaluation.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "AI Supplier Register",
+          "description": "Register of AI suppliers, what they supply, integration into AI systems and risk assessments.",
+          "filetype": "XLSX"
+        },
+        {
+          "name": "Supplier Corrective Action Records",
+          "description": "Records requiring suppliers to take corrective actions when AI systems/components do not align with the organization's responsible approach.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Supplier-Delivered AI Documentation",
+          "description": "Evidence that suppliers have delivered appropriate and adequate documentation related to supplied AI systems.",
+          "filetype": "PDF"
+        }
+      ]
+    },
+    {
+      "control_id": "17.3",
+      "original_reference": "A.10.4",
+      "title": "Customers",
+      "description": "The organization shall ensure that its responsible approach to the development and use of AI systems considers their customer expectations and needs.",
+      "full_text": "The organization shall ensure that its responsible approach to the development and use of AI systems considers their customer expectations and needs.",
+      "domain": "Third-Party Management",
+      "category": "Third-Party and Customer Relationships",
+      "section_number": "A.10.4",
+      "parent_section": "A.10",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        {
+          "name": "Customer Requirements Capture Records",
+          "description": "Records of customer expectations and needs captured during design/engineering and through contractual or general usage agreements.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Customer Risk Information Pack",
+          "description": "Information provided to customers identifying risks of AI products/services and limits of valid domains of use, enabling customer risk treatment.",
+          "filetype": "PDF"
+        },
+        {
+          "name": "Responsibility Boundary Document",
+          "description": "Documented allocation of responsibility between AI system provider and customer, addressing supplier/customer relationship complexity.",
+          "filetype": "PDF"
+        }
+      ]
+    }
+  ]
+}

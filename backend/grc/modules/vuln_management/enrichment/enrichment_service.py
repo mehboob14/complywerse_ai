@@ -55,6 +55,39 @@ def _resolve_asset_criticality(db: Session, vuln: Vulnerability) -> Optional[str
     return best
 
 
+def _resolve_asset_criticality_score(db: Session, vuln: Vulnerability) -> Optional[float]:
+    """Phase 5.4 — Return the max derived criticality_score across linked assets.
+
+    Returns None when no linked asset has the score populated; the caller
+    then falls back to the text-based `_resolve_asset_criticality()` path.
+    """
+    try:
+        rows = (
+            db.query(ITAsset.criticality_score)
+            .join(VulnerabilityAssetLink, VulnerabilityAssetLink.asset_id == ITAsset.id)
+            .filter(
+                VulnerabilityAssetLink.vulnerability_id == vuln.id,
+                ITAsset.criticality_score.isnot(None),
+            )
+            .all()
+        )
+    except Exception:
+        logger.exception("Failed to resolve asset criticality score for vuln %s", vuln.id)
+        return None
+
+    best: Optional[float] = None
+    for (score,) in rows:
+        if score is None:
+            continue
+        try:
+            val = float(score)
+        except (TypeError, ValueError):
+            continue
+        if best is None or val > best:
+            best = val
+    return best
+
+
 def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
     """Pull NVD + EPSS + KEV for `vuln.cve_id`, write back, commit.
 
@@ -89,6 +122,7 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
             epss_score=None,
             kev_flag=False,
             asset_criticality=_resolve_asset_criticality(db, vuln),
+            asset_criticality_score=_resolve_asset_criticality_score(db, vuln),
         )
         vuln.composite_priority = priority
         summary["composite_priority"] = priority
@@ -110,6 +144,29 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
         if nvd.references:
             vuln.exploit_references = nvd.references
         summary["nvd_synced"] = True
+        # ---- CPE matcher (Phase 4) -----------------------------------------
+        # Walk this CVE's NVD `affected_configurations` against the tenant's
+        # SoftwareIdentifier inventory; auto-link any matching assets.
+        # Best-effort: a failure here doesn't poison enrichment.
+        try:
+            from ....services.cpe_matcher import match_cve_to_asset_ids, write_auto_links
+            asset_ids = match_cve_to_asset_ids(
+                db,
+                tenant_id=vuln.tenant_id,
+                cve_id=cve_id,
+                configurations=nvd.configurations or [],
+            )
+            if asset_ids:
+                added = write_auto_links(
+                    db,
+                    vuln_id=vuln.id,
+                    tenant_id=vuln.tenant_id,
+                    asset_ids=asset_ids,
+                )
+                summary["cpe_matches_added"] = added
+        except Exception:
+            logger.exception("CPE matcher failed for vuln %s", vuln.id)
+            summary["errors"].append("cpe_matcher_exception")
     else:
         summary["errors"].append("nvd_unavailable")
 
@@ -148,11 +205,13 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
 
     # ---- Composite priority ------------------------------------------------
     asset_criticality = _resolve_asset_criticality(db, vuln)
+    asset_criticality_score = _resolve_asset_criticality_score(db, vuln)
     priority = compute_composite_priority(
         cvss_score=vuln.cvss_score,
         epss_score=vuln.epss_score,
         kev_flag=vuln.kev_flag,
         asset_criticality=asset_criticality,
+        asset_criticality_score=asset_criticality_score,
     )
     vuln.composite_priority = priority
     summary["composite_priority"] = priority

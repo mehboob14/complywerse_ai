@@ -40,6 +40,7 @@ import {
   Lightbulb,
   Tag
 } from 'lucide-react';
+import EvidenceViewer, { EvidenceFile } from '@/components/evidence/EvidenceViewer';
 
 type StatusFilter = 'all' | 'draft' | 'pending_review' | 'approved' | 'rejected' | 'expired';
 type OCRStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'not_applicable';
@@ -141,6 +142,10 @@ export default function EvidencePage() {
   const canDelete = hasPermission('evidence:evidence_library:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  // In-browser preview state. Clicking the eye-icon opens the shared
+  // EvidenceViewer modal instead of navigating to the detail page —
+  // auditors and reviewers want a quick look, not a context switch.
+  const [previewFile, setPreviewFile] = useState<EvidenceFile | null>(null);
   const [typeFilter, setTypeFilter] = useState('');
   const [staleFilter, setStaleFilter] = useState<boolean | null>(null);
   const [showExpired, setShowExpired] = useState(true);
@@ -515,9 +520,24 @@ export default function EvidencePage() {
                       </div>
 
                       <div className="flex items-center gap-1">
-                        <Link href={`/evidence/${item.id}`} title="View" className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black">
-                          <Eye size={14} />
-                        </Link>
+                        {item.file_path ? (
+                          <button
+                            onClick={() => setPreviewFile({
+                              file_path: item.file_path!,
+                              file_name: item.file_name || `Evidence ${item.id}`,
+                              mime_type: (item as any).mime_type ?? null,
+                              file_size: (item as any).file_size ?? null,
+                            })}
+                            title="Preview file"
+                            className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black"
+                          >
+                            <Eye size={14} />
+                          </button>
+                        ) : (
+                          <Link href={`/evidence/${item.id}`} title="View detail" className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black">
+                            <Eye size={14} />
+                          </Link>
+                        )}
                         <Link href={`/evidence/${item.id}`} title="Edit" className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black">
                           <Edit2 size={14} />
                         </Link>
@@ -617,9 +637,24 @@ export default function EvidencePage() {
                           </td>
                           <td className="px-3 py-2.5">
                             <div className="flex items-center justify-end gap-1">
-                              <Link href={`/evidence/${item.id}`} title="View" className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black">
-                                <Eye size={14} />
-                              </Link>
+                              {item.file_path ? (
+                                <button
+                                  onClick={() => setPreviewFile({
+                                    file_path: item.file_path!,
+                                    file_name: item.file_name || `Evidence ${item.id}`,
+                                    mime_type: (item as any).mime_type ?? null,
+                                    file_size: (item as any).file_size ?? null,
+                                  })}
+                                  title="Preview file"
+                                  className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black"
+                                >
+                                  <Eye size={14} />
+                                </button>
+                              ) : (
+                                <Link href={`/evidence/${item.id}`} title="View detail" className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black">
+                                  <Eye size={14} />
+                                </Link>
+                              )}
                               <Link href={`/evidence/${item.id}`} title="Edit" className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black">
                                 <Edit2 size={14} />
                               </Link>
@@ -688,6 +723,15 @@ export default function EvidencePage() {
           evidenceTypes={evidenceTypes || []}
         />
       )}
+
+      {/* Shared in-browser file viewer for the central evidence list.
+          Replaces the older "go to detail page just to see the file"
+          flow — clicking the eye-icon now opens a quick popup. Edit
+          icon still routes to the detail page for the full record. */}
+      <EvidenceViewer
+        evidence={previewFile}
+        onClose={() => setPreviewFile(null)}
+      />
     </div>
   );
 }

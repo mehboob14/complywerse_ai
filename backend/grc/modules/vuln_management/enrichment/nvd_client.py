@@ -41,6 +41,12 @@ class NvdResult:
     last_modified_at: Optional[datetime] = None
     description: Optional[str] = None
     references: List[str] = field(default_factory=list)
+    # Phase 4 (CPE matcher) — raw affected-configuration nodes from NVD.
+    # Each node carries `cpeMatch[]` with `criteria`, `vulnerable`, and the
+    # `versionStartIncluding`/`Excluding` + `versionEndIncluding`/`Excluding`
+    # range bounds. Consumed by `services/cpe_matcher.py` to find assets
+    # with matching SoftwareIdentifier rows.
+    configurations: List[Dict[str, Any]] = field(default_factory=list)
 
 
 def _redis_client():
@@ -96,6 +102,7 @@ def _from_cache(redis_client, cve_id: str) -> Optional[NvdResult]:
         last_modified_at=_parse_nvd_datetime(payload.get("last_modified_at")),
         description=payload.get("description"),
         references=list(payload.get("references") or []),
+        configurations=list(payload.get("configurations") or []),
     )
 
 
@@ -109,6 +116,7 @@ def _to_cache(redis_client, result: NvdResult) -> None:
             "last_modified_at": result.last_modified_at.isoformat() if result.last_modified_at else None,
             "description": result.description,
             "references": result.references,
+            "configurations": result.configurations,
         }
         redis_client.set(
             f"nvd:{result.cve_id}",
@@ -139,12 +147,22 @@ def _extract_payload(raw: Dict[str, Any], cve_id: str) -> Optional[NvdResult]:
         if isinstance(url, str) and url.strip():
             references.append(url.strip())
 
+    # Affected-configuration nodes — captured verbatim for the CPE matcher.
+    # Cap to a reasonable size so the Redis-cached blob stays sane on
+    # outlier CVEs that list hundreds of CPE variants.
+    configurations = cve.get("configurations") or []
+    if isinstance(configurations, list):
+        configurations = configurations[:50]
+    else:
+        configurations = []
+
     return NvdResult(
         cve_id=cve.get("id") or cve_id,
         published_at=_parse_nvd_datetime(cve.get("published")),
         last_modified_at=_parse_nvd_datetime(cve.get("lastModified")),
         description=description,
         references=references[:25],  # cap to keep the JSON column compact
+        configurations=configurations,
     )
 
 

@@ -18,7 +18,23 @@ Usage:
 import json
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, List, Dict, Any
+
+# ─── Load backend/.env before importing models ──────────────────────
+# `models` imports `db.py`, which freezes the database URL from env
+# vars at import time. Standalone invocations (`python -m grc.seed_frameworks`)
+# don't go through the FastAPI startup, so without this we'd fall back
+# to the hard-coded default `postgres:postgres@localhost:5432/grc_master`
+# and the connection would fail against any non-default Postgres setup.
+# Best-effort: missing dotenv lib or missing .env file is non-fatal.
+try:
+    from dotenv import load_dotenv  # type: ignore
+    _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+    if _ENV_FILE.exists():
+        load_dotenv(_ENV_FILE)
+except Exception:  # pragma: no cover — env load is best-effort
+    pass
 
 from .models import (
     SessionLocal, Framework, FrameworkDomain, ControlObjective,
@@ -27,6 +43,8 @@ from .models import (
     UploadedFramework, ParsedFrameworkControl, Tenant,
     ControlEvidenceRequirement
 )
+# Per-tenant session factory — seeded data lives in the tenant DB, not master.
+from .db import open_tenant_session
 
 
 def _determine_control_attributes(control_name, control_statement):
@@ -2188,14 +2206,48 @@ def seed_uploaded_frameworks(session=None, seed_dir: str = None, tenant_id: int 
     print(f"Found {len(json_files)} framework JSON file(s) to seed")
 
     owns_session = session is None
-    db = session or SessionLocal()
+    # Step 1 — resolve the tenant against the MASTER catalog (this is the
+    # only thing the master DB knows about). Then close the master session
+    # immediately; everything else has to run against the tenant DB.
+    if session is None and tenant_id is None:
+        from .models import Tenant as _MasterTenant
+        master = SessionLocal()
+        try:
+            t = master.query(_MasterTenant).first()
+            if t is None:
+                raise RuntimeError(
+                    "No tenants in the master catalog. Run tenant provisioning before seeding frameworks."
+                )
+            tenant_id = t.id
+            tenant_slug = t.slug
+        finally:
+            master.close()
+    else:
+        tenant_slug = None
+
+    # Step 2 — open the actual tenant DB session. Per-tenant DBs are where
+    # `grc_uploaded_frameworks` (and every other operational table) live;
+    # `SessionLocal` only sees the master catalog so writing seeds against
+    # it raises "relation does not exist".
+    if session is not None:
+        db = session
+    else:
+        if tenant_slug is None:
+            # Caller passed an explicit tenant_id without a slug — look it up.
+            from .models import Tenant as _MasterTenant
+            master = SessionLocal()
+            try:
+                t = master.query(_MasterTenant).filter(_MasterTenant.id == tenant_id).first()
+                if t is None:
+                    raise RuntimeError(f"Tenant id {tenant_id} not found in master catalog")
+                tenant_slug = t.slug
+            finally:
+                master.close()
+        db = open_tenant_session(tenant_slug)
+
     seeded_frameworks = []
 
     try:
-        # Get default tenant if not specified
-        if tenant_id is None:
-            tenant_id = get_default_tenant(db)
-
         for json_file in json_files:
             file_path = os.path.join(seed_dir, json_file)
             data = load_framework_json(file_path)

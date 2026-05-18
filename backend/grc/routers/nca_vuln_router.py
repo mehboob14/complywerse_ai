@@ -116,21 +116,37 @@ def _ensure_bridged_vulnerability(entry: NcaVulnEntry, db: Session) -> Vulnerabi
     # effort — broker/redis failure here never blocks the bridge. The daily
     # Celery refresh will pick up anything that slips through.
     if bridged.cve_id:
+        _tenant_slug_for_async = None
         try:
             from ..db import MasterSession as _MS
             from ..models import Tenant as _MT
-            from ..tasks.vulnerabilities import enrich_vuln as _enrich_vuln_task
             _m = _MS()
             try:
                 _row = _m.query(_MT.slug).filter(_MT.id == entry.tenant_id).first()
             finally:
                 _m.close()
-            if _row and _row[0]:
-                _enrich_vuln_task.delay(tenant_slug=_row[0], vuln_id=bridged.id)
+            _tenant_slug_for_async = _row[0] if (_row and _row[0]) else None
         except Exception:
-            # Logged at debug — bridge success is what matters; the daily
-            # refresh closes the loop on any missed enrichments.
-            pass
+            _tenant_slug_for_async = None
+
+        if _tenant_slug_for_async:
+            try:
+                from ..tasks.vulnerabilities import enrich_vuln as _enrich_vuln_task
+                _enrich_vuln_task.delay(
+                    tenant_slug=_tenant_slug_for_async, vuln_id=bridged.id
+                )
+            except Exception:
+                # Logged at debug — bridge success is what matters; the daily
+                # refresh closes the loop on any missed enrichments.
+                pass
+            # Phase 6 — same dispatch for vendor patch intelligence.
+            try:
+                from ..tasks.patch_intel import sync_msrc_vuln as _sync_msrc_task
+                _sync_msrc_task.delay(
+                    tenant_slug=_tenant_slug_for_async, vuln_id=bridged.id
+                )
+            except Exception:
+                pass
 
     return bridged
 

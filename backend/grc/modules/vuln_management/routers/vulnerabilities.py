@@ -3,6 +3,7 @@ import io
 import csv
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
@@ -119,13 +120,42 @@ def _build_vulnerability_response(v: Vulnerability) -> VulnerabilityResponse:
         nvd_last_synced_at=getattr(v, "nvd_last_synced_at", None),
         exploit_references=list(getattr(v, "exploit_references", None) or []) or None,
         composite_priority=getattr(v, "composite_priority", None),
+        # Phase 6 — vendor patch intelligence.
+        patch_references=list(getattr(v, "patch_references", None) or []) or None,
+        vendor_advisory_ids=list(getattr(v, "vendor_advisory_ids", None) or []) or None,
+        remediation_guidance=getattr(v, "remediation_guidance", None),
+        psirt_synced_at=getattr(v, "psirt_synced_at", None),
+        psirt_source=getattr(v, "psirt_source", None),
+        # Phase 8 — exception workflow.
+        exception_status=getattr(v, "exception_status", None) or None,
+        exception_requested_by_id=getattr(v, "exception_requested_by_id", None),
+        exception_requested_at=getattr(v, "exception_requested_at", None),
+        exception_justification=getattr(v, "exception_justification", None),
+        exception_compensating_controls=list(
+            getattr(v, "exception_compensating_controls", None) or []
+        ) or None,
+        exception_approved_at=getattr(v, "exception_approved_at", None),
+        exception_expires_at=getattr(v, "exception_expires_at", None),
+        exception_denial_reason=getattr(v, "exception_denial_reason", None),
+        exception_revoked_by_id=getattr(v, "exception_revoked_by_id", None),
+        exception_revoked_at=getattr(v, "exception_revoked_at", None),
+        exception_revocation_reason=getattr(v, "exception_revocation_reason", None),
+        exception_metadata=dict(getattr(v, "exception_metadata", None) or {}) or None,
     )
 
 
 # Statuses that should be hidden from the default vulnerability register list.
 # Mirrors `RESOLVED_STATUSES` in the dashboard router so the two views stay
 # consistent on what counts as "closed/mitigated".
-_LIST_CLOSED_STATUSES = ["resolved", "remediated", "verified", "closed", "accepted", "false_positive"]
+# Terminal/closed statuses — hidden from the default list view. The new
+# `auto_closed_decommissioned` value is set by the asset-lifecycle auto-close
+# hook (asset_lifecycle._auto_close_linked_vulns) when a linked asset enters
+# decommissioned/retired; treated identically to other terminal states for
+# filtering, but reports can distinguish it via the literal value.
+_LIST_CLOSED_STATUSES = [
+    "resolved", "remediated", "verified", "closed",
+    "accepted", "false_positive", "auto_closed_decommissioned",
+]
 
 
 @router.get("/vulnerabilities", response_model=List[VulnerabilityResponse])
@@ -339,7 +369,10 @@ async def bulk_upload_vulnerabilities(
         raise HTTPException(status_code=422, detail="The file is empty or contains no data rows.")
 
     VALID_SEVERITIES = {"critical", "high", "medium", "low", "info"}
-    VALID_STATUSES = {"open", "in_progress", "remediated", "verified", "closed", "accepted", "false_positive"}
+    VALID_STATUSES = {
+        "open", "in_progress", "remediated", "verified", "closed",
+        "accepted", "false_positive", "auto_closed_decommissioned",
+    }
 
     created = 0
     skipped = 0  # rows with no usable title (usually trailing blank spreadsheet rows)
@@ -563,7 +596,10 @@ def change_vulnerability_status(
     if request.resolution_notes:
         vuln.resolution_notes = request.resolution_notes
     
-    if request.status in ["resolved", "remediated", "verified", "closed", "accepted", "false_positive"]:
+    if request.status in [
+        "resolved", "remediated", "verified", "closed",
+        "accepted", "false_positive", "auto_closed_decommissioned",
+    ]:
         vuln.resolved_at = datetime.utcnow()
     if request.status in ["verified", "resolved", "closed"]:
         vuln.verified_by = current_user.id
@@ -664,3 +700,380 @@ def bulk_enrich_endpoint(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Could not queue bulk enrichment: {exc}",
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 — Vendor patch intelligence (MSRC first)
+# ---------------------------------------------------------------------------
+# Asks the responsible PSIRT (currently only MSRC; Red Hat / Cisco land in
+# future PRs) for the KB articles / vendor advisory IDs / remediation text
+# that fix this vuln. Synchronous and best-effort — same failure semantics as
+# /enrich.
+
+
+@router.post("/vulnerabilities/{vuln_id}/sync-patch-info", response_model=VulnerabilityResponse)
+def sync_patch_info_endpoint(
+    vuln_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Ask the vendor PSIRT (MSRC for now) for patch metadata. Returns the
+    updated record so the UI doesn't need a follow-up GET. Idempotent — a
+    re-sync replaces this vuln's MSRC entries with the fresh data while
+    preserving entries from other PSIRTs."""
+    user_tenants = get_user_tenants(current_user, db)
+    vuln = get_vuln_or_404(vuln_id, user_tenants, db)
+
+    # Lazy import — keeps `requests` + redis off the import path for callers
+    # that never click the Sync button.
+    from ..patch_intel import sync_patch_intel
+
+    try:
+        sync_patch_intel(vuln, db)
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Unexpected exception during patch-intel sync for vuln %s", vuln.id
+        )
+
+    db.refresh(vuln)
+    vuln = db.query(Vulnerability).options(
+        joinedload(Vulnerability.assignee),
+        joinedload(Vulnerability.verifier),
+        joinedload(Vulnerability.asset_links).joinedload(VulnerabilityAssetLink.asset),
+    ).filter(Vulnerability.id == vuln.id).first()
+    return _build_vulnerability_response(vuln)
+
+
+@router.post("/vulnerabilities/sync-patch-info-all")
+def bulk_sync_patch_info_endpoint(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Queue a tenant-wide patch-intel sync via Celery. Returns immediately;
+    the worker walks every open CVE-bearing vuln and asks MSRC for each.
+    Non-Microsoft CVEs are cached as negative hits so subsequent runs skip
+    them quickly."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    from ....db import MasterSession
+    from ....models import Tenant as _Tenant
+
+    master = MasterSession()
+    try:
+        row = master.query(_Tenant.slug).filter(_Tenant.id == tenant_id).first()
+    finally:
+        master.close()
+
+    if not row or not row[0]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not resolve tenant slug for bulk patch-intel sync.",
+        )
+
+    try:
+        from ...tasks.patch_intel import bulk_sync_msrc
+        result = bulk_sync_msrc.delay(tenant_slug=row[0])
+        return {"queued": True, "task_id": result.id}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Could not queue bulk patch-intel sync: {exc}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 — Exception Workflow
+# ---------------------------------------------------------------------------
+# Formal request → approve|deny → revoke|expire state machine. Separation of
+# duties enforced server-side: the user who requested an exception cannot
+# also approve or deny it. The legacy `is_exception`/`exception_reason`/
+# `exception_approved_by`/`exception_expiry` columns are kept in sync so
+# existing dashboards and reports keep working.
+
+from ....schemas import (  # noqa: E402  (intentional inline import for grouping)
+    ExceptionRequestBody,
+    ExceptionApproveBody,
+    ExceptionDenyBody,
+    ExceptionRevokeBody,
+)
+
+
+def _exception_fsm_response(vuln, summary: dict) -> dict:
+    """Combine the FSM summary with the canonical VulnerabilityResponse so
+    the UI can refresh either the panel or the whole row from one call."""
+    return {
+        "vulnerability": _build_vulnerability_response(vuln).model_dump(),
+        "exception": summary,
+    }
+
+
+@router.post("/vulnerabilities/{vuln_id}/exception/request")
+def request_vuln_exception(
+    vuln_id: int,
+    body: ExceptionRequestBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Open an exception request for a vulnerability. Justification mandatory."""
+    user_tenants = get_user_tenants(current_user, db)
+    vuln = get_vuln_or_404(vuln_id, user_tenants, db)
+
+    from ....services.vuln_exception import (
+        ExceptionWorkflowError,
+        request_exception,
+    )
+
+    try:
+        summary = request_exception(
+            vuln=vuln,
+            actor_id=current_user.id,
+            justification=body.justification,
+            compensating_controls=body.compensating_controls,
+            expires_at=body.expires_at,
+        )
+    except ExceptionWorkflowError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc),
+        ) from exc
+
+    db.commit()
+    db.refresh(vuln)
+    return _exception_fsm_response(vuln, summary)
+
+
+@router.post("/vulnerabilities/{vuln_id}/exception/approve")
+def approve_vuln_exception(
+    vuln_id: int,
+    body: ExceptionApproveBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    # Approval is a stronger action than edit, but until a dedicated
+    # `approve_exception` permission is rolled out per-tenant we gate it
+    # behind edit. The FSM still enforces separation of duties (the
+    # requester cannot also approve), which is the auditor-relevant control.
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Approve a `requested` exception. Separation-of-duties enforced."""
+    user_tenants = get_user_tenants(current_user, db)
+    vuln = get_vuln_or_404(vuln_id, user_tenants, db)
+
+    from ....services.vuln_exception import (
+        ExceptionWorkflowError,
+        approve_exception,
+    )
+
+    try:
+        summary = approve_exception(
+            vuln=vuln,
+            actor_id=current_user.id,
+            comment=body.comment,
+            expires_at=body.expires_at,
+        )
+    except ExceptionWorkflowError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc),
+        ) from exc
+
+    db.commit()
+    db.refresh(vuln)
+    return _exception_fsm_response(vuln, summary)
+
+
+@router.post("/vulnerabilities/{vuln_id}/exception/deny")
+def deny_vuln_exception(
+    vuln_id: int,
+    body: ExceptionDenyBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Deny a `requested` exception. Reason mandatory; separation-of-duties enforced."""
+    user_tenants = get_user_tenants(current_user, db)
+    vuln = get_vuln_or_404(vuln_id, user_tenants, db)
+
+    from ....services.vuln_exception import (
+        ExceptionWorkflowError,
+        deny_exception,
+    )
+
+    try:
+        summary = deny_exception(
+            vuln=vuln,
+            actor_id=current_user.id,
+            denial_reason=body.denial_reason,
+        )
+    except ExceptionWorkflowError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc),
+        ) from exc
+
+    db.commit()
+    db.refresh(vuln)
+    return _exception_fsm_response(vuln, summary)
+
+
+class BulkExceptionRequestBody(BaseModel):
+    vulnerability_ids: List[int]
+    justification: str
+    compensating_controls: Optional[List[str]] = None
+    expires_at: Optional[datetime] = None
+
+
+@router.post("/vulnerabilities/exception/bulk-request")
+def bulk_request_vuln_exception(
+    body: BulkExceptionRequestBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Open exception requests on a batch of vulns at once. Each row gets
+    its own state-machine entry (per-vuln history preserved); a single
+    justification + expiry applies to all. Rows that aren't in a
+    transitionable state are skipped with a per-row error message.
+
+    Returns a summary `{requested: int, skipped: int, errors: [{id, msg}]}`."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenant access.")
+    if not body.vulnerability_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="vulnerability_ids must contain at least one id.",
+        )
+    if not (body.justification or "").strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Justification is required.",
+        )
+
+    from ....services.vuln_exception import (
+        ExceptionWorkflowError,
+        request_exception,
+    )
+
+    rows = (
+        db.query(Vulnerability)
+        .filter(Vulnerability.id.in_(body.vulnerability_ids))
+        .filter(Vulnerability.tenant_id.in_(user_tenants))
+        .all()
+    )
+    found = {v.id for v in rows}
+    requested = 0
+    skipped = 0
+    errors: List[dict] = []
+
+    for vid in body.vulnerability_ids:
+        if vid not in found:
+            errors.append({"id": vid, "msg": "not_found_or_no_access"})
+            skipped += 1
+            continue
+    for vuln in rows:
+        try:
+            request_exception(
+                vuln=vuln,
+                actor_id=current_user.id,
+                justification=body.justification,
+                compensating_controls=body.compensating_controls,
+                expires_at=body.expires_at,
+            )
+            requested += 1
+        except ExceptionWorkflowError as exc:
+            errors.append({"id": vuln.id, "msg": str(exc)})
+            skipped += 1
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Commit failed.")
+
+    return {"requested": requested, "skipped": skipped, "errors": errors}
+
+
+@router.get("/vulnerabilities/exception-queue")
+def list_exception_queue(
+    state: Optional[str] = Query(None, description="Filter by exception_status; defaults to all non-none states."),
+    skip: int = 0,
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Queue view across the tenant — vulns currently in any exception
+    state. Used by the Exceptions queue page so reviewers don't have to
+    open each vuln to see what's pending."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"total": 0, "rows": []}
+
+    query = (
+        db.query(Vulnerability)
+        .filter(Vulnerability.tenant_id.in_(user_tenants))
+        .filter(Vulnerability.exception_status.isnot(None))
+        .filter(Vulnerability.exception_status != "none")
+    )
+    if state:
+        query = query.filter(Vulnerability.exception_status == state)
+
+    total = query.count()
+    rows = (
+        query.order_by(Vulnerability.exception_requested_at.desc().nulls_last())
+        .offset(skip).limit(limit).all()
+    )
+
+    return {
+        "total": total,
+        "rows": [
+            {
+                "id": v.id,
+                "vuln_id": v.vuln_id,
+                "title": v.title,
+                "severity": v.severity,
+                "cve_id": v.cve_id,
+                "exception_status": v.exception_status,
+                "exception_requested_by_id": v.exception_requested_by_id,
+                "exception_requested_at": v.exception_requested_at.isoformat() if v.exception_requested_at else None,
+                "exception_approved_at": v.exception_approved_at.isoformat() if v.exception_approved_at else None,
+                "exception_expires_at": v.exception_expires_at.isoformat() if v.exception_expires_at else None,
+                "exception_justification": (v.exception_justification or "")[:300] if v.exception_justification else None,
+                "composite_priority": v.composite_priority,
+            }
+            for v in rows
+        ],
+    }
+
+
+@router.post("/vulnerabilities/{vuln_id}/exception/revoke")
+def revoke_vuln_exception(
+    vuln_id: int,
+    body: ExceptionRevokeBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Revoke an `approved` exception. Used when a compensating control fails
+    or new threat intel makes the exception untenable."""
+    user_tenants = get_user_tenants(current_user, db)
+    vuln = get_vuln_or_404(vuln_id, user_tenants, db)
+
+    from ....services.vuln_exception import (
+        ExceptionWorkflowError,
+        revoke_exception,
+    )
+
+    try:
+        summary = revoke_exception(
+            vuln=vuln,
+            actor_id=current_user.id,
+            reason=body.reason,
+        )
+    except ExceptionWorkflowError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc),
+        ) from exc
+
+    db.commit()
+    db.refresh(vuln)
+    return _exception_fsm_response(vuln, summary)

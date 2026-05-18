@@ -17,6 +17,7 @@ from ..models import (
     ITAsset, AssetControlLink, AssetInternalControlLink, AssetRiskAssessment, AssetFrameworkControlLink,
     AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, Risk, InternalControl,
     Vulnerability, VulnerabilityAssetLink, AssetSecurityComplianceSelection,
+    SoftwareIdentifier,
     GRCUser, Tenant, TenantUser, get_db
 )
 from ..schemas import (
@@ -24,9 +25,13 @@ from ..schemas import (
     AssetValuation, AssetControlLinkCreate, AssetRiskAssessmentResponse,
     AssetDashboard, AssetCoverage, MessageResponse,
     AssetFrameworkControlLinkCreate, AssetEvidenceLinkCreate,
-    AssetDetailResponse, AssetCoverageAnalysis
+    AssetDetailResponse, AssetCoverageAnalysis,
+    LifecycleTransitionRequest,
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, decode_token
+# Phase 5.4 + 5.3 helpers — keep all logic out of the router body.
+from ..services.asset_criticality import recompute_for_asset as recompute_asset_criticality
+from ..services import asset_lifecycle
 # Per-database-per-tenant: the tenant DB *is* the active session, so tenant
 # users are just GRCUser rows in the current request's session.
 
@@ -282,6 +287,12 @@ def list_assets(
     criticality: Optional[str] = None,
     owner_id: Optional[int] = None,
     status_filter: Optional[str] = None,
+    # Phase 5 list filters. All optional, default behavior unchanged.
+    lifecycle_state: Optional[str] = None,
+    data_classification: Optional[str] = None,
+    internet_facing: Optional[bool] = None,
+    stale_only: bool = Query(False, description="When true, return assets where last_seen_at is older than `stale_days` (default 30)."),
+    stale_days: int = Query(30, ge=1, le=365),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -290,9 +301,9 @@ def list_assets(
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return []
-    
+
     query = db.query(ITAsset).filter(ITAsset.tenant_id.in_(user_tenants))
-    
+
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(ITAsset.tenant_id == tenant_id)
@@ -301,10 +312,28 @@ def list_assets(
     if criticality:
         query = query.filter(ITAsset.criticality == criticality)
     if owner_id:
-        query = query.filter(ITAsset.owner_id == owner_id)
+        # Match the legacy `owner_id` OR the new Phase 5.2 `primary_owner_id`
+        # so callers don't have to know which one is populated.
+        query = query.filter(
+            (ITAsset.owner_id == owner_id) | (ITAsset.primary_owner_id == owner_id)
+        )
     if status_filter:
         query = query.filter(ITAsset.status == status_filter)
-    
+    if lifecycle_state:
+        query = query.filter(ITAsset.lifecycle_state == lifecycle_state)
+    if data_classification:
+        query = query.filter(ITAsset.data_classification == data_classification)
+    if internet_facing is not None:
+        query = query.filter(ITAsset.internet_facing == internet_facing)
+    if stale_only:
+        from datetime import timedelta
+        cutoff = datetime.utcnow() - timedelta(days=stale_days)
+        # NULL last_seen_at is treated as "never seen", which is also stale —
+        # match the UI semantics for the stale filter.
+        query = query.filter(
+            (ITAsset.last_seen_at == None) | (ITAsset.last_seen_at < cutoff)  # noqa: E711
+        )
+
     assets = query.order_by(ITAsset.created_at.desc()).offset(skip).limit(limit).all()
     return assets
 
@@ -333,6 +362,24 @@ def create_asset(
             detail="Tenant not found"
         )
     
+    # Validate any manual criticality override up-front so we don't
+    # persist a half-valid row. Override requires both a valid bucket
+    # AND a reason; the recompute call below will keep the override
+    # bucket but still write the derived `criticality_score` for audit.
+    from ..services.asset_criticality import is_valid_bucket
+    manual_override = bool(asset.criticality_manual_override) and bool(asset.criticality)
+    if manual_override:
+        if not is_valid_bucket(asset.criticality):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="criticality override must be one of low/medium/high/critical",
+            )
+        if not (asset.criticality_override_reason or "").strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="criticality_override_reason is required when overriding the derived criticality",
+            )
+
     db_asset = ITAsset(
         tenant_id=tenant_id,
         name=asset.name,
@@ -343,22 +390,50 @@ def create_asset(
         custodian=asset.custodian,
         host_name=asset.host_name,
         ip_address=asset.ip_address,
-        criticality=asset.criticality,
+        # `criticality` is set here only when the user is overriding the
+        # derived value. Otherwise it's left blank and the recompute
+        # below fills it from the CIA + exposure inputs.
+        criticality=(asset.criticality if manual_override else None),
+        criticality_manual_override=manual_override,
+        criticality_override_reason=asset.criticality_override_reason if manual_override else None,
         vendor=asset.vendor,
         location=asset.location,
         confidentiality_rating=asset.confidentiality_rating,
         integrity_rating=asset.integrity_rating,
         availability_rating=asset.availability_rating,
         valuation=asset.valuation,
-        cde_environment=asset.cde_environment
+        cde_environment=asset.cde_environment,
+        # Phase 5.1 — Exposure metadata. None values are stored as NULL.
+        internet_facing=bool(asset.internet_facing) if asset.internet_facing is not None else False,
+        network_segment=asset.network_segment,
+        data_classification=asset.data_classification,
+        business_function=asset.business_function,
+        compliance_scope=asset.compliance_scope if asset.compliance_scope is not None else [],
+        # Phase 5.2 — Ownership chain.
+        primary_owner_id=asset.primary_owner_id,
+        secondary_owner_id=asset.secondary_owner_id,
+        owning_team=asset.owning_team,
+        owning_team_id=asset.owning_team_id,
+        escalation_contact_id=asset.escalation_contact_id,
+        business_owner_id=asset.business_owner_id,
+        # Phase 5.3 — Lifecycle state (only the starting state on create;
+        # subsequent moves go through /lifecycle-transition so the machine
+        # validates them).
+        lifecycle_state=(asset.lifecycle_state or "active"),
     )
-    
+
     # Auto-resolve owner_name from owner_id if not provided
     if asset.owner_id and not asset.owner_name:
         owner = db.query(GRCUser).filter(GRCUser.id == asset.owner_id).first()
         if owner:
             db_asset.owner_name = owner.display_name or owner.username
-    
+
+    # ISO 27005 derived criticality (bucket + 0-10 score). When the row
+    # carries `criticality_manual_override=True`, the bucket is preserved
+    # but the score is still re-derived from the inputs so the audit log
+    # shows what the system would have chosen.
+    recompute_asset_criticality(db_asset)
+
     db.add(db_asset)
     db.commit()
     db.refresh(db_asset)
@@ -467,19 +542,83 @@ def get_asset_coverage(
     )
 
 
+# ─── Criticality helper endpoints ─────────────────────────────────
+# Two helpers powering the new IT-Asset form:
+#   * `/criticality/business-functions` — catalogue of categories the
+#     form's "Business function" dropdown should render. Grouped, with
+#     each entry's `high_impact` flag exposed so the UI can show a
+#     small "boosts criticality" tag next to those options.
+#   * `/criticality/preview` — pure compute. Lets the form show the
+#     calculated bucket + 0-10 score live as the user fills the
+#     inputs, before they save. No database writes.
+
+@router.get("/criticality/business-functions")
+def list_business_functions(
+    current_user: GRCUser = Depends(require_auth),
+):
+    from ..services.asset_criticality import list_business_function_categories
+    return {"items": list_business_function_categories()}
+
+
+class CriticalityPreviewRequest(BaseModel):
+    confidentiality_rating: Optional[int] = None
+    integrity_rating: Optional[int] = None
+    availability_rating: Optional[int] = None
+    data_classification: Optional[str] = None
+    internet_facing: Optional[bool] = None
+    business_function: Optional[str] = None
+
+
+@router.post("/criticality/preview")
+def preview_criticality(
+    payload: CriticalityPreviewRequest,
+    current_user: GRCUser = Depends(require_auth),
+):
+    from ..services.asset_criticality import compute_criticality_score, score_to_bucket
+    score = compute_criticality_score(
+        confidentiality_rating=payload.confidentiality_rating,
+        integrity_rating=payload.integrity_rating,
+        availability_rating=payload.availability_rating,
+        data_classification=payload.data_classification,
+        internet_facing=payload.internet_facing,
+        business_function=payload.business_function,
+    )
+    return {
+        "score": score,
+        "bucket": score_to_bucket(score),
+    }
+
+
 ASSET_TEMPLATE_COLUMNS = [
-    ("name", "Asset Name (Required)", "ERP System"),
-    ("description", "Description", "Enterprise Resource Planning system for finance and operations"),
-    ("asset_type", "Asset Type (Required: application/infrastructure/data/cloud/third_party)", "application"),
-    ("criticality", "Criticality (low/medium/high/critical)", "high"),
-    ("vendor", "Vendor Name", "SAP"),
-    ("location", "Location", "Primary Data Center"),
+    # ── Identity ────────────────────────────────────────────────────
+    ("name",                   "Asset Name (Required)", "ERP System"),
+    ("description",            "Description", "Enterprise Resource Planning system for finance and operations"),
+    ("asset_type",             "Asset Type (Required: application/infrastructure/data/cloud/third_party)", "application"),
+    ("host_name",              "Host Name / FQDN", "erp-prod-01.example.com"),
+    ("ip_address",             "IP Address", "10.20.30.40"),
+    ("vendor",                 "Vendor", "SAP"),
+    ("location",               "Location", "Primary Data Center"),
+    # ── CIA ratings (drive criticality) ─────────────────────────────
     ("confidentiality_rating", "Confidentiality Rating (1-5)", "4"),
-    ("integrity_rating", "Integrity Rating (1-5)", "5"),
-    ("availability_rating", "Availability Rating (1-5)", "5"),
-    ("valuation", "Valuation (USD)", "500000"),
-    ("status", "Status (active/inactive/decommissioned)", "active"),
-    ("cde_environment", "CDE Environment (true/false)", "false"),
+    ("integrity_rating",       "Integrity Rating (1-5)", "5"),
+    ("availability_rating",    "Availability Rating (1-5)", "5"),
+    # ── Exposure metadata (drive criticality) ───────────────────────
+    ("data_classification",    "Data Classification (public/internal/confidential/restricted)", "confidential"),
+    ("internet_facing",        "Internet Facing (true/false)", "true"),
+    ("business_function",      "Business Function (category id — see catalogue, e.g. payment_processing / authentication_iam / customer_data / other)", "payment_processing"),
+    ("network_segment",        "Network Segment", "dmz"),
+    ("compliance_scope",       "Compliance Scope (comma-separated framework short codes, e.g. PCI-DSS,SWIFT)", "PCI-DSS,SWIFT"),
+    # ── Ownership ───────────────────────────────────────────────────
+    ("owner_name",             "Owner Display Name", "Jane Doe"),
+    ("owning_team",            "Owning Team Name", "Payments Engineering"),
+    # ── Business + lifecycle ────────────────────────────────────────
+    ("valuation",              "Valuation (USD)", "500000"),
+    ("status",                 "Status (active/inactive/decommissioned)", "active"),
+    ("lifecycle_state",        "Lifecycle State (planned/active/maintenance/decommissioned/retired)", "active"),
+    ("cde_environment",        "CDE Environment (true/false)", "false"),
+    # ── Optional criticality override ───────────────────────────────
+    ("criticality",            "Criticality OVERRIDE (low/medium/high/critical) — LEAVE BLANK to let the system calculate from CIA + exposure inputs above", ""),
+    ("criticality_override_reason", "Reason for override (required if Criticality column is filled)", ""),
 ]
 
 
@@ -587,18 +726,62 @@ async def upload_assets_file(
     valid_asset_types = ["application", "infrastructure", "data", "cloud", "third_party"]
     valid_criticality = ["low", "medium", "high", "critical"]
     valid_status = ["active", "inactive", "decommissioned"]
-    
+    valid_data_class = ["public", "internal", "confidential", "restricted"]
+    valid_lifecycle = ["planned", "active", "maintenance", "decommissioned", "retired"]
+
+    from ..services.asset_criticality import recompute_for_asset, is_valid_bucket
+
     imported = []
     errors = []
-    
+
+    def _bool(val) -> bool:
+        if val is None:
+            return False
+        return str(val).strip().lower() in ("true", "yes", "1", "y")
+
+    def parse_int(val, min_val=None, max_val=None):
+        if val is None or val == "":
+            return None
+        try:
+            v = int(float(str(val)))
+            if min_val is not None and v < min_val:
+                return min_val
+            if max_val is not None and v > max_val:
+                return max_val
+            return v
+        except Exception:
+            return None
+
+    def parse_float(val):
+        if val is None or val == "":
+            return None
+        try:
+            return float(str(val).replace(",", ""))
+        except Exception:
+            return None
+
+    def parse_str(val) -> Optional[str]:
+        if val is None:
+            return None
+        s = str(val).strip()
+        return s or None
+
+    def parse_csv_list(val):
+        if val is None:
+            return None
+        raw = str(val).strip()
+        if not raw:
+            return None
+        return [item.strip() for item in raw.split(",") if item.strip()]
+
     for idx, row in enumerate(rows, start=1):
         row_num = idx + 2
-        
+
         name = str(row.get("name", "")).strip() if row.get("name") else ""
         if not name:
             errors.append({"row": row_num, "error": "Name is required"})
             continue
-        
+
         asset_type = str(row.get("asset_type", "")).strip().lower() if row.get("asset_type") else ""
         if not asset_type:
             errors.append({"row": row_num, "error": "Asset type is required"})
@@ -606,61 +789,100 @@ async def upload_assets_file(
         if asset_type not in valid_asset_types:
             errors.append({"row": row_num, "error": f"Invalid asset_type '{asset_type}'. Must be one of: {', '.join(valid_asset_types)}"})
             continue
-        
-        criticality = str(row.get("criticality", "medium")).strip().lower() if row.get("criticality") else "medium"
-        if criticality not in valid_criticality:
-            criticality = "medium"
-        
-        asset_status = str(row.get("status", "active")).strip().lower() if row.get("status") else "active"
+
+        # Optional manual override of the derived criticality bucket. If the
+        # cell is empty, we let `recompute_for_asset` derive it from the CIA
+        # ratings + exposure metadata.
+        override_raw = parse_str(row.get("criticality"))
+        override_reason = parse_str(row.get("criticality_override_reason"))
+        manual_override = False
+        criticality_value: Optional[str] = None
+        if override_raw:
+            override_norm = override_raw.lower()
+            if override_norm not in valid_criticality:
+                errors.append({
+                    "row": row_num,
+                    "error": (
+                        f"Invalid criticality override '{override_raw}'. Must be one "
+                        f"of {valid_criticality} or blank to let the system compute it."
+                    ),
+                })
+                continue
+            if not override_reason:
+                errors.append({
+                    "row": row_num,
+                    "error": "When 'criticality' is set the 'criticality_override_reason' column is required.",
+                })
+                continue
+            manual_override = True
+            criticality_value = override_norm
+
+        asset_status_raw = parse_str(row.get("status"))
+        asset_status = asset_status_raw.lower() if asset_status_raw else "active"
         if asset_status not in valid_status:
             asset_status = "active"
-        
-        def parse_int(val, min_val=None, max_val=None):
-            if val is None or val == "":
-                return None
-            try:
-                v = int(float(str(val)))
-                if min_val is not None and v < min_val:
-                    return min_val
-                if max_val is not None and v > max_val:
-                    return max_val
-                return v
-            except:
-                return None
-        
-        def parse_float(val):
-            if val is None or val == "":
-                return None
-            try:
-                return float(str(val).replace(",", ""))
-            except:
-                return None
-        
-        try:
-            cde_raw = str(row.get("cde_environment", "")).strip().lower() if row.get("cde_environment") else ""
-            cde_flag = cde_raw in ("true", "yes", "1", "y")
 
+        data_classification_raw = parse_str(row.get("data_classification"))
+        data_classification = data_classification_raw.lower() if data_classification_raw else None
+        if data_classification and data_classification not in valid_data_class:
+            errors.append({
+                "row": row_num,
+                "error": f"Invalid data_classification '{data_classification_raw}'. Must be one of {valid_data_class}.",
+            })
+            continue
+
+        lifecycle_raw = parse_str(row.get("lifecycle_state"))
+        lifecycle_state = lifecycle_raw.lower() if lifecycle_raw else None
+        if lifecycle_state and lifecycle_state not in valid_lifecycle:
+            errors.append({
+                "row": row_num,
+                "error": f"Invalid lifecycle_state '{lifecycle_raw}'. Must be one of {valid_lifecycle}.",
+            })
+            continue
+
+        try:
             asset = ITAsset(
                 tenant_id=tenant_id,
                 name=name,
-                description=str(row.get("description", "")).strip() if row.get("description") else None,
+                description=parse_str(row.get("description")),
                 asset_type=asset_type,
-                criticality=criticality,
-                vendor=str(row.get("vendor", "")).strip() if row.get("vendor") else None,
-                location=str(row.get("location", "")).strip() if row.get("location") else None,
+                host_name=parse_str(row.get("host_name")),
+                ip_address=parse_str(row.get("ip_address")),
+                vendor=parse_str(row.get("vendor")),
+                location=parse_str(row.get("location")),
+                owner_name=parse_str(row.get("owner_name")),
+                owning_team=parse_str(row.get("owning_team")),
+                # CIA — drive the derived criticality.
                 confidentiality_rating=parse_int(row.get("confidentiality_rating"), 1, 5),
                 integrity_rating=parse_int(row.get("integrity_rating"), 1, 5),
                 availability_rating=parse_int(row.get("availability_rating"), 1, 5),
+                # Exposure metadata — also drive the derived criticality.
+                data_classification=data_classification,
+                internet_facing=_bool(row.get("internet_facing")) if parse_str(row.get("internet_facing")) is not None else None,
+                business_function=parse_str(row.get("business_function")),
+                network_segment=parse_str(row.get("network_segment")),
+                compliance_scope=parse_csv_list(row.get("compliance_scope")) or [],
+                # Business + lifecycle.
                 valuation=parse_float(row.get("valuation")),
                 status=asset_status,
-                cde_environment=cde_flag
+                lifecycle_state=lifecycle_state or "active",
+                cde_environment=_bool(row.get("cde_environment")),
+                # Override (if present, validated above).
+                criticality=criticality_value,
+                criticality_manual_override=manual_override,
+                criticality_override_reason=override_reason if manual_override else None,
             )
+            # Always run the derived-criticality calculation. When
+            # `criticality_manual_override` is True, the service keeps
+            # the user's bucket but still writes the audit score; when
+            # False, both the bucket and score are system-computed.
+            recompute_for_asset(asset)
             db.add(asset)
             db.flush()
             imported.append({"id": asset.id, "name": asset.name})
         except Exception as e:
             errors.append({"row": row_num, "error": str(e)})
-    
+
     db.commit()
     
     imported_count = len(imported)
@@ -732,6 +954,24 @@ def get_asset(
         "status": asset.status,
         "cde_environment": asset.cde_environment or False,
         "created_at": asset.created_at.isoformat(),
+        # Phase 5 operational context fields.
+        "internet_facing": bool(asset.internet_facing) if asset.internet_facing is not None else False,
+        "network_segment": asset.network_segment,
+        "data_classification": asset.data_classification,
+        "business_function": asset.business_function,
+        "compliance_scope": asset.compliance_scope or [],
+        "primary_owner_id": asset.primary_owner_id,
+        "secondary_owner_id": asset.secondary_owner_id,
+        "owning_team": asset.owning_team,
+        "escalation_contact_id": asset.escalation_contact_id,
+        "business_owner_id": asset.business_owner_id,
+        "lifecycle_state": asset.lifecycle_state,
+        "decommissioned_at": asset.decommissioned_at.isoformat() if asset.decommissioned_at else None,
+        "retirement_reason": asset.retirement_reason,
+        "replacement_asset_id": asset.replacement_asset_id,
+        "criticality_score": asset.criticality_score,
+        "last_seen_at": asset.last_seen_at.isoformat() if asset.last_seen_at else None,
+        "last_seen_source": asset.last_seen_source,
         "linked_controls": [link.normalized_control_id for link in asset.control_links],
         "linked_risks": [link.risk_id for link in asset.risk_links],
         "latest_assessment": latest_assessment
@@ -758,18 +998,126 @@ def update_asset(
         )
     
     update_data = asset_update.model_dump(exclude_unset=True)
+
+    # Validate any criticality override before applying any fields so we
+    # don't half-update the row.
+    from ..services.asset_criticality import is_valid_bucket
+    if update_data.get("criticality_manual_override"):
+        override_bucket = update_data.get("criticality") or asset.criticality
+        override_reason = (
+            update_data.get("criticality_override_reason")
+            or asset.criticality_override_reason
+            or ""
+        )
+        if not is_valid_bucket(override_bucket):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="criticality override must be one of low/medium/high/critical",
+            )
+        if not str(override_reason).strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="criticality_override_reason is required when overriding the derived criticality",
+            )
+
     for field, value in update_data.items():
         setattr(asset, field, value)
-    
+
+    # When the caller explicitly turns the override OFF, clear the
+    # reason so we don't keep stale audit text around. The recompute
+    # below will overwrite `criticality` with the derived bucket.
+    if update_data.get("criticality_manual_override") is False:
+        asset.criticality_override_reason = None
+
     # Auto-resolve owner_name when owner_id is updated without owner_name
     if 'owner_id' in update_data and 'owner_name' not in update_data and update_data.get('owner_id'):
         owner = db.query(GRCUser).filter(GRCUser.id == update_data['owner_id']).first()
         if owner:
             asset.owner_name = owner.display_name or owner.username
-    
+
+    # Recompute derived criticality whenever any of its inputs changed
+    # OR the override flag was toggled. The recompute respects
+    # `criticality_manual_override` so it never clobbers an active override.
+    _criticality_inputs = {
+        "confidentiality_rating", "integrity_rating", "availability_rating",
+        "data_classification", "internet_facing", "business_function",
+        "criticality_manual_override", "criticality",
+    }
+    if _criticality_inputs.intersection(update_data.keys()):
+        recompute_asset_criticality(asset)
+
     db.commit()
     db.refresh(asset)
     return asset
+
+
+@router.post("/{asset_id}/lifecycle-transition", response_model=dict)
+def transition_asset_lifecycle(
+    asset_id: int,
+    payload: LifecycleTransitionRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Phase 5.3 — Move an asset through the lifecycle state machine.
+
+    States:  planned → active ↔ maintenance → decommissioned → retired.
+    Decommissioning or retiring auto-closes the asset's open vulnerabilities
+    (best-effort; the transition still succeeds if the close fails).
+    """
+    user_tenants = get_user_tenants(current_user, db)
+
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found",
+        )
+
+    # If a replacement is named, ensure it exists in a tenant the user can see.
+    if payload.replacement_asset_id is not None:
+        replacement = db.query(ITAsset).filter(
+            ITAsset.id == payload.replacement_asset_id,
+            ITAsset.tenant_id.in_(user_tenants),
+        ).first()
+        if not replacement:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Replacement asset not found",
+            )
+        if replacement.id == asset.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="An asset cannot be its own replacement",
+            )
+
+    try:
+        summary = asset_lifecycle.transition(
+            db,
+            asset,
+            payload.to_state,
+            reason=payload.reason,
+            replacement_asset_id=payload.replacement_asset_id,
+            actor_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    db.commit()
+    db.refresh(asset)
+
+    # Stamp into the response for the UI; include the new asset state so the
+    # frontend can refresh without a follow-up GET.
+    summary["asset_id"] = asset.id
+    summary["lifecycle_state"] = asset.lifecycle_state
+    summary["retirement_reason"] = asset.retirement_reason
+    summary["replacement_asset_id"] = asset.replacement_asset_id
+    return summary
 
 
 @router.delete("/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1074,6 +1422,9 @@ def get_asset_detail(
                 "impact_on_asset": link.impact_on_asset,
                 "notes": link.notes,
                 "created_at": link.created_at,
+                # Provenance — Auto badge + source chip on the UI.
+                "link_source": getattr(link, "link_source", "manual") or "manual",
+                "auto_linked": bool(getattr(link, "auto_linked", False)),
             })
     
     risk_assessments = []
@@ -1088,7 +1439,37 @@ def get_asset_detail(
     
     total_controls = len(linked_controls) + len(linked_internal_controls) + len(linked_framework_controls)
     coverage = min(total_controls * 10, 100) if total_controls > 0 else 0
-    
+
+    # Phase 5.2 — Resolve owner-chain display names with a single batch query
+    # so the response carries human-readable labels for the UI.
+    owner_ids = {
+        i for i in (
+            asset.primary_owner_id, asset.secondary_owner_id,
+            asset.escalation_contact_id, asset.business_owner_id,
+        ) if i is not None
+    }
+    owner_names: Dict[int, str] = {}
+    if owner_ids:
+        for u in db.query(GRCUser).filter(GRCUser.id.in_(owner_ids)).all():
+            owner_names[u.id] = u.display_name or u.username
+
+    replacement_name: Optional[str] = None
+    if asset.replacement_asset_id is not None:
+        rep = db.query(ITAsset.name).filter(ITAsset.id == asset.replacement_asset_id).first()
+        replacement_name = rep[0] if rep else None
+
+    # Owning team name — prefer FK, fall back to the legacy free-text field
+    # so old rows still render something useful.
+    owning_team_name: Optional[str] = asset.owning_team
+    if asset.owning_team_id is not None:
+        try:
+            from ..models import Team
+            t = db.query(Team.name).filter(Team.id == asset.owning_team_id).first()
+            if t and t[0]:
+                owning_team_name = t[0]
+        except Exception:
+            pass
+
     return AssetDetailResponse(
         id=asset.id,
         tenant_id=asset.tenant_id,
@@ -1116,7 +1497,32 @@ def get_asset_detail(
         linked_evidence=linked_evidence,
         linked_vulnerabilities=linked_vulnerabilities,
         risk_assessments=risk_assessments,
-        coverage_percentage=float(coverage)
+        coverage_percentage=float(coverage),
+        # Phase 5 fields.
+        internet_facing=bool(asset.internet_facing) if asset.internet_facing is not None else False,
+        network_segment=asset.network_segment,
+        data_classification=asset.data_classification,
+        business_function=asset.business_function,
+        compliance_scope=asset.compliance_scope or [],
+        primary_owner_id=asset.primary_owner_id,
+        primary_owner_name=owner_names.get(asset.primary_owner_id) if asset.primary_owner_id else None,
+        secondary_owner_id=asset.secondary_owner_id,
+        secondary_owner_name=owner_names.get(asset.secondary_owner_id) if asset.secondary_owner_id else None,
+        owning_team=asset.owning_team,
+        owning_team_id=asset.owning_team_id,
+        owning_team_name=owning_team_name,
+        escalation_contact_id=asset.escalation_contact_id,
+        escalation_contact_name=owner_names.get(asset.escalation_contact_id) if asset.escalation_contact_id else None,
+        business_owner_id=asset.business_owner_id,
+        business_owner_name=owner_names.get(asset.business_owner_id) if asset.business_owner_id else None,
+        lifecycle_state=asset.lifecycle_state,
+        decommissioned_at=asset.decommissioned_at,
+        retirement_reason=asset.retirement_reason,
+        replacement_asset_id=asset.replacement_asset_id,
+        replacement_asset_name=replacement_name,
+        criticality_score=asset.criticality_score,
+        last_seen_at=asset.last_seen_at,
+        last_seen_source=asset.last_seen_source,
     )
 
 
@@ -1716,5 +2122,119 @@ def unlink_asset_from_internal_control(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found")
 
     db.delete(db_link)
+    db.commit()
+    return None
+
+
+# ── Phase 4: Software inventory (CPE / PURL) per asset ──────────────────────
+# Feeds the CPE matcher (services/cpe_matcher.py). When an enrichment run
+# pulls a CVE's affected_configurations, the matcher walks every
+# SoftwareIdentifier row in the tenant and auto-creates the linked vuln rows.
+
+class SoftwareIdentifierCreate(BaseModel):
+    identifier_type: str  # "cpe" or "purl"
+    identifier: str
+    vendor: Optional[str] = None
+    product: Optional[str] = None
+    version: Optional[str] = None
+    source: Optional[str] = "manual"
+
+
+@router.get("/{asset_id}/software-identifiers")
+def list_software_identifiers(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    asset = _get_asset_for_user(asset_id, current_user, db)
+    rows = (
+        db.query(SoftwareIdentifier)
+        .filter(SoftwareIdentifier.asset_id == asset.id)
+        .order_by(SoftwareIdentifier.identifier_type.asc(), SoftwareIdentifier.identifier.asc())
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "identifier_type": r.identifier_type,
+            "identifier": r.identifier,
+            "vendor": r.vendor,
+            "product": r.product,
+            "version": r.version,
+            "source": r.source,
+            "created_at": r.created_at,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/{asset_id}/software-identifiers", status_code=status.HTTP_201_CREATED)
+def add_software_identifier(
+    asset_id: int,
+    payload: SoftwareIdentifierCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    asset = _get_asset_for_user(asset_id, current_user, db)
+    ident_type = (payload.identifier_type or "").strip().lower()
+    if ident_type not in ("cpe", "purl"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="identifier_type must be 'cpe' or 'purl'.",
+        )
+    ident = (payload.identifier or "").strip()
+    if not ident:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="identifier is required.",
+        )
+    # Parse to extract vendor/product/version when the caller didn't supply
+    # them — saves the matcher work later and keeps the row searchable.
+    from ..services.cpe_matcher import parse_cpe, parse_purl
+    parsed = parse_cpe(ident) if ident_type == "cpe" else parse_purl(ident)
+    vendor = payload.vendor or (parsed.vendor if parsed else None)
+    product = payload.product or (parsed.product if parsed else None)
+    version = payload.version or (parsed.version if parsed and parsed.version != "*" else None)
+
+    row = SoftwareIdentifier(
+        tenant_id=asset.tenant_id,
+        asset_id=asset.id,
+        identifier_type=ident_type,
+        identifier=ident,
+        vendor=(vendor or None),
+        product=(product or None),
+        version=(version or None),
+        source=(payload.source or "manual"),
+    )
+    try:
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Could not create identifier: {exc.__class__.__name__} (possibly duplicate).",
+        )
+    return {"id": row.id, "identifier": row.identifier}
+
+
+@router.delete("/{asset_id}/software-identifiers/{identifier_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_software_identifier(
+    asset_id: int,
+    identifier_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    asset = _get_asset_for_user(asset_id, current_user, db)
+    row = (
+        db.query(SoftwareIdentifier)
+        .filter(SoftwareIdentifier.id == identifier_id)
+        .filter(SoftwareIdentifier.asset_id == asset.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Identifier not found.")
+    db.delete(row)
     db.commit()
     return None

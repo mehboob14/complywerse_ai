@@ -29,6 +29,10 @@ from .routers import (
     artifacts_router,
 )
 from .routers import dcc_router, audit_plan_router, nca_risk_router, nca_vuln_router, nca_container_router, nca_templates_router, nca_kpi_router
+# Phase 9 — cross-domain power search + exception-aging analytics.
+from .routers import search_router
+# Teams — admin CRUD for org teams used by the asset ownership-chain dropdown.
+from .routers import teams_router
 
 
 from .routers.admin_router import router as admin_router
@@ -45,12 +49,13 @@ from .modules.chatbot import (
     stop_complychat_embedding_worker,
 )
 from .modules.vendor_risk import vendor_risk_router
+from .modules.auditor_portal import auditor_portal_router
 from .modules.workflow_engine import (
     workflow_engine_router,
     start_workflow_engine_runtime,
     stop_workflow_engine_runtime,
 )
-from .modules.integrations import integrations_router
+from .modules.integrations import integrations_router, cloud_connectors_router
 from .middleware.subdomain import TenantMiddleware
 
 app = FastAPI(
@@ -167,8 +172,23 @@ app.include_router(control_library_router)
 app.include_router(vuln_management_router)
 app.include_router(chatbot_router)
 app.include_router(vendor_risk_router)
+app.include_router(auditor_portal_router)
 app.include_router(workflow_engine_router)
 app.include_router(integrations_router)
+# Track A / Phase 7 — Cloud connector framework. Lives at `/cloud-connectors`
+# so it doesn't collide with the existing `/integrations` Nessus/Nexpose
+# routes; the legacy connections page keeps working unchanged.
+app.include_router(cloud_connectors_router)
+# External-connector framework (Ticketing / SIEM / Pen-test / Collab /
+# Transcribe). Lives at `/connectors` alongside `/cloud-connectors` and
+# the legacy `/integrations` vuln-scanner routes; each surface owns its
+# own provider catalogue and credential storage.
+from .modules.connectors.router import router as connectors_router  # noqa: E402
+app.include_router(connectors_router)
+# Phase 9 — cross-domain power search + exception-aging analytics.
+app.include_router(search_router)
+# Teams — admin CRUD for org teams + asset owning-team dropdown.
+app.include_router(teams_router)
 
 
 @app.on_event("startup")

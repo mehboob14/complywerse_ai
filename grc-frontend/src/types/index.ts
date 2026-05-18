@@ -365,6 +365,15 @@ export interface DocumentVersion {
 
 export type AssetType = 'application' | 'infrastructure' | 'data' | 'cloud' | 'third_party';
 
+export type LifecycleState =
+  | 'planned'
+  | 'active'
+  | 'maintenance'
+  | 'decommissioned'
+  | 'retired';
+
+export type DataClassification = 'public' | 'internal' | 'confidential' | 'restricted';
+
 export interface ITAsset {
   id: number;
   tenant_id: number;
@@ -386,6 +395,27 @@ export interface ITAsset {
   status: 'active' | 'inactive' | 'decommissioned';
   cde_environment?: boolean;
   created_at: string;
+  // Phase 5 — Operational context. All optional on read; older rows that
+  // pre-date the migration will simply omit these.
+  internet_facing?: boolean;
+  network_segment?: string | null;
+  data_classification?: DataClassification | null;
+  business_function?: string | null;
+  compliance_scope?: string[];
+  primary_owner_id?: number | null;
+  secondary_owner_id?: number | null;
+  owning_team?: string | null;
+  // FK to grc_teams.id — preferred over the free-text owning_team.
+  owning_team_id?: number | null;
+  escalation_contact_id?: number | null;
+  business_owner_id?: number | null;
+  lifecycle_state?: LifecycleState | null;
+  decommissioned_at?: string | null;
+  retirement_reason?: string | null;
+  replacement_asset_id?: number | null;
+  criticality_score?: number | null;
+  last_seen_at?: string | null;
+  last_seen_source?: string | null;
 }
 
 export interface AssetDetail extends ITAsset {
@@ -395,6 +425,14 @@ export interface AssetDetail extends ITAsset {
   linked_evidence: Array<{id: number; name: string; status: string}>;
   risk_assessments: Array<{id: number; risk_score: number; coverage_percentage: number; assessment_date: string}>;
   coverage_percentage?: number;
+  // Resolved display names for the ownership chain — returned by the
+  // detail endpoint as a convenience so the UI doesn't have to hit
+  // /assets/tenant-users for each ID.
+  primary_owner_name?: string | null;
+  secondary_owner_name?: string | null;
+  escalation_contact_name?: string | null;
+  business_owner_name?: string | null;
+  replacement_asset_name?: string | null;
 }
 
 export interface CertificationJourney {
@@ -517,11 +555,19 @@ export interface ControlEvidence {
   id: number;
   file_name?: string;
   file_size?: number;
+  // Server-side path under /uploads — used by the in-browser viewer to
+  // fetch the file as a blob. Optional because some evidence rows
+  // (e.g. text-only attestations) won't have a file.
+  file_path?: string;
+  mime_type?: string | null;
   uploaded_at: string;
   ai_confidence_score?: number;
   review_status: 'pending' | 'approved' | 'rejected';
   ai_assessment_status?: 'completed' | 'processing' | 'pending_assessment' | 'pending_ocr' | 'pending';
   ai_assessment_summary?: string;
+  // Set when this control-evidence row points back at a row in the
+  // central evidence library (used to deep-link to `/evidence/{id}`).
+  linked_evidence_id?: number;
 }
 
 export interface CertificationControl {

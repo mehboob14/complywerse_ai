@@ -7,6 +7,7 @@ import { complianceApi, evidenceApi, governanceApi } from '@/lib/api';
 import { authedFetch } from '@/lib/auth-fetch';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SearchInput, MultiSelectDropdown } from '@/components/ui';
+import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
 
 import {
   FileText,
@@ -883,15 +884,27 @@ export default function PolicyStatementsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Linked Evidence</label>
                   <div className="space-y-2">
                     {selectedStatement.evidence.map((ev) => (
-                      <Link
+                      <div
                         key={ev.id}
-                        href={`/evidence/${ev.id}`}
-                        className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 p-2 rounded-lg transition-colors group"
-                        title="Open evidence detail"
+                        className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 p-2 rounded-lg"
                       >
-                        <CheckCircle className="h-4 w-4 text-emerald-600" />
-                        <span className="text-sm text-gray-700 group-hover:text-emerald-800 group-hover:underline">{ev.name}</span>
-                      </Link>
+                        <Link
+                          href={`/evidence/${ev.id}`}
+                          className="flex items-center gap-2 flex-1 min-w-0 group hover:underline"
+                          title="Open evidence detail"
+                        >
+                          <CheckCircle className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                          <span className="text-sm text-gray-700 group-hover:text-emerald-800 truncate">{ev.name}</span>
+                          {ev.file_name && <span className="text-xs text-gray-500 truncate">({ev.file_name})</span>}
+                        </Link>
+                        {/* In-place preview — no need to leave the
+                            statement modal to look at the underlying file. */}
+                        <EvidencePreviewButton
+                          evidenceId={ev.id}
+                          label="Preview"
+                          className="inline-flex items-center gap-1 rounded bg-white border border-emerald-300 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 flex-shrink-0"
+                        />
+                      </div>
                     ))}
                   </div>
                 </div>

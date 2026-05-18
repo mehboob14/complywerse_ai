@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import os
 import uuid
@@ -8,16 +8,22 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from openai import OpenAI
 
 from ....models import (
     GovernanceDocument, GovernanceDocumentVersion, DocumentReviewer,
-    DocumentApprovalStep, DocumentAuditLog, GRCUser, Tenant, PolicyStatement, 
-    InternalControl, ParsedFrameworkControl, UploadedFramework, PolicyReviewHistory, get_db
+    DocumentApprovalStep, DocumentAuditLog, DocumentAnnotation, GRCUser,
+    Tenant, PolicyStatement, InternalControl, ParsedFrameworkControl,
+    UploadedFramework, CertificationJourney, PolicyReviewHistory, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 from ..action_logger import log_governance_action
+from ..ai_drafting import (
+    build_tenant_context,
+    build_framework_index,
+    run_drafting_pipeline,
+)
 
 AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
@@ -1394,6 +1400,11 @@ async def create_document_with_file(
     classification: str = Form("internal"),
     owner_id: Optional[int] = Form(None),
     tenant_id: Optional[int] = Form(None),
+    # JSON-encoded list of UploadedFramework ids the doc should link to.
+    # Sent as a JSON string because List[int] in multipart Form isn't
+    # consistently supported across FastAPI versions and front-end
+    # FormData encoders. Parsed below; safe if absent or malformed.
+    framework_ids: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1431,6 +1442,18 @@ async def create_document_with_file(
     with open(file_path, "wb") as f:
         f.write(content)
     
+    # Decode framework_ids JSON if the client supplied any. Tolerant of
+    # missing / malformed input — the upload still succeeds, the doc
+    # just isn't framework-tagged in that case.
+    parsed_framework_ids: List[int] = []
+    if framework_ids:
+        try:
+            raw = json.loads(framework_ids)
+            if isinstance(raw, list):
+                parsed_framework_ids = [int(v) for v in raw if v is not None]
+        except (json.JSONDecodeError, TypeError, ValueError):
+            parsed_framework_ids = []
+
     document = GovernanceDocument(
         tenant_id=tenant_id,
         title=title,
@@ -1445,7 +1468,8 @@ async def create_document_with_file(
         file_size=file_size,
         file_type=file_ext,
         status="draft",
-        current_version="1.0"
+        current_version="1.0",
+        framework_ids=parsed_framework_ids,
     )
     db.add(document)
     db.flush()
@@ -1958,15 +1982,20 @@ def _title_similarity(a: str, b: str) -> float:
 
 
 # When a suggestion's tokenized similarity to ANY existing title is at or
-# above this threshold, treat it as a duplicate without calling the AI again.
-# Tuned empirically: "Information Security Policy" vs "ISMS Policy" → 1.0
-# (identical token set after synonym expansion); "Access Control Policy"
-# vs "Access Management Procedure" → 0.5 (same primary topic — should
-# dedupe); unrelated titles (e.g. "Cryptographic Controls Standard" vs
-# "Information Security Policy") fall well below 0.4. Threshold lowered
-# from 0.6 → 0.5 after observed false-negatives where AI suggested
-# trivially renamed versions of existing docs.
-_TITLE_SIMILARITY_HARD_DUP = 0.5
+# above this threshold, treat it as a duplicate without calling the AI.
+# Conservative threshold: this stage only catches *very* close matches
+# (>= 85% Jaccard overlap on meaningful tokens). The semantic GPT stage
+# downstream catches the looser cases with full context.
+#
+# Why so conservative: at 0.5 we hit false positives like
+# "Information Security Management Policy" vs "Supplier Security
+# Management Policy" — 2 of 4 shared tokens (security, management) =
+# 0.5 = exact threshold hit, but they're semantically different policies
+# (internal IT security vs third-party/vendor security). Raising to 0.85
+# keeps obvious cases (e.g. identical token sets after synonym expansion)
+# while routing genuine gray-area calls to the semantic stage that can
+# reason about scope.
+_TITLE_SIMILARITY_HARD_DUP = 0.85
 
 
 # Document statuses that count as "the org already has this on the books".
@@ -1982,13 +2011,15 @@ def _semantic_dedup_against_existing(
     client: OpenAI,
     suggestions: List[Dict],
     existing_documents: List[Dict],
-) -> Tuple[set, List[str]]:
+) -> Tuple[set, List[Dict]]:
     """Ask GPT-4o which of the new suggestions are substantially equivalent
     to a document the tenant already has.
 
-    Returns (set_of_indices_to_drop, list_of_dropped_titles). Failure-mode is
-    "drop nothing" — we never want a flaky AI call to silently remove
-    legitimate suggestions, so any error returns empty results.
+    Returns (set_of_indices_to_drop, list_of_match_dicts). Each match dict
+    has shape {suggested_title, matched_existing_id, matched_existing_title,
+    reason}. Failure-mode is "drop nothing" — we never want a flaky AI call
+    to silently remove legitimate suggestions, so any error returns empty
+    results.
     """
     if not suggestions or not existing_documents:
         return set(), []
@@ -2062,19 +2093,40 @@ NEW:
         )
         raw = response.choices[0].message.content or "{}"
         parsed = json.loads(raw)
+        # Build a title → existing-doc lookup so we can attach the matched
+        # existing record to each drop. Used by callers to render the skip
+        # alongside the doc that justified it.
+        existing_by_title = {(d.get("title") or "").strip().lower(): d for d in existing_documents}
         dropped_indices: set = set()
-        dropped_titles: List[str] = []
+        match_records: List[Dict] = []
         for entry in (parsed.get("duplicates") or []):
             try:
                 idx = int(entry.get("i"))
             except (TypeError, ValueError):
                 continue
-            if 0 <= idx < len(suggestions):
-                dropped_indices.add(idx)
-                title = suggestions[idx].get("title") or ""
-                if title:
-                    dropped_titles.append(title)
-        return dropped_indices, dropped_titles
+            if not (0 <= idx < len(suggestions)):
+                continue
+            suggested_title = (suggestions[idx].get("title") or "").strip()
+            matched_title = (entry.get("matches_existing_title") or "").strip()
+            reason_text = (entry.get("reason") or "").strip()[:200]
+            matched_doc = existing_by_title.get(matched_title.lower()) if matched_title else None
+            # Only emit a skip when we can pin it to a real existing doc.
+            # If the AI returned a duplicate flag but the matched title
+            # doesn't resolve to one of EXISTING, we drop the entry — the
+            # user explicitly asked us not to show inaccurate skips.
+            if not matched_doc or not suggested_title:
+                continue
+            dropped_indices.add(idx)
+            match_records.append({
+                "suggested_title": suggested_title,
+                "matched_existing_id": matched_doc.get("id"),
+                "matched_existing_title": matched_doc.get("title"),
+                "matched_existing_doc_type": matched_doc.get("doc_type"),
+                "matched_existing_status": matched_doc.get("status"),
+                "reason": reason_text or "Semantic match against an existing document.",
+                "match_type": "semantic",
+            })
+        return dropped_indices, match_records
     except Exception:
         # Defensive: never let a flaky dedup call hide real suggestions.
         return set(), []
@@ -2308,44 +2360,77 @@ Return a JSON object with this structure:
                 _normalize_doc_title(d["title"]): d for d in existing_documents if d.get("title")
             }
 
+            # Every entry in skipped_matches carries the *matched existing
+            # doc* so the UI never has to guess which platform document
+            # justified the skip. If no real existing doc can be pinned to
+            # a suggestion, that suggestion is NOT recorded as a skip
+            # (we'd rather pass through to the AI list than show an
+            # inaccurate "we skipped X" claim — which was the prior bug).
             after_stage1: List[Dict] = []
-            skipped_as_existing: List[str] = []
+            skipped_matches: List[Dict] = []
 
+            stage1_count = 0
             for suggestion in raw_suggestions:
-                title = str(suggestion.get("title") or "")
+                title = str(suggestion.get("title") or "").strip()
                 norm = _normalize_doc_title(title)
-                if norm and norm in existing_norm_lookup:
-                    skipped_as_existing.append(title)
+                matched = existing_norm_lookup.get(norm) if norm else None
+                if matched and title:
+                    skipped_matches.append({
+                        "suggested_title": title,
+                        "matched_existing_id": matched.get("id"),
+                        "matched_existing_title": matched.get("title"),
+                        "matched_existing_doc_type": matched.get("doc_type"),
+                        "matched_existing_status": matched.get("status"),
+                        "reason": "Identical normalised title already exists.",
+                        "match_type": "exact_normalized",
+                    })
+                    stage1_count += 1
                     continue
                 after_stage1.append(suggestion)
 
+            stage2_count = 0
             after_stage2: List[Dict] = []
             for suggestion in after_stage1:
-                title = str(suggestion.get("title") or "")
-                hard_dup = False
-                for existing_title in existing_titles_for_compare:
-                    if _title_similarity(title, existing_title) >= _TITLE_SIMILARITY_HARD_DUP:
-                        skipped_as_existing.append(title)
-                        hard_dup = True
-                        break
-                if not hard_dup:
-                    after_stage2.append(suggestion)
+                title = str(suggestion.get("title") or "").strip()
+                matched_doc = None
+                best_score = 0.0
+                for existing in existing_documents:
+                    existing_title = existing.get("title") or ""
+                    if not existing_title:
+                        continue
+                    score = _title_similarity(title, existing_title)
+                    if score >= _TITLE_SIMILARITY_HARD_DUP and score > best_score:
+                        best_score = score
+                        matched_doc = existing
+                if matched_doc and title:
+                    skipped_matches.append({
+                        "suggested_title": title,
+                        "matched_existing_id": matched_doc.get("id"),
+                        "matched_existing_title": matched_doc.get("title"),
+                        "matched_existing_doc_type": matched_doc.get("doc_type"),
+                        "matched_existing_status": matched_doc.get("status"),
+                        "reason": f"Title shares {int(best_score * 100)}% of meaningful tokens with an existing document.",
+                        "match_type": "token_overlap",
+                    })
+                    stage2_count += 1
+                    continue
+                after_stage2.append(suggestion)
 
             # Stage 3: semantic dedup pass. Skip the call entirely when
             # there's nothing to compare against or no remaining
             # suggestions — saves a round-trip and tokens.
             after_stage3 = after_stage2
-            semantic_skipped: List[str] = []
+            stage3_count = 0
             if existing_titles_for_compare and after_stage2:
-                semantic_skip_ids, semantic_skip_titles = _semantic_dedup_against_existing(
+                semantic_skip_ids, semantic_matches = _semantic_dedup_against_existing(
                     client=client,
                     suggestions=after_stage2,
                     existing_documents=existing_documents,
                 )
                 if semantic_skip_ids:
                     after_stage3 = [s for i, s in enumerate(after_stage2) if i not in semantic_skip_ids]
-                    semantic_skipped = semantic_skip_titles
-                    skipped_as_existing.extend(semantic_skip_titles)
+                    skipped_matches.extend(semantic_matches)
+                    stage3_count = len(semantic_matches)
 
             result["suggestions"] = after_stage3
             result["total_suggestions"] = len(after_stage3)
@@ -2359,11 +2444,16 @@ Return a JSON object with this structure:
                 for d in existing_documents
             ]
             result["already_covered_count"] = len(existing_documents)
-            result["skipped_duplicate_titles"] = skipped_as_existing
+            # New authoritative field: only contains skips that are pinned
+            # to a real existing doc. The UI renders this directly.
+            result["skipped_matches"] = skipped_matches
+            # Legacy: titles only. Kept for any old client that still
+            # reads it. Derived from skipped_matches so it can't drift.
+            result["skipped_duplicate_titles"] = [m["suggested_title"] for m in skipped_matches]
             result["skipped_breakdown"] = {
-                "exact_normalized": len(raw_suggestions) - len(after_stage1),
-                "token_overlap": len(after_stage1) - len(after_stage2),
-                "semantic": len(semantic_skipped),
+                "exact_normalized": stage1_count,
+                "token_overlap": stage2_count,
+                "semantic": stage3_count,
             }
         return result
     
@@ -2391,86 +2481,115 @@ def generate_policy_ai_draft(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Generate a policy/standard/procedure document using AI based on framework requirements"""
-    controls_context = ""
-    framework_controls = []
-    domain_context: List[str] = []
-    parent_document_context: Optional[str] = None
-    
-    if request.framework_ids:
-        frameworks = db.query(UploadedFramework).filter(
-            UploadedFramework.id.in_(request.framework_ids)
-        ).all()
-        
-        if frameworks:
-            summary_text, framework_controls, domain_context = build_framework_control_context(frameworks, db)
-            controls_context = "The document should align with the following framework controls and governance domains:\n\n"
-            controls_context += summary_text
-    
-    if request.regulatory_scope:
-        for scope in request.regulatory_scope:
-            matching_frameworks = db.query(UploadedFramework).filter(
-                UploadedFramework.name.ilike(f"%{scope}%")
-            ).all()
-            
-            for framework in matching_frameworks:
-                if not any(fc.get("framework") == framework.name for fc in framework_controls):
-                    summary_text, extra_alignment, extra_domains = build_framework_control_context([framework], db, per_framework_limit=40)
-                    if summary_text:
-                        controls_context += ("\n\n" if controls_context else "") + summary_text
-                        framework_controls.extend(extra_alignment)
-                        for domain in extra_domains:
-                            if domain not in domain_context:
-                                domain_context.append(domain)
+    """Kick off an async drafting job.
 
+    The synchronous pipeline took 30–90s for bank-grade output and was
+    blowing past HTTP timeouts at the proxy. This endpoint now:
+
+      1. Validates the request (parent doc, tenant context).
+      2. Allocates a Redis-tracked job id.
+      3. Dispatches `ai_drafting.generate_draft` to Celery.
+      4. Returns `{job_id, status: 'queued'}` immediately.
+
+    The frontend polls `GET /governance/documents/ai-draft-jobs/{job_id}`
+    every second or two until `status == 'completed'|'failed'`.
+
+    Falls back to in-process execution if Celery isn't reachable — the
+    user-visible behaviour is identical, just slower without an opt-out.
+    """
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tenant context for drafting",
+        )
+
+    # Validate parent document up-front so the user gets immediate
+    # feedback rather than a failed job 60s later.
     if request.parent_document_id:
         user_tenants = get_user_tenants(current_user, db)
-        parent_document = db.query(GovernanceDocument).filter(
+        parent_exists = db.query(GovernanceDocument.id).filter(
             GovernanceDocument.id == request.parent_document_id,
-            GovernanceDocument.tenant_id.in_(user_tenants)
+            GovernanceDocument.tenant_id.in_(user_tenants),
         ).first()
-        if not parent_document:
+        if not parent_exists:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Parent document not found"
+                detail="Parent document not found",
             )
 
-        parent_excerpt = (parent_document.content or "").strip()
-        if len(parent_excerpt) > 6000:
-            parent_excerpt = parent_excerpt[:6000] + "\n...[truncated]"
-        if not parent_excerpt:
-            parent_excerpt = "(No parent content available. Use title, type, and description as baseline intent.)"
+    from ....tasks.ai_drafting import create_job
 
-        parent_document_context = (
-            f"Parent Document Title: {parent_document.title}\n"
-            f"Parent Document Type: {parent_document.doc_type}\n"
-            f"Parent Document Description: {parent_document.description or ''}\n"
-            f"Parent Document Content Excerpt:\n{parent_excerpt}"
-        )
-    
-    result = generate_policy_with_openai(
-        doc_type=request.doc_type,
-        title=request.title,
-        controls_context=controls_context,
-        domain_context=domain_context,
-        regulatory_scope=request.regulatory_scope or [],
-        description=request.description,
-        include_sections=request.include_sections,
-        parent_document_context=parent_document_context,
-    )
-    
-    generated_content = result.get("generated_content", "")
-    word_count = len(generated_content.split()) if generated_content else 0
-    estimated_review_time = f"{max(5, word_count // 100)} minutes"
-    
-    return {
-        "generated_content": generated_content,
-        "suggested_title": result.get("suggested_title", request.title),
-        "suggested_sections": result.get("suggested_sections", []),
-        "framework_alignment": framework_controls if framework_controls else result.get("framework_alignment", []),
-        "word_count": word_count,
-        "estimated_review_time": estimated_review_time
+    request_payload = {
+        "tenant_id": tenant_id,
+        "doc_type": request.doc_type,
+        "title": request.title,
+        "description": request.description,
+        "framework_ids": request.framework_ids or [],
+        "parent_document_id": request.parent_document_id,
+        "include_sections": request.include_sections or [],
     }
+    job_id = create_job(
+        tenant_id=tenant_id,
+        request_summary={
+            "doc_type": request.doc_type,
+            "title": request.title,
+            "framework_ids": request.framework_ids or [],
+        },
+    )
+
+    # Resolve tenant slug for the TenantTask first-arg contract.
+    from ....db import MasterSession
+    from ....models import Tenant as MasterTenant
+    master = MasterSession()
+    try:
+        row = master.query(MasterTenant.slug).filter(MasterTenant.id == tenant_id).first()
+        tenant_slug = row[0] if row else None
+    finally:
+        master.close()
+
+    if not tenant_slug:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not resolve tenant slug for async drafting",
+        )
+
+    # Run in a daemon thread inside this FastAPI process. This avoids the
+    # "broker accepts the task but no worker is consuming" failure mode
+    # we hit when relying on Celery. The thread writes progress to Redis
+    # the same way the Celery task would; the polling endpoint is
+    # identical for both code paths.
+    from ....tasks.ai_drafting import dispatch_in_thread
+    dispatch_in_thread(tenant_slug, job_id, request_payload)
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "poll_url": f"/governance/documents/ai-draft-jobs/{job_id}",
+    }
+
+
+@router.get("/ai-draft-jobs/{job_id}")
+def get_ai_draft_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Poll a running / completed drafting job.
+
+    Returns the same payload `generate_draft` writes to Redis — frontend
+    keeps polling until `status in ('completed', 'failed')` and then
+    reads the `result` field for the generated document.
+    """
+    from ....tasks.ai_drafting import get_job
+
+    tenant_id = get_user_primary_tenant(current_user, db)
+    payload = get_job(job_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Drafting job not found or expired")
+    # Tenant scoping — never let a tenant peek at another tenant's job.
+    if payload.get("tenant_id") and payload["tenant_id"] != tenant_id:
+        raise HTTPException(status_code=404, detail="Drafting job not found or expired")
+    return payload
 
 
 class CompareWithDocumentBody(BaseModel):
@@ -2715,5 +2834,156 @@ def get_document_html(
             "html": "".join(html_parts),
             "file_type": document.file_type
         }
-    
+
     raise HTTPException(status_code=404, detail="Document file not found")
+
+
+# ============================================================================
+# Document annotations / remarks
+# ----------------------------------------------------------------------------
+# Auditors and reviewers can attach remarks to a document. Two anchor kinds
+# are supported today:
+#   - text_range : anchored to a character offset range in the document's
+#                   plain-text representation (works for `content`-based
+#                   docs, markdown, and the in-browser viewer's text mode)
+#   - general    : free-form comment with no specific anchor
+#
+# Threading is intentionally NOT supported in v1 — flat annotations are
+# easier to anchor and render; reply chains can be added later by
+# introducing `parent_annotation_id` without a breaking change.
+# ============================================================================
+
+class AnnotationCreateRequest(BaseModel):
+    anchor_kind: str = Field("general", pattern=r"^(text_range|general)$")
+    anchor_data: Optional[Dict[str, Any]] = None
+    comment: str = Field(..., min_length=1, max_length=4000)
+
+
+class AnnotationUpdateRequest(BaseModel):
+    comment: Optional[str] = Field(None, min_length=1, max_length=4000)
+    status: Optional[str] = Field(None, pattern=r"^(open|resolved)$")
+
+
+def _serialize_annotation(a: DocumentAnnotation, user_lookup: Dict[int, GRCUser]) -> dict:
+    user = user_lookup.get(a.user_id)
+    return {
+        "id": a.id,
+        "document_id": a.document_id,
+        "anchor_kind": a.anchor_kind,
+        "anchor_data": a.anchor_data or {},
+        "comment": a.comment,
+        "status": a.status,
+        "user_id": a.user_id,
+        "user_name": (user.display_name or user.email) if user else None,
+        "created_at": a.created_at,
+        "updated_at": a.updated_at,
+    }
+
+
+def _assert_doc_access(document_id: int, user_tenants: List[int], db: Session) -> GovernanceDocument:
+    doc = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants),
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found in your tenant.")
+    return doc
+
+
+@router.get("/{document_id}/annotations")
+def list_document_annotations(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+    doc = _assert_doc_access(document_id, user_tenants, db)
+    rows = db.query(DocumentAnnotation).filter(
+        DocumentAnnotation.document_id == doc.id,
+        DocumentAnnotation.tenant_id == doc.tenant_id,
+    ).order_by(DocumentAnnotation.created_at.asc()).all()
+    user_ids = list({r.user_id for r in rows})
+    users = db.query(GRCUser).filter(GRCUser.id.in_(user_ids)).all() if user_ids else []
+    user_lookup = {u.id: u for u in users}
+    return {
+        "annotations": [_serialize_annotation(a, user_lookup) for a in rows],
+        "total": len(rows),
+    }
+
+
+@router.post("/{document_id}/annotations", status_code=status.HTTP_201_CREATED)
+def create_document_annotation(
+    document_id: int,
+    payload: AnnotationCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+    doc = _assert_doc_access(document_id, user_tenants, db)
+    annotation = DocumentAnnotation(
+        tenant_id=doc.tenant_id,
+        document_id=doc.id,
+        user_id=current_user.id,
+        anchor_kind=payload.anchor_kind,
+        anchor_data=payload.anchor_data or {},
+        comment=payload.comment.strip(),
+        status="open",
+    )
+    db.add(annotation)
+    db.commit()
+    db.refresh(annotation)
+    return _serialize_annotation(annotation, {current_user.id: current_user})
+
+
+@router.put("/{document_id}/annotations/{annotation_id}")
+def update_document_annotation(
+    document_id: int,
+    annotation_id: int,
+    payload: AnnotationUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+    doc = _assert_doc_access(document_id, user_tenants, db)
+    annotation = db.query(DocumentAnnotation).filter(
+        DocumentAnnotation.id == annotation_id,
+        DocumentAnnotation.document_id == doc.id,
+        DocumentAnnotation.tenant_id == doc.tenant_id,
+    ).first()
+    if not annotation:
+        raise HTTPException(status_code=404, detail="Annotation not found.")
+    # Comment edits restricted to the author; status can be flipped by
+    # any tenant member (so a different reviewer can mark resolved).
+    if payload.comment is not None:
+        if annotation.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Only the author can edit this remark.")
+        annotation.comment = payload.comment.strip()
+    if payload.status is not None:
+        annotation.status = payload.status
+    db.commit()
+    db.refresh(annotation)
+    user = db.query(GRCUser).filter(GRCUser.id == annotation.user_id).first()
+    return _serialize_annotation(annotation, {annotation.user_id: user} if user else {})
+
+
+@router.delete("/{document_id}/annotations/{annotation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document_annotation(
+    document_id: int,
+    annotation_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+    doc = _assert_doc_access(document_id, user_tenants, db)
+    annotation = db.query(DocumentAnnotation).filter(
+        DocumentAnnotation.id == annotation_id,
+        DocumentAnnotation.document_id == doc.id,
+        DocumentAnnotation.tenant_id == doc.tenant_id,
+    ).first()
+    if not annotation:
+        raise HTTPException(status_code=404, detail="Annotation not found.")
+    if annotation.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the author can delete this remark.")
+    db.delete(annotation)
+    db.commit()
+    return None

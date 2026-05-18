@@ -1,17 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { Building2, Users as UsersIcon, ShieldCheck, ScrollText, Bot, GitPullRequest, KeyRound, Lock } from 'lucide-react';
+import { Building2, Users as UsersIcon, ShieldCheck, ScrollText, Bot, GitPullRequest, KeyRound, Lock, Cloud, UsersRound, Plug } from 'lucide-react';
 import OrganizationProfilePage from './organization/page';
 import UsersManagementPage from './users/page';
 import RolesManagementPage from './roles/page';
+import TeamsAdminPage from './teams/page';
 import AuditLogsPage from './audit-logs/page';
 import PasswordPolicyPage from './password-policy/page';
+import CloudConnectorsAdminPage from './cloud-connectors/page';
+import ConnectorsAdminPage from './connectors/page';
 import IntegrationsConnectionsPage from '../integrations/connections/page';
 import WorkflowEnginePage from '../workflow-engine/page';
 import { IdentityProvidersCard } from '@/components/integrations/IdentityProvidersCard';
 
-type AdminTab = 'company' | 'users' | 'roles' | 'password-policy' | 'integrations' | 'identity' | 'workflow' | 'audit';
+type AdminTab = 'company' | 'users' | 'roles' | 'teams' | 'password-policy' | 'integrations' | 'cloud-connectors' | 'connectors' | 'identity' | 'workflow' | 'audit';
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('company');
@@ -20,9 +23,15 @@ export default function AdminPage() {
     { id: 'company', label: 'Company', icon: Building2 },
     { id: 'users', label: 'User Management', icon: UsersIcon },
     { id: 'roles', label: 'Role Management', icon: ShieldCheck },
+    // Org teams — used as owning_team dropdown on assets + future ownership chains.
+    { id: 'teams', label: 'Teams', icon: UsersRound },
     // Password & session policy — controls complexity, lockout, and idle timeout.
     { id: 'password-policy', label: 'Password Policy', icon: Lock },
     { id: 'integrations', label: 'Integrations', icon: Bot },
+    // Phase 7 — Cloud Connectors (AWS Inspector, Azure Defender, GCP SCC).
+    { id: 'cloud-connectors', label: 'Cloud Connectors', icon: Cloud },
+    // External connector framework — ServiceNow, Splunk, MS Teams, Fireflies, …
+    { id: 'connectors', label: 'Connectors', icon: Plug },
     { id: 'identity', label: 'Identity Providers', icon: KeyRound },
     { id: 'workflow', label: 'Workflow Engine', icon: GitPullRequest },
     { id: 'audit', label: 'Audit Logs', icon: ScrollText },
@@ -57,8 +66,11 @@ export default function AdminPage() {
         {activeTab === 'company' && <OrganizationProfilePage />}
         {activeTab === 'users' && <UsersManagementPage />}
         {activeTab === 'roles' && <RolesManagementPage />}
+        {activeTab === 'teams' && <TeamsAdminPage />}
         {activeTab === 'password-policy' && <PasswordPolicyPage />}
         {activeTab === 'integrations' && <IntegrationsConnectionsPage />}
+        {activeTab === 'cloud-connectors' && <CloudConnectorsAdminPage />}
+        {activeTab === 'connectors' && <ConnectorsAdminPage />}
         {activeTab === 'identity' && <IdentityProvidersCard />}
         {activeTab === 'workflow' && <WorkflowEnginePage />}
         {activeTab === 'audit' && <AuditLogsPage />}

@@ -456,6 +456,13 @@ class RiskBase(BaseModel):
     owner_id: Optional[int] = None
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = []
+    # The risk's owning team / business unit. Frontends now send `team_id`
+    # (sourced from admin/teams). The risk handler resolves it to a real
+    # BusinessUnit row (auto-mirroring by name) and stores it on
+    # `business_unit_id`. Direct `business_unit_id` is still accepted so
+    # API callers that already know the BU id can keep using it.
+    team_id: Optional[int] = None
+    business_unit_id: Optional[int] = None
     # Provenance — manual | register_import | assessment | incident | rcsa | framework_gap | ubl_import | nca_import
     source_type: Optional[str] = None
     source_assessment_id: Optional[int] = None
@@ -488,6 +495,10 @@ class RiskUpdate(BaseModel):
     owner_id: Optional[int] = None
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = None
+    # Team / business unit re-assignment. Same shape as RiskBase — pass
+    # team_id and the handler will auto-mirror to a BusinessUnit row.
+    team_id: Optional[int] = None
+    business_unit_id: Optional[int] = None
     status: Optional[str] = None
     closure_status: Optional[str] = None
     closure_notes: Optional[str] = None
@@ -827,10 +838,39 @@ class ITAssetBase(BaseModel):
     custodian: Optional[str] = None
     host_name: Optional[str] = None
     ip_address: Optional[str] = None
-    criticality: str = "medium"
+    # `criticality` is system-derived from the CIA + exposure inputs by
+    # default. Clients may still pass a value but it's overridden by the
+    # derived bucket unless `criticality_manual_override=True` is also
+    # set (see services/asset_criticality.py).
+    criticality: Optional[str] = None
     vendor: Optional[str] = None
     location: Optional[str] = None
     cde_environment: bool = False
+    # Phase 5.1 — Exposure metadata. All optional; writers may supply.
+    internet_facing: Optional[bool] = None
+    network_segment: Optional[str] = None
+    data_classification: Optional[str] = None
+    business_function: Optional[str] = None
+    compliance_scope: Optional[List[str]] = None
+    # Phase 5.2 — Ownership chain.
+    primary_owner_id: Optional[int] = None
+    secondary_owner_id: Optional[int] = None
+    owning_team: Optional[str] = None
+    # FK to grc_teams.id — preferred over the free-text owning_team field.
+    owning_team_id: Optional[int] = None
+    escalation_contact_id: Optional[int] = None
+    business_owner_id: Optional[int] = None
+    # Phase 5.3 — Lifecycle state (only the starting state; transitions go
+    # through the dedicated POST /lifecycle-transition endpoint so the state
+    # machine + auto-close hook can run.)
+    lifecycle_state: Optional[str] = None
+    # Audit-traceable override of the derived criticality bucket.
+    # `criticality_manual_override=True` + a `criticality` value tells the
+    # server to keep the user's bucket; the derived numeric score is
+    # still stored in `criticality_score` so the audit log shows both
+    # "what the system computed" and "what the user chose to publish".
+    criticality_manual_override: Optional[bool] = None
+    criticality_override_reason: Optional[str] = None
 
 
 class ITAssetCreate(ITAssetBase):
@@ -858,6 +898,23 @@ class ITAssetUpdate(BaseModel):
     location: Optional[str] = None
     status: Optional[str] = None
     cde_environment: Optional[bool] = None
+    # Phase 5 — Operational context fields. Lifecycle state is intentionally
+    # NOT updatable through this generic endpoint; clients must use
+    # POST /assets/{id}/lifecycle-transition so the state machine runs.
+    internet_facing: Optional[bool] = None
+    network_segment: Optional[str] = None
+    data_classification: Optional[str] = None
+    business_function: Optional[str] = None
+    compliance_scope: Optional[List[str]] = None
+    primary_owner_id: Optional[int] = None
+    secondary_owner_id: Optional[int] = None
+    owning_team: Optional[str] = None
+    owning_team_id: Optional[int] = None
+    escalation_contact_id: Optional[int] = None
+    business_owner_id: Optional[int] = None
+    # Manual override of the derived criticality bucket (see ITAssetBase).
+    criticality_manual_override: Optional[bool] = None
+    criticality_override_reason: Optional[str] = None
 
 
 class ITAssetResponse(BaseModel):
@@ -881,9 +938,43 @@ class ITAssetResponse(BaseModel):
     status: str
     cde_environment: bool = False
     created_at: datetime
+    # Phase 5 fields — all optional on the response so older rows that
+    # haven't been touched since the migration still serialize cleanly.
+    internet_facing: Optional[bool] = None
+    network_segment: Optional[str] = None
+    data_classification: Optional[str] = None
+    business_function: Optional[str] = None
+    compliance_scope: Optional[List[str]] = None
+    primary_owner_id: Optional[int] = None
+    secondary_owner_id: Optional[int] = None
+    owning_team: Optional[str] = None
+    owning_team_id: Optional[int] = None
+    owning_team_name: Optional[str] = None
+    escalation_contact_id: Optional[int] = None
+    business_owner_id: Optional[int] = None
+    lifecycle_state: Optional[str] = None
+    decommissioned_at: Optional[datetime] = None
+    retirement_reason: Optional[str] = None
+    replacement_asset_id: Optional[int] = None
+    criticality_score: Optional[float] = None
+    criticality_manual_override: Optional[bool] = None
+    criticality_override_reason: Optional[str] = None
+    last_seen_at: Optional[datetime] = None
+    last_seen_source: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class LifecycleTransitionRequest(BaseModel):
+    """Body for POST /assets/{id}/lifecycle-transition.
+
+    `to_state` is required. `reason` and `replacement_asset_id` are recorded
+    when transitioning into a terminal state (decommissioned / retired).
+    """
+    to_state: str
+    reason: Optional[str] = None
+    replacement_asset_id: Optional[int] = None
 
 
 class AssetValuation(BaseModel):
@@ -936,7 +1027,30 @@ class AssetDetailResponse(BaseModel):
     linked_vulnerabilities: List[dict] = []
     risk_assessments: List[dict] = []
     coverage_percentage: Optional[float] = None
-    
+    # Phase 5 operational context fields.
+    internet_facing: Optional[bool] = None
+    network_segment: Optional[str] = None
+    data_classification: Optional[str] = None
+    business_function: Optional[str] = None
+    compliance_scope: Optional[List[str]] = None
+    primary_owner_id: Optional[int] = None
+    primary_owner_name: Optional[str] = None
+    secondary_owner_id: Optional[int] = None
+    secondary_owner_name: Optional[str] = None
+    owning_team: Optional[str] = None
+    escalation_contact_id: Optional[int] = None
+    escalation_contact_name: Optional[str] = None
+    business_owner_id: Optional[int] = None
+    business_owner_name: Optional[str] = None
+    lifecycle_state: Optional[str] = None
+    decommissioned_at: Optional[datetime] = None
+    retirement_reason: Optional[str] = None
+    replacement_asset_id: Optional[int] = None
+    replacement_asset_name: Optional[str] = None
+    criticality_score: Optional[float] = None
+    last_seen_at: Optional[datetime] = None
+    last_seen_source: Optional[str] = None
+
     class Config:
         from_attributes = True
 
@@ -1998,6 +2112,31 @@ class VulnerabilityResponse(BaseModel):
     nvd_last_synced_at: Optional[datetime] = None
     exploit_references: Optional[List[str]] = None
     composite_priority: Optional[float] = None
+    # Phase 6 — Vendor patch intelligence (MSRC first). Same nullable
+    # discipline: a vuln that hasn't been patch-intel-synced renders with
+    # the Patch Information section hidden.
+    patch_references: Optional[List[Dict[str, Any]]] = None
+    vendor_advisory_ids: Optional[List[str]] = None
+    remediation_guidance: Optional[str] = None
+    psirt_synced_at: Optional[datetime] = None
+    psirt_source: Optional[str] = None
+    # Phase 8 — Exception workflow. Mirrors `vuln_exception` service output;
+    # the legacy `is_exception`/`exception_reason`/`exception_approved_by`/
+    # `exception_expiry` columns above stay valid for backward compat.
+    exception_status: Optional[str] = None
+    exception_requested_by_id: Optional[int] = None
+    exception_requested_at: Optional[datetime] = None
+    exception_justification: Optional[str] = None
+    exception_compensating_controls: Optional[List[str]] = None
+    exception_approved_at: Optional[datetime] = None
+    exception_expires_at: Optional[datetime] = None
+    exception_denial_reason: Optional[str] = None
+    exception_revoked_by_id: Optional[int] = None
+    exception_revoked_at: Optional[datetime] = None
+    exception_revocation_reason: Optional[str] = None
+    exception_metadata: Optional[Dict[str, Any]] = None
+    exception_requested_by_name: Optional[str] = None
+    exception_revoked_by_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -2005,6 +2144,31 @@ class VulnerabilityResponse(BaseModel):
 
 class VulnerabilityAssign(BaseModel):
     user_id: int
+
+
+# Phase 8 — Exception workflow request bodies.
+
+class ExceptionRequestBody(BaseModel):
+    """Body for POST /vulnerabilities/{id}/exception/request."""
+    justification: str
+    compensating_controls: Optional[List[str]] = None
+    expires_at: Optional[datetime] = None
+
+
+class ExceptionApproveBody(BaseModel):
+    """Body for POST /vulnerabilities/{id}/exception/approve."""
+    comment: Optional[str] = None
+    expires_at: Optional[datetime] = None  # approver may override the requested expiry
+
+
+class ExceptionDenyBody(BaseModel):
+    """Body for POST /vulnerabilities/{id}/exception/deny."""
+    denial_reason: str
+
+
+class ExceptionRevokeBody(BaseModel):
+    """Body for POST /vulnerabilities/{id}/exception/revoke."""
+    reason: Optional[str] = None
 
 
 class VulnerabilityStatusChange(BaseModel):
@@ -2079,6 +2243,9 @@ class VulnerabilityAssetLinkResponse(BaseModel):
     created_by: Optional[int]
     asset_name: Optional[str] = None
     asset_type: Optional[str] = None
+    # Provenance surfaced for the Auto badge + source chip in the UI.
+    link_source: Optional[str] = None
+    auto_linked: Optional[bool] = None
 
     class Config:
         from_attributes = True

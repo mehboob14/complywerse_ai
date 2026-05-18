@@ -1351,17 +1351,58 @@ def activate_campaign(
     ).count()
     
     if existing_assessments == 0:
-        business_units = db.query(BusinessUnit).filter(
-            BusinessUnit.tenant_id == db_campaign.tenant_id
+        # New behaviour: Teams (admin/teams) are the canonical "department"
+        # source. We seed one RCSAAssessment per active Team for this
+        # tenant. For each Team we ensure a BusinessUnit row mirrors it
+        # (matched by case-insensitive name) so the rest of the platform
+        # that references business_unit_id keeps working unchanged. If a
+        # tenant has no Teams configured yet we fall back to the legacy
+        # BusinessUnit seed so existing setups don't break — that path
+        # is the original behaviour, left intact below.
+        from ....models import Team  # local import to avoid cycle
+        teams = db.query(Team).filter(
+            Team.tenant_id == db_campaign.tenant_id,
+            Team.is_active == True,  # noqa: E712
         ).all()
-        for bu in business_units:
-            assessment = RCSAAssessment(
-                tenant_id=db_campaign.tenant_id,
-                campaign_id=campaign_id,
-                business_unit_id=bu.id
-            )
-            db.add(assessment)
-    
+
+        if teams:
+            existing_bus = db.query(BusinessUnit).filter(
+                BusinessUnit.tenant_id == db_campaign.tenant_id,
+            ).all()
+            bu_by_name = {(b.name or "").strip().lower(): b for b in existing_bus}
+            for team in teams:
+                key = (team.name or "").strip().lower()
+                bu = bu_by_name.get(key)
+                if bu is None:
+                    bu = BusinessUnit(
+                        tenant_id=db_campaign.tenant_id,
+                        name=team.name,
+                    )
+                    db.add(bu)
+                    db.flush()  # need bu.id for the FK below
+                    bu_by_name[key] = bu
+                assessment = RCSAAssessment(
+                    tenant_id=db_campaign.tenant_id,
+                    campaign_id=campaign_id,
+                    business_unit_id=bu.id,
+                    # Assign the team lead as the default assessor so the
+                    # campaign immediately has an owner; tenants can
+                    # reassign per-assessment afterwards.
+                    assessor_id=team.lead_user_id,
+                )
+                db.add(assessment)
+        else:
+            business_units = db.query(BusinessUnit).filter(
+                BusinessUnit.tenant_id == db_campaign.tenant_id
+            ).all()
+            for bu in business_units:
+                assessment = RCSAAssessment(
+                    tenant_id=db_campaign.tenant_id,
+                    campaign_id=campaign_id,
+                    business_unit_id=bu.id
+                )
+                db.add(assessment)
+
     db.commit()
     db.refresh(db_campaign)
     
@@ -1501,7 +1542,38 @@ def list_assessments(
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return []
-    
+
+    # Default visibility: non-admin users only see assessments they're
+    # assigned to. Tenant admins (Administrator role, primary contact,
+    # or superadmin) keep seeing every row. Frontends can override
+    # either way by passing `mine=true` or `mine=false` explicitly —
+    # backwards-compatible with any caller that already sets the flag.
+    if mine is None:
+        from ....models import UserRole, Role, Tenant as _Tenant
+        is_admin = bool(getattr(current_user, "is_superadmin", False))
+        if not is_admin:
+            role_ids = [
+                ur.role_id for ur in db.query(UserRole).filter(
+                    UserRole.user_id == current_user.id
+                ).all()
+            ]
+            if role_ids:
+                role_names = {
+                    r.name for r in db.query(Role).filter(Role.id.in_(role_ids)).all()
+                }
+                if "Administrator" in role_names:
+                    is_admin = True
+            if not is_admin:
+                primary_email = (
+                    db.query(_Tenant.primary_contact_email)
+                    .filter(_Tenant.id.in_(user_tenants))
+                    .first()
+                )
+                if primary_email and primary_email[0] and current_user.email \
+                        and primary_email[0].lower() == current_user.email.lower():
+                    is_admin = True
+        mine = not is_admin
+
     query = db.query(RCSAAssessment).options(
         joinedload(RCSAAssessment.business_unit),
         joinedload(RCSAAssessment.assessor),
@@ -1509,7 +1581,7 @@ def list_assessments(
         joinedload(RCSAAssessment.responses),
         joinedload(RCSAAssessment.findings)
     ).filter(RCSAAssessment.tenant_id.in_(user_tenants))
-    
+
     if mine:
         query = query.filter(RCSAAssessment.assessor_id == current_user.id)
     if campaign_id:

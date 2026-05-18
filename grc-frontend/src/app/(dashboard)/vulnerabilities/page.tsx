@@ -33,6 +33,7 @@ import {
   Route,
   Save,
   Shield,
+  FileCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -1107,6 +1108,25 @@ export default function VulnerabilitiesPage() {
               >
                 <Shield size={14} />
                 Enrich All
+              </button>
+              {/* Phase 6 — Sync All Patch Info. Queues a Celery job that
+                  walks every open CVE-bearing vuln and asks MSRC for the
+                  matching KB articles + remediation. Non-Microsoft CVEs
+                  are cached as negative hits so the second run is cheap. */}
+              <button
+                onClick={async () => {
+                  try {
+                    const r = await vulnManagementApi.vulnerabilities.syncPatchInfoAll();
+                    alert(`Queued bulk patch-intel sync (task ${r.data?.task_id ?? 'unknown'}). KB articles will appear on Microsoft vulns within a few minutes.`);
+                  } catch {
+                    alert('Could not queue bulk patch-intel sync. Check the worker is running.');
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+                title="Ask MSRC for KB articles + remediation against every open CVE-bearing vuln in this tenant"
+              >
+                <FileCheck size={14} />
+                Sync Patch Info
               </button>
               <button
                 onClick={() => {

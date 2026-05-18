@@ -537,9 +537,38 @@ export const documentsApi = {
 };
 
 export const assetsApi = {
-  getAll: () => apiClient.get<ITAsset[]>('/assets'),
+  // Pass filters through query params. Defaults preserved when called with
+  // no args, so existing callers (e.g. `assetsApi.getAll()`) are unchanged.
+  getAll: (params?: {
+    asset_type?: string;
+    criticality?: string;
+    owner_id?: number;
+    status_filter?: string;
+    lifecycle_state?: string;
+    data_classification?: string;
+    internet_facing?: boolean;
+    stale_only?: boolean;
+    stale_days?: number;
+    skip?: number;
+    limit?: number;
+  }) => apiClient.get<ITAsset[]>('/assets', { params }),
   getById: (id: number) => apiClient.get<ITAsset>(`/assets/${id}`),
   getDetail: (id: number) => apiClient.get(`/assets/${id}/detail`),
+  // Phase 5.3 — Lifecycle state transition. Backend enforces the FSM and
+  // returns the new state + a count of auto-closed vulnerabilities.
+  transitionLifecycle: (
+    id: number,
+    payload: { to_state: string; reason?: string; replacement_asset_id?: number },
+  ) => apiClient.post<{
+    asset_id: number;
+    from_state: string;
+    to_state: string;
+    lifecycle_state: string;
+    decommissioned_at: string | null;
+    retirement_reason: string | null;
+    replacement_asset_id: number | null;
+    auto_closed_vulnerabilities: number;
+  }>(`/assets/${id}/lifecycle-transition`, payload),
   getDashboard: () => apiClient.get('/assets/dashboard'),
   getTenantUsers: () => apiClient.get<Array<{id: number; display_name: string; email: string}>>('/assets/tenant-users'),
   getCIARecommendation: (data: {
@@ -1686,6 +1715,58 @@ export const vulnManagementApi = {
     // "Enrich all" button on the list page after rolling out the feature.
     enrichAll: () =>
       apiClient.post(`/vuln-management/vulnerabilities/enrich-all`),
+    // Phase 6 — Vendor patch intelligence (MSRC first). Asks the upstream
+    // PSIRT for KB articles + advisory IDs + remediation text for this
+    // vuln's CVE. Idempotent re-sync; non-Microsoft CVEs are cached as
+    // negative hits so subsequent calls are cheap.
+    syncPatchInfo: (id: number) =>
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/sync-patch-info`),
+    // Bulk patch-intel sync — queues a Celery job to walk every open
+    // CVE-bearing vuln in the tenant.
+    syncPatchInfoAll: () =>
+      apiClient.post(`/vuln-management/vulnerabilities/sync-patch-info-all`),
+    // Phase 8 — Exception workflow. Each verb is a discrete state-machine
+    // transition; the backend rejects invalid moves with a 400 and
+    // enforces separation of duties (the requester cannot also approve).
+    exceptionRequest: (id: number, body: {
+      justification: string;
+      compensating_controls?: string[];
+      expires_at?: string;
+    }) => apiClient.post(`/vuln-management/vulnerabilities/${id}/exception/request`, body),
+    exceptionApprove: (id: number, body: { comment?: string; expires_at?: string }) =>
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/exception/approve`, body),
+    exceptionDeny: (id: number, body: { denial_reason: string }) =>
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/exception/deny`, body),
+    exceptionRevoke: (id: number, body: { reason?: string }) =>
+      apiClient.post(`/vuln-management/vulnerabilities/${id}/exception/revoke`, body),
+    // Bulk exception request — one justification + expiry applies to N vulns.
+    bulkExceptionRequest: (body: {
+      vulnerability_ids: number[];
+      justification: string;
+      compensating_controls?: string[];
+      expires_at?: string;
+    }) => apiClient.post<{ requested: number; skipped: number; errors: Array<{ id: number; msg: string }> }>(
+      `/vuln-management/vulnerabilities/exception/bulk-request`, body,
+    ),
+    // Cross-tenant queue view for the Exceptions page.
+    exceptionQueue: (params?: { state?: string; skip?: number; limit?: number }) =>
+      apiClient.get<{
+        total: number;
+        rows: Array<{
+          id: number;
+          vuln_id: string;
+          title: string;
+          severity: string;
+          cve_id?: string;
+          exception_status: string;
+          exception_requested_by_id?: number;
+          exception_requested_at?: string;
+          exception_approved_at?: string;
+          exception_expires_at?: string;
+          exception_justification?: string;
+          composite_priority?: number;
+        }>;
+      }>('/vuln-management/vulnerabilities/exception-queue', { params }),
   },
   mitigations: {
     list: (vulnId: number) => 
@@ -1904,6 +1985,333 @@ export const dashboardApi = {
   getEnhancedStats: (tenantId?: number) => apiClient.get('/dashboard/enhanced-stats', { params: tenantId ? { tenant_id: tenantId } : {} }),
 };
 
+// ── Phase 7: Cloud connectors ────────────────────────────────────────────────
+export interface CloudConnector {
+  id: number;
+  tenant_id: number;
+  provider: string;
+  display_name: string;
+  description?: string | null;
+  sync_schedule_seconds?: number | null;
+  is_active: boolean;
+  last_sync_at?: string | null;
+  last_sync_status?: string | null;
+  last_sync_error?: string | null;
+  last_health_check_at?: string | null;
+  last_health_status?: string | null;
+  health_metrics?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ───────────────────────────────────────────────────────────────────
+// External connector framework (Ticketing / SIEM / Pen-test / Collab /
+// Transcribe). Distinct from `cloudConnectorsApi` (AWS/Azure/GCP) and
+// from `integrationsApi` (legacy Nessus/Nexpose scanner connections).
+// ───────────────────────────────────────────────────────────────────
+export interface ConnectorProviderField {
+  key: string;
+  label: string;
+  kind: 'text' | 'password' | 'url' | 'textarea' | 'select' | 'toggle';
+  required: boolean;
+  placeholder?: string;
+  help_text?: string;
+  options?: Array<{ value: string; label: string }>;
+  is_credential: boolean;
+}
+
+export interface ConnectorProviderMeta {
+  provider: string;
+  label: string;
+  category: 'ticketing' | 'siem' | 'pentest' | 'collab' | 'transcribe';
+  description: string;
+  auth_method: 'api_key' | 'basic' | 'oauth2' | 'token';
+  beta: boolean;
+  docs_url?: string;
+  oauth_scopes?: string[];
+  fields: ConnectorProviderField[];
+}
+
+export interface ConnectorRow {
+  id: number;
+  provider: string;
+  provider_label: string;
+  category: string;
+  connection_name: string;
+  console_url: string;
+  auth_method: string;
+  sync_schedule: string;
+  is_active: boolean;
+  status: string;
+  last_sync_at: string | null;
+  last_sync_status: string | null;
+  last_sync_stats: Record<string, unknown> | null;
+  consecutive_failures: number;
+  provider_config: Record<string, unknown>;
+  has_credentials: boolean;
+  beta: boolean;
+  created_at: string | null;
+}
+
+export const connectorsApi = {
+  listProviders: (category?: string) => apiClient.get<{
+    encryption_enabled: boolean;
+    categories: string[];
+    providers: ConnectorProviderMeta[];
+  }>('/connectors/providers', category ? { params: { category } } : undefined),
+  list: () => apiClient.get<{ items: ConnectorRow[] }>('/connectors'),
+  create: (data: {
+    provider: string;
+    connection_name: string;
+    console_url?: string;
+    fields: Record<string, unknown>;
+    sync_schedule?: string;
+    verify_ssl?: boolean;
+  }) => apiClient.post<{
+    connection: ConnectorRow;
+    test_result: { success: boolean; message: string; server_version?: string; details?: Record<string, unknown> };
+  }>('/connectors', data),
+  update: (id: number, data: Partial<{
+    connection_name: string;
+    console_url: string;
+    fields: Record<string, unknown>;
+    sync_schedule: string;
+    is_active: boolean;
+    verify_ssl: boolean;
+  }>) => apiClient.patch<{ connection: ConnectorRow }>(`/connectors/${id}`, data),
+  test: (id: number) => apiClient.post<{
+    success: boolean; message: string; server_version?: string; details?: Record<string, unknown>;
+  }>(`/connectors/${id}/test`),
+  sync: (id: number) => apiClient.post<{
+    queued: boolean; connector_id?: number; inline?: boolean; result?: Record<string, unknown>;
+  }>(`/connectors/${id}/sync`),
+  remove: (id: number) => apiClient.delete(`/connectors/${id}`),
+  oauthStart: (provider: string, connectorId: number) => apiClient.get<{
+    authorize_url: string; state: string;
+  }>('/connectors/oauth/start', { params: { provider, connector_id: connectorId } }),
+};
+
+export const cloudConnectorsApi = {
+  listProviders: () => apiClient.get<{
+    providers: Array<{ provider: string; label: string; credentials_schema: Record<string, unknown> }>;
+    encryption_ready: boolean;
+  }>('/cloud-connectors/providers'),
+  list: () => apiClient.get<CloudConnector[]>('/cloud-connectors'),
+  create: (data: {
+    provider: string;
+    display_name: string;
+    description?: string;
+    credentials: Record<string, unknown>;
+    sync_schedule_seconds?: number;
+  }) => apiClient.post<CloudConnector>('/cloud-connectors', data),
+  update: (id: number, data: Partial<{
+    display_name: string;
+    description: string;
+    credentials: Record<string, unknown>;
+    sync_schedule_seconds: number;
+    is_active: boolean;
+  }>) => apiClient.patch<CloudConnector>(`/cloud-connectors/${id}`, data),
+  healthCheck: (id: number) =>
+    apiClient.post<{ status: string; detail?: string; latency_ms?: number; checked_at?: string }>(
+      `/cloud-connectors/${id}/health-check`,
+    ),
+  sync: (id: number) =>
+    apiClient.post<{
+      status: string;
+      connector_id: number;
+      assets_new?: number;
+      assets_updated?: number;
+      vulnerabilities_new?: number;
+      vulnerabilities_updated?: number;
+      errors?: string[];
+    }>(`/cloud-connectors/${id}/sync`),
+  syncAll: () =>
+    apiClient.post<{ queued: boolean; task_id: string }>(`/cloud-connectors/sync-all`),
+  delete: (id: number) => apiClient.delete(`/cloud-connectors/${id}`),
+  // Per-provider setup guide + auto-generated secure values (per-tenant
+  // External ID for AWS, IAM policies, role assignment text, …). Used by
+  // the Add Connector modal to show step-by-step linking instructions.
+  setupInfo: (provider: string) =>
+    apiClient.get<{
+      provider: string;
+      label: string;
+      security_model: string;
+      security_summary: string;
+      what_we_store?: string[];
+      what_we_dont_store?: string[];
+      copy_blocks?: Array<{ label: string; value: string; language?: string; help?: string }>;
+      steps: Array<{ title: string; body: string; code?: string }>;
+      credentials_template?: Record<string, unknown>;
+      redirect?: string;
+    }>(`/cloud-connectors/setup-info/${provider}`),
+  // Unified discovery view — returns BOTH cloud connectors (new framework)
+  // AND legacy scanner integrations (Nessus / Nexpose) in one list so the
+  // admin sees the full integration surface in one place.
+  unified: () => apiClient.get<{
+    connectors: Array<{
+      id: number;
+      framework: 'cloud_connector' | 'legacy_scanner';
+      provider: string;
+      display_name: string;
+      description?: string | null;
+      is_active: boolean;
+      last_sync_at?: string | null;
+      last_sync_status?: string | null;
+      last_sync_error?: string | null;
+      last_health_status?: string | null;
+      manage_path: string;
+    }>;
+    total: number;
+  }>('/cloud-connectors/unified'),
+};
+
+// ── Teams (admin) ────────────────────────────────────────────────────────────
+// Tenant-scoped org teams used by the asset ownership-chain dropdown.
+
+export interface Team {
+  id: number;
+  tenant_id: number;
+  name: string;
+  description?: string | null;
+  lead_user_id?: number | null;
+  lead_user_name?: string | null;
+  is_active: boolean;
+  member_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeamMember {
+  id: number;
+  user_id: number;
+  user_display_name?: string | null;
+  user_email?: string | null;
+  role_in_team: string;
+  added_at: string;
+}
+
+export const teamsApi = {
+  list: (includeInactive = false) =>
+    apiClient.get<Team[]>('/admin/teams', { params: { include_inactive: includeInactive } }),
+  get: (id: number) =>
+    apiClient.get<Team & { members: TeamMember[] }>(`/admin/teams/${id}`),
+  create: (data: { name: string; description?: string; lead_user_id?: number }) =>
+    apiClient.post<Team>('/admin/teams', data),
+  update: (id: number, data: Partial<{ name: string; description: string; lead_user_id: number; is_active: boolean }>) =>
+    apiClient.patch<Team>(`/admin/teams/${id}`, data),
+  delete: (id: number) => apiClient.delete(`/admin/teams/${id}`),
+  listMembers: (teamId: number) =>
+    apiClient.get<TeamMember[]>(`/admin/teams/${teamId}/members`),
+  addMember: (teamId: number, data: { user_id: number; role_in_team?: 'lead' | 'member' | 'viewer' }) =>
+    apiClient.post<TeamMember>(`/admin/teams/${teamId}/members`, data),
+  updateMember: (teamId: number, memberId: number, data: { role_in_team: 'lead' | 'member' | 'viewer' }) =>
+    apiClient.patch<TeamMember>(`/admin/teams/${teamId}/members/${memberId}`, data),
+  removeMember: (teamId: number, memberId: number) =>
+    apiClient.delete(`/admin/teams/${teamId}/members/${memberId}`),
+};
+
+// ── Phase 4: Software identifier (CPE / PURL) inventory per asset ───────────
+export const softwareIdentifiersApi = {
+  list: (assetId: number) =>
+    apiClient.get<Array<{
+      id: number;
+      identifier_type: 'cpe' | 'purl';
+      identifier: string;
+      vendor?: string | null;
+      product?: string | null;
+      version?: string | null;
+      source?: string | null;
+      created_at: string;
+    }>>(`/assets/${assetId}/software-identifiers`),
+  create: (assetId: number, body: {
+    identifier_type: 'cpe' | 'purl';
+    identifier: string;
+    vendor?: string;
+    product?: string;
+    version?: string;
+    source?: string;
+  }) => apiClient.post(`/assets/${assetId}/software-identifiers`, body),
+  delete: (assetId: number, identifierId: number) =>
+    apiClient.delete(`/assets/${assetId}/software-identifiers/${identifierId}`),
+};
+
+// ── Phase 9: Power search + analytics ────────────────────────────────────────
+export const searchApi = {
+  power: (params: {
+    q: string;
+    domains?: string;
+    per_domain_limit?: number;
+  }) => apiClient.get<{
+    q: string;
+    total: number;
+    results: Record<string, Array<{
+      type: string;
+      id: number;
+      title: string;
+      subtitle?: string | null;
+      url: string;
+      severity?: string;
+      status?: string;
+      asset_type?: string;
+      criticality?: string;
+    }>>;
+  }>('/search/power', { params }),
+  exceptionAging: () =>
+    apiClient.get<{
+      generated_at: string;
+      counts_by_state: Record<string, number>;
+      active_aging_buckets: Record<string, number>;
+      expiring_within: Record<string, number>;
+      expired_unactioned: number;
+      pending_request_aging: Record<string, number>;
+    }>('/analytics/exception-aging'),
+  executiveDashboard: () =>
+    apiClient.get<Record<string, unknown>>('/analytics/executive-dashboard'),
+  analystDashboard: () =>
+    apiClient.get<Record<string, unknown>>('/analytics/analyst-dashboard'),
+  correlation: () =>
+    apiClient.get<{
+      by_kb: Array<{ kb_id: string; finding_count: number; affected_assets: number }>;
+      by_cve: Array<{ cve_id: string; finding_count: number; affected_assets: number }>;
+    }>('/analytics/patch-correlation'),
+  vendorRisk: () =>
+    apiClient.get<{
+      by_vendor: Array<{
+        vendor: string;
+        vuln_count: number;
+        critical_count: number;
+        high_count: number;
+        medium_count: number;
+        low_count: number;
+      }>;
+      by_cwe: Array<{ cwe_id: string; count: number }>;
+    }>('/analytics/vendor-risk'),
+};
+
+// ── Phase 9: Compliance reports (CSV / Excel exports) ────────────────────────
+export const reportsApi = {
+  exceptionsActive: (params?: { start_date?: string; end_date?: string; format?: 'csv' | 'xlsx' }) =>
+    apiClient.get('/reports/exceptions-active', {
+      params,
+      responseType: 'blob',
+    }),
+  remediationTimeline: (params?: { format?: 'csv' | 'xlsx' }) =>
+    apiClient.get('/reports/remediation-timeline', {
+      params,
+      responseType: 'blob',
+    }),
+  assetRegister: (params?: { format?: 'csv' | 'xlsx' }) =>
+    apiClient.get('/reports/asset-register', {
+      params,
+      responseType: 'blob',
+    }),
+  patchEvidence: (params?: { format?: 'csv' | 'xlsx' }) =>
+    apiClient.get('/reports/patch-evidence', {
+      params,
+      responseType: 'blob',
+    }),
+};
+
 export const enrichedDashboardApi = {
   getExecutiveRiskVelocity: (days?: number) => apiClient.get('/enriched-dashboard/executive/risk-velocity', { params: days ? { days } : {} }),
   getExecutiveRiskAppetiteGauge: () => apiClient.get('/enriched-dashboard/executive/risk-appetite-gauge'),
@@ -1972,10 +2380,23 @@ export const committeeApi = {
   createCharter: (committeeId: number, data: any) => apiClient.post(`/governance/committees/${committeeId}/charters`, data),
   updateCharter: (charterId: number, data: any) => apiClient.put(`/governance/committees/charters/${charterId}`, data),
   deleteCharter: (committeeId: number, charterId: number) => apiClient.delete(`/governance/committees/${committeeId}/charters/${charterId}`),
-  uploadCharterFile: (committeeId: number, charterId: number, formData: FormData) => 
+  uploadCharterFile: (committeeId: number, charterId: number, formData: FormData) =>
     apiClient.post(`/governance/committees/${committeeId}/charters/${charterId}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     }),
+  // Single-shot: takes a PDF/DOCX/TXT, creates a new charter with the
+  // extracted text as content + the file saved alongside. Used by the
+  // "Upload Charter" button placed before "AI Generate Charter".
+  uploadNewCharter: (committeeId: number, file: File, opts?: { title?: string; version?: string; status?: string }) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (opts?.title) fd.append('title', opts.title);
+    if (opts?.version) fd.append('version', opts.version);
+    if (opts?.status) fd.append('status_value', opts.status);
+    return apiClient.post(`/governance/committees/${committeeId}/charters/upload-new`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   downloadCharterFile: (charterId: number) => 
     apiClient.get(`/governance/committees/charters/${charterId}/download`, { responseType: 'blob' }),
   aiGenerateCharter: (committeeId: number, frameworkIds?: number[]) => apiClient.post(`/governance/committees/${committeeId}/ai-generate-charter`, { framework_ids: frameworkIds || [] }),
@@ -1988,6 +2409,27 @@ export const committeeApi = {
   getAgenda: (meetingId: number) => apiClient.get(`/governance/committees/meetings/${meetingId}/agenda`),
   addAgendaItem: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/agenda`, data),
   updateAgendaItem: (itemId: number, data: any) => apiClient.put(`/governance/committees/meetings/agenda/${itemId}`, data),
+  // Upload PDF / DOCX / TXT agenda doc → backend extracts text +
+  // heuristic-parses + AI fallback when needed → inserts MeetingAgendaItem rows.
+  uploadAgendaForParse: (meetingId: number, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post(`/governance/committees/meetings/${meetingId}/agenda/upload-parse`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  // Voting on agenda items — each committee member can record one
+  // agree / disagree / partial / abstain vote per item with optional
+  // comment. Re-posting updates the existing vote (upsert).
+  voteAgendaItem: (itemId: number, vote: 'agreed' | 'disagreed' | 'partial' | 'abstain', comment?: string) =>
+    apiClient.post(`/governance/committees/meetings/agenda/${itemId}/votes`, { vote, comment }),
+  listAgendaVotes: (itemId: number) =>
+    apiClient.get<{
+      total: number;
+      tally: { agreed: number; disagreed: number; partial: number; abstain: number };
+      my_vote: null | { vote: string; comment?: string };
+      votes: Array<{ id: number; user_id: number; user_name: string; vote: string; comment?: string; voted_at: string }>;
+    }>(`/governance/committees/meetings/agenda/${itemId}/votes`),
   deleteAgendaItem: (itemId: number) => apiClient.delete(`/governance/committees/meetings/agenda/${itemId}`),
   getMeetingAttachments: (meetingId: number) =>
     apiClient.get(`/governance/committees/meetings/${meetingId}/attachments`),
@@ -2001,6 +2443,16 @@ export const committeeApi = {
     apiClient.delete(`/governance/committees/meetings/attachments/${attachmentId}`),
   createMinutes: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/minutes`, data),
   updateMinutes: (minutesId: number, data: any) => apiClient.put(`/governance/committees/minutes/${minutesId}`, data),
+  // Upload a PDF / DOCX / TXT minutes document — backend extracts the
+  // text and stores it as the minutes content, dropping any previously
+  // approved status back to draft so reviewers see the change.
+  uploadMinutesDoc: (meetingId: number, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post(`/governance/committees/meetings/${meetingId}/minutes/upload`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   createAction: (meetingId: number, data: any) => apiClient.post(`/governance/committees/meetings/${meetingId}/actions`, data),
   createManualAction: (data: any) => apiClient.post('/governance/committees/actions/manual', data),
   getActions: (params?: { status?: string; committee_id?: number; overdue_only?: boolean }) => apiClient.get('/governance/committees/actions', { params }),

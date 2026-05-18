@@ -25,6 +25,7 @@ import dynamic from 'next/dynamic';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { InlineLinkPicker } from '@/components/ui/InlineLinkPicker';
+import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
 
@@ -256,10 +257,18 @@ function EvidenceLinkSection({ controlId }: { controlId: number }) {
                 </div>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                {/* In-place file preview (popup) for the linked evidence —
+                    avoids context-switching to the central evidence page
+                    just to glance at the artifact. */}
+                <EvidencePreviewButton
+                  evidenceId={lnk.evidence_id}
+                  className="rounded p-1 text-slate-400 hover:text-blue-600"
+                  title="Preview evidence file"
+                />
                 <Link
                   href={`/evidence/${lnk.evidence_id}`}
                   className="rounded p-1 text-slate-400 hover:text-blue-600"
-                  title="View evidence"
+                  title="Open evidence detail"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                 </Link>

@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
-import { assetsApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
+import { apiClient, assetsApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
 import type { ITAsset } from '@/types';
 import { SearchInput, InlineLinkPicker, PageLoader } from '@/components/ui';
 import {
@@ -78,6 +78,9 @@ interface LinkedVulnerability {
   impact_on_asset?: string | null;
   notes?: string | null;
   created_at?: string | null;
+  // Provenance — Phase 4 / Track B. Drives the Auto badge + source chip.
+  link_source?: string | null;
+  auto_linked?: boolean | null;
 }
 
 interface RiskAssessment {
@@ -116,6 +119,32 @@ interface AssetDetailData {
   linked_vulnerabilities: LinkedVulnerability[];
   risk_assessments: RiskAssessment[];
   coverage_percentage: number;
+  // Phase 5 — Operational context. All optional; assets that pre-date the
+  // migration simply render the relevant cells as "Not set".
+  internet_facing?: boolean;
+  network_segment?: string | null;
+  data_classification?: string | null;
+  business_function?: string | null;
+  compliance_scope?: string[];
+  primary_owner_id?: number | null;
+  primary_owner_name?: string | null;
+  secondary_owner_id?: number | null;
+  secondary_owner_name?: string | null;
+  owning_team?: string | null;
+  owning_team_id?: number | null;
+  owning_team_name?: string | null;
+  escalation_contact_id?: number | null;
+  escalation_contact_name?: string | null;
+  business_owner_id?: number | null;
+  business_owner_name?: string | null;
+  lifecycle_state?: string | null;
+  decommissioned_at?: string | null;
+  retirement_reason?: string | null;
+  replacement_asset_id?: number | null;
+  replacement_asset_name?: string | null;
+  criticality_score?: number | null;
+  last_seen_at?: string | null;
+  last_seen_source?: string | null;
 }
 
 interface SecurityComplianceControl {
@@ -156,6 +185,21 @@ type AssetUpdatePayload = Partial<
     | 'vendor'
     | 'location'
     | 'status'
+    // Phase 5 — Operational context fields editable through the standard
+    // PUT /assets/{id} endpoint. Lifecycle state is intentionally NOT here:
+    // it transitions through its own POST /lifecycle-transition endpoint so
+    // the FSM + auto-close hooks always run.
+    | 'internet_facing'
+    | 'network_segment'
+    | 'data_classification'
+    | 'business_function'
+    | 'compliance_scope'
+    | 'primary_owner_id'
+    | 'secondary_owner_id'
+    | 'owning_team'
+    | 'owning_team_id'
+    | 'escalation_contact_id'
+    | 'business_owner_id'
   >
 >;
 
@@ -170,6 +214,7 @@ export default function AssetDetailPage() {
   const [activeTab, setActiveTab] = useState<TabType>('details');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showLifecycleModal, setShowLifecycleModal] = useState(false);
 
   const { data: asset, isLoading, error } = useQuery<AssetDetailData>({
     queryKey: ['asset-detail', assetId],
@@ -219,6 +264,18 @@ export default function AssetDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
       queryClient.invalidateQueries({ queryKey: ['asset-coverage', assetId] });
+    },
+  });
+
+  // Phase 5.3 — Move through the lifecycle state machine. Backend validates
+  // the transition; we just surface the rejection or refresh the row.
+  const lifecycleMutation = useMutation({
+    mutationFn: (payload: { to_state: string; reason?: string; replacement_asset_id?: number }) =>
+      assetsApi.transitionLifecycle(assetId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+      queryClient.invalidateQueries({ queryKey: ['asset-coverage', assetId] });
+      setShowLifecycleModal(false);
     },
   });
 
@@ -445,6 +502,16 @@ export default function AssetDetailPage() {
                 Edit
               </button>
             )}
+            {canEdit && (
+              <button
+                onClick={() => setShowLifecycleModal(true)}
+                className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
+                title="Change lifecycle state — decommissioning auto-closes linked vulns"
+              >
+                <TrendingUp className="h-4 w-4" />
+                Lifecycle
+              </button>
+            )}
             <button
               onClick={() => assessRiskMutation.mutate()}
               disabled={assessRiskMutation.isPending}
@@ -640,6 +707,23 @@ export default function AssetDetailPage() {
           isSaving={updateAssetMutation.isPending}
         />
       )}
+
+      {showLifecycleModal && (
+        <LifecycleTransitionModal
+          currentState={asset.lifecycle_state || 'active'}
+          onClose={() => setShowLifecycleModal(false)}
+          onSubmit={(payload) => lifecycleMutation.mutate(payload)}
+          isSaving={lifecycleMutation.isPending}
+          errorMessage={
+            lifecycleMutation.error
+              ? (lifecycleMutation.error as { response?: { data?: { detail?: string } }; message?: string })
+                  ?.response?.data?.detail ||
+                (lifecycleMutation.error as { message?: string })?.message ||
+                'Transition failed'
+              : null
+          }
+        />
+      )}
     </div>
   );
 }
@@ -655,6 +739,21 @@ function EditAssetModal({
   onSave: (data: AssetUpdatePayload) => void;
   isSaving: boolean;
 }) {
+  // Tenant users — drives every "pick an owner" dropdown.
+  const { data: tenantUsers } = useQuery({
+    queryKey: ['tenant-users-for-asset-edit'],
+    queryFn: () => assetsApi.getTenantUsers().then((r) => r.data),
+    staleTime: 60 * 1000,
+  });
+  // Active org teams — drives the Owning Team dropdown.
+  const { data: teams } = useQuery({
+    queryKey: ['teams-for-asset-edit'],
+    queryFn: () => apiClient.get('/admin/teams').then((r) => r.data as Array<{
+      id: number; name: string; is_active: boolean;
+    }>),
+    staleTime: 60 * 1000,
+  });
+
   const [form, setForm] = useState({
     name: asset.name || '',
     description: asset.description || '',
@@ -668,10 +767,34 @@ function EditAssetModal({
     vendor: asset.vendor || '',
     location: asset.location || '',
     status: asset.status || 'active',
+    // Phase 5 — Operational context fields.
+    internet_facing: asset.internet_facing ?? false,
+    network_segment: asset.network_segment || '',
+    data_classification: asset.data_classification || '',
+    business_function: asset.business_function || '',
+    compliance_scope_text: (asset.compliance_scope || []).join(', '),
+    primary_owner_id: asset.primary_owner_id ?? '',
+    secondary_owner_id: asset.secondary_owner_id ?? '',
+    // Two ways to record the owning team: a structured FK to grc_teams or
+    // a free-text fallback for assets predating the Teams feature.
+    owning_team_id: asset.owning_team_id ?? '',
+    owning_team: asset.owning_team || '',
+    escalation_contact_id: asset.escalation_contact_id ?? '',
+    business_owner_id: asset.business_owner_id ?? '',
   });
+
+  const parseId = (v: string | number): number | undefined => {
+    if (v === '' || v === null || v === undefined) return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const scope = form.compliance_scope_text
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
     onSave({
       name: form.name,
       description: form.description || undefined,
@@ -685,20 +808,67 @@ function EditAssetModal({
       vendor: form.vendor || undefined,
       location: form.location || undefined,
       status: form.status as ITAsset['status'],
+      // Phase 5 — only included when the field actually has a value so the
+      // backend stores null for clears rather than overwriting with empty strings.
+      internet_facing: Boolean(form.internet_facing),
+      network_segment: form.network_segment || undefined,
+      data_classification: (form.data_classification || undefined) as ITAsset['data_classification'],
+      business_function: form.business_function || undefined,
+      compliance_scope: scope,
+      primary_owner_id: parseId(form.primary_owner_id),
+      secondary_owner_id: parseId(form.secondary_owner_id),
+      // Both fields go through: FK for the picker-selected team, plain
+      // text for the legacy fallback. Backend normalises on read.
+      owning_team_id: parseId(form.owning_team_id),
+      owning_team: form.owning_team || undefined,
+      escalation_contact_id: parseId(form.escalation_contact_id),
+      business_owner_id: parseId(form.business_owner_id),
     });
   };
 
+  // Helper component — user-picker dropdown with email shown alongside.
+  const UserPicker = ({ label, value, onChange }: {
+    label: string;
+    value: number | '';
+    onChange: (v: number | '') => void;
+  }) => (
+    <div>
+      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+      <select
+        value={value === '' ? '' : value}
+        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : '')}
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+      >
+        <option value="">— None —</option>
+        {(tenantUsers || []).map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.display_name} ({u.email})
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
-      <div className="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-900">Edit Asset</h2>
+      {/*
+        Layout: fixed-height column with sticky header + sticky footer.
+        Body scrolls internally — the modal NEVER overflows the viewport,
+        so the title and action buttons stay reachable on small screens.
+      */}
+      <div className="w-full max-w-4xl flex flex-col max-h-[90vh] rounded-lg border border-slate-200 bg-white shadow-xl">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
+          <h2 className="text-base font-semibold text-slate-900">Edit Asset</h2>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          id="edit-asset-form"
+          onSubmit={handleSubmit}
+          className="space-y-4 px-6 py-4 overflow-y-auto flex-1"
+        >
           <div>
             <label className="block text-xs font-medium text-slate-600">Asset Name</label>
             <input
@@ -833,30 +1003,227 @@ function EditAssetModal({
             />
           </div>
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Save
-            </button>
+          {/* ── Phase 5: Operational Context ──────────────────────────── */}
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              Operational Context
+            </h3>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <label className="flex items-center gap-2 text-xs text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.internet_facing)}
+                  onChange={(e) => setForm({ ...form, internet_facing: e.target.checked })}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                Internet-facing
+              </label>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Data Classification</label>
+                <select
+                  value={form.data_classification}
+                  onChange={(e) => setForm({ ...form, data_classification: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                >
+                  <option value="">— Not set —</option>
+                  <option value="public">Public</option>
+                  <option value="internal">Internal</option>
+                  <option value="confidential">Confidential</option>
+                  <option value="restricted">Restricted</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Network Segment</label>
+                <input
+                  value={form.network_segment}
+                  onChange={(e) => setForm({ ...form, network_segment: e.target.value })}
+                  placeholder="dmz, prod-app-tier, ..."
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-600">Business Function</label>
+                <input
+                  value={form.business_function}
+                  onChange={(e) => setForm({ ...form, business_function: e.target.value })}
+                  placeholder="Payments, HR Operations, ..."
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-medium text-slate-600">
+                  Compliance Scope <span className="text-slate-400">(comma-separated, e.g. PCI-DSS, HIPAA)</span>
+                </label>
+                <input
+                  value={form.compliance_scope_text}
+                  onChange={(e) => setForm({ ...form, compliance_scope_text: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                />
+              </div>
+            </div>
           </div>
+
+          {/* ── Phase 5.2: Ownership Chain ────────────────────────────── */}
+          {/* Pickers feed off the existing /assets/tenant-users endpoint;
+              the team picker uses the new /admin/teams endpoint. If no
+              teams are configured yet, the user falls back to a free-text
+              field — that legacy value still saves on the backend. */}
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              Ownership Chain
+            </h3>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <UserPicker
+                label="Primary Owner"
+                value={form.primary_owner_id as number | ''}
+                onChange={(v) => setForm({ ...form, primary_owner_id: v })}
+              />
+              <UserPicker
+                label="Secondary Owner"
+                value={form.secondary_owner_id as number | ''}
+                onChange={(v) => setForm({ ...form, secondary_owner_id: v })}
+              />
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Owning Team</label>
+                {teams && teams.length > 0 ? (
+                  <select
+                    value={form.owning_team_id === '' ? '' : form.owning_team_id}
+                    onChange={(e) => setForm({
+                      ...form,
+                      owning_team_id: e.target.value ? Number(e.target.value) : '',
+                      // Mirror the team name into the legacy text field so
+                      // older code paths that read `owning_team` see it too.
+                      owning_team: e.target.value
+                        ? (teams.find((t) => t.id === Number(e.target.value))?.name || '')
+                        : '',
+                    })}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  >
+                    <option value="">— None —</option>
+                    {teams.filter((t) => t.is_active).map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={form.owning_team}
+                    onChange={(e) => setForm({ ...form, owning_team: e.target.value, owning_team_id: '' })}
+                    placeholder="Create teams in Admin → Teams"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  />
+                )}
+                {teams && teams.length === 0 && (
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    No teams configured yet. <a href="/admin" className="text-blue-600 hover:underline">Manage teams →</a>
+                  </p>
+                )}
+              </div>
+              <UserPicker
+                label="Escalation Contact"
+                value={form.escalation_contact_id as number | ''}
+                onChange={(v) => setForm({ ...form, escalation_contact_id: v })}
+              />
+              <div className="md:col-span-2">
+                <UserPicker
+                  label="Business Owner"
+                  value={form.business_owner_id as number | ''}
+                  onChange={(v) => setForm({ ...form, business_owner_id: v })}
+                />
+              </div>
+            </div>
+          </div>
+
         </form>
+
+        {/* Sticky footer — always visible regardless of scroll position. */}
+        <div className="px-6 py-3 border-t border-slate-200 flex justify-end gap-3 flex-shrink-0 bg-white rounded-b-lg">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="edit-asset-form"
+            disabled={isSaving}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+            Save
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
+// ── Phase 5 helpers ──────────────────────────────────────────────────────────
+
+const LIFECYCLE_STYLES: Record<string, string> = {
+  planned: 'border-slate-200 bg-slate-50 text-slate-600',
+  active: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  maintenance: 'border-amber-200 bg-amber-50 text-amber-700',
+  decommissioned: 'border-orange-200 bg-orange-50 text-orange-700',
+  retired: 'border-rose-200 bg-rose-50 text-rose-700',
+};
+
+const DATA_CLASSIFICATION_STYLES: Record<string, string> = {
+  public: 'border-slate-200 bg-slate-50 text-slate-600',
+  internal: 'border-blue-200 bg-blue-50 text-blue-700',
+  confidential: 'border-amber-200 bg-amber-50 text-amber-700',
+  restricted: 'border-rose-200 bg-rose-50 text-rose-700',
+};
+
+function ScoreBadge({ score }: { score?: number | null }) {
+  if (score == null) {
+    return <span className="text-sm text-slate-400">Not yet computed</span>;
+  }
+  // Match the priority_bucket thresholds on the backend so colour
+  // semantics line up across the asset and vuln pages.
+  let cls = 'border-slate-200 bg-slate-50 text-slate-700';
+  if (score >= 9) cls = 'border-rose-200 bg-rose-50 text-rose-700';
+  else if (score >= 7) cls = 'border-amber-200 bg-amber-50 text-amber-700';
+  else if (score >= 4) cls = 'border-blue-200 bg-blue-50 text-blue-700';
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${cls}`}>
+      {score.toFixed(1)} / 10
+    </span>
+  );
+}
+
+function StaleIndicator({ lastSeenAt }: { lastSeenAt?: string | null }) {
+  if (!lastSeenAt) {
+    return <span className="text-xs text-slate-400">Never observed</span>;
+  }
+  const seenDate = new Date(lastSeenAt);
+  const ageDays = (Date.now() - seenDate.getTime()) / (1000 * 60 * 60 * 24);
+  const stale = ageDays > 30;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-slate-700">{seenDate.toLocaleDateString()}</span>
+      {stale && (
+        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+          Stale ({Math.round(ageDays)}d)
+        </span>
+      )}
+    </div>
+  );
+}
+
 function DetailsTab({ asset }: { asset: AssetDetailData }) {
+  const lifecycle = (asset.lifecycle_state || 'active').toLowerCase();
+  const lifecycleCls = LIFECYCLE_STYLES[lifecycle] || LIFECYCLE_STYLES.active;
+  const classificationCls = asset.data_classification
+    ? DATA_CLASSIFICATION_STYLES[asset.data_classification.toLowerCase()] || DATA_CLASSIFICATION_STYLES.internal
+    : null;
+
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -939,6 +1306,151 @@ function DetailsTab({ asset }: { asset: AssetDetailData }) {
               })}
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* ── Phase 5.1: Operational Context ─────────────────────────────── */}
+      <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <Target className="h-4 w-4 text-blue-600" />
+          Operational Context
+        </h3>
+        <div className="space-y-3">
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Internet-facing</span>
+            <p className="text-sm text-slate-700">
+              {asset.internet_facing ? (
+                <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
+                  Exposed
+                </span>
+              ) : (
+                <span className="text-slate-700">Internal only</span>
+              )}
+            </p>
+          </div>
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Data Classification</span>
+            <p className="text-sm">
+              {asset.data_classification && classificationCls ? (
+                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize ${classificationCls}`}>
+                  {asset.data_classification}
+                </span>
+              ) : (
+                <span className="text-slate-400">Not set</span>
+              )}
+            </p>
+          </div>
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Network Segment</span>
+            <p className="text-sm text-slate-700">{asset.network_segment || <span className="text-slate-400">Not set</span>}</p>
+          </div>
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Business Function</span>
+            <p className="text-sm text-slate-700">{asset.business_function || <span className="text-slate-400">Not set</span>}</p>
+          </div>
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Compliance Scope</span>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {asset.compliance_scope && asset.compliance_scope.length > 0 ? (
+                asset.compliance_scope.map((scope) => (
+                  <span key={scope} className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700">
+                    {scope}
+                  </span>
+                ))
+              ) : (
+                <span className="text-sm text-slate-400">None declared</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Phase 5.2: Ownership Chain ─────────────────────────────────── */}
+      <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <User className="h-4 w-4 text-blue-600" />
+          Ownership Chain
+        </h3>
+        <div className="space-y-3">
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Primary Owner</span>
+            <p className="text-sm text-slate-700">
+              {asset.primary_owner_name || (asset.primary_owner_id ? `User #${asset.primary_owner_id}` : asset.owner_name || <span className="text-slate-400">Not assigned</span>)}
+            </p>
+          </div>
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Secondary Owner</span>
+            <p className="text-sm text-slate-700">
+              {asset.secondary_owner_name || (asset.secondary_owner_id ? `User #${asset.secondary_owner_id}` : <span className="text-slate-400">Not assigned</span>)}
+            </p>
+          </div>
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Owning Team</span>
+            <p className="text-sm text-slate-700">{asset.owning_team || <span className="text-slate-400">Not assigned</span>}</p>
+          </div>
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Escalation Contact</span>
+            <p className="text-sm text-slate-700">
+              {asset.escalation_contact_name || (asset.escalation_contact_id ? `User #${asset.escalation_contact_id}` : <span className="text-slate-400">Not assigned</span>)}
+            </p>
+          </div>
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Business Owner</span>
+            <p className="text-sm text-slate-700">
+              {asset.business_owner_name || (asset.business_owner_id ? `User #${asset.business_owner_id}` : <span className="text-slate-400">Not assigned</span>)}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Phase 5.3 + 5.4 + 5.5: Lifecycle + Threat Score + Last-Seen ── */}
+      <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <TrendingUp className="h-4 w-4 text-blue-600" />
+          Lifecycle & Threat Score
+        </h3>
+        <div className="space-y-3">
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Lifecycle State</span>
+            <p className="text-sm">
+              <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold capitalize ${lifecycleCls}`}>
+                {asset.lifecycle_state || 'active'}
+              </span>
+            </p>
+          </div>
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Derived Criticality Score</span>
+            <div className="mt-1"><ScoreBadge score={asset.criticality_score} /></div>
+          </div>
+          <div>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Last Observed</span>
+            <div className="mt-1"><StaleIndicator lastSeenAt={asset.last_seen_at} /></div>
+            {asset.last_seen_source && (
+              <p className="text-xs text-slate-500">via {asset.last_seen_source}</p>
+            )}
+          </div>
+          {asset.decommissioned_at && (
+            <div>
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Decommissioned</span>
+              <p className="text-sm text-slate-700">{new Date(asset.decommissioned_at).toLocaleString()}</p>
+            </div>
+          )}
+          {asset.retirement_reason && (
+            <div>
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Retirement Reason</span>
+              <p className="text-sm text-slate-700">{asset.retirement_reason}</p>
+            </div>
+          )}
+          {asset.replacement_asset_id && (
+            <div>
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Replacement Asset</span>
+              <p className="text-sm text-slate-700">
+                <Link href={`/assets/${asset.replacement_asset_id}`} className="text-blue-600 hover:underline">
+                  {asset.replacement_asset_name || `Asset #${asset.replacement_asset_id}`}
+                </Link>
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1286,6 +1798,21 @@ function VulnerabilitiesTab({
                 <span className={`rounded-full border px-2 py-0.5 text-xs ${statusColors[(vuln.status || '').toLowerCase()] || 'border-slate-200 bg-slate-100 text-slate-600'}`}>
                   {(vuln.status || 'unknown').replace(/_/g, ' ')}
                 </span>
+                {/* Provenance chips — show how this link was created so
+                    reviewers can spot auto-linked false positives. */}
+                {vuln.link_source && vuln.link_source !== 'manual' && (
+                  <span className="rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
+                    {vuln.link_source.replace(/_/g, ' ')}
+                  </span>
+                )}
+                {vuln.auto_linked && (
+                  <span
+                    className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700"
+                    title="Linked automatically by scanner / sync / matcher — review for accuracy"
+                  >
+                    Auto
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-3">
                 <Link
@@ -1625,6 +2152,148 @@ function DeleteConfirmModal({
             Delete Asset
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Phase 5.3: Lifecycle transition modal ────────────────────────────────────
+// Encodes the FSM client-side as well so the user only sees moves the backend
+// will accept. The backend is still the source of truth and will reject any
+// invalid transition with a 400 — the client copy is purely UX.
+const ALLOWED_LIFECYCLE_MOVES: Record<string, string[]> = {
+  planned: ['active'],
+  active: ['maintenance', 'decommissioned'],
+  maintenance: ['active', 'decommissioned'],
+  decommissioned: ['retired'],
+  retired: [],
+};
+
+function LifecycleTransitionModal({
+  currentState,
+  onClose,
+  onSubmit,
+  isSaving,
+  errorMessage,
+}: {
+  currentState: string;
+  onClose: () => void;
+  onSubmit: (payload: { to_state: string; reason?: string; replacement_asset_id?: number }) => void;
+  isSaving: boolean;
+  errorMessage: string | null;
+}) {
+  const cur = (currentState || 'active').toLowerCase();
+  const options = ALLOWED_LIFECYCLE_MOVES[cur] || [];
+  const [toState, setToState] = useState<string>(options[0] || '');
+  const [reason, setReason] = useState('');
+  const [replacementId, setReplacementId] = useState<string>('');
+
+  const isTerminal = toState === 'decommissioned' || toState === 'retired';
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!toState) return;
+    const payload: { to_state: string; reason?: string; replacement_asset_id?: number } = {
+      to_state: toState,
+    };
+    if (isTerminal && reason.trim()) payload.reason = reason.trim();
+    if (isTerminal && replacementId.trim()) {
+      const id = Number(replacementId);
+      if (!Number.isNaN(id) && id > 0) payload.replacement_asset_id = id;
+    }
+    onSubmit(payload);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
+      <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-900">Change Lifecycle State</h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="mb-4 text-xs text-slate-600">
+          Current state: <span className="font-semibold capitalize text-slate-900">{cur}</span>.
+          {isTerminal && (
+            <span className="mt-1 block rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+              Moving to <span className="font-semibold capitalize">{toState}</span> will auto-close
+              any open vulnerabilities linked to this asset.
+            </span>
+          )}
+        </p>
+
+        {errorMessage && (
+          <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+            {errorMessage}
+          </div>
+        )}
+
+        {options.length === 0 ? (
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+            No further lifecycle transitions are permitted from <span className="font-semibold capitalize">{cur}</span>.
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600">Move to</label>
+              <select
+                value={toState}
+                onChange={(e) => setToState(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm capitalize text-slate-900"
+              >
+                {options.map((opt) => (
+                  <option key={opt} value={opt} className="capitalize">{opt}</option>
+                ))}
+              </select>
+            </div>
+
+            {isTerminal && (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600">Reason (optional)</label>
+                  <textarea
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Replaced by new ERP rollout"
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600">Replacement asset ID (optional)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={replacementId}
+                    onChange={(e) => setReplacementId(e.target.value)}
+                    placeholder="e.g. 482"
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving || !toState}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                Apply transition
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

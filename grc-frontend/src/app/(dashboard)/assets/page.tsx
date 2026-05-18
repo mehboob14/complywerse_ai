@@ -1,6 +1,7 @@
 ﻿'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import apiClient from '@/lib/api';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
@@ -140,6 +141,14 @@ export default function AssetsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [criticalityFilter, setCriticalityFilter] = useState<CriticalityFilter>('all');
+  // Phase 5 filters. Client-side only — the list is small enough that we
+  // don't need a round-trip per filter change, and the existing list query
+  // doesn't accept these params yet by design (default sort preserved).
+  const [lifecycleFilter, setLifecycleFilter] = useState<string>('all');
+  const [classificationFilter, setClassificationFilter] = useState<string>('all');
+  const [staleOnly, setStaleOnly] = useState<boolean>(false);
+  // Phase 7 — source filter (which cloud / scanner discovered this asset).
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<ITAsset | null>(null);
@@ -267,15 +276,51 @@ export default function AssetsPage() {
   };
 
   const filteredAssets = assets?.filter((asset: ITAsset) => {
-    const matchesSearch = 
+    const matchesSearch =
       asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       asset.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       asset.vendor?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesStatus = statusFilter === 'all' || asset.status === statusFilter;
     const matchesCriticality = criticalityFilter === 'all' || asset.criticality === criticalityFilter;
-    
-    return matchesSearch && matchesStatus && matchesCriticality;
+
+    // Phase 5 filters. NULL fields fall through unless the user has actively
+    // selected a value — assets that pre-date the migration are not excluded
+    // from the default view.
+    const matchesLifecycle =
+      lifecycleFilter === 'all' ||
+      (asset.lifecycle_state || 'active').toLowerCase() === lifecycleFilter;
+    const matchesClassification =
+      classificationFilter === 'all' ||
+      (asset.data_classification || '').toLowerCase() === classificationFilter;
+    const matchesStale = (() => {
+      if (!staleOnly) return true;
+      if (!asset.last_seen_at) return true; // never observed → stale
+      const ageDays = (Date.now() - new Date(asset.last_seen_at).getTime()) / (1000 * 60 * 60 * 24);
+      return ageDays > 30;
+    })();
+    // Phase 7 — source filter. Sources cluster naturally: "aws_inspector",
+    // "azure_defender", "gcp_scc", "nessus", "nexpose", "manual"; we group
+    // the cloud ones into "cloud" for the dropdown to keep the UI simple
+    // while still letting power users pick a specific cloud.
+    const matchesSource = (() => {
+      if (sourceFilter === 'all') return true;
+      const src = (asset.last_seen_source || 'manual').toLowerCase();
+      if (sourceFilter === 'cloud') {
+        return src === 'aws_inspector' || src === 'azure_defender' || src === 'gcp_scc';
+      }
+      return src === sourceFilter;
+    })();
+
+    return (
+      matchesSearch &&
+      matchesStatus &&
+      matchesCriticality &&
+      matchesLifecycle &&
+      matchesClassification &&
+      matchesStale &&
+      matchesSource
+    );
   });
 
   const handleDelete = (e: React.MouseEvent, id: number) => {
@@ -500,6 +545,72 @@ export default function AssetsPage() {
           multiSelect={false}
           autoApply
           placeholder="All Criticality"
+          size="md"
+        />
+
+        {/* ── Phase 5 list filters ─────────────────────────────────────── */}
+        <MultiSelectDropdown
+          title="Lifecycle"
+          items={[
+            { value: 'planned', label: 'Planned' },
+            { value: 'active', label: 'Active' },
+            { value: 'maintenance', label: 'Maintenance' },
+            { value: 'decommissioned', label: 'Decommissioned' },
+            { value: 'retired', label: 'Retired' },
+          ]}
+          selectedValues={lifecycleFilter !== 'all' ? [lifecycleFilter] : []}
+          onApply={(v) => setLifecycleFilter(v[0] || 'all')}
+          multiSelect={false}
+          autoApply
+          placeholder="All Lifecycle"
+          size="md"
+        />
+
+        <MultiSelectDropdown
+          title="Data Classification"
+          items={[
+            { value: 'public', label: 'Public' },
+            { value: 'internal', label: 'Internal' },
+            { value: 'confidential', label: 'Confidential' },
+            { value: 'restricted', label: 'Restricted' },
+          ]}
+          selectedValues={classificationFilter !== 'all' ? [classificationFilter] : []}
+          onApply={(v) => setClassificationFilter(v[0] || 'all')}
+          multiSelect={false}
+          autoApply
+          placeholder="All Classifications"
+          size="md"
+        />
+
+        <button
+          type="button"
+          onClick={() => setStaleOnly((s) => !s)}
+          className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+            staleOnly
+              ? 'border-amber-300 bg-amber-50 text-amber-700'
+              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+          }`}
+          title="Show only assets not observed for 30+ days"
+        >
+          Stale only ({'>'}30d)
+        </button>
+
+        <MultiSelectDropdown
+          title="Source"
+          items={[
+            { value: 'cloud', label: 'Any cloud (AWS/Azure/GCP)' },
+            { value: 'aws_inspector', label: 'AWS Inspector' },
+            { value: 'azure_defender', label: 'Azure Defender' },
+            { value: 'gcp_scc', label: 'GCP SCC' },
+            { value: 'nessus', label: 'Nessus' },
+            { value: 'nexpose', label: 'Nexpose' },
+            { value: 'manual', label: 'Manual / unknown' },
+          ]}
+          selectedValues={sourceFilter !== 'all' ? [sourceFilter] : []}
+          onApply={(v) => setSourceFilter(v[0] || 'all')}
+          multiSelect={false}
+          autoApply
+          placeholder="All Sources"
           size="md"
         />
 
@@ -757,13 +868,68 @@ function AssetModal({
     ip_address: initialData?.ip_address || '',
     status: (initialData?.status || 'active') as 'active' | 'inactive' | 'decommissioned',
     cde_environment: (initialData as any)?.cde_environment || false,
+    // Exposure metadata — drive the ISO 27005 derived criticality.
+    data_classification: ((initialData as any)?.data_classification || '') as '' | 'public' | 'internal' | 'confidential' | 'restricted',
+    internet_facing: Boolean((initialData as any)?.internet_facing),
+    business_function: ((initialData as any)?.business_function || '') as string,
+    network_segment: ((initialData as any)?.network_segment || '') as string,
+    // Override
+    criticality_manual_override: Boolean((initialData as any)?.criticality_manual_override),
+    criticality_override_reason: ((initialData as any)?.criticality_override_reason || '') as string,
   });
   const [customSubComponent, setCustomSubComponent] = useState('');
-  
+
+  // Catalogue of business-function categories — drives the dropdown.
+  const { data: businessFunctionsData } = useQuery<{ items: Array<{ id: string; label: string; group: string; high_impact: boolean }> }>({
+    queryKey: ['asset-business-functions'],
+    queryFn: async () => (await apiClient.get('/assets/criticality/business-functions')).data,
+  });
+  const businessFunctionGroups = useMemo(() => {
+    const groups: Record<string, Array<{ id: string; label: string; high_impact: boolean }>> = {};
+    for (const item of businessFunctionsData?.items || []) {
+      (groups[item.group] ||= []).push({ id: item.id, label: item.label, high_impact: item.high_impact });
+    }
+    return groups;
+  }, [businessFunctionsData]);
+
+  // Live derived criticality — recomputed client-side via debounced POST to
+  // /assets/criticality/preview whenever an input changes.
+  const [derivedCriticality, setDerivedCriticality] = useState<{ score: number; bucket: 'low' | 'medium' | 'high' | 'critical' } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const res = await apiClient.post('/assets/criticality/preview', {
+          confidentiality_rating: formData.confidentiality_rating,
+          integrity_rating: formData.integrity_rating,
+          availability_rating: formData.availability_rating,
+          data_classification: formData.data_classification || null,
+          internet_facing: formData.internet_facing,
+          business_function: formData.business_function || null,
+        });
+        if (!cancelled) setDerivedCriticality(res.data);
+      } catch {}
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [
+    formData.confidentiality_rating,
+    formData.integrity_rating,
+    formData.availability_rating,
+    formData.data_classification,
+    formData.internet_facing,
+    formData.business_function,
+  ]);
+
   const isEditMode = !!initialData;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Override validation — surface inline so the user fixes it before
+    // we make the round-trip and get a 400 back.
+    if (formData.criticality_manual_override && !formData.criticality_override_reason.trim()) {
+      alert('Please provide a reason for the manual criticality override.');
+      return;
+    }
     const submitData: any = {
       name: formData.name,
       description: formData.description || undefined,
@@ -771,7 +937,6 @@ function AssetModal({
       owner_id: formData.owner_id || undefined,
       vendor: formData.vendor || undefined,
       location: formData.location || undefined,
-      criticality: formData.criticality,
       confidentiality_rating: formData.confidentiality_rating,
       integrity_rating: formData.integrity_rating,
       availability_rating: formData.availability_rating,
@@ -780,6 +945,15 @@ function AssetModal({
       custodian: formData.sub_components.length > 0 ? formData.sub_components.join(', ') : undefined,
       ip_address: formData.ip_address || undefined,
       cde_environment: formData.cde_environment,
+      // Exposure metadata — feeds the derived criticality.
+      data_classification: formData.data_classification || undefined,
+      internet_facing: formData.internet_facing,
+      business_function: formData.business_function || undefined,
+      network_segment: formData.network_segment || undefined,
+      // Criticality is derived server-side unless override is on.
+      criticality_manual_override: formData.criticality_manual_override,
+      criticality: formData.criticality_manual_override ? formData.criticality : undefined,
+      criticality_override_reason: formData.criticality_manual_override ? formData.criticality_override_reason : undefined,
     };
     if (isEditMode) {
       submitData.status = formData.status;
@@ -1033,21 +1207,8 @@ function AssetModal({
                 </div>
               </div>
 
-              {/* Row: Criticality + Asset Value */}
+              {/* Row: Asset Value (criticality is now derived — see below) */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Criticality</label>
-                  <select
-                    value={formData.criticality}
-                    onChange={(e) => setFormData({ ...formData, criticality: e.target.value as typeof formData.criticality })}
-                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
-                  </select>
-                </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">Asset Value (USD)</label>
                   <div className="relative">
@@ -1061,6 +1222,16 @@ function AssetModal({
                       min="0"
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Network Segment</label>
+                  <input
+                    type="text"
+                    value={formData.network_segment}
+                    onChange={(e) => setFormData({ ...formData, network_segment: e.target.value })}
+                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                    placeholder="e.g., dmz, internal, mgmt"
+                  />
                 </div>
               </div>
 
@@ -1101,9 +1272,11 @@ function AssetModal({
                 )}
               </div>
 
-              {/* CIA Ratings */}
+              {/* CIA Ratings — primary input to derived criticality */}
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">CIA Ratings</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  CIA Ratings <span className="text-slate-400 font-normal">(highest of the three drives criticality)</span>
+                </label>
                 <div className="grid grid-cols-3 gap-3">
                   <RatingSelector
                     label="Confidentiality"
@@ -1124,6 +1297,136 @@ function AssetModal({
                     color="bg-yellow-600"
                   />
                 </div>
+              </div>
+
+              {/* Data classification + Internet-facing — secondary inputs */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mt-3 mb-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Data Classification</label>
+                  <select
+                    value={formData.data_classification}
+                    onChange={(e) => setFormData({ ...formData, data_classification: e.target.value as typeof formData.data_classification })}
+                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                  >
+                    <option value="">(none)</option>
+                    <option value="public">Public</option>
+                    <option value="internal">Internal</option>
+                    <option value="confidential">Confidential</option>
+                    <option value="restricted">Restricted</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Internet-Facing</label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, internet_facing: !formData.internet_facing })}
+                      className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+                        formData.internet_facing ? 'bg-amber-500' : 'bg-slate-200'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                          formData.internet_facing ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <span className="text-xs text-slate-700">{formData.internet_facing ? 'Exposed to the public internet' : 'Internal only'}</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Business function — structured catalogue, drives criticality boost */}
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">Business Function</label>
+                <select
+                  value={formData.business_function}
+                  onChange={(e) => setFormData({ ...formData, business_function: e.target.value })}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">(not categorised)</option>
+                  {Object.entries(businessFunctionGroups).map(([group, items]) => (
+                    <optgroup key={group} label={group}>
+                      {items.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.label}{item.high_impact ? ' ⬆ boosts criticality' : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+
+              {/* Derived criticality — live preview + override */}
+              <div className="rounded-lg border border-slate-200 bg-gradient-to-br from-slate-50 to-blue-50/40 p-3 mb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                      System-calculated criticality
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      ISO 27005: max(C, I, A) + adjustments for exposure, data class, business function.
+                    </p>
+                  </div>
+                  {derivedCriticality && (
+                    <div className="text-right">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold uppercase ${
+                        derivedCriticality.bucket === 'critical' ? 'bg-rose-100 text-rose-700' :
+                        derivedCriticality.bucket === 'high' ? 'bg-orange-100 text-orange-700' :
+                        derivedCriticality.bucket === 'medium' ? 'bg-amber-100 text-amber-700' :
+                        'bg-slate-100 text-slate-700'
+                      }`}>
+                        {derivedCriticality.bucket}
+                      </span>
+                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">score {derivedCriticality.score} / 10</p>
+                    </div>
+                  )}
+                </div>
+                <label className="mt-3 flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.criticality_manual_override}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      criticality_manual_override: e.target.checked,
+                      // Seed the override with the derived bucket so the dropdown isn't empty.
+                      criticality: (e.target.checked && derivedCriticality ? derivedCriticality.bucket : formData.criticality),
+                    })}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-xs text-slate-700">
+                    Override the calculated criticality
+                    <span className="text-slate-400"> — requires a reason for the audit trail</span>
+                  </span>
+                </label>
+                {formData.criticality_manual_override && (
+                  <div className="mt-2 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-0.5">Override bucket</label>
+                      <select
+                        value={formData.criticality}
+                        onChange={(e) => setFormData({ ...formData, criticality: e.target.value as typeof formData.criticality })}
+                        className="w-full rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-0.5">Reason *</label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.criticality_override_reason}
+                        onChange={(e) => setFormData({ ...formData, criticality_override_reason: e.target.value })}
+                        className="w-full rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                        placeholder="e.g. compensating controls in place"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

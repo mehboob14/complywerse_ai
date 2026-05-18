@@ -262,6 +262,10 @@ def get_assessment(
                 "file_name": ev.file_name,
                 "file_type": ev.file_type,
                 "file_size": ev.file_size,
+                # Surface the on-disk path so the in-browser evidence
+                # viewer can fetch + render the file. Stored privately
+                # but served via the auth-gated /uploads mount.
+                "file_path": ev.file_path,
             })
 
         qr_data.append({

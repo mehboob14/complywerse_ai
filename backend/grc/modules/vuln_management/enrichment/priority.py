@@ -51,25 +51,42 @@ def compute_composite_priority(
     epss_score: Optional[float] = None,
     kev_flag: Optional[bool] = None,
     asset_criticality: Optional[str] = None,
+    asset_criticality_score: Optional[float] = None,
 ) -> Optional[float]:
     """Compute the 0-10 priority score from enrichment fields.
 
     Returns None when every signal is missing — that lets the caller leave
     `composite_priority` as NULL on rows we have no data for, rather than
     storing a misleading 0.0.
+
+    Asset-criticality input precedence (Phase 5.4):
+        1. `asset_criticality_score` (numeric 0-10) — preferred when set.
+        2. `asset_criticality` (text: low/medium/high/critical) — fallback
+           for rows whose linked asset hasn't had its derived score computed.
+        3. Default of 5.0 (medium) when neither is supplied.
     """
     # Skip rows where nothing is known — keeps the column honest.
-    if cvss_score is None and epss_score is None and not kev_flag and not asset_criticality:
+    if (
+        cvss_score is None
+        and epss_score is None
+        and not kev_flag
+        and not asset_criticality
+        and asset_criticality_score is None
+    ):
         return None
 
     cvss_component = WEIGHT_CVSS * _safe_float(cvss_score)
     epss_component = WEIGHT_EPSS * (_safe_float(epss_score) * 10.0)
     kev_component = WEIGHT_KEV * (10.0 if kev_flag else 0.0)
 
-    asset_score = _ASSET_CRITICALITY_SCORE.get(
-        (asset_criticality or "").lower().strip(),
-        _DEFAULT_ASSET_SCORE,
-    )
+    if asset_criticality_score is not None:
+        # Clamp defensively — caller may pass anything.
+        asset_score = max(0.0, min(10.0, _safe_float(asset_criticality_score)))
+    else:
+        asset_score = _ASSET_CRITICALITY_SCORE.get(
+            (asset_criticality or "").lower().strip(),
+            _DEFAULT_ASSET_SCORE,
+        )
     asset_component = WEIGHT_ASSET * asset_score
 
     priority = cvss_component + epss_component + kev_component + asset_component

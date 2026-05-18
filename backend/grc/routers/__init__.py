@@ -24,6 +24,10 @@ from .nca_vuln_router import router as nca_vuln_router
 from .nca_container_router import router as nca_container_router
 from .nca_templates_router import router as nca_templates_router
 from .nca_kpi_router import router as nca_kpi_router
+# Phase 9 — cross-domain power search + exception-aging analytics.
+from .search_router import router as search_router
+# Teams — admin CRUD for org teams used by the asset ownership-chain dropdown.
+from .teams_router import router as teams_router
 
 __all__ = [
     "auth_router",
@@ -46,4 +50,6 @@ __all__ = [
     "sso_router",
     "entra_router",
     "artifacts_router",
+    "search_router",
+    "teams_router",
 ]

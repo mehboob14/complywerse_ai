@@ -181,7 +181,221 @@ _COLUMN_ADDS = [
     ("grc_users", "locked_until", "TIMESTAMP", "ix_grc_users_locked_until"),
     ("grc_users", "last_activity_at", "TIMESTAMP", None),
     ("grc_users", "password_changed_at", "TIMESTAMP", None),
+    # Phase 5 — Asset Operational Context. All additive, no existing read
+    # path depends on these. Defaults chosen so behavior is unchanged until
+    # a writer populates the column.
+    # 5.1 Exposure metadata
+    ("grc_it_assets", "internet_facing", "BOOLEAN DEFAULT FALSE",
+     "ix_it_asset_internet_facing"),
+    ("grc_it_assets", "network_segment", "VARCHAR(100)", None),
+    ("grc_it_assets", "data_classification", "VARCHAR(50)",
+     "ix_it_asset_data_classification"),
+    ("grc_it_assets", "business_function", "VARCHAR(100)", None),
+    ("grc_it_assets", "compliance_scope", "JSON DEFAULT '[]'::json", None),
+    # 5.2 Ownership chain — FK constraint not added by ALTER (just the
+    # column). New tenant DBs get the FK via create_all; existing ones treat
+    # these as plain INTEGER references.
+    ("grc_it_assets", "primary_owner_id", "INTEGER", None),
+    ("grc_it_assets", "secondary_owner_id", "INTEGER", None),
+    ("grc_it_assets", "owning_team", "VARCHAR(100)", None),
+    # FK to grc_teams.id; coexists with the legacy `owning_team` text label.
+    # New writers fill the FK; old rows keep the text. The detail response
+    # derives a single name from whichever is populated.
+    ("grc_it_assets", "owning_team_id", "INTEGER", "ix_it_asset_owning_team_id"),
+    ("grc_it_assets", "escalation_contact_id", "INTEGER", None),
+    ("grc_it_assets", "business_owner_id", "INTEGER", None),
+    # 5.3 Lifecycle state machine
+    ("grc_it_assets", "lifecycle_state", "VARCHAR(30) DEFAULT 'active'",
+     "ix_it_asset_lifecycle_state"),
+    ("grc_it_assets", "decommissioned_at", "TIMESTAMP", None),
+    ("grc_it_assets", "retirement_reason", "TEXT", None),
+    ("grc_it_assets", "replacement_asset_id", "INTEGER", None),
+    # 5.4 Derived criticality score
+    ("grc_it_assets", "criticality_score", "DOUBLE PRECISION",
+     "ix_it_asset_criticality_score"),
+    # 5.5 Last-seen tracking
+    ("grc_it_assets", "last_seen_at", "TIMESTAMP",
+     "ix_it_asset_last_seen_at"),
+    ("grc_it_assets", "last_seen_source", "VARCHAR(50)", None),
+    # Phase 6 — Vendor Patch Intelligence (MSRC first). All nullable so the
+    # column adds are no-ops for existing rows; populated on demand via
+    # /vulnerabilities/{id}/sync-patch-info, on ingest via Celery, and by
+    # the daily MSRC refresh task. `psirt_source` distinguishes the data
+    # provider so future PSIRT connectors (Red Hat, Cisco) can share the
+    # same columns without rewriting the schema.
+    ("grc_vulnerabilities", "patch_references", "JSON DEFAULT '[]'::json", None),
+    ("grc_vulnerabilities", "vendor_advisory_ids", "JSON DEFAULT '[]'::json", None),
+    ("grc_vulnerabilities", "remediation_guidance", "TEXT", None),
+    ("grc_vulnerabilities", "psirt_synced_at", "TIMESTAMP",
+     "ix_vuln_psirt_synced_at"),
+    ("grc_vulnerabilities", "psirt_source", "VARCHAR(50)",
+     "ix_vuln_psirt_source"),
+    # Phase 8 — Exception Workflow state machine. Sits alongside the
+    # legacy is_exception/exception_reason/exception_approved_by/
+    # exception_expiry columns; new writers fill both for backward compat.
+    ("grc_vulnerabilities", "exception_status", "VARCHAR(20) DEFAULT 'none'",
+     "ix_vuln_exception_status"),
+    ("grc_vulnerabilities", "exception_requested_by_id", "INTEGER", None),
+    ("grc_vulnerabilities", "exception_requested_at", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "exception_justification", "TEXT", None),
+    ("grc_vulnerabilities", "exception_compensating_controls",
+     "JSON DEFAULT '[]'::json", None),
+    ("grc_vulnerabilities", "exception_approved_at", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "exception_expires_at", "TIMESTAMP",
+     "ix_vuln_exception_expires_at"),
+    ("grc_vulnerabilities", "exception_denial_reason", "TEXT", None),
+    ("grc_vulnerabilities", "exception_revoked_by_id", "INTEGER", None),
+    ("grc_vulnerabilities", "exception_revoked_at", "TIMESTAMP", None),
+    ("grc_vulnerabilities", "exception_revocation_reason", "TEXT", None),
+    ("grc_vulnerabilities", "exception_metadata",
+     "JSON DEFAULT '{}'::json", None),
+    # Gap-close 2026-05-12 — VulnerabilityAssetLink provenance. `link_source`
+    # records which code path created the link (manual / scanner /
+    # cpe_match / cloud_sync / nca_bridge). `auto_linked` is the binary
+    # "automation created this" flag used by the Auto badge in the UI.
+    # Default values are chosen so existing rows look like manually created
+    # links — the UI hides the Auto badge for `auto_linked=False`.
+    ("grc_vulnerability_asset_links", "link_source",
+     "VARCHAR(50) DEFAULT 'manual'", "ix_vuln_asset_link_source"),
+    ("grc_vulnerability_asset_links", "auto_linked",
+     "BOOLEAN DEFAULT FALSE", "ix_vuln_asset_link_auto"),
+    # `lead_user_id` lives on the Team model; the table is auto-created via
+    # Base.metadata.create_all so no entries are needed for grc_teams /
+    # grc_team_members. This is the only ALTER needed for the Teams feature:
+    # the ITAsset.owning_team_id FK above.
+    # Committee charter — structured sections JSON for uploaded charters
+    # so they render in the same UI as AI-drafted ones.
+    ("grc_committee_charters", "sections_json", "JSON", None),
+    # External connector framework — extends IntegrationConnection beyond
+    # the original Nessus/Nexpose scope to cover ticketing, SIEM, pen-test,
+    # collaboration, and transcription connectors.
+    ("grc_integration_connections", "category",
+     "VARCHAR(30) DEFAULT 'vuln_scanner'", "ix_connection_category"),
+    ("grc_integration_connections", "encrypted_credentials", "TEXT", None),
+    ("grc_integration_connections", "oauth_tokens", "TEXT", None),
+    ("grc_integration_connections", "provider_config", "JSON", None),
+    # ITAsset — manual criticality override audit columns. `criticality_score`
+    # is always system-computed; the textual `criticality` bucket can be
+    # overridden by a user with a reason captured here for the audit trail.
+    ("grc_it_assets", "criticality_manual_override", "BOOLEAN DEFAULT FALSE", None),
+    ("grc_it_assets", "criticality_override_reason", "TEXT", None),
 ]
+
+
+def _backfill_framework_assessment_register_type(engine: Engine) -> None:
+    """One-shot data backfill.
+
+    Earlier code in `framework_risk_assessments.py:move_framework_question_to_risk_register`
+    tagged every risk that came from a framework risk assessment with
+    `register_type = "Framework Assessment #<assessment_id>"` — a value
+    that doesn't match the framework's short_code, so:
+
+      • the Risk Register filter dropdown showed "Framework Assessment #42"
+        as an option rather than "SWIFT" / "PCI-DSS" / etc.,
+      • the Auditor Portal `/risks` endpoint, which filters by
+        `register_type == framework.short_code`, returned an empty list.
+
+    The writer is now fixed (uses the framework's short_code or name).
+    This backfill re-tags the historical rows so they show up consistently
+    in both the filter dropdown and the auditor portal.
+
+    Idempotent: a row that already has a non-legacy `register_type` is
+    skipped. Safe on every restart — runs once per engine via the
+    `_ensure_for_engine` memoisation.
+    """
+    try:
+        inspector = inspect(engine)
+        # Quick guards — bail if the schema isn't ready.
+        if not inspector.has_table("grc_risks"):
+            return
+        if not inspector.has_table("grc_framework_risk_assessments"):
+            return
+        risk_cols = {c["name"] for c in inspector.get_columns("grc_risks")}
+        if "register_type" not in risk_cols:
+            return
+
+        with engine.begin() as conn:
+            rows = conn.execute(text(
+                """
+                SELECT id, register_type
+                FROM grc_risks
+                WHERE register_type LIKE 'Framework Assessment #%'
+                """
+            )).fetchall()
+
+            if not rows:
+                return
+
+            for risk_id, register_type in rows:
+                # Parse the assessment id out of the legacy tag.
+                try:
+                    assessment_id = int(str(register_type).rsplit("#", 1)[-1])
+                except (ValueError, IndexError):
+                    continue
+
+                assessment_row = conn.execute(text(
+                    """
+                    SELECT a.id, a.framework_id, a.uploaded_framework_id,
+                           f.short_code AS framework_short_code,
+                           f.name AS framework_name,
+                           uf.name AS uploaded_framework_name
+                    FROM grc_framework_risk_assessments a
+                    LEFT JOIN grc_frameworks f ON f.id = a.framework_id
+                    LEFT JOIN grc_uploaded_frameworks uf ON uf.id = a.uploaded_framework_id
+                    WHERE a.id = :aid
+                    """
+                ), {"aid": assessment_id}).fetchone()
+                if not assessment_row:
+                    continue
+
+                short_code = (assessment_row[3] or "").strip() if assessment_row[3] else ""
+                fw_name = (assessment_row[4] or "").strip() if assessment_row[4] else ""
+                uf_name = (assessment_row[5] or "").strip() if assessment_row[5] else ""
+                new_register_type = short_code or fw_name or uf_name
+                if not new_register_type:
+                    continue
+
+                conn.execute(text(
+                    """
+                    UPDATE grc_risks
+                    SET register_type = :rt,
+                        source_type = COALESCE(source_type, 'assessment'),
+                        source_reference = COALESCE(source_reference, :sref)
+                    WHERE id = :rid
+                    """
+                ), {
+                    "rt": new_register_type,
+                    "sref": f"framework_assessment:{assessment_id}",
+                    "rid": risk_id,
+                })
+            logger.info(
+                "Backfilled framework_assessment register_type for %d legacy risk row(s) on %s",
+                len(rows), getattr(engine.url, "database", "?"),
+            )
+    except Exception:
+        logger.exception("Failed framework_assessment register_type backfill")
+
+
+def _ensure_column_nullable(engine: Engine, table: str, column: str) -> None:
+    """Drop NOT NULL on an existing column. Idempotent — a column that's
+    already nullable raises no error on Postgres. Used by the connector
+    framework migration which relaxed `credential_env_prefix` from
+    NOT NULL to nullable for non-scanner integrations.
+    """
+    try:
+        inspector = inspect(engine)
+        if not inspector.has_table(table):
+            return
+        cols = {c["name"]: c for c in inspector.get_columns(table)}
+        if column not in cols:
+            return
+        if cols[column].get("nullable", True):
+            return
+        with engine.begin() as conn:
+            conn.execute(text(f"ALTER TABLE {table} ALTER COLUMN {column} DROP NOT NULL"))
+        logger.info("Relaxed NOT NULL on %s.%s on engine %s", table, column, engine.url.database)
+    except Exception:
+        logger.exception("Failed to relax NOT NULL on %s.%s", table, column)
 
 
 def _ensure_for_engine(engine: Engine) -> None:
@@ -207,6 +421,18 @@ def _ensure_for_engine(engine: Engine) -> None:
             all_ok = all_ok and ok
             if ok and index_name:
                 _ensure_index(engine, table=table, column=column, index_name=index_name)
+
+        # Relax NOT NULL on columns the connector framework needs to leave
+        # empty for non-scanner providers. Idempotent.
+        _ensure_column_nullable(engine, "grc_integration_connections", "credential_env_prefix")
+
+        # One-shot data backfill: re-tag legacy "Framework Assessment #<id>"
+        # risks with their actual framework short_code/name so the Risk
+        # Register filter dropdown and the Auditor Portal `/risks` view both
+        # find them. Idempotent — rows already migrated have a non-legacy
+        # `register_type` and are skipped on subsequent runs.
+        _backfill_framework_assessment_register_type(engine)
+
         # Only mark the engine as "ensured" if every column add succeeded (or
         # was a no-op) — otherwise let a later request retry, since the
         # underlying issue might be transient.

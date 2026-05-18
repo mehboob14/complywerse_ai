@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { committeeApi, apiClient, frameworkUploadApi } from '@/lib/api';
@@ -81,6 +81,10 @@ interface Charter {
   file_name?: string;
   file_type?: string;
   file_size?: number;
+  // Populated by the upload-new endpoint or any path that parses
+  // structured sections. Frontend prefers this when present so an
+  // uploaded charter renders the same way an AI-drafted one does.
+  sections?: CharterSection[] | null;
 }
 
 interface Meeting {
@@ -501,6 +505,33 @@ export default function CommitteeDetailPage() {
     },
   });
 
+  // "Upload Charter" — create a brand-new charter directly from a PDF /
+  // DOCX / TXT file. Single round-trip: backend extracts the text, saves
+  // the file, returns the new charter row. Placed BEFORE "AI Generate
+  // Charter" because importing an existing charter is the more common
+  // path for customers who already have one.
+  const uploadNewCharterMutation = useMutation({
+    mutationFn: (file: File) =>
+      committeeApi.uploadNewCharter(committeeId, file, { status: 'draft' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['committee-charters', committeeId] });
+      setAiError(null);
+    },
+    onError: (error: any) => {
+      const msg = error?.response?.data?.detail || error?.message || 'Failed to upload charter';
+      setAiError(msg);
+    },
+  });
+
+  // Hidden file input bound to the Upload button.
+  const uploadCharterInputRef = useRef<HTMLInputElement | null>(null);
+  const onPickUploadCharterFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadNewCharterMutation.mutate(file);
+    // Reset so picking the same file twice still fires onChange.
+    if (e.target) e.target.value = '';
+  };
+
   const aiGenerateMutation = useMutation({
     mutationFn: () => committeeApi.aiGenerateCharter(committeeId, selectedFrameworkIds.length > 0 ? selectedFrameworkIds : undefined),
     onSuccess: (response) => {
@@ -893,24 +924,54 @@ export default function CommitteeDetailPage() {
 
       {activeTab === 'charters' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-black">Committee Charters</h2>
-            <button
-              onClick={() => {
-                setAiError(null);
-                setSelectedFrameworkIds([]);
-                setShowFrameworkSelectionModal(true);
-              }}
-              disabled={aiGenerateMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-all"
-            >
-              {aiGenerateMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              {aiGenerateMutation.isPending ? 'Analyzing Frameworks...' : 'AI Generate Charter'}
-            </button>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-lg font-semibold text-black">Committee Charters</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Already have a charter document? <strong>Upload</strong> it. Need a draft from
+                scratch? <strong>AI Generate</strong> creates one from your frameworks.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Hidden file input — the Upload button below triggers it. */}
+              <input
+                ref={uploadCharterInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,text/plain,text/markdown"
+                onChange={onPickUploadCharterFile}
+                className="hidden"
+              />
+              {/* Upload Charter — comes BEFORE AI Generate so customers
+                  who already have a document see the import path first. */}
+              <button
+                onClick={() => uploadCharterInputRef.current?.click()}
+                disabled={uploadNewCharterMutation.isPending}
+                className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-all"
+              >
+                {uploadNewCharterMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                {uploadNewCharterMutation.isPending ? 'Uploading…' : 'Upload Charter'}
+              </button>
+              <button
+                onClick={() => {
+                  setAiError(null);
+                  setSelectedFrameworkIds([]);
+                  setShowFrameworkSelectionModal(true);
+                }}
+                disabled={aiGenerateMutation.isPending}
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-all"
+              >
+                {aiGenerateMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {aiGenerateMutation.isPending ? 'Analyzing Frameworks...' : 'AI Generate Charter'}
+              </button>
+            </div>
           </div>
 
           {aiError && (
@@ -1168,8 +1229,18 @@ export default function CommitteeDetailPage() {
                       </button>
                     </div>
                   </div>
-                  <p className="text-black mt-4 line-clamp-2">{charter.content}</p>
-                  
+                  {/* Charter body — when the row has structured sections
+                      (uploaded + parsed, or AI-saved) render them as
+                      collapsible cards like the AI panel. Otherwise fall
+                      back to a clamped preview of the plain content. */}
+                  {charter.sections && charter.sections.length > 0 ? (
+                    <CharterSectionsView sections={charter.sections} />
+                  ) : (
+                    charter.content && (
+                      <p className="text-black mt-4 line-clamp-2">{charter.content}</p>
+                    )
+                  )}
+
                   {charter.file_name && (
                     <div className="flex items-center gap-3 mt-4 p-3 bg-slate-100 rounded-lg">
                       <Paperclip className="h-4 w-4 text-primary-400" />
@@ -1982,6 +2053,67 @@ export default function CommitteeDetailPage() {
           </div>
         </form>
       </RightSlidePanel>
+    </div>
+  );
+}
+
+// ── CharterSectionsView ──────────────────────────────────────────────────────
+// Renders the structured sections (from upload-parse or AI-generate) as
+// expandable cards — same visual language as the AI panel above, so an
+// uploaded charter and an AI-drafted one look identical to the reader.
+
+function CharterSectionsView({ sections }: { sections: CharterSection[] }) {
+  const [expanded, setExpanded] = useState<Set<number>>(new Set([0]));
+  const toggle = (i: number) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
+  };
+  return (
+    <div className="mt-4 space-y-2">
+      {sections.map((s, i) => {
+        const isOpen = expanded.has(i);
+        return (
+          <div key={i} className="rounded-lg border border-slate-200 bg-white">
+            <button
+              type="button"
+              onClick={() => toggle(i)}
+              className="w-full px-3 py-2 flex items-center justify-between gap-2 hover:bg-slate-50"
+            >
+              <span className="text-sm font-medium text-slate-800 truncate text-left">
+                {i + 1}. {s.title}
+              </span>
+              {isOpen ? (
+                <ChevronDown className="h-4 w-4 text-slate-400" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-slate-400" />
+              )}
+            </button>
+            {isOpen && (
+              <div className="px-3 pb-3 border-t border-slate-100 pt-2">
+                <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                  {s.content}
+                </p>
+                {s.framework_references && s.framework_references.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {s.framework_references.map((ref) => (
+                      <span
+                        key={ref}
+                        className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700"
+                      >
+                        {ref}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

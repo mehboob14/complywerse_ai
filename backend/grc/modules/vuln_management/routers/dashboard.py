@@ -12,7 +12,10 @@ from ....models import (
     NormalizedControl, InternalControl, VulnerabilityMitigation
 )
 
-RESOLVED_STATUSES = ["resolved", "remediated", "verified", "closed", "accepted", "false_positive"]
+RESOLVED_STATUSES = [
+    "resolved", "remediated", "verified", "closed",
+    "accepted", "false_positive", "auto_closed_decommissioned",
+]
 from ....schemas import (
     VulnerabilityDashboard, OverdueVulnerabilityResponse, AssetExposureResponse
 )

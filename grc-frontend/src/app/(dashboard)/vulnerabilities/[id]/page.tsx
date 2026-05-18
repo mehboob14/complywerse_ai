@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { vulnManagementApi, assetsApi, ermApi } from '@/lib/api';
+import { vulnManagementApi, assetsApi, ermApi, apiClient } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { InlineLinkPicker, PageLoader } from '@/components/ui';
 import {
@@ -21,6 +21,7 @@ import {
   X,
   Trash2,
   FileText,
+  FileCheck,
   Link as LinkIcon,
   Calendar,
   User,
@@ -67,6 +68,28 @@ interface VulnerabilityDetail {
   nvd_last_synced_at?: string;
   exploit_references?: string[];
   composite_priority?: number;
+  // Phase 6 — Vendor patch intelligence. Same nullable discipline: the
+  // Patch Information section hides itself when nothing has been synced.
+  patch_references?: Array<{ source: string; id: string; url: string; type: string }>;
+  vendor_advisory_ids?: string[];
+  remediation_guidance?: string;
+  psirt_synced_at?: string;
+  psirt_source?: string;
+  // Phase 8 — Exception workflow. Defaults to "none"; richer than the
+  // legacy is_exception/exception_reason/exception_approved_by/
+  // exception_expiry fields above, which are kept in sync server-side.
+  exception_status?: 'none' | 'requested' | 'approved' | 'denied' | 'expired' | 'revoked' | string | null;
+  exception_requested_by_id?: number | null;
+  exception_requested_at?: string | null;
+  exception_justification?: string | null;
+  exception_compensating_controls?: string[] | null;
+  exception_approved_at?: string | null;
+  exception_expires_at?: string | null;
+  exception_denial_reason?: string | null;
+  exception_revoked_by_id?: number | null;
+  exception_revoked_at?: string | null;
+  exception_revocation_reason?: string | null;
+  exception_metadata?: Record<string, unknown> | null;
 }
 
 interface Mitigation {
@@ -87,6 +110,9 @@ interface AssetLink {
   asset_name: string;
   asset_type?: string;
   relationship_type?: string;
+  // Provenance — Track B / Phase 4. Drives the Auto badge + source chip.
+  link_source?: string | null;
+  auto_linked?: boolean | null;
 }
 
 interface ControlLink {
@@ -315,6 +341,20 @@ export default function VulnerabilityDetailPage() {
       return response.data as VulnerabilityDetail;
     },
   });
+
+  // Phase 8 — the Exception Workflow panel needs the current user's ID to
+  // enforce separation of duties client-side (the backend is the real gate,
+  // but disabling the Approve/Deny buttons up front gives a cleaner UX than
+  // a 400 after the click). Cached across the session.
+  const { data: currentUser } = useQuery({
+    queryKey: ['current-user-id'],
+    queryFn: async () => {
+      const response = await apiClient.get('/auth/me');
+      return response.data as { id: number };
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+  const currentUserId = currentUser?.id ?? null;
 
   const { data: mitigations } = useQuery({
     queryKey: ['vuln-mitigations', vulnId],
@@ -703,6 +743,14 @@ export default function VulnerabilityDetailPage() {
                 empty so the Enrich button is always reachable for any vuln
                 with a CVE-ID. */}
             <ThreatIntelPanel vulnerability={vulnerability} />
+
+            {/* Phase 8 — Exception Workflow. Renders for every vuln; the
+                panel itself encodes state-aware UI for request / approve /
+                deny / revoke / expired actions. */}
+            <ExceptionWorkflowPanel
+              vulnerability={vulnerability}
+              currentUserId={currentUserId}
+            />
           </div>
         </div>
       )}
@@ -784,6 +832,7 @@ export default function VulnerabilityDetailPage() {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Asset</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Type</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Relationship</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Provenance</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600"></th>
                   </tr>
                 </thead>
@@ -793,6 +842,26 @@ export default function VulnerabilityDetailPage() {
                       <td className="px-4 py-3 cw-text">{link.asset_name}</td>
                       <td className="px-4 py-3 text-slate-600">{link.asset_type || '-'}</td>
                       <td className="px-4 py-3 text-slate-600">{link.relationship_type || 'affected'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          {link.link_source && link.link_source !== 'manual' && (
+                            <span className="rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
+                              {link.link_source.replace(/_/g, ' ')}
+                            </span>
+                          )}
+                          {link.auto_linked && (
+                            <span
+                              className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700"
+                              title="Linked automatically by scanner / sync / matcher — review for accuracy"
+                            >
+                              Auto
+                            </span>
+                          )}
+                          {!link.link_source && !link.auto_linked && (
+                            <span className="text-[10px] text-slate-400">manual</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3">
                         {canDelete && (
                         <button
@@ -1475,6 +1544,15 @@ function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetai
     },
   });
 
+  // Phase 6 — vendor patch intelligence sync. Independent mutation so the
+  // operator can refresh KB articles without re-pulling EPSS/KEV.
+  const syncPatchMutation = useMutation({
+    mutationFn: () => vulnManagementApi.vulnerabilities.syncPatchInfo(vulnerability.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vulnerability', vulnerability.id] });
+    },
+  });
+
   // If there's no CVE-ID, enrichment can't do anything — skip the whole
   // panel. Keeps the right column compact for manual/internal findings.
   if (!vulnerability.cve_id) return null;
@@ -1485,8 +1563,23 @@ function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetai
     !!vulnerability.nvd_last_synced_at ||
     (vulnerability.exploit_references && vulnerability.exploit_references.length > 0);
 
+  const hasPatchIntel =
+    (vulnerability.patch_references && vulnerability.patch_references.length > 0) ||
+    (vulnerability.vendor_advisory_ids && vulnerability.vendor_advisory_ids.length > 0) ||
+    !!vulnerability.remediation_guidance ||
+    !!vulnerability.psirt_synced_at;
+
   const fmt = (iso?: string) =>
     iso ? new Date(iso).toLocaleDateString() : '—';
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard API can be denied in some browser sandboxes — silently
+      // fall through. Operators can always copy from the visible badge.
+    }
+  };
 
   return (
     <div className="cw-card p-4">
@@ -1604,6 +1697,589 @@ function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetai
             </div>
           )}
         </dl>
+      )}
+
+      {/* ── Phase 6: Vendor Patch Intelligence ─────────────────────────── */}
+      <div className="mt-4 pt-3 border-t border-slate-200">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600 flex items-center gap-1.5">
+            <FileCheck className="h-3.5 w-3.5 text-slate-500" />
+            Patch Information
+            {vulnerability.psirt_source && (
+              <span className="ml-1 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
+                {vulnerability.psirt_source}
+              </span>
+            )}
+          </h3>
+          <button
+            onClick={() => syncPatchMutation.mutate()}
+            disabled={syncPatchMutation.isPending}
+            className="inline-flex items-center gap-1.5 text-xs rounded-md border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            title="Pull KB articles + remediation from Microsoft Security Response Center"
+          >
+            {syncPatchMutation.isPending ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <RefreshCw size={12} />
+            )}
+            {hasPatchIntel ? 'Re-sync' : 'Sync patch info'}
+          </button>
+        </div>
+
+        {!hasPatchIntel && !syncPatchMutation.isSuccess && (
+          <p className="text-xs text-slate-500 italic">
+            Click <strong>Sync patch info</strong> to ask MSRC for KB articles
+            and vendor remediation for {vulnerability.cve_id}.
+          </p>
+        )}
+
+        {hasPatchIntel && (
+          <dl className="space-y-2.5">
+            {vulnerability.patch_references && vulnerability.patch_references.length > 0 && (
+              <div>
+                <dt className="text-sm text-slate-600 mb-1">KB Articles & Patches</dt>
+                <dd className="flex flex-wrap gap-1.5">
+                  {vulnerability.patch_references.slice(0, 12).map((ref, idx) => (
+                    <a
+                      key={`${ref.source}-${ref.id}-${idx}`}
+                      href={ref.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={ref.url}
+                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium transition-colors ${
+                        ref.type === 'kb'
+                          ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      <ExternalLink size={10} />
+                      {ref.id}
+                    </a>
+                  ))}
+                  {vulnerability.patch_references.length > 12 && (
+                    <span className="text-xs text-slate-500 self-center">
+                      + {vulnerability.patch_references.length - 12} more
+                    </span>
+                  )}
+                </dd>
+              </div>
+            )}
+
+            {vulnerability.vendor_advisory_ids && vulnerability.vendor_advisory_ids.length > 0 && (
+              <div>
+                <dt className="text-sm text-slate-600 mb-1">Vendor Advisories</dt>
+                <dd className="flex flex-wrap gap-1.5">
+                  {vulnerability.vendor_advisory_ids.map((adv) => (
+                    <span
+                      key={adv}
+                      className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800"
+                    >
+                      {adv}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+            )}
+
+            {vulnerability.remediation_guidance && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <dt className="text-sm text-slate-600">Remediation Guidance</dt>
+                  <button
+                    onClick={() => copyToClipboard(vulnerability.remediation_guidance || '')}
+                    className="text-[10px] text-slate-500 hover:text-slate-700"
+                    title="Copy remediation text to clipboard"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <dd className="rounded-md border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 whitespace-pre-wrap">
+                  {vulnerability.remediation_guidance.length > 600
+                    ? vulnerability.remediation_guidance.slice(0, 600) + '…'
+                    : vulnerability.remediation_guidance}
+                </dd>
+              </div>
+            )}
+
+            {vulnerability.psirt_synced_at && (
+              <div>
+                <dt className="text-sm text-slate-600">Last PSIRT Sync</dt>
+                <dd className="text-xs text-slate-500">
+                  {new Date(vulnerability.psirt_synced_at).toLocaleString()}
+                </dd>
+              </div>
+            )}
+          </dl>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// ExceptionWorkflowPanel  (Phase 8)
+// ---------------------------------------------------------------------------
+// State-aware UI for the request → approve|deny → revoke|expired FSM. The
+// backend is the source of truth and rejects invalid moves with a 400, but
+// we mirror the FSM client-side so the operator only sees the actions that
+// are currently legal. Separation of duties is enforced server-side, so the
+// requester cannot also approve or deny — we disable those buttons locally
+// for the requester to keep the UX honest.
+
+const EXCEPTION_STATE_STYLES: Record<string, string> = {
+  none: 'border-slate-200 bg-slate-50 text-slate-600',
+  requested: 'border-amber-200 bg-amber-50 text-amber-800',
+  approved: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  denied: 'border-rose-200 bg-rose-50 text-rose-800',
+  expired: 'border-orange-200 bg-orange-50 text-orange-800',
+  revoked: 'border-slate-300 bg-slate-100 text-slate-700',
+};
+
+function ExceptionWorkflowPanel({
+  vulnerability,
+  currentUserId,
+}: {
+  vulnerability: VulnerabilityDetail;
+  currentUserId: number | null;
+}) {
+  const qc = useQueryClient();
+  const state = (vulnerability.exception_status || 'none') as string;
+  const isRequester =
+    currentUserId !== null &&
+    vulnerability.exception_requested_by_id !== null &&
+    vulnerability.exception_requested_by_id === currentUserId;
+
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activeAction, setActiveAction] = useState<
+    'request' | 'approve' | 'deny' | 'revoke' | null
+  >(null);
+  const [justification, setJustification] = useState('');
+  const [compensatingControls, setCompensatingControls] = useState('');
+  const [requestedExpiry, setRequestedExpiry] = useState('');
+  const [approvalComment, setApprovalComment] = useState('');
+  const [approvalExpiry, setApprovalExpiry] = useState('');
+  const [denialReason, setDenialReason] = useState('');
+  const [revocationReason, setRevocationReason] = useState('');
+
+  const resetForm = () => {
+    setErrorMessage(null);
+    setActiveAction(null);
+    setJustification('');
+    setCompensatingControls('');
+    setRequestedExpiry('');
+    setApprovalComment('');
+    setApprovalExpiry('');
+    setDenialReason('');
+    setRevocationReason('');
+  };
+
+  const onError = (e: unknown) => {
+    const msg =
+      (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+      (e as { message?: string })?.message ||
+      'Action failed';
+    setErrorMessage(msg);
+  };
+
+  const requestMutation = useMutation({
+    mutationFn: () =>
+      vulnManagementApi.vulnerabilities.exceptionRequest(vulnerability.id, {
+        justification: justification.trim(),
+        compensating_controls: compensatingControls
+          .split(',')
+          .map((c) => c.trim())
+          .filter(Boolean),
+        expires_at: requestedExpiry ? new Date(requestedExpiry).toISOString() : undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vulnerability', vulnerability.id] });
+      resetForm();
+    },
+    onError,
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: () =>
+      vulnManagementApi.vulnerabilities.exceptionApprove(vulnerability.id, {
+        comment: approvalComment.trim() || undefined,
+        expires_at: approvalExpiry ? new Date(approvalExpiry).toISOString() : undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vulnerability', vulnerability.id] });
+      resetForm();
+    },
+    onError,
+  });
+
+  const denyMutation = useMutation({
+    mutationFn: () =>
+      vulnManagementApi.vulnerabilities.exceptionDeny(vulnerability.id, {
+        denial_reason: denialReason.trim(),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vulnerability', vulnerability.id] });
+      resetForm();
+    },
+    onError,
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: () =>
+      vulnManagementApi.vulnerabilities.exceptionRevoke(vulnerability.id, {
+        reason: revocationReason.trim() || undefined,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vulnerability', vulnerability.id] });
+      resetForm();
+    },
+    onError,
+  });
+
+  const fmt = (iso?: string | null) =>
+    iso ? new Date(iso).toLocaleDateString() : '—';
+
+  const canRequest = ['none', 'denied', 'expired'].includes(state);
+  const canDecide = state === 'requested' && !isRequester;
+  const canRevoke = state === 'approved';
+  const stateStyle = EXCEPTION_STATE_STYLES[state] || EXCEPTION_STATE_STYLES.none;
+
+  return (
+    <div className="cw-card p-4">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-sm font-semibold cw-text flex items-center gap-1.5">
+          <CheckCircle className="h-4 w-4 text-slate-600" />
+          Exception Workflow
+        </h2>
+        <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${stateStyle}`}>
+          {state}
+        </span>
+      </div>
+
+      {errorMessage && (
+        <div className="mb-3 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
+          {errorMessage}
+        </div>
+      )}
+
+      {/* Read-only snapshot of the current exception state. */}
+      {state !== 'none' && (
+        <dl className="space-y-1.5 text-xs mb-3">
+          {vulnerability.exception_requested_at && (
+            <div>
+              <dt className="text-slate-500">Requested</dt>
+              <dd className="text-slate-700">
+                {fmt(vulnerability.exception_requested_at)}
+                {vulnerability.exception_requested_by_id != null && (
+                  <span className="text-slate-500 ml-1">
+                    (user #{vulnerability.exception_requested_by_id})
+                  </span>
+                )}
+              </dd>
+            </div>
+          )}
+          {vulnerability.exception_justification && (
+            <div>
+              <dt className="text-slate-500">Justification</dt>
+              <dd className="text-slate-700 whitespace-pre-wrap">
+                {vulnerability.exception_justification}
+              </dd>
+            </div>
+          )}
+          {vulnerability.exception_compensating_controls &&
+            vulnerability.exception_compensating_controls.length > 0 && (
+              <div>
+                <dt className="text-slate-500">Compensating controls</dt>
+                <dd className="flex flex-wrap gap-1 mt-0.5">
+                  {vulnerability.exception_compensating_controls.map((c) => (
+                    <span
+                      key={c}
+                      className="inline-flex items-center rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700"
+                    >
+                      {c}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+            )}
+          {vulnerability.exception_approved_at && (
+            <div>
+              <dt className="text-slate-500">Approved</dt>
+              <dd className="text-slate-700">
+                {fmt(vulnerability.exception_approved_at)}
+                {vulnerability.exception_expires_at && (
+                  <span className="text-slate-500 ml-1">
+                    · expires {fmt(vulnerability.exception_expires_at)}
+                  </span>
+                )}
+              </dd>
+            </div>
+          )}
+          {vulnerability.exception_denial_reason && (
+            <div>
+              <dt className="text-slate-500">Denial reason</dt>
+              <dd className="text-rose-700 whitespace-pre-wrap">
+                {vulnerability.exception_denial_reason}
+              </dd>
+            </div>
+          )}
+          {vulnerability.exception_revoked_at && (
+            <div>
+              <dt className="text-slate-500">Revoked</dt>
+              <dd className="text-slate-700">
+                {fmt(vulnerability.exception_revoked_at)}
+                {vulnerability.exception_revocation_reason && (
+                  <span className="text-slate-600 ml-1">
+                    — {vulnerability.exception_revocation_reason}
+                  </span>
+                )}
+              </dd>
+            </div>
+          )}
+        </dl>
+      )}
+
+      {/* Action area — state-aware. We only render the form that matches
+          the current state + the user's role. */}
+      {!activeAction && (
+        <div className="flex flex-wrap gap-2">
+          {canRequest && (
+            <button
+              onClick={() => setActiveAction('request')}
+              className="inline-flex items-center gap-1.5 text-xs rounded-md border border-blue-300 bg-blue-50 px-2.5 py-1 text-blue-700 hover:bg-blue-100"
+            >
+              {state === 'none' ? 'Request exception' : 'Re-request exception'}
+            </button>
+          )}
+          {canDecide && (
+            <>
+              <button
+                onClick={() => setActiveAction('approve')}
+                className="inline-flex items-center gap-1.5 text-xs rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-emerald-700 hover:bg-emerald-100"
+              >
+                Approve
+              </button>
+              <button
+                onClick={() => setActiveAction('deny')}
+                className="inline-flex items-center gap-1.5 text-xs rounded-md border border-rose-300 bg-rose-50 px-2.5 py-1 text-rose-700 hover:bg-rose-100"
+              >
+                Deny
+              </button>
+            </>
+          )}
+          {state === 'requested' && isRequester && (
+            <p className="text-xs text-slate-500 italic">
+              Awaiting reviewer. You requested this exception, so separation of
+              duties prevents you from approving or denying it.
+            </p>
+          )}
+          {canRevoke && (
+            <button
+              onClick={() => setActiveAction('revoke')}
+              className="inline-flex items-center gap-1.5 text-xs rounded-md border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-50"
+            >
+              Revoke
+            </button>
+          )}
+          {state === 'revoked' && (
+            <p className="text-xs text-slate-500 italic">
+              Revoked exceptions are terminal — request a new one if needed.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Forms — only one renders at a time. */}
+      {activeAction === 'request' && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!justification.trim()) {
+              setErrorMessage('Justification is required.');
+              return;
+            }
+            requestMutation.mutate();
+          }}
+          className="mt-3 space-y-2"
+        >
+          <div>
+            <label className="block text-xs font-medium text-slate-600">Justification *</label>
+            <textarea
+              value={justification}
+              onChange={(e) => setJustification(e.target.value)}
+              rows={2}
+              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600">
+              Compensating controls <span className="text-slate-400">(comma-separated)</span>
+            </label>
+            <input
+              value={compensatingControls}
+              onChange={(e) => setCompensatingControls(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900"
+              placeholder="WAF rule WAF-1023, IDS sig 5067, ..."
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600">Desired expiry</label>
+            <input
+              type="date"
+              value={requestedExpiry}
+              onChange={(e) => setRequestedExpiry(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={resetForm}
+              className="text-xs rounded-md border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={requestMutation.isPending}
+              className="inline-flex items-center gap-1.5 text-xs rounded-md bg-blue-600 px-2.5 py-1 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {requestMutation.isPending && <Loader2 size={12} className="animate-spin" />}
+              Submit
+            </button>
+          </div>
+        </form>
+      )}
+
+      {activeAction === 'approve' && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            approveMutation.mutate();
+          }}
+          className="mt-3 space-y-2"
+        >
+          <div>
+            <label className="block text-xs font-medium text-slate-600">Approval comment</label>
+            <textarea
+              value={approvalComment}
+              onChange={(e) => setApprovalComment(e.target.value)}
+              rows={2}
+              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600">
+              Override expiry <span className="text-slate-400">(optional)</span>
+            </label>
+            <input
+              type="date"
+              value={approvalExpiry}
+              onChange={(e) => setApprovalExpiry(e.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={resetForm}
+              className="text-xs rounded-md border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={approveMutation.isPending}
+              className="inline-flex items-center gap-1.5 text-xs rounded-md bg-emerald-600 px-2.5 py-1 text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {approveMutation.isPending && <Loader2 size={12} className="animate-spin" />}
+              Approve exception
+            </button>
+          </div>
+        </form>
+      )}
+
+      {activeAction === 'deny' && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!denialReason.trim()) {
+              setErrorMessage('A denial reason is required.');
+              return;
+            }
+            denyMutation.mutate();
+          }}
+          className="mt-3 space-y-2"
+        >
+          <div>
+            <label className="block text-xs font-medium text-slate-600">Denial reason *</label>
+            <textarea
+              value={denialReason}
+              onChange={(e) => setDenialReason(e.target.value)}
+              rows={2}
+              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900"
+              required
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={resetForm}
+              className="text-xs rounded-md border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={denyMutation.isPending}
+              className="inline-flex items-center gap-1.5 text-xs rounded-md bg-rose-600 px-2.5 py-1 text-white hover:bg-rose-700 disabled:opacity-50"
+            >
+              {denyMutation.isPending && <Loader2 size={12} className="animate-spin" />}
+              Deny exception
+            </button>
+          </div>
+        </form>
+      )}
+
+      {activeAction === 'revoke' && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            revokeMutation.mutate();
+          }}
+          className="mt-3 space-y-2"
+        >
+          <div>
+            <label className="block text-xs font-medium text-slate-600">
+              Revocation reason <span className="text-slate-400">(optional)</span>
+            </label>
+            <textarea
+              value={revocationReason}
+              onChange={(e) => setRevocationReason(e.target.value)}
+              rows={2}
+              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900"
+              placeholder="Compensating control failed, new threat intelligence, ..."
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={resetForm}
+              className="text-xs rounded-md border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={revokeMutation.isPending}
+              className="inline-flex items-center gap-1.5 text-xs rounded-md bg-slate-700 px-2.5 py-1 text-white hover:bg-slate-800 disabled:opacity-50"
+            >
+              {revokeMutation.isPending && <Loader2 size={12} className="animate-spin" />}
+              Revoke
+            </button>
+          </div>
+        </form>
       )}
     </div>
   );

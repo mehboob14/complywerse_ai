@@ -22,6 +22,7 @@ from ....models import (
     GovernanceObjective, Issue, GRCUser, Tenant, get_db,
     ParsedFrameworkControl, UploadedFramework, RiskMitigationAction,
     Vulnerability, VulnerabilityAssetLink, RiskAssessmentRisk,
+    Team, BusinessUnit,
 )
 from ....schemas import (
     RiskCreate, RiskUpdate, RiskResponse,
@@ -79,6 +80,48 @@ _VULN_ID_PATTERN = re.compile(r"^\s*VULN-(\d+)\s*$", re.IGNORECASE)
 
 def normalize_key(value: Optional[str]) -> str:
     return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+def _resolve_team_to_business_unit(
+    *,
+    team_id: Optional[int],
+    fallback_business_unit_id: Optional[int],
+    tenant_id: int,
+    db: Session,
+) -> Optional[int]:
+    """Map a Team selection to a BusinessUnit id, creating the BU on demand.
+
+    Frontends now pick a Team (admin/teams) when assigning a risk; this
+    helper translates that choice to a BusinessUnit row so the rest of
+    the platform that joins on `business_unit_id` keeps working without
+    any other code changes. Auto-mirroring matches by case-insensitive
+    team name. When no team is selected, falls back to the caller's
+    `fallback_business_unit_id` if supplied — useful for API callers
+    that already know the BU id directly.
+    """
+    if team_id is None:
+        return fallback_business_unit_id
+    team = db.query(Team).filter(
+        Team.id == team_id,
+        Team.tenant_id == tenant_id,
+    ).first()
+    if not team:
+        return fallback_business_unit_id
+    name_key = (team.name or "").strip().lower()
+    if not name_key:
+        return fallback_business_unit_id
+    # Reuse an existing BU with the same name when present; otherwise
+    # create a fresh BU row mirroring the team.
+    existing = db.query(BusinessUnit).filter(
+        BusinessUnit.tenant_id == tenant_id,
+    ).all()
+    for bu in existing:
+        if (bu.name or "").strip().lower() == name_key:
+            return bu.id
+    new_bu = BusinessUnit(tenant_id=tenant_id, name=team.name)
+    db.add(new_bu)
+    db.flush()
+    return new_bu.id
 
 
 def is_ubl_template_register_type(value: Optional[str]) -> bool:
@@ -864,6 +907,8 @@ def import_ubl_risk_register(
                                 asset=asset,
                                 notes="Linked from UBL Template risk register import",
                                 created_by=current_user.id,
+                                link_source="nca_bridge",
+                                auto_linked=True,
                             )
                         )
                 if vulnerability_entry:
@@ -1030,6 +1075,17 @@ def create_risk(
             risk_sub_category = ubl_sub_source[:100]
         sanitized_ubl_fields["risk_id"] = format_ubl_risk_id(get_next_ubl_risk_sequence(tenant_id, db))
 
+    # Resolve team assignment to a BusinessUnit row. Teams (admin/teams)
+    # are the canonical "department" source; we auto-mirror the team to
+    # a BusinessUnit (matched by case-insensitive name) so the rest of
+    # the platform that joins on business_unit_id keeps working.
+    resolved_bu_id = _resolve_team_to_business_unit(
+        team_id=getattr(risk, "team_id", None),
+        fallback_business_unit_id=getattr(risk, "business_unit_id", None),
+        tenant_id=tenant_id,
+        db=db,
+    )
+
     db_risk = Risk(
         tenant_id=tenant_id,
         title=risk.title,
@@ -1041,6 +1097,7 @@ def create_risk(
         ubl_fields=sanitized_ubl_fields if isinstance(sanitized_ubl_fields, dict) else None,
         owner_id=risk.owner_id,
         business_owner_id=risk.business_owner_id,
+        business_unit_id=resolved_bu_id,
         affected_department_ids=risk.affected_department_ids or [],
         inherent_likelihood=risk.inherent_likelihood,
         inherent_impact=risk.inherent_impact,
@@ -1569,9 +1626,25 @@ def update_risk(
         )
         update_data["risk_category"] = update_data["category"]
 
+    # team_id is a transient mapping field — resolve it to a real
+    # business_unit_id and don't try to setattr it onto the ORM model
+    # (Risk has no `team_id` column today).
+    if "team_id" in update_data:
+        team_id_value = update_data.pop("team_id")
+        resolved = _resolve_team_to_business_unit(
+            team_id=team_id_value,
+            fallback_business_unit_id=update_data.get("business_unit_id"),
+            tenant_id=risk.tenant_id,
+            db=db,
+        )
+        if resolved is not None:
+            update_data["business_unit_id"] = resolved
+        else:
+            update_data.pop("business_unit_id", None)
+
     for field, value in update_data.items():
         setattr(risk, field, value)
-    
+
     risk.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(risk)

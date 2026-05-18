@@ -28,6 +28,7 @@ import {
 import Link from 'next/link';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
+import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
 
 interface Question {
   id: number;
@@ -79,11 +80,17 @@ interface AISuggestion {
 interface Assessment {
   id: number;
   campaign_id: number;
-  campaign_name: string;
-  business_unit: string;
-  assessor_name: string;
+  campaign_name: string | null;
+  // Backend RCSAAssessmentDetailResponse returns `business_unit_name`
+  // (per the schema), not a flat `business_unit` string. Keeping a
+  // legacy `business_unit` alias would mask the field-mismatch bug —
+  // we read the canonical field directly here.
+  business_unit_id?: number | null;
+  business_unit_name: string | null;
+  assessor_id?: number | null;
+  assessor_name: string | null;
   status: string;
-  due_date: string;
+  due_date: string | null;
   progress: number;
   questions: Question[];
   responses: Response[];
@@ -245,7 +252,14 @@ export default function AssessmentDetailPage() {
 
   const handleSubmit = () => {
     if (!assessment) return;
-    
+
+    // Detect any still-empty required fields. Previously this was a
+    // hard block — the department couldn't submit their own portion
+    // until *every* template-defined required field was filled, even
+    // when the unfilled questions belong to a different team's scope.
+    // We now treat the gate as a warning and let the user knowingly
+    // submit their assigned part. Reviewers can flag any incomplete
+    // areas during approval.
     const errors = new Set<number>();
     assessment.questions.filter(q => q.is_required).forEach(q => {
       const response = responses[q.id];
@@ -262,8 +276,18 @@ export default function AssessmentDetailPage() {
       }
     });
 
+    // Light up the red borders so the user can still see what's
+    // missing, but only short-circuit the submit when they actively
+    // cancel the confirmation prompt.
     if (errors.size > 0) {
       setValidationErrors(errors);
+      const proceed = confirm(
+        `${errors.size} required field${errors.size === 1 ? ' is' : 's are'} still empty.\n\n` +
+        `Submit your assigned portion anyway? Reviewers will be able to ` +
+        `flag missing areas during approval.`,
+      );
+      if (!proceed) return;
+      submitMutation.mutate();
       return;
     }
 
@@ -447,11 +471,11 @@ export default function AssessmentDetailPage() {
           <div className="flex items-center gap-4 mt-1">
             <span className="flex items-center gap-1.5 text-slate-600">
               <Building2 className="h-4 w-4" />
-              {assessment.business_unit}
+              {assessment.business_unit_name || <span className="italic text-slate-400">Unassigned</span>}
             </span>
             <span className="flex items-center gap-1.5 text-slate-600">
               <Calendar className="h-4 w-4" />
-              Due: {new Date(assessment.due_date).toLocaleDateString()}
+              Due: {assessment.due_date ? new Date(assessment.due_date).toLocaleDateString() : '—'}
             </span>
             <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
               {statusStyle.label}
@@ -834,14 +858,24 @@ export default function AssessmentDetailPage() {
                         <span className="text-sm text-slate-900">{file.filename}</span>
                         <span className="text-xs text-slate-500">{formatFileSize(file.file_size)}</span>
                       </div>
-                      {isEditable && (
-                        <button
-                          onClick={() => handleRemoveEvidence(currentQuestion.id, file.id)}
-                          className="p-1 text-slate-600 hover:text-rose-400"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {/* In-place preview so the assessor doesn't have
+                            to leave the RCSA flow to verify what was
+                            uploaded against this question. */}
+                        <EvidencePreviewButton
+                          evidenceId={file.id}
+                          title="Preview file"
+                          className="p-1 text-slate-600 hover:text-blue-600"
+                        />
+                        {isEditable && (
+                          <button
+                            onClick={() => handleRemoveEvidence(currentQuestion.id, file.id)}
+                            className="p-1 text-slate-600 hover:text-rose-400"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1143,14 +1177,21 @@ export default function AssessmentDetailPage() {
                                   <span className="text-sm text-slate-900">{file.filename}</span>
                                   <span className="text-xs text-slate-500">{formatFileSize(file.file_size)}</span>
                                 </div>
-                                {isEditable && (
-                                  <button
-                                    onClick={() => handleRemoveEvidence(question.id, file.id)}
-                                    className="p-1 text-slate-600 hover:text-rose-400"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                )}
+                                <div className="flex items-center gap-1">
+                                  <EvidencePreviewButton
+                                    evidenceId={file.id}
+                                    title="Preview file"
+                                    className="p-1 text-slate-600 hover:text-blue-600"
+                                  />
+                                  {isEditable && (
+                                    <button
+                                      onClick={() => handleRemoveEvidence(question.id, file.id)}
+                                      className="p-1 text-slate-600 hover:text-rose-400"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             ))}
                           </div>

@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import * as XLSX from 'xlsx';
-import { adminApi, assetsApi, ermApi } from '@/lib/api';
+import { adminApi, assetsApi, ermApi, teamsApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { ITAsset, Risk, RiskCategory, RiskStatus, RiskDashboard, HeatmapCell } from '@/types';
 import {
@@ -2010,6 +2010,12 @@ function RiskModal({
     risk_sub_category: risk?.risk_sub_category || toInputString((risk?.ubl_fields as Record<string, unknown> | undefined)?.sub_source_activity || ''),
     business_owner_id: risk?.business_owner_id || undefined as number | undefined,
     affected_department_ids: risk?.affected_department_ids || [] as number[],
+    // Owning team (admin/teams). Backend resolves this to a real
+    // BusinessUnit row (auto-mirrored by name) and stores it on the
+    // risk's business_unit_id column so existing joins keep working.
+    team_id: ((risk as unknown as { team_id?: number; business_unit_id?: number } | null)?.team_id
+      ?? (risk as unknown as { business_unit_id?: number } | null)?.business_unit_id
+      ?? undefined) as number | undefined,
     status: risk?.status || 'open' as RiskStatus,
     inherent_likelihood: risk?.inherent_likelihood || 3,
     inherent_impact: risk?.inherent_impact || 3,
@@ -2070,6 +2076,24 @@ function RiskModal({
       const response = await assetsApi.getAll();
       return (response.data || []) as ITAsset[];
     },
+  });
+
+  // Active teams from admin/teams. These now drive the "Assigned Team"
+  // and "Affected Departments" pickers — replacing the hardcoded list
+  // that the tenant couldn't edit. The same Team list is used for RCSA
+  // campaign seeding, so a risk assigned to a team here matches the
+  // assessment row that team will fill out.
+  const { data: teams } = useQuery({
+    queryKey: ['risk-modal-teams'],
+    queryFn: async () => {
+      try {
+        const response = await teamsApi.list(false);
+        return response.data || [];
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 60 * 1000,
   });
 
   const filteredAssets = useMemo(() => {
@@ -2718,6 +2742,35 @@ function RiskModal({
             </div>
           </div>
 
+          {/* Assigned team / department picker — backed by admin/teams.
+              When the risk is saved the backend resolves this team_id to
+              a BusinessUnit row (creating one named after the team if
+              none exists) and stores it on the risk's business_unit_id.
+              That same business_unit_id is what RCSA assessments and the
+              dashboard's BU-progress panel are keyed on, so a risk
+              assigned here lands in the right team's scope automatically. */}
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">
+              Assigned Team / Department
+              <span className="ml-1 text-xs font-normal text-gray-500">(defines who owns and reviews this risk)</span>
+            </label>
+            <MultiSelectDropdown
+              title="Assigned Team"
+              items={(teams || []).map((t: any) => ({
+                value: String(t.id),
+                label: t.name,
+                subLabel: t.description || undefined,
+              }))}
+              selectedValues={formData.team_id ? [String(formData.team_id)] : []}
+              onApply={(vals) => setFormData({ ...formData, team_id: vals[0] ? Number(vals[0]) : undefined })}
+              multiSelect={false}
+              triggerVariant="input"
+              placeholder={(teams || []).length === 0 ? 'No teams configured yet — create one in Admin → Teams' : 'Select a team / department'}
+              size="md"
+              forceSearch
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-800 mb-1">Linked Assets (Optional)</label>
             <div className="rounded-lg border border-gray-300 bg-white p-2">
@@ -2760,8 +2813,20 @@ function RiskModal({
 
           <div>
             <label className="block text-sm font-medium text-gray-800 mb-1">Affected Departments</label>
+            {/* Previously a hardcoded list (IT/Finance/Operations/...) that
+                tenants couldn't edit. Now sourced from admin/teams so the
+                same definitions flow through the risk register, RCSA
+                campaigns, and dashboard BU progress. Stores team ids in
+                affected_department_ids (the column itself is just a JSON
+                int-list — semantics moved from a fake DEPARTMENTS index
+                to real Team primary keys). */}
             <div className="flex flex-wrap gap-2">
-              {DEPARTMENTS.map((dept) => (
+              {(teams || []).length === 0 && (
+                <p className="text-xs text-slate-500 italic">
+                  No teams configured yet. Add them in Admin → Teams.
+                </p>
+              )}
+              {(teams || []).map((dept: any) => (
                 <button
                   key={dept.id}
                   type="button"

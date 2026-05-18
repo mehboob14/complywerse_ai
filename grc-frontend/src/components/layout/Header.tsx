@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, LogOut, UserCircle, Users } from 'lucide-react';
-import { apiClient } from '@/lib/api';
+import { ChevronDown, LogOut, UserCircle, Users, Search, Loader2 } from 'lucide-react';
+import { apiClient, searchApi } from '@/lib/api';
 
 const navIconProps = {
   size: 18,
@@ -17,6 +17,8 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
   '/vulnerabilities/sla': { title: 'SLA Configuration' },
   '/vulnerabilities/reports': { title: 'Vulnerability Reports' },
   '/vulnerabilities/departments': { title: 'Department Management' },
+  '/vulnerabilities/analytics': { title: 'Vulnerability Analytics', subtitle: 'Executive + analyst dashboards, correlation, vendor risk, and compliance reports' },
+  '/vulnerabilities/exceptions': { title: 'Exception Queue', subtitle: 'Cross-tenant exception review and approval workflow' },
   '/dashboard': { title: 'Overview' },
   '/governance': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
   '/governance/documents': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },
@@ -159,6 +161,10 @@ export default function Header() {
       </div>
 
       <div className="ml-3 flex items-center gap-2.5">
+        {/* Phase 9 — Global search bar (cross-domain). Placed before the
+            notification bell so keyboard-driven users hit it quickly. */}
+        <GlobalSearchBar />
+
         {/* Notification bell */}
         <div className="relative" ref={notifRef}>
           <button
@@ -286,5 +292,112 @@ export default function Header() {
         </div>
       </div>
     </header>
+  );
+}
+
+// ─── Phase 9: Global search bar ───────────────────────────────────────────
+// Debounced cross-domain search. Triggers after 2+ characters with a 250ms
+// delay so we don't slam the backend on every keystroke. Results are typed
+// (vulnerability / asset / risk) and link straight to the detail page.
+
+function GlobalSearchBar() {
+  const router = useRouter();
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const [debounced, setDebounced] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(q.trim()), 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const { data, isFetching } = useQuery({
+    queryKey: ['global-search', debounced],
+    queryFn: () => searchApi.power({ q: debounced, per_domain_limit: 6 }).then((r) => r.data),
+    enabled: debounced.length >= 2,
+    staleTime: 30 * 1000,
+  });
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+
+  const hasResults =
+    !!data &&
+    Object.values(data.results || {}).some((arr) => Array.isArray(arr) && arr.length > 0);
+
+  const onHit = (url: string) => {
+    setOpen(false);
+    setQ('');
+    router.push(url);
+  };
+
+  return (
+    <div className="relative hidden md:block" ref={containerRef}>
+      <div className="relative">
+        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder="Search vulns, assets, risks…"
+          className="h-8 w-56 rounded-md border border-slate-200 bg-white pl-7 pr-7 text-xs text-slate-700 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
+        />
+        {isFetching && (
+          <Loader2
+            size={12}
+            className="absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-slate-400"
+          />
+        )}
+      </div>
+
+      {open && debounced.length >= 2 && (
+        <div className="absolute right-0 z-50 mt-1 w-96 rounded-lg border border-slate-200 bg-white shadow-xl">
+          {!hasResults && !isFetching && (
+            <p className="px-3 py-3 text-xs text-slate-500">No results for &ldquo;{debounced}&rdquo;.</p>
+          )}
+          {data && hasResults && (
+            <div className="max-h-96 overflow-y-auto p-1">
+              {(['vulnerabilities', 'assets', 'risks'] as const).map((domain) => {
+                const arr = (data.results || {})[domain] || [];
+                if (arr.length === 0) return null;
+                return (
+                  <div key={domain} className="px-1 py-1">
+                    <p className="px-2 py-1 text-[10px] uppercase tracking-wide text-slate-400">
+                      {domain}
+                    </p>
+                    {arr.map((hit) => (
+                      <button
+                        key={`${hit.type}-${hit.id}`}
+                        onClick={() => onHit(hit.url)}
+                        className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-slate-50"
+                      >
+                        <p className="font-medium text-slate-800 truncate">{hit.title}</p>
+                        <p className="text-slate-500 text-[11px] truncate">
+                          {hit.subtitle || ''}
+                          {hit.severity ? ` · ${hit.severity}` : ''}
+                          {hit.criticality ? ` · ${hit.criticality}` : ''}
+                          {hit.asset_type ? ` · ${hit.asset_type}` : ''}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

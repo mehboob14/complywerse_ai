@@ -278,7 +278,15 @@ class GRCUser(Base):
     document_versions = relationship("DocumentVersion", back_populates="creator")
     document_approvals = relationship("DocumentApprovalWorkflow", back_populates="approver")
     owned_gov_documents = relationship("GovernanceDocument", back_populates="owner", foreign_keys="GovernanceDocument.owner_id")
-    owned_assets = relationship("ITAsset", back_populates="owner")
+    # Phase 5.2 added 4 more FK columns from ITAsset → grc_users.id
+    # (primary_owner_id, secondary_owner_id, escalation_contact_id,
+    # business_owner_id). Without the explicit `foreign_keys` hint here,
+    # SQLAlchemy can't decide which FK path back_populates this collection.
+    owned_assets = relationship(
+        "ITAsset",
+        back_populates="owner",
+        foreign_keys="ITAsset.owner_id",
+    )
     asset_assessments = relationship("AssetRiskAssessment", back_populates="assessor")
     owned_programs = relationship("ComplianceProgram", back_populates="owner")
     compliance_assessments = relationship("GRCComplianceAssessment", back_populates="assessor")
@@ -1924,6 +1932,42 @@ class PolicyExceptionComment(Base):
     )
 
 
+class DocumentAnnotation(Base):
+    """Auditor / reviewer remark anchored to a governance document.
+
+    Two kinds today:
+      - text_range: anchored to a character offset range in the document's
+        plain-text representation. `anchor_data` carries
+        `{start_offset, end_offset, quoted_text}`. Rendered as a highlight
+        span in the in-browser viewer for the matching slice.
+      - general: a free-form comment with no specific anchor, shown in the
+        comments sidebar but not highlighted in the body. Used when the
+        underlying file type (PDF, XLSX, image) doesn't yet support
+        precise selection anchoring.
+
+    The table is intentionally narrow — threading, mentions, and
+    resolved-state can layer on top later without schema churn.
+    """
+    __tablename__ = "grc_document_annotations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    anchor_kind = Column(String(50), nullable=False, default="general")  # text_range | general
+    anchor_data = Column(JSON, default=dict)
+    comment = Column(Text, nullable=False)
+    status = Column(String(20), default="open")  # open | resolved
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("GRCUser")
+
+    __table_args__ = (
+        Index("ix_doc_annotation_tenant_doc", "tenant_id", "document_id"),
+    )
+
+
 class Issue(Base):
     __tablename__ = "grc_issues"
     
@@ -2444,7 +2488,7 @@ class DocumentAttestation(Base):
 
 class ITAsset(Base):
     __tablename__ = "grc_it_assets"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
@@ -2464,10 +2508,84 @@ class ITAsset(Base):
     location = Column(String(255), nullable=True)
     status = Column(String(50), default="active")  # active, inactive, decommissioned
     cde_environment = Column(Boolean, default=False)
+
+    # ── Phase 5.1: Exposure metadata ───────────────────────────────────────
+    # Operational context that the existing `criticality`/`status` columns
+    # don't capture. All nullable / safe-defaulted so existing rows behave
+    # identically until a writer sets them.
+    internet_facing = Column(Boolean, default=False)
+    network_segment = Column(String(100), nullable=True)  # e.g. "dmz", "prod-app-tier"
+    data_classification = Column(String(50), nullable=True)  # public, internal, confidential, restricted
+    business_function = Column(String(100), nullable=True)  # e.g. "Payments", "HR Operations"
+    compliance_scope = Column(JSON, default=list)  # ["PCI-DSS", "HIPAA", ...]
+
+    # ── Phase 5.2: Ownership chain ─────────────────────────────────────────
+    # Richer ownership model than the single legacy `owner_id`. Reads should
+    # prefer `primary_owner_id` when set, else fall back to `owner_id`.
+    # `owning_team` is a free-text label until a dedicated Teams table lands.
+    primary_owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    secondary_owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    # Legacy text label — kept for back-compat with existing rows. New
+    # writers prefer `owning_team_id` (FK to grc_teams). The detail
+    # response derives a single human-readable team name from whichever is
+    # populated.
+    owning_team = Column(String(100), nullable=True)
+    owning_team_id = Column(Integer, ForeignKey("grc_teams.id"), nullable=True, index=True)
+    escalation_contact_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    business_owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+
+    # ── Phase 5.3: Lifecycle state machine ─────────────────────────────────
+    # `lifecycle_state` runs alongside the legacy `status` column (working
+    # agreement: additive only). Allowed transitions:
+    #   planned → active → maintenance → decommissioned → retired
+    # See services/asset_lifecycle.py for the machine.
+    lifecycle_state = Column(String(30), default="active")
+    decommissioned_at = Column(DateTime, nullable=True)
+    retirement_reason = Column(Text, nullable=True)
+    replacement_asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=True)
+
+    # ── Phase 5.4: Derived criticality score ───────────────────────────────
+    # 0.0-10.0 numeric score derived ISO 27005-style from the CIA ratings +
+    # exposure adjustments (data_classification, internet_facing,
+    # business_function). Always computed on write; never user-supplied.
+    # Read by the composite-priority formula in priority.py.
+    criticality_score = Column(Float, nullable=True)
+    # Audit-traceable override of the textual `criticality` bucket. When
+    # `criticality_manual_override=True`, the `criticality` column is set
+    # by the user (with an explanation in `criticality_override_reason`);
+    # the numeric `criticality_score` still reflects the derived value so
+    # the audit trail captures both "what the system computed" and "what
+    # the user chose to publish".
+    criticality_manual_override = Column(Boolean, default=False, nullable=True)
+    criticality_override_reason = Column(Text, nullable=True)
+
+    # ── Phase 5.5: Last-seen tracking ──────────────────────────────────────
+    # Bumped by scanner ingest paths. Stale-asset filter on the UI checks
+    # `last_seen_at < now - 30d`.
+    last_seen_at = Column(DateTime, nullable=True)
+    last_seen_source = Column(String(50), nullable=True)  # e.g. "nessus", "manual", "azure_defender"
+
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     tenant = relationship("Tenant", back_populates="it_assets")
-    owner = relationship("GRCUser", back_populates="owned_assets")
+    # `owner` (legacy): back_populated by GRCUser.owned_assets. Kept for
+    # backward compat — list/detail pages still resolve display_name from it
+    # when the new ownership chain isn't populated.
+    owner = relationship("GRCUser", back_populates="owned_assets", foreign_keys=[owner_id])
+    # New ownership relationships are one-way (no back_populates) so we don't
+    # have to touch GRCUser — `foreign_keys=...` disambiguates which FK each
+    # relationship binds to since multiple columns now point at grc_users.id.
+    primary_owner = relationship("GRCUser", foreign_keys=[primary_owner_id])
+    secondary_owner = relationship("GRCUser", foreign_keys=[secondary_owner_id])
+    escalation_contact = relationship("GRCUser", foreign_keys=[escalation_contact_id])
+    business_owner = relationship("GRCUser", foreign_keys=[business_owner_id])
+    owning_team_obj = relationship("Team", foreign_keys=[owning_team_id])
+    # Self-referential: which asset replaced this one when retired.
+    replacement_asset = relationship(
+        "ITAsset",
+        remote_side="ITAsset.id",
+        foreign_keys=[replacement_asset_id],
+    )
     control_links = relationship("AssetControlLink", back_populates="asset", cascade="all, delete-orphan")
     internal_control_links = relationship("AssetInternalControlLink", back_populates="asset", cascade="all, delete-orphan")
     risk_links = relationship("RiskAssetLink", back_populates="asset", cascade="all, delete-orphan")
@@ -2479,10 +2597,16 @@ class ITAsset(Base):
         back_populates="asset",
         cascade="all, delete-orphan",
     )
-    
+
     __table_args__ = (
         Index("ix_it_asset_tenant_type", "tenant_id", "asset_type"),
         Index("ix_it_asset_tenant_criticality", "tenant_id", "criticality"),
+        # Phase 5 indexes — filters on the list page + stale-asset sweep.
+        Index("ix_it_asset_lifecycle_state", "lifecycle_state"),
+        Index("ix_it_asset_data_classification", "data_classification"),
+        Index("ix_it_asset_internet_facing", "internet_facing"),
+        Index("ix_it_asset_last_seen_at", "last_seen_at"),
+        Index("ix_it_asset_criticality_score", "criticality_score"),
     )
 
 
@@ -4096,6 +4220,50 @@ class Vulnerability(Base):
     # untouched; surfaced as an opt-in sortable column on the list page.
     composite_priority = Column(Float, nullable=True)
 
+    # --- Phase 6: Vendor Patch Intelligence (MSRC first) ---
+    # Populated by patch_intel_service on a CVE-bearing vuln when the upstream
+    # PSIRT recognises the CVE. All nullable so existing rows stay valid.
+    # `patch_references` is a JSON array of {source, id, url, type} objects —
+    # e.g. {"source":"msrc","id":"KB5009543","url":"https://support.microsoft.com/...","type":"kb"}.
+    # The same shape works for Red Hat (rhsa), Cisco (cisco_psirt), etc.
+    # when those connectors land later.
+    patch_references = Column(JSON, default=list, nullable=True)
+    # Free-form vendor advisory IDs that aren't structured KB articles
+    # (e.g. ADV200005, security-advisory-2024-01). Stored as JSON array of
+    # strings so multiple advisories per vuln are preserved verbatim.
+    vendor_advisory_ids = Column(JSON, default=list, nullable=True)
+    # Vendor-supplied remediation instructions, copied verbatim so analysts
+    # see exactly what the PSIRT recommends (rather than our paraphrase).
+    remediation_guidance = Column(Text, nullable=True)
+    # Last successful PSIRT sync timestamp + which PSIRT served the data.
+    # `psirt_source` is one of "msrc", "rhsa", "cisco_psirt", etc.
+    psirt_synced_at = Column(DateTime, nullable=True)
+    psirt_source = Column(String(50), nullable=True)
+
+    # --- Phase 8: Exception Workflow ---
+    # Richer exception model than the legacy is_exception/exception_reason/
+    # exception_approved_by/exception_expiry columns above. New writers go
+    # through the state machine + endpoints in modules/vuln_management/
+    # exceptions.py; legacy columns are kept in sync so existing readers
+    # (dashboards, reports) don't have to change.
+    # States: none → requested → approved | denied → expired | revoked.
+    exception_status = Column(String(20), default="none", nullable=True)
+    exception_requested_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    exception_requested_at = Column(DateTime, nullable=True)
+    exception_justification = Column(Text, nullable=True)
+    # JSON array of compensating-control IDs / free-text references so an
+    # auditor can see what's offsetting the unpatched risk.
+    exception_compensating_controls = Column(JSON, default=list, nullable=True)
+    exception_approved_at = Column(DateTime, nullable=True)
+    exception_expires_at = Column(DateTime, nullable=True)
+    exception_denial_reason = Column(Text, nullable=True)
+    exception_revoked_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    exception_revoked_at = Column(DateTime, nullable=True)
+    exception_revocation_reason = Column(Text, nullable=True)
+    # Free-form metadata — approval comments, attachments, change-management
+    # tickets, etc. JSON keeps the schema stable across future fields.
+    exception_metadata = Column(JSON, default=dict, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -4125,6 +4293,82 @@ class Vulnerability(Base):
         Index("ix_vuln_kev_flag", "kev_flag"),
         Index("ix_vuln_composite_priority", "composite_priority"),
         Index("ix_vuln_epss_percentile", "epss_percentile"),
+        # Phase 6 — drives the daily MSRC refresh task ("walk every vuln
+        # whose PSIRT data is older than N days") and the "show me all
+        # Microsoft patches" filter on the list page.
+        Index("ix_vuln_psirt_source", "psirt_source"),
+        Index("ix_vuln_psirt_synced_at", "psirt_synced_at"),
+        # Phase 8 — drives the daily expiry sweep + the exception-aging
+        # analytics endpoint (Phase 9.1).
+        Index("ix_vuln_exception_status", "exception_status"),
+        Index("ix_vuln_exception_expires_at", "exception_expires_at"),
+    )
+
+
+# =============================================================================
+# Track A / Phase 7 — Cloud Connector Framework (foundation)
+# =============================================================================
+# Unified entity for any external system that pushes data into the platform
+# (AWS Inspector, Azure Defender, GCP SCC; later RHSA + Cisco PSIRT etc.).
+# Today the Nessus/Nexpose integrations live under `IntegrationConnection`
+# and use bespoke credential blobs. This entity is the cleaner pattern for
+# new connectors; the legacy table is kept as-is so existing tenants keep
+# syncing without a backfill.
+#
+# Encryption: `encrypted_credentials_blob` stores ciphertext only. The
+# matching encryption helper lives in `services/connector_credentials.py`
+# and is keyed off `CONNECTOR_MASTER_KEY` (env). Plaintext credentials never
+# touch the DB — even on read, callers go through `decrypt_credentials()`
+# which fails closed when the master key is missing.
+
+class CloudConnector(Base):
+    """Per-tenant cloud connector instance. Auth + sync state for one
+    cloud account / subscription / project."""
+    __tablename__ = "grc_cloud_connectors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+
+    # Stable identifier for the cloud SDK we'll call.
+    # Allowed: "aws_inspector", "azure_defender", "gcp_scc", and future
+    # PSIRTs ("rhsa", "cisco_psirt") if we choose to route them through the
+    # same framework.
+    provider = Column(String(50), nullable=False)
+    display_name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+
+    # AES-encrypted JSON blob. Format depends on provider:
+    #   aws_inspector → {"role_arn": "...", "external_id": "...", "regions": ["us-east-1"]}
+    #   azure_defender → {"tenant_id": "...", "client_id": "...", "client_secret": "..."}
+    #   gcp_scc → {"service_account_json": "..."}  (or WIF config)
+    # Decryption is gated by `services/connector_credentials.decrypt_credentials()`.
+    encrypted_credentials_blob = Column(Text, nullable=True)
+
+    # Sync schedule in seconds. 6 hours default per the roadmap; admins
+    # can override per connector. NULL means "manual sync only".
+    sync_schedule_seconds = Column(Integer, default=6 * 60 * 60, nullable=True)
+
+    # Lifecycle + health state.
+    is_active = Column(Boolean, default=True, nullable=False)
+    last_sync_at = Column(DateTime, nullable=True)
+    last_sync_status = Column(String(20), nullable=True)  # ok, partial, error
+    last_sync_error = Column(Text, nullable=True)
+    last_health_check_at = Column(DateTime, nullable=True)
+    last_health_status = Column(String(20), nullable=True)  # ok, degraded, error
+    # Running counters surfaced on the admin page — assets discovered,
+    # vulns ingested, errors encountered. Cleared on connector reset.
+    health_metrics = Column(JSON, default=dict, nullable=True)
+
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    tenant = relationship("Tenant", foreign_keys=[tenant_id])
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+
+    __table_args__ = (
+        Index("ix_cloud_connector_tenant_provider", "tenant_id", "provider"),
+        Index("ix_cloud_connector_last_sync_at", "last_sync_at"),
     )
 
 
@@ -4172,24 +4416,141 @@ class VulnerabilityMitigation(Base):
 class VulnerabilityAssetLink(Base):
     """Links vulnerabilities to affected IT assets"""
     __tablename__ = "grc_vulnerability_asset_links"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     vulnerability_id = Column(Integer, ForeignKey("grc_vulnerabilities.id"), nullable=False, index=True)
     asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
-    
+
     impact_on_asset = Column(String(50), nullable=True)  # confidentiality, integrity, availability
     notes = Column(Text, nullable=True)
-    
+
+    # How this link was created. One of: manual / scanner / cpe_match /
+    # cloud_sync / nca_bridge. Set by the code path that creates the link;
+    # unknown rows default to "manual" so legacy data stays valid.
+    link_source = Column(String(50), default="manual", nullable=True)
+    # True when the link was created by automation (matcher / sync) rather
+    # than a person. Surfaced as an "Auto" badge in the UI so reviewers can
+    # spot false positives without inspecting metadata.
+    auto_linked = Column(Boolean, default=False, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
-    
+
     vulnerability = relationship("Vulnerability", back_populates="asset_links")
     asset = relationship("ITAsset")
     creator = relationship("GRCUser", foreign_keys=[created_by])
-    
+
     __table_args__ = (
         UniqueConstraint("vulnerability_id", "asset_id", name="uq_vuln_asset_link"),
         Index("ix_vuln_asset_link", "vulnerability_id", "asset_id"),
+        # Drives the "show me all auto-linked vulns" filter on the asset
+        # detail's linked-vulns list + the auditor's review queue.
+        Index("ix_vuln_asset_link_source", "link_source"),
+        Index("ix_vuln_asset_link_auto", "auto_linked"),
+    )
+
+
+class Team(Base):
+    """Org team (e.g., Payments, Identity, Platform Engineering).
+
+    Used in two places today:
+      * ITAsset.owning_team_id — picks the team that owns an asset.
+      * Member list rendered in admin → Teams for ownership chain context.
+
+    A team is tenant-scoped. Members are GRCUsers with a `role_in_team`
+    label (lead / member / viewer) — independent of the platform-wide RBAC
+    roles, since a person can be "lead of Payments team" while having a
+    "Compliance Analyst" platform role.
+    """
+    __tablename__ = "grc_teams"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    # Optional: who runs the team day-to-day. Different from "member with
+    # role_in_team='lead'" because a team can have multiple leads but only
+    # one canonical contact.
+    lead_user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    tenant = relationship("Tenant")
+    lead = relationship("GRCUser", foreign_keys=[lead_user_id])
+    members = relationship("TeamMember", back_populates="team", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_team_tenant_name"),
+        Index("ix_team_tenant", "tenant_id"),
+        Index("ix_team_tenant_active", "tenant_id", "is_active"),
+    )
+
+
+class TeamMember(Base):
+    """Join row: which users belong to which team, and in what capacity."""
+    __tablename__ = "grc_team_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("grc_teams.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    # In-team role label. Free-text-ish but the API restricts to a known set.
+    role_in_team = Column(String(30), default="member", nullable=False)
+    added_at = Column(DateTime, default=datetime.utcnow)
+    added_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+
+    team = relationship("Team", back_populates="members")
+    user = relationship("GRCUser", foreign_keys=[user_id])
+    adder = relationship("GRCUser", foreign_keys=[added_by])
+
+    __table_args__ = (
+        UniqueConstraint("team_id", "user_id", name="uq_team_member"),
+        Index("ix_team_member_team", "team_id"),
+        Index("ix_team_member_user", "user_id"),
+    )
+
+
+class SoftwareIdentifier(Base):
+    """CPE / PURL identifier installed on an asset.
+
+    Populated by the CPE matcher (Phase 4 piece) and by scanner adapters
+    that report installed-software inventory. Drives the matcher that
+    creates `VulnerabilityAssetLink` rows automatically for CVEs whose
+    `affected_configurations` overlap an asset's identifiers.
+
+    Stored normalised:
+        identifier_type ∈ {"cpe", "purl"}
+        identifier        — full identifier string, e.g.
+                            "cpe:2.3:a:apache:log4j:2.14.1:*:*:*:*:*:*:*"
+        vendor / product  — parsed components for cheap LIKE matching
+        version           — parsed version for range comparison
+    """
+    __tablename__ = "grc_software_identifiers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
+
+    identifier_type = Column(String(10), nullable=False)  # cpe | purl
+    identifier = Column(String(500), nullable=False)
+    vendor = Column(String(100), nullable=True)
+    product = Column(String(100), nullable=True)
+    version = Column(String(50), nullable=True)
+
+    # Provenance — where the identifier came from. Same vocabulary as
+    # VulnerabilityAssetLink.link_source so reports stay aligned.
+    source = Column(String(50), default="manual", nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    asset = relationship("ITAsset")
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "asset_id", "identifier",
+                         name="uq_software_identifier"),
+        Index("ix_software_identifier_tenant", "tenant_id"),
+        Index("ix_software_identifier_asset", "asset_id"),
+        # Cheap LIKE lookup during matcher runs.
+        Index("ix_software_identifier_vendor_product", "vendor", "product"),
     )
 
 
@@ -5315,12 +5676,19 @@ class CommitteeCharter(Base):
     file_name = Column(String(255), nullable=True)
     file_type = Column(String(50), nullable=True)
     file_size = Column(Integer, nullable=True)
-    
+    # Structured sections — same shape the AI-generate flow returns
+    # ([{title, content, framework_references[]}]). Populated by the
+    # upload-new endpoint via the charter_parser service; left NULL on
+    # rows whose `content` is the source of truth (legacy + plain-text
+    # creates). The UI prefers `sections_json` when present so uploaded
+    # charters render identically to AI-drafted ones.
+    sections_json = Column(JSON, nullable=True)
+
     tenant = relationship("Tenant")
     committee = relationship("GovernanceCommittee", back_populates="charters")
     approver = relationship("GRCUser", foreign_keys=[approved_by])
     creator = relationship("GRCUser", foreign_keys=[created_by])
-    
+
     __table_args__ = (
         Index("ix_committee_charter_tenant", "tenant_id"),
         Index("ix_committee_charter_committee", "committee_id"),
@@ -5395,6 +5763,36 @@ class MeetingAgendaItem(Base):
         Index("ix_meeting_agenda_tenant", "tenant_id"),
         Index("ix_meeting_agenda_meeting", "meeting_id"),
         Index("ix_meeting_agenda_status", "status"),
+    )
+
+
+class MeetingAgendaItemVote(Base):
+    """Per-member vote on a single agenda item.
+
+    Used for the voting / consensus surface on a meeting's agenda — each
+    committee member records one of {agreed, disagreed, partial, abstain}
+    with an optional comment. Re-voting updates the existing row
+    (per the uniq constraint below), so the tally is always one-per-user.
+    """
+    __tablename__ = "grc_meeting_agenda_item_votes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    agenda_item_id = Column(Integer, ForeignKey("grc_meeting_agenda_items.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    # Allowed values enforced in the router: agreed | disagreed | partial | abstain.
+    vote = Column(String(20), nullable=False)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    agenda_item = relationship("MeetingAgendaItem", backref="votes")
+    user = relationship("GRCUser", foreign_keys=[user_id])
+
+    __table_args__ = (
+        UniqueConstraint("agenda_item_id", "user_id", name="uq_agenda_item_vote"),
+        Index("ix_agenda_vote_item", "agenda_item_id"),
+        Index("ix_agenda_vote_user", "user_id"),
     )
 
 
@@ -5770,19 +6168,56 @@ class RegulatoryFeedItem(Base):
 # =============================================================================
 
 class IntegrationConnection(Base):
-    """Vulnerability scanner connections (Nexpose, Nessus, etc.)"""
+    """Unified external connector row.
+
+    Originally modelled vulnerability scanners (Nessus, Nexpose). Extended
+    to cover every external integration the platform talks to, distinguished
+    by `category`:
+
+      * `vuln_scanner` — original use case (Nessus, Nexpose, Rapid7…)
+      * `ticketing`    — ServiceNow, BMC Remedy
+      * `siem`         — Splunk, Wazuh, QRadar
+      * `pentest`      — Metasploit, Core Impact
+      * `collab`       — MS Teams, Zoom, Office 365
+      * `transcribe`   — Fireflies.ai
+      * `cloud`        — (reserved; cloud scanners still live in `CloudConnector`)
+
+    Auth credentials are stored encrypted in `encrypted_credentials`
+    (Fernet via `services.connector_credentials`). OAuth2 refresh tokens
+    live alongside in `oauth_tokens`. Per-provider configuration that
+    doesn't belong in the credential blob (Splunk index name, ServiceNow
+    assignment group, etc.) lives in `provider_config`.
+
+    The legacy `username`/`password` columns are preserved for migration
+    safety; new code paths read/write only the encrypted blob.
+    """
     __tablename__ = "grc_integration_connections"
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
-    integration_type = Column(String(50), nullable=False)  # nexpose, nessus
+    integration_type = Column(String(50), nullable=False)  # provider key: nexpose, nessus, servicenow, splunk, …
+    # NEW — connector category drives which adapter base class is used.
+    category = Column(String(30), nullable=True, default="vuln_scanner")
     connection_name = Column(String(200), nullable=False)
     console_url = Column(String(500), nullable=False)
     console_port = Column(Integer, default=3780)
-    auth_method = Column(String(50), default="api_key")
-    credential_env_prefix = Column(String(100), nullable=False)
+    auth_method = Column(String(50), default="api_key")  # api_key, basic, oauth2, token
+    credential_env_prefix = Column(String(100), nullable=True)
+    # Legacy plaintext columns — kept nullable for back-compat. New writes
+    # leave these empty and serialise into `encrypted_credentials`.
     username = Column(String(255), nullable=True)
     password = Column(String(500), nullable=True)
+    # NEW — Fernet-encrypted JSON blob produced by
+    # `connector_credentials.encrypt_credentials({...})`. Holds api_key,
+    # client_secret, refresh_token seed, basic-auth password, etc.
+    encrypted_credentials = Column(Text, nullable=True)
+    # NEW — OAuth2 access/refresh token blob (encrypted). Separate from
+    # `encrypted_credentials` so the static client_secret can survive a
+    # refresh-token rotation without re-saving the whole connection.
+    oauth_tokens = Column(Text, nullable=True)
+    # NEW — non-secret provider configuration (assignment_group,
+    # splunk_index, teams_channel_id, …). Plain JSON.
+    provider_config = Column(JSON, nullable=True)
     sync_schedule = Column(String(50), default="0 */4 * * *")  # cron format
     is_active = Column(Boolean, default=True)
     status = Column(String(50), default="pending")  # pending, connected, error, deactivated
@@ -5801,6 +6236,7 @@ class IntegrationConnection(Base):
     __table_args__ = (
         Index("ix_connection_tenant", "tenant_id"),
         Index("ix_connection_type", "tenant_id", "integration_type"),
+        Index("ix_connection_category", "tenant_id", "category"),
         UniqueConstraint("tenant_id", "connection_name", name="uq_connection_name_tenant"),
     )
 

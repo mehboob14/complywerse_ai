@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState, useMemo } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { committeeApi, apiClient } from '@/lib/api';
@@ -29,6 +29,7 @@ import {
   Download,
   Paperclip,
   Loader2,
+  ChevronRight,
 } from 'lucide-react';
 import Link from 'next/link';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
@@ -350,6 +351,34 @@ export default function MeetingDetailPage() {
     },
   });
 
+  // Upload + AI-parse: takes a PDF/DOCX agenda, parses it into items,
+  // appends them after the highest existing item_number.
+  const uploadAgendaInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadAgendaMutation = useMutation({
+    mutationFn: (file: File) => committeeApi.uploadAgendaForParse(meetingId, file),
+    onSuccess: (r: any) => {
+      queryClient.invalidateQueries({ queryKey: ['meeting-agenda', meetingId] });
+      const count = r?.data?.inserted ?? 0;
+      toast({
+        title: `Imported ${count} agenda item${count === 1 ? '' : 's'}`,
+        message: 'Edit any item to refine the parsed details.',
+        type: 'success',
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Could not parse agenda',
+        message: err?.response?.data?.detail || 'Try a more structured document or add items manually.',
+        type: 'error',
+      });
+    },
+  });
+  const onPickAgendaUploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadAgendaMutation.mutate(file);
+    if (e.target) e.target.value = '';
+  };
+
   const updateAgendaMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => committeeApi.updateAgendaItem(id, data),
     onSuccess: () => {
@@ -446,6 +475,39 @@ export default function MeetingDetailPage() {
       toast({ title: 'Failed to save minutes', message: err?.response?.data?.detail || 'Please try again', type: 'error' });
     },
   });
+
+  // Upload a PDF / DOCX / TXT minutes document — server extracts text
+  // and saves it as the minutes content. Replaces existing minutes
+  // (dropping prior approval back to draft) if a record is already
+  // present for this meeting.
+  const uploadMinutesInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadMinutesMutation = useMutation({
+    mutationFn: (file: File) => committeeApi.uploadMinutesDoc(meetingId, file),
+    onSuccess: (r: any) => {
+      queryClient.invalidateQueries({ queryKey: ['meeting', meetingId] });
+      setIsEditMinutesOpen(false);
+      const replaced = r?.data?.replaced_existing;
+      toast({
+        title: replaced ? 'Minutes replaced from document' : 'Minutes uploaded',
+        message: replaced
+          ? 'Previous content was overwritten and dropped back to draft.'
+          : 'Document extracted into draft minutes. Edit to refine.',
+        type: 'success',
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Could not upload minutes',
+        message: err?.response?.data?.detail || 'Try a text-based PDF, DOCX, or TXT.',
+        type: 'error',
+      });
+    },
+  });
+  const onPickMinutesUploadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadMinutesMutation.mutate(file);
+    if (e.target) e.target.value = '';
+  };
 
   const autoPopulateMutation = useMutation({
     mutationFn: (opts: typeof autoPopulateOptions) => committeeApi.autoPopulateAgenda(meetingId, opts),
@@ -588,13 +650,36 @@ export default function MeetingDetailPage() {
                 Agenda
               </h3>
               {canCreate && (
-              <button
-                onClick={() => setIsAddAgendaOpen(true)}
-                className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
-              >
-                <Plus className="h-4 w-4" />
-                Add Item
-              </button>
+                <div className="flex items-center gap-2">
+                  {/* Hidden file input — Upload & AI parse button triggers it. */}
+                  <input
+                    ref={uploadAgendaInputRef}
+                    type="file"
+                    accept=".pdf,.doc,.docx,.txt,.md"
+                    onChange={onPickAgendaUploadFile}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => uploadAgendaInputRef.current?.click()}
+                    disabled={uploadAgendaMutation.isPending}
+                    className="flex items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                    title="Upload a PDF / DOCX agenda — we'll parse it into items via heuristic + AI"
+                  >
+                    {uploadAgendaMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    {uploadAgendaMutation.isPending ? 'Parsing…' : 'Upload & AI parse'}
+                  </button>
+                  <button
+                    onClick={() => setIsAddAgendaOpen(true)}
+                    className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Item
+                  </button>
+                </div>
               )}
             </div>
 
@@ -694,6 +779,11 @@ export default function MeetingDetailPage() {
                             <span className="font-medium">Decision:</span> {item.decision_made}
                           </div>
                         )}
+                        {/* Voting panel — committee members cast an
+                            agree / partial / disagree / abstain vote with
+                            an optional comment. Tally + per-vote details
+                            visible to everyone in the tenant. */}
+                        <AgendaVotePanel itemId={item.id} />
                       </div>
                     </div>
                   </div>
@@ -708,26 +798,58 @@ export default function MeetingDetailPage() {
                 <FileText className="h-5 w-5 text-emerald-500" />
                 Meeting Minutes
               </h3>
-              {(meeting.has_minutes || meeting.minutes) && !isEditMinutesOpen && (
-                <button
-                  onClick={() => {
-                    setMinutesContent(meeting.minutes?.content ?? '');
-                    setIsEditMinutesOpen(true);
-                  }}
-                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
-                >
-                  <Save className="h-4 w-4" />
-                  Edit Minutes
-                </button>
-              )}
-              {!meeting.has_minutes && !meeting.minutes && !isEditMinutesOpen && (
-                <button
-                  onClick={() => setIsEditMinutesOpen(true)}
-                  className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
-                >
-                  <Plus className="h-4 w-4" />
-                  Draft Minutes
-                </button>
+              {!isEditMinutesOpen && (
+                <div className="flex items-center gap-2">
+                  {/* Hidden file input — clicked programmatically by the
+                      Upload button below. Accepts PDF, Word, plain text,
+                      markdown, and RTF; the server extracts the text and
+                      stores it as the draft minutes content. */}
+                  <input
+                    ref={uploadMinutesInputRef}
+                    type="file"
+                    accept=".pdf,.doc,.docx,.txt,.md,.rtf,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,application/rtf"
+                    className="hidden"
+                    onChange={onPickMinutesUploadFile}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => uploadMinutesInputRef.current?.click()}
+                    disabled={uploadMinutesMutation.isPending}
+                    title={
+                      meeting.has_minutes || meeting.minutes
+                        ? 'Upload a document to replace the current minutes (drops back to draft)'
+                        : 'Upload a PDF / DOCX / TXT — we extract the text into draft minutes'
+                    }
+                    className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <Upload className="h-4 w-4" />
+                    {uploadMinutesMutation.isPending
+                      ? 'Uploading…'
+                      : (meeting.has_minutes || meeting.minutes)
+                        ? 'Upload to Replace'
+                        : 'Upload Minutes'}
+                  </button>
+                  {(meeting.has_minutes || meeting.minutes) ? (
+                    <button
+                      onClick={() => {
+                        setMinutesContent(meeting.minutes?.content ?? '');
+                        setIsEditMinutesOpen(true);
+                      }}
+                      className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
+                    >
+                      <Save className="h-4 w-4" />
+                      Edit Minutes
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setIsEditMinutesOpen(true)}
+                      className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-gray-50"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Draft Minutes
+                    </button>
+                  )}
+                </div>
               )}
             </div>
 
@@ -1390,6 +1512,175 @@ export default function MeetingDetailPage() {
           </div>
         </div>
       </RightSlidePanel>
+    </div>
+  );
+}
+
+// ── AgendaVotePanel ─────────────────────────────────────────────────────────
+// Per-agenda-item voting surface. Compact by default (just the tally chips
+// + the user's own vote indicator); expands to show the cast/change UI +
+// the full vote list with comments. Re-clicking a vote you've already
+// cast toggles it off only via "Change vote" → no accidental flips.
+
+type VoteValue = 'agreed' | 'disagreed' | 'partial' | 'abstain';
+
+const VOTE_STYLES: Record<VoteValue, { label: string; bg: string; text: string; border: string }> = {
+  agreed:    { label: 'Agreed',    bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  partial:   { label: 'Partial',   bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200' },
+  disagreed: { label: 'Disagreed', bg: 'bg-rose-50',    text: 'text-rose-700',    border: 'border-rose-200' },
+  abstain:   { label: 'Abstain',   bg: 'bg-slate-50',   text: 'text-slate-600',   border: 'border-slate-200' },
+};
+
+function AgendaVotePanel({ itemId }: { itemId: number }) {
+  const qc = useQueryClient();
+  const [expanded, setExpanded] = useState(false);
+  const [draftVote, setDraftVote] = useState<VoteValue | null>(null);
+  const [draftComment, setDraftComment] = useState('');
+
+  const { data } = useQuery({
+    queryKey: ['agenda-votes', itemId],
+    queryFn: () => committeeApi.listAgendaVotes(itemId).then((r) => r.data),
+    staleTime: 30 * 1000,
+  });
+
+  const voteMutation = useMutation({
+    mutationFn: ({ vote, comment }: { vote: VoteValue; comment?: string }) =>
+      committeeApi.voteAgendaItem(itemId, vote, comment),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agenda-votes', itemId] });
+      setDraftVote(null);
+      setDraftComment('');
+    },
+  });
+
+  const tally = data?.tally || { agreed: 0, disagreed: 0, partial: 0, abstain: 0 };
+  const total = data?.total ?? 0;
+  const myVote = (data?.my_vote?.vote as VoteValue | undefined) || null;
+  const myComment = data?.my_vote?.comment || '';
+
+  const orderedVotes: VoteValue[] = ['agreed', 'partial', 'disagreed', 'abstain'];
+
+  return (
+    <div className="mt-2 rounded-md border border-slate-200 bg-slate-50">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full px-3 py-1.5 flex items-center justify-between gap-2 hover:bg-slate-100 rounded-t-md"
+      >
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            Votes {total > 0 ? `(${total})` : ''}
+          </span>
+          {orderedVotes.map((v) => {
+            const n = (tally as Record<string, number>)[v] || 0;
+            if (n === 0) return null;
+            const s = VOTE_STYLES[v];
+            return (
+              <span key={v} className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${s.bg} ${s.text} ${s.border}`}>
+                {s.label}: {n}
+              </span>
+            );
+          })}
+          {myVote && (
+            <span className="text-[10px] text-slate-500 ml-1">
+              · your vote: <span className={`font-semibold ${VOTE_STYLES[myVote].text}`}>{VOTE_STYLES[myVote].label}</span>
+            </span>
+          )}
+        </div>
+        <ChevronRight className={`h-3.5 w-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+      </button>
+
+      {expanded && (
+        <div className="px-3 pb-2 pt-1 border-t border-slate-200">
+          {/* Cast / change vote */}
+          <div className="mt-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
+              {myVote ? 'Change your vote' : 'Cast a vote'}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {orderedVotes.map((v) => {
+                const s = VOTE_STYLES[v];
+                const isMine = myVote === v;
+                const isDraft = draftVote === v;
+                return (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setDraftVote(v)}
+                    disabled={voteMutation.isPending}
+                    className={`text-xs px-2.5 py-1 rounded-md border transition-colors disabled:opacity-50 ${
+                      isDraft || (!draftVote && isMine)
+                        ? `${s.bg} ${s.text} ${s.border} font-semibold`
+                        : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
+            </div>
+            {draftVote && (
+              <div className="mt-2 space-y-2">
+                <textarea
+                  value={draftComment}
+                  onChange={(e) => setDraftComment(e.target.value)}
+                  rows={2}
+                  placeholder={myComment ? `Current comment: ${myComment}. Type to update…` : 'Optional comment'}
+                  className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900"
+                />
+                <div className="flex gap-1.5 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => { setDraftVote(null); setDraftComment(''); }}
+                    className="text-xs rounded-md border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={voteMutation.isPending}
+                    onClick={() => voteMutation.mutate({
+                      vote: draftVote,
+                      comment: draftComment.trim() || undefined,
+                    })}
+                    className="text-xs rounded-md bg-blue-600 px-2.5 py-1 text-white hover:bg-blue-700 inline-flex items-center gap-1 disabled:opacity-50"
+                  >
+                    {voteMutation.isPending && <Loader2 size={11} className="animate-spin" />}
+                    Submit vote
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Vote history */}
+          {data?.votes && data.votes.length > 0 && (
+            <div className="mt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
+                Who voted what
+              </p>
+              <ul className="space-y-1">
+                {data.votes.map((v) => {
+                  const s = VOTE_STYLES[(v.vote as VoteValue)] || VOTE_STYLES.abstain;
+                  return (
+                    <li key={v.id} className="flex items-start justify-between gap-2 text-xs">
+                      <div className="min-w-0 flex-1">
+                        <span className="text-slate-700 font-medium">{v.user_name || `User #${v.user_id}`}</span>
+                        {v.comment && (
+                          <p className="text-slate-600 text-xs mt-0.5 break-words">{v.comment}</p>
+                        )}
+                      </div>
+                      <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${s.bg} ${s.text} ${s.border}`}>
+                        {s.label}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

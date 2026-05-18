@@ -236,6 +236,10 @@ def serialize_charter(charter: CommitteeCharter) -> dict:
         "file_name": charter.file_name,
         "file_type": charter.file_type,
         "file_size": charter.file_size,
+        # Structured sections — populated by the upload-new endpoint or
+        # by an AI-generate result the operator saved. NULL on legacy
+        # plain-text rows; the frontend renders content directly in that case.
+        "sections": getattr(charter, "sections_json", None) or None,
     }
 
 
@@ -825,8 +829,241 @@ def add_agenda_item(
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
-    
+
     return serialize_agenda_item(db_item)
+
+
+@router.post("/meetings/{meeting_id}/agenda/upload-parse", status_code=status.HTTP_201_CREATED)
+async def upload_and_parse_agenda(
+    meeting_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Take a PDF/DOCX/TXT agenda document, parse it into structured
+    agenda items via the heuristic + AI parser, and bulk-insert them
+    against the meeting. Existing items are NOT touched — new ones get
+    appended after the highest current item_number.
+
+    Returns the freshly inserted items so the UI can render them
+    immediately without an extra GET round-trip.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+
+    meeting = db.query(CommitteeMeeting).filter(
+        CommitteeMeeting.id == meeting_id,
+        CommitteeMeeting.tenant_id.in_(user_tenants),
+    ).first()
+    if not meeting:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
+
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file provided")
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty")
+
+    try:
+        file.file.seek(0)
+    except Exception:
+        pass
+
+    # Extract plain text using the existing helper.
+    try:
+        extracted = extract_text_from_uploaded_action_file(file, file_bytes) or ""
+    except Exception:
+        logger.exception("Agenda upload-parse: text extraction failed for %s", file.filename)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not read the uploaded document.",
+        )
+
+    if not extracted.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The document is empty or unreadable.",
+        )
+
+    # Parse into agenda items.
+    try:
+        from ....services.agenda_parser import parse_agenda_items
+        parsed = parse_agenda_items(extracted)
+    except Exception:
+        logger.exception("Agenda upload-parse: parser raised")
+        parsed = []
+
+    if not parsed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Couldn't extract any agenda items from the document. "
+                "Try formatting items with numbered headers (1. Title) "
+                "or upload a more structured agenda."
+            ),
+        )
+
+    # Append after the highest existing item_number.
+    max_num = db.query(func.max(MeetingAgendaItem.item_number)).filter(
+        MeetingAgendaItem.meeting_id == meeting_id,
+    ).scalar() or 0
+
+    inserted: List[MeetingAgendaItem] = []
+    for idx, p in enumerate(parsed, start=1):
+        row = MeetingAgendaItem(
+            tenant_id=meeting.tenant_id,
+            meeting_id=meeting_id,
+            item_number=max_num + idx,
+            title=p.get("title") or "Untitled agenda item",
+            description=p.get("description"),
+            item_type=p.get("item_type") or "discussion",
+            time_allocated_minutes=p.get("time_allocated_minutes"),
+            status="pending",
+        )
+        db.add(row)
+        inserted.append(row)
+
+    db.commit()
+    for row in inserted:
+        db.refresh(row)
+
+    return {
+        "inserted": len(inserted),
+        "agenda_items": [serialize_agenda_item(r) for r in inserted],
+    }
+
+
+# ── Agenda item voting ─────────────────────────────────────────────────────
+# One vote per user per agenda item. Re-posting updates (upsert). Tally is
+# computed on every GET so it's always fresh. Comments are optional and
+# free-text; the UI shows each vote alongside its commenter's display name.
+
+_VALID_AGENDA_VOTES = {"agreed", "disagreed", "partial", "abstain"}
+
+
+class AgendaVoteBody(BaseModel):
+    vote: str
+    comment: Optional[str] = None
+
+
+def _get_agenda_item_for_user(item_id: int, user: GRCUser, db: Session):
+    """Tenant-scoped fetch of an agenda item via its meeting → tenant."""
+    user_tenants = get_user_tenants(user, db)
+    from ....models import MeetingAgendaItem as _AI
+    item = (
+        db.query(_AI)
+        .filter(_AI.id == item_id)
+        .filter(_AI.tenant_id.in_(user_tenants))
+        .first()
+    )
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agenda item not found")
+    return item
+
+
+@router.post("/meetings/agenda/{item_id}/votes")
+def cast_agenda_vote(
+    item_id: int,
+    body: AgendaVoteBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Cast or update the current user's vote on an agenda item.
+
+    Idempotent — re-posting the same vote with a new comment just
+    updates the comment. Vote values are validated against the allowed
+    set (agreed / disagreed / partial / abstain); anything else returns 400.
+    """
+    item = _get_agenda_item_for_user(item_id, current_user, db)
+
+    vote = (body.vote or "").strip().lower()
+    if vote not in _VALID_AGENDA_VOTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"vote must be one of: {', '.join(sorted(_VALID_AGENDA_VOTES))}",
+        )
+
+    from ....models import MeetingAgendaItemVote
+    existing = (
+        db.query(MeetingAgendaItemVote)
+        .filter(MeetingAgendaItemVote.agenda_item_id == item.id)
+        .filter(MeetingAgendaItemVote.user_id == current_user.id)
+        .first()
+    )
+    if existing:
+        existing.vote = vote
+        if body.comment is not None:
+            existing.comment = (body.comment or "").strip() or None
+        db.commit()
+        db.refresh(existing)
+        return {
+            "id": existing.id, "vote": existing.vote, "comment": existing.comment,
+            "updated": True,
+        }
+    new_row = MeetingAgendaItemVote(
+        tenant_id=item.tenant_id,
+        agenda_item_id=item.id,
+        user_id=current_user.id,
+        vote=vote,
+        comment=(body.comment or "").strip() or None,
+    )
+    db.add(new_row)
+    db.commit()
+    db.refresh(new_row)
+    return {
+        "id": new_row.id, "vote": new_row.vote, "comment": new_row.comment,
+        "updated": False,
+    }
+
+
+@router.get("/meetings/agenda/{item_id}/votes")
+def list_agenda_votes(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """List votes + tally for an agenda item.
+
+    Returns:
+      - `total`: vote count
+      - `tally`: counts by vote type (every value in _VALID_AGENDA_VOTES)
+      - `my_vote`: the caller's vote if they've voted, else None
+      - `votes`: full list with user display names + comments
+    """
+    item = _get_agenda_item_for_user(item_id, current_user, db)
+    from ....models import MeetingAgendaItemVote
+
+    rows = (
+        db.query(MeetingAgendaItemVote)
+        .options(joinedload(MeetingAgendaItemVote.user))
+        .filter(MeetingAgendaItemVote.agenda_item_id == item.id)
+        .order_by(MeetingAgendaItemVote.updated_at.desc())
+        .all()
+    )
+    tally = {v: 0 for v in _VALID_AGENDA_VOTES}
+    my_vote = None
+    for r in rows:
+        tally[r.vote] = tally.get(r.vote, 0) + 1
+        if r.user_id == current_user.id:
+            my_vote = {"vote": r.vote, "comment": r.comment}
+
+    return {
+        "total": len(rows),
+        "tally": tally,
+        "my_vote": my_vote,
+        "votes": [
+            {
+                "id": r.id,
+                "user_id": r.user_id,
+                "user_name": (r.user.display_name or r.user.username) if r.user else None,
+                "vote": r.vote,
+                "comment": r.comment,
+                "voted_at": r.updated_at.isoformat() if r.updated_at else None,
+            }
+            for r in rows
+        ],
+    }
+
 
 @router.put("/meetings/agenda/{item_id}")
 def update_agenda_item(
@@ -1272,8 +1509,119 @@ def create_or_update_minutes(
     db.add(db_minutes)
     db.commit()
     db.refresh(db_minutes)
-    
+
     return serialize_minutes(db_minutes)
+
+
+@router.post("/meetings/{meeting_id}/minutes/upload", status_code=status.HTTP_201_CREATED)
+async def upload_minutes_document(
+    meeting_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Upload a minutes document (PDF / DOCX / TXT / MD / CSV) and store
+    its extracted text as the meeting minutes content. If minutes already
+    exist for this meeting, the upload replaces the content but preserves
+    the existing approval state unless the existing record was already
+    approved (in which case we drop back to draft and clear the approver
+    so changes go through review again).
+
+    The user can edit the extracted text afterwards via the existing
+    PUT /meetings/minutes/{id} endpoint.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+
+    meeting = db.query(CommitteeMeeting).filter(
+        CommitteeMeeting.id == meeting_id,
+        CommitteeMeeting.tenant_id.in_(user_tenants),
+    ).first()
+    if not meeting:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
+
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file provided")
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty")
+
+    # 10 MB cap. Minutes documents shouldn't be larger than this in
+    # practice; bigger uploads are almost always the wrong file.
+    if len(file_bytes) > 10 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File too large. Maximum allowed size is 10 MB.",
+        )
+
+    try:
+        file.file.seek(0)
+    except Exception:
+        pass
+
+    try:
+        extracted = extract_text_from_uploaded_action_file(file, file_bytes) or ""
+    except Exception:
+        logger.exception("Minutes upload: text extraction failed for %s", file.filename)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not read the uploaded document.",
+        )
+
+    extracted = extracted.strip()
+    if not extracted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "The document is empty or unreadable. "
+                "Scanned PDFs without OCR are not supported — upload a "
+                "text-based PDF, DOCX, or TXT."
+            ),
+        )
+
+    existing = db.query(MeetingMinutes).filter(
+        MeetingMinutes.meeting_id == meeting_id,
+    ).first()
+
+    if existing:
+        existing.content = extracted
+        # Uploading a new doc invalidates any prior approval — drop back
+        # to draft so reviewers see the change.
+        if existing.status == "approved":
+            existing.status = "draft"
+            existing.approved_by = None
+            existing.approved_at = None
+        existing.drafted_by = current_user.id
+        existing.drafted_at = datetime.utcnow()
+        db.commit()
+        db.refresh(existing)
+        return {
+            "uploaded": True,
+            "filename": file.filename,
+            "characters": len(extracted),
+            "replaced_existing": True,
+            "minutes": serialize_minutes(existing),
+        }
+
+    db_minutes = MeetingMinutes(
+        tenant_id=meeting.tenant_id,
+        meeting_id=meeting_id,
+        content=extracted,
+        attendees=[],
+        status="draft",
+        drafted_by=current_user.id,
+    )
+    db.add(db_minutes)
+    db.commit()
+    db.refresh(db_minutes)
+    return {
+        "uploaded": True,
+        "filename": file.filename,
+        "characters": len(extracted),
+        "replaced_existing": False,
+        "minutes": serialize_minutes(db_minutes),
+    }
+
 
 @router.put("/meetings/minutes/{minutes_id}")
 def update_minutes(
@@ -1892,11 +2240,121 @@ async def upload_charter_file(
     charter.file_name = file.filename
     charter.file_type = file_ext.lstrip(".") if file_ext else None
     charter.file_size = file_size
-    
+
     db.commit()
     db.refresh(charter)
-    
+
     return serialize_charter(charter)
+
+
+@router.post("/{committee_id}/charters/upload-new", status_code=status.HTTP_201_CREATED)
+async def upload_new_charter(
+    committee_id: int,
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+    version: Optional[str] = Form("1.0"),
+    status_value: Optional[str] = Form("draft"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Create a new committee charter directly from an uploaded document.
+
+    One round-trip from the UI: takes the file, extracts plain text into
+    `content` (best-effort — empty content is fine, the operator can edit
+    later), saves the file to the per-tenant upload directory, and stamps
+    file_path/name/type/size on the new row. The returned shape matches
+    the regular create endpoint so the frontend can reuse its render
+    code.
+
+    Use this when the customer already has a Word/PDF charter and wants
+    to import it as the canonical version. The `AI Generate Charter`
+    button is for the opposite case — drafting one from scratch.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+
+    committee = db.query(GovernanceCommittee).filter(
+        GovernanceCommittee.id == committee_id,
+        GovernanceCommittee.tenant_id.in_(user_tenants),
+    ).first()
+    if not committee:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Committee not found")
+
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file provided")
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty")
+
+    # Reset the SpooledTemporaryFile so extract_text can read again from
+    # the start. The action-file extractor expects `file.file` to be seekable.
+    try:
+        file.file.seek(0)
+    except Exception:
+        pass
+
+    # Best-effort text extraction (PDF / DOCX / TXT). Bad/unsupported
+    # formats just leave content empty — the operator can edit later.
+    extracted_text = ""
+    try:
+        extracted_text = extract_text_from_uploaded_action_file(file, file_bytes) or ""
+    except Exception:
+        logger.exception("Charter upload-new: text extraction failed for %s", file.filename)
+
+    # Derive a sensible title from the filename when the caller didn't supply one.
+    derived_title = (title or "").strip()
+    if not derived_title:
+        stem = os.path.splitext(file.filename)[0]
+        derived_title = (stem or "Uploaded Charter").replace("_", " ").replace("-", " ")[:255]
+
+    # Parse the extracted text into AI-style sections so the UI can
+    # render the uploaded charter in the same beautiful panel as the
+    # AI-drafted one. Best-effort — failure leaves sections NULL and the
+    # plain content path still renders.
+    parsed_sections = None
+    try:
+        from ....services.charter_parser import parse_charter_sections
+        if extracted_text and extracted_text.strip():
+            parsed_sections = parse_charter_sections(extracted_text)
+    except Exception:
+        logger.exception("Charter upload-new: section parsing failed")
+        parsed_sections = None
+
+    db_charter = CommitteeCharter(
+        tenant_id=committee.tenant_id,
+        committee_id=committee_id,
+        version=(version or "1.0").strip() or "1.0",
+        title=derived_title,
+        content=extracted_text or None,
+        sections_json=parsed_sections,
+        status=(status_value or "draft").strip() or "draft",
+        created_by=current_user.id,
+    )
+    db.add(db_charter)
+    db.commit()
+    db.refresh(db_charter)
+
+    # Persist the file alongside the row so users can re-download it later.
+    tenant_upload_dir = os.path.join(UPLOAD_DIR, str(db_charter.tenant_id))
+    os.makedirs(tenant_upload_dir, exist_ok=True)
+    file_ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    unique_filename = f"{db_charter.id}_{uuid.uuid4().hex[:8]}{file_ext}"
+    file_path = os.path.join(tenant_upload_dir, unique_filename)
+    try:
+        with open(file_path, "wb") as f:
+            f.write(file_bytes)
+        db_charter.file_path = file_path
+        db_charter.file_name = file.filename
+        db_charter.file_type = file_ext.lstrip(".") if file_ext else None
+        db_charter.file_size = len(file_bytes)
+        db.commit()
+        db.refresh(db_charter)
+    except Exception:
+        logger.exception("Charter upload-new: file save failed (row already created)")
+        # Row is intentionally kept — the operator has the extracted text;
+        # they can re-upload the file separately.
+
+    return serialize_charter(db_charter)
 
 
 

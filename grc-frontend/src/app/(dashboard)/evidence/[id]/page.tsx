@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { InlineLinkPicker, PageLoader } from '@/components/ui';
+import EvidenceViewer from '@/components/evidence/EvidenceViewer';
 import {
   ArrowLeft, Loader2, AlertCircle, FileCheck, Calendar, Clock,
   CheckCircle, XCircle, FileText, Edit, ScanText, Brain, Link2,
@@ -229,6 +230,7 @@ export default function EvidenceDetailPage() {
   const [selectedControlId, setSelectedControlId] = useState<number | null>(null);
   const [showRiskModal, setShowRiskModal] = useState(false);
   const [showAssetModal, setShowAssetModal] = useState(false);
+  const [showFilePreview, setShowFilePreview] = useState(false);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
   const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [selectedRiskId, setSelectedRiskId] = useState<number | null>(null);
@@ -907,6 +909,16 @@ export default function EvidenceDetailPage() {
               <span className="text-xs text-gray-500">Version</span>
               <p className="text-sm text-black">v{evidence.version}</p>
             </div>
+            {evidence.file_path && (
+              <button
+                onClick={() => setShowFilePreview(true)}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+                title="Open the file in an in-browser preview"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Preview file
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1287,11 +1299,24 @@ export default function EvidenceDetailPage() {
           </div>
         )}
 
+      {/* Shared in-browser preview of the uploaded file. The viewer
+          fetches via the auth'd axios client so /api/uploads/... gets
+          the right headers, then routes to per-type renderers (image,
+          PDF, xlsx/csv, markdown, text) or degrades to a download CTA
+          for non-previewable formats. */}
+      <EvidenceViewer
+        evidence={showFilePreview && evidence?.file_path ? {
+          file_path: evidence.file_path,
+          file_name: evidence.file_name || 'evidence',
+          mime_type: evidence.file_type,
+        } : null}
+        onClose={() => setShowFilePreview(false)}
+      />
     </div>
   );
 }
 
-function OverviewTab({ 
+function OverviewTab({
   evidence, 
   formatDate, 
   formatDateTime 

@@ -98,10 +98,18 @@ interface Campaign {
 }
 
 interface BUProgress {
-  business_unit: string;
-  completion_rate: number;
+  // Backend (RCSABUProgress schema) returns business_unit_name + completed
+  // (not business_unit + completed_assessments). The old local interface
+  // was the reason BU names came out blank and the bar chart filled with
+  // "Unknown" labels.
+  business_unit_id: number;
+  business_unit_name: string | null;
   total_assessments: number;
-  completed_assessments: number;
+  completed: number;
+  in_progress: number;
+  not_started: number;
+  completion_rate: number;
+  avg_risk_score: number | null;
 }
 
 interface FindingsBySeverity {
@@ -287,7 +295,7 @@ export default function RCSADashboardPage() {
     .slice(0, 8)
     .sort((a, b) => b.completion_rate - a.completion_rate)
     .map((bu) => {
-      const name = bu.business_unit ?? 'Unknown';
+      const name = bu.business_unit_name || 'Unknown';
       return {
         name: name.length > 20 ? name.slice(0, 20) + '\u2026' : name,
         rate: Math.round(bu.completion_rate ?? 0),

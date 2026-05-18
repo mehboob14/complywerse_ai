@@ -9,6 +9,7 @@ import Link from 'next/link';
 import apiClient, { tenantApi } from '@/lib/api';
 import XlsxMaturityViewer from './XlsxMaturityViewer';
 import ArtifactsTab from '@/components/compliance/ArtifactsTab';
+import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
 import DCCAssessmentTab from '@/components/compliance/DCCAssessmentTab';
 import AuditPlanTab from '@/components/compliance/AuditPlanTab';
 import NcaTab from '@/components/compliance/NcaTab';
@@ -1554,9 +1555,12 @@ export default function AssessmentDetailPage() {
                                                   )}
                                                 </div>
                                                 {ev.evidence && (
-                                                  <p className="text-xs text-gray-500 mt-1">
-                                                    {ev.evidence.file_name} • {ev.evidence.file_type}
-                                                  </p>
+                                                  <div className="flex items-center gap-2 mt-1">
+                                                    <p className="text-xs text-gray-500">
+                                                      {ev.evidence.file_name} • {ev.evidence.file_type}
+                                                    </p>
+                                                    <EvidencePreviewButton evidenceId={ev.evidence.id} label="Preview" className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 hover:bg-blue-100" />
+                                                  </div>
                                                 )}
                                                 {isFrameworkLink && ev.framework_name && (
                                                   <p className="text-xs text-purple-600 mt-1">

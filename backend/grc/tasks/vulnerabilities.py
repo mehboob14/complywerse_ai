@@ -88,7 +88,10 @@ def bulk_enrich_open_vulns(self, tenant_slug: str, only_with_cve: bool = True, d
     # Only re-enrich rows that aren't in a terminal state. SLA-driven
     # remediation isn't affected by enrichment changes, so closed vulns
     # don't need refreshing.
-    terminal = ("resolved", "remediated", "verified", "closed", "accepted", "false_positive")
+    terminal = (
+        "resolved", "remediated", "verified", "closed",
+        "accepted", "false_positive", "auto_closed_decommissioned",
+    )
     query = db.query(Vulnerability).filter(~Vulnerability.status.in_(terminal))
     if only_with_cve:
         query = query.filter(Vulnerability.cve_id.isnot(None))
@@ -113,6 +116,58 @@ def bulk_enrich_open_vulns(self, tenant_slug: str, only_with_cve: bool = True, d
         tenant_slug, total, enriched, failed,
     )
     return {"status": "ok", "total": total, "enriched": enriched, "failed": failed}
+
+
+@celery_app.task(
+    base=TenantTask,
+    bind=True,
+    name="grc.tasks.vulnerabilities.run_cpe_matcher_for_vuln",
+    queue="parsing",
+    max_retries=1,
+    default_retry_delay=60,
+)
+def run_cpe_matcher_for_vuln(self, tenant_slug: str, vuln_id: int, db: Session = None) -> dict:
+    """Standalone CPE matcher run for one vuln. Used by:
+      * the manual "Re-run matcher" admin button on a vuln, and
+      * the daily refresh below (so newly registered SoftwareIdentifier
+        rows pick up existing open vulns).
+    """
+    from ..models import Vulnerability
+    from ..modules.vuln_management.enrichment.nvd_client import fetch_nvd
+    from ..services.cpe_matcher import match_cve_to_asset_ids, write_auto_links
+
+    vuln = db.query(Vulnerability).filter(Vulnerability.id == vuln_id).first()
+    if not vuln or not vuln.cve_id:
+        return {"status": "skipped", "vuln_id": vuln_id}
+
+    try:
+        nvd = fetch_nvd(vuln.cve_id)
+    except Exception:
+        return {"status": "error", "reason": "nvd_unavailable", "vuln_id": vuln_id}
+    if not nvd or not nvd.configurations:
+        return {"status": "no_configurations", "vuln_id": vuln_id}
+
+    try:
+        asset_ids = match_cve_to_asset_ids(
+            db,
+            tenant_id=vuln.tenant_id,
+            cve_id=vuln.cve_id,
+            configurations=nvd.configurations,
+        )
+        added = write_auto_links(
+            db, vuln_id=vuln.id, tenant_id=vuln.tenant_id, asset_ids=asset_ids,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("run_cpe_matcher_for_vuln failed tenant=%s vuln=%s", tenant_slug, vuln_id)
+        return {"status": "error", "reason": "exception", "vuln_id": vuln_id}
+
+    logger.info(
+        "run_cpe_matcher_for_vuln tenant=%s vuln=%s added=%d",
+        tenant_slug, vuln_id, added,
+    )
+    return {"status": "ok", "vuln_id": vuln_id, "matches_added": added}
 
 
 @celery_app.task(

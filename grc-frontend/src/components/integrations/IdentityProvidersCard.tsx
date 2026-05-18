@@ -50,6 +50,9 @@ export function IdentityProvidersCard() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  // Google Workspace card opens a separate info panel — the OAuth flow
+  // isn't wired up yet, so this panel just explains what's coming.
+  const [googleOpen, setGoogleOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('config');
   const [config, setConfig] = useState<IdpConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -288,6 +291,7 @@ export function IdentityProvidersCard() {
           </h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {/* Microsoft Entra ID — live */}
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -296,7 +300,13 @@ export function IdentityProvidersCard() {
           >
             <div className="flex items-center gap-3 min-w-0">
               <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded bg-blue-50 text-blue-600">
-                <Sparkles size={18} />
+                {/* Microsoft 4-square logo */}
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 23 23">
+                  <path fill="#f35325" d="M1 1h10v10H1z"/>
+                  <path fill="#81bc06" d="M12 1h10v10H12z"/>
+                  <path fill="#05a6f0" d="M1 12h10v10H1z"/>
+                  <path fill="#ffba08" d="M12 12h10v10H12z"/>
+                </svg>
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-medium text-slate-800 truncate">{PROVIDER_LABEL}</p>
@@ -307,8 +317,72 @@ export function IdentityProvidersCard() {
               {loading ? '…' : status.label}
             </span>
           </button>
+
+          {/* Google Workspace — visible in the picker; backend wiring is
+              on the roadmap. Clicking opens an informational panel rather
+              than starting an OAuth flow that doesn't exist yet. */}
+          <button
+            type="button"
+            onClick={() => setGoogleOpen(true)}
+            className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left hover:border-blue-300 hover:bg-blue-50/30 transition"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded bg-slate-50">
+                {/* Google "G" logo */}
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48">
+                  <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
+                  <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/>
+                  <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0124 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
+                  <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 01-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-800 truncate">Google Workspace</p>
+                <p className="text-xs text-slate-500 truncate">SSO sign-in + user provisioning</p>
+              </div>
+            </div>
+            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap bg-slate-100 text-slate-600">
+              Not configured
+            </span>
+          </button>
         </div>
       </div>
+
+      {/* Informational slide-over for Google Workspace until the OAuth
+          flow ships. Same visual style as the Entra panel so the page
+          feels consistent. */}
+      <RightSlidePanel
+        isOpen={googleOpen}
+        onClose={() => setGoogleOpen(false)}
+        title="Google Workspace"
+        subtitle="OAuth sign-in + Cloud Identity user provisioning"
+        width="w-full max-w-2xl"
+      >
+        <div className="space-y-4">
+          <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 space-y-1">
+            <p className="font-medium">Coming soon</p>
+            <p>
+              The Google Workspace connector is on the roadmap. When it ships you'll be
+              able to: sign in with a Google Workspace account, sync directory users
+              from Cloud Identity, and map Google Groups to GRC roles — the same way
+              Microsoft Entra works today.
+            </p>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-700 space-y-1">
+            <p className="font-medium">What it will do</p>
+            <ul className="list-disc list-inside space-y-0.5">
+              <li>OAuth 2.0 + OIDC consent flow with your Workspace domain.</li>
+              <li>Auto-provision new users from the domain on first sign-in.</li>
+              <li>Map Google Groups (e.g. <code className="font-mono">security@yourco.com</code>) → GRC roles.</li>
+              <li>Optional domain allowlist (mirrors the Entra setting).</li>
+            </ul>
+          </div>
+          <div className="text-xs text-slate-500">
+            Need this sooner? Tell us — we'll prioritise based on which side has the
+            larger user base.
+          </div>
+        </div>
+      </RightSlidePanel>
 
       <RightSlidePanel
         isOpen={open}

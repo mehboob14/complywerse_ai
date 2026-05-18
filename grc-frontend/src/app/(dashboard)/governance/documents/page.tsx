@@ -41,7 +41,9 @@ import {
   Send,
   Globe,
   Users,
+  ShieldCheck,
 } from 'lucide-react';
+import Link from 'next/link';
 import NcaTemplateSelect, { NcaTemplateMeta } from '@/components/governance/NcaTemplateSelect';
 
 interface TenantUser {
@@ -307,6 +309,12 @@ export default function GovernanceDocumentsPage() {
         review_cycle_months: data.review_cycle_months || 12,
         effective_date: data.effective_date,
         expiry_date: data.expiry_date,
+        // Persist optional framework linkage so the auditor portal can
+        // surface this doc under each linked framework. Previously this
+        // field was silently dropped at save time — that was the root
+        // cause of "I drafted against SWIFT but the auditor portal
+        // documents tab is empty".
+        framework_ids: Array.isArray(data.framework_ids) ? data.framework_ids : [],
       };
       return governanceApi.createDocument(payload as any);
     },
@@ -337,6 +345,9 @@ export default function GovernanceDocumentsPage() {
         review_cycle_months: data.review_cycle_months,
         effective_date: data.effective_date,
         expiry_date: data.expiry_date,
+        // Allow editing the framework linkage after creation too —
+        // re-tagging a doc must propagate to the auditor portal.
+        framework_ids: Array.isArray(data.framework_ids) ? data.framework_ids : undefined,
       };
       return governanceApi.updateDocument(id, payload as any);
     },
@@ -428,60 +439,121 @@ export default function GovernanceDocumentsPage() {
     },
   });
 
+  // Async drafting job — kicks off a background task on submit and polls
+  // /ai-draft-jobs/{id} until it completes. Real stage telemetry comes
+  // straight from the pipeline's progress_callback events, so the modal
+  // can show "Drafting section 4 of 13" instead of a fake timer.
+  const [aiDraftJobId, setAIDraftJobId] = useState<string | null>(null);
+  const [aiDraftJobState, setAIDraftJobState] = useState<{
+    status: 'queued' | 'running' | 'completed' | 'failed' | 'inline';
+    stage?: string;
+    sections_total?: number | null;
+    sections_completed?: number;
+    last_section?: string | null;
+    elapsed_ms?: number;
+    error?: string | null;
+  } | null>(null);
+
   const aiDraftMutation = useMutation({
     mutationFn: async (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; parent_document_id?: number; nca_template_id?: string }) => {
-      // If user picked an NCA reference template, route through the NCA-template
-      // AI-draft endpoint so the template content is used as the backbone.
+      let response;
       if (data.nca_template_id) {
-        const orgContext = data.description
-          ? `Document description: ${data.description}`
-          : '';
         const requirements: string[] = [];
+        if (data.description) requirements.push(`Document description: ${data.description}`);
         if (data.framework_ids && data.framework_ids.length > 0) {
           requirements.push(`Align with framework IDs: ${data.framework_ids.join(', ')}`);
         }
-        const res = await apiClient.post(
+        response = await apiClient.post(
           `/governance/nca-templates/${data.nca_template_id}/ai-draft`,
           {
             title: data.title,
-            organization_context: orgContext || undefined,
             additional_requirements: requirements.length > 0 ? requirements.join('\n') : undefined,
             doc_type: data.doc_type,
             save_as_document: false,
           }
         );
-        // Adapt the NCA endpoint shape to what AIDraftPolicyModal expects
-        const r = res.data || {};
-        const wc = r.word_count || (r.generated_content?.split(/\s+/).length ?? 0);
-        return {
-          data: {
-            generated_content: r.generated_content || '',
-            suggested_title: data.title,
-            suggested_sections: [],
-            framework_alignment: [],
-            word_count: wc,
-            estimated_review_time: `${Math.max(5, Math.floor(wc / 100))} minutes`,
-          },
-        };
+      } else {
+        response = await apiClient.post('/governance/documents/ai-draft', data);
       }
-      return governanceApi.generatePolicyDraft(data);
+      const body: any = response.data || {};
+      if (!body.job_id) {
+        // Legacy sync response — pass through directly.
+        return { synchronous: true, payload: body };
+      }
+      return { synchronous: false, jobId: body.job_id };
     },
-    onSuccess: (response) => {
-      setAIDraftResult(response.data as typeof aiDraftResult);
-      toast({
-        type: 'success',
-        title: 'Draft Generated',
-        message: 'AI has generated your policy draft. Review and use the content.',
-      });
+    onSuccess: async (out: any) => {
+      if (out.synchronous) {
+        // Backend ran inline (e.g. dev mode without Celery) — surface the result directly.
+        setAIDraftResult(out.payload);
+        toast({ type: 'success', title: 'Draft Generated', message: 'AI has generated your policy draft.' });
+        return;
+      }
+      setAIDraftJobId(out.jobId);
+      setAIDraftJobState({ status: 'queued' });
     },
     onError: (error: any) => {
       toast({
         type: 'error',
         title: 'Generation Failed',
-        message: error?.response?.data?.detail || 'Failed to generate AI draft.',
+        message: error?.response?.data?.detail || 'Failed to start AI draft job.',
       });
     },
   });
+
+  // Polling loop — runs whenever we have an active job.
+  useEffect(() => {
+    if (!aiDraftJobId) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const poll = async () => {
+      try {
+        const resp = await apiClient.get(`/governance/documents/ai-draft-jobs/${aiDraftJobId}`);
+        if (cancelled) return;
+        const payload: any = resp.data || {};
+        setAIDraftJobState({
+          status: payload.status,
+          stage: payload.stage,
+          sections_total: payload.sections_total,
+          sections_completed: payload.sections_completed,
+          last_section: payload.last_section,
+          elapsed_ms: payload.elapsed_ms,
+          error: payload.error,
+        });
+        if (payload.status === 'completed') {
+          setAIDraftResult(payload.result);
+          setAIDraftJobId(null);
+          toast({ type: 'success', title: 'Draft Generated', message: 'AI has generated your policy draft.' });
+          return;
+        }
+        if (payload.status === 'failed') {
+          setAIDraftJobId(null);
+          toast({
+            type: 'error',
+            title: 'Generation Failed',
+            message: payload.error || 'AI drafting job failed.',
+          });
+          return;
+        }
+      } catch (e: any) {
+        // Job missing / expired → stop polling
+        if (e?.response?.status === 404) {
+          setAIDraftJobId(null);
+          setAIDraftJobState(null);
+          toast({ type: 'error', title: 'Drafting Job Lost', message: 'The drafting job is no longer tracked.' });
+          return;
+        }
+      }
+      if (!cancelled) timer = setTimeout(poll, 2000);
+    };
+
+    poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [aiDraftJobId, toast]);
 
   const handleDownload = async (doc: DocumentItem) => {
     try {
@@ -1440,7 +1512,7 @@ export default function GovernanceDocumentsPage() {
             setAIDraftResult(null);
           }}
           onGenerate={(data) => aiDraftMutation.mutate(data)}
-          onUseContent={(content: string, title: string, docType?: string, description?: string, parentDocumentId?: number) => {
+          onUseContent={(content: string, title: string, docType?: string, description?: string, parentDocumentId?: number, frameworkIds?: number[]) => {
             setIsAIDraftModalOpen(false);
             setAIDraftResult(null);
             setAutoParseAfterCreate(true);
@@ -1450,10 +1522,14 @@ export default function GovernanceDocumentsPage() {
               doc_type: docType || 'policy',
               description: description || '',
               parent_document_id: parentDocumentId || null,
+              // Carry the AI-draft framework selection through to the
+              // Document modal so the user doesn't have to reselect.
+              framework_ids: Array.isArray(frameworkIds) ? frameworkIds : [],
             } as any);
             setIsModalOpen(true);
           }}
-          isLoading={aiDraftMutation.isPending}
+          isLoading={aiDraftMutation.isPending || Boolean(aiDraftJobId)}
+          jobState={aiDraftJobState}
           result={aiDraftResult}
         />
       )}
@@ -1474,11 +1550,25 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
     description: '',
     doc_type: 'policy',
     classification: 'internal',
+    framework_ids: [] as number[],
   });
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: frameworkOptions } = useQuery({
+    queryKey: ['document-modal-frameworks'],
+    queryFn: async () => {
+      const response = await apiClient.get('/framework-upload/upload');
+      const data = response.data;
+      const items = Array.isArray(data) ? data : data?.items || data?.frameworks || [];
+      return (items as any[]).filter((f) =>
+        f.is_active && ['parsed', 'published', 'classified', 'completed'].includes(f.upload_status),
+      );
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
   const validateFile = (file: File): boolean => {
     const ext = file.name.split('.').pop()?.toLowerCase();
@@ -1540,6 +1630,11 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
     data.append('classification', formData.classification);
     if (formData.description) {
       data.append('description', formData.description);
+    }
+    if (formData.framework_ids.length > 0) {
+      // JSON-encoded so the backend can rehydrate the list with one
+      // parse call (more reliable than repeated form keys here).
+      data.append('framework_ids', JSON.stringify(formData.framework_ids));
     }
 
     onSubmit(data);
@@ -1696,6 +1791,37 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
                 size="md"
               />
             </div>
+          </div>
+
+          {/* Optional framework linkage — same field as the AI-draft and
+              manual-create flows so uploaded docs also surface in the
+              auditor portal under each linked framework. */}
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">
+              Linked Frameworks <span className="text-xs font-normal text-gray-500">(optional)</span>
+            </label>
+            <MultiSelectDropdown
+              title="Linked Frameworks"
+              items={(frameworkOptions || []).map((f: any) => ({
+                value: String(f.id),
+                label: f.name || `Framework ${f.id}`,
+              }))}
+              selectedValues={formData.framework_ids.map(String)}
+              onApply={(vals) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  framework_ids: vals.map((v) => Number(v)).filter((n) => !Number.isNaN(n)),
+                }))
+              }
+              multiSelect={true}
+              triggerVariant="input"
+              placeholder="Link to one or more frameworks…"
+              size="md"
+              forceSearch
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Linked documents appear under each framework&apos;s Documents tab in the auditor portal.
+            </p>
           </div>
 
       </form>
@@ -1915,6 +2041,26 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
     review_cycle_months: document?.review_cycle_months || 12,
     effective_date: document?.effective_date?.split('T')[0] || '',
     expiry_date: document?.expiry_date?.split('T')[0] || '',
+    // Optional framework linkage — this is what the auditor portal reads
+    // from `framework_ids` to display the doc under each framework. Empty
+    // by default; user can pick zero, one, or many.
+    framework_ids: (document?.framework_ids || []) as number[],
+  });
+
+  // Frameworks available for linkage — same source the AI-draft modal uses,
+  // so the IDs are guaranteed to be the same shape the auditor-portal
+  // backend expects (UploadedFramework.id).
+  const { data: frameworkOptions } = useQuery({
+    queryKey: ['document-modal-frameworks'],
+    queryFn: async () => {
+      const response = await apiClient.get('/framework-upload/upload');
+      const data = response.data;
+      const items = Array.isArray(data) ? data : data?.items || data?.frameworks || [];
+      return (items as any[]).filter((f) =>
+        f.is_active && ['parsed', 'published', 'classified', 'completed'].includes(f.upload_status),
+      );
+    },
+    staleTime: 5 * 60 * 1000,
   });
 
   // NCA template prefill — only available on create (not edit) so existing
@@ -1969,6 +2115,10 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
       parent_document_id: formData.parent_document_id || null,
       effective_date: formData.effective_date || null,
       expiry_date: formData.expiry_date || null,
+      // Persist framework linkage explicitly. Empty array is fine — the
+      // auditor portal just won't surface the doc under any framework
+      // until the user attaches one.
+      framework_ids: formData.framework_ids,
     } as any);
   };
 
@@ -2098,6 +2248,39 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
               size="md"
               forceSearch
             />
+          </div>
+
+          {/* Optional framework linkage. When set, the document shows up
+              under each linked framework's Documents tab in the auditor
+              portal. The auditor portal endpoint matches UploadedFramework.id
+              against this array, so the picker pulls from the same
+              framework-upload list. */}
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">
+              Linked Frameworks <span className="text-xs font-normal text-gray-500">(optional)</span>
+            </label>
+            <MultiSelectDropdown
+              title="Linked Frameworks"
+              items={(frameworkOptions || []).map((f: any) => ({
+                value: String(f.id),
+                label: f.name || `Framework ${f.id}`,
+              }))}
+              selectedValues={formData.framework_ids.map(String)}
+              onApply={(vals) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  framework_ids: vals.map((v) => Number(v)).filter((n) => !Number.isNaN(n)),
+                }))
+              }
+              multiSelect={true}
+              triggerVariant="input"
+              placeholder="Link to one or more frameworks…"
+              size="md"
+              forceSearch
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Linked documents appear under each framework&apos;s Documents tab in the auditor portal.
+            </p>
           </div>
 
           <div>
@@ -2453,12 +2636,125 @@ function RequestAttestationModal({ document, onClose, onSubmit, isLoading }: Req
   );
 }
 
+// Real, telemetry-backed progress for the AI drafting pipeline.
+// Reads the job state from the polling loop instead of guessing from
+// elapsed time. Stages map to the Celery task's stage transitions:
+//   queued → context → outline → expand_sections → qa → done
+type DraftingJobState = {
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'inline';
+  stage?: string;
+  sections_total?: number | null;
+  sections_completed?: number;
+  last_section?: string | null;
+  elapsed_ms?: number;
+  error?: string | null;
+};
+
+interface DraftingStageProgressProps {
+  jobState?: DraftingJobState | null;
+}
+
+const STAGE_FLOW = [
+  { key: 'context',          label: 'Reading your organisation profile', detail: 'Picking up committees, password policy, active framework journeys' },
+  { key: 'outline',          label: 'Planning the document outline',     detail: 'Choosing topics per section from your active frameworks' },
+  { key: 'expand_sections',  label: 'Drafting sections in parallel',     detail: 'Citing your frameworks and substituting tenant values inline' },
+  { key: 'qa',               label: 'Validating depth and citations',    detail: 'Catching placeholders, hallucinated codes, thin sections' },
+  { key: 'done',             label: 'Ready',                              detail: '' },
+];
+
+function DraftingStageProgress({ jobState }: DraftingStageProgressProps) {
+  const activeStage = jobState?.stage || 'queued';
+  const activeIdx = (() => {
+    const i = STAGE_FLOW.findIndex(s => s.key === activeStage);
+    return i === -1 ? 0 : i;
+  })();
+  const elapsedSec = Math.floor((jobState?.elapsed_ms || 0) / 1000);
+  const total = jobState?.sections_total || 0;
+  const done = jobState?.sections_completed || 0;
+  const sectionsPct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : null;
+
+  return (
+    <div className="rounded-2xl border border-purple-200 bg-gradient-to-br from-purple-50 to-blue-50 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-5 w-5 animate-spin text-purple-600" />
+          <div>
+            <div className="text-sm font-semibold text-purple-900">
+              {jobState?.status === 'queued' ? 'Queued — waiting for a worker' : 'Drafting in progress'}
+            </div>
+            <div className="text-xs text-purple-700/80">
+              Running on a background worker. You can close this and it'll keep going.
+            </div>
+          </div>
+        </div>
+        <div className="text-xs font-mono text-purple-700">{elapsedSec}s</div>
+      </div>
+
+      {sectionsPct !== null && activeStage === 'expand_sections' && (
+        <div className="mt-4">
+          <div className="flex items-center justify-between text-xs text-purple-800 mb-1">
+            <span className="font-medium">{jobState?.last_section || 'Drafting sections…'}</span>
+            <span>{done} / {total} sections</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-purple-200/70 overflow-hidden">
+            <div
+              className="h-full bg-purple-600 transition-all duration-500"
+              style={{ width: `${sectionsPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      <ol className="mt-4 space-y-1.5">
+        {STAGE_FLOW.slice(0, -1).map((stage, i) => {
+          const state = i < activeIdx ? 'done' : i === activeIdx ? 'active' : 'pending';
+          return (
+            <li key={stage.key} className="flex items-start gap-2.5">
+              <span
+                className={
+                  state === 'done'
+                    ? 'mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-purple-600 text-white shrink-0'
+                    : state === 'active'
+                      ? 'mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border-2 border-purple-600 bg-white shrink-0'
+                      : 'mt-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full border-2 border-gray-300 bg-white shrink-0'
+                }
+              >
+                {state === 'done' ? <CheckCircle className="h-3 w-3" /> : null}
+                {state === 'active' ? <span className="block h-1.5 w-1.5 rounded-full bg-purple-600 animate-pulse" /> : null}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className={state === 'pending' ? 'text-xs text-gray-500' : 'text-xs font-medium text-purple-900'}>
+                  {stage.label}
+                </div>
+                {state === 'active' && stage.detail && (
+                  <div className="text-[11px] text-purple-700/70 mt-0.5">{stage.detail}</div>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
 interface AIDraftPolicyModalProps {
   parentDocuments: DocumentItem[];
   onClose: () => void;
   onGenerate: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; parent_document_id?: number; nca_template_id?: string }) => void;
-  onUseContent: (content: string, title: string, docType?: string, description?: string, parentDocumentId?: number) => void;
+  onUseContent: (
+    content: string,
+    title: string,
+    docType?: string,
+    description?: string,
+    parentDocumentId?: number,
+    // Frameworks the user picked in this AI-draft session — must
+    // propagate through to the document-create call so the doc shows
+    // up in the auditor portal under each linked framework.
+    frameworkIds?: number[],
+  ) => void;
   isLoading: boolean;
+  jobState?: DraftingJobState | null;
   result: {
     generated_content: string;
     suggested_title: string;
@@ -2469,7 +2765,7 @@ interface AIDraftPolicyModalProps {
   } | null;
 }
 
-function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent, isLoading, result }: AIDraftPolicyModalProps) {
+function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent, isLoading, jobState, result }: AIDraftPolicyModalProps) {
   const [formData, setFormData] = useState({
     doc_type: 'policy',
     title: '',
@@ -2485,8 +2781,21 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
   // Backend returns these so the user can see what was skipped from AI
   // suggestions ("12 already covered" / "18 missing to create").
   const [alreadyCovered, setAlreadyCovered] = useState<Array<{ id: number; title: string; doc_type: string; status: string }>>([]);
-  const [skippedDuplicateTitles, setSkippedDuplicateTitles] = useState<string[]>([]);
+  // Each entry pins an AI-skipped suggestion to a real existing platform
+  // doc. Backend only emits a record here when it can identify which
+  // uploaded/drafted/approved doc justified the skip — speculative
+  // skips that can't be tied to a real doc are NOT shown.
+  const [skippedMatches, setSkippedMatches] = useState<Array<{
+    suggested_title: string;
+    matched_existing_id: number | null;
+    matched_existing_title: string | null;
+    matched_existing_doc_type?: string | null;
+    matched_existing_status?: string | null;
+    reason: string;
+    match_type: 'exact_normalized' | 'token_overlap' | 'semantic';
+  }>>([]);
   const [showAlreadyCoveredAll, setShowAlreadyCoveredAll] = useState(false);
+  const [showBypassedAll, setShowBypassedAll] = useState(false);
   const { toast } = useToast();
 
   const { data: frameworks } = useQuery({
@@ -2508,8 +2817,9 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
     setSuggestions(null);
     setShowSuggestions(false);
     setAlreadyCovered([]);
-    setSkippedDuplicateTitles([]);
+    setSkippedMatches([]);
     setShowAlreadyCoveredAll(false);
+    setShowBypassedAll(false);
   };
 
   const selectedFrameworks = (frameworks || []).filter((f: any) => selectedFrameworkIds.includes(f.id));
@@ -2531,8 +2841,14 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
       const payload = (response.data as any) || {};
       setSuggestions(payload.suggestions || []);
       setAlreadyCovered(Array.isArray(payload.already_covered) ? payload.already_covered : []);
-      setSkippedDuplicateTitles(Array.isArray(payload.skipped_duplicate_titles) ? payload.skipped_duplicate_titles : []);
+      // Prefer the new authoritative field. Each entry carries the
+      // matched existing doc, so the UI never has to guess.
+      const rawMatches = Array.isArray(payload.skipped_matches) ? payload.skipped_matches : [];
+      setSkippedMatches(
+        rawMatches.filter((m: any) => m && m.suggested_title && m.matched_existing_title),
+      );
       setShowAlreadyCoveredAll(false);
+      setShowBypassedAll(false);
     } catch (error: any) {
       toast({
         type: 'error',
@@ -2541,7 +2857,7 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
       });
       setSuggestions([]);
       setAlreadyCovered([]);
-      setSkippedDuplicateTitles([]);
+      setSkippedMatches([]);
     } finally {
       setSuggestionsLoading(false);
     }
@@ -2655,7 +2971,14 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
             </button>
             <button
               type="button"
-              onClick={() => onUseContent(result.generated_content, result.suggested_title, formData.doc_type, formData.description, selectedParentDocumentId || undefined)}
+              onClick={() => onUseContent(
+                result.generated_content,
+                result.suggested_title,
+                formData.doc_type,
+                formData.description,
+                selectedParentDocumentId || undefined,
+                selectedFrameworkIds,
+              )}
               className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
             >
               <CheckCircle className="h-4 w-4" />
@@ -2667,99 +2990,150 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
     >
       <div>
         {!result ? (
-          <form id="ai-draft-form" onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium cw-text mb-1">Document Type *</label>
-                  <MultiSelectDropdown
-                    title="Document Type"
-                    items={[
-                      { value: 'policy', label: 'Policy' },
-                      { value: 'standard', label: 'Standard' },
-                      { value: 'procedure', label: 'Procedure' },
-                      { value: 'guideline', label: 'Guideline' },
-                    ]}
-                    selectedValues={formData.doc_type ? [formData.doc_type] : []}
-                    onApply={(vals) => {
-                      setFormData(prev => ({ ...prev, doc_type: vals[0] || '' }));
-                      setSuggestions(null);
-                      setShowSuggestions(false);
-                    }}
-                    multiSelect={false}
-                    triggerVariant="input"
-                    placeholder="Select Document Type"
-                    size="md"
+          <form id="ai-draft-form" onSubmit={handleSubmit} className="space-y-5">
+              {isLoading && <DraftingStageProgress jobState={jobState} />}
+
+              {/* ─── Step 1 · What are you drafting? ─────────────────── */}
+              <section className={isLoading ? 'opacity-50 pointer-events-none' : ''}>
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-white text-[11px] font-semibold">1</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                    What are you drafting?
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium cw-text mb-1">
+                      Document title <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      placeholder="e.g. Information Security Policy"
+                      value={formData.title}
+                      onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium cw-text mb-1">
+                      Document type <span className="text-red-500">*</span>
+                    </label>
+                    <MultiSelectDropdown
+                      title="Document Type"
+                      items={[
+                        { value: 'policy', label: 'Policy' },
+                        { value: 'standard', label: 'Standard' },
+                        { value: 'procedure', label: 'Procedure' },
+                        { value: 'guideline', label: 'Guideline' },
+                      ]}
+                      selectedValues={formData.doc_type ? [formData.doc_type] : []}
+                      onApply={(vals) => {
+                        setFormData(prev => ({ ...prev, doc_type: vals[0] || '' }));
+                        setSuggestions(null);
+                        setShowSuggestions(false);
+                      }}
+                      multiSelect={false}
+                      triggerVariant="input"
+                      placeholder="Select"
+                      size="md"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <label className="block text-sm font-medium cw-text mb-1">
+                    Description / intent <span className="text-xs font-normal text-gray-400">(optional)</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="What should this document cover? Any specific scope, audience, or focus?"
+                    value={formData.description}
+                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium cw-text mb-1">Regulatory Frameworks (Optional)</label>
-                  <MultiSelectDropdown
-                    title="Frameworks"
-                    items={(frameworks || []).map((fw: any) => ({ value: String(fw.id), label: fw.name }))}
-                    selectedValues={selectedFrameworkIds.map(String)}
-                    onApply={(vals) => {
-                      setSelectedFrameworkIds(vals.map(Number));
-                      setSuggestions(null);
-                      setShowSuggestions(false);
-                    }}
-                    multiSelect={true}
-                    triggerVariant="input"
-                    placeholder="Select frameworks..."
-                    size="md"
-                    forceSearch
-                  />
+              </section>
+
+              {/* ─── Step 2 · Sources (all optional) ──────────────────── */}
+              <section className={isLoading ? 'opacity-50 pointer-events-none' : ''}>
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-purple-600 text-white text-[11px] font-semibold">2</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                    Anchor it (optional)
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    — citations will come from the frameworks you pick
+                  </span>
                 </div>
-              </div>
-
-              <div>
-                <NcaTemplateSelect
-                  value={selectedNcaTemplateId}
-                  onChange={(id) => setSelectedNcaTemplateId(id)}
-                  label="Templates"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium cw-text mb-1">Select Parent Document (Optional)</label>
-                <MultiSelectDropdown
-                  title="Parent Document"
-                  items={parentDocuments.map((docOption) => ({
-                    value: String(docOption.id),
-                    label: `${docOption.title} (${docOption.doc_type})`,
-                  }))}
-                  selectedValues={selectedParentDocumentId != null ? [String(selectedParentDocumentId)] : []}
-                  onApply={(vals) => setSelectedParentDocumentId(vals[0] ? Number(vals[0]) : null)}
-                  multiSelect={false}
-                  triggerVariant="input"
-                  placeholder="Select Parent Document"
-                  size="md"
-                  forceSearch
-                />
-                <p className="mt-1 text-xs cw-text-muted">
-                  Framework references are optional. You can generate a comprehensive document with or without frameworks.
-                </p>
-              </div>
-
-              {selectedFrameworks.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {selectedFrameworks.map((fw: any) => (
-                    <span
-                      key={fw.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700"
-                    >
-                      <Shield className="h-3 w-3" />
-                      {fw.name}
-                      <button
-                        type="button"
-                        onClick={() => toggleFramework(fw.id)}
-                        className="ml-0.5 rounded-full hover:bg-purple-500/30 p-0.5"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Regulatory frameworks</label>
+                    <MultiSelectDropdown
+                      title="Frameworks"
+                      items={(frameworks || []).map((fw: any) => ({ value: String(fw.id), label: fw.name }))}
+                      selectedValues={selectedFrameworkIds.map(String)}
+                      onApply={(vals) => {
+                        setSelectedFrameworkIds(vals.map(Number));
+                        setSuggestions(null);
+                        setShowSuggestions(false);
+                      }}
+                      multiSelect={true}
+                      triggerVariant="input"
+                      placeholder="Select frameworks to cite..."
+                      size="md"
+                      forceSearch
+                    />
+                    {selectedFrameworks.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {selectedFrameworks.map((fw: any) => (
+                          <span
+                            key={fw.id}
+                            className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700"
+                          >
+                            <Shield className="h-2.5 w-2.5" />
+                            {fw.name}
+                            <button
+                              type="button"
+                              onClick={() => toggleFramework(fw.id)}
+                              className="ml-0.5 rounded-full hover:bg-purple-500/30 p-0.5"
+                            >
+                              <X className="h-2.5 w-2.5" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Reference template</label>
+                      <NcaTemplateSelect
+                        value={selectedNcaTemplateId}
+                        onChange={(id) => setSelectedNcaTemplateId(id)}
+                        label=""
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Parent document</label>
+                      <MultiSelectDropdown
+                        title="Parent Document"
+                        items={parentDocuments.map((docOption) => ({
+                          value: String(docOption.id),
+                          label: `${docOption.title} (${docOption.doc_type})`,
+                        }))}
+                        selectedValues={selectedParentDocumentId != null ? [String(selectedParentDocumentId)] : []}
+                        onApply={(vals) => setSelectedParentDocumentId(vals[0] ? Number(vals[0]) : null)}
+                        multiSelect={false}
+                        triggerVariant="input"
+                        placeholder="Choose a parent..."
+                        size="md"
+                        forceSearch
+                      />
+                    </div>
+                  </div>
                 </div>
-              )}
+              </section>
 
               {selectedFrameworkIds.length > 0 && !showSuggestions && (
                 <button
@@ -2867,28 +3241,154 @@ function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium cw-text mb-1">Policy Title *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g., Information Security Policy"
-                  value={formData.title}
-                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
+              {/* Bypassed-by-AI panel. The AI suggested these, but the
+                  platform recognised each as substantially equivalent to
+                  a document the tenant already has. Every row links the
+                  AI's suggested title to the existing doc that justified
+                  the skip — if a skip can't be tied to a real existing
+                  doc (e.g. a low-confidence semantic match the backend
+                  couldn't pin), it's NOT shown here. */}
+              {showSuggestions && !suggestionsLoading && (skippedMatches.length > 0 || alreadyCovered.length > 0) && (
+                <div className="overflow-hidden rounded-xl border border-amber-200 bg-white">
+                  <div className="flex items-center justify-between border-b border-amber-100 bg-amber-50 px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-amber-700" />
+                      <span className="text-sm font-medium text-amber-800">
+                        Bypassed by AI — already covered
+                      </span>
+                      <span className="text-xs text-amber-700/80">
+                        ({skippedMatches.length + alreadyCovered.length})
+                      </span>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium cw-text mb-1">Description / Requirements</label>
-                <textarea
-                  rows={3}
-                  placeholder="Describe what this policy should cover, any specific requirements, or areas of focus..."
-                  value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
+                  <div className="p-3 space-y-3">
+                    {/* Verified skips: each row pairs the AI's suggestion
+                        with the existing platform doc it matched. Clicking
+                        the existing-doc title opens it in a new tab so the
+                        reviewer can audit the call. */}
+                    {skippedMatches.length > 0 && (
+                      <div className="rounded-lg border border-amber-100 bg-amber-50/40 p-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 mb-1.5">
+                          {skippedMatches.length} suggestion{skippedMatches.length === 1 ? '' : 's'} bypassed (matched to existing docs)
+                        </p>
+                        <ul className="space-y-1.5">
+                          {(showBypassedAll ? skippedMatches : skippedMatches.slice(0, 8)).map((m, idx) => {
+                            const matchTypeLabel =
+                              m.match_type === 'exact_normalized'
+                                ? 'Exact match'
+                                : m.match_type === 'token_overlap'
+                                ? 'Similar title'
+                                : 'Semantic match';
+                            const matchTypeStyle =
+                              m.match_type === 'exact_normalized'
+                                ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                : m.match_type === 'token_overlap'
+                                ? 'border-orange-200 bg-orange-50 text-orange-700'
+                                : 'border-purple-200 bg-purple-50 text-purple-700';
+                            return (
+                              <li
+                                key={`bypassed-${idx}`}
+                                className="text-xs flex flex-col gap-1 rounded-md border border-amber-100 bg-white/60 px-2 py-1.5"
+                              >
+                                <div className="flex items-start gap-2 flex-wrap">
+                                  <span className="text-amber-900 line-through opacity-75 truncate" title={m.suggested_title}>
+                                    {m.suggested_title}
+                                  </span>
+                                  <span
+                                    className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${matchTypeStyle}`}
+                                    title={m.reason}
+                                  >
+                                    {matchTypeLabel}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-emerald-800">
+                                  <ChevronRight className="h-3 w-3 text-emerald-500 flex-shrink-0" />
+                                  <span className="text-[10px] uppercase tracking-wide text-emerald-600 font-semibold">
+                                    Matched to
+                                  </span>
+                                  {m.matched_existing_id ? (
+                                    <Link
+                                      href={`/governance/documents/${m.matched_existing_id}`}
+                                      className="text-xs font-medium text-emerald-800 hover:underline truncate"
+                                      title={m.matched_existing_title ?? undefined}
+                                    >
+                                      {m.matched_existing_title}
+                                    </Link>
+                                  ) : (
+                                    <span className="text-xs font-medium text-emerald-800 truncate">
+                                      {m.matched_existing_title}
+                                    </span>
+                                  )}
+                                  {m.matched_existing_status && (
+                                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-emerald-700">
+                                      {m.matched_existing_status}
+                                    </span>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        {skippedMatches.length > 8 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowBypassedAll((v) => !v)}
+                            className="mt-1 text-[11px] text-amber-700 hover:text-amber-800 hover:underline"
+                          >
+                            {showBypassedAll ? 'Show fewer' : `Show all ${skippedMatches.length}`}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Existing platform docs covering the framework.
+                        Independent of the skip-list above — these are
+                        ALL the docs that already exist, not just the
+                        ones the AI tried to re-suggest. */}
+                    {alreadyCovered.length > 0 && (
+                      <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 mb-1.5 flex items-center gap-1.5">
+                          <CheckCircle className="h-3 w-3" />
+                          Existing documents covering this framework ({alreadyCovered.length})
+                        </p>
+                        <ul className="space-y-1">
+                          {(showAlreadyCoveredAll ? alreadyCovered : alreadyCovered.slice(0, 8)).map((doc) => (
+                            <li key={doc.id} className="text-xs text-emerald-900 flex items-center justify-between gap-2">
+                              <span className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-emerald-500">•</span>
+                                <Link
+                                  href={`/governance/documents/${doc.id}`}
+                                  className="hover:underline truncate"
+                                >
+                                  {doc.title}
+                                </Link>
+                              </span>
+                              <span className="flex items-center gap-1 flex-shrink-0">
+                                <span className="inline-flex items-center rounded-full bg-white border border-emerald-200 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700">
+                                  {doc.doc_type}
+                                </span>
+                                <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-emerald-700">
+                                  {doc.status}
+                                </span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        {alreadyCovered.length > 8 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAlreadyCoveredAll((v) => !v)}
+                            className="mt-1 text-[11px] text-emerald-700 hover:text-emerald-800 hover:underline"
+                          >
+                            {showAlreadyCoveredAll ? 'Show fewer' : `Show all ${alreadyCovered.length}`}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
           </form>
         ) : (

@@ -54,6 +54,7 @@ import {
   RotateCcw,
   GitCompare,
   Sparkles,
+  Search,
 } from 'lucide-react';
 import NcaCompareModal from '@/components/governance/NcaCompareModal';
 
@@ -200,6 +201,9 @@ export default function PolicyDetailPage() {
   const [showGapModal, setShowGapModal] = useState(false);
   const [showNcaCompareModal, setShowNcaCompareModal] = useState(false);
   const [selectedFrameworkIds, setSelectedFrameworkIds] = useState<number[]>([]);
+  // Search term used to filter the framework picker inside the gap
+  // analysis modal. Reset when the modal closes.
+  const [gapFrameworkSearch, setGapFrameworkSearch] = useState('');
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [editAction, setEditAction] = useState<string | null>(null);
@@ -1480,12 +1484,38 @@ export default function PolicyDetailPage() {
                 <p className="text-sm text-gray-600">Select frameworks to analyze against</p>
               </div>
               <button
-                onClick={() => { setShowGapModal(false); setSelectedFrameworkIds([]); }}
+                onClick={() => { setShowGapModal(false); setSelectedFrameworkIds([]); setGapFrameworkSearch(''); }}
                 className="p-2 text-gray-600 hover:text-black rounded-lg hover:bg-white"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
+
+            {/* Search box for the framework picker — the previous list
+                forced the user to scroll through every uploaded framework
+                to find one (~30+ in seeded tenants). Filter applies to
+                name, short_code, framework_type, regulator, and version. */}
+            {uploadedFrameworks && uploadedFrameworks.length > 0 && (
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={gapFrameworkSearch}
+                  onChange={(e) => setGapFrameworkSearch(e.target.value)}
+                  placeholder="Search frameworks by name, code, or regulator…"
+                  className="w-full rounded-lg border border-gray-300 bg-white pl-9 pr-9 py-2 text-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                />
+                {gapFrameworkSearch && (
+                  <button
+                    onClick={() => setGapFrameworkSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-gray-700"
+                    title="Clear search"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="space-y-3 max-h-64 overflow-y-auto mb-6">
               {!uploadedFrameworks ? (
@@ -1494,50 +1524,93 @@ export default function PolicyDetailPage() {
                 </div>
               ) : uploadedFrameworks.length === 0 ? (
                 <p className="text-sm text-gray-600 text-center py-4">No frameworks uploaded yet</p>
-              ) : (
-                <>
-                  <label className="flex items-center gap-3 rounded-lg border border-gray-300 bg-white p-3 cursor-pointer hover:bg-gray-100 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={selectedFrameworkIds.length === uploadedFrameworks.length}
-                      onChange={toggleSelectAll}
-                      className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-500 focus:ring-primary-500"
-                    />
-                    <span className="font-medium text-black">Select All ({uploadedFrameworks.length})</span>
-                  </label>
-                  {uploadedFrameworks.map((fw: any) => (
-                    <label
-                      key={fw.id}
-                      className="flex items-center gap-3 rounded-lg border border-gray-300/50 bg-white/50 p-3 cursor-pointer hover:bg-gray-100/50 transition-colors"
-                    >
+              ) : (() => {
+                // Apply the search filter to the framework list. We compute
+                // the visible subset here so both the Select-All checkbox
+                // and the row count below reflect the current filter.
+                const term = gapFrameworkSearch.trim().toLowerCase();
+                const visible = term
+                  ? (uploadedFrameworks as any[]).filter((fw) => {
+                      const haystack = [
+                        fw.name,
+                        fw.short_code,
+                        fw.framework_type,
+                        fw.regulator,
+                        fw.source_organization,
+                        fw.version,
+                      ].filter(Boolean).join(' ').toLowerCase();
+                      return haystack.includes(term);
+                    })
+                  : (uploadedFrameworks as any[]);
+
+                if (visible.length === 0) {
+                  return (
+                    <p className="text-sm text-gray-600 text-center py-4">
+                      No frameworks match &ldquo;{gapFrameworkSearch}&rdquo;.
+                    </p>
+                  );
+                }
+
+                const visibleIds = visible.map((fw: any) => fw.id);
+                const allVisibleSelected = visibleIds.every((vid: number) => selectedFrameworkIds.includes(vid));
+                const handleToggleVisible = () => {
+                  if (allVisibleSelected) {
+                    // Unselect just the visible ones; keep any selections
+                    // outside the current filter so the user doesn't lose
+                    // them when narrowing/widening the search.
+                    setSelectedFrameworkIds((prev) => prev.filter((pid) => !visibleIds.includes(pid)));
+                  } else {
+                    setSelectedFrameworkIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+                  }
+                };
+
+                return (
+                  <>
+                    <label className="flex items-center gap-3 rounded-lg border border-gray-300 bg-white p-3 cursor-pointer hover:bg-gray-100 transition-colors">
                       <input
                         type="checkbox"
-                        checked={selectedFrameworkIds.includes(fw.id)}
-                        onChange={() => toggleFramework(fw.id)}
+                        checked={allVisibleSelected}
+                        onChange={handleToggleVisible}
                         className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-500 focus:ring-primary-500"
                       />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-black">{fw.name || `Framework ${fw.id}`}</span>
-                          {(fw.short_code || fw.framework_type) && (
-                            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-800">{fw.short_code || fw.framework_type}</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-600">
-                          {fw.version && <span>v{fw.version}</span>}
-                          {(fw.control_count != null || fw.parsed_controls_count != null) && <span>{fw.control_count ?? fw.parsed_controls_count} controls</span>}
-                          {(fw.regulator || fw.source_organization) && <span>{fw.regulator || fw.source_organization}</span>}
-                        </div>
-                      </div>
+                      <span className="font-medium text-black">
+                        {term ? `Select all matching (${visible.length})` : `Select All (${uploadedFrameworks.length})`}
+                      </span>
                     </label>
-                  ))}
-                </>
-              )}
+                    {visible.map((fw: any) => (
+                      <label
+                        key={fw.id}
+                        className="flex items-center gap-3 rounded-lg border border-gray-300/50 bg-white/50 p-3 cursor-pointer hover:bg-gray-100/50 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedFrameworkIds.includes(fw.id)}
+                          onChange={() => toggleFramework(fw.id)}
+                          className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-500 focus:ring-primary-500"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-black">{fw.name || `Framework ${fw.id}`}</span>
+                            {(fw.short_code || fw.framework_type) && (
+                              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-gray-800">{fw.short_code || fw.framework_type}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-600">
+                            {fw.version && <span>v{fw.version}</span>}
+                            {(fw.control_count != null || fw.parsed_controls_count != null) && <span>{fw.control_count ?? fw.parsed_controls_count} controls</span>}
+                            {(fw.regulator || fw.source_organization) && <span>{fw.regulator || fw.source_organization}</span>}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </>
+                );
+              })()}
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-gray-300">
               <button
-                onClick={() => { setShowGapModal(false); setSelectedFrameworkIds([]); }}
+                onClick={() => { setShowGapModal(false); setSelectedFrameworkIds([]); setGapFrameworkSearch(''); }}
                 className="px-4 py-2 text-sm font-medium text-gray-800 hover:text-black rounded-lg hover:bg-white"
               >
                 Cancel

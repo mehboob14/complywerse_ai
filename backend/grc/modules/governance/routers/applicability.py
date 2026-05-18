@@ -114,78 +114,44 @@ def set_clause_applicability(
 
     now = datetime.utcnow()
 
-    # Clauses that the AI flagged as critical (e.g. PCI network segmentation,
-    # MFA on privileged access, encryption-at-rest) cannot be self-approved as
-    # Not Applicable — they must go through reviewer approval. Marking them
-    # back to Applicable also stays pending so reviewers can validate the
-    # rationale before the row reappears in the requirements list.
-    is_critical_clause = bool(getattr(control, "is_critical", False))
-    auto_approve = not is_critical_clause
+    # No clause is ever self-approved. Every applicability decision —
+    # Applicable or Not Applicable, critical or not — is recorded as
+    # `pending` and must be approved by a reviewer (auditor portal or
+    # the in-app Applicability tab) before it propagates to the
+    # ControlImplementation row. Enforces separation of duties between
+    # the requester and the approver across the whole framework, not
+    # just critical clauses. `is_critical` is still surfaced in the
+    # response so the UI can show the red-flag banner; it just no
+    # longer changes the workflow path.
 
     if existing:
         existing.is_applicable = request.is_applicable
         existing.justification = justification
-        if auto_approve:
-            existing.status = "approved"
-            existing.reviewed_by = current_user.id
-            existing.reviewed_at = now
-            existing.review_comment = "Self-approved on save"
-        else:
-            existing.status = "pending"
-            existing.reviewed_by = None
-            existing.reviewed_at = None
-            existing.review_comment = None
+        existing.status = "pending"
+        existing.reviewed_by = None
+        existing.reviewed_at = None
+        existing.review_comment = None
         existing.requested_by = current_user.id
         existing.requested_at = now
         existing.updated_at = now
         record = existing
     else:
-        if auto_approve:
-            record = ClauseApplicability(
-                tenant_id=framework.tenant_id,
-                uploaded_framework_id=request.uploaded_framework_id,
-                control_id=request.control_id,
-                is_applicable=request.is_applicable,
-                justification=justification,
-                status="approved",
-                requested_by=current_user.id,
-                requested_at=now,
-                reviewed_by=current_user.id,
-                reviewed_at=now,
-                review_comment="Self-approved on save",
-            )
-        else:
-            record = ClauseApplicability(
-                tenant_id=framework.tenant_id,
-                uploaded_framework_id=request.uploaded_framework_id,
-                control_id=request.control_id,
-                is_applicable=request.is_applicable,
-                justification=justification,
-                status="pending",
-                requested_by=current_user.id,
-                requested_at=now,
-            )
+        record = ClauseApplicability(
+            tenant_id=framework.tenant_id,
+            uploaded_framework_id=request.uploaded_framework_id,
+            control_id=request.control_id,
+            is_applicable=request.is_applicable,
+            justification=justification,
+            status="pending",
+            requested_by=current_user.id,
+            requested_at=now,
+        )
         db.add(record)
 
     db.flush()
 
-    # Only propagate to ControlImplementation when the decision is final
-    # (auto-approved). Critical clauses stay in their previous applicable state
-    # until a reviewer approves the request via /review.
-    if auto_approve:
-        journey_ids = [
-            j.id for j in db.query(CertificationJourney.id)
-            .filter(CertificationJourney.tenant_id == framework.tenant_id)
-            .all()
-        ]
-        if journey_ids:
-            db.query(ControlImplementation).filter(
-                ControlImplementation.parsed_control_id == request.control_id,
-                ControlImplementation.journey_id.in_(journey_ids)
-            ).update(
-                {"is_applicable": request.is_applicable},
-                synchronize_session=False
-            )
+    # No propagation to ControlImplementation here — that happens only
+    # once a reviewer approves the decision via the /review endpoint.
 
     audit = AuditLog(
         tenant_id=framework.tenant_id,

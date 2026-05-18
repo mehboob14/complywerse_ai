@@ -23,15 +23,22 @@ import { PageLoader } from '@/components/ui';
 interface Assessment {
   id: number;
   campaign_id: number;
-  campaign_name: string;
-  business_unit: string;
-  assessor_name: string;
+  campaign_name: string | null;
+  // Backend (RCSAAssessmentResponse) returns `business_unit_id` + `business_unit_name`,
+  // not a single `business_unit` string. Reading the wrong field is the root
+  // cause of the BU column showing blank, the BU filter crashing on undefined
+  // values, and the dashboard panel showing empty bars.
+  business_unit_id: number | null;
+  business_unit_name: string | null;
+  assessor_id: number | null;
+  assessor_name: string | null;
   status: 'not_started' | 'in_progress' | 'submitted' | 'under_review' | 'approved' | 'rejected';
-  score?: number;
-  due_date: string;
+  overall_risk_score?: number | null;
+  overall_control_score?: number | null;
+  ai_quality_score?: number | null;
+  due_date: string | null;
   created_at: string;
   updated_at: string;
-  progress: number;
 }
 
 interface Campaign {
@@ -74,10 +81,13 @@ export default function RCSAAssessmentsPage() {
     queryKey: ['rcsa-assessments', statusFilter, campaignFilter, businessUnitFilter],
     queryFn: async () => {
       try {
+        // Param names must match the backend signature:
+        //   status -> status_filter   (was sending "status" which the server ignored)
+        //   business_unit -> business_unit_id (server filters by id, not name)
         const params: Record<string, unknown> = {};
-        if (statusFilter) params.status = statusFilter;
+        if (statusFilter) params.status_filter = statusFilter;
         if (campaignFilter) params.campaign_id = campaignFilter;
-        if (businessUnitFilter) params.business_unit = businessUnitFilter;
+        if (businessUnitFilter) params.business_unit_id = businessUnitFilter;
         const response = await rcsaApi.getAssessments(params);
         return response.data as Assessment[];
       } catch {
@@ -112,22 +122,45 @@ export default function RCSAAssessmentsPage() {
     },
   });
 
-  const businessUnits = useMemo(() => {
-    if (!assessments) return [];
-    const units = Array.from(new Set(assessments.map(a => a.business_unit)));
-    return units.sort();
+  // Distinct business units present in the loaded assessments. Built as
+  // (id, name) pairs because the backend filters by id (an integer),
+  // not by display name. `null` values are dropped — previously a single
+  // undefined entry was crashing MultiSelectDropdown when it tried to
+  // stringify the filter option value.
+  const businessUnitOptions = useMemo(() => {
+    if (!assessments) return [] as Array<{ id: number; name: string }>;
+    const map = new Map<number, string>();
+    for (const a of assessments) {
+      if (a.business_unit_id != null && a.business_unit_name) {
+        map.set(a.business_unit_id, a.business_unit_name);
+      }
+    }
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }, [assessments]);
 
   const filteredAssessments = useMemo(() => {
     if (!assessments) return [];
-    return assessments.filter(assessment => {
-      const matchesSearch = !searchTerm || 
-        assessment.campaign_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        assessment.business_unit.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        assessment.assessor_name.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesSearch;
+    if (!searchTerm) return assessments;
+    const term = searchTerm.toLowerCase();
+    return assessments.filter((assessment) => {
+      const haystack = [
+        assessment.campaign_name,
+        assessment.business_unit_name,
+        assessment.assessor_name,
+      ].filter(Boolean).join(' ').toLowerCase();
+      return haystack.includes(term);
     });
   }, [assessments, searchTerm]);
+
+  const anyFilterActive = !!(searchTerm || statusFilter || campaignFilter || businessUnitFilter);
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('');
+    setCampaignFilter('');
+    setBusinessUnitFilter('');
+  };
 
   const getActionButton = (assessment: Assessment) => {
     switch (assessment.status) {
@@ -232,11 +265,21 @@ export default function RCSAAssessmentsPage() {
         />
         <MultiSelectDropdown
           title="Business Unit"
-          items={businessUnits.map((unit) => ({ value: unit, label: unit }))}
+          items={businessUnitOptions.map((unit) => ({ value: String(unit.id), label: unit.name }))}
           selectedValues={businessUnitFilter ? [businessUnitFilter] : []}
           onApply={(vals) => setBusinessUnitFilter(vals[0] || '')}
           multiSelect={false}
         />
+        {anyFilterActive && (
+          <button
+            type="button"
+            onClick={handleClearFilters}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            title="Clear all filters"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       <div className="card overflow-hidden">
@@ -255,26 +298,28 @@ export default function RCSAAssessmentsPage() {
           <tbody>
             {filteredAssessments.map((assessment) => {
               const statusStyle = getStatusStyle(assessment.status);
-              const isOverdue = new Date(assessment.due_date) < new Date() && !['approved', 'rejected'].includes(assessment.status);
+              const isOverdue = !!assessment.due_date
+                && new Date(assessment.due_date) < new Date()
+                && !['approved', 'rejected'].includes(assessment.status);
               
               return (
                 <tr key={assessment.id} className="border-b border-slate-200/50 hover:bg-white/50">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
                       <ClipboardCheck className="h-4 w-4 text-primary-400" />
-                      <span className="text-slate-900 font-medium">{assessment.campaign_name}</span>
+                      <span className="text-slate-900 font-medium">{assessment.campaign_name || '—'}</span>
                     </div>
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2 text-slate-700">
                       <Building2 className="h-4 w-4 text-slate-500" />
-                      {assessment.business_unit}
+                      {assessment.business_unit_name || <span className="text-slate-400 italic">Unassigned</span>}
                     </div>
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2 text-slate-700">
                       <User className="h-4 w-4 text-slate-500" />
-                      {assessment.assessor_name}
+                      {assessment.assessor_name || <span className="text-slate-400 italic">Unassigned</span>}
                     </div>
                   </td>
                   <td className="py-3 px-4">
@@ -283,21 +328,29 @@ export default function RCSAAssessmentsPage() {
                     </span>
                   </td>
                   <td className="py-3 px-4">
-                    {assessment.score !== undefined ? (
-                      <span className={`font-medium ${
-                        assessment.score >= 80 ? 'text-green-400' : 
-                        assessment.score >= 60 ? 'text-yellow-400' : 'text-red-400'
-                      }`}>
-                        {assessment.score}%
-                      </span>
-                    ) : (
-                      <span className="text-slate-500">-</span>
-                    )}
+                    {(() => {
+                      // Score column was reading `assessment.score`, which the
+                      // backend never sends. The relevant scores are stored on
+                      // overall_risk_score / overall_control_score; we surface
+                      // whichever exists and fall back to ai_quality_score for
+                      // submitted-but-unscored assessments.
+                      const score = assessment.overall_control_score ?? assessment.overall_risk_score ?? assessment.ai_quality_score;
+                      if (score == null) return <span className="text-slate-500">-</span>;
+                      const rounded = Math.round(score);
+                      return (
+                        <span className={`font-medium ${
+                          rounded >= 80 ? 'text-green-400' :
+                          rounded >= 60 ? 'text-yellow-400' : 'text-red-400'
+                        }`}>
+                          {rounded}%
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="py-3 px-4">
                     <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-400' : 'text-slate-700'}`}>
                       <Calendar className="h-4 w-4" />
-                      {formatDate(assessment.due_date)}
+                      {formatDate(assessment.due_date || undefined)}
                     </div>
                   </td>
                   <td className="py-3 px-4">

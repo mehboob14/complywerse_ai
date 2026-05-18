@@ -64,7 +64,9 @@ def list_asset_links(
             created_at=link.created_at,
             created_by=link.created_by,
             asset_name=link.asset.name if link.asset else None,
-            asset_type=link.asset.asset_type if link.asset else None
+            asset_type=link.asset.asset_type if link.asset else None,
+            link_source=getattr(link, "link_source", "manual") or "manual",
+            auto_linked=bool(getattr(link, "auto_linked", False)),
         )
         for link in links
     ]
@@ -104,7 +106,10 @@ def create_asset_link(
         asset_id=request_body.asset_id,
         impact_on_asset=request_body.impact_on_asset,
         notes=request_body.notes,
-        created_by=current_user.id
+        created_by=current_user.id,
+        # A user clicked Link in the UI → manual, not auto.
+        link_source="manual",
+        auto_linked=False,
     )
     db.add(link)
     db.flush()  # Flush the link first

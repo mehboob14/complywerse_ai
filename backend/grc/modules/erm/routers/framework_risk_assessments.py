@@ -1313,11 +1313,31 @@ def move_framework_question_to_risk_register(
         if creator_active:
             owner_id = assessment.created_by
 
+    # Resolve framework identity so the resulting Risk row carries a
+    # `register_type` value that both the Risk Register filter dropdown
+    # and the Auditor Portal `/risks` endpoint can match on.
+    #
+    # Preference order for `register_type`:
+    #   1. published Framework.short_code   (e.g. "SWIFT", "PCI-DSS") — short, stable
+    #   2. published Framework.name          (full name fallback)
+    #   3. UploadedFramework.name            (uploaded frameworks have no short_code today)
+    #   4. legacy `"Framework Assessment #<id>"`  (only when neither is available)
+    #
+    # The auditor portal resolves `framework_short_code` from the same
+    # fields, so writing the value here guarantees both sides agree.
     framework_name = None
+    framework_short_code = None
     if assessment.uploaded_framework:
         framework_name = assessment.uploaded_framework.name
     elif assessment.framework:
         framework_name = assessment.framework.name
+        framework_short_code = getattr(assessment.framework, "short_code", None) or None
+
+    register_type_value = (
+        (framework_short_code or "").strip()
+        or (framework_name or "").strip()
+        or f"Framework Assessment #{assessment.id}"
+    )
 
     default_title = f"[Framework Assessment #{assessment.id}] Q{question.order_index or question.id} Risk"
     risk_title = (data.title or default_title).strip()
@@ -1332,7 +1352,6 @@ def move_framework_question_to_risk_register(
         risk_description_parts.append(f"Additional Context: {data.description}")
 
     category_value = "framework_assessment"
-    register_type_value = f"Framework Assessment #{assessment.id}"
 
     risk = Risk(
         tenant_id=assessment.tenant_id,
@@ -1351,6 +1370,10 @@ def move_framework_question_to_risk_register(
         residual_score=question.residual_score,
         treatment_plan=(data.treatment_plan or question.acceptance_notes),
         status="accepted",
+        # Provenance — lets the auditor portal recover the framework link
+        # even if `register_type` was edited manually downstream.
+        source_type="assessment",
+        source_reference=f"framework_assessment:{assessment.id}",
     )
     db.add(risk)
     db.flush()

@@ -139,6 +139,10 @@ const navigation: NavEntry[] = [
     items: [
       { name: 'Overview', href: '/vulnerabilities/dashboard', icon: BarChart3, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
       { name: 'Vulnerabilities', href: '/vulnerabilities', icon: Bug, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
+      // Phase 9 — Analytics & reports (executive/analyst dashboards + correlation + vendor + 4 reports)
+      { name: 'Analytics', href: '/vulnerabilities/analytics', icon: BarChart3, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
+      // Phase 8 — Exception queue (across-vulns review view).
+      { name: 'Exceptions', href: '/vulnerabilities/exceptions', icon: FileText, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
       // { name: 'Departments', href: '/vulnerabilities/departments', icon: Users, requiredPermissions: ['vulnerabilities:remediation:*'] },
       // { name: 'Reports', href: '/vulnerabilities/reports', icon: FileText, requiredPermissions: ['vulnerabilities:reports:*'] },
       // { name: 'SLA Config', href: '/vulnerabilities/sla', icon: Clock, requiredPermissions: ['vulnerabilities:sla_management:*'] },

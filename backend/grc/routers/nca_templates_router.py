@@ -404,11 +404,13 @@ def ai_draft_from_template(
     db: Session = Depends(get_db),
     user: GRCUser = Depends(require_auth),
 ):
-    """Use a template as a reference and let AI generate a tailored draft.
+    """Kick off async drafting using an NCA template as the structural anchor.
 
-    Unlike create-document (which copies/modifies the template directly),
-    this rewrites the document from scratch using the template purely as
-    structural and content guidance, blended with the user's own context.
+    Mirrors `/governance/documents/ai-draft` — returns a job id the
+    frontend polls. The NCA template text is squirreled into the
+    request payload as the parent-document context so the pipeline
+    inherits NCA's clause numbering while still personalising for the
+    tenant.
     """
     item = _find_template(template_id)
     if not item:
@@ -417,72 +419,73 @@ def ai_draft_from_template(
     if not OPENAI_API_KEY:
         raise HTTPException(status_code=503, detail="AI not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY.")
 
-    reference = _extract_template_text(template_id)
+    tenant_id = get_user_primary_tenant(user, db)
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="No tenant context for drafting")
 
+    reference = _extract_template_text(template_id) or ""
+    parent_excerpt = reference.strip()
+    if len(parent_excerpt) > 6000:
+        parent_excerpt = parent_excerpt[:6000] + "\n...[truncated]"
+    parent_blob = (
+        f"Reference template title: {item['title']}\n"
+        f"Reference template category: {item['category']}\n"
+        f"Reference excerpt (use the structure/numbering as a guide but "
+        f"substitute the tenant's actual values throughout):\n{parent_excerpt}"
+    )
+    if body.organization_context:
+        parent_blob += f"\n\nUser-supplied organisation context: {body.organization_context}"
+    if body.additional_requirements:
+        parent_blob += f"\n\nAdditional requirements: {body.additional_requirements}"
+
+    doc_type = body.doc_type or CATEGORY_TO_DOC_TYPE.get(item["category"], "policy")
+
+    # Resolve tenant slug for TenantTask.
+    from ..db import MasterSession
+    from ..models import Tenant as MasterTenant
+    master = MasterSession()
     try:
-        from openai import OpenAI
-        kwargs: Dict[str, Any] = {"api_key": OPENAI_API_KEY}
-        if OPENAI_BASE_URL:
-            kwargs["base_url"] = OPENAI_BASE_URL
-        client = OpenAI(**kwargs)
+        row = master.query(MasterTenant.slug).filter(MasterTenant.id == tenant_id).first()
+        tenant_slug = row[0] if row else None
+    finally:
+        master.close()
+    if not tenant_slug:
+        raise HTTPException(status_code=500, detail="Could not resolve tenant slug")
 
-        prompt = f"""You are a senior GRC documentation specialist drafting a cybersecurity {item['category'].lower()} for a Saudi-regulated organization. Use the NCA reference template below as the structural and policy backbone, but produce an original document tailored to the organization context provided.
+    from ..tasks.ai_drafting import create_job, dispatch_in_thread
 
-REFERENCE TEMPLATE ({item['title']}):
-{reference[:16000]}
-
-NEW DOCUMENT TITLE: {body.title}
-
-ORGANIZATION CONTEXT:
-{body.organization_context or '(generic — no specific context)'}
-
-ADDITIONAL REQUIREMENTS:
-{body.additional_requirements or '(none)'}
-
-Return a complete document in markdown with sections: Purpose, Scope, Definitions, Roles & Responsibilities, Policy/Standard Statements, Compliance & Enforcement, Review, References. Preserve any NCA control numbering format from the reference where applicable.
-"""
-
-        completion = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.55,
-        )
-        generated = (completion.choices[0].message.content or "").strip()
-    except Exception as exc:
-        logger.exception("AI draft from NCA template failed")
-        raise HTTPException(status_code=500, detail=f"AI generation failed: {exc}")
-
-    response: Dict[str, Any] = {
-        "generated_content": generated,
+    job_id = create_job(
+        tenant_id=tenant_id,
+        request_summary={
+            "doc_type": doc_type,
+            "title": body.title,
+            "source_template": item["title"],
+        },
+    )
+    request_payload: Dict[str, Any] = {
+        "tenant_id": tenant_id,
+        "doc_type": doc_type,
         "title": body.title,
-        "source_template": {"id": template_id, "title": item["title"], "category": item["category"]},
-        "word_count": len(generated.split()),
+        "description": body.additional_requirements,
+        "framework_ids": [],
+        # Stuff the NCA reference into the parent context channel — the
+        # pipeline doesn't distinguish source.
+        "parent_document_text": parent_blob,
+        "source_template_id": template_id,
+        "source_template_title": item["title"],
+        "save_as_document": body.save_as_document,
+        "classification": body.classification or "internal",
+        "user_id": getattr(user, "id", None),
+        "user_name": getattr(user, "display_name", None) or getattr(user, "username", None),
     }
+    dispatch_in_thread(tenant_slug, job_id, request_payload)
 
-    if body.save_as_document:
-        tenant_id = get_user_primary_tenant(user, db)
-        doc_type = body.doc_type or CATEGORY_TO_DOC_TYPE.get(item["category"], "policy")
-        doc = GovernanceDocument(
-            tenant_id=tenant_id,
-            document_code=_next_document_code(tenant_id, doc_type, db),
-            title=body.title,
-            description=f"AI-drafted using NCA template: {item['title']}",
-            content=generated,
-            doc_type=doc_type,
-            classification=body.classification or "internal",
-            current_version="1.0",
-            status="draft",
-            author_id=getattr(user, "id", None),
-            author_name=getattr(user, "display_name", None) or getattr(user, "username", None),
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
-        )
-        db.add(doc)
-        db.commit()
-        db.refresh(doc)
-        response["document_id"] = doc.id
-
-    return response
+    return {
+        "job_id": job_id,
+        "status": "queued",
+        "source_template": {"id": template_id, "title": item["title"], "category": item["category"]},
+        "poll_url": f"/governance/documents/ai-draft-jobs/{job_id}",
+    }
 
 
 @router.post("/{template_id}/compare")

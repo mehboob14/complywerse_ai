@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { MultiSelectDropdown, PageLoader } from '@/components/ui';
+import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
 
 interface Assessment {
   id: number;
@@ -72,6 +73,9 @@ interface EvidenceFile {
   file_name: string;
   file_type: string;
   file_size: number;
+  // Backend now also surfaces the on-disk path so the evidence viewer
+  // can fetch the bytes for in-browser preview.
+  file_path?: string | null;
 }
 
 interface QuestionnaireResponse {
@@ -764,6 +768,18 @@ export default function AssessmentDetailPage() {
                                             <FileText className="h-3 w-3 text-green-500" />
                                             <span className="truncate">{ev.file_name}</span>
                                             <span className="text-gray-300">({ev.file_type})</span>
+                                            {ev.file_path && (
+                                              <EvidencePreviewButton
+                                                file={{
+                                                  file_path: ev.file_path,
+                                                  file_name: ev.file_name,
+                                                  mime_type: ev.file_type,
+                                                  file_size: ev.file_size,
+                                                }}
+                                                className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-100"
+                                                title="Preview file"
+                                              />
+                                            )}
                                           </div>
                                         ))}
                                       </div>

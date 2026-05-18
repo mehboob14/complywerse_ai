@@ -10,6 +10,7 @@ import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CertificationJourney, ControlImplementation, ProgressSummary, CertificationControl, SubControlWithEvidence, ControlEvidence, ITAsset } from '@/types';
 import ControlImplementationModal from '@/components/ControlImplementationModal';
+import EvidenceViewer from '@/components/evidence/EvidenceViewer';
 import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
 import {
   Loader2,
@@ -56,6 +57,7 @@ import {
   CheckCircle,
   Unlink,
   Package,
+  X,
 } from 'lucide-react';
 import ArtifactsTab, {
   CreateArtifactModal,
@@ -424,57 +426,68 @@ function RequirementArtifactsSection({
           )}
 
           {catalog.length > 0 && (
-            <ul className="space-y-1.5">
+            <ul className="space-y-1">
               {catalog.map((item) => {
                 const created = isCreated(item);
+                // Tighter layout: text column is shrink-allowed and the
+                // button sits directly next to it instead of being
+                // shoved to the far right with a stretch-fill. Removes
+                // the dead whitespace called out in the screenshot.
                 return (
                   <li
                     key={item.id}
-                    className="flex items-start gap-3 rounded-md border border-purple-200 bg-white px-3 py-2"
+                    className={`group flex items-center gap-3 rounded-md border px-3 py-1.5 transition-colors ${
+                      created
+                        ? 'border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50/70'
+                        : 'border-purple-200 bg-white hover:bg-purple-50/40'
+                    }`}
                   >
-                    <FileText className="h-4 w-4 text-purple-500 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-black">{item.name}</span>
+                    <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md ${created ? 'bg-emerald-100 text-emerald-700' : 'bg-purple-100 text-purple-700'}`}>
+                      <FileText className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-shrink">
+                      <div className="flex items-center gap-1.5 flex-wrap leading-tight">
+                        <span className="text-sm font-medium text-slate-900 truncate">{item.name}</span>
                         {item.mandatory && (
-                          <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
+                          <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700">
                             Mandatory
                           </span>
                         )}
                         {item.is_platform_native && (
-                          <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
-                            Platform-native
+                          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700">
+                            Platform
                           </span>
                         )}
-                        <span className="text-[10px] text-gray-500 capitalize">{item.artifact_type}</span>
                       </div>
-                      {item.description && (
-                        <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{item.description}</p>
-                      )}
-                      <div className="mt-0.5 flex items-center gap-3 text-[10px] text-gray-500">
-                        {item.control_ref && <span className="font-mono">{item.control_ref}</span>}
-                        {item.stage && <span>{item.stage}</span>}
+                      <div className="mt-0.5 flex items-center gap-2 text-[10px] text-slate-500">
+                        <span className="capitalize">{item.artifact_type}</span>
+                        {item.control_ref && <span className="font-mono">· {item.control_ref}</span>}
+                        {item.stage && <span>· {item.stage}</span>}
                         {item.format && <span>· {item.format}</span>}
                       </div>
                     </div>
-                    <div className="flex-shrink-0">
+                    {/* The mr-auto spacer was eating the whole row; now
+                        the button is on a flex item with ml-auto so it
+                        hugs the right edge but the text container can
+                        grow naturally without the trailing gap. */}
+                    <div className="ml-auto flex-shrink-0">
                       {created ? (
                         <button
                           type="button"
                           onClick={() => setEditingArtifact(created)}
-                          className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                          className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 shadow-sm"
                           title="View / edit / download / upload"
                         >
-                          <Check className="h-3 w-3" />
+                          <Eye className="h-3.5 w-3.5" />
                           View
                         </button>
                       ) : (
                         <button
                           type="button"
                           onClick={() => setCreatingFromCatalog(item)}
-                          className="inline-flex items-center gap-1 rounded-md border border-purple-300 bg-white px-2.5 py-1 text-xs font-medium text-purple-700 hover:bg-purple-50"
+                          className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-purple-700 shadow-sm"
                         >
-                          <Plus className="h-3 w-3" />
+                          <Plus className="h-3.5 w-3.5" />
                           Create
                         </button>
                       )}
@@ -575,6 +588,50 @@ export default function CertificationJourneyPage() {
   const [selectedControl, setSelectedControl] = useState<ControlImplementation | null>(null);
   const [showControlModal, setShowControlModal] = useState(false);
   const [expandedControls, setExpandedControls] = useState<number[]>([]);
+  // Spine-view modal: opens when the user clicks a requirement row in
+  // the progress-spine layout. The modal renders the existing
+  // renderControlAccordion forcibly expanded — so the upload-per-
+  // recommendation, assign picker, artifacts section, and every other
+  // feature stay identical to the legacy inline accordion.
+  const [selectedSpineControl, setSelectedSpineControl] = useState<CertificationControl | null>(null);
+
+  /**
+   * Open/close the requirement modal AND mirror that selection into
+   * the URL as `?req=<id>`. Critical for back-from-evidence-detail:
+   * the browser captures the URL at click time, so `router.back()`
+   * inside /evidence/[id] returns to /frameworks/<fwId>?req=<reqId>
+   * and the page auto-reopens the modal on the same requirement.
+   * Tab is forced to `controls` so the spine is what greets the user.
+   */
+  const openSpineControl = (control: CertificationControl | null) => {
+    setSelectedSpineControl(control);
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (control) {
+      url.searchParams.set('req', String(control.id));
+      url.searchParams.set('tab', 'controls');
+    } else {
+      url.searchParams.delete('req');
+    }
+    // replaceState keeps SPA navigation intact (no full reload) while
+    // still updating the address bar — so back/forward see the state.
+    window.history.replaceState({}, '', url.toString());
+  };
+
+  // Guarded ref-id for the spine auto-open effect declared below.
+  // Lives up here next to the related state so the wiring is visible
+  // even though the effect itself needs to sit after `controls` is
+  // declared (TDZ).
+  const spineAutoOpenedFor = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!selectedSpineControl) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') openSpineControl(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedSpineControl]);
   const [expandedSubControlKeys, setExpandedSubControlKeys] = useState<string[]>([]);
   const [expandedRequirementTextIds, setExpandedRequirementTextIds] = useState<number[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
@@ -617,6 +674,33 @@ export default function CertificationJourneyPage() {
     },
     enabled: !!journeyId,
   });
+
+  // Auto-open the spine modal when arriving with `?req=<id>` in the URL.
+  // This is what makes the back-button from /evidence/[id] land the
+  // user on the exact requirement they came from: we mirror the modal
+  // selection into the URL on open, so the browser captures it; coming
+  // back via `router.back()` returns to /frameworks/<id>?req=<reqId>
+  // and this effect re-opens the modal once `controls` resolves.
+  // Matches by certification-control id OR parsed_control id so either
+  // URL shape works. Guarded with `spineAutoOpenedFor` so a parent
+  // re-render doesn't keep re-opening the same modal after the user
+  // closes it.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !controls || controls.length === 0) return;
+    const sp = new URL(window.location.href).searchParams;
+    const reqRaw = sp.get('req');
+    if (!reqRaw) return;
+    const reqId = Number(reqRaw);
+    if (!Number.isFinite(reqId)) return;
+    if (spineAutoOpenedFor.current === reqId) return;
+    const match = (controls as CertificationControl[]).find(
+      (c) => c.id === reqId || c.parsed_control_id === reqId,
+    );
+    if (!match) return;
+    spineAutoOpenedFor.current = reqId;
+    setActiveTab('controls');
+    setSelectedSpineControl(match);
+  }, [controls]);
 
   // Critical-clause AI analysis. Loaded lazily — the GET is cheap (DB read of
   // already-flagged rows) and powers the "Critical Items" panel; the POST
@@ -682,6 +766,9 @@ export default function CertificationJourneyPage() {
   });
 
   const [deletingEvidenceId, setDeletingEvidenceId] = useState<number | null>(null);
+  // Evidence file currently shown in the in-browser preview modal.
+  // Holds the minimal fields the shared viewer needs (path / name / type).
+  const [previewEvidenceFile, setPreviewEvidenceFile] = useState<{ file_path: string; file_name: string; mime_type?: string | null; file_size?: number | null } | null>(null);
 
   const deleteEvidenceMutation = useMutation({
     mutationFn: async (ev: { id: number; item_type?: string; linked_evidence_id?: number }) => {
@@ -1184,6 +1271,83 @@ export default function CertificationJourneyPage() {
     }
   };
 
+  // Group the (already filtered + sorted) controls into hierarchy
+  // sections so the requirements view can render as a "Progress spine"
+  // — a vertical journey through the framework with numbered section
+  // anchors. Section key is the leading numeric prefix of the control
+  // code (e.g. "1.2" -> section "1") with `domain_name` as fallback for
+  // frameworks whose clause IDs aren't numeric. We deliberately work off
+  // `filteredControls` so the spine respects the current search/category/
+  // status filters and the user's sort order.
+  type RequirementSection = {
+    key: string;
+    label: string;
+    sectionNumber: number | null;  // null when grouping by non-numeric domain
+    controls: CertificationControl[];
+  };
+
+  // Pure helper — extracted so the Assigned-to-me tab can reuse the
+  // same grouping rules on its own filtered list without re-running
+  // every page-level memo. The result is sorted by numeric section
+  // then alphabetically by label so output is stable across re-renders.
+  const buildRequirementSections = (list: CertificationControl[]): RequirementSection[] => {
+    const map = new Map<string, RequirementSection>();
+    for (const c of list) {
+      const code = String((c as any).control_code || (c as any).original_control_code || '').trim();
+      const numericPrefix = code.match(/^\s*(\d+)/)?.[1];
+      const key = numericPrefix
+        ? `num:${numericPrefix}`
+        : `dom:${(c.domain_name || 'general').toLowerCase().trim()}`;
+      const label = c.domain_name || (numericPrefix ? `Section ${numericPrefix}` : 'General');
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          label,
+          sectionNumber: numericPrefix ? Number(numericPrefix) : null,
+          controls: [],
+        });
+      }
+      map.get(key)!.controls.push(c);
+    }
+    const result = Array.from(map.values());
+    result.sort((a, b) => {
+      if (a.sectionNumber !== null && b.sectionNumber !== null) return a.sectionNumber - b.sectionNumber;
+      if (a.sectionNumber !== null) return -1;
+      if (b.sectionNumber !== null) return 1;
+      return a.label.localeCompare(b.label);
+    });
+    return result;
+  };
+
+  const requirementSections: RequirementSection[] = (() => {
+    const map = new Map<string, RequirementSection>();
+    for (const c of filteredControls) {
+      const code = String((c as any).control_code || (c as any).original_control_code || '').trim();
+      const numericPrefix = code.match(/^\s*(\d+)/)?.[1];
+      const key = numericPrefix
+        ? `num:${numericPrefix}`
+        : `dom:${(c.domain_name || 'general').toLowerCase().trim()}`;
+      const label = c.domain_name || (numericPrefix ? `Section ${numericPrefix}` : 'General');
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          label,
+          sectionNumber: numericPrefix ? Number(numericPrefix) : null,
+          controls: [],
+        });
+      }
+      map.get(key)!.controls.push(c);
+    }
+    const list = Array.from(map.values());
+    list.sort((a, b) => {
+      if (a.sectionNumber !== null && b.sectionNumber !== null) return a.sectionNumber - b.sectionNumber;
+      if (a.sectionNumber !== null) return -1;
+      if (b.sectionNumber !== null) return 1;
+      return a.label.localeCompare(b.label);
+    });
+    return list;
+  })();
+
   const totalEvidence = (controls || []).reduce(
     (acc: number, c: CertificationControl) => acc + (c.evidence_count ?? (c.evidence ? c.evidence.length : 0)),
     0
@@ -1309,8 +1473,107 @@ export default function CertificationJourneyPage() {
     );
   };
 
+  /**
+   * Critical-clause callout: AI-flagged red-flag requirements that must
+   * go through reviewer approval before they can be marked Not
+   * Applicable. Lives on the Overview tab so it surfaces immediately
+   * when the user opens a framework — the previous placement at the
+   * top of the Controls tab pushed the spine down and buried the
+   * "where do I start" cue. Returns `null` when no analysis has run
+   * AND no critical items exist (it's a no-op until either side has
+   * data to show).
+   */
+  const renderCriticalItemsPanel = () => {
+    const critical = criticalData?.items ?? [];
+    const analyzed = !!criticalData?.analyzed_at;
+    const isAnalyzing = analyzeCriticalMutation.isPending;
+    if (!analyzed && critical.length === 0) {
+      // First-time state — invite user to run analysis.
+      return (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900">Critical-Clause Analysis</p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Run an AI scan to flag red-flag clauses in this framework that may require special attention during review.
+              </p>
+            </div>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => analyzeCriticalMutation.mutate()}
+                disabled={isAnalyzing}
+                className="flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {isAnalyzing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                {isAnalyzing ? 'Analyzing…' : 'Run AI analysis'}
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-4">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-rose-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-rose-900">
+                Critical Items <span className="text-rose-700 font-normal">({critical.length})</span>
+              </p>
+              <p className="text-xs text-rose-800 mt-0.5">
+                These clauses require reviewer approval before being marked Not Applicable.
+                {criticalData?.analyzed_at ? ` Last analyzed ${new Date(criticalData.analyzed_at).toLocaleDateString()}.` : ''}
+              </p>
+            </div>
+          </div>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => analyzeCriticalMutation.mutate()}
+              disabled={isAnalyzing}
+              className="flex items-center gap-1.5 rounded-md border border-rose-300 bg-white px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+              title="Re-run AI critical-clause analysis"
+            >
+              {isAnalyzing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+              {isAnalyzing ? 'Re-analyzing…' : 'Re-analyze'}
+            </button>
+          )}
+        </div>
+        {critical.length === 0 ? (
+          <p className="text-xs text-rose-800 italic">No critical clauses identified for this framework.</p>
+        ) : (
+          <>
+            <ul className="space-y-1.5">
+              {(criticalExpanded ? critical : critical.slice(0, 8)).map((c) => (
+                <li key={c.parsed_control_id} className="flex items-start gap-2 text-xs">
+                  <span className="font-mono text-rose-700 flex-shrink-0">{c.control_code}</span>
+                  <span className="text-rose-900">{c.title}</span>
+                  {c.reason && <span className="text-rose-700/80 truncate">— {c.reason}</span>}
+                </li>
+              ))}
+            </ul>
+            {critical.length > 8 && (
+              <button
+                type="button"
+                onClick={() => setCriticalExpanded((v) => !v)}
+                className="mt-2 text-xs font-medium text-rose-700 hover:text-rose-900 hover:underline"
+              >
+                {criticalExpanded ? 'View less' : `View all ${critical.length} →`}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
   const renderOverviewTab = () => (
-    !isCertificationFramework ? (
+    <div className="space-y-4">
+      {renderCriticalItemsPanel()}
+      {!isCertificationFramework ? (
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           <div className="cw-card p-6">
@@ -1538,7 +1801,8 @@ export default function CertificationJourneyPage() {
         </div>
       </div>
     </div>
-    )
+    )}
+    </div>
   );
 
   const renderPhasesTab = () => (
@@ -1915,8 +2179,16 @@ export default function CertificationJourneyPage() {
     );
   };
 
-  const renderControlAccordion = (control: CertificationControl, showUpload = true) => {
-    const isExpanded = expandedControls.includes(control.id);
+  const renderControlAccordion = (
+    control: CertificationControl,
+    showUpload = true,
+    forceExpanded = false,
+  ) => {
+    // `forceExpanded` is set when the accordion is rendered inside the
+    // spine's detail modal — the modal is the user's explicit request
+    // for the deep view, so it stays open regardless of the per-row
+    // expanded state used for the legacy inline-accordion tabs.
+    const isExpanded = forceExpanded || expandedControls.includes(control.id);
     const category = getCategoryFromDomain(control.domain_name);
     const statusConfig: Record<string, { label: string; color: string }> = {
       not_started: { label: 'Not Implemented', color: 'bg-rose-50 text-rose-700' },
@@ -1937,12 +2209,13 @@ export default function CertificationJourneyPage() {
     const hasLongRequirementText = requirementTextFull.length > 160;
     
     return (
-      <div id={`control-${control.id}`} key={control.id} className="rounded-lg border border-gray-200 bg-white">
-        {/* Accordion toggle is a <div role="button"> rather than a <button>
-            because the row contains nested interactive elements (the
-            applicability badge). HTML disallows interactive descendants inside
-            a <button>, which causes browsers to drop click handlers on those
-            nested controls. Keyboard support is preserved via tabIndex + Enter/Space. */}
+      <div id={`control-${control.id}`} key={control.id} className={forceExpanded ? '' : 'rounded-lg border border-gray-200 bg-white'}>
+        {/* Accordion header. Hidden when forceExpanded is set — the
+            spine modal owns its own header (code + name + scope/badge
+            action bar) and rendering this row inside the modal would
+            duplicate the title. Keyboard support is preserved via
+            tabIndex + Enter/Space when the row is interactive. */}
+        {!forceExpanded && (
         <div
           role="button"
           tabIndex={0}
@@ -1987,24 +2260,66 @@ export default function CertificationJourneyPage() {
               </span>
             )}
             <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-700">{category}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                setApplicabilityModalControl(control);
-                setApplicabilityIsApplicable(!control.is_applicable);
-                setApplicabilityJustification('');
-                setShowApplicabilityModal(true);
-              }}
+            {/* Inline scope toggle — one click flips applicability without
+                opening the modal. Critical clauses still route the
+                out-of-scope direction through the modal so the reviewer
+                warning + justification step is preserved (backend records
+                their decision as pending until approved). */}
+            <div
+              role="group"
+              aria-label="Requirement scope"
+              className="relative z-10 inline-flex items-center overflow-hidden rounded-lg border border-gray-300 text-xs"
+              onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
-              title={control.is_applicable ? 'Click to mark as Not Applicable' : 'Click to mark as Applicable'}
-              className={`relative z-10 rounded-lg px-2 py-1 text-xs transition-colors cursor-pointer ${control.is_applicable
-                ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:ring-1 hover:ring-emerald-300'
-                : 'bg-gray-50 text-gray-700 hover:bg-gray-100 hover:ring-1 hover:ring-gray-300'}`}
             >
-              {control.is_applicable ? 'Applicable' : 'N/A'}
-            </button>
+              <button
+                type="button"
+                disabled={setApplicabilityMutation.isPending}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  if (control.is_applicable || !journey?.framework_id) return;
+                  const parsedId = control.parsed_control_id ?? control.id;
+                  setApplicabilityMutation.mutate({
+                    control_id: parsedId,
+                    uploaded_framework_id: journey.framework_id,
+                    is_applicable: true,
+                    justification: '',
+                  });
+                }}
+                title="Mark this requirement as part of scope"
+                className={`px-2.5 py-1 transition-colors cursor-pointer disabled:opacity-50 ${control.is_applicable
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-700'}`}
+              >
+                In Scope
+              </button>
+              <button
+                type="button"
+                disabled={setApplicabilityMutation.isPending}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  if (!control.is_applicable || !journey?.framework_id) return;
+                  // Always prompt for justification when marking Not Applicable —
+                  // the audit trail needs a documented reason regardless of
+                  // whether the clause was AI-flagged as critical. (Critical
+                  // clauses get the additional reviewer-approval banner inside
+                  // the modal; non-critical ones skip straight to a recorded
+                  // decision.)
+                  setApplicabilityModalControl(control);
+                  setApplicabilityIsApplicable(false);
+                  setApplicabilityJustification('');
+                  setShowApplicabilityModal(true);
+                }}
+                title="Mark this requirement as out of scope (justification required)"
+                className={`border-l border-gray-300 px-2.5 py-1 transition-colors cursor-pointer disabled:opacity-50 ${!control.is_applicable
+                  ? 'bg-rose-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-rose-50 hover:text-rose-700'}`}
+              >
+                Out of Scope
+              </button>
+            </div>
             <span className={`rounded-lg px-2 py-1 text-xs ${status.color}`}>{status.label}</span>
             <span className="text-xs text-gray-500">{approvedEvidenceCount}/{requiredEvidenceCount || '—'} approved</span>
             <span className="text-xs text-gray-500">{evidenceCount}/{requiredEvidenceCount || '—'} evidence</span>
@@ -2014,10 +2329,13 @@ export default function CertificationJourneyPage() {
             </div>
           </div>
         </div>
+        )}
         {isExpanded && (
-          <div className="border-t border-gray-200 p-4">
+          <div className={forceExpanded ? '' : 'border-t border-gray-200 p-4'}>
             {control.control_statement && (
-              <p className="mb-4 text-sm text-gray-600 whitespace-pre-wrap break-words">
+              <p className={`text-sm whitespace-pre-wrap break-words ${forceExpanded
+                ? 'mb-4 rounded-lg border border-gray-200 bg-gray-50 p-4 leading-relaxed text-gray-700'
+                : 'mb-4 text-gray-600'}`}>
                 {control.control_statement}
               </p>
             )}
@@ -2251,6 +2569,21 @@ export default function CertificationJourneyPage() {
                           )}
                           {/* Action buttons row */}
                           <div className="mt-3 ml-7 flex items-center gap-2 flex-wrap">
+                            {ev.file_path && (
+                              <button
+                                onClick={() => setPreviewEvidenceFile({
+                                  file_path: ev.file_path!,
+                                  file_name: ev.file_name || 'evidence',
+                                  mime_type: ev.mime_type,
+                                  file_size: ev.file_size,
+                                })}
+                                className="flex items-center gap-1 rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                                title="Preview evidence file in-browser"
+                              >
+                                <Eye className="h-3 w-3" />
+                                Preview
+                              </button>
+                            )}
                             {isPendingReview && canEdit && (
                               <>
                                 <button
@@ -2281,7 +2614,7 @@ export default function CertificationJourneyPage() {
                               <button
                                 onClick={() => {
                                   setAssessingEvidenceId(ev.id);
-                                  assessEvidenceMutation.mutate(ev.linked_evidence_id);
+                                  assessEvidenceMutation.mutate(ev.linked_evidence_id!);
                                 }}
                                 disabled={isAssessing}
                                 className="flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
@@ -2361,52 +2694,53 @@ export default function CertificationJourneyPage() {
                           : rawFiletype.toUpperCase();
                       
                       return (
-                        <div key={`${idx}`} className="rounded-lg bg-gray-50 border border-gray-200 p-3">
-                          <div className="flex items-start gap-3">
-                            <Radio className="h-4 w-4 text-blue-600 mt-1 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-black">{ev.title}</p>
+                        <div key={`${idx}`} className="rounded-md border border-slate-200 bg-white px-3 py-1.5 hover:bg-slate-50/60 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md ${typeColor.replace('100', '50').replace('text-', 'text-')}`}>
+                              <Radio className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="min-w-0 flex-shrink">
+                              <p className="text-sm font-medium text-slate-900 leading-tight truncate">{ev.title}</p>
                               {(() => {
                                 const titleText = (ev.title || '').trim();
                                 const descText = (ev.description || '').trim();
                                 const isDuplicate = titleText.toLowerCase() === descText.toLowerCase();
                                 return !descText || isDuplicate ? null : (
-                                  <p className="text-xs text-gray-600 mt-1">{ev.description}</p>
+                                  <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{ev.description}</p>
                                 );
                               })()}
-                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <span className={`rounded px-1.5 py-0.5 text-xs ${typeColor}`}>
+                              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${typeColor}`}>
                                   {typeLabel}
                                 </span>
                                 {filetypeLabel && (
-                                  <span className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-xs text-gray-600">
+                                  <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-600">
                                     {filetypeLabel}
                                   </span>
                                 )}
+                                <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${ev.is_required !== false ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-700'}`}>
+                                  {ev.is_required !== false ? 'Required' : 'Optional'}
+                                </span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className={`rounded px-2 py-1 text-xs ${ev.is_required !== false ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
-                                {ev.is_required !== false ? 'Required' : 'Optional'}
-                              </span>
-                              {showUpload && (
-                                <label className="cursor-pointer">
-                                  <input
-                                    type="file"
-                                    className="hidden"
-                                    onChange={(e) => handleFileUpload(control.id, e)}
-                                    disabled={uploadingControlId === control.id}
-                                  />
-                                  <span className="flex items-center gap-1 rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50">
-                                    {uploadingControlId === control.id ? (
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    ) : (
-                                      <Upload className="h-3 w-3" />
-                                    )}
-                                  </span>
-                                </label>
-                              )}
-                            </div>
+                            {showUpload && (
+                              <label className="ml-auto cursor-pointer flex-shrink-0">
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  onChange={(e) => handleFileUpload(control.id, e)}
+                                  disabled={uploadingControlId === control.id}
+                                />
+                                <span className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 shadow-sm">
+                                  {uploadingControlId === control.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Upload className="h-3.5 w-3.5" />
+                                  )}
+                                  Upload
+                                </span>
+                              </label>
+                            )}
                           </div>
                         </div>
                       );
@@ -2590,140 +2924,330 @@ export default function CertificationJourneyPage() {
       );
     }
 
+    // Reuse the exact same progress-spine renderer as the main
+    // Requirements (Controls) tab — same numbered section anchors,
+    // L-junction branches, compact cards, requirement-detail modal,
+    // and ?req=N URL state. The only differences are the slice of
+    // controls (only the ones assigned to the current user) and the
+    // summary banner copy (focus on the user's queue, not the
+    // framework total).
+    const assignedSections = buildRequirementSections(assignedToMe);
+    return renderRequirementsSpine(assignedSections, {
+      title: 'Your assigned requirements',
+      subtitle: `${assignedToMe.length} requirement${assignedToMe.length === 1 ? '' : 's'} assigned to you`,
+      hideAttestationEstimate: true,
+    });
+  };
+
+  /**
+   * Vertical "Progress spine" renderer for the requirements list. Each
+   * top-level section becomes a numbered circle anchored to a vertical
+   * spine; controls inside that section render with the existing
+   * `renderControlAccordion` so the actual per-clause content stays
+   * unchanged — only the surrounding hierarchy/visual rhythm is new.
+   *
+   * The summary banner at the top is built from the framework progress
+   * payload (implementedCount, inProgressCount, totalControlsProgress).
+   * In-review = `in_progress` controls; "to start" = the residual.
+   */
+  /**
+   * Render the progress-spine layout. By default sources its sections
+   * from the page-level `requirementSections` (filteredControls), but
+   * callers can pass `customSections` + `summaryOverride` to reuse the
+   * exact same visual on a different slice — that's how the Assigned-
+   * to-me tab gets the spine treatment without duplicating any markup.
+   *
+   * `summaryOverride` swaps the top "your assessment" banner for a
+   * caller-specific one; counts inside (compliant / in review / to
+   * start) are recomputed from the supplied sections so the bar always
+   * reflects the actual list being shown.
+   */
+  const renderRequirementsSpine = (
+    customSections?: RequirementSection[],
+    summaryOverride?: { title: string; subtitle?: string; hideAttestationEstimate?: boolean },
+  ) => {
+    const sectionsToRender = customSections ?? requirementSections;
+    const isCustom = !!customSections;
+
+    // When rendering a custom slice (e.g. "assigned to me"), recompute
+    // every count from the slice itself — the framework-wide totals
+    // would lie. For the default page-level call we use the
+    // pre-aggregated progress payload because it already accounts for
+    // controls that were trimmed by the search/category/status filters
+    // (which we still want represented in the summary).
+    const allSlice = sectionsToRender.flatMap((s) => s.controls);
+    const compliant = isCustom
+      ? allSlice.filter((c) => c.status === 'implemented' || c.status === 'verified').length
+      : implementedCount + verifiedCount;
+    const inReview = isCustom
+      ? allSlice.filter((c) => c.status === 'in_progress').length
+      : inProgressCount;
+    const totalForBar = isCustom
+      ? allSlice.length
+      : (totalControlsProgress || filteredControls.length || 0);
+    const naForBar = isCustom
+      ? allSlice.filter((c) => c.status === 'not_applicable').length
+      : notApplicableCount;
+    const toStart = Math.max(0, totalForBar - compliant - inReview - naForBar);
+
+    const compliantPct = totalForBar > 0 ? (compliant / totalForBar) * 100 : 0;
+    const inReviewPct = totalForBar > 0 ? (inReview / totalForBar) * 100 : 0;
+    const naPct = totalForBar > 0 ? (naForBar / totalForBar) * 100 : 0;
+
+    const sectionsInProgress = sectionsToRender.filter((s) =>
+      s.controls.some((c) => c.status === 'in_progress')
+        || s.controls.some((c) => c.status !== 'implemented' && c.status !== 'verified' && c.status !== 'not_applicable'),
+    ).length;
+    const totalSections = sectionsToRender.length;
+    const fwName = (journey as any)?.framework_name || journey?.framework?.name || journey?.name || 'Framework';
+    const summaryTitle = summaryOverride?.title ?? `${fwName} — your assessment`;
+    const defaultSubtitle = totalSections > 0
+      ? `Section ${Math.min(sectionsInProgress + 1, totalSections)} of ${totalSections} in progress`
+      : 'No sections yet';
+    const summarySubtitle = summaryOverride?.subtitle ?? defaultSubtitle;
+    const completionPct = totalForBar > 0 ? Math.round((compliant / totalForBar) * 100) : 0;
+    const displayCompletionPct = isCustom ? completionPct : Math.round(completionPercentage);
+
     return (
-      <div className="space-y-4">
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-gray-700">
-            <Users className="h-4 w-4 text-blue-600" />
-            <span>
-              <span className="font-semibold">{assignedToMe.length}</span> requirement{assignedToMe.length === 1 ? '' : 's'} assigned to you
+      <div className="space-y-6">
+        {/* ===== Top "your assessment" summary card =====
+            Multi-segment bar with compliant / in-review / to-start
+            counts so the user gets the whole story at a glance. */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4 mb-4 flex-wrap">
+            <div className="min-w-0">
+              <h2 className="text-xl font-semibold text-slate-900 leading-tight">
+                {summaryTitle}
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">
+                {summarySubtitle}
+                {!summaryOverride?.hideAttestationEstimate && (journey as any)?.due_date && (() => {
+                  const dueRaw = (journey as any).due_date as string;
+                  const days = Math.max(0, Math.round((new Date(dueRaw).getTime() - Date.now()) / 86_400_000));
+                  return ` · est. ${days} day${days === 1 ? '' : 's'} to attestation`;
+                })()}
+              </p>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="text-3xl font-bold text-emerald-700 leading-none">
+                {displayCompletionPct}<span className="text-base text-emerald-600/70">%</span>
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {compliant} of {totalForBar} {isCustom ? 'assigned' : 'controls'} compliant
+              </p>
+            </div>
+          </div>
+
+          <div className="h-3 w-full overflow-hidden rounded-full bg-slate-100 flex">
+            <div className="h-full bg-emerald-500 transition-all" style={{ width: `${compliantPct}%` }} title={`${compliant} compliant`} />
+            <div className="h-full bg-orange-500 transition-all" style={{ width: `${inReviewPct}%` }} title={`${inReview} in review`} />
+            <div className="h-full bg-slate-300 transition-all" style={{ width: `${naPct}%` }} title={`${naForBar} N/A`} />
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-slate-600">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="font-semibold text-slate-900">{compliant}</span> compliant
             </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-orange-500" />
+              <span className="font-semibold text-slate-900">{inReview}</span> in review
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-slate-300" />
+              <span className="font-semibold text-slate-900">{toStart}</span> to start
+            </span>
+            {naForBar > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-slate-500">
+                <span className="h-2 w-2 rounded-full bg-slate-400" />
+                <span className="font-semibold">{naForBar}</span> N/A
+              </span>
+            )}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-          {assignedToMe.length > 0 ? (
-            <div className="space-y-3">
-              {assignedToMe.map((control: CertificationControl) => renderControlAccordion(control))}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Shield className="mb-4 h-12 w-12 text-gray-400" />
-              <p className="text-gray-600">No requirements are assigned to you yet</p>
-              <p className="text-sm text-gray-500 mt-1">
-                When a requirement is assigned to you it will appear here with the same upload, evidence and recommendations tools.
-              </p>
-            </div>
-          )}
-        </div>
+        {/* ===== Spine ===== */}
+        {sectionsToRender.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center bg-white border border-slate-200 rounded-xl">
+            <Shield className="mb-4 h-12 w-12 text-slate-400" />
+            <p className="text-slate-600">No {entityLabelPlural.toLowerCase()} found</p>
+            <p className="mt-1 text-sm text-slate-500">Try adjusting your filters</p>
+          </div>
+        ) : (
+          <div className="relative">
+            {sectionsToRender.map((section, idx) => {
+              const sCompliant = section.controls.filter((c) =>
+                c.status === 'implemented' || c.status === 'verified',
+              ).length;
+              const sTotal = section.controls.length;
+              const sRemaining = Math.max(0, sTotal - sCompliant);
+              const isLast = idx === sectionsToRender.length - 1;
+              const displayNum = section.sectionNumber ?? (idx + 1);
+
+              return (
+                <div key={section.key} className="relative pl-16 pb-8 last:pb-0">
+                  {/* Numbered anchor circle — the "trunk node" the
+                      section's spine grows out of. Thicker border to
+                      match the trunk, soft ring shadow to lift it off
+                      the page, and the emerald-600 ink matches the
+                      branches below so the whole hierarchy reads as
+                      one connected tree. */}
+                  <div
+                    className={`absolute left-0 top-0 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white text-base font-semibold shadow-md ring-4 ring-white transition-colors ${
+                      sCompliant === sTotal
+                        ? 'border-[3px] border-emerald-600 text-emerald-700'
+                        : sCompliant > 0
+                          ? 'border-[3px] border-emerald-600 text-emerald-700'
+                          : 'border-[3px] border-slate-400 text-slate-600'
+                    }`}
+                  >
+                    {displayNum}
+                  </div>
+                  {/* Vertical spine line connecting to the next section.
+                      Thicker (1.5px) and darker (emerald-600) so the
+                      hierarchy reads at a glance — this is the trunk of
+                      the tree the requirements branch off of. */}
+                  {!isLast && (
+                    <div className="absolute left-6 top-12 -ml-[0.75px] w-[3px] h-[calc(100%-3rem)] rounded-full bg-emerald-600/80" />
+                  )}
+
+                  {/* Section header */}
+                  <div className="mb-3">
+                    <h3 className="text-lg font-semibold text-slate-900 leading-tight">{section.label}</h3>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      <span className="text-emerald-700 font-medium">{sCompliant}</span> of {sTotal} compliant
+                      {sRemaining > 0 && (
+                        <> · <span className="text-slate-700">{sRemaining}</span> to go</>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Compact spine cards. Each card is a click-target
+                      that opens the requirement detail modal — keeps
+                      the spine visually quiet while still surfacing the
+                      key per-row signal (status dot, code, name,
+                      critical / evidence count). The L-junction line
+                      on the left visually anchors each card to the
+                      section's spine. */}
+                  <div className="relative space-y-2">
+                    {section.controls.map((control: CertificationControl, ctrlIdx: number) => {
+                      const isCompliant = control.status === 'implemented' || control.status === 'verified';
+                      const isInProgress = control.status === 'in_progress';
+                      const isNA = control.status === 'not_applicable';
+                      const dotClass = isCompliant
+                        ? 'bg-emerald-600 border-emerald-600'
+                        : isInProgress
+                          ? 'bg-orange-500 border-orange-500'
+                          : isNA
+                            ? 'bg-slate-300 border-slate-300'
+                            : 'bg-white border-slate-300';
+                      const statusLabel = isCompliant
+                        ? 'Compliant'
+                        : isInProgress
+                          ? 'In progress'
+                          : isNA
+                            ? 'Not applicable'
+                            : 'Not implemented';
+                      const evidenceTotal = control.required_evidence_count
+                        ?? (control.evidence_requirements?.length || 0);
+                      const evidenceApproved = control.approved_evidence_count
+                        ?? (control.evidence?.filter((e) => e.review_status === 'approved').length || 0);
+                      const isLastCard = ctrlIdx === section.controls.length - 1;
+                      // Each requirement's branch reads as a true tree:
+                      // a vertical leg dropping from the parent trunk
+                      // turns into a horizontal arm that meets the card.
+                      // We draw the joint with a rounded-top-left corner
+                      // so it bends visually instead of looking like two
+                      // disconnected sticks. The vertical sliver under
+                      // the last card is hidden so the rail terminates
+                      // cleanly under the final requirement of the
+                      // section.
+                      return (
+                        <div key={control.id} className="relative">
+                          {/* Vertical leg dropping from the parent
+                              section spine down to this card's row.
+                              For sibling cards it continues to the next;
+                              for the final card it stops at the bend. */}
+                          <div
+                            aria-hidden="true"
+                            className="absolute -left-[2.625rem] top-0 w-[3px] bg-emerald-600/80"
+                            style={{ height: isLastCard ? '1.625rem' : 'calc(100% + 0.5rem)' }}
+                          />
+                          {/* Rounded L-junction: horizontal arm with a
+                              soft corner where it meets the vertical
+                              leg. Drawn as a single rounded segment so
+                              the bend looks intentional, not stuck-on. */}
+                          <div
+                            aria-hidden="true"
+                            className="absolute -left-[2.625rem] top-[1.4rem] h-[3px] w-6 bg-emerald-600/80 rounded-bl-md"
+                            style={{ borderBottomLeftRadius: '0', borderTopLeftRadius: '0' }}
+                          />
+                          {/* Soft circular bullet where the arm meets
+                              the card — gives the branch a finished
+                              "node" feel and helps the eye land on the
+                              row anchor. */}
+                          <div
+                            aria-hidden="true"
+                            className="absolute -left-[1.05rem] top-[1.25rem] h-2 w-2 rounded-full border-2 border-emerald-600 bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => openSpineControl(control)}
+                            className="w-full text-left rounded-xl border border-slate-200 bg-white px-4 py-3 hover:border-emerald-300 hover:shadow-sm transition-all group"
+                          >
+                            <div className="flex items-center gap-3">
+                              {/* Status dot */}
+                              <span className={`h-4 w-4 flex-shrink-0 rounded-full border-2 ${dotClass}`} />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-mono text-sm font-medium text-blue-700">{control.control_code}</span>
+                                  <span className="text-sm font-medium text-slate-900 truncate">{control.control_name}</span>
+                                  {control.is_critical && (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-medium text-rose-700"
+                                      title={control.criticality_reason || 'AI-flagged critical clause'}
+                                    >
+                                      Critical
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="mt-0.5 text-xs text-slate-500">
+                                  {statusLabel}
+                                  {evidenceTotal > 0 && (
+                                    <> · {evidenceApproved}/{evidenceTotal} evidence approved</>
+                                  )}
+                                </p>
+                              </div>
+                              <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 group-hover:border-emerald-400 group-hover:text-emerald-700">
+                                {isCompliant || isNA ? 'View' : 'Continue →'}
+                              </span>
+                            </div>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
 
   const renderControlsTab = () => (
     <div className="space-y-4">
-      {/* Critical Items panel — surfaces AI-flagged red-flag clauses for this
-          framework (e.g. PCI network segmentation, MFA on privileged access).
-          Hidden until the analysis has been run at least once and found any. */}
-      {(() => {
-        const critical = criticalData?.items ?? [];
-        const analyzed = !!criticalData?.analyzed_at;
-        const isAnalyzing = analyzeCriticalMutation.isPending;
-        if (!analyzed && critical.length === 0) {
-          // First-time state — invite user to run analysis.
-          return (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-amber-900">Critical-Clause Analysis</p>
-                  <p className="text-xs text-amber-800 mt-0.5">
-                    Run an AI scan to flag red-flag clauses in this framework that may require special attention during review.
-                  </p>
-                </div>
-                {canEdit && (
-                  <button
-                    type="button"
-                    onClick={() => analyzeCriticalMutation.mutate()}
-                    disabled={isAnalyzing}
-                    className="flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-                  >
-                    {isAnalyzing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                    {isAnalyzing ? 'Analyzing…' : 'Run AI analysis'}
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        }
-        return (
-          <div className="rounded-xl border border-rose-200 bg-rose-50/60 p-4">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-rose-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-rose-900">
-                    Critical Items <span className="text-rose-700 font-normal">({critical.length})</span>
-                  </p>
-                  <p className="text-xs text-rose-800 mt-0.5">
-                    These clauses require reviewer approval before being marked Not Applicable.
-                    {criticalData?.analyzed_at ? ` Last analyzed ${new Date(criticalData.analyzed_at).toLocaleDateString()}.` : ''}
-                  </p>
-                </div>
-              </div>
-              {canEdit && (
-                <button
-                  type="button"
-                  onClick={() => analyzeCriticalMutation.mutate()}
-                  disabled={isAnalyzing}
-                  className="flex items-center gap-1.5 rounded-md border border-rose-300 bg-white px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
-                  title="Re-run AI critical-clause analysis"
-                >
-                  {isAnalyzing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                  {isAnalyzing ? 'Re-analyzing…' : 'Re-analyze'}
-                </button>
-              )}
-            </div>
-            {critical.length === 0 ? (
-              <p className="text-xs text-rose-800 italic">No critical clauses identified for this framework.</p>
-            ) : (
-              <>
-                <ul className="space-y-1.5">
-                  {(criticalExpanded ? critical : critical.slice(0, 8)).map((c) => (
-                    <li key={c.parsed_control_id} className="flex items-start gap-2 text-xs">
-                      <span className="font-mono text-rose-700 flex-shrink-0">{c.control_code}</span>
-                      <span className="text-rose-900">{c.title}</span>
-                      {c.reason && <span className="text-rose-700/80 truncate">— {c.reason}</span>}
-                    </li>
-                  ))}
-                </ul>
-                {critical.length > 8 && (
-                  <button
-                    type="button"
-                    onClick={() => setCriticalExpanded((v) => !v)}
-                    className="mt-2 text-xs font-medium text-rose-700 hover:text-rose-900 hover:underline"
-                  >
-                    {criticalExpanded ? 'View less' : `View all ${critical.length} →`}
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        );
-      })()}
+      {/* Critical Items panel moved to the Overview tab — it lives
+          alongside the framework summary now so users see red-flag
+          clauses immediately when they open the framework, rather
+          than after navigating to Controls. The renderer lives at
+          renderCriticalItemsPanel() and is mounted from
+          renderOverviewTab. */}
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-        <div className="mb-2 flex items-center justify-between text-sm">
-          <span className="text-gray-600">Evidence Readiness</span>
-          <span className="font-medium text-black">{readinessPercentage}%</span>
-        </div>
-        <div className="h-3 overflow-hidden rounded-full bg-gray-100">
-          <div
-            className="h-full rounded-full bg-blue-600 transition-all"
-            style={{ width: `${readinessPercentage}%` }}
-          />
-        </div>
-      </div>
+      {/* Evidence Readiness banner hidden per design — the spine's
+          top "your assessment" summary already carries this signal as
+          part of its multi-segment progress bar. */}
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <div className="mb-6 flex items-center justify-between border-b border-gray-200 pb-4">
@@ -2804,17 +3328,12 @@ export default function CertificationJourneyPage() {
               />
             </div>
 
-            <div className="space-y-3">
-              {filteredControls.length > 0 ? (
-                filteredControls.map((control: CertificationControl) => renderControlAccordion(control))
-              ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Shield className="mb-4 h-12 w-12 text-gray-400" />
-                  <p className="text-gray-600">No {entityLabelPlural.toLowerCase()} found</p>
-                  <p className="text-sm text-gray-500 mt-1">Try adjusting your filters</p>
-                </div>
-              )}
-            </div>
+            {/* Progress-spine layout: hierarchy-aware vertical journey
+                through the framework. Section anchors on the left
+                (numbered circles tied by a spine line) surface "where am
+                I" cues at a glance; the per-clause accordion content
+                inside each section is unchanged. */}
+            {renderRequirementsSpine()}
           </div>
         )}
 
@@ -3504,7 +4023,10 @@ export default function CertificationJourneyPage() {
           the Applicability tab, etc.) without depending on which tab's render
           tree is currently mounted. */}
       {showApplicabilityModal && applicabilityModalControl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        // z-index sits above the requirement-detail spine modal
+        // (z-100) so the Out-of-Scope justification prompt stacks on
+        // top instead of disappearing behind it.
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
             <div className="flex-1 overflow-y-auto p-6">
               <h3 className="mb-1 text-lg font-semibold text-black">
@@ -3533,17 +4055,24 @@ export default function CertificationJourneyPage() {
               )}
               <div className="mb-4">
                 <label className="mb-2 block text-sm font-medium text-gray-700">
-                  Justification {applicabilityModalControl.is_critical
-                    ? <span className="text-xs font-normal text-rose-600">(recommended for reviewer)</span>
-                    : <span className="text-xs font-normal text-gray-500">(optional)</span>}
+                  Justification {applicabilityIsApplicable
+                    ? <span className="text-xs font-normal text-gray-500">(optional)</span>
+                    : <span className="text-xs font-normal text-rose-600">* required</span>}
                 </label>
                 <textarea
                   value={applicabilityJustification}
                   onChange={(e) => setApplicabilityJustification(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600"
                   rows={4}
-                  placeholder={applicabilityIsApplicable ? 'Optionally explain why this control is being re-applied...' : 'Optionally explain why this clause is not applicable to your organization...'}
+                  placeholder={applicabilityIsApplicable
+                    ? 'Optionally explain why this control is being re-applied...'
+                    : 'Explain why this clause is not applicable to your organization. Required for the audit trail.'}
                 />
+                {!applicabilityIsApplicable && !applicabilityJustification.trim() && (
+                  <p className="mt-1 text-[11px] text-rose-600">
+                    A justification is required when marking a requirement as Not Applicable.
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex items-center justify-end gap-3 border-t border-gray-200 p-6 pt-4">
@@ -3555,8 +4084,11 @@ export default function CertificationJourneyPage() {
               </button>
               <button
                 onClick={handleSetApplicability}
-                disabled={setApplicabilityMutation.isPending}
-                className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 ${
+                disabled={
+                  setApplicabilityMutation.isPending
+                  || (!applicabilityIsApplicable && !applicabilityJustification.trim())
+                }
+                className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   applicabilityIsApplicable
                     ? 'bg-emerald-600 hover:bg-emerald-700'
                     : 'bg-rose-600 hover:bg-rose-700'
@@ -3627,6 +4159,162 @@ export default function CertificationJourneyPage() {
           </div>
         </div>
       )}
+
+      {/* Shared in-browser evidence viewer. Renders image / PDF / xlsx /
+          csv / markdown / text inline; degrades to download for formats
+          (e.g. DOCX/PPTX) that can't be portably previewed in-browser. */}
+      <EvidenceViewer
+        evidence={previewEvidenceFile}
+        onClose={() => setPreviewEvidenceFile(null)}
+      />
+
+      {/* Large-format requirement detail popup. Opens from the progress
+          spine when the user clicks a requirement card. The content
+          inside is the existing renderControlAccordion forced into its
+          expanded state — so every feature (per-recommendation upload,
+          assign-to picker, artifacts, evidence approve/reject, create
+          flow) is preserved verbatim. The modal is just a frame around
+          the same accordion content the SoA/Assigned tabs use inline. */}
+      {selectedSpineControl && (() => {
+        const sc = selectedSpineControl;
+        const requiredCount = sc.required_evidence_count
+          ?? (sc.evidence_requirements ? sc.evidence_requirements.length : 0);
+        const evCount = sc.evidence_count ?? (sc.evidence ? sc.evidence.length : 0);
+        const approvedCount = sc.approved_evidence_count
+          ?? (sc.evidence ? sc.evidence.filter((ev) => ev.review_status === 'approved').length : 0);
+        const coverage = sc.evidence_coverage
+          ?? (requiredCount > 0 ? Math.min(1, evCount / requiredCount) : evCount > 0 ? 1 : 0);
+        const statusPill: Record<string, { label: string; className: string }> = {
+          not_started: { label: 'Not Implemented', className: 'bg-rose-50 text-rose-700 border-rose-200' },
+          in_progress: { label: 'Partial', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+          implemented: { label: 'Implemented', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+          verified: { label: 'Verified', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+          not_applicable: { label: 'Not Applicable', className: 'bg-slate-50 text-slate-600 border-slate-200' },
+        };
+        const sp = statusPill[sc.status] || statusPill.not_started;
+        const category = getCategoryFromDomain(sc.domain_name);
+        const parsedId = sc.parsed_control_id ?? sc.id;
+        return (
+        <div
+          // Backdrop + container colours/spacing match the existing
+          // applicability modal pattern (bg-black/60, gray-200 border,
+          // gray-* text scale) so the spine modal feels like a first-
+          // class citizen of the same design system rather than a one-
+          // off. items-center + body-owns-scroll keeps the popup
+          // anchored centre while artifacts expand inside.
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => openSpineControl(null)}
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header — title row (code + name once) and a compact
+                action bar pulling all the chips/toggles that used to
+                live on the accordion's header row. The inner accordion
+                now skips its own header when forceExpanded so there's
+                no duplication. Tokens (text-lg semibold for title,
+                gray-200 borders, text-sm subtext) align with every
+                other modal in the app. */}
+            <div className="flex-shrink-0 border-b border-gray-200 bg-white px-6 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-sm font-semibold text-blue-600">{sc.control_code}</span>
+                  <h2 className="text-lg font-semibold text-black truncate">{sc.control_name}</h2>
+                  {sc.domain_name && (
+                    <span className="text-sm text-gray-500">· {sc.domain_name}</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => openSpineControl(null)}
+                  className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900 flex-shrink-0"
+                  title="Close (Esc)"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="mt-3 flex items-center gap-2 flex-wrap">
+                {sc.is_critical && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-1 text-xs font-medium text-rose-700"
+                    title={sc.criticality_reason || 'AI-flagged critical clause'}
+                  >
+                    <AlertTriangle className="h-3 w-3" />
+                    Critical
+                  </span>
+                )}
+                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-700">{category}</span>
+                {/* Scope toggle: identical contract to the accordion's
+                    inline scope buttons (one-click for In Scope, modal-
+                    prompted justification for Out of Scope). Lives here
+                    so the user can flip scope without scrolling down. */}
+                <div
+                  role="group"
+                  aria-label="Requirement scope"
+                  className="inline-flex items-center overflow-hidden rounded-lg border border-gray-300 text-xs"
+                >
+                  <button
+                    type="button"
+                    disabled={setApplicabilityMutation.isPending}
+                    onClick={() => {
+                      if (sc.is_applicable || !journey?.framework_id) return;
+                      setApplicabilityMutation.mutate({
+                        control_id: parsedId,
+                        uploaded_framework_id: journey.framework_id,
+                        is_applicable: true,
+                        justification: '',
+                      });
+                    }}
+                    title="Mark this requirement as part of scope"
+                    className={`px-2.5 py-1 transition-colors disabled:opacity-50 ${sc.is_applicable
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-700'}`}
+                  >
+                    In Scope
+                  </button>
+                  <button
+                    type="button"
+                    disabled={setApplicabilityMutation.isPending}
+                    onClick={() => {
+                      if (!sc.is_applicable || !journey?.framework_id) return;
+                      setApplicabilityModalControl(sc);
+                      setApplicabilityIsApplicable(false);
+                      setApplicabilityJustification('');
+                      setShowApplicabilityModal(true);
+                    }}
+                    title="Mark this requirement as out of scope (justification required)"
+                    className={`border-l border-gray-300 px-2.5 py-1 transition-colors disabled:opacity-50 ${!sc.is_applicable
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-white text-gray-600 hover:bg-rose-50 hover:text-rose-700'}`}
+                  >
+                    Out of Scope
+                  </button>
+                </div>
+                <span className={`rounded-lg border px-2 py-1 text-xs font-medium ${sp.className}`}>
+                  {sp.label}
+                </span>
+                <span className="text-xs text-gray-500">
+                  <span className="font-semibold text-gray-700">{approvedCount}/{requiredCount || '—'}</span> approved
+                </span>
+                <span className="text-xs text-gray-500">
+                  <span className="font-semibold text-gray-700">{evCount}/{requiredCount || '—'}</span> evidence
+                </span>
+                <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                  <Circle className={`h-3.5 w-3.5 ${evCount > 0 ? 'text-emerald-600 fill-emerald-600' : 'text-gray-300'}`} />
+                  {Math.round(coverage * 100)}%
+                </span>
+              </div>
+            </div>
+            {/* Body owns the scroll: when artifacts/evidence expand
+                inside, the body scrolls but the modal itself stays
+                anchored to the viewport's centre. */}
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {renderControlAccordion(sc, true, true)}
+            </div>
+          </div>
+        </div>
+        );
+      })()}
     </div>
   );
 }

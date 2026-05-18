@@ -237,6 +237,13 @@ class SyncService:
                         ITAsset.name == name,
                     ).first()
 
+                # Phase 5.5 — Tag every sync with where + when we last saw this
+                # asset. Used by the UI stale filter and by future analytics.
+                # Wrapped in a getattr guard so the bump silently no-ops if the
+                # column migration hasn't yet applied for this tenant DB.
+                _now = datetime.utcnow()
+                _source_label = (connection.integration_type or "scanner").lower()
+
                 if existing:
                     changed = False
                     for key, val in mapped_asset.items():
@@ -257,6 +264,11 @@ class SyncService:
                         if current != val:
                             setattr(existing, key, val)
                             changed = True
+                    # Bump last-seen regardless of whether other fields changed —
+                    # the asset is still being observed, even if nothing differs.
+                    if hasattr(existing, "last_seen_at"):
+                        existing.last_seen_at = _now
+                        existing.last_seen_source = _source_label
                     if changed:
                         if hasattr(existing, "updated_at"):
                             existing.updated_at = datetime.utcnow()
@@ -274,6 +286,14 @@ class SyncService:
                         tenant_id=tenant_id,
                         **mapped_asset,
                     )
+                    # First sighting — set both the bump fields and the
+                    # lifecycle state (defaults to "active" but make it explicit
+                    # so new tenant DBs and old ones look identical).
+                    if hasattr(asset, "last_seen_at"):
+                        asset.last_seen_at = _now
+                        asset.last_seen_source = _source_label
+                    if hasattr(asset, "lifecycle_state") and asset.lifecycle_state is None:
+                        asset.lifecycle_state = "active"
                     db.add(asset)
                     stats["assets_new"] += 1
                     synced_assets.append({
@@ -446,6 +466,8 @@ class SyncService:
                                 asset_id=asset.id,
                                 impact_on_asset="Detected by scanner on linked asset",
                                 created_by=None,
+                                link_source="scanner",
+                                auto_linked=True,
                             ))
 
                         # Fan out enrichment for any vuln that has a CVE-ID.
@@ -462,6 +484,21 @@ class SyncService:
                             except Exception:
                                 logger.warning(
                                     "Could not dispatch enrichment for vuln %s",
+                                    db_vuln.id,
+                                    exc_info=False,
+                                )
+                            # Phase 6 — also dispatch patch-intel (MSRC) sync.
+                            # Same best-effort discipline: failures here are
+                            # picked up by the daily patch-intel refresh.
+                            try:
+                                from ...tasks.patch_intel import sync_msrc_vuln as _sync_msrc_task
+                                _sync_msrc_task.delay(
+                                    tenant_slug=tenant_slug_for_enrich,
+                                    vuln_id=db_vuln.id,
+                                )
+                            except Exception:
+                                logger.warning(
+                                    "Could not dispatch patch-intel for vuln %s",
                                     db_vuln.id,
                                     exc_info=False,
                                 )

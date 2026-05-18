@@ -59,6 +59,22 @@ celery_app = Celery(
         # daily beat refresh. Runs on the existing `parsing` queue so no new
         # worker service is required.
         "grc.tasks.vulnerabilities",
+        # Phase 6 — Vendor patch intelligence (MSRC). Shares the parsing
+        # queue with vuln enrichment until the dedicated `enrichment` queue
+        # spins up (Track C).
+        "grc.tasks.patch_intel",
+        # Phase 8 — Exception workflow expiry sweep. Light per-tenant
+        # task that fans out daily; lives on `parsing` until the dedicated
+        # `notification` queue spins up.
+        "grc.tasks.exceptions",
+        # Phase 7 — Cloud connector sync. Lives on `parsing` until the
+        # dedicated `sync` queue spins up.
+        "grc.tasks.cloud_sync",
+        # External connector framework — Ticketing/SIEM/Pen-test/Collab/Transcribe.
+        "grc.tasks.connectors",
+        # Async AI document drafting — moves the multi-stage pipeline off the
+        # request thread so it can't time out at the HTTP layer.
+        "grc.tasks.ai_drafting",
     ],
 )
 
@@ -93,10 +109,25 @@ celery_app.conf.update(
     },
 
     # ── Routing ──────────────────────────────────────────────────────────────
-    # Three queues so we can scale workers independently:
-    #   default  — short interactive tasks (<5s)
-    #   parsing  — long AI-heavy tasks (framework parse, gap analysis)
-    #   maintenance — periodic / housekeeping
+    # Queue inventory (worker -Q flag should subscribe to the relevant set):
+    #   default       — short interactive tasks (<5s)
+    #   parsing       — long AI-heavy tasks (framework parse, gap analysis)
+    #   maintenance   — periodic / housekeeping
+    #   enrichment    — Track C (Phase 5+): NVD/EPSS/KEV/MSRC + future cloud
+    #                   enrichment HTTP work. Currently empty; vuln enrichment
+    #                   shares `parsing` for backward compat. Future phases
+    #                   (6 MSRC patch sync, 9 reporting aggregations) will
+    #                   route their tasks here so they don't compete with
+    #                   AI parse runs for worker slots.
+    #   sync          — Track C (Phase 7): cloud asset/vulnerability sync
+    #                   (AWS Inspector, Azure Defender, GCP SCC). Long-poll
+    #                   work that benefits from a dedicated worker pool.
+    #   notification  — Track C (Phase 8): exception-expiry notifications,
+    #                   stale-asset reminders, scheduled report emails. Short
+    #                   bursts of fan-out, isolated so a stuck email send
+    #                   can't block enrichment or sync work.
+    # No existing routes are changed below — `parsing` keeps owning vuln
+    # enrichment until a future PR explicitly opts it into `enrichment`.
     task_default_queue="default",
     task_routes={
         "grc.tasks.frameworks.*": {"queue": "parsing"},
@@ -106,6 +137,24 @@ celery_app.conf.update(
         # Vuln enrichment shares the parsing queue — same worker can handle
         # it; the work is light (HTTP calls + a small DB write per row).
         "grc.tasks.vulnerabilities.*": {"queue": "parsing"},
+        # Phase 6 — patch intelligence shares `parsing` for now. When the
+        # `enrichment` queue + worker land we'll flip this to {"queue":
+        # "enrichment"} without touching task code.
+        "grc.tasks.patch_intel.*": {"queue": "parsing"},
+        # Phase 8 — exception workflow sweep. Same story: shares `parsing`
+        # until the dedicated `notification` queue lands.
+        "grc.tasks.exceptions.*": {"queue": "parsing"},
+        # Phase 7 — cloud connector sync. Shares `parsing` for now.
+        "grc.tasks.cloud_sync.*": {"queue": "parsing"},
+        # External-connector framework (ticketing / SIEM / pentest / collab /
+        # transcribe). Reuses the `parsing` queue until a dedicated worker pool
+        # is justified by traffic.
+        "grc.tasks.connectors.*": {"queue": "parsing"},
+        "connectors.*": {"queue": "parsing"},
+        # Async AI drafting routes onto the same parsing queue (long-running
+        # AI work, same character as policy parse / gap analysis).
+        "grc.tasks.ai_drafting.*": {"queue": "parsing"},
+        "ai_drafting.*": {"queue": "parsing"},
     },
 
     # ── Beat schedule ────────────────────────────────────────────────────────
@@ -117,6 +166,41 @@ celery_app.conf.update(
         "vuln-enrichment-daily-refresh": {
             "task": "grc.tasks.vulnerabilities.daily_refresh",
             "schedule": 24 * 60 * 60,   # 24h cadence (Python int seconds)
+            "options": {"queue": "parsing"},
+        },
+        # Phase 6 — Daily PSIRT (MSRC) refresh. Stagger from the enrichment
+        # refresh so the two don't compete for the same MSRC/redis pool
+        # bandwidth at the same minute (the actual offset is whatever beat
+        # gives them after startup; the schedules are independent counters).
+        "patch-intel-daily-refresh": {
+            "task": "grc.tasks.patch_intel.daily_patch_intel_refresh",
+            "schedule": 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # Phase 8 — Daily exception-expiry sweep. Transitions approved
+        # exceptions past their `exception_expires_at` to `expired` and
+        # syncs the legacy `is_exception` flag so existing reports update
+        # without further code changes.
+        "exception-expiry-daily-sweep": {
+            "task": "grc.tasks.exceptions.daily_exception_expiry_sweep",
+            "schedule": 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # Phase 7 — Cloud connector sync fan-out. Every 6 hours; per-row
+        # `sync_schedule_seconds` further filters out fresh connectors,
+        # so an admin can opt a connector into hourly sync without us
+        # changing beat config.
+        "cloud-connector-sync-fan-out": {
+            "task": "grc.tasks.cloud_sync.daily_cloud_connector_fan_out",
+            "schedule": 6 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # External-connector fan-out (ticketing / SIEM / pen-test / collab /
+        # transcribe). Every hour — most categories are cheap polls; ticketing
+        # status sync benefits from a tighter cadence than the 6h cloud sync.
+        "connectors-hourly-sync": {
+            "task": "connectors.sync_all_active",
+            "schedule": 60 * 60,
             "options": {"queue": "parsing"},
         },
     },
