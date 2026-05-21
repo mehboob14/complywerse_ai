@@ -33,7 +33,7 @@
     ],
     "target_audience": "Top management, governing bodies, AI governance and oversight professionals, CISOs, CIOs, CTOs, Chief AI Officers, AI risk managers, AI developers, AI deployers, AI operators, AI impact assessors, privacy/security/safety/quality functions, internal audit, legal & compliance, procurement, and any role involved in the design, provision, use or governance of AI systems in any organization.",
     "certification_body": "Accredited third-party certification bodies operating under ISO/IEC 17021-1 and (where applicable) ISO/IEC 17065 are expected to provide certification against ISO/IEC 42001:2023.",
-    "certification_validity_period": "Typically a 3-year certification cycle with annual surveillance audits and recertification at year 3, consistent with ISO management system certification practice.",
+    "certification_validity_period": "3 years (annual surveillance audits; recertification at year 3)",
     "certification_levels": null,
     "certification_lifecycle": "Stage 1 (documentation review) and Stage 2 (implementation audit) initial certification audits, followed by annual surveillance audits and recertification audit every three years.",
     "required_artifacts": [

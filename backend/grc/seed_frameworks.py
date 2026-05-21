@@ -1958,13 +1958,39 @@ def seed_framework_from_json(db, data: Dict[str, Any], tenant_id: int = None,
             effective_date = datetime.fromisoformat(metadata["effective_date"].replace("Z", "+00:00"))
         except (ValueError, TypeError):
             pass
-    
+
     compliance_deadline = None
     if metadata.get("compliance_deadline"):
         try:
             compliance_deadline = datetime.fromisoformat(metadata["compliance_deadline"].replace("Z", "+00:00"))
         except (ValueError, TypeError):
             pass
+
+    # Defensive truncation — every VARCHAR(N) column on `UploadedFramework`
+    # gets capped to its declared length so an over-long seed value logs a
+    # warning instead of blowing up the whole seed run. Text/JSON columns
+    # are untouched. Mirrors the column widths in `models.py:UploadedFramework`.
+    def _cap(field_name: str, max_len: int) -> Optional[str]:
+        raw = metadata.get(field_name)
+        if raw is None:
+            return None
+        if not isinstance(raw, str):
+            raw = str(raw)
+        if len(raw) <= max_len:
+            return raw
+        print(
+            f"  ⚠ '{name}': '{field_name}' is {len(raw)} chars, truncating to "
+            f"{max_len} (consider shortening in the JSON)"
+        )
+        return raw[:max_len]
+
+    framework_type_val          = _cap("framework_type", 100)
+    source_organization_val     = _cap("source_organization", 255)
+    version_val                 = _cap("version", 50)
+    classification_val          = _cap("classification", 50) or "compliance"
+    certification_body_val      = _cap("certification_body", 255)
+    certification_validity_val  = _cap("certification_validity_period", 100)
+    regulatory_authority_val    = _cap("regulatory_authority", 255)
     
     # Create the UploadedFramework record
     framework = UploadedFramework(
@@ -1979,31 +2005,31 @@ def seed_framework_from_json(db, data: Dict[str, Any], tenant_id: int = None,
         parsed_at=datetime.utcnow(),
         
         # Classification fields
-        classification=metadata.get("classification", "compliance"),
+        classification=classification_val,
         classification_confidence=metadata.get("classification_confidence"),
         classification_reasoning=metadata.get("classification_reasoning"),
-        
+
         # Basic metadata
-        framework_type=metadata.get("framework_type", "regulatory"),
-        source_organization=metadata.get("source_organization"),
-        version=metadata.get("version"),
+        framework_type=framework_type_val or "regulatory",
+        source_organization=source_organization_val,
+        version=version_val,
         effective_date=effective_date,
-        
+
         # Pre-processing overview
         framework_purpose=metadata.get("framework_purpose"),
         framework_scope=metadata.get("framework_scope"),
         framework_objectives=metadata.get("framework_objectives"),
         target_audience=metadata.get("target_audience"),
-        
+
         # Certification-specific fields
-        certification_body=metadata.get("certification_body"),
-        certification_validity_period=metadata.get("certification_validity_period"),
+        certification_body=certification_body_val,
+        certification_validity_period=certification_validity_val,
         certification_levels=metadata.get("certification_levels"),
         certification_lifecycle=metadata.get("certification_lifecycle"),
         required_artifacts=metadata.get("required_artifacts"),
-        
+
         # Compliance-specific fields
-        regulatory_authority=metadata.get("regulatory_authority"),
+        regulatory_authority=regulatory_authority_val,
         compliance_deadline=compliance_deadline,
         penalty_for_non_compliance=metadata.get("penalty_for_non_compliance"),
         adoption_approach=metadata.get("adoption_approach"),
@@ -2346,10 +2372,44 @@ if __name__ == "__main__":
         action="store_true",
         help="Force re-seeding even if frameworks exist"
     )
-    
+    parser.add_argument(
+        "--all-tenants",
+        action="store_true",
+        help=(
+            "Run the seeder against every tenant in the master catalog. "
+            "Without this flag, only the first (or --tenant-id) tenant is "
+            "seeded, which is why newly-added JSONs may be invisible to "
+            "users on other tenants."
+        ),
+    )
+
     args = parser.parse_args()
-    
+
     if args.json_file:
         seed_single_framework(args.json_file, args.tenant_id, force=args.force)
+    elif args.all_tenants:
+        # Iterate every tenant in the master catalog. Each tenant gets its
+        # own session via seed_uploaded_frameworks' tenant resolution path.
+        # Idempotent thanks to framework_exists — only missing rows insert.
+        from .models import Tenant as _MasterTenant
+        master = SessionLocal()
+        try:
+            tenants = master.query(_MasterTenant.id, _MasterTenant.slug, _MasterTenant.name).all()
+        finally:
+            master.close()
+        print(f"Seeding {len(tenants)} tenant(s)…\n")
+        total_new = 0
+        for tid, slug, name in tenants:
+            print(f"--- Tenant id={tid} slug={slug!r} name={name!r}")
+            try:
+                created = seed_uploaded_frameworks(
+                    args.seed_dir, tenant_id=tid, force=args.force,
+                )
+                total_new += len(created or [])
+            except Exception as exc:
+                print(f"   ! tenant id={tid} failed: {exc}")
+                continue
+            print()
+        print(f"Done. {total_new} framework row(s) created across all tenants.")
     else:
         seed_uploaded_frameworks(args.seed_dir, args.tenant_id, force=args.force)

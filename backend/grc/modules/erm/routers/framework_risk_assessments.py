@@ -1339,7 +1339,18 @@ def move_framework_question_to_risk_register(
         or f"Framework Assessment #{assessment.id}"
     )
 
-    default_title = f"[Framework Assessment #{assessment.id}] Q{question.order_index or question.id} Risk"
+    # Build a meaningful default title using the framework + actual
+    # question text instead of the opaque "Framework Assessment #N"
+    # marker. Users land in the Risk Register and immediately see what
+    # the risk is about and which framework it traces to.
+    fw_tag = (framework_short_code or framework_name or "Framework").strip()
+    question_excerpt = (question.question_text or "").strip().replace("\n", " ")
+    if len(question_excerpt) > 110:
+        question_excerpt = question_excerpt[:110].rsplit(" ", 1)[0] + "…"
+    if question_excerpt:
+        default_title = f"[{fw_tag}] {question_excerpt}"
+    else:
+        default_title = f"[{fw_tag}] Assessment Q{question.order_index or question.id}"
     risk_title = (data.title or default_title).strip()
     risk_description_parts = [
         f"Source: Framework Risk Assessment '{assessment.name}'",

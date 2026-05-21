@@ -9,7 +9,7 @@ from sqlalchemy import func
 
 from ....models import (
     Vulnerability, VulnerabilityReport, VulnerabilitySLAConfig,
-    VulnerabilityAssetLink, GRCUser, get_db
+    VulnerabilityAssetLink, VulnerabilityDependency, GRCUser, get_db
 )
 from ....schemas import (
     VulnerabilityCreate, VulnerabilityUpdate, VulnerabilityResponse,
@@ -615,6 +615,484 @@ def change_vulnerability_status(
     ).filter(Vulnerability.id == vuln.id).first()
 
     return _build_vulnerability_response(vuln)
+
+
+# ---------------------------------------------------------------------------
+# CVE auto-fill from title
+# ---------------------------------------------------------------------------
+# When the operator types a title like "Log4Shell RCE" or "CVE-2021-44228
+# in payment-gateway", we offer to pre-fill the CVE-ID / CVSS score /
+# severity / CWE / description fields by looking up NVD directly.
+#
+# Two match strategies:
+#   1. Explicit CVE-ID in the title (regex). Highest confidence.
+#   2. Known nickname → CVE map (Log4Shell, Spring4Shell, EternalBlue, …).
+# Both paths converge on the same NVD lookup so the response shape is
+# uniform regardless of how the match was made.
+
+# Famous vulnerability nicknames operators frequently type as titles. We
+# keep this short and curated rather than fuzzy-matching every title —
+# fuzzy matches against the full CVE catalogue produce too many false
+# positives to be useful as an auto-fill default.
+_VULN_NICKNAMES: dict[str, str] = {
+    "log4shell": "CVE-2021-44228",
+    "log4j": "CVE-2021-44228",
+    "spring4shell": "CVE-2022-22965",
+    "springshell": "CVE-2022-22965",
+    "eternalblue": "CVE-2017-0144",
+    "heartbleed": "CVE-2014-0160",
+    "shellshock": "CVE-2014-6271",
+    "dirtycow": "CVE-2016-5195",
+    "dirty cow": "CVE-2016-5195",
+    "bluekeep": "CVE-2019-0708",
+    "printnightmare": "CVE-2021-34527",
+    "follina": "CVE-2022-30190",
+    "proxyshell": "CVE-2021-34473",
+    "proxylogon": "CVE-2021-26855",
+    "zerologon": "CVE-2020-1472",
+    "ghostcat": "CVE-2020-1938",
+    "shitrix": "CVE-2019-19781",
+    "kr00k": "CVE-2019-15126",
+    "ripple20": "CVE-2020-11896",
+    "smbghost": "CVE-2020-0796",
+    "curveball": "CVE-2020-0601",
+    "moveit": "CVE-2023-34362",
+    "citrix bleed": "CVE-2023-4966",
+    "regresshion": "CVE-2024-6387",
+    "xz backdoor": "CVE-2024-3094",
+    "xz utils": "CVE-2024-3094",
+}
+
+_CVE_PATTERN = __import__("re").compile(r"CVE-\d{4}-\d{4,7}", __import__("re").IGNORECASE)
+
+
+def _extract_cve_from_title(title: str) -> Optional[str]:
+    """Return the first CVE-ID found in the title, uppercased. None if absent."""
+    if not title:
+        return None
+    m = _CVE_PATTERN.search(title)
+    return m.group(0).upper() if m else None
+
+
+def _match_nickname(title: str) -> Optional[str]:
+    """Map well-known vulnerability nicknames to their CVE-ID."""
+    if not title:
+        return None
+    t = title.lower()
+    # Longest-prefix wins so "dirty cow" beats a stray "dirty".
+    for key in sorted(_VULN_NICKNAMES.keys(), key=len, reverse=True):
+        if key in t:
+            return _VULN_NICKNAMES[key]
+    return None
+
+
+def _severity_from_cvss(score: Optional[float]) -> Optional[str]:
+    """Map a CVSS base score to the severity bucket the rest of the platform
+    uses. Mirrors the bucketing in the natural-language summary helpers."""
+    if score is None:
+        return None
+    try:
+        s = float(score)
+    except (TypeError, ValueError):
+        return None
+    if s >= 9.0:
+        return "critical"
+    if s >= 7.0:
+        return "high"
+    if s >= 4.0:
+        return "medium"
+    if s > 0.0:
+        return "low"
+    return "info"
+
+
+def _fetch_nvd_full(cve_id: str) -> Optional[dict]:
+    """Raw NVD GET for a single CVE returning the parsed JSON or None.
+
+    Separate from the enrichment client because we need CVSS + CWE fields
+    the cached `NvdResult` shape doesn't carry. Best-effort: never raises.
+    """
+    import os
+    import requests as _requests
+    headers = {"User-Agent": "complywerse-vuln-lookup/1.0"}
+    api_key = (os.environ.get("NVD_API_KEY") or "").strip()
+    if api_key:
+        headers["apiKey"] = api_key
+    try:
+        response = _requests.get(
+            "https://services.nvd.nist.gov/rest/json/cves/2.0",
+            params={"cveId": cve_id.upper()},
+            headers=headers,
+            timeout=8,
+        )
+    except Exception:
+        return None
+    if response.status_code != 200:
+        return None
+    try:
+        data = response.json()
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+class CveLookupRequest(BaseModel):
+    title: str
+    cve_id: Optional[str] = None  # optional explicit override
+
+
+class CveLookupResponse(BaseModel):
+    matched: bool
+    match_source: Optional[str] = None  # 'cve_in_title' | 'nickname' | 'explicit'
+    cve_id: Optional[str] = None
+    cvss_score: Optional[float] = None
+    cvss_vector: Optional[str] = None
+    severity: Optional[str] = None
+    cwe_id: Optional[str] = None
+    description: Optional[str] = None
+    nvd_url: Optional[str] = None
+
+
+@router.post("/vulnerabilities/lookup-by-title", response_model=CveLookupResponse)
+def lookup_cve_by_title(
+    payload: CveLookupRequest,
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Find a likely CVE for a free-text vulnerability title.
+
+    Returns the highest-confidence match it finds (explicit CVE-ID in title
+    > known nickname). When nothing matches, returns `matched=False` and
+    the frontend keeps the form blank — never auto-fills speculative data.
+    """
+    title = (payload.title or "").strip()
+    explicit = (payload.cve_id or "").strip().upper()
+
+    if explicit and _CVE_PATTERN.match(explicit):
+        cve_id = explicit
+        match_source = "explicit"
+    else:
+        extracted = _extract_cve_from_title(title)
+        if extracted:
+            cve_id = extracted
+            match_source = "cve_in_title"
+        else:
+            nickname = _match_nickname(title)
+            if nickname:
+                cve_id = nickname
+                match_source = "nickname"
+            else:
+                return CveLookupResponse(matched=False)
+
+    raw = _fetch_nvd_full(cve_id)
+    if not raw:
+        # We know the CVE-ID — return that much so the user can at least
+        # accept the ID into the form even if NVD is unreachable.
+        return CveLookupResponse(
+            matched=True,
+            match_source=match_source,
+            cve_id=cve_id,
+            nvd_url=f"https://nvd.nist.gov/vuln/detail/{cve_id}",
+        )
+
+    vulns = raw.get("vulnerabilities") or []
+    if not vulns:
+        return CveLookupResponse(
+            matched=True,
+            match_source=match_source,
+            cve_id=cve_id,
+            nvd_url=f"https://nvd.nist.gov/vuln/detail/{cve_id}",
+        )
+
+    cve = (vulns[0] or {}).get("cve") or {}
+
+    # English description.
+    description: Optional[str] = None
+    for desc in cve.get("descriptions") or []:
+        if (desc or {}).get("lang") == "en":
+            description = (desc.get("value") or "").strip() or None
+            if description and len(description) > 1000:
+                description = description[:1000].rsplit(" ", 1)[0] + "…"
+            break
+
+    # CVSS — prefer v3.1, fall back to v3.0, then v2.0.
+    cvss_score: Optional[float] = None
+    cvss_vector: Optional[str] = None
+    metrics = cve.get("metrics") or {}
+    for key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
+        entries = metrics.get(key) or []
+        if not entries:
+            continue
+        cvss_data = (entries[0] or {}).get("cvssData") or {}
+        if cvss_data.get("baseScore") is not None:
+            try:
+                cvss_score = float(cvss_data["baseScore"])
+            except (TypeError, ValueError):
+                cvss_score = None
+        cvss_vector = cvss_data.get("vectorString") or cvss_vector
+        if cvss_score is not None:
+            break
+
+    # CWE — first weakness entry, English.
+    cwe_id: Optional[str] = None
+    for w in cve.get("weaknesses") or []:
+        for d in (w or {}).get("description") or []:
+            if (d or {}).get("lang") == "en":
+                val = (d.get("value") or "").strip()
+                if val and val.upper().startswith("CWE-"):
+                    cwe_id = val.upper()
+                    break
+        if cwe_id:
+            break
+
+    return CveLookupResponse(
+        matched=True,
+        match_source=match_source,
+        cve_id=cve_id,
+        cvss_score=cvss_score,
+        cvss_vector=cvss_vector,
+        severity=_severity_from_cvss(cvss_score),
+        cwe_id=cwe_id,
+        description=description,
+        nvd_url=f"https://nvd.nist.gov/vuln/detail/{cve_id}",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Vulnerability dependency chains
+# ---------------------------------------------------------------------------
+# A "dependent" vuln requires its "prerequisite" to be exploitable in
+# practice (e.g. a local privilege-escalation flaw needs an RCE foothold
+# first). Storing the chain lets a triager push the right one to the top
+# of the queue and gives auditors a structured "kill-chain" view.
+#
+# We deliberately do NOT auto-modify composite_priority based on chain
+# state — that would surprise users whose SLAs/dashboards are calibrated
+# to the current numbers. The chain is informational + visualised; humans
+# choose how to act on it.
+
+
+class VulnDependencyCreate(BaseModel):
+    prerequisite_vuln_id: int
+    notes: Optional[str] = None
+    chain_stage: Optional[str] = None  # initial_access / execution / priv_esc / lateral / exfil
+
+
+class VulnDependencyResponse(BaseModel):
+    id: int
+    dependent_vuln_id: int
+    prerequisite_vuln_id: int
+    notes: Optional[str] = None
+    chain_stage: Optional[str] = None
+    # Denormalised prereq summary so the UI doesn't need a second fetch.
+    prerequisite_title: Optional[str] = None
+    prerequisite_vuln_code: Optional[str] = None
+    prerequisite_severity: Optional[str] = None
+    prerequisite_status: Optional[str] = None
+    prerequisite_cve_id: Optional[str] = None
+    prerequisite_kev_flag: Optional[bool] = None
+    prerequisite_composite_priority: Optional[float] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+def _serialize_dependency(dep: VulnerabilityDependency, prereq: Optional[Vulnerability]) -> dict:
+    """Build the response shape with prereq fields flattened in."""
+    return {
+        "id": dep.id,
+        "dependent_vuln_id": dep.dependent_vuln_id,
+        "prerequisite_vuln_id": dep.prerequisite_vuln_id,
+        "notes": dep.notes,
+        "chain_stage": dep.chain_stage,
+        "prerequisite_title": prereq.title if prereq else None,
+        "prerequisite_vuln_code": prereq.vuln_id if prereq else None,
+        "prerequisite_severity": prereq.severity if prereq else None,
+        "prerequisite_status": prereq.status if prereq else None,
+        "prerequisite_cve_id": prereq.cve_id if prereq else None,
+        "prerequisite_kev_flag": bool(prereq.kev_flag) if prereq and prereq.kev_flag is not None else None,
+        "prerequisite_composite_priority": prereq.composite_priority if prereq else None,
+        "created_at": dep.created_at,
+    }
+
+
+@router.get("/vulnerabilities/{vuln_id}/dependencies")
+def list_vulnerability_dependencies(
+    vuln_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """List the chain: vulns this one *depends on* (prerequisites) and
+    vulns that *depend on* this one (dependents). Bidirectional view in
+    one round-trip so the UI renders the whole graph for this row.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    vuln = get_vuln_or_404(vuln_id, user_tenants, db)
+
+    # Prerequisites this vuln depends on.
+    prereq_rows = (
+        db.query(VulnerabilityDependency)
+        .options(joinedload(VulnerabilityDependency.prerequisite_vuln))
+        .filter(VulnerabilityDependency.dependent_vuln_id == vuln.id)
+        .all()
+    )
+    prerequisites = [
+        _serialize_dependency(d, d.prerequisite_vuln) for d in prereq_rows
+    ]
+
+    # Other vulns that depend on this one.
+    dep_rows = (
+        db.query(VulnerabilityDependency)
+        .options(joinedload(VulnerabilityDependency.dependent_vuln))
+        .filter(VulnerabilityDependency.prerequisite_vuln_id == vuln.id)
+        .all()
+    )
+    dependents = []
+    for d in dep_rows:
+        dv = d.dependent_vuln
+        dependents.append({
+            "id": d.id,
+            "dependent_vuln_id": d.dependent_vuln_id,
+            "prerequisite_vuln_id": d.prerequisite_vuln_id,
+            "notes": d.notes,
+            "chain_stage": d.chain_stage,
+            "dependent_title": dv.title if dv else None,
+            "dependent_vuln_code": dv.vuln_id if dv else None,
+            "dependent_severity": dv.severity if dv else None,
+            "dependent_status": dv.status if dv else None,
+            "dependent_cve_id": dv.cve_id if dv else None,
+            "dependent_kev_flag": bool(dv.kev_flag) if dv and dv.kev_flag is not None else None,
+            "dependent_composite_priority": dv.composite_priority if dv else None,
+            "created_at": d.created_at,
+        })
+
+    # Chain warning summary — surfaces in the UI as a coloured banner.
+    # If any unresolved prereq is KEV-listed or has composite > 9, the
+    # operator should treat THIS vuln with extra urgency.
+    open_high_prereqs = [
+        p for p in prerequisites
+        if (p.get("prerequisite_status") or "").lower() not in (
+            "resolved", "remediated", "verified", "closed", "false_positive",
+        )
+        and (
+            bool(p.get("prerequisite_kev_flag"))
+            or (isinstance(p.get("prerequisite_composite_priority"), (int, float))
+                and (p["prerequisite_composite_priority"] or 0) >= 9.0)
+        )
+    ]
+    chain_warning = None
+    if open_high_prereqs:
+        chain_warning = (
+            f"{len(open_high_prereqs)} unresolved prerequisite"
+            f"{'s' if len(open_high_prereqs) != 1 else ''} with high real-world "
+            f"urgency. Closing those raises the effective exploitability of this vuln."
+        )
+
+    return {
+        "prerequisites": prerequisites,
+        "dependents": dependents,
+        "chain_warning": chain_warning,
+    }
+
+
+@router.post("/vulnerabilities/{vuln_id}/dependencies", response_model=VulnDependencyResponse)
+def add_vulnerability_dependency(
+    vuln_id: int,
+    payload: VulnDependencyCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Declare that `vuln_id` depends on `prerequisite_vuln_id`."""
+    user_tenants = get_user_tenants(current_user, db)
+    dependent = get_vuln_or_404(vuln_id, user_tenants, db)
+
+    if payload.prerequisite_vuln_id == vuln_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A vulnerability cannot depend on itself.",
+        )
+
+    prerequisite = get_vuln_or_404(payload.prerequisite_vuln_id, user_tenants, db)
+    if prerequisite.tenant_id != dependent.tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot link vulnerabilities across tenants.",
+        )
+
+    # Reject simple cycles (A→B→A). Deeper cycles still possible — surfaced
+    # in the UI but not blocked, since real chains can legitimately loop
+    # (e.g. mutually reinforcing exploits).
+    inverse = (
+        db.query(VulnerabilityDependency)
+        .filter(
+            VulnerabilityDependency.dependent_vuln_id == prerequisite.id,
+            VulnerabilityDependency.prerequisite_vuln_id == dependent.id,
+        )
+        .first()
+    )
+    if inverse:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Would create a direct cycle — '{prerequisite.title}' already "
+                f"depends on '{dependent.title}'."
+            ),
+        )
+
+    existing = (
+        db.query(VulnerabilityDependency)
+        .filter(
+            VulnerabilityDependency.dependent_vuln_id == dependent.id,
+            VulnerabilityDependency.prerequisite_vuln_id == prerequisite.id,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dependency already exists.",
+        )
+
+    dep = VulnerabilityDependency(
+        tenant_id=dependent.tenant_id,
+        dependent_vuln_id=dependent.id,
+        prerequisite_vuln_id=prerequisite.id,
+        notes=payload.notes,
+        chain_stage=payload.chain_stage,
+        created_by=current_user.id,
+    )
+    db.add(dep)
+    db.commit()
+    db.refresh(dep)
+    return VulnDependencyResponse(**_serialize_dependency(dep, prerequisite))
+
+
+@router.delete("/vulnerabilities/{vuln_id}/dependencies/{dependency_id}")
+def remove_vulnerability_dependency(
+    vuln_id: int,
+    dependency_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("vulnerabilities:vulnerability_register:edit")),
+):
+    """Remove a single dependency edge."""
+    user_tenants = get_user_tenants(current_user, db)
+    vuln = get_vuln_or_404(vuln_id, user_tenants, db)
+
+    dep = (
+        db.query(VulnerabilityDependency)
+        .filter(
+            VulnerabilityDependency.id == dependency_id,
+            VulnerabilityDependency.dependent_vuln_id == vuln.id,
+        )
+        .first()
+    )
+    if not dep:
+        raise HTTPException(status_code=404, detail="Dependency not found.")
+    db.delete(dep)
+    db.commit()
+    return {"deleted": True}
 
 
 # ---------------------------------------------------------------------------

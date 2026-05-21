@@ -641,6 +641,10 @@ export const assetsApi = {
     apiClient.delete(`/assets/${id}/security-compliance/selections/${encodeURIComponent(controlId)}`),
   getCoverageAnalysis: (id: number) => apiClient.get(`/assets/${id}/coverage-analysis`),
   assessRisk: (id: number) => apiClient.post(`/assets/${id}/assess`),
+  // Trajectory map data: Asset → Vulnerabilities → Controls → Risks (one-shot
+  // aggregate). Powers the interactive xyflow diagram on the asset detail
+  // page's Trajectory tab.
+  getTrajectory: (id: number) => apiClient.get(`/assets/${id}/trajectory`),
   downloadTemplate: async () => {
     const response = await apiClient.get('/assets/template/download', {
       responseType: 'blob'
@@ -1540,6 +1544,12 @@ export const complianceApi = {
       apiClient.get('/compliance/policies/dashboard/overdue', { params }),
     getByDocument: (params?: { tenant_id?: number; limit?: number }) =>
       apiClient.get('/compliance/policies/dashboard/by-document', { params }),
+    // One-shot aggregate for the comprehensive /frameworks dashboard.
+    // Returns KPIs + status mix + per-framework rollup + domain breakdown +
+    // recent activity in one round trip, so the page doesn't N+1 across all
+    // active journeys.
+    getFrameworksAggregate: (params?: { tenant_id?: number }) =>
+      apiClient.get('/compliance/policies/dashboard/frameworks-aggregate', { params }),
   },
   statements: {
     getAll: (params?: {
@@ -1705,6 +1715,25 @@ export const vulnManagementApi = {
       apiClient.post(`/vuln-management/vulnerabilities/${id}/assign`, { user_id: userId }),
     changeStatus: (id: number, status: string, notes?: string) =>
       apiClient.post(`/vuln-management/vulnerabilities/${id}/status`, { status, notes }),
+    // CVE auto-fill from a free-text title. Returns matched CVE metadata
+    // (cvss, severity, cwe, description) when the title either contains a
+    // CVE-ID outright or matches a curated nickname (Log4Shell, etc.). The
+    // frontend uses this to offer one-click pre-fill on the Add modal.
+    lookupByTitle: (body: { title: string; cve_id?: string }) =>
+      apiClient.post(`/vuln-management/vulnerabilities/lookup-by-title`, body),
+    // Vulnerability dependency chains — declare that vuln A is only
+    // exploitable when vuln B is also present. Bi-directional listing
+    // (prerequisites + dependents) in one call so the UI graph renders
+    // without a second fetch.
+    listDependencies: (id: number) =>
+      apiClient.get(`/vuln-management/vulnerabilities/${id}/dependencies`),
+    addDependency: (id: number, body: {
+      prerequisite_vuln_id: number;
+      notes?: string;
+      chain_stage?: string;
+    }) => apiClient.post(`/vuln-management/vulnerabilities/${id}/dependencies`, body),
+    removeDependency: (id: number, dependencyId: number) =>
+      apiClient.delete(`/vuln-management/vulnerabilities/${id}/dependencies/${dependencyId}`),
     // Threat-intelligence enrichment: pulls NVD canonical metadata, EPSS
     // exploit probability, and CISA KEV flag for the vuln's CVE-ID, then
     // recomputes composite_priority. Idempotent — safe to call repeatedly.
@@ -1787,12 +1816,46 @@ export const vulnManagementApi = {
       apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/assets/${linkId}`),
   },
   controlLinks: {
-    list: (vulnId: number) => 
+    list: (vulnId: number) =>
       apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/controls`),
-    create: (vulnId: number, data: { control_type: string; framework_control_id?: number; internal_control_id?: number }) => 
+    create: (vulnId: number, data: { control_type: string; framework_control_id?: number; internal_control_id?: number }) =>
       apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/controls`, data),
-    delete: (vulnId: number, linkId: number) => 
+    delete: (vulnId: number, linkId: number) =>
       apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/controls/${linkId}`),
+    // Re-run the CWE → framework-control auto-mapper for one vuln.
+    // Idempotent; only touches rows tagged `auto:cwe:*`. Returns
+    // {matched_controls, added, kept, removed_stale, errors}.
+    autoMap: (vulnId: number) =>
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/controls/auto-map`),
+
+    // Per-tenant CWE → control overrides (compliance team customisation).
+    listOverrides: () =>
+      apiClient.get(`/vuln-management/cwe-overrides`),
+    createOverride: (body: {
+      cwe_id: string;
+      framework_prefix: string;
+      control_code_pattern: string;
+      action: 'add' | 'remove';
+      notes?: string;
+    }) => apiClient.post(`/vuln-management/cwe-overrides`, body),
+    deleteOverride: (id: number) =>
+      apiClient.delete(`/vuln-management/cwe-overrides/${id}`),
+    previewOverrides: (params: { cwe_id?: string; has_cve?: boolean; is_kev?: boolean }) =>
+      apiClient.get(`/vuln-management/cwe-overrides/preview`, { params }),
+    // Reverse lookup: which open vulns affect this framework control.
+    // Returns {control, summary, items}. `controlType` is "parsed" (the
+    // upload-driven seed table, where the 27 active frameworks live) or
+    // "legacy" (the older FrameworkControl chain). Defaults to "parsed"
+    // because that's where the data actually is.
+    listEvidenceForControl: (
+      controlId: number,
+      includeResolved = false,
+      controlType: 'parsed' | 'legacy' = 'parsed',
+    ) =>
+      apiClient.get(
+        `/vuln-management/framework-controls/${controlId}/vulnerability-evidence`,
+        { params: { include_resolved: includeResolved, control_type: controlType } },
+      ),
   },
   retests: {
     list: (vulnId: number) => 
@@ -1885,12 +1948,35 @@ export const vulnManagementApi = {
     getDepartmentWorkload: () => apiClient.get('/vuln-management/dashboard/department-workload'),
     getAgingByDepartment: () => apiClient.get('/vuln-management/dashboard/aging-by-department'),
     getEscalationMetrics: () => apiClient.get('/vuln-management/dashboard/escalation-metrics'),
+    // Threat-intelligence metrics — KEV exposure, composite-priority buckets,
+    // EPSS bands, asset-criticality matrix, top-10 priority table. Returns
+    // empty/zero series when the tenant hasn't enriched anything yet.
+    getThreatIntel: (params?: { tenant_id?: number }) =>
+      apiClient.get('/vuln-management/dashboard/threat-intel', { params }),
+    // Asset risk heatmap (treemap data). One row per asset with at least
+    // one open vuln; size = asset criticality, value = total open priority.
+    // Designed for "where should the next patching cycle focus?" answer.
+    getAssetRiskHeatmap: (params?: { tenant_id?: number; limit?: number }) =>
+      apiClient.get('/vuln-management/dashboard/asset-risk-heatmap', { params }),
     // Trend series + report download for the overview "intuitive graphs"
     // section. `period` accepts "60d", "90d", "quarter", "180d", "365d".
-    // `bucket` is auto-resolved by the backend; pass to override.
-    getTrends: (params?: { period?: string; bucket?: 'day' | 'week' | 'month'; tenant_id?: number }) =>
-      apiClient.get('/vuln-management/dashboard/trends', { params }),
-    downloadReport: (params?: { period?: string; bucket?: 'day' | 'week' | 'month'; fmt?: 'pdf' | 'text' }) =>
+    // `start_date` + `end_date` (ISO YYYY-MM-DD) override `period` when both
+    // are supplied — that's the custom date-range path. `bucket` is
+    // auto-resolved by the backend; pass to override.
+    getTrends: (params?: {
+      period?: string;
+      bucket?: 'day' | 'week' | 'month';
+      tenant_id?: number;
+      start_date?: string;
+      end_date?: string;
+    }) => apiClient.get('/vuln-management/dashboard/trends', { params }),
+    downloadReport: (params?: {
+      period?: string;
+      bucket?: 'day' | 'week' | 'month';
+      fmt?: 'pdf' | 'text';
+      start_date?: string;
+      end_date?: string;
+    }) =>
       apiClient.get('/vuln-management/dashboard/report', {
         params,
         responseType: 'blob',

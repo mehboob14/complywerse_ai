@@ -34,6 +34,8 @@ import {
   Save,
   Shield,
   FileCheck,
+  Sparkles,
+  CheckCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -242,6 +244,84 @@ export default function VulnerabilitiesPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isNcaAddOpen, setIsNcaAddOpen] = useState(false);
+
+  // CVE auto-fill — watches the title input on the Add modal, debounces 600ms,
+  // and asks the backend whether the title contains a CVE-ID or matches a
+  // known nickname (Log4Shell etc.). When a match comes back, we surface a
+  // small "Apply" banner that one-click pre-fills cvss/cve/cwe/severity.
+  const addFormRef = useRef<HTMLFormElement>(null);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [cveLookup, setCveLookup] = useState<{
+    matched: boolean;
+    match_source?: string;
+    cve_id?: string;
+    cvss_score?: number;
+    cvss_vector?: string;
+    severity?: string;
+    cwe_id?: string;
+    description?: string;
+    nvd_url?: string;
+  } | null>(null);
+  const [cveLookupLoading, setCveLookupLoading] = useState(false);
+  const [cveLookupApplied, setCveLookupApplied] = useState(false);
+
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const trimmed = titleDraft.trim();
+    if (trimmed.length < 4) {
+      setCveLookup(null);
+      setCveLookupLoading(false);
+      return;
+    }
+    setCveLookupLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await vulnManagementApi.vulnerabilities.lookupByTitle({ title: trimmed });
+        const data = res.data as { matched: boolean } & Record<string, unknown>;
+        setCveLookup(data.matched ? (data as typeof cveLookup) : null);
+      } catch {
+        setCveLookup(null);
+      } finally {
+        setCveLookupLoading(false);
+      }
+    }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titleDraft, isModalOpen]);
+
+  // Reset auto-fill state whenever the modal opens / closes so we don't show
+  // a stale banner the next time the user clicks "Add Vulnerability".
+  useEffect(() => {
+    if (!isModalOpen) {
+      setTitleDraft('');
+      setCveLookup(null);
+      setCveLookupApplied(false);
+    }
+  }, [isModalOpen]);
+
+  const applyCveAutoFill = () => {
+    if (!cveLookup || !addFormRef.current) return;
+    const form = addFormRef.current;
+    const setField = (name: string, value: string | number | undefined | null) => {
+      if (value === undefined || value === null || value === '') return;
+      const el = form.elements.namedItem(name) as
+        | HTMLInputElement
+        | HTMLSelectElement
+        | HTMLTextAreaElement
+        | null;
+      if (!el) return;
+      // Only overwrite when the field is empty — operator-typed values win.
+      if ((el.value || '').trim().length === 0) {
+        el.value = String(value);
+      }
+    };
+    setField('cve_id', cveLookup.cve_id);
+    setField('cvss_score', cveLookup.cvss_score);
+    setField('cwe_id', cveLookup.cwe_id);
+    setField('severity', cveLookup.severity);
+    setField('description', cveLookup.description);
+    setCveLookupApplied(true);
+  };
   const [ncaExpandedRows, setNcaExpandedRows] = useState<Set<number>>(new Set());
   const [bulkUploadState, setBulkUploadState] = useState<'idle'|'uploading'|'done'|'error'>('idle');
   const [bulkUploadMsg, setBulkUploadMsg] = useState<string|null>(null);
@@ -667,39 +747,45 @@ export default function VulnerabilitiesPage() {
     <div className="-m-4 lg:-m-5">
       {/* Header + KPI Charts */}
       <div className="border-b border-[var(--color-border)] px-3 sm:px-6 py-3">
-        {/* Tabs */}
-        <div className="mb-3 flex items-center gap-0 border-b border-gray-200 -mx-3 sm:-mx-6 px-3 sm:px-6 overflow-x-auto">
+        {/* Tabs + Register-Type selector — same row, selector right-aligned
+            so the operator sees the active register at a glance and can
+            switch contexts without scrolling past the toolbar below. */}
+        <div className="mb-3 flex items-end justify-between gap-3 border-b border-gray-200 -mx-3 sm:-mx-6 px-3 sm:px-6 overflow-x-auto">
           <div className="flex items-center gap-0 min-w-max">
             {tabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id as 'vulnerabilities' | 'departments' | 'sla')}
-                className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
+                className={`relative inline-flex items-center gap-1.5 rounded-t-md px-3 sm:px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors -mb-px ${
                   activeTab === id
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'text-blue-700 bg-blue-50/50'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-slate-50'
                 }`}
               >
                 <Icon size={14} />
                 {label}
+                {activeTab === id && (
+                  <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-blue-600" />
+                )}
               </button>
             ))}
           </div>
+          {activeTab === 'vulnerabilities' && (
+            <div className="flex items-center gap-2 pb-2 flex-shrink-0">
+              <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Register</span>
+              <select
+                value={registerType}
+                onChange={(e) => setRegisterType(e.target.value as 'standard' | 'nca')}
+                className="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                title="Switch between the Standard register and the NCA Saudi template view"
+              >
+                <option value="standard">Standard</option>
+                <option value="nca">NCA Template</option>
+              </select>
+            </div>
+          )}
         </div>
 
-        {activeTab === 'vulnerabilities' && (
-          <div className="mb-3 flex items-center gap-2">
-            <span className="text-sm cw-text-muted">Register Type:</span>
-            <select
-              value={registerType}
-              onChange={(e) => setRegisterType(e.target.value as 'standard' | 'nca')}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="standard">Standard Register</option>
-              <option value="nca">NCA Template</option>
-            </select>
-          </div>
-        )}
 
         {/* Both registerType values use the SAME general view — only the
             template_type filter changes. NCA-specific entry points (Upload
@@ -1089,45 +1175,50 @@ export default function VulnerabilitiesPage() {
                 {bulkUploadState === 'uploading' ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
                 Bulk Upload
               </button>
-              {/* Enrich All — queues a Celery job that runs NVD + EPSS +
-                  CISA KEV against every open vuln in the tenant. Used for
-                  backfilling rows that pre-date the enrichment feature.
-                  Returns immediately; actual work streams through the
-                  parsing worker over the next few minutes. */}
-              <button
-                onClick={async () => {
-                  try {
-                    const r = await vulnManagementApi.vulnerabilities.enrichAll();
-                    alert(`Queued bulk enrichment (task ${r.data?.task_id ?? 'unknown'}). Refresh in a minute or two to see updated scores.`);
-                  } catch {
-                    alert('Could not queue bulk enrichment. Check the worker is running.');
-                  }
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
-                title="Run NVD + EPSS + CISA KEV against every open vuln in this tenant"
-              >
-                <Shield size={14} />
-                Enrich All
-              </button>
-              {/* Phase 6 — Sync All Patch Info. Queues a Celery job that
-                  walks every open CVE-bearing vuln and asks MSRC for the
-                  matching KB articles + remediation. Non-Microsoft CVEs
-                  are cached as negative hits so the second run is cheap. */}
-              <button
-                onClick={async () => {
-                  try {
-                    const r = await vulnManagementApi.vulnerabilities.syncPatchInfoAll();
-                    alert(`Queued bulk patch-intel sync (task ${r.data?.task_id ?? 'unknown'}). KB articles will appear on Microsoft vulns within a few minutes.`);
-                  } catch {
-                    alert('Could not queue bulk patch-intel sync. Check the worker is running.');
-                  }
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
-                title="Ask MSRC for KB articles + remediation against every open CVE-bearing vuln in this tenant"
-              >
-                <FileCheck size={14} />
-                Sync Patch Info
-              </button>
+              {/* Enrich All + Sync Patch Info — hidden from the toolbar
+                  because both jobs now run automatically: enrichment fires
+                  on every ingest/import (`enrich_vuln.delay(...)`) and is
+                  re-applied by the daily Celery beat (`daily_refresh`).
+                  Patch-info sync runs on demand from the per-vuln Threat
+                  Intelligence panel + the same daily beat. The bulk
+                  endpoints are still mounted (`/enrich-all`,
+                  `/sync-patch-info-all`) — they're just no longer the
+                  primary UX. Restore the buttons here if you need to
+                  re-expose them. */}
+              {false && (
+                <>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const r = await vulnManagementApi.vulnerabilities.enrichAll();
+                        alert(`Queued bulk enrichment (task ${r.data?.task_id ?? 'unknown'}). Refresh in a minute or two to see updated scores.`);
+                      } catch {
+                        alert('Could not queue bulk enrichment. Check the worker is running.');
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+                    title="Run NVD + EPSS + CISA KEV against every open vuln in this tenant"
+                  >
+                    <Shield size={14} />
+                    Enrich All
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const r = await vulnManagementApi.vulnerabilities.syncPatchInfoAll();
+                        alert(`Queued bulk patch-intel sync (task ${r.data?.task_id ?? 'unknown'}). KB articles will appear on Microsoft vulns within a few minutes.`);
+                      } catch {
+                        alert('Could not queue bulk patch-intel sync. Check the worker is running.');
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors"
+                    title="Ask MSRC for KB articles + remediation against every open CVE-bearing vuln in this tenant"
+                  >
+                    <FileCheck size={14} />
+                    Sync Patch Info
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => {
                   // NCA register → use the NCA-specific add modal so the form
@@ -1418,6 +1509,7 @@ export default function VulnerabilitiesPage() {
         </div>
 
         <form
+          ref={addFormRef}
           onSubmit={(e) => {
             e.preventDefault();
             handleSubmit(new FormData(e.currentTarget));
@@ -1425,6 +1517,61 @@ export default function VulnerabilitiesPage() {
           className="flex flex-col flex-1 min-h-0"
         >
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            {/* CVE auto-fill banner — surfaced when the title contains a
+                CVE-ID or matches a known nickname. One-click pre-fills the
+                CVE / CVSS / CWE / severity / description fields below. */}
+            {cveLookup?.matched && cveLookup.cve_id && !cveLookupApplied && (
+              <div className="rounded-md border border-blue-200 bg-blue-50 p-2.5 text-xs flex items-start gap-2.5">
+                <Sparkles className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-blue-900">
+                    <strong>{cveLookup.cve_id}</strong>
+                    {cveLookup.match_source === 'nickname' && ' matched by known nickname.'}
+                    {cveLookup.match_source === 'cve_in_title' && ' detected in title.'}
+                    {cveLookup.match_source === 'explicit' && ' provided.'}
+                    {typeof cveLookup.cvss_score === 'number' && (
+                      <> CVSS <strong>{cveLookup.cvss_score.toFixed(1)}</strong>
+                      {cveLookup.severity ? <> ({cveLookup.severity})</> : null}
+                      {cveLookup.cwe_id ? <>, {cveLookup.cwe_id}</> : null}.</>
+                    )}
+                  </p>
+                  {cveLookup.description && (
+                    <p className="text-blue-800/80 mt-1 line-clamp-2" title={cveLookup.description}>
+                      {cveLookup.description}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={applyCveAutoFill}
+                  className="flex-shrink-0 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
+                  title="Pre-fill CVE / CVSS / CWE / severity / description from NVD. Operator-typed values are preserved."
+                >
+                  Auto-fill
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCveLookup(null)}
+                  className="flex-shrink-0 rounded-md border border-blue-200 bg-white px-2 py-1 text-xs text-blue-700 hover:bg-blue-100"
+                  title="Dismiss"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+            {cveLookupApplied && (
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800 flex items-center gap-1.5">
+                <CheckCircle className="h-3.5 w-3.5" />
+                Pre-filled from {cveLookup?.cve_id}. Review and adjust before saving.
+              </div>
+            )}
+            {cveLookupLoading && !cveLookup?.matched && titleDraft.trim().length >= 4 && (
+              <div className="text-[11px] text-slate-500 italic flex items-center gap-1.5">
+                <Loader2 size={11} className="animate-spin" />
+                Looking up CVE…
+              </div>
+            )}
+
             {/* Row 1: Title + Description */}
             <div className="grid grid-cols-2 gap-x-4">
               <div>
@@ -1434,6 +1581,7 @@ export default function VulnerabilitiesPage() {
                   name="title"
                   required
                   placeholder="e.g., SQL Injection in Admin Panel"
+                  onChange={(e) => setTitleDraft(e.target.value)}
                   className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
               </div>

@@ -1,17 +1,17 @@
-"""Phase 6 orchestrator: MSRC → writes back to a Vulnerability row.
+"""Phase 6 orchestrator: MSRC + KEV + NVD-derived patch links → Vulnerability.
 
 Single entry point: `sync_patch_intel(vuln, db)`. Reads `vuln.cve_id`, asks
-the MSRC client for the patch metadata, writes the result columns plus
-`psirt_synced_at` / `psirt_source`. Always commits — caller doesn't need to.
+the MSRC client for the patch metadata. When MSRC has nothing (most CVEs
+aren't Microsoft) we fall back to two universally-available sources so the
+button always produces something useful:
 
-Returns a summary dict the on-demand endpoint passes back to the frontend so
-the UI can render the new state without a re-fetch.
+  1. CISA KEV `required_action` text — populated for ~1,200 actively-
+     exploited CVEs and explicitly designed as remediation guidance.
+  2. Patch / advisory URLs detected in the NVD `exploit_references` we
+     already pulled during enrichment — covers Apache, Red Hat, Cisco,
+     Oracle, packetstorm advisory pages, etc.
 
-Vendor detection: we don't try to predict vendor before calling MSRC. MSRC
-itself returns 404 for any non-Microsoft CVE; the cost is one negative-cache
-HTTP call per CVE per 7 days. That's far simpler than CPE-based pre-filtering
-and avoids false negatives when Microsoft owns a CVE under a non-obvious
-product name (e.g. WSUS, Defender, Edge).
+Always commits — caller doesn't need to.
 
 Future PSIRTs (Red Hat, Cisco) will be added to the dispatch list here and
 their results merged into the same `patch_references` JSON column — see the
@@ -20,8 +20,10 @@ their results merged into the same `patch_references` JSON column — see the
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
-from typing import List
+from typing import List, Optional
+from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
@@ -88,6 +90,89 @@ def _refs_only_from(refs: List[dict], source: str) -> List[dict]:
         ref for ref in (refs or [])
         if isinstance(ref, dict) and (ref.get("source") or "").lower() != source.lower()
     ]
+
+
+# ── NVD-reference fallback ───────────────────────────────────────────────
+# When MSRC has nothing, scan the NVD exploit_references we already
+# enriched and pull out vendor advisory / patch URLs. Most CVEs have
+# vendor advisory links in their NVD references; making them visible as
+# patch info immediately makes the panel useful for non-Microsoft CVEs.
+
+# (regex, source, type, id-extractor) — order matters; first match wins.
+_NVD_PATCH_PATTERNS: list[tuple[re.Pattern, str, str]] = [
+    # Red Hat — RHSA-YYYY:NNNN
+    (re.compile(r"access\.redhat\.com/errata/(RHSA-\d{4}:\d+)", re.IGNORECASE), "rhsa", "advisory"),
+    (re.compile(r"access\.redhat\.com/security/cve/", re.IGNORECASE), "rhsa", "advisory"),
+    # Microsoft — support.microsoft.com / KB articles / msrc
+    (re.compile(r"support\.microsoft\.com/[^\s\"'<>]+", re.IGNORECASE), "msrc", "kb"),
+    (re.compile(r"msrc\.microsoft\.com/update-guide/[^\s\"'<>]+", re.IGNORECASE), "msrc", "advisory"),
+    # Cisco
+    (re.compile(r"tools\.cisco\.com/security/center/content/CiscoSecurityAdvisory/[^\s\"'<>]+", re.IGNORECASE), "cisco_psirt", "advisory"),
+    # Oracle
+    (re.compile(r"oracle\.com/security-alerts/[^\s\"'<>]+", re.IGNORECASE), "oracle", "advisory"),
+    # Apache
+    (re.compile(r"issues\.apache\.org/[^\s\"'<>]+", re.IGNORECASE), "apache", "advisory"),
+    (re.compile(r"apache\.org/[^/]*security[^\s\"'<>]*", re.IGNORECASE), "apache", "advisory"),
+    # VMware
+    (re.compile(r"vmware\.com/security/advisories/[^\s\"'<>]+", re.IGNORECASE), "vmware", "advisory"),
+    # GitHub Security Advisory (GHSA)
+    (re.compile(r"github\.com/[^/]+/[^/]+/security/advisories/(GHSA-[^/\s\"'<>]+)", re.IGNORECASE), "ghsa", "advisory"),
+    # Generic packetstormsecurity advisory pages — useful as patch context
+    (re.compile(r"packetstormsecurity\.com/files/\d+/[^\s\"'<>]+(?:Advisory|Patch|Fix)[^\s\"'<>]*", re.IGNORECASE), "vendor", "advisory"),
+]
+
+_KB_PATTERN = re.compile(r"\bKB\d{6,8}\b", re.IGNORECASE)
+
+
+def _derive_ref_id(url: str, fallback_match: Optional[re.Match] = None) -> str:
+    """Pick a short human-readable ID for the patch chip.
+
+    Prefer a captured group (RHSA-2021:5106, GHSA-xxx), else a KB number
+    spotted in the URL, else the last meaningful path segment.
+    """
+    if fallback_match is not None and fallback_match.groups():
+        return fallback_match.group(1)
+    kb = _KB_PATTERN.search(url)
+    if kb:
+        return kb.group(0).upper()
+    try:
+        path = urlparse(url).path
+        last = [p for p in path.split("/") if p][-1] if path else ""
+        return last[:60] or urlparse(url).hostname or "advisory"
+    except Exception:
+        return "advisory"
+
+
+def _extract_patch_refs_from_nvd(
+    references: List[str], existing_urls: set,
+) -> List[dict]:
+    """Walk NVD references and pull out any vendor patch / advisory URLs.
+
+    Each match becomes one entry in the patch_references JSON column with
+    a sensible source tag (`rhsa`, `cisco_psirt`, `oracle`, ...). Returns
+    only refs whose URLs aren't already represented.
+    """
+    out: List[dict] = []
+    seen: set = set(existing_urls)
+    for url in references or []:
+        if not isinstance(url, str) or not url:
+            continue
+        if url in seen:
+            continue
+        for pattern, source, ref_type in _NVD_PATCH_PATTERNS:
+            m = pattern.search(url)
+            if not m:
+                continue
+            ref_id = _derive_ref_id(url, m)
+            out.append({
+                "source": source,
+                "id": ref_id,
+                "url": url,
+                "type": ref_type,
+            })
+            seen.add(url)
+            break
+    return out
 
 
 def sync_patch_intel(vuln: Vulnerability, db: Session) -> dict:
@@ -174,10 +259,85 @@ def sync_patch_intel(vuln: Vulnerability, db: Session) -> dict:
         summary["advisory_count"] = len(vuln.vendor_advisory_ids or [])
         summary["has_remediation"] = bool(vuln.remediation_guidance)
     else:
-        # MSRC explicitly said "not a Microsoft CVE". We don't wipe existing
-        # data (it might have come from a different PSIRT), but we do stamp
-        # the sync timestamp so the daily refresh skips this row for a while.
+        # MSRC explicitly said "not a Microsoft CVE". Fall back to two
+        # universally-available sources so the operator still gets useful
+        # patch info instead of an empty panel.
         summary["errors"].append("not_a_microsoft_cve")
+
+        # Fallback 1 — scan NVD references for vendor advisory / patch URLs.
+        existing_urls = {
+            (ref.get("url") or "") for ref in (vuln.patch_references or [])
+            if isinstance(ref, dict)
+        }
+        nvd_refs = _extract_patch_refs_from_nvd(
+            list(vuln.exploit_references or []), existing_urls,
+        )
+        if nvd_refs:
+            merged_refs = _merge_patch_references(
+                list(vuln.patch_references or []), nvd_refs,
+            )
+            vuln.patch_references = merged_refs
+            summary["patch_references"] = merged_refs
+            summary["kb_count"] = sum(
+                1 for r in merged_refs if isinstance(r, dict) and r.get("type") == "kb"
+            )
+            summary["advisory_count"] = len(vuln.vendor_advisory_ids or [])
+            # Mark the dominant non-MSRC source so the UI badge is honest.
+            non_msrc_sources = {
+                (r.get("source") or "").lower() for r in merged_refs
+                if isinstance(r, dict) and (r.get("source") or "").lower() != "msrc"
+            }
+            if non_msrc_sources:
+                # Prefer specific PSIRT sources over the generic "vendor" bucket.
+                for preferred in ("rhsa", "cisco_psirt", "oracle", "vmware", "apache", "ghsa", "vendor"):
+                    if preferred in non_msrc_sources:
+                        vuln.psirt_source = preferred
+                        summary["psirt_source"] = preferred
+                        break
+
+        # Fallback 2 — CISA KEV publishes verbatim "required action" text for
+        # every entry. If this vuln is KEV-listed and we still have no
+        # remediation guidance, use that text. It's authoritative and
+        # remediation-shaped (e.g. "Apply mitigations per vendor instructions
+        # by 2021-12-24" or "Disconnect product from networks").
+        if not vuln.remediation_guidance and bool(vuln.kev_flag):
+            try:
+                from ..enrichment.kev_cache import kev_metadata
+                meta = kev_metadata(vuln.cve_id or "") or {}
+                kev_text_parts: list[str] = []
+                if meta.get("required_action"):
+                    kev_text_parts.append(
+                        f"CISA required action: {meta['required_action']}"
+                    )
+                if meta.get("short_description"):
+                    kev_text_parts.append(
+                        f"CISA description: {meta['short_description']}"
+                    )
+                if meta.get("due_date"):
+                    try:
+                        kev_text_parts.append(
+                            f"CISA due date (federal agencies): "
+                            f"{meta['due_date'].strftime('%Y-%m-%d')}"
+                        )
+                    except Exception:
+                        pass
+                if kev_text_parts:
+                    vuln.remediation_guidance = "\n\n".join(kev_text_parts)
+                    summary["remediation_guidance"] = vuln.remediation_guidance
+                    summary["has_remediation"] = True
+                    if not vuln.psirt_source:
+                        vuln.psirt_source = "cisa_kev"
+                        summary["psirt_source"] = "cisa_kev"
+            except Exception:
+                logger.exception(
+                    "KEV-based remediation lookup failed for vuln %s", vuln.id
+                )
+
+        if not (summary["kb_count"] or summary["advisory_count"] or summary["has_remediation"]):
+            # Truly nothing found anywhere — tag the summary so the UI can
+            # surface a clear "no patch info available" message instead of
+            # the silent failure the user reported.
+            summary["errors"].append("no_patch_info_anywhere")
 
     now = datetime.utcnow()
     vuln.psirt_synced_at = now

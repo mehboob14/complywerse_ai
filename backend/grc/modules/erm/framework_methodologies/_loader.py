@@ -79,12 +79,22 @@ logger = logging.getLogger(__name__)
 # specific aliases avoid false matches.
 _ALIAS_OVERRIDES: Dict[str, List[str]] = {
     "adhics": [
-        "adhics", "abu dhabi healthcare", "doh abu dhabi",
+        "adhics",
         "abu dhabi healthcare information and cyber security",
         "abu dhabi healthcare information and cyber security standard",
-        # Permissive catches — the standard is unique enough by region that
-        # these won't collide with anything else in the catalog.
-        "department of health abu dhabi", "abu dhabi health information",
+        # NOTE: deliberately NOT including the broad "abu dhabi healthcare",
+        # "doh abu dhabi", "abu dhabi health information" or "department of
+        # health abu dhabi" aliases — those names also match the DOH ADHIE
+        # policy (a separate framework). ADHICS is unambiguously named so
+        # the strict alias above is enough.
+    ],
+    "doh_adhie": [
+        "doh adhie", "adhie", "abu dhabi health information exchange",
+        "abu dhabi health information",
+        "doh policy on the abu dhabi health information exchange",
+        # "malaffi" is the operational brand name of the Abu Dhabi health
+        # information exchange — uploaded frameworks often use it.
+        "malaffi",
     ],
     "aramco_ccc": [
         "aramco ccc", "sacs-002", "sacs 002", "saudi aramco cybersecurity",
@@ -107,8 +117,22 @@ _ALIAS_OVERRIDES: Dict[str, List[str]] = {
         "hipaa", "hitech", "ocr risk analysis", "hhs sra",
         "health insurance portability",
     ],
+    "hitrust_csf": [
+        "hitrust", "hitrust csf", "hitrust common security framework",
+        "mycsf", "hitrust alliance",
+        # HITRUST e1/i1/r2 assessment scopes — operators sometimes refer to
+        # the scope name rather than the framework name in uploaded titles.
+        "hitrust e1", "hitrust i1", "hitrust r2",
+    ],
     "iso_22301": ["iso 22301", "iso/iec 22301", "iso22301", "business continuity management"],
     "iso_27001": ["iso 27001", "iso/iec 27001", "iso27001", "isms", "iso 27002", "iso 27005"],
+    "iso_42001": [
+        "iso 42001", "iso/iec 42001", "iso42001",
+        "ai management system", "aims",
+        # Disambiguate from generic "iso/iec ai" — only the 42001 series
+        # carries the AI-specific management-system requirements.
+        "iso ai management",
+    ],
     "mas_trm": [
         "mas trm", "mas technology risk", "monetary authority of singapore",
         "trm guidelines",
@@ -120,6 +144,13 @@ _ALIAS_OVERRIDES: Dict[str, List[str]] = {
         "pci dss", "pci-dss", "pcidss",
         "payment card industry", "payment card data security",
         "pci data security",
+    ],
+    "qcb_technology_risks": [
+        "qcb", "qatar central bank",
+        "qcb technology risks", "qatar central bank technology risks",
+        "qcb circular",
+        # "qcb cyber" used loosely; specific enough for Qatar context.
+        "qcb cyber security",
     ],
     "sabic_cybertrust": ["sabic cybertrust", "sabic cyber trust", "sabic"],
     "sama_csf": [

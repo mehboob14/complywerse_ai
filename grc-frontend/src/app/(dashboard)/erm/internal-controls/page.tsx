@@ -504,7 +504,6 @@ export default function InternalControlsPage() {
 
   const handleSubmit = (formData: FormData) => {
     const data: Record<string, unknown> = {
-      control_id: formData.get('control_id'),
       name: formData.get('name'),
       description: formData.get('description') || undefined,
       category: formData.get('category') || undefined,
@@ -956,16 +955,23 @@ export default function InternalControlsPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="block text-sm font-medium text-gray-800 mb-1">
-                      Control ID *
+                      Control ID
                     </label>
-                    <input
-                      name="control_id"
-                      type="text"
-                      required
-                      defaultValue={editingControl?.control_id || ''}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                      placeholder="e.g., CTL-001"
-                    />
+                    {editingControl ? (
+                      <input
+                        type="text"
+                        value={editingControl.control_id}
+                        readOnly
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-slate-700 cursor-not-allowed"
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value="Auto-generated on save (e.g., IC-0001)"
+                        readOnly
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm italic text-slate-500 cursor-not-allowed"
+                      />
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-800 mb-1">

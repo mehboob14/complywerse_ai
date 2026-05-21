@@ -4220,6 +4220,18 @@ class Vulnerability(Base):
     # untouched; surfaced as an opt-in sortable column on the list page.
     composite_priority = Column(Float, nullable=True)
 
+    # --- Public-exploit detection (GitHub PoC search) ---
+    # Counts of public proof-of-concept exploit repos on GitHub. A non-zero
+    # value here means the exploit is no longer theoretical — random
+    # attackers can clone-and-run it. Populated by enrichment alongside
+    # NVD/EPSS/KEV. Top references stored verbatim so the UI can link out
+    # to the actual repos without re-querying GitHub.
+    public_exploit_count = Column(Integer, nullable=True)
+    # JSON array of {full_name, url, stars, description} dicts. Capped to
+    # the top 8 most-starred repos to keep the row small.
+    public_exploit_refs = Column(JSON, default=list, nullable=True)
+    public_exploit_synced_at = Column(DateTime, nullable=True)
+
     # --- Phase 6: Vendor Patch Intelligence (MSRC first) ---
     # Populated by patch_intel_service on a CVE-bearing vuln when the upstream
     # PSIRT recognises the CVE. All nullable so existing rows stay valid.
@@ -4450,6 +4462,47 @@ class VulnerabilityAssetLink(Base):
     )
 
 
+class VulnerabilityDependency(Base):
+    """Chain dependency: vuln A is only meaningfully exploitable if vuln B
+    is also present (or vice-versa). Real-world example: a privilege-
+    escalation flaw matters most when a remote-code-execution flaw lets an
+    attacker reach the box in the first place. Surfacing the chain lets a
+    triager push the right one to the top of the queue.
+
+    Directionality: `dependent_vuln` requires `prerequisite_vuln` to be
+    exploitable. Mark notes for the rationale ("PrintNightmare requires
+    SMB foothold from CVE-X"). One row per directional edge — pair them up
+    in two rows if a bidirectional relationship truly applies.
+    """
+    __tablename__ = "grc_vulnerability_dependencies"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    dependent_vuln_id = Column(Integer, ForeignKey("grc_vulnerabilities.id"), nullable=False, index=True)
+    prerequisite_vuln_id = Column(Integer, ForeignKey("grc_vulnerabilities.id"), nullable=False, index=True)
+    # Free-form rationale. Highly recommended so future readers know why
+    # the chain was declared (vs. inferring from the two titles).
+    notes = Column(Text, nullable=True)
+    # Optional kill-chain stage tag: 'initial_access', 'execution',
+    # 'privilege_escalation', 'lateral_movement', 'exfiltration'. Drives an
+    # informational chip in the UI; no business logic depends on it yet.
+    chain_stage = Column(String(50), nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+
+    dependent_vuln = relationship("Vulnerability", foreign_keys=[dependent_vuln_id])
+    prerequisite_vuln = relationship("Vulnerability", foreign_keys=[prerequisite_vuln_id])
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+
+    __table_args__ = (
+        UniqueConstraint("dependent_vuln_id", "prerequisite_vuln_id", name="uq_vuln_dependency_pair"),
+        Index("ix_vuln_dep_dependent", "dependent_vuln_id"),
+        Index("ix_vuln_dep_prereq", "prerequisite_vuln_id"),
+        Index("ix_vuln_dep_tenant", "tenant_id"),
+    )
+
+
 class Team(Base):
     """Org team (e.g., Payments, Identity, Platform Engineering).
 
@@ -4554,30 +4607,89 @@ class SoftwareIdentifier(Base):
     )
 
 
+class CweControlOverride(Base):
+    """Per-tenant override on top of the static CWE → framework-control map.
+
+    The default map in ``cwe_control_map.py`` ships sensible PCI / ISO /
+    OWASP / NIST mappings for the CWE Top 25. This table lets a tenant's
+    compliance team add their own organisation-specific links (e.g. "for
+    us, CWE-89 also breaks SAMA CSF 4.2.1") OR remove a default link they
+    disagree with (e.g. "we don't accept the NIST SI-15 mapping").
+
+    Schema notes:
+      - ``cwe_id`` accepts the literal sentinels ``__vuln_mgmt__`` (the
+        always-applicable patch-management rule set) and ``__kev__``
+        (always-applicable active-exploitation rule set) — operators can
+        edit those baselines too.
+      - ``framework_prefix`` matches the loose Framework.name substring
+        rules used by the resolver. ``control_code_pattern`` matches the
+        ParsedFrameworkControl.control_id / original_reference substring.
+      - ``action`` is ``"add"`` or ``"remove"``. Add merges into the
+        identifier list before the live query; remove filters matching
+        defaults OUT of the list before querying.
+    """
+    __tablename__ = "grc_cwe_control_overrides"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    # "CWE-89", "__vuln_mgmt__", "__kev__"
+    cwe_id = Column(String(50), nullable=False, index=True)
+    framework_prefix = Column(String(100), nullable=False)
+    control_code_pattern = Column(String(100), nullable=False)
+    # "add" or "remove"
+    action = Column(String(10), nullable=False, default="add")
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+
+    creator = relationship("GRCUser", foreign_keys=[created_by])
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "cwe_id", "framework_prefix", "control_code_pattern", "action",
+            name="uq_cwe_override",
+        ),
+        Index("ix_cwe_override_tenant_cwe", "tenant_id", "cwe_id"),
+    )
+
+
 class VulnerabilityControlLink(Base):
     """Links vulnerabilities to framework controls they violate"""
     __tablename__ = "grc_vulnerability_control_links"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     vulnerability_id = Column(Integer, ForeignKey("grc_vulnerabilities.id"), nullable=False, index=True)
     framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=True, index=True)
     normalized_control_id = Column(Integer, ForeignKey("grc_normalized_controls.id"), nullable=True, index=True)
     internal_control_id = Column(Integer, ForeignKey("grc_internal_controls.id"), nullable=True, index=True)
-    
+    # New FK: targets `ParsedFrameworkControl` (controls produced by the
+    # upload-driven seed path). The CWE auto-mapper uses this column
+    # because seeded frameworks land in the parsed-control tables, not the
+    # legacy Framework/FrameworkControl chain. Existing manual links keep
+    # using `framework_control_id` / `internal_control_id` for backwards
+    # compatibility.
+    parsed_framework_control_id = Column(
+        Integer, ForeignKey("grc_parsed_framework_controls.id"),
+        nullable=True, index=True,
+    )
+
     compliance_impact = Column(String(50), nullable=True)  # non_compliant, partial, at_risk
     notes = Column(Text, nullable=True)
-    
+
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
-    
+
     vulnerability = relationship("Vulnerability", back_populates="control_links")
     framework_control = relationship("FrameworkControl")
     normalized_control = relationship("NormalizedControl")
     internal_control = relationship("InternalControl")
+    parsed_framework_control = relationship("ParsedFrameworkControl", foreign_keys=[parsed_framework_control_id])
     creator = relationship("GRCUser", foreign_keys=[created_by])
-    
+
     __table_args__ = (
         Index("ix_vuln_control_link", "vulnerability_id"),
+        Index("ix_vuln_control_link_parsed", "parsed_framework_control_id"),
     )
 
 

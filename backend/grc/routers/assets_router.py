@@ -18,6 +18,10 @@ from ..models import (
     AssetEvidenceLink, NormalizedControl, FrameworkControl, Evidence, Risk, InternalControl,
     Vulnerability, VulnerabilityAssetLink, AssetSecurityComplianceSelection,
     SoftwareIdentifier,
+    # Trajectory-map endpoint pulls these in to traverse Asset → Vuln → Control → Risk
+    VulnerabilityControlLink, ParsedFrameworkControl,
+    RiskAssetLink, RiskControlLink, RiskFrameworkControlLink,
+    Framework,
     GRCUser, Tenant, TenantUser, get_db
 )
 from ..schemas import (
@@ -1524,6 +1528,313 @@ def get_asset_detail(
         last_seen_at=asset.last_seen_at,
         last_seen_source=asset.last_seen_source,
     )
+
+
+@router.get("/{asset_id}/trajectory")
+def get_asset_trajectory(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Asset → Vuln → Control → Risk trajectory map data.
+
+    One-shot aggregate for the interactive node-link diagram on the asset
+    detail page. Walks four hops in a single tenant-scoped query plan:
+
+       Asset  ──(VulnerabilityAssetLink)──▶  Vulnerabilities
+       Vuln   ──(VulnerabilityControlLink)──▶  Controls (parsed / framework /
+                                                normalized / internal)
+       Ctrl   ──(RiskFrameworkControlLink|RiskControlLink)──▶  Risks
+       Asset  ──(RiskAssetLink)──▶  Risks (direct, kept separate so the UI
+                                  can render a different edge style)
+
+    The frontend uses node colour / size / dashed-edge cues to express
+    severity, KEV status, auto-vs-manual provenance, and control-mitigation
+    effectiveness — so the payload includes every field that drives those
+    cues, but no more.
+    """
+    asset = _get_asset_for_user(asset_id, current_user, db)
+
+    # ── 1. Vulnerabilities affecting this asset ──────────────────────────
+    val_rows = db.query(VulnerabilityAssetLink).options(
+        joinedload(VulnerabilityAssetLink.vulnerability),
+    ).filter(
+        VulnerabilityAssetLink.asset_id == asset_id,
+    ).all()
+
+    open_vals = [
+        l for l in val_rows
+        if l.vulnerability is not None and l.vulnerability.status in ("open", "in_progress")
+    ]
+    vuln_ids = [l.vulnerability_id for l in open_vals]
+
+    vulnerabilities_payload = []
+    asset_vuln_edges = []
+    kev_count = 0
+    for link in open_vals:
+        v = link.vulnerability
+        if v.kev_flag:
+            kev_count += 1
+        vulnerabilities_payload.append({
+            "id": v.id,
+            "vuln_id": v.vuln_id,
+            "title": v.title,
+            "severity": v.severity,
+            "cvss_score": v.cvss_score,
+            "composite_priority": v.composite_priority,
+            "kev_flag": bool(v.kev_flag),
+            "epss_score": v.epss_score,
+            "status": v.status,
+            "cve_id": v.cve_id,
+            "cwe_id": v.cwe_id,
+        })
+        asset_vuln_edges.append({
+            "from": "asset",
+            "to": f"vuln:{v.id}",
+            "kind": "affects",
+            "link_source": link.link_source or "manual",
+            "auto_linked": bool(link.auto_linked),
+            "impact": link.impact_on_asset,
+            "severity": v.severity,
+        })
+
+    # ── 2. Controls each vuln links to ───────────────────────────────────
+    vcl_rows: List[VulnerabilityControlLink] = []
+    if vuln_ids:
+        vcl_rows = db.query(VulnerabilityControlLink).filter(
+            VulnerabilityControlLink.vulnerability_id.in_(vuln_ids)
+        ).all()
+
+    # Resolve control entities + dedupe per (target_type, target_id).
+    # Key shape: "<target_type>:<id>" — also used as graph node id.
+    controls_by_key: Dict[str, Dict[str, Any]] = {}
+    vuln_ctrl_edges = []
+
+    # Pre-fetch the four control tables we may need, batched by id list.
+    parsed_ids = sorted({r.parsed_framework_control_id for r in vcl_rows if r.parsed_framework_control_id})
+    framework_ids = sorted({r.framework_control_id for r in vcl_rows if r.framework_control_id})
+    normalized_ids = sorted({r.normalized_control_id for r in vcl_rows if r.normalized_control_id})
+    internal_ids = sorted({r.internal_control_id for r in vcl_rows if r.internal_control_id})
+
+    parsed_map: Dict[int, ParsedFrameworkControl] = {}
+    if parsed_ids:
+        for c in db.query(ParsedFrameworkControl).filter(ParsedFrameworkControl.id.in_(parsed_ids)).all():
+            parsed_map[c.id] = c
+
+    framework_map: Dict[int, FrameworkControl] = {}
+    framework_short_codes: Dict[int, str] = {}
+    if framework_ids:
+        # Eager-load Framework so we can grab short_code for the chip
+        rows = db.query(FrameworkControl).options(
+            joinedload(FrameworkControl.objective)
+        ).filter(FrameworkControl.id.in_(framework_ids)).all()
+        for c in rows:
+            framework_map[c.id] = c
+        # Resolve framework short_code via the Framework table.
+        # FrameworkControl → objective → domain → framework is the canonical chain;
+        # fall back to a simpler lookup if relationships aren't loaded.
+        try:
+            fw_pairs = db.query(FrameworkControl.id, Framework.short_code).join(
+                Framework, Framework.id == FrameworkControl.framework_id, isouter=True
+            ).filter(FrameworkControl.id.in_(framework_ids)).all()
+            for cid, sc in fw_pairs:
+                if sc:
+                    framework_short_codes[cid] = sc
+        except Exception:
+            # Tolerate FK/column naming differences across the legacy schema.
+            pass
+
+    normalized_map: Dict[int, NormalizedControl] = {}
+    if normalized_ids:
+        for c in db.query(NormalizedControl).filter(NormalizedControl.id.in_(normalized_ids)).all():
+            normalized_map[c.id] = c
+
+    internal_map: Dict[int, InternalControl] = {}
+    if internal_ids:
+        for c in db.query(InternalControl).filter(InternalControl.id.in_(internal_ids)).all():
+            internal_map[c.id] = c
+
+    def _classify_source(notes: Optional[str]) -> Tuple[str, Optional[str]]:
+        """Parse the `notes` column convention written by the CWE auto-mapper.
+        Returns (source, auto_cwe). Manual links return ('manual', None)."""
+        if notes and notes.startswith("auto:cwe:"):
+            cwe = notes.split(":", 2)[-1].strip() or None
+            return ("auto_cwe", cwe)
+        return ("manual", None)
+
+    for vcl in vcl_rows:
+        source, auto_cwe = _classify_source(vcl.notes)
+        target_type: Optional[str] = None
+        target_id: Optional[int] = None
+        code = name = None
+        framework_short_code: Optional[str] = None
+
+        if vcl.parsed_framework_control_id and vcl.parsed_framework_control_id in parsed_map:
+            target_type = "parsed"
+            target_id = vcl.parsed_framework_control_id
+            c = parsed_map[target_id]
+            code, name = c.control_id, c.title
+            # parsed_framework_control belongs to an uploaded framework — name fetched on the client
+        elif vcl.framework_control_id and vcl.framework_control_id in framework_map:
+            target_type = "framework"
+            target_id = vcl.framework_control_id
+            c = framework_map[target_id]
+            code, name = c.code, c.name
+            framework_short_code = framework_short_codes.get(target_id)
+        elif vcl.normalized_control_id and vcl.normalized_control_id in normalized_map:
+            target_type = "normalized"
+            target_id = vcl.normalized_control_id
+            c = normalized_map[target_id]
+            code = getattr(c, "code", None) or getattr(c, "control_id", None)
+            name = getattr(c, "name", None) or getattr(c, "title", None)
+        elif vcl.internal_control_id and vcl.internal_control_id in internal_map:
+            target_type = "internal"
+            target_id = vcl.internal_control_id
+            c = internal_map[target_id]
+            code, name = c.control_id, c.name
+        else:
+            continue
+
+        key = f"{target_type}:{target_id}"
+        if key not in controls_by_key:
+            controls_by_key[key] = {
+                "key": key,
+                "id": target_id,
+                "target_type": target_type,
+                "code": code,
+                "name": name,
+                "framework_short_code": framework_short_code,
+                "source": source,
+                "auto_cwe": auto_cwe,
+            }
+
+        vuln_ctrl_edges.append({
+            "from": f"vuln:{vcl.vulnerability_id}",
+            "to": f"ctl:{key}",
+            "kind": "mitigated_by",
+            "source": source,
+            "auto_cwe": auto_cwe,
+            "compliance_impact": vcl.compliance_impact,
+        })
+
+    # ── 3. Risks reached via these controls (transitive) ─────────────────
+    transitive_risks: Dict[int, Dict[str, Any]] = {}
+    ctrl_risk_edges: List[Dict[str, Any]] = []
+
+    # 3a. RiskFrameworkControlLink — for parsed + legacy framework controls
+    if framework_ids:
+        rfcl = db.query(RiskFrameworkControlLink).options(
+            joinedload(RiskFrameworkControlLink.risk),
+        ).filter(RiskFrameworkControlLink.framework_control_id.in_(framework_ids)).all()
+        for link in rfcl:
+            r = link.risk
+            if r is None:
+                continue
+            transitive_risks.setdefault(r.id, {"risk": r, "source": "via_control"})
+            ctrl_risk_edges.append({
+                "from": f"ctl:framework:{link.framework_control_id}",
+                "to": f"risk:{r.id}",
+                "kind": "control_to_risk",
+                "effectiveness": link.mitigation_effectiveness,
+            })
+
+    # 3b. RiskControlLink — for normalized controls
+    if normalized_ids:
+        rcl = db.query(RiskControlLink).options(
+            joinedload(RiskControlLink.risk),
+        ).filter(RiskControlLink.normalized_control_id.in_(normalized_ids)).all()
+        for link in rcl:
+            r = link.risk
+            if r is None:
+                continue
+            transitive_risks.setdefault(r.id, {"risk": r, "source": "via_control"})
+            ctrl_risk_edges.append({
+                "from": f"ctl:normalized:{link.normalized_control_id}",
+                "to": f"risk:{r.id}",
+                "kind": "control_to_risk",
+                "effectiveness": None,
+            })
+
+    # ── 4. Risks linked DIRECTLY to the asset ────────────────────────────
+    direct_links = db.query(RiskAssetLink).options(
+        joinedload(RiskAssetLink.risk),
+    ).filter(RiskAssetLink.asset_id == asset_id).all()
+
+    direct_risk_ids = set()
+    asset_risk_edges: List[Dict[str, Any]] = []
+    for rl in direct_links:
+        r = rl.risk
+        if r is None:
+            continue
+        direct_risk_ids.add(r.id)
+        # Direct provenance trumps via_control (we still keep the via_control
+        # edges for users who want to see how the chain actually arrives).
+        transitive_risks[r.id] = {"risk": r, "source": "direct"}
+        asset_risk_edges.append({
+            "from": "asset",
+            "to": f"risk:{r.id}",
+            "kind": "direct",
+        })
+
+    # ── 5. Assemble payload ──────────────────────────────────────────────
+    def _risk_tier(score: Optional[float]) -> str:
+        if score is None: return "unknown"
+        if score >= 15: return "critical"
+        if score >= 10: return "high"
+        if score >= 5:  return "medium"
+        return "low"
+
+    risks_payload = []
+    for rid, entry in transitive_risks.items():
+        r = entry["risk"]
+        inherent = getattr(r, "inherent_score", None) or getattr(r, "inherent_risk_score", None)
+        residual = getattr(r, "residual_score", None) or getattr(r, "residual_risk_score", None)
+        risks_payload.append({
+            "id": r.id,
+            "title": r.title,
+            "status": r.status,
+            "inherent_score": inherent,
+            "residual_score": residual,
+            "tier": _risk_tier(residual if residual is not None else inherent),
+            "source": entry["source"],
+        })
+    risks_payload.sort(
+        key=lambda r: (r["residual_score"] or 0),
+        reverse=True,
+    )
+
+    edges = asset_vuln_edges + vuln_ctrl_edges + ctrl_risk_edges + asset_risk_edges
+
+    stats = {
+        "open_vulns": len(vulnerabilities_payload),
+        "kev_count": kev_count,
+        "controls": len(controls_by_key),
+        "risks_direct": sum(1 for r in risks_payload if r["source"] == "direct"),
+        "risks_transitive": sum(1 for r in risks_payload if r["source"] == "via_control"),
+        "max_residual": max(
+            (r["residual_score"] for r in risks_payload if r["residual_score"] is not None),
+            default=0,
+        ),
+    }
+
+    return {
+        "asset": {
+            "id": asset.id,
+            "name": asset.name,
+            "type": asset.asset_type,
+            "criticality": asset.criticality,
+            "criticality_score": asset.criticality_score,
+            "internet_facing": bool(getattr(asset, "internet_facing", False)),
+            "confidentiality_rating": asset.confidentiality_rating,
+            "integrity_rating": asset.integrity_rating,
+            "availability_rating": asset.availability_rating,
+        },
+        "vulnerabilities": vulnerabilities_payload,
+        "controls": list(controls_by_key.values()),
+        "risks": risks_payload,
+        "edges": edges,
+        "stats": stats,
+    }
 
 
 @router.get("/{asset_id}/security-compliance/controls")

@@ -36,7 +36,7 @@ import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import { assetsApi } from '@/lib/api';
 import { ITAsset, AssetType } from '@/types';
-import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, PageLoader, ComboBoxInput, type ComboBoxOption } from '@/components/ui';
 import {
   Server,
   Loader2,
@@ -832,6 +832,80 @@ export default function AssetsPage() {
   );
 }
 
+// Suggestion lists for the searchable-with-free-text dropdowns on the
+// asset modal. The user can pick from these or type their own value — the
+// component commits whatever they type on Enter/blur. Keep these short
+// and obvious; the goal isn't to enumerate every vendor in the world but
+// to spare the operator typing out the common ones.
+const VENDOR_SUGGESTIONS: ComboBoxOption[] = [
+  { value: 'Microsoft',  label: 'Microsoft',  group: 'Cloud / OS' },
+  { value: 'AWS',        label: 'Amazon Web Services', group: 'Cloud / OS' },
+  { value: 'Google Cloud', label: 'Google Cloud', group: 'Cloud / OS' },
+  { value: 'Azure',      label: 'Microsoft Azure', group: 'Cloud / OS' },
+  { value: 'Oracle',     label: 'Oracle',     group: 'Database / ERP' },
+  { value: 'SAP',        label: 'SAP',        group: 'Database / ERP' },
+  { value: 'IBM',        label: 'IBM',        group: 'Database / ERP' },
+  { value: 'Red Hat',    label: 'Red Hat',    group: 'OS / Platform' },
+  { value: 'VMware',     label: 'VMware',     group: 'OS / Platform' },
+  { value: 'Cisco',      label: 'Cisco',      group: 'Network / Security' },
+  { value: 'Palo Alto',  label: 'Palo Alto Networks', group: 'Network / Security' },
+  { value: 'Fortinet',   label: 'Fortinet',   group: 'Network / Security' },
+  { value: 'CrowdStrike', label: 'CrowdStrike', group: 'Network / Security' },
+  { value: 'Okta',       label: 'Okta',       group: 'Identity' },
+  { value: 'Atlassian',  label: 'Atlassian',  group: 'DevOps' },
+  { value: 'GitHub',     label: 'GitHub',     group: 'DevOps' },
+  { value: 'GitLab',     label: 'GitLab',     group: 'DevOps' },
+  { value: 'In-house',   label: 'In-house / internally built', group: 'Internal' },
+];
+
+const NETWORK_SEGMENT_SUGGESTIONS: ComboBoxOption[] = [
+  { value: 'dmz',         label: 'DMZ',                 hint: 'public-facing' },
+  { value: 'internal',    label: 'Internal',            hint: 'corp network' },
+  { value: 'mgmt',        label: 'Management',          hint: 'admin / mgmt VLAN' },
+  { value: 'production',  label: 'Production',          hint: 'prod tier' },
+  { value: 'staging',     label: 'Staging' },
+  { value: 'development', label: 'Development' },
+  { value: 'cde',         label: 'Cardholder Data Environment', hint: 'PCI DSS' },
+  { value: 'restricted',  label: 'Restricted / Air-gapped' },
+  { value: 'guest',       label: 'Guest / Wi-Fi' },
+  { value: 'iot',         label: 'IoT / OT' },
+];
+
+const LOCATION_SUGGESTIONS: ComboBoxOption[] = [
+  { value: 'us-east-1',   label: 'AWS us-east-1',  group: 'Cloud region' },
+  { value: 'us-west-2',   label: 'AWS us-west-2',  group: 'Cloud region' },
+  { value: 'eu-west-1',   label: 'AWS eu-west-1',  group: 'Cloud region' },
+  { value: 'me-south-1',  label: 'AWS me-south-1', group: 'Cloud region' },
+  { value: 'azure-eastus', label: 'Azure East US',  group: 'Cloud region' },
+  { value: 'gcp-us-central1', label: 'GCP us-central1', group: 'Cloud region' },
+  { value: 'On-Premise',  label: 'On-Premise',     group: 'Physical' },
+  { value: 'Co-located',  label: 'Co-located DC',  group: 'Physical' },
+  { value: 'HQ',          label: 'Head Office',    group: 'Physical' },
+  { value: 'Branch',      label: 'Branch Office',  group: 'Physical' },
+  { value: 'Remote',      label: 'Remote / Home',  group: 'Physical' },
+];
+
+const DATA_CLASSIFICATION_OPTIONS: ComboBoxOption[] = [
+  { value: 'public',       label: 'Public',       hint: 'no restrictions' },
+  { value: 'internal',     label: 'Internal',     hint: 'employees only' },
+  { value: 'confidential', label: 'Confidential', hint: 'need-to-know' },
+  { value: 'restricted',   label: 'Restricted',   hint: 'highest sensitivity' },
+];
+
+const STATUS_OPTIONS: ComboBoxOption[] = [
+  { value: 'active',         label: 'Active' },
+  { value: 'inactive',       label: 'Inactive' },
+  { value: 'decommissioned', label: 'Decommissioned' },
+];
+
+const CRITICALITY_OPTIONS: ComboBoxOption[] = [
+  { value: 'low',      label: 'Low' },
+  { value: 'medium',   label: 'Medium' },
+  { value: 'high',     label: 'High' },
+  { value: 'critical', label: 'Critical' },
+];
+
+
 function AssetModal({
   onClose,
   onSave,
@@ -1187,22 +1261,22 @@ function AssetModal({
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">Vendor</label>
-                  <input
-                    type="text"
+                  <ComboBoxInput
                     value={formData.vendor}
-                    onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                    placeholder="e.g., Microsoft, AWS"
+                    onChange={(v) => setFormData({ ...formData, vendor: v })}
+                    options={VENDOR_SUGGESTIONS}
+                    placeholder="Search or type a vendor…"
+                    ariaLabel="Vendor"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">Location</label>
-                  <input
-                    type="text"
+                  <ComboBoxInput
                     value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                    placeholder="e.g., US-East, On-Premise"
+                    onChange={(v) => setFormData({ ...formData, location: v })}
+                    options={LOCATION_SUGGESTIONS}
+                    placeholder="Search or type a location…"
+                    ariaLabel="Location"
                   />
                 </div>
               </div>
@@ -1225,12 +1299,12 @@ function AssetModal({
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">Network Segment</label>
-                  <input
-                    type="text"
+                  <ComboBoxInput
                     value={formData.network_segment}
-                    onChange={(e) => setFormData({ ...formData, network_segment: e.target.value })}
-                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                    placeholder="e.g., dmz, internal, mgmt"
+                    onChange={(v) => setFormData({ ...formData, network_segment: v })}
+                    options={NETWORK_SEGMENT_SUGGESTIONS}
+                    placeholder="Search or type a segment…"
+                    ariaLabel="Network segment"
                   />
                 </div>
               </div>
@@ -1259,15 +1333,15 @@ function AssetModal({
                 {isEditMode && (
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-0.5">Status</label>
-                    <select
+                    <ComboBoxInput
                       value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value as typeof formData.status })}
-                      className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                    >
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                      <option value="decommissioned">Decommissioned</option>
-                    </select>
+                      onChange={(v) => setFormData({ ...formData, status: (v || 'active') as typeof formData.status })}
+                      options={STATUS_OPTIONS}
+                      allowCustom={false}
+                      displayLabelInsteadOfValue
+                      placeholder="Select status…"
+                      ariaLabel="Status"
+                    />
                   </div>
                 )}
               </div>
@@ -1303,17 +1377,15 @@ function AssetModal({
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 mt-3 mb-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">Data Classification</label>
-                  <select
+                  <ComboBoxInput
                     value={formData.data_classification}
-                    onChange={(e) => setFormData({ ...formData, data_classification: e.target.value as typeof formData.data_classification })}
-                    className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                  >
-                    <option value="">(none)</option>
-                    <option value="public">Public</option>
-                    <option value="internal">Internal</option>
-                    <option value="confidential">Confidential</option>
-                    <option value="restricted">Restricted</option>
-                  </select>
+                    onChange={(v) => setFormData({ ...formData, data_classification: (v || '') as typeof formData.data_classification })}
+                    options={DATA_CLASSIFICATION_OPTIONS}
+                    allowCustom={false}
+                    displayLabelInsteadOfValue
+                    placeholder="None — search to pick…"
+                    ariaLabel="Data classification"
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Internet-Facing</label>
@@ -1336,25 +1408,27 @@ function AssetModal({
                 </div>
               </div>
 
-              {/* Business function — structured catalogue, drives criticality boost */}
+              {/* Business function — structured catalogue, drives criticality
+                  boost. Searchable + supports free-text for teams whose
+                  function isn't in the seeded catalogue. */}
               <div className="mb-3">
                 <label className="block text-xs font-medium text-slate-600 mb-0.5">Business Function</label>
-                <select
+                <ComboBoxInput
                   value={formData.business_function}
-                  onChange={(e) => setFormData({ ...formData, business_function: e.target.value })}
-                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="">(not categorised)</option>
-                  {Object.entries(businessFunctionGroups).map(([group, items]) => (
-                    <optgroup key={group} label={group}>
-                      {items.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.label}{item.high_impact ? ' ⬆ boosts criticality' : ''}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                  onChange={(v) => setFormData({ ...formData, business_function: v })}
+                  options={Object.entries(businessFunctionGroups).flatMap(([group, items]) =>
+                    items.map((item) => ({
+                      value: item.id,
+                      label: item.label,
+                      group,
+                      hint: item.high_impact ? '⬆ boosts criticality' : undefined,
+                    })),
+                  )}
+                  placeholder="Search or type a function…"
+                  emptyText="No matches — Enter to use the typed value as a custom function."
+                  ariaLabel="Business function"
+                  displayLabelInsteadOfValue
+                />
               </div>
 
               {/* Derived criticality — live preview + override */}
@@ -1403,16 +1477,15 @@ function AssetModal({
                   <div className="mt-2 grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-0.5">Override bucket</label>
-                      <select
+                      <ComboBoxInput
                         value={formData.criticality}
-                        onChange={(e) => setFormData({ ...formData, criticality: e.target.value as typeof formData.criticality })}
-                        className="w-full rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-                      >
-                        <option value="low">Low</option>
-                        <option value="medium">Medium</option>
-                        <option value="high">High</option>
-                        <option value="critical">Critical</option>
-                      </select>
+                        onChange={(v) => setFormData({ ...formData, criticality: (v || 'medium') as typeof formData.criticality })}
+                        options={CRITICALITY_OPTIONS}
+                        allowCustom={false}
+                        displayLabelInsteadOfValue
+                        placeholder="Select bucket…"
+                        ariaLabel="Override bucket"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-0.5">Reason *</label>

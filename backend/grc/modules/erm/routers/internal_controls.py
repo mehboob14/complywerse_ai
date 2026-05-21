@@ -489,6 +489,37 @@ def list_internal_controls(
     ]
 
 
+_AUTO_CONTROL_ID_RE = re.compile(r"^IC-(\d+)$")
+
+
+def _next_auto_control_id(db: Session, tenant_id: int) -> str:
+    """Return the next IC-NNNN identifier for this tenant.
+
+    Scans existing control_id values matching the strict ``IC-<digits>``
+    pattern and returns one greater than the highest seen, zero-padded to
+    four digits. Custom prefixes (``IC-MAN-0001`` from upload-manual, or any
+    user-supplied IDs) are intentionally ignored so the auto-sequence stays
+    contiguous within its own namespace.
+    """
+    rows = (
+        db.query(InternalControl.control_id)
+        .filter(InternalControl.tenant_id == tenant_id)
+        .all()
+    )
+    highest = 0
+    for (cid,) in rows:
+        match = _AUTO_CONTROL_ID_RE.match(cid or "")
+        if not match:
+            continue
+        try:
+            n = int(match.group(1))
+        except ValueError:
+            continue
+        if n > highest:
+            highest = n
+    return f"IC-{highest + 1:04d}"
+
+
 @router.post("", response_model=InternalControlResponse, status_code=status.HTTP_201_CREATED)
 def create_internal_control(
     control: InternalControlCreate,
@@ -501,15 +532,22 @@ def create_internal_control(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User is not assigned to any tenant"
         )
-    
+
+    # Auto-generate the control_id when the caller omits it. UI submissions
+    # always take this path; legacy callers (imports, migrations) that bring
+    # their own ID continue to flow through the duplicate-check below.
+    requested_control_id = (control.control_id or "").strip()
+    if not requested_control_id:
+        requested_control_id = _next_auto_control_id(db, tenant_id)
+
     existing = db.query(InternalControl).filter(
         InternalControl.tenant_id == tenant_id,
-        InternalControl.control_id == control.control_id
+        InternalControl.control_id == requested_control_id
     ).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Control ID '{control.control_id}' already exists for this tenant"
+            detail=f"Control ID '{requested_control_id}' already exists for this tenant"
         )
 
     if control.source_document_id:
@@ -525,7 +563,7 @@ def create_internal_control(
     
     db_control = InternalControl(
         tenant_id=tenant_id,
-        control_id=control.control_id,
+        control_id=requested_control_id,
         name=control.name,
         description=control.description,
         category=control.category,

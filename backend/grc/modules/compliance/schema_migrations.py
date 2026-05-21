@@ -174,6 +174,18 @@ _COLUMN_ADDS = [
     ("grc_vulnerabilities", "exploit_references", "JSON DEFAULT '[]'::json", None),
     ("grc_vulnerabilities", "composite_priority", "DOUBLE PRECISION",
      "ix_vuln_composite_priority"),
+    # Public-exploit detection (GitHub PoC). count=NULL means we have not
+    # checked yet; count=0 is a positive "we checked and found nothing".
+    ("grc_vulnerabilities", "public_exploit_count", "INTEGER",
+     "ix_vuln_public_exploit_count"),
+    ("grc_vulnerabilities", "public_exploit_refs", "JSON DEFAULT '[]'::json", None),
+    ("grc_vulnerabilities", "public_exploit_synced_at", "TIMESTAMP", None),
+    # Parsed-framework FK for CWE auto-mapper — the legacy FrameworkControl
+    # table is empty in upload-seeded tenants; the auto-mapper now writes
+    # parsed_framework_control_id instead.
+    ("grc_vulnerability_control_links", "parsed_framework_control_id",
+     "INTEGER REFERENCES grc_parsed_framework_controls(id)",
+     "ix_vuln_control_link_parsed"),
     # Account lockout + activity tracking on grc_users. All nullable so the
     # column adds are pure no-ops for existing users; login handler treats
     # NULL as "0 failed attempts / no lock / never seen activity yet".

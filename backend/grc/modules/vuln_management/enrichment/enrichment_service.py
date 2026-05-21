@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from ....models import Vulnerability, VulnerabilityAssetLink, ITAsset
 from .epss_client import fetch_epss
+from .github_poc_client import fetch_github_poc
 from .kev_cache import is_kev, kev_metadata
 from .nvd_client import fetch_nvd
 from .priority import compute_composite_priority
@@ -203,6 +204,25 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
 
     vuln.nvd_last_synced_at = datetime.utcnow()
 
+    # ---- Public-exploit detection (GitHub PoC) -----------------------------
+    # Search for clone-and-run exploit repos. A non-zero count means the
+    # vuln is no longer theoretically exploitable — any unskilled attacker
+    # can run the published code. Best-effort: rate limit / network failures
+    # leave the columns untouched so the daily refresh retries.
+    try:
+        poc = fetch_github_poc(cve_id)
+    except Exception:
+        poc = None
+        summary["errors"].append("github_poc_exception")
+    if poc is not None:
+        vuln.public_exploit_count = poc.repo_count
+        vuln.public_exploit_refs = poc.refs_as_dicts()
+        vuln.public_exploit_synced_at = datetime.utcnow()
+        summary["public_exploit_count"] = poc.repo_count
+        summary["public_exploit_found"] = bool(poc.found)
+    else:
+        summary["errors"].append("github_poc_unavailable")
+
     # ---- Composite priority ------------------------------------------------
     asset_criticality = _resolve_asset_criticality(db, vuln)
     asset_criticality_score = _resolve_asset_criticality_score(db, vuln)
@@ -213,6 +233,13 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
         asset_criticality=asset_criticality,
         asset_criticality_score=asset_criticality_score,
     )
+    # Public-exploit boost: when there's a working PoC on GitHub and KEV
+    # hasn't already maxed out the formula, bump the score by up to +0.5.
+    # We deliberately keep this small — a PoC is a meaningful signal but
+    # not as strong as confirmed in-the-wild exploitation (KEV). Cap at 10.
+    if priority is not None and bool(getattr(vuln, "public_exploit_count", 0) or 0) > 0:
+        if not vuln.kev_flag:
+            priority = min(10.0, priority + 0.5)
     vuln.composite_priority = priority
     summary["composite_priority"] = priority
 
@@ -222,5 +249,25 @@ def enrich_vulnerability(vuln: Vulnerability, db: Session) -> dict:
         db.rollback()
         logger.exception("Failed to commit enrichment for vuln %s", vuln.id)
         summary["errors"].append("commit_failed")
+
+    # ---- CWE → framework-control auto-mapping ------------------------------
+    # Best-effort: the writer never raises into the caller. We pass
+    # delete_stale=False here so a casual re-enrichment doesn't remove
+    # auto rows mid-investigation; the explicit /controls/auto-map
+    # endpoint passes True for the "clean reset" semantics the UI
+    # button promises.
+    try:
+        from ..control_mapping import auto_map_compliance_controls
+        cm_summary = auto_map_compliance_controls(
+            vuln, db, delete_stale=False, user_id=None,
+        )
+        summary["compliance_mapping"] = cm_summary
+        for err in cm_summary.get("errors") or []:
+            summary["errors"].append(f"compliance_mapping_{err}")
+    except Exception:
+        logger.exception(
+            "compliance_mapping auto-map raised unexpectedly for vuln %s", vuln.id
+        )
+        summary["errors"].append("compliance_mapping_exception")
 
     return summary

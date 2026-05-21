@@ -6,7 +6,7 @@ from sqlalchemy import func, and_, or_
 
 from ....models import (
     Vulnerability, VulnerabilityAssetLink, VulnerabilitySLAConfig,
-    VulnerabilityControlLink, ITAsset, GRCUser, get_db,
+    VulnerabilityControlLink, ITAsset, GRCUser, Tenant, get_db,
     GRCDepartment, GRCVulnerabilityDepartmentAssignment, GRCVulnWorkflowState,
     GRCVulnWorkflowHistory, GRCVulnEscalationLog, FrameworkControl,
     NormalizedControl, InternalControl, VulnerabilityMitigation
@@ -1108,15 +1108,44 @@ def _enumerate_buckets(start: date, end: date, bucket: str):
     return keys
 
 
+def _parse_iso_date(value: Optional[str]) -> Optional[date]:
+    """Parse a ``YYYY-MM-DD`` string. Returns None on empty / bad input —
+    callers fall back to the period-based window in that case."""
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value.strip(), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _bucket_for_span(days: int) -> str:
+    """Pick the default bucket granularity for a date span (days). Mirrors
+    `_resolve_period`'s heuristic so custom ranges render at the same
+    densities as the preset chips."""
+    if days <= 90:
+        return "day"
+    if days <= 270:
+        return "week"
+    return "month"
+
+
 @router.get("/trends")
 def get_dashboard_trends(
     tenant_id: Optional[int] = None,
     period: str = "90d",
     bucket: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     """Time-bucketed metrics for the overview trend charts.
+
+    `start_date` and `end_date` (ISO YYYY-MM-DD) take precedence over
+    `period` when both are supplied — that's the path the custom
+    date-range picker uses for executive reports. When omitted, the
+    `period` chip (60d / 90d / 180d / 365d / quarter) is used.
 
     Returns four parallel series keyed by date bucket:
       - discovered:        new vulnerabilities created in the bucket
@@ -1138,20 +1167,49 @@ def get_dashboard_trends(
     else:
         filter_tenants = user_tenants
 
-    days, default_bucket = _resolve_period(period)
+    # Resolve the window: custom dates win when both are present, otherwise
+    # fall back to the period chip. End-date is inclusive (we extend it to
+    # 23:59:59 so the day-of bucket captures activity up to midnight).
+    now = datetime.utcnow()
+    sd = _parse_iso_date(start_date)
+    ed = _parse_iso_date(end_date)
+    if sd and ed and sd <= ed:
+        start = datetime.combine(sd, datetime.min.time())
+        # Inclusive end — capture the entire `ed` day.
+        end_dt = datetime.combine(ed, datetime.max.time().replace(microsecond=0))
+        # Cap the upper bound at "now" so a future end-date doesn't show
+        # phantom empty buckets — the rest of the system treats `now` as
+        # the present.
+        if end_dt > now:
+            end_dt = now
+        days = max(1, (end_dt.date() - sd).days + 1)
+        default_bucket = _bucket_for_span(days)
+        # Surface the resolved range in the response so the UI can show it.
+        period = f"{sd.isoformat()}..{ed.isoformat()}"
+    else:
+        days, default_bucket = _resolve_period(period)
+        start = now - timedelta(days=days)
+        end_dt = now
+
     bucket = (bucket or default_bucket).lower()
     if bucket not in ("day", "week", "month"):
         bucket = default_bucket
 
-    now = datetime.utcnow()
-    start = now - timedelta(days=days)
-
-    # Discovered (created_at within window).
+    # Discovered (created_at within window). Custom end_date bounds the upper
+    # side so a report for "Jan 1–Mar 31" doesn't pick up April activity.
     discovered_rows = db.query(Vulnerability.created_at, Vulnerability.discovered_at).filter(
         Vulnerability.tenant_id.in_(filter_tenants),
         or_(
-            and_(Vulnerability.discovered_at != None, Vulnerability.discovered_at >= start),
-            and_(Vulnerability.discovered_at == None, Vulnerability.created_at >= start),
+            and_(
+                Vulnerability.discovered_at != None,
+                Vulnerability.discovered_at >= start,
+                Vulnerability.discovered_at <= end_dt,
+            ),
+            and_(
+                Vulnerability.discovered_at == None,
+                Vulnerability.created_at >= start,
+                Vulnerability.created_at <= end_dt,
+            ),
         ),
     ).all()
 
@@ -1160,6 +1218,7 @@ def get_dashboard_trends(
         Vulnerability.tenant_id.in_(filter_tenants),
         Vulnerability.resolved_at != None,
         Vulnerability.resolved_at >= start,
+        Vulnerability.resolved_at <= end_dt,
     ).all()
 
     # Status-change events from workflow history.
@@ -1170,6 +1229,7 @@ def get_dashboard_trends(
         Vulnerability.tenant_id.in_(filter_tenants),
         GRCVulnWorkflowHistory.performed_at != None,
         GRCVulnWorkflowHistory.performed_at >= start,
+        GRCVulnWorkflowHistory.performed_at <= end_dt,
     ).all()
 
     discovered_counts: Dict[str, int] = {}
@@ -1202,14 +1262,16 @@ def get_dashboard_trends(
         Vulnerability.tenant_id.in_(filter_tenants),
         Vulnerability.resolved_at != None,
         Vulnerability.resolved_at >= start,
+        Vulnerability.resolved_at <= end_dt,
     ).all()
     for disc_at, res_at in mttr_rows:
         if disc_at and res_at:
             resolution_days_within.append((res_at - disc_at).total_seconds() / 86400.0)
     mttr_within = (sum(resolution_days_within) / len(resolution_days_within)) if resolution_days_within else None
 
-    # Fill zero-buckets so charts are continuous.
-    bucket_keys = _enumerate_buckets(start.date(), now.date(), bucket)
+    # Fill zero-buckets so charts are continuous. Honour the resolved
+    # end_dt (custom date range may end before "now").
+    bucket_keys = _enumerate_buckets(start.date(), end_dt.date(), bucket)
     discovered_series = [{"date": k, "count": discovered_counts.get(k, 0)} for k in bucket_keys]
     resolved_series = [{"date": k, "count": resolved_counts.get(k, 0)} for k in bucket_keys]
     status_change_series = [{"date": k, "count": status_change_counts.get(k, 0)} for k in bucket_keys]
@@ -1238,7 +1300,7 @@ def get_dashboard_trends(
         "period_days": days,
         "bucket": bucket,
         "start": start.date().isoformat(),
-        "end": now.date().isoformat(),
+        "end": end_dt.date().isoformat(),
         "total_discovered": total_discovered,
         "total_resolved": total_resolved,
         "net_change": total_discovered - total_resolved,
@@ -1263,112 +1325,552 @@ def get_dashboard_trends(
     }
 
 
-def _render_pdf_report(payload: dict) -> bytes:
-    """Render the trend payload as a PDF using reportlab.
+def _build_executive_narrative(payload: dict) -> str:
+    """One-paragraph plain-English summary that opens the PDF.
 
-    Returns raw PDF bytes. Raises ImportError if reportlab is not installed,
-    in which case the caller falls back to a plain-text report.
+    Translates the raw counters into the kind of sentence an executive
+    actually reads — KEV exposure first (the only thing that's truly
+    drop-everything urgent), then backlog dynamics, then SLA posture.
+    """
+    s = payload.get("summary") or {}
+    posture = payload.get("posture") or {}
+    ti = payload.get("threat_intel") or {}
+    cov = ti.get("enrichment_coverage") or {}
+    kev_count = int(cov.get("kev_count", 0) or 0)
+    total_open = int(cov.get("total_open", 0) or 0)
+    pri = ti.get("priority_buckets") or {}
+    crit_pri = int(pri.get("critical", 0) or 0)
+    high_pri = int(pri.get("high", 0) or 0)
+    discovered = int(s.get("total_discovered", 0) or 0)
+    resolved = int(s.get("total_resolved", 0) or 0)
+    net = int(s.get("net_change", 0) or 0)
+    mttr = s.get("mttr_days_within_window")
+    sla_map = posture.get("sla_compliance") or {}
+    sla_pct = None
+    if sla_map:
+        rates = [float(v.get("compliance_rate") or 0) for v in sla_map.values() if isinstance(v, dict)]
+        if rates:
+            sla_pct = round(sum(rates) / len(rates))
+    overdue = int(posture.get("overdue_count", 0) or 0)
+
+    bits: list[str] = []
+    bits.append(
+        f"Between {s.get('start','—')} and {s.get('end','—')}, "
+        f"the organisation logged {discovered} new vulnerabilit{'y' if discovered == 1 else 'ies'} "
+        f"and resolved {resolved}."
+    )
+    if net > 0:
+        bits.append(f"The open backlog grew by {net} during the window.")
+    elif net < 0:
+        bits.append(f"The open backlog shrank by {abs(net)} during the window — net positive.")
+    else:
+        bits.append("The open backlog held steady during the window.")
+    if total_open:
+        if kev_count:
+            bits.append(
+                f"Of {total_open} currently-open vulnerabilities, "
+                f"{kev_count} {'is' if kev_count == 1 else 'are'} actively exploited in the wild "
+                f"(listed in the CISA Known Exploited Vulnerabilities catalogue) and "
+                f"require remediation ahead of routine SLA windows."
+            )
+        else:
+            bits.append(
+                f"There are {total_open} open vulnerabilities; none are currently flagged by "
+                f"CISA as actively exploited."
+            )
+    if crit_pri or high_pri:
+        bits.append(
+            f"Composite-priority triage (CVSS + EPSS + KEV + asset criticality) places "
+            f"{crit_pri} in the Critical tier and {high_pri} in the High tier."
+        )
+    if mttr is not None:
+        bits.append(f"Mean time to remediate within the window is {mttr} days.")
+    if sla_pct is not None:
+        bits.append(
+            f"SLA compliance currently stands at {sla_pct}%"
+            + (f" with {overdue} overdue items." if overdue else ".")
+        )
+    return " ".join(bits)
+
+
+def _render_pdf_report(payload: dict) -> bytes:
+    """Executive-ready PDF.
+
+    Sections:
+      1. Title page — tenant name, window, generated-by + timestamp,
+         classification footer.
+      2. Executive summary — one plain-English paragraph + KPI tile band.
+      3. Current posture — severity / status breakdown, SLA table.
+      4. Threat intelligence — KEV count, priority buckets, EPSS bands,
+         enrichment coverage.
+      5. Top-10 priority list — the actual "fix these first" table.
+      6. Asset-criticality × severity matrix — where the blast lands.
+      7. Activity in window — trend roll-up (totals, not noisy day rows).
+      8. Appendix — full time-series tables, only when the window has data.
+
+    Raises ImportError if reportlab is not installed; caller falls back to
+    a plain-text report.
     """
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak,
+        KeepTogether,
+    )
     from reportlab.lib import colors
+    from reportlab.lib.units import inch
+    from reportlab.lib.enums import TA_CENTER
     import io as _io
 
     buf = _io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=letter, title="Vulnerability Status Report")
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter,
+        leftMargin=0.6 * inch, rightMargin=0.6 * inch,
+        topMargin=0.6 * inch, bottomMargin=0.6 * inch,
+        title="Vulnerability Executive Report",
+        author=payload.get("tenant_name") or "Vulnerability Management",
+    )
     styles = getSampleStyleSheet()
-    h2 = ParagraphStyle("h2", parent=styles["Heading2"], spaceAfter=6)
-    body = styles["BodyText"]
 
-    s = payload.get("summary", {})
-    story = [
-        Paragraph("Vulnerability Status Report", styles["Title"]),
-        Spacer(1, 6),
-        Paragraph(
-            f"Window: {s.get('start','')} – {s.get('end','')} "
-            f"({s.get('period_days','?')} days, bucket: {s.get('bucket','day')})",
-            body,
-        ),
-        Spacer(1, 12),
-        Paragraph("Summary", h2),
+    # Brand-tone palette — slate-900 / red-600 / amber-500 / blue-600.
+    BRAND_DARK = colors.HexColor("#0f172a")
+    BRAND_MUTED = colors.HexColor("#64748b")
+    BRAND_RED = colors.HexColor("#dc2626")
+    BRAND_ORANGE = colors.HexColor("#f97316")
+    BRAND_AMBER = colors.HexColor("#eab308")
+    BRAND_BLUE = colors.HexColor("#3b82f6")
+    BRAND_BG_LIGHT = colors.HexColor("#f8fafc")
+    BRAND_BORDER = colors.HexColor("#e2e8f0")
+
+    title_style = ParagraphStyle(
+        "TitleBig", parent=styles["Title"], fontSize=24, leading=28,
+        textColor=BRAND_DARK, alignment=TA_CENTER, spaceAfter=4,
+    )
+    subtitle_style = ParagraphStyle(
+        "Subtitle", parent=styles["Heading2"], fontSize=14, leading=18,
+        textColor=BRAND_MUTED, alignment=TA_CENTER, spaceAfter=24,
+        fontName="Helvetica",
+    )
+    section_style = ParagraphStyle(
+        "Section", parent=styles["Heading2"], fontSize=13, leading=16,
+        textColor=BRAND_DARK, spaceBefore=14, spaceAfter=6,
+        fontName="Helvetica-Bold",
+    )
+    sub_section_style = ParagraphStyle(
+        "SubSection", parent=styles["Heading3"], fontSize=11, leading=14,
+        textColor=BRAND_DARK, spaceBefore=8, spaceAfter=4,
+        fontName="Helvetica-Bold",
+    )
+    body_style = ParagraphStyle(
+        "Body", parent=styles["BodyText"], fontSize=10, leading=14,
+        textColor=BRAND_DARK,
+    )
+    body_muted = ParagraphStyle(
+        "BodyMuted", parent=body_style, textColor=BRAND_MUTED, fontSize=9,
+    )
+    footer_style = ParagraphStyle(
+        "Footer", parent=body_style, fontSize=8, textColor=BRAND_MUTED,
+        alignment=TA_CENTER,
+    )
+    kpi_label_style = ParagraphStyle(
+        "KpiLabel", parent=body_style, fontSize=8, textColor=BRAND_MUTED,
+        alignment=TA_CENTER, fontName="Helvetica-Bold", spaceAfter=2,
+    )
+    kpi_value_style = ParagraphStyle(
+        "KpiValue", parent=body_style, fontSize=18, textColor=BRAND_DARK,
+        alignment=TA_CENTER, fontName="Helvetica-Bold",
+    )
+
+    story: list = []
+
+    s = payload.get("summary") or {}
+    posture = payload.get("posture") or {}
+    ti = payload.get("threat_intel") or {}
+    tenant_name = payload.get("tenant_name") or "Vulnerability Management"
+    generated_by = payload.get("generated_by") or "—"
+    generated_at = payload.get("generated_at") or ""
+
+    # ── Section 1: Title page ────────────────────────────────────────────
+    story.append(Spacer(1, 1.2 * inch))
+    story.append(Paragraph("Vulnerability Management", title_style))
+    story.append(Paragraph("Executive Status Report", title_style))
+    story.append(Spacer(1, 0.3 * inch))
+    story.append(Paragraph(tenant_name, subtitle_style))
+    story.append(Spacer(1, 0.4 * inch))
+
+    cover_info = [
+        ["Reporting window", f"{s.get('start','—')}  →  {s.get('end','—')} ({s.get('period_days','?')} days)"],
+        ["Granularity", (s.get('bucket') or 'day').title()],
+        ["Generated by", generated_by],
+        ["Generated at (UTC)", generated_at.replace("T", " ").rstrip("Z")],
     ]
+    cover_table = Table(cover_info, colWidths=[2.0 * inch, 4.0 * inch])
+    cover_table.setStyle(TableStyle([
+        ("FONTNAME",  (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE",  (0, 0), (-1, -1), 10),
+        ("TEXTCOLOR", (0, 0), (0, -1), BRAND_MUTED),
+        ("TEXTCOLOR", (1, 0), (1, -1), BRAND_DARK),
+        ("ALIGN",     (0, 0), (-1, -1), "LEFT"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.25, BRAND_BORDER),
+    ]))
+    story.append(cover_table)
+    story.append(Spacer(1, 2.2 * inch))
+    story.append(Paragraph(
+        "CONFIDENTIAL — Internal Use Only<br/>This document contains security-sensitive information about vulnerabilities and assets.",
+        footer_style,
+    ))
+    story.append(PageBreak())
 
-    summary_table = [
-        ["Total discovered", s.get("total_discovered", 0)],
-        ["Total resolved", s.get("total_resolved", 0)],
-        ["Net change (open delta)", s.get("net_change", 0)],
-        ["Status changes", s.get("total_status_changes", 0)],
+    # ── Section 2: Executive summary + KPI tiles ─────────────────────────
+    story.append(Paragraph("Executive Summary", section_style))
+    story.append(Paragraph(_build_executive_narrative(payload), body_style))
+    story.append(Spacer(1, 10))
+
+    cov = ti.get("enrichment_coverage") or {}
+    total_open = int(cov.get("total_open", 0) or 0)
+    kev_count = int(cov.get("kev_count", 0) or 0)
+    pri = ti.get("priority_buckets") or {}
+    sev = posture.get("by_severity") or {}
+    sla_map = posture.get("sla_compliance") or {}
+    overdue = int(posture.get("overdue_count", 0) or 0)
+    mttr = posture.get("mttr_days")
+    sla_pct = None
+    if sla_map:
+        rates = [float(v.get("compliance_rate") or 0) for v in sla_map.values() if isinstance(v, dict)]
+        if rates:
+            sla_pct = round(sum(rates) / len(rates))
+
+    def _kpi_cell(label: str, value, tone: colors.Color = BRAND_DARK):
+        return [
+            Paragraph(label.upper(), kpi_label_style),
+            Paragraph(
+                f'<font color="{tone.hexval()}">{value}</font>',
+                kpi_value_style,
+            ),
+        ]
+
+    kpi_row = [[
+        _kpi_cell("Total open", total_open, BRAND_DARK),
+        _kpi_cell("Actively exploited (KEV)", kev_count, BRAND_RED if kev_count else BRAND_MUTED),
+        _kpi_cell("Critical / High severity",
+                  (int(sev.get("critical", 0)) + int(sev.get("high", 0))),
+                  BRAND_ORANGE),
+        _kpi_cell("MTTR (days)",
+                  mttr if mttr is not None else "—",
+                  BRAND_AMBER if mttr is not None else BRAND_MUTED),
+        _kpi_cell("SLA compliance",
+                  f"{sla_pct}%" if sla_pct is not None else "—",
+                  BRAND_BLUE if sla_pct is not None else BRAND_MUTED),
+    ]]
+    kpi_table = Table(kpi_row, colWidths=[1.4 * inch] * 5, rowHeights=[0.85 * inch])
+    kpi_table.setStyle(TableStyle([
+        ("BOX",     (0, 0), (-1, -1), 0.5, BRAND_BORDER),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, BRAND_BORDER),
+        ("BACKGROUND", (0, 0), (-1, -1), BRAND_BG_LIGHT),
+        ("VALIGN",  (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.append(kpi_table)
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        f"{overdue} overdue items at time of report.",
+        body_muted,
+    ))
+
+    # ── Section 3: Current posture ───────────────────────────────────────
+    story.append(Paragraph("Current Posture", section_style))
+
+    sev_order = ["critical", "high", "medium", "low", "info"]
+    sev_rows = [["Severity", "Count"]]
+    for k in sev_order:
+        if int(sev.get(k, 0)):
+            sev_rows.append([k.title(), int(sev.get(k, 0))])
+    by_status = posture.get("by_status") or {}
+    if len(sev_rows) > 1:
+        story.append(Paragraph("By severity", sub_section_style))
+        story.append(_styled_kv_table(sev_rows, BRAND_BORDER, BRAND_BG_LIGHT))
+        story.append(Spacer(1, 6))
+
+    status_rows = [["Status", "Count"]]
+    for k, c in by_status.items():
+        if int(c):
+            status_rows.append([str(k).replace("_", " ").title(), int(c)])
+    if len(status_rows) > 1:
+        story.append(Paragraph("By status", sub_section_style))
+        story.append(_styled_kv_table(status_rows, BRAND_BORDER, BRAND_BG_LIGHT))
+        story.append(Spacer(1, 6))
+
+    if sla_map:
+        story.append(Paragraph("SLA compliance by severity", sub_section_style))
+        sla_rows = [["Severity", "Total", "Resolved", "On time", "Rate %"]]
+        for k, v in sla_map.items():
+            if not isinstance(v, dict):
+                continue
+            sla_rows.append([
+                str(k).title(),
+                int(v.get("total", 0)),
+                int(v.get("resolved", 0)),
+                int(v.get("on_time", 0)),
+                f"{round(float(v.get('compliance_rate', 0)))}%",
+            ])
+        sla_t = Table(sla_rows, hAlign="LEFT", colWidths=[1.2 * inch] + [0.9 * inch] * 4)
+        sla_t.setStyle(_header_table_style(BRAND_BORDER, BRAND_BG_LIGHT))
+        story.append(sla_t)
+
+    # ── Section 4: Threat intelligence ──────────────────────────────────
+    story.append(Paragraph("Threat Intelligence", section_style))
+
+    enriched_pct = (
+        round((int(cov.get("enriched", 0)) / total_open) * 100)
+        if total_open else 0
+    )
+    cov_para = (
+        f"Threat-intel enrichment covers <b>{int(cov.get('enriched', 0))} of {total_open}</b> "
+        f"open vulnerabilities ({enriched_pct}%). Of these, <b>{kev_count}</b> are "
+        f"flagged by CISA as actively exploited and <b>{int(cov.get('epss_count', 0))}</b> "
+        f"have EPSS exploit-probability scores."
+    )
+    story.append(Paragraph(cov_para, body_style))
+    story.append(Spacer(1, 6))
+
+    story.append(Paragraph("Composite priority distribution", sub_section_style))
+    pri_rows = [
+        ["Priority bucket", "Open vulnerabilities", "Definition"],
+        ["Critical", int(pri.get("critical", 0)), "Composite ≥ 9.0 — patch within days"],
+        ["High",     int(pri.get("high", 0)),     "7.0 – 8.99 — patch within standard SLA"],
+        ["Medium",   int(pri.get("medium", 0)),   "4.0 – 6.99 — routine cycle"],
+        ["Low",      int(pri.get("low", 0)),      "< 4.0 — track only"],
+        ["Unscored", int(pri.get("unscored", 0)), "Not yet enriched"],
+    ]
+    pri_t = Table(pri_rows, hAlign="LEFT", colWidths=[1.0 * inch, 1.5 * inch, 4.0 * inch])
+    pri_t.setStyle(_header_table_style(BRAND_BORDER, BRAND_BG_LIGHT))
+    story.append(pri_t)
+    story.append(Spacer(1, 6))
+
+    epss = ti.get("epss_bands") or {}
+    epss_rows = [
+        ["EPSS band", "Open vulnerabilities", "What it means"],
+        ["Very High (≥0.50)", int(epss.get("very_high", 0)), "Extremely likely to be exploited in next 30 days"],
+        ["High (0.10–0.50)",  int(epss.get("high", 0)),      "Meaningfully elevated chance"],
+        ["Moderate (0.01–0.10)", int(epss.get("moderate", 0)), "Some exploit signal"],
+        ["Low (<0.01)",       int(epss.get("low", 0)),       "Unlikely to be exploited soon"],
+        ["Negligible (0)",    int(epss.get("negligible", 0)), "No exploit signal"],
+        ["Unscored",          int(epss.get("unscored", 0)),  "EPSS not yet pulled"],
+    ]
+    story.append(Paragraph("Exploit likelihood (EPSS) distribution", sub_section_style))
+    epss_t = Table(epss_rows, hAlign="LEFT", colWidths=[1.6 * inch, 1.5 * inch, 3.4 * inch])
+    epss_t.setStyle(_header_table_style(BRAND_BORDER, BRAND_BG_LIGHT))
+    story.append(epss_t)
+
+    # ── Section 5: Top-10 priority list ─────────────────────────────────
+    top = ti.get("top_priority_vulns") or []
+    if top:
+        story.append(PageBreak())
+        story.append(Paragraph("Top 10 — Fix These First", section_style))
+        story.append(Paragraph(
+            "Ranked by composite priority (CVSS + EPSS + KEV + asset criticality). "
+            "KEV-flagged rows are actively exploited in the wild and warrant immediate action "
+            "regardless of standard severity SLA.",
+            body_muted,
+        ))
+        story.append(Spacer(1, 4))
+        top_rows = [["#", "Title", "CVE", "Priority", "CVSS", "EPSS", "Assets", "KEV"]]
+        for i, v in enumerate(top, start=1):
+            top_rows.append([
+                str(i),
+                _truncate(v.get("title", ""), 48),
+                v.get("cve_id") or "—",
+                f"{float(v.get('composite_priority')):.2f}" if isinstance(v.get("composite_priority"), (int, float)) else "—",
+                f"{float(v.get('cvss_score')):.1f}" if isinstance(v.get("cvss_score"), (int, float)) else "—",
+                f"{float(v.get('epss_score')):.3f}" if isinstance(v.get("epss_score"), (int, float)) else "—",
+                int(v.get("linked_asset_count", 0)),
+                "Yes" if v.get("kev_flag") else "—",
+            ])
+        top_t = Table(
+            top_rows, hAlign="LEFT",
+            colWidths=[0.3 * inch, 2.4 * inch, 1.1 * inch, 0.7 * inch, 0.55 * inch, 0.6 * inch, 0.55 * inch, 0.5 * inch],
+            repeatRows=1,
+        )
+        style_cmds = [
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("BACKGROUND", (0, 0), (-1, 0), BRAND_DARK),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("ALIGN", (3, 1), (-2, -1), "RIGHT"),
+            ("ALIGN", (-1, 1), (-1, -1), "CENTER"),
+            ("INNERGRID", (0, 0), (-1, -1), 0.25, BRAND_BORDER),
+            ("BOX", (0, 0), (-1, -1), 0.25, BRAND_BORDER),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]
+        # Tint KEV rows red.
+        for r, v in enumerate(top, start=1):
+            if v.get("kev_flag"):
+                style_cmds.append(("BACKGROUND", (0, r), (-1, r), colors.HexColor("#fef2f2")))
+        top_t.setStyle(TableStyle(style_cmds))
+        story.append(top_t)
+
+    # ── Section 6: Asset-criticality × severity matrix ──────────────────
+    matrix = ti.get("asset_criticality_matrix") or []
+    if matrix:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Asset Criticality vs. Vulnerability Severity", section_style))
+        story.append(Paragraph(
+            "Where the worst severities actually live. A critical-severity flaw on a "
+            "low-criticality dev box is meaningfully different from the same flaw on a "
+            "production database — this matrix surfaces the concentration of risk.",
+            body_muted,
+        ))
+        story.append(Spacer(1, 4))
+        m_rows = [["Asset criticality", "Critical", "High", "Medium", "Low", "Info", "Total"]]
+        for row in matrix:
+            total_in_row = sum(int(row.get(k, 0) or 0) for k in ("critical", "high", "medium", "low", "info"))
+            m_rows.append([
+                str(row.get("asset_criticality", "")).title(),
+                int(row.get("critical", 0)),
+                int(row.get("high", 0)),
+                int(row.get("medium", 0)),
+                int(row.get("low", 0)),
+                int(row.get("info", 0)),
+                total_in_row,
+            ])
+        m_t = Table(m_rows, hAlign="LEFT", colWidths=[1.4 * inch] + [0.75 * inch] * 6)
+        m_t.setStyle(_header_table_style(BRAND_BORDER, BRAND_BG_LIGHT))
+        story.append(m_t)
+
+    # ── Section 7: Activity in window (compact, no day-row noise) ──────
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("Activity in Reporting Window", section_style))
+    activity_rows = [
+        ["Metric", "Value"],
+        ["Total discovered", int(s.get("total_discovered", 0))],
+        ["Total resolved", int(s.get("total_resolved", 0))],
+        ["Net change (open delta)", int(s.get("net_change", 0))],
+        ["Status changes", int(s.get("total_status_changes", 0))],
         ["MTTR (days, in window)",
          s.get("mttr_days_within_window") if s.get("mttr_days_within_window") is not None else "—"],
         ["Fixed-vs-new ratio",
          s.get("fixed_vs_new_ratio") if s.get("fixed_vs_new_ratio") is not None else "—"],
     ]
-    t = Table(summary_table, hAlign="LEFT", colWidths=[200, 100])
-    t.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
-        ("BOX", (0, 0), (-1, -1), 0.25, colors.grey),
-        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
-        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-    ]))
-    story.append(t)
-    story.append(Spacer(1, 16))
+    activity_t = Table(activity_rows, hAlign="LEFT", colWidths=[3.0 * inch, 1.5 * inch])
+    activity_t.setStyle(_header_table_style(BRAND_BORDER, BRAND_BG_LIGHT))
+    story.append(activity_t)
 
-    # Linked task progress.
     tp = s.get("task_progress") or {}
-    story.append(Paragraph("Task Progress (linked to vulnerabilities)", h2))
     if tp.get("total"):
-        rows = [["Status", "Count"]]
+        story.append(Spacer(1, 8))
+        story.append(Paragraph("Linked task progress", sub_section_style))
+        task_rows = [["Status", "Count"]]
         for st, cnt in (tp.get("by_status") or {}).items():
-            rows.append([str(st), int(cnt)])
-        rows.append(["Total", int(tp.get("total", 0))])
-        t2 = Table(rows, hAlign="LEFT", colWidths=[200, 100])
-        t2.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-            ("BOX", (0, 0), (-1, -1), 0.25, colors.grey),
-            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
-            ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
-            ("FONTSIZE", (0, 0), (-1, -1), 10),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("BACKGROUND", (0, -1), (-1, -1), colors.whitesmoke),
-            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-        ]))
-        story.append(t2)
-    else:
-        story.append(Paragraph("No tasks are linked to vulnerabilities in this window.", body))
-    story.append(Spacer(1, 16))
+            task_rows.append([str(st).title(), int(cnt)])
+        task_rows.append(["Total", int(tp.get("total", 0))])
+        story.append(_styled_kv_table(task_rows, BRAND_BORDER, BRAND_BG_LIGHT, bold_last=True))
 
-    # Time-series tables (compact).
-    def _series_table(title: str, series: List[Dict[str, Any]]):
-        story.append(Paragraph(title, h2))
-        if not series:
-            story.append(Paragraph("No data in window.", body))
-            return
-        rows = [["Date", "Count"]]
-        for p in series:
-            rows.append([p.get("date", ""), int(p.get("count", 0))])
-        tt = Table(rows, hAlign="LEFT", colWidths=[200, 100], repeatRows=1)
-        tt.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-            ("BOX", (0, 0), (-1, -1), 0.25, colors.grey),
-            ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.grey),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ]))
-        story.append(tt)
-        story.append(Spacer(1, 12))
+    # ── Section 8: Appendix — full time-series ─────────────────────────
+    has_series = any((payload.get(k) or []) for k in ("discovered", "resolved", "net_open_delta", "status_changes"))
+    if has_series:
+        story.append(PageBreak())
+        story.append(Paragraph("Appendix — Time Series", section_style))
+        story.append(Paragraph(
+            f"Bucket granularity: {(s.get('bucket') or 'day').title()}. "
+            "Zero-valued buckets are included so charts remain continuous.",
+            body_muted,
+        ))
+        story.append(Spacer(1, 4))
 
-    _series_table("Discovered over time", payload.get("discovered") or [])
-    _series_table("Resolved over time", payload.get("resolved") or [])
-    _series_table("Net open delta", payload.get("net_open_delta") or [])
-    _series_table("Status changes", payload.get("status_changes") or [])
+        def _series_table(title: str, series):
+            story.append(Paragraph(title, sub_section_style))
+            if not series:
+                story.append(Paragraph("No data in window.", body_muted))
+                return
+            rows = [["Date", "Count"]]
+            for p in series:
+                rows.append([p.get("date", ""), int(p.get("count", 0))])
+            tt = Table(rows, hAlign="LEFT", colWidths=[2.0 * inch, 1.0 * inch], repeatRows=1)
+            tt.setStyle(_header_table_style(BRAND_BORDER, BRAND_BG_LIGHT))
+            story.append(tt)
+            story.append(Spacer(1, 8))
 
-    doc.build(story)
+        _series_table("Discovered over time", payload.get("discovered") or [])
+        _series_table("Resolved over time", payload.get("resolved") or [])
+        _series_table("Net open delta", payload.get("net_open_delta") or [])
+        _series_table("Status changes", payload.get("status_changes") or [])
+
+    # ── Page footer on every page ──────────────────────────────────────
+    def _draw_footer(canvas, _doc):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(BRAND_MUTED)
+        canvas.drawString(0.6 * inch, 0.35 * inch,
+                          f"{tenant_name} — Vulnerability Executive Report")
+        canvas.drawRightString(letter[0] - 0.6 * inch, 0.35 * inch,
+                               f"Page {_doc.page}  •  CONFIDENTIAL")
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
     pdf_bytes = buf.getvalue()
     buf.close()
     return pdf_bytes
+
+
+def _truncate(text: str, limit: int) -> str:
+    """Trim with an ellipsis for table cells where wrapping would break
+    column widths."""
+    if not text:
+        return ""
+    text = str(text)
+    return (text[: limit - 1] + "…") if len(text) > limit else text
+
+
+def _header_table_style(border_color, header_bg):
+    """Shared TableStyle for reporting tables: bold header row, alternating
+    row bg, thin grey borders."""
+    from reportlab.platypus import TableStyle
+    return TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("BACKGROUND", (0, 0), (-1, 0), header_bg),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.6, border_color),
+        ("INNERGRID", (0, 1), (-1, -1), 0.25, border_color),
+        ("BOX", (0, 0), (-1, -1), 0.5, border_color),
+        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+        ("ALIGN", (0, 0), (0, -1), "LEFT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ])
+
+
+def _styled_kv_table(rows, border_color, header_bg, bold_last: bool = False):
+    """2-column key/value table with a header row. Optionally bolds the
+    final row (used for "Total" lines)."""
+    from reportlab.platypus import Table, TableStyle
+    t = Table(rows, hAlign="LEFT", colWidths=[3.0 * inch, 1.5 * inch])
+    cmds = [
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("BACKGROUND", (0, 0), (-1, 0), header_bg),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.6, border_color),
+        ("INNERGRID", (0, 1), (-1, -1), 0.25, border_color),
+        ("BOX", (0, 0), (-1, -1), 0.5, border_color),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+    ]
+    if bold_last and len(rows) > 1:
+        cmds.append(("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"))
+        cmds.append(("BACKGROUND", (0, -1), (-1, -1), header_bg))
+    t.setStyle(TableStyle(cmds))
+    return t
 
 
 def _render_text_report(payload: dict) -> str:
@@ -1424,28 +1926,88 @@ def download_dashboard_report(
     tenant_id: Optional[int] = None,
     period: str = "90d",
     bucket: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     fmt: str = "pdf",
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    """Download a vulnerability status report.
+    """Download an executive vulnerability status report.
 
-    `fmt` accepts `pdf` (default) or `text`. PDF rendering uses reportlab if
-    available; if it isn't installed in the deployment we fall back to a
-    plain-text report (filename .txt) so the endpoint never errors out.
+    `start_date` / `end_date` (ISO YYYY-MM-DD) take precedence over `period`
+    when both are supplied. `fmt` accepts `pdf` (default) or `text`.
+
+    The report fuses three internal views in one document:
+      - Trend window (the `start`..`end` slice the operator requested)
+      - Current posture (live counts by severity / status / SLA)
+      - Threat-intel snapshot (KEV / EPSS / composite priority / top-10)
+
+    PDF rendering uses reportlab if available; without it we fall back to a
+    plain-text report so the endpoint never 500s on a missing optional dep.
     """
-    payload = get_dashboard_trends(
+    trends = get_dashboard_trends(
         tenant_id=tenant_id,
         period=period,
         bucket=bucket,
+        start_date=start_date,
+        end_date=end_date,
+        db=db,
+        current_user=current_user,
+    )
+    posture = get_dashboard(
+        tenant_id=tenant_id,
+        db=db,
+        current_user=current_user,
+    )
+    threat_intel = get_threat_intel_dashboard(
+        tenant_id=tenant_id,
         db=db,
         current_user=current_user,
     )
 
-    from fastapi.responses import StreamingResponse
-    import io as _io
+    # Resolve the tenant name + a "generated by" footer so the PDF reads
+    # like a corporate document, not a debug dump. Soft-fail to defaults.
+    tenant_name = "Vulnerability Management"
+    try:
+        primary_tenant_id = tenant_id or get_user_primary_tenant(current_user, db)
+        if primary_tenant_id:
+            t = db.query(Tenant).filter(Tenant.id == primary_tenant_id).first()
+            if t and t.name:
+                tenant_name = t.name
+    except Exception:
+        pass
 
-    fname_base = f"vulnerability-report-{payload.get('summary', {}).get('end', 'now')}-{period}"
+    generated_by = (
+        current_user.full_name
+        if getattr(current_user, "full_name", None)
+        else current_user.email
+    )
+
+    # `posture` is a Pydantic schema (VulnerabilityDashboard). Convert to dict
+    # so the PDF renderer can use plain dict semantics. `getattr` fallback
+    # keeps the path compatible with both pydantic v1 and v2.
+    if hasattr(posture, "model_dump"):
+        posture_dict = posture.model_dump()
+    elif hasattr(posture, "dict"):
+        posture_dict = posture.dict()
+    else:
+        posture_dict = dict(posture or {})
+
+    payload = {
+        **trends,                       # period, bucket, buckets, series, summary
+        "posture": posture_dict,        # live counts / SLA / MTTR / overdue
+        "threat_intel": threat_intel,   # KEV / EPSS / priority / top-10 / matrix
+        "tenant_name": tenant_name,
+        "generated_by": generated_by,
+        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
+
+    from fastapi.responses import StreamingResponse
+
+    summary = payload.get("summary") or {}
+    fname_window = f"{summary.get('start','')}_to_{summary.get('end','now')}"
+    fname_base = f"vulnerability-report-{fname_window}"
+
     if fmt.lower() == "text":
         text = _render_text_report(payload)
         return StreamingResponse(
@@ -1473,3 +2035,367 @@ def download_dashboard_report(
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename={fname_base}.pdf"},
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Threat-intelligence dashboard
+# ─────────────────────────────────────────────────────────────────────────
+# Aggregates the enrichment columns (kev_flag, epss_score, composite_priority)
+# plus linked-asset criticality so the dashboard can render KEV exposure,
+# priority buckets, EPSS distribution, and an asset-criticality cross-cut.
+# Read-only — does not write to the DB. Open vulns only (resolved noise drowns
+# out the signal).
+
+@router.get("/threat-intel")
+def get_threat_intel_dashboard(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Charts powered by NVD/EPSS/KEV enrichment + linked asset criticality.
+
+    Returns a single JSON object with sections matched 1:1 to the chart
+    components on the frontend so the dashboard can render with a single
+    fetch. All sections degrade to empty arrays / zeros when no enriched
+    data is present yet — the page renders an "Enrich your vulns to unlock
+    these views" empty state in that case.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {
+            "kev_exposure": {"kev": 0, "non_kev": 0},
+            "priority_buckets": {"critical": 0, "high": 0, "medium": 0, "low": 0, "unscored": 0},
+            "epss_bands": {
+                "very_high": 0, "high": 0, "moderate": 0, "low": 0, "negligible": 0, "unscored": 0,
+            },
+            "asset_criticality_matrix": [],
+            "top_priority_vulns": [],
+            "enrichment_coverage": {"total_open": 0, "enriched": 0, "kev_count": 0, "epss_count": 0},
+        }
+
+    base_query = db.query(Vulnerability).filter(
+        Vulnerability.tenant_id.in_(user_tenants),
+        ~Vulnerability.status.in_(RESOLVED_STATUSES),
+    )
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        base_query = base_query.filter(Vulnerability.tenant_id == tenant_id)
+
+    open_vulns = base_query.all()
+    open_ids = [v.id for v in open_vulns]
+    total_open = len(open_vulns)
+
+    # ── KEV exposure (donut) ────────────────────────────────────────────
+    kev_count = sum(1 for v in open_vulns if bool(v.kev_flag))
+    non_kev = total_open - kev_count
+
+    # ── Composite-priority buckets (pie) ────────────────────────────────
+    pri = {"critical": 0, "high": 0, "medium": 0, "low": 0, "unscored": 0}
+    for v in open_vulns:
+        p = v.composite_priority
+        if p is None:
+            pri["unscored"] += 1
+        elif p >= 9:
+            pri["critical"] += 1
+        elif p >= 7:
+            pri["high"] += 1
+        elif p >= 4:
+            pri["medium"] += 1
+        else:
+            pri["low"] += 1
+
+    # ── EPSS exploit-probability bands (bar) ────────────────────────────
+    # Bands picked to match the natural-language buckets in the UI:
+    #   >= 0.5 very high    (top 1-2% of CVEs)
+    #   0.1 – 0.5 high      (active exploit signal)
+    #   0.01 – 0.1 moderate
+    #   0 – 0.01 low
+    #   exactly 0 negligible
+    epss = {"very_high": 0, "high": 0, "moderate": 0, "low": 0, "negligible": 0, "unscored": 0}
+    for v in open_vulns:
+        s = v.epss_score
+        if s is None:
+            epss["unscored"] += 1
+        elif s >= 0.5:
+            epss["very_high"] += 1
+        elif s >= 0.1:
+            epss["high"] += 1
+        elif s >= 0.01:
+            epss["moderate"] += 1
+        elif s > 0:
+            epss["low"] += 1
+        else:
+            epss["negligible"] += 1
+
+    # ── Asset-criticality × severity matrix (stacked bar) ──────────────
+    # For each linked asset criticality bucket, count vulns by severity. The
+    # matrix tells operators where their concentrated risk actually lives —
+    # a CVSS-9 on a "low" asset is very different from the same CVSS on a
+    # "critical" production DB.
+    matrix_rows: List[dict] = []
+    if open_ids:
+        # Build {asset_criticality, severity, count} tuples.
+        rows = (
+            db.query(
+                ITAsset.criticality,
+                Vulnerability.severity,
+                func.count(Vulnerability.id),
+            )
+            .join(VulnerabilityAssetLink, VulnerabilityAssetLink.asset_id == ITAsset.id)
+            .join(Vulnerability, Vulnerability.id == VulnerabilityAssetLink.vulnerability_id)
+            .filter(Vulnerability.id.in_(open_ids))
+            .group_by(ITAsset.criticality, Vulnerability.severity)
+            .all()
+        )
+        # Reshape into [{criticality, critical: N, high: N, medium: N, low: N, info: N}, ...]
+        crit_order = ["critical", "high", "medium", "low"]
+        bucket: Dict[str, Dict[str, int]] = {}
+        for crit, sev, count in rows:
+            crit_key = (crit or "unspecified").lower().strip() or "unspecified"
+            sev_key = (sev or "info").lower().strip() or "info"
+            bucket.setdefault(crit_key, {})[sev_key] = (
+                bucket.get(crit_key, {}).get(sev_key, 0) + count
+            )
+        # Emit rows in our canonical asset-criticality order, then any extras alphabetically.
+        seen = set()
+        for crit_key in crit_order + sorted(k for k in bucket.keys() if k not in crit_order):
+            if crit_key not in bucket or crit_key in seen:
+                continue
+            seen.add(crit_key)
+            row = bucket[crit_key]
+            matrix_rows.append({
+                "asset_criticality": crit_key,
+                "critical": int(row.get("critical", 0)),
+                "high":     int(row.get("high", 0)),
+                "medium":   int(row.get("medium", 0)),
+                "low":      int(row.get("low", 0)),
+                "info":     int(row.get("info", 0)),
+            })
+
+    # ── Top-N composite-priority vulns (table) ──────────────────────────
+    top_rows = (
+        base_query
+        .order_by(
+            (Vulnerability.composite_priority.is_(None)).asc(),
+            Vulnerability.composite_priority.desc(),
+            Vulnerability.cvss_score.desc(),
+            Vulnerability.created_at.desc(),
+        )
+        .limit(10)
+        .all()
+    )
+    top_priority_vulns = []
+    for v in top_rows:
+        # Use the existing linked_assets relationship to count without
+        # blowing out the query — we just need a small preview here.
+        linked_count = (
+            db.query(func.count(VulnerabilityAssetLink.id))
+            .filter(VulnerabilityAssetLink.vulnerability_id == v.id)
+            .scalar() or 0
+        )
+        top_priority_vulns.append({
+            "id": v.id,
+            "vuln_id": v.vuln_id,
+            "title": v.title,
+            "severity": v.severity,
+            "cve_id": v.cve_id,
+            "cvss_score": v.cvss_score,
+            "epss_score": v.epss_score,
+            "epss_percentile": v.epss_percentile,
+            "kev_flag": bool(v.kev_flag),
+            "composite_priority": v.composite_priority,
+            "linked_asset_count": linked_count,
+            "status": v.status,
+        })
+
+    # ── Enrichment coverage (small stat) ────────────────────────────────
+    enriched_count = sum(1 for v in open_vulns if v.nvd_last_synced_at is not None)
+    epss_count = sum(1 for v in open_vulns if v.epss_score is not None)
+
+    return {
+        "kev_exposure": {"kev": kev_count, "non_kev": non_kev},
+        "priority_buckets": pri,
+        "epss_bands": epss,
+        "asset_criticality_matrix": matrix_rows,
+        "top_priority_vulns": top_priority_vulns,
+        "enrichment_coverage": {
+            "total_open": total_open,
+            "enriched": enriched_count,
+            "kev_count": kev_count,
+            "epss_count": epss_count,
+        },
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Asset risk heatmap (treemap data)
+# ─────────────────────────────────────────────────────────────────────────
+# Per-asset aggregation: rectangle size driven by asset criticality, colour
+# driven by total open composite-priority sum. One screen answers "which
+# assets should the next patching cycle focus on?". Open vulns only.
+
+@router.get("/asset-risk-heatmap")
+def get_asset_risk_heatmap(
+    tenant_id: Optional[int] = None,
+    limit: int = 60,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Returns one entry per asset with at least one open vuln.
+
+    Each row carries enough data for the treemap renderer to size and
+    colour the rectangle, plus a short "top vulns" preview list so the
+    tooltip / drill-in shows what's actually broken without a follow-up
+    fetch.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"assets": [], "summary": {"total_assets": 0, "total_open_vulns": 0}}
+
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        filter_tenants = [tenant_id]
+    else:
+        filter_tenants = user_tenants
+
+    # Bulk-fetch all open vulns + their links + asset info in three queries
+    # rather than N+1. We group in Python because the pivot we need is
+    # awkward in SQL across all dialects.
+    open_vulns_q = (
+        db.query(Vulnerability)
+        .filter(
+            Vulnerability.tenant_id.in_(filter_tenants),
+            ~Vulnerability.status.in_(RESOLVED_STATUSES),
+        )
+    )
+    open_vulns = open_vulns_q.all()
+    open_vuln_ids = [v.id for v in open_vulns]
+    if not open_vuln_ids:
+        return {"assets": [], "summary": {"total_assets": 0, "total_open_vulns": 0}}
+
+    links = (
+        db.query(
+            VulnerabilityAssetLink.vulnerability_id,
+            VulnerabilityAssetLink.asset_id,
+        )
+        .filter(VulnerabilityAssetLink.vulnerability_id.in_(open_vuln_ids))
+        .all()
+    )
+    asset_ids = sorted({a_id for _, a_id in links})
+    if not asset_ids:
+        return {"assets": [], "summary": {"total_assets": 0, "total_open_vulns": len(open_vuln_ids)}}
+
+    assets_rows = (
+        db.query(
+            ITAsset.id, ITAsset.name, ITAsset.asset_type,
+            ITAsset.criticality, ITAsset.criticality_score,
+            ITAsset.internet_facing, ITAsset.data_classification,
+            ITAsset.business_function,
+        )
+        .filter(ITAsset.id.in_(asset_ids))
+        .all()
+    )
+
+    # Index vulns by id, build asset→vuln mapping.
+    vulns_by_id = {v.id: v for v in open_vulns}
+    asset_to_vuln_ids: dict[int, list[int]] = {}
+    for vuln_id, asset_id in links:
+        asset_to_vuln_ids.setdefault(asset_id, []).append(vuln_id)
+
+    # Criticality score table — keep aligned with the priority formula's
+    # asset_criticality weighting. Used as the rectangle size when an asset
+    # has no derived `criticality_score`.
+    _CRIT_SCORE = {"critical": 10, "high": 7, "medium": 4, "low": 2}
+
+    out_rows: list[dict] = []
+    for asset_id, name, atype, crit, crit_score, inet, dclass, bfunc in assets_rows:
+        vuln_ids = asset_to_vuln_ids.get(asset_id) or []
+        if not vuln_ids:
+            continue
+        asset_vulns = [vulns_by_id[v] for v in vuln_ids if v in vulns_by_id]
+
+        total_priority_sum = 0.0
+        kev_count = 0
+        max_priority = 0.0
+        sev_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+        for v in asset_vulns:
+            p = v.composite_priority if isinstance(v.composite_priority, (int, float)) else None
+            if p is None and isinstance(v.cvss_score, (int, float)):
+                # Fall back to CVSS so un-enriched rows still influence the heatmap.
+                p = float(v.cvss_score)
+            if p is not None:
+                total_priority_sum += float(p)
+                if p > max_priority:
+                    max_priority = float(p)
+            if bool(v.kev_flag):
+                kev_count += 1
+            sev_key = (v.severity or "info").lower()
+            if sev_key in sev_counts:
+                sev_counts[sev_key] += 1
+
+        # Size: prefer the derived criticality_score (richer signal), fall
+        # back to the categorical bucket → numeric mapping.
+        size = (
+            float(crit_score)
+            if isinstance(crit_score, (int, float)) and crit_score
+            else float(_CRIT_SCORE.get((crit or "").lower(), 1))
+        )
+
+        # Top 3 vulns for the tooltip — preserves the "what's actually
+        # broken" context without forcing a second API call on hover.
+        sorted_vulns = sorted(
+            asset_vulns,
+            key=lambda v: (
+                -1 if bool(v.kev_flag) else 0,
+                -(float(v.composite_priority) if isinstance(v.composite_priority, (int, float)) else 0.0),
+                -(float(v.cvss_score) if isinstance(v.cvss_score, (int, float)) else 0.0),
+            ),
+        )[:3]
+        top_vulns_preview = [
+            {
+                "id": v.id,
+                "title": v.title,
+                "cve_id": v.cve_id,
+                "severity": v.severity,
+                "kev_flag": bool(v.kev_flag),
+                "composite_priority": v.composite_priority,
+            }
+            for v in sorted_vulns
+        ]
+
+        out_rows.append({
+            "asset_id": asset_id,
+            "asset_name": name,
+            "asset_type": atype,
+            "criticality": crit,
+            "criticality_score": (
+                float(crit_score) if isinstance(crit_score, (int, float)) else None
+            ),
+            "internet_facing": bool(inet) if inet is not None else None,
+            "data_classification": dclass,
+            "business_function": bfunc,
+            "open_vuln_count": len(asset_vulns),
+            "kev_count": kev_count,
+            "total_priority_sum": round(total_priority_sum, 2),
+            "max_priority": round(max_priority, 2),
+            "severity_breakdown": sev_counts,
+            "size": size,                       # treemap rectangle size
+            "value": round(total_priority_sum, 2),  # treemap colour intensity
+            "top_vulns": top_vulns_preview,
+        })
+
+    # Order: KEV-bearing assets first, then by total priority desc. Cap to
+    # `limit` so a tenant with thousands of assets doesn't ship a 5MB JSON.
+    out_rows.sort(
+        key=lambda r: (-r["kev_count"], -r["total_priority_sum"]),
+    )
+    out_rows = out_rows[: max(1, min(int(limit), 200))]
+
+    return {
+        "assets": out_rows,
+        "summary": {
+            "total_assets": len(out_rows),
+            "total_open_vulns": len(open_vuln_ids),
+            "assets_with_kev": sum(1 for r in out_rows if r["kev_count"] > 0),
+        },
+    }

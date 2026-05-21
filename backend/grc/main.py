@@ -91,9 +91,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Compress JSON responses larger than 500 bytes — typical 5–10x reduction
-# for the heavy coverage / heatmap / dashboard payloads. Critical for
-# proxies/CDNs that enforce response-size limits in production.
 app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
 
 app.add_middleware(TenantMiddleware)

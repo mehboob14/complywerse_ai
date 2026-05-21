@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi, assetsApi, ermApi, apiClient } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { InlineLinkPicker, PageLoader } from '@/components/ui';
+import { InlineLinkPicker, PageLoader, ComboBoxInput, type ComboBoxOption } from '@/components/ui';
 import {
   Bug,
   Loader2,
@@ -23,6 +23,7 @@ import {
   FileText,
   FileCheck,
   Link as LinkIcon,
+  Link2,
   Calendar,
   User,
   ExternalLink,
@@ -68,6 +69,16 @@ interface VulnerabilityDetail {
   nvd_last_synced_at?: string;
   exploit_references?: string[];
   composite_priority?: number;
+  // Public-exploit detection (GitHub PoC search). Non-null count = we
+  // checked; >0 = clone-and-run code is in the wild.
+  public_exploit_count?: number | null;
+  public_exploit_refs?: Array<{
+    full_name: string;
+    url: string;
+    stars: number;
+    description?: string | null;
+  }> | null;
+  public_exploit_synced_at?: string | null;
   // Phase 6 — Vendor patch intelligence. Same nullable discipline: the
   // Patch Information section hides itself when nothing has been synced.
   patch_references?: Array<{ source: string; id: string; url: string; type: string }>;
@@ -120,6 +131,9 @@ interface ControlLink {
   framework_control_id?: number;
   normalized_control_id?: number;
   internal_control_id?: number;
+  // ParsedFrameworkControl FK — populated by the CWE auto-mapper because
+  // upload-driven seeded frameworks live in the parsed-control tables.
+  parsed_framework_control_id?: number | null;
   compliance_impact?: string;
   notes?: string;
   framework_control_code?: string;
@@ -127,6 +141,18 @@ interface ControlLink {
   normalized_control_code?: string;
   normalized_control_name?: string;
   internal_control_name?: string;
+  // ParsedFrameworkControl rendering data — mirrors the legacy fields
+  // above so the UI doesn't have to branch on which FK is set.
+  parsed_control_code?: string | null;
+  parsed_control_name?: string | null;
+  parsed_framework_name?: string | null;
+  // CWE auto-mapping provenance — populated by the backend `_build_response`
+  // helper. `source` is "manual" or "auto_cwe"; `auto_cwe` is the CWE-ID
+  // that triggered the auto-link; `framework_short_code` lets the UI
+  // render a framework badge without a second fetch.
+  source?: 'manual' | 'auto_cwe' | string;
+  auto_cwe?: string | null;
+  framework_short_code?: string | null;
 }
 
 interface Retest {
@@ -211,6 +237,7 @@ const TABS = [
   { id: 'mitigations', label: 'Mitigations', icon: CheckCircle },
   { id: 'assets', label: 'Assets', icon: Server },
   { id: 'controls', label: 'Controls', icon: Shield },
+  { id: 'dependencies', label: 'Chain', icon: Link2 },
   { id: 'departments', label: 'Departments', icon: Users },
   { id: 'workflow', label: 'Workflow', icon: GitBranch },
   { id: 'escalations', label: 'Escalations', icon: Bell },
@@ -477,7 +504,13 @@ export default function VulnerabilityDetailPage() {
   });
 
   const suggestFixMutation = useMutation({
-    mutationFn: () => vulnManagementApi.ai.suggestFix(vulnId),
+    // Unwrap the AxiosResponse so AIAnalysisTab can read output_data directly.
+    // The backend returns the full job row with output_data.{summary,
+    // suggestions, recommendation} after a successful run.
+    mutationFn: async () => {
+      const res = await vulnManagementApi.ai.suggestFix(vulnId);
+      return res.data as SuggestFixJobResponse;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vulnerability', vulnId] });
     },
@@ -518,6 +551,52 @@ export default function VulnerabilityDetailPage() {
     mutationFn: (linkId: number) => vulnManagementApi.controlLinks.delete(vulnId, linkId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vuln-controls', vulnId] });
+    },
+  });
+
+  // CWE → framework-control auto-map. The mutation result drives a small
+  // banner on the Controls tab; the banner clears itself after the next
+  // user action (clicking Auto-map again, leaving the tab, etc.).
+  const [autoMapBanner, setAutoMapBanner] = useState<{
+    tone: 'success' | 'info' | 'error';
+    text: string;
+  } | null>(null);
+  const autoMapMutation = useMutation({
+    mutationFn: async () => {
+      const res = await vulnManagementApi.controlLinks.autoMap(vulnId);
+      return res.data as {
+        matched_controls: number;
+        added: number;
+        kept: number;
+        removed_stale: number;
+        errors: string[];
+      };
+    },
+    onSuccess: (summary) => {
+      queryClient.invalidateQueries({ queryKey: ['vuln-controls', vulnId] });
+      const noMatch = summary.matched_controls === 0;
+      if (noMatch) {
+        setAutoMapBanner({
+          tone: 'info',
+          text: 'No framework controls matched this vuln. Either the CWE isn\'t in our mapping table or this tenant hasn\'t seeded a framework that covers it.',
+        });
+      } else {
+        const parts: string[] = [];
+        if (summary.added) parts.push(`${summary.added} added`);
+        if (summary.kept) parts.push(`${summary.kept} already linked`);
+        if (summary.removed_stale) parts.push(`${summary.removed_stale} stale removed`);
+        setAutoMapBanner({
+          tone: 'success',
+          text: `Matched ${summary.matched_controls} framework control${summary.matched_controls === 1 ? '' : 's'}: ${parts.join(' · ')}.`,
+        });
+      }
+    },
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setAutoMapBanner({
+        tone: 'error',
+        text: detail || 'Auto-map failed. Check that the framework data is seeded.',
+      });
     },
   });
 
@@ -591,167 +670,334 @@ export default function VulnerabilityDetailPage() {
   const severityStyle = getSeverityStyle(vulnerability.severity);
   const statusStyle = getStatusStyle(vulnerability.status);
 
-  return (
-    <div className="min-h-full space-y-4 bg-white p-4 md:p-6">
-      <div className="flex items-center gap-3">
-        <Link href="/vulnerabilities" className="text-slate-600 hover:text-slate-900 transition-colors">
-          <ArrowLeft size={18} />
-        </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold text-slate-900">{vulnerability.title}</h1>
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${severityStyle.bg} ${severityStyle.text}`}>
-              {severityStyle.label}
-            </span>
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
-              {statusStyle.label}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500">VULN-{vulnerability.id}</p>
-        </div>
-        <button onClick={() => setShowStatusModal(true)} className="btn-secondary text-xs py-1 px-2.5">
-          Change Status
-        </button>
-      </div>
+  // ── Hero-strip derived values ───────────────────────────────────────
+  // The header KPI strip shows the operator everything they need to triage
+  // this vuln at a glance. All values come from existing columns; no new
+  // queries.
+  const dueDate = vulnerability.due_date ? new Date(vulnerability.due_date) : null;
+  const dueDays = dueDate
+    ? Math.ceil((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
+  const dueLabel = dueDays === null
+    ? null
+    : dueDays < 0
+      ? `${Math.abs(dueDays)}d overdue`
+      : dueDays === 0
+        ? 'Due today'
+        : `${dueDays}d to SLA`;
+  const dueTone = dueDays === null
+    ? 'border-slate-200 bg-slate-50 text-slate-600'
+    : dueDays < 0
+      ? 'border-red-300 bg-red-50 text-red-700'
+      : dueDays <= 3
+        ? 'border-orange-300 bg-orange-50 text-orange-700'
+        : 'border-emerald-200 bg-emerald-50 text-emerald-700';
 
-      <div className="border-b border-slate-200">
-        <nav className="flex gap-0 overflow-x-auto">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-slate-600 hover:text-slate-900'
-              }`}
+  const priorityValue = typeof vulnerability.composite_priority === 'number'
+    ? vulnerability.composite_priority
+    : null;
+  const priorityTone = priorityValue === null
+    ? 'border-slate-200 bg-slate-50 text-slate-600'
+    : priorityValue >= 9
+      ? 'border-red-300 bg-red-50 text-red-700'
+      : priorityValue >= 7
+        ? 'border-orange-300 bg-orange-50 text-orange-700'
+        : priorityValue >= 4
+          ? 'border-yellow-300 bg-yellow-50 text-yellow-700'
+          : 'border-blue-200 bg-blue-50 text-blue-700';
+
+  const epssValue = typeof vulnerability.epss_score === 'number' ? vulnerability.epss_score : null;
+  const cvssValue = typeof vulnerability.cvss_score === 'number' ? vulnerability.cvss_score : null;
+  const linkedAssetCount = vulnerability.linked_assets?.length ?? 0;
+  const hasPublicExploit = typeof vulnerability.public_exploit_count === 'number'
+    && vulnerability.public_exploit_count > 0;
+
+  return (
+    <div className="min-h-full bg-slate-50/30">
+      {/* ── Hero header ───────────────────────────────────────────────
+          Two-row strip: identity row (back / title / status / actions),
+          KPI row (severity / CVSS / EPSS / Priority / KEV / SLA / owner /
+          assets). All values link to existing columns; layout adapts on
+          smaller screens. */}
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
+        <div className="px-4 md:px-6 pt-3 pb-2">
+          <div className="flex items-start gap-3">
+            <Link
+              href="/vulnerabilities"
+              className="mt-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+              title="Back to vulnerabilities"
             >
-              <tab.icon size={13} />
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
+              <ArrowLeft size={14} />
+            </Link>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">
+                  Vulnerability · VULN-{vulnerability.id}
+                </span>
+                {vulnerability.cve_id && (
+                  <span className="text-[10px] font-mono text-slate-500">
+                    · {vulnerability.cve_id}
+                  </span>
+                )}
+                {vulnerability.kev_flag && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-800">
+                    <AlertCircle size={9} />
+                    CISA KEV
+                  </span>
+                )}
+                {hasPublicExploit && !vulnerability.kev_flag && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-800">
+                    Public Exploit
+                  </span>
+                )}
+              </div>
+              <h1 className="mt-1 text-xl font-semibold text-slate-900 leading-snug">
+                {vulnerability.title}
+              </h1>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span
+                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyle.bg} ${statusStyle.text} border-current/10`}
+              >
+                {statusStyle.label}
+              </span>
+              <button
+                onClick={() => setShowStatusModal(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                Change Status
+              </button>
+            </div>
+          </div>
+
+          {/* KPI strip — high-information-density at-a-glance row. Each
+              cell renders only when the underlying value exists, so the
+              strip stays compact on partially-enriched vulns. */}
+          <div className="mt-3 flex flex-wrap items-stretch gap-2">
+            <div className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 ${severityStyle.bg} ${severityStyle.text}`}>
+              <span className="text-[9px] uppercase tracking-wider opacity-75">Severity</span>
+              <span className="text-xs font-bold">{severityStyle.label}</span>
+            </div>
+            {cvssValue !== null && (
+              <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1">
+                <span className="text-[9px] uppercase tracking-wider text-slate-500">CVSS</span>
+                <span className="text-xs font-bold text-slate-900">{cvssValue.toFixed(1)}</span>
+              </div>
+            )}
+            {epssValue !== null && (
+              <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1" title="Exploit Prediction Scoring System — 30-day probability of in-the-wild exploitation">
+                <span className="text-[9px] uppercase tracking-wider text-slate-500">EPSS</span>
+                <span className="text-xs font-bold text-slate-900">{(epssValue * 100).toFixed(1)}%</span>
+              </div>
+            )}
+            {priorityValue !== null && (
+              <div className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 ${priorityTone}`} title="Composite priority — CVSS + EPSS + KEV + asset criticality">
+                <span className="text-[9px] uppercase tracking-wider opacity-75">Priority</span>
+                <span className="text-xs font-bold">{priorityValue.toFixed(2)} / 10</span>
+              </div>
+            )}
+            {dueLabel && (
+              <div className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 ${dueTone}`}>
+                <Clock size={11} />
+                <span className="text-xs font-semibold">{dueLabel}</span>
+              </div>
+            )}
+            {vulnerability.assigned_user_name && (
+              <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1">
+                <User size={11} className="text-slate-500" />
+                <span className="text-xs text-slate-700">{vulnerability.assigned_user_name}</span>
+              </div>
+            )}
+            {linkedAssetCount > 0 && (
+              <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1">
+                <Server size={11} className="text-slate-500" />
+                <span className="text-xs text-slate-700">
+                  {linkedAssetCount} asset{linkedAssetCount === 1 ? '' : 's'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Tab navigation — pill-style hover, accent bar on active. */}
+          <nav className="mt-3 -mx-1 flex gap-1 overflow-x-auto">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative flex items-center gap-1.5 rounded-t-md px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
+                  activeTab === tab.id
+                    ? 'text-primary-700 bg-primary-50/50'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <tab.icon size={13} />
+                {tab.label}
+                {activeTab === tab.id && (
+                  <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary-600" />
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </header>
+
+      {/* ── Tab content ─────────────────────────────────────────────── */}
+      <div className="space-y-4 px-4 md:px-6 py-4">
+
 
       {activeTab === 'overview' && (
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-4">
-            <div className="cw-card p-4">
-              <h2 className="text-sm font-semibold cw-text mb-2">Description</h2>
-              <p className="text-sm text-slate-600 whitespace-pre-wrap">
-                {vulnerability.description || 'No description provided.'}
-              </p>
+        <div className="space-y-4">
+          {/* Description card — primary card. Slightly larger padding +
+              accent border so the operator's eye lands here first. */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-slate-500" />
+                Description
+              </h2>
+            </div>
+            <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+              {vulnerability.description || (
+                <span className="text-slate-400 italic">No description provided.</span>
+              )}
+            </p>
+          </div>
+
+          {/* Sidebar — Identity / Asset Context / Ownership / Timeline.
+              Grouped sub-sections so the user can find each fact quickly.
+              Renders below the description on mobile, beside on lg+. */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-4">
+              {/* NCA Template Fields — verbatim register data preserved on the bridge */}
+              {vulnerability.template_type === 'NCA Template' && vulnerability.template_fields && Object.keys(vulnerability.template_fields).length > 0 && (
+                <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-5">
+                  <h2 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5 text-blue-600" />
+                    NCA Template Fields
+                  </h2>
+                  <p className="text-xs text-slate-600 mb-3">
+                    Verbatim fields from the NCA Saudi vulnerability register template. Owner and assets are managed via platform pickers in the other tabs.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    {Object.entries(vulnerability.template_fields).filter(([, v]) => v !== null && v !== '' && v !== undefined).map(([k, v]) => (
+                      <div key={k} className="rounded-md border border-blue-100 bg-white px-2.5 py-2">
+                        <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-0.5">{k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</p>
+                        <p className="text-sm text-slate-800 whitespace-pre-wrap break-words">{String(v)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {vulnerability.ai_recommendation && (
+                <div className="rounded-xl border border-primary-200 bg-gradient-to-br from-primary-50 to-primary-50/40 p-5">
+                  <h2 className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-primary-600" />
+                    AI Recommendation
+                  </h2>
+                  {formatAIText(vulnerability.ai_recommendation)}
+                </div>
+              )}
             </div>
 
-            {/* NCA Template Fields — verbatim register data preserved on the bridge */}
-            {vulnerability.template_type === 'NCA Template' && vulnerability.template_fields && Object.keys(vulnerability.template_fields).length > 0 && (
-              <div className="cw-card p-4">
-                <h2 className="text-sm font-semibold cw-text mb-3 flex items-center gap-1.5">
-                  <FileText className="h-4 w-4 text-blue-600" />
-                  NCA Template Fields
-                </h2>
-                <p className="text-xs text-slate-500 mb-3">All fields from the NCA Saudi vulnerability register template. Owner and assets are managed via platform pickers in the other tabs.</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                  {Object.entries(vulnerability.template_fields).filter(([, v]) => v !== null && v !== '' && v !== undefined).map(([k, v]) => (
-                    <div key={k}>
-                      <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-0.5">{k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</p>
-                      <p className="text-sm text-slate-800 whitespace-pre-wrap break-words">{String(v)}</p>
+            <aside className="space-y-4">
+              {/* Identity card — CVE / CWE / Component */}
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                  Identity
+                </p>
+                <dl className="space-y-2">
+                  {vulnerability.cve_id && (
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-xs text-slate-500 flex-shrink-0">CVE ID</dt>
+                      <dd className="text-xs font-mono text-slate-900 text-right truncate">{vulnerability.cve_id}</dd>
                     </div>
-                  ))}
-                </div>
+                  )}
+                  {vulnerability.cwe_id && /^cwe-/i.test(vulnerability.cwe_id) && (
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-xs text-slate-500 flex-shrink-0">CWE ID</dt>
+                      <dd className="text-xs font-mono text-slate-900 text-right truncate">{vulnerability.cwe_id}</dd>
+                    </div>
+                  )}
+                  {typeof vulnerability.cvss_score === 'number' && (
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-xs text-slate-500 flex-shrink-0">CVSS</dt>
+                      <dd className="text-xs font-semibold text-slate-900">{vulnerability.cvss_score.toFixed(1)} / 10</dd>
+                    </div>
+                  )}
+                  {vulnerability.affected_component && (
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-xs text-slate-500 flex-shrink-0">Component</dt>
+                      <dd className="text-xs text-slate-800 text-right truncate">{vulnerability.affected_component}</dd>
+                    </div>
+                  )}
+                </dl>
               </div>
-            )}
 
-            {vulnerability.ai_recommendation && (
-              <div className="rounded-xl border border-primary-200 bg-primary-50 p-4">
-                <h2 className="text-sm font-semibold cw-text mb-2 flex items-center gap-1.5">
-                  <Sparkles className="h-4 w-4 text-primary-600" />
-                  AI Recommendation
-                </h2>
-                {formatAIText(vulnerability.ai_recommendation)}
+              {/* Asset Context card */}
+              {((vulnerability.linked_assets && vulnerability.linked_assets.length > 0) || vulnerability.affected_host) && (
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
+                    <Server size={11} />
+                    Asset Context
+                  </p>
+                  {vulnerability.linked_assets && vulnerability.linked_assets.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {vulnerability.linked_assets.map((a) => (
+                        <span key={a} className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">
+                          {a}
+                        </span>
+                      ))}
+                    </div>
+                  ) : vulnerability.affected_host ? (
+                    <p className="text-xs text-slate-700">{vulnerability.affected_host}</p>
+                  ) : null}
+                </div>
+              )}
+
+              {/* Ownership + Timeline card */}
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                  Ownership &amp; Timeline
+                </p>
+                <dl className="space-y-2">
+                  {vulnerability.assigned_user_name && (
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-xs text-slate-500 flex-shrink-0 flex items-center gap-1">
+                        <User size={11} />
+                        Assigned
+                      </dt>
+                      <dd className="text-xs text-slate-800 text-right truncate">{vulnerability.assigned_user_name}</dd>
+                    </div>
+                  )}
+                  {vulnerability.due_date && (
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-xs text-slate-500 flex-shrink-0 flex items-center gap-1">
+                        <Calendar size={11} />
+                        Due
+                      </dt>
+                      <dd className="text-xs text-slate-800 text-right">{new Date(vulnerability.due_date).toLocaleDateString()}</dd>
+                    </div>
+                  )}
+                  <div className="flex items-baseline justify-between gap-2">
+                    <dt className="text-xs text-slate-500 flex-shrink-0">Created</dt>
+                    <dd className="text-xs text-slate-700 text-right">{new Date(vulnerability.created_at).toLocaleDateString()}</dd>
+                  </div>
+                  {vulnerability.updated_at && (
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-xs text-slate-500 flex-shrink-0">Updated</dt>
+                      <dd className="text-xs text-slate-700 text-right">{new Date(vulnerability.updated_at).toLocaleDateString()}</dd>
+                    </div>
+                  )}
+                </dl>
               </div>
-            )}
+            </aside>
           </div>
 
-          <div className="space-y-3">
-            <div className="cw-card p-4">
-              <h2 className="text-sm font-semibold cw-text mb-2">Details</h2>
-              <dl className="space-y-2">
-                {vulnerability.cvss_score && (
-                  <div>
-                    <dt className="text-sm text-slate-600">CVSS Score</dt>
-                    <dd className="cw-text font-medium">{vulnerability.cvss_score}</dd>
-                  </div>
-                )}
-                {vulnerability.cve_id && (
-                  <div>
-                    <dt className="text-sm text-slate-600">CVE ID</dt>
-                    <dd className="cw-text font-mono">{vulnerability.cve_id}</dd>
-                  </div>
-                )}
-                {vulnerability.cwe_id && (
-                  <div>
-                    <dt className="text-sm text-slate-600">CWE ID</dt>
-                    <dd className="cw-text font-mono">{vulnerability.cwe_id}</dd>
-                  </div>
-                )}
-                {vulnerability.affected_component && (
-                  <div>
-                    <dt className="text-sm text-slate-600">Affected Component</dt>
-                    <dd className="cw-text">{vulnerability.affected_component}</dd>
-                  </div>
-                )}
-                {(vulnerability.linked_assets && vulnerability.linked_assets.length > 0) && (
-                  <div>
-                    <dt className="text-sm text-slate-600">Linked Assets</dt>
-                    <dd className="cw-text">{vulnerability.linked_assets.join(', ')}</dd>
-                  </div>
-                )}
-                {(!vulnerability.linked_assets || vulnerability.linked_assets.length === 0) && vulnerability.affected_host && (
-                  <div>
-                    <dt className="text-sm text-slate-600">Linked Assets</dt>
-                    <dd className="cw-text">{vulnerability.affected_host}</dd>
-                  </div>
-                )}
-                {vulnerability.due_date && (
-                  <div>
-                    <dt className="text-sm text-slate-600">Due Date</dt>
-                    <dd className="cw-text flex items-center gap-1.5">
-                      <Calendar size={14} className="text-slate-600" />
-                      {new Date(vulnerability.due_date).toLocaleDateString()}
-                    </dd>
-                  </div>
-                )}
-                {vulnerability.assigned_user_name && (
-                  <div>
-                    <dt className="text-sm text-slate-600">Assigned To</dt>
-                    <dd className="cw-text flex items-center gap-1.5">
-                      <User size={14} className="text-slate-600" />
-                      {vulnerability.assigned_user_name}
-                    </dd>
-                  </div>
-                )}
-                <div>
-                  <dt className="text-sm text-slate-600">Created</dt>
-                  <dd className="cw-text">{new Date(vulnerability.created_at).toLocaleString()}</dd>
-                </div>
-              </dl>
-            </div>
-
-            {/* Threat Intelligence — populated by the on-demand Enrich
-                button or the background daily refresh. Renders even when
-                empty so the Enrich button is always reachable for any vuln
-                with a CVE-ID. */}
-            <ThreatIntelPanel vulnerability={vulnerability} />
-
-            {/* Phase 8 — Exception Workflow. Renders for every vuln; the
-                panel itself encodes state-aware UI for request / approve /
-                deny / revoke / expired actions. */}
-            <ExceptionWorkflowPanel
-              vulnerability={vulnerability}
-              currentUserId={currentUserId}
-            />
-          </div>
+          {/* Threat Intelligence + Patch Information — full-width below
+              the description+sidebar grid. Panel hides itself when the
+              vuln has no CVE-ID. Exception Workflow lives in its own tab. */}
+          <ThreatIntelPanel vulnerability={vulnerability} />
         </div>
       )}
 
@@ -883,55 +1129,214 @@ export default function VulnerabilityDetailPage() {
 
       {activeTab === 'controls' && (
         <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <h2 className="text-sm font-semibold cw-text">Linked Controls</h2>
-            {canEdit && (
-              <InlineLinkPicker
-                triggerLabel="Link Control"
-                triggerClassName="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-                items={(internalControls || []).filter((c: { id: number }) => !controlLinks?.some((l) => l.internal_control_id === c.id)).map((c: { id: number; control_id?: string; name: string; category?: string }) => ({
-                  value: String(c.id),
-                  label: c.control_id ? `${c.control_id} — ${c.name}` : c.name,
-                  subLabel: c.category,
-                }))}
-                isLoading={internalControlsLoading || createControlLinkMutation.isPending}
-                emptyText="No controls available"
-                searchPlaceholder="Search controls"
-                onSelect={(value) => createControlLinkMutation.mutate({
-                  control_type: 'internal',
-                  internal_control_id: Number(value),
-                })}
-              />
-            )}
+          <div className="flex justify-between items-center flex-wrap gap-2">
+            <div>
+              <h2 className="text-sm font-semibold cw-text">Linked Controls</h2>
+              <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">
+                Compliance impact — every linked control this vulnerability currently breaks
+                or puts at risk. Auto-mapped rows come from this vuln&apos;s CWE; manual rows
+                are linked by you.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {canEdit && vulnerability.cwe_id && (
+                <button
+                  type="button"
+                  onClick={() => autoMapMutation.mutate()}
+                  disabled={autoMapMutation.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                  title={`Auto-map framework controls from ${vulnerability.cwe_id}`}
+                >
+                  {autoMapMutation.isPending ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={14} />
+                  )}
+                  Auto-map from CWE
+                </button>
+              )}
+              {canEdit && (
+                <InlineLinkPicker
+                  triggerLabel="Link Control"
+                  triggerClassName="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  items={(internalControls || []).filter((c: { id: number }) => !controlLinks?.some((l) => l.internal_control_id === c.id)).map((c: { id: number; control_id?: string; name: string; category?: string }) => ({
+                    value: String(c.id),
+                    label: c.control_id ? `${c.control_id} — ${c.name}` : c.name,
+                    subLabel: c.category,
+                  }))}
+                  isLoading={internalControlsLoading || createControlLinkMutation.isPending}
+                  emptyText="No controls available"
+                  searchPlaceholder="Search controls"
+                  onSelect={(value) => createControlLinkMutation.mutate({
+                    control_type: 'internal',
+                    internal_control_id: Number(value),
+                  })}
+                />
+              )}
+            </div>
           </div>
+
+          {/* Auto-map result banner */}
+          {autoMapBanner && (
+            <div
+              className={`rounded-md border p-2.5 text-xs ${
+                autoMapBanner.tone === 'success'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                  : autoMapBanner.tone === 'error'
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : 'border-blue-200 bg-blue-50 text-blue-800'
+              }`}
+            >
+              {autoMapBanner.text}
+            </div>
+          )}
+
+          {/* Compliance Impact summary — visible whenever we have at least one
+              auto-mapped row. Counts the unique framework short_codes so the
+              user sees the impact span at a glance ("breaks N controls across
+              3 frameworks: PCI-DSS, ISO27001, OWASP"). */}
+          {(() => {
+            const autoLinks = (controlLinks || []).filter((l) => l.source === 'auto_cwe');
+            if (autoLinks.length === 0) return null;
+            const frameworks = Array.from(new Set(
+              autoLinks
+                .map((l) => l.framework_short_code)
+                .filter((s): s is string => !!s),
+            ));
+            return (
+              <div className="rounded-md border border-orange-200 bg-orange-50 p-3 text-xs text-orange-900 flex items-start gap-2">
+                <AlertCircle size={14} className="text-orange-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p>
+                    This vulnerability currently breaks <strong>{autoLinks.length}</strong>{' '}
+                    control{autoLinks.length === 1 ? '' : 's'}
+                    {frameworks.length > 0 && (
+                      <> across <strong>{frameworks.length}</strong> framework{frameworks.length === 1 ? '' : 's'}</>
+                    )}.
+                    Resolving or mitigating it lifts each control out of non-compliant status.
+                  </p>
+                  {frameworks.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {frameworks.map((fw) => (
+                        <span
+                          key={fw}
+                          className="inline-flex items-center rounded-full border border-orange-300 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-800"
+                        >
+                          {fw}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="cw-card overflow-hidden">
             {(!controlLinks || controlLinks.length === 0) ? (
-              <div className="p-8 text-center text-slate-600">No controls linked yet</div>
+              <div className="p-8 text-center text-slate-600">
+                No controls linked yet.
+                {vulnerability.cwe_id && (
+                  <div className="mt-2 text-xs">
+                    Click <strong>Auto-map from CWE</strong> to discover framework controls this vuln affects.
+                  </div>
+                )}
+              </div>
             ) : (
               <table className="w-full">
                 <thead className="bg-slate-50/50">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Control</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Framework</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">ID</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Source</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {controlLinks.map((link) => {
-                    const displayName = link.internal_control_name || link.framework_control_name || link.normalized_control_name || '-';
-                    const displayCode = link.framework_control_code || link.normalized_control_code || (link.internal_control_id ? `IC-${link.internal_control_id}` : '-');
-                    const displayType = link.internal_control_id ? 'Internal' : link.framework_control_id ? 'Framework' : link.normalized_control_id ? 'Normalized' : '-';
+                    const displayName = link.internal_control_name
+                      || link.parsed_control_name
+                      || link.framework_control_name
+                      || link.normalized_control_name
+                      || '-';
+                    const displayCode = link.parsed_control_code
+                      || link.framework_control_code
+                      || link.normalized_control_code
+                      || (link.internal_control_id ? `IC-${link.internal_control_id}` : '-');
+                    const displayType = link.internal_control_id
+                      ? 'Internal'
+                      : (link.framework_control_id || link.parsed_framework_control_id)
+                      ? 'Framework'
+                      : link.normalized_control_id
+                      ? 'Normalized'
+                      : '-';
+                    const isAuto = link.source === 'auto_cwe';
+                    // Detail-page link target — prefer the new parsed-FK
+                    // route, fall back to the legacy framework-FK route.
+                    const detailHref = link.parsed_framework_control_id
+                      ? `/erm/framework-controls/${link.parsed_framework_control_id}?type=parsed`
+                      : link.framework_control_id
+                      ? `/erm/framework-controls/${link.framework_control_id}?type=legacy`
+                      : null;
                     return (
                     <tr key={link.id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 cw-text">{displayName}</td>
                       <td className="px-4 py-3 text-slate-600">{displayType}</td>
-                      <td className="px-4 py-3 text-slate-600 font-mono text-xs">{displayCode}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {link.framework_short_code ? (
+                          detailHref ? (
+                            <Link
+                              href={detailHref}
+                              className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                              title={link.parsed_framework_name || 'Open framework control detail'}
+                            >
+                              {link.framework_short_code}
+                            </Link>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-700">
+                              {link.framework_short_code}
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 font-mono text-xs">
+                        {detailHref ? (
+                          <Link
+                            href={detailHref}
+                            className="hover:text-blue-600 hover:underline"
+                            title="Open framework control detail"
+                          >
+                            {displayCode}
+                          </Link>
+                        ) : (
+                          displayCode
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {isAuto ? (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700"
+                            title={`Auto-mapped from ${link.auto_cwe || 'vulnerability management rules'}`}
+                          >
+                            <Sparkles size={9} />
+                            Auto{link.auto_cwe ? ` • ${link.auto_cwe}` : ''}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                            Manual
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         {canDelete && (
                         <button
                           onClick={() => deleteControlLinkMutation.mutate(link.id)}
                           className="text-slate-600 hover:text-red-600"
+                          title={isAuto ? 'Remove this auto-mapped link (it will not be re-created until you click Auto-map again)' : 'Remove this manual link'}
                         >
                           <Trash2 size={16} />
                         </button>
@@ -945,6 +1350,10 @@ export default function VulnerabilityDetailPage() {
             )}
           </div>
         </div>
+      )}
+
+      {activeTab === 'dependencies' && (
+        <DependenciesTab vulnId={vulnId} />
       )}
 
       {activeTab === 'departments' && (
@@ -1159,40 +1568,12 @@ export default function VulnerabilityDetailPage() {
 
 
       {activeTab === 'ai' && (
-        <div className="space-y-3">
-          <div className="cw-card p-4">
-            <h2 className="text-sm font-semibold cw-text mb-2 flex items-center gap-1.5">
-              <Sparkles className="h-4 w-4 text-primary-600" />
-              AI-Powered Analysis
-            </h2>
-            <p className="text-sm text-slate-600 mb-3">
-              Get AI-powered recommendations for fixing this vulnerability based on the description, severity, and affected components.
-            </p>
-            <button
-              onClick={() => suggestFixMutation.mutate()}
-              disabled={suggestFixMutation.isPending}
-              className="btn-primary flex items-center gap-2"
-            >
-              {suggestFixMutation.isPending ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Sparkles size={16} />
-                  Get AI Recommendation
-                </>
-              )}
-            </button>
-            {vulnerability.ai_recommendation && (
-              <div className="mt-6 p-4 rounded-lg bg-primary-50 border border-primary-200">
-                <h3 className="text-sm font-medium text-primary-600 mb-2">Recommendation</h3>
-                {formatAIText(vulnerability.ai_recommendation)}
-              </div>
-            )}
-          </div>
-        </div>
+        <AIAnalysisTab
+          vulnerability={vulnerability}
+          suggestFixMutation={suggestFixMutation}
+          onAcceptSuggestion={(payload) => createMitigationMutation.mutate(payload)}
+          acceptingSuggestion={createMitigationMutation.isPending}
+        />
       )}
 
       {activeTab === 'exception' && (
@@ -1521,9 +1902,828 @@ export default function VulnerabilityDetailPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
+
+
+// ---------------------------------------------------------------------------
+// AIAnalysisTab
+// ---------------------------------------------------------------------------
+// Triggers the structured /ai/suggest-fix endpoint and renders the JSON
+// response as a list of actionable suggestion cards. Each card has an
+// "Add as Mitigation" button that calls the mitigations create endpoint
+// with the suggestion's title + description + priority pre-filled, so the
+// operator can accept the AI's plan one click at a time. The legacy
+// `ai_recommendation` markdown is shown below as a fallback / expanded
+// view for context.
+
+interface AISuggestion {
+  title: string;
+  description?: string;
+  priority?: string;
+  effort?: string;
+  category?: string;
+}
+
+interface SuggestFixOutput {
+  summary?: string;
+  recommendation?: string;
+  suggestions?: AISuggestion[];
+}
+
+interface SuggestFixJobResponse {
+  status?: string;
+  error_message?: string | null;
+  output_data?: SuggestFixOutput | null;
+}
+
+const SUGGESTION_PRIORITY_STYLES: Record<string, string> = {
+  critical: 'bg-red-50 text-red-700 border-red-200',
+  high: 'bg-orange-50 text-orange-700 border-orange-200',
+  medium: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  low: 'bg-blue-50 text-blue-700 border-blue-200',
+};
+
+const SUGGESTION_CATEGORY_LABELS: Record<string, string> = {
+  patch: 'Patch',
+  config: 'Configuration',
+  compensating_control: 'Compensating control',
+  monitoring: 'Monitoring',
+  isolation: 'Isolation',
+  detection: 'Detection',
+};
+
+// ---------------------------------------------------------------------------
+// DependenciesTab  (vuln chain — prerequisites + dependents)
+// ---------------------------------------------------------------------------
+// Two-column view: vulns this one *needs* to be exploitable (prerequisites)
+// and vulns that *need* this one (dependents). Plus an "Add prerequisite"
+// picker that searches the tenant's open vulns.
+//
+// Composite priority is NOT modified by chain state — that would surprise
+// users whose SLAs/dashboards are calibrated to today's numbers. Instead,
+// the backend returns a `chain_warning` string when there's at least one
+// unresolved high-urgency prereq, and we render it as a coloured banner.
+
+interface ChainDependency {
+  id: number;
+  dependent_vuln_id: number;
+  prerequisite_vuln_id: number;
+  notes?: string | null;
+  chain_stage?: string | null;
+  prerequisite_title?: string | null;
+  prerequisite_vuln_code?: string | null;
+  prerequisite_severity?: string | null;
+  prerequisite_status?: string | null;
+  prerequisite_cve_id?: string | null;
+  prerequisite_kev_flag?: boolean | null;
+  prerequisite_composite_priority?: number | null;
+  created_at?: string;
+}
+
+interface ChainDependent {
+  id: number;
+  dependent_vuln_id: number;
+  prerequisite_vuln_id: number;
+  notes?: string | null;
+  chain_stage?: string | null;
+  dependent_title?: string | null;
+  dependent_vuln_code?: string | null;
+  dependent_severity?: string | null;
+  dependent_status?: string | null;
+  dependent_cve_id?: string | null;
+  dependent_kev_flag?: boolean | null;
+  dependent_composite_priority?: number | null;
+}
+
+interface VulnSearchOption {
+  id: number;
+  title: string;
+  vuln_id?: string | null;
+  cve_id?: string | null;
+  severity?: string | null;
+  status?: string | null;
+}
+
+const CHAIN_STAGE_OPTIONS = [
+  { value: '',                    label: '— No stage —' },
+  { value: 'initial_access',      label: 'Initial Access' },
+  { value: 'execution',           label: 'Execution' },
+  { value: 'privilege_escalation', label: 'Privilege Escalation' },
+  { value: 'lateral_movement',    label: 'Lateral Movement' },
+  { value: 'persistence',         label: 'Persistence' },
+  { value: 'exfiltration',        label: 'Exfiltration' },
+];
+
+function DependenciesTab({ vulnId }: { vulnId: number }) {
+  const qc = useQueryClient();
+  const [showAdd, setShowAdd] = useState(false);
+  const [pickedVulnId, setPickedVulnId] = useState<number | null>(null);
+  const [notes, setNotes] = useState('');
+  const [chainStage, setChainStage] = useState('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const { data: chainData, isLoading } = useQuery({
+    queryKey: ['vuln-dependencies', vulnId],
+    queryFn: async () => {
+      const res = await vulnManagementApi.vulnerabilities.listDependencies(vulnId);
+      return res.data as {
+        prerequisites: ChainDependency[];
+        dependents: ChainDependent[];
+        chain_warning: string | null;
+      };
+    },
+  });
+
+  // Picker: pull every visible vuln (up to 500) once when the modal opens
+  // so the ComboBoxInput can filter client-side instantly. 500 is enough
+  // headroom for almost every tenant; if a tenant exceeds that we'd fall
+  // back to server-side search — but the existing endpoint defaults to
+  // open vulns only, so 500 covers very large estates in practice.
+  const { data: allVulns, isFetching: pickerLoading } = useQuery({
+    queryKey: ['vuln-picker-all'],
+    queryFn: async () => {
+      const res = await vulnManagementApi.vulnerabilities.getAll({ limit: 500 });
+      const list = (res.data as VulnSearchOption[] | undefined) ?? [];
+      // Exclude self — a vuln can't be its own prerequisite.
+      return list.filter((v) => v.id !== vulnId);
+    },
+    enabled: showAdd,
+    staleTime: 30_000,
+  });
+
+  // Shape the vulns into ComboBoxInput options, grouped by severity so
+  // the dropdown shows sticky section headings (Critical, High, …).
+  const pickerOptions: ComboBoxOption[] = React.useMemo(() => {
+    const list = allVulns ?? [];
+    const sevOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+    return list
+      .slice()
+      .sort((a, b) => {
+        const sa = sevOrder[(a.severity || 'info').toLowerCase()] ?? 5;
+        const sb = sevOrder[(b.severity || 'info').toLowerCase()] ?? 5;
+        if (sa !== sb) return sa - sb;
+        return (a.title || '').localeCompare(b.title || '');
+      })
+      .map((v) => {
+        const sev = (v.severity || 'info').toLowerCase();
+        const sevLabel = sev.charAt(0).toUpperCase() + sev.slice(1);
+        const idTag = v.cve_id || v.vuln_id || `#${v.id}`;
+        return {
+          value: String(v.id),
+          label: `${v.title}`,
+          group: `${sevLabel} severity`,
+          hint: idTag,
+        } as ComboBoxOption;
+      });
+  }, [allVulns]);
+
+  const addMutation = useMutation({
+    mutationFn: async (body: { prerequisite_vuln_id: number; notes?: string; chain_stage?: string }) => {
+      const res = await vulnManagementApi.vulnerabilities.addDependency(vulnId, body);
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vuln-dependencies', vulnId] });
+      setShowAdd(false);
+      setPickedVulnId(null);
+      setNotes('');
+      setChainStage('');
+      setErrorMsg(null);
+    },
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setErrorMsg(detail || 'Could not add dependency.');
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: async (dependencyId: number) => {
+      const res = await vulnManagementApi.vulnerabilities.removeDependency(vulnId, dependencyId);
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vuln-dependencies', vulnId] });
+    },
+  });
+
+  const submitAdd = () => {
+    if (!pickedVulnId) {
+      setErrorMsg('Pick a prerequisite vulnerability first.');
+      return;
+    }
+    addMutation.mutate({
+      prerequisite_vuln_id: pickedVulnId,
+      notes: notes.trim() || undefined,
+      chain_stage: chainStage || undefined,
+    });
+  };
+
+  const renderSeverityChip = (sev?: string | null) => {
+    const s = (sev || '').toLowerCase();
+    const style = SEVERITY_STYLES[s] || SEVERITY_STYLES.info;
+    return (
+      <span className={`inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-semibold uppercase ${style.bg} ${style.text}`}>
+        {style.label}
+      </span>
+    );
+  };
+
+  if (isLoading) return <PageLoader className="h-40" />;
+
+  const prereqs = chainData?.prerequisites ?? [];
+  const deps = chainData?.dependents ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-sm font-semibold cw-text">Vulnerability Chain</h2>
+          <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">
+            Declare prerequisites — vulnerabilities that must also exist for this one
+            to be exploitable in practice. A privilege-escalation flaw on a server is
+            far more urgent when a remote-code-execution flaw lets attackers reach
+            that server in the first place.
+          </p>
+        </div>
+        <button
+          onClick={() => { setShowAdd(true); setErrorMsg(null); }}
+          className="btn-primary flex items-center gap-1.5 text-sm py-1 px-3"
+        >
+          <Plus size={14} />
+          Add Prerequisite
+        </button>
+      </div>
+
+      {chainData?.chain_warning && (
+        <div className="rounded-md border border-orange-200 bg-orange-50 p-3 text-xs text-orange-900 flex items-start gap-2">
+          <AlertCircle size={14} className="text-orange-600 flex-shrink-0 mt-0.5" />
+          <div>{chainData.chain_warning}</div>
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Prerequisites: vulns this one depends on. */}
+        <div className="cw-card p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-2 flex items-center gap-1.5">
+            <Link2 size={12} />
+            Prerequisites ({prereqs.length})
+          </h3>
+          <p className="text-[11px] text-slate-500 mb-2">
+            Vulnerabilities that must be present for this one to be exploitable.
+          </p>
+          {prereqs.length === 0 ? (
+            <p className="text-xs text-slate-500 italic py-3">No prerequisites declared.</p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {prereqs.map((p) => {
+                const resolved = ['resolved', 'remediated', 'verified', 'closed', 'false_positive'].includes(
+                  (p.prerequisite_status || '').toLowerCase()
+                );
+                return (
+                  <li key={p.id} className="py-2 flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link
+                          href={`/vulnerabilities/${p.prerequisite_vuln_id}`}
+                          className="text-sm text-slate-900 hover:text-blue-600 hover:underline font-medium truncate"
+                        >
+                          {p.prerequisite_title || `#${p.prerequisite_vuln_id}`}
+                        </Link>
+                        {renderSeverityChip(p.prerequisite_severity)}
+                        {p.prerequisite_kev_flag && (
+                          <span className="inline-flex items-center rounded-full bg-red-50 px-1.5 py-0 text-[10px] font-bold text-red-700 border border-red-200">KEV</span>
+                        )}
+                        {resolved && (
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-1.5 py-0 text-[10px] font-semibold text-emerald-700 border border-emerald-200">Resolved</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                        {p.prerequisite_vuln_code && <span className="font-mono">{p.prerequisite_vuln_code}</span>}
+                        {p.prerequisite_cve_id && <span className="font-mono">{p.prerequisite_cve_id}</span>}
+                        {typeof p.prerequisite_composite_priority === 'number' && (
+                          <span>priority {p.prerequisite_composite_priority.toFixed(2)}</span>
+                        )}
+                        {p.chain_stage && (
+                          <span className="rounded bg-slate-100 px-1.5 py-0 uppercase tracking-wide text-[9px]">
+                            {p.chain_stage.replace(/_/g, ' ')}
+                          </span>
+                        )}
+                      </div>
+                      {p.notes && <p className="text-xs text-slate-600 mt-1">{p.notes}</p>}
+                    </div>
+                    <button
+                      onClick={() => removeMutation.mutate(p.id)}
+                      className="text-slate-400 hover:text-red-600"
+                      disabled={removeMutation.isPending}
+                      title="Remove this dependency"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* Dependents: vulns that depend on this one. Read-only — managed
+            from the other vuln's tab. */}
+        <div className="cw-card p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-2 flex items-center gap-1.5">
+            <Link2 size={12} className="rotate-180" />
+            Depended On By ({deps.length})
+          </h3>
+          <p className="text-[11px] text-slate-500 mb-2">
+            Vulnerabilities that declare this one as a prerequisite. Closing this
+            row makes those rows less urgent.
+          </p>
+          {deps.length === 0 ? (
+            <p className="text-xs text-slate-500 italic py-3">Nothing depends on this vulnerability.</p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {deps.map((d) => (
+                <li key={d.id} className="py-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Link
+                      href={`/vulnerabilities/${d.dependent_vuln_id}`}
+                      className="text-sm text-slate-900 hover:text-blue-600 hover:underline font-medium truncate"
+                    >
+                      {d.dependent_title || `#${d.dependent_vuln_id}`}
+                    </Link>
+                    {renderSeverityChip(d.dependent_severity)}
+                    {d.dependent_kev_flag && (
+                      <span className="inline-flex items-center rounded-full bg-red-50 px-1.5 py-0 text-[10px] font-bold text-red-700 border border-red-200">KEV</span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                    {d.dependent_vuln_code && <span className="font-mono">{d.dependent_vuln_code}</span>}
+                    {d.dependent_cve_id && <span className="font-mono">{d.dependent_cve_id}</span>}
+                    {typeof d.dependent_composite_priority === 'number' && (
+                      <span>priority {d.dependent_composite_priority.toFixed(2)}</span>
+                    )}
+                  </div>
+                  {d.notes && <p className="text-xs text-slate-600 mt-1">{d.notes}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {/* Add-prerequisite modal */}
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="cw-card w-full max-w-lg p-5 shadow-xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-900">Add Prerequisite</h3>
+              <button onClick={() => setShowAdd(false)} className="text-slate-500 hover:text-slate-900">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  Prerequisite vulnerability *
+                </label>
+                <ComboBoxInput
+                  value={pickedVulnId !== null ? String(pickedVulnId) : ''}
+                  onChange={(v) => {
+                    const n = Number(v);
+                    setPickedVulnId(Number.isFinite(n) && n > 0 ? n : null);
+                  }}
+                  options={pickerOptions}
+                  allowCustom={false}
+                  displayLabelInsteadOfValue
+                  placeholder={
+                    pickerLoading
+                      ? 'Loading vulnerabilities…'
+                      : pickerOptions.length === 0
+                        ? 'No other vulnerabilities to pick from'
+                        : `Search across ${pickerOptions.length} vulnerabilities…`
+                  }
+                  emptyText="No vulnerabilities match that query."
+                  ariaLabel="Prerequisite vulnerability"
+                  disabled={pickerLoading || pickerOptions.length === 0}
+                />
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Click to open the dropdown — type any part of the title, CVE-ID, or severity to filter.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Kill-chain stage (optional)</label>
+                <select
+                  value={chainStage}
+                  onChange={(e) => setChainStage(e.target.value)}
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                >
+                  {CHAIN_STAGE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Rationale (recommended)</label>
+                <textarea
+                  rows={3}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="e.g. Priv-esc only matters once an RCE foothold is established via the prerequisite."
+                  className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              {errorMsg && (
+                <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {errorMsg}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button onClick={() => setShowAdd(false)} className="cw-btn-secondary text-sm px-3 py-1.5">
+                  Cancel
+                </button>
+                <button
+                  onClick={submitAdd}
+                  disabled={addMutation.isPending}
+                  className="btn-primary flex items-center gap-1.5 text-sm px-3 py-1.5"
+                >
+                  {addMutation.isPending && <Loader2 size={14} className="animate-spin" />}
+                  Add Dependency
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function AIAnalysisTab({
+  vulnerability,
+  suggestFixMutation,
+  onAcceptSuggestion,
+  acceptingSuggestion,
+}: {
+  vulnerability: VulnerabilityDetail;
+  suggestFixMutation: {
+    mutate: () => void;
+    isPending: boolean;
+    data?: SuggestFixJobResponse | null;
+  };
+  onAcceptSuggestion: (payload: Record<string, unknown>) => void;
+  acceptingSuggestion: boolean;
+}) {
+  const [acceptedTitles, setAcceptedTitles] = useState<Set<string>>(new Set());
+
+  const job = suggestFixMutation.data ?? null;
+  const output = job?.output_data ?? null;
+  const suggestions = (output?.suggestions ?? []).filter((s) => !!s?.title);
+  const summary = (output?.summary ?? '').trim();
+  const jobFailed = job?.status === 'failed';
+  const fallbackText = (
+    output?.recommendation ?? vulnerability.ai_recommendation ?? ''
+  ).trim();
+
+  // Has the operator at least once asked for AI analysis? We use this to
+  // switch from "intro card with CTA" to "results section".
+  const hasResult = suggestions.length > 0 || !!summary || !!fallbackText;
+
+  // Quick context chips so the user can see WHICH signals the AI used.
+  const contextChips: { label: string; tone: string }[] = [];
+  if (vulnerability.kev_flag) contextChips.push({ label: 'CISA KEV', tone: 'bg-red-50 text-red-700 border-red-200' });
+  if (typeof vulnerability.epss_score === 'number')
+    contextChips.push({ label: `EPSS ${vulnerability.epss_score.toFixed(2)}`, tone: 'bg-amber-50 text-amber-700 border-amber-200' });
+  if (typeof vulnerability.composite_priority === 'number')
+    contextChips.push({ label: `Priority ${vulnerability.composite_priority.toFixed(1)}`, tone: 'bg-slate-50 text-slate-700 border-slate-200' });
+  if (vulnerability.patch_references && vulnerability.patch_references.length > 0)
+    contextChips.push({ label: `${vulnerability.patch_references.length} KB articles`, tone: 'bg-blue-50 text-blue-700 border-blue-200' });
+
+  const acceptSuggestion = (s: AISuggestion) => {
+    const priority = ['critical', 'high', 'medium', 'low'].includes((s.priority || '').toLowerCase())
+      ? (s.priority || '').toLowerCase()
+      : 'medium';
+    const titlePrefix = '[AI] ';
+    onAcceptSuggestion({
+      action_title: (titlePrefix + s.title).slice(0, 255),
+      action_description: s.description || undefined,
+      priority,
+    });
+    setAcceptedTitles((prev) => new Set(prev).add(s.title));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="cw-card p-5">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-sm font-semibold cw-text flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4 text-primary-600" />
+              AI-Powered Remediation Plan
+            </h2>
+            <p className="text-xs text-slate-600 mt-1 max-w-2xl">
+              The AI reads this vulnerability&apos;s CVE description, CVSS score,
+              <strong> CISA KEV flag</strong>, <strong>EPSS probability</strong>,
+              vendor <strong>KB articles &amp; advisories</strong>, and linked
+              asset context — then produces ranked, accept-with-one-click
+              remediation steps.
+            </p>
+            {contextChips.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2.5">
+                {contextChips.map((c) => (
+                  <span key={c.label} className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${c.tone}`}>
+                    {c.label}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => suggestFixMutation.mutate()}
+            disabled={suggestFixMutation.isPending}
+            className="btn-primary flex items-center gap-2 text-sm whitespace-nowrap"
+          >
+            {suggestFixMutation.isPending ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                Analyzing…
+              </>
+            ) : (
+              <>
+                <Sparkles size={14} />
+                {hasResult ? 'Regenerate' : 'Generate Plan'}
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {jobFailed && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <strong>AI analysis failed.</strong> {job?.error_message || 'Please try again.'}
+        </div>
+      )}
+
+      {summary && (
+        <div className="rounded-xl border border-primary-200 bg-primary-50/60 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-primary-700 mb-1.5">
+            Overall recommendation
+          </h3>
+          <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+            {summary}
+          </p>
+        </div>
+      )}
+
+      {suggestions.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h3 className="text-sm font-semibold text-slate-900">
+              Suggested mitigation actions
+            </h3>
+            <span className="text-xs text-slate-500">
+              {suggestions.length} suggestion{suggestions.length === 1 ? '' : 's'} · ordered by urgency
+            </span>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {suggestions.map((s, idx) => {
+              const priorityKey = (s.priority || 'medium').toLowerCase();
+              const priorityStyle = SUGGESTION_PRIORITY_STYLES[priorityKey] ?? SUGGESTION_PRIORITY_STYLES.medium;
+              const categoryLabel = s.category ? SUGGESTION_CATEGORY_LABELS[s.category.toLowerCase()] ?? s.category : null;
+              const accepted = acceptedTitles.has(s.title);
+              return (
+                <div key={`${idx}-${s.title}`} className="cw-card p-4 flex flex-col">
+                  <div className="flex items-start gap-2 mb-2">
+                    <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-semibold text-primary-700">
+                      {idx + 1}
+                    </span>
+                    <h4 className="text-sm font-semibold text-slate-900 leading-snug">
+                      {s.title}
+                    </h4>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${priorityStyle}`}>
+                      {priorityKey}
+                    </span>
+                    {s.effort && (
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                        effort · {s.effort.toLowerCase()}
+                      </span>
+                    )}
+                    {categoryLabel && (
+                      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
+                        {categoryLabel}
+                      </span>
+                    )}
+                  </div>
+                  {s.description && (
+                    <div className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap flex-1">
+                      {s.description}
+                    </div>
+                  )}
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => acceptSuggestion(s)}
+                      disabled={accepted || acceptingSuggestion}
+                      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                        accepted
+                          ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 cursor-default'
+                          : 'border border-primary-300 bg-primary-50 text-primary-700 hover:bg-primary-100 disabled:opacity-50'
+                      }`}
+                    >
+                      {accepted ? (
+                        <>
+                          <CheckCircle size={12} />
+                          Added to mitigations
+                        </>
+                      ) : acceptingSuggestion ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />
+                          Adding…
+                        </>
+                      ) : (
+                        <>
+                          <Plus size={12} />
+                          Add as Mitigation
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Legacy markdown recommendation — show only when we have NO structured
+          suggestions, so older runs (or fallback prose) still surface. */}
+      {suggestions.length === 0 && fallbackText && (
+        <div className="rounded-xl border border-primary-200 bg-primary-50 p-4">
+          <h3 className="text-sm font-medium text-primary-600 mb-2">Recommendation</h3>
+          {formatAIText(fallbackText)}
+        </div>
+      )}
+
+      {!hasResult && !suggestFixMutation.isPending && !jobFailed && (
+        <div className="cw-card p-6 text-center">
+          <Sparkles className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+          <p className="text-sm text-slate-600">
+            Click <strong>Generate Plan</strong> to produce a ranked remediation plan tuned to this
+            vulnerability&apos;s real-world exploit signals and available vendor patches.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// buildThreatNarrative
+// ---------------------------------------------------------------------------
+// Deterministic, client-side natural-language summary of the threat-intel
+// signals on a vuln. The whole point: a security analyst knows what
+// "EPSS 0.94" and "CISA KEV" mean instantly — most operators don't. This
+// helper turns those into one short paragraph + a recommended-action line
+// that any reader can act on. No AI call, no API key, no latency — it's
+// pure derivation from columns the row already carries.
+
+function buildThreatNarrative(v: VulnerabilityDetail): {
+  paragraph: string;
+  action: string;
+  tone: 'critical' | 'high' | 'medium' | 'low' | 'unknown';
+} {
+  const bits: string[] = [];
+  const cve = v.cve_id || 'this vulnerability';
+  const sev = (v.severity || '').toLowerCase();
+
+  // Severity / CVSS sentence — universal opener.
+  if (typeof v.cvss_score === 'number' && v.cvss_score > 0) {
+    const sevLabel = sev === 'critical' ? 'critical-severity'
+      : sev === 'high' ? 'high-severity'
+      : sev === 'medium' ? 'medium-severity'
+      : sev === 'low' ? 'low-severity'
+      : 'rated';
+    bits.push(`${cve} is a ${sevLabel} flaw (CVSS ${v.cvss_score.toFixed(1)} / 10).`);
+  } else if (sev) {
+    bits.push(`${cve} is currently classified as ${sev}.`);
+  } else {
+    bits.push(`${cve} is logged in this register.`);
+  }
+
+  // KEV sentence — strongest urgency signal.
+  if (v.kev_flag) {
+    const when = v.kev_date_added
+      ? new Date(v.kev_date_added).toLocaleDateString(undefined, {
+          year: 'numeric', month: 'short', day: 'numeric',
+        })
+      : '';
+    bits.push(
+      `CISA has confirmed it is being actively exploited in real attacks${when ? ` (added to the Known Exploited Vulnerabilities catalogue on ${when})` : ''}. This is not theoretical — attackers are using it right now.`
+    );
+  }
+
+  // Public-exploit sentence — almost as strong as KEV; bolder than EPSS.
+  if (typeof v.public_exploit_count === 'number' && v.public_exploit_count > 0) {
+    bits.push(
+      `Working exploit code is publicly available on GitHub (${v.public_exploit_count} ${v.public_exploit_count === 1 ? 'repository' : 'repositories'} reference this CVE), so any attacker can clone and run it — no skill required.`
+    );
+  }
+
+  // EPSS sentence — converts the number into a plain-English likelihood.
+  if (typeof v.epss_score === 'number') {
+    const pctRank = typeof v.epss_percentile === 'number'
+      ? (v.epss_percentile * 100)
+      : null;
+    let likelihood: string;
+    if (v.epss_score >= 0.5 || (pctRank !== null && pctRank >= 95)) {
+      likelihood = 'extremely likely to be exploited in the wild over the next 30 days';
+    } else if (v.epss_score >= 0.1 || (pctRank !== null && pctRank >= 80)) {
+      likelihood = 'has a meaningfully elevated chance of being exploited soon';
+    } else if (v.epss_score >= 0.01) {
+      likelihood = 'is unlikely to be exploited in the near term';
+    } else {
+      likelihood = 'has not shown signs of real-world exploitation';
+    }
+    const rankPart = pctRank !== null
+      ? ` — it sits in the top ${(100 - pctRank).toFixed(1)}% of all known CVEs by predicted exploit probability`
+      : '';
+    bits.push(
+      `Based on real-world exploit signals, it ${likelihood}${rankPart}.`
+    );
+  } else if (!v.kev_flag && v.cve_id) {
+    bits.push(
+      'Threat-intel data has not been pulled yet — click Enrich on the right to fetch CISA KEV, EPSS, and NVD details.'
+    );
+  }
+
+  // Asset / blast-radius sentence.
+  const linkedCount = v.linked_assets?.length ?? 0;
+  if (linkedCount > 0) {
+    if (linkedCount === 1) {
+      bits.push(`It affects one of your assets: ${v.linked_assets![0]}.`);
+    } else {
+      const sample = v.linked_assets!.slice(0, 3).join(', ');
+      bits.push(
+        `It affects ${linkedCount} of your assets${linkedCount > 3 ? ` (including ${sample})` : ` (${sample})`}.`
+      );
+    }
+  } else if (v.affected_host) {
+    bits.push(`It was detected on ${v.affected_host}.`);
+  }
+
+  // Priority + recommended action.
+  let action = '';
+  let tone: 'critical' | 'high' | 'medium' | 'low' | 'unknown' = 'unknown';
+  const p = v.composite_priority;
+  const hasPublicExploit = typeof v.public_exploit_count === 'number' && v.public_exploit_count > 0;
+  if (v.kev_flag) {
+    action = 'Treat this as drop-everything urgent. Patch or apply compensating controls immediately, even ahead of your normal SLA.';
+    tone = 'critical';
+  } else if (hasPublicExploit) {
+    action = 'Public exploit code exists — treat as imminently exploitable. Patch within the next maintenance window at the latest, and consider compensating controls in the meantime.';
+    tone = 'critical';
+  } else if (typeof p === 'number') {
+    if (p >= 9) {
+      action = 'Top of the queue. Patch within days, not weeks. Confirm linked assets are inventoried and consider compensating controls until the patch lands.';
+      tone = 'critical';
+    } else if (p >= 7) {
+      action = 'High priority. Schedule remediation within your standard SLA window. Monitor for new exploit signals — if EPSS climbs, escalate.';
+      tone = 'high';
+    } else if (p >= 4) {
+      action = 'Standard priority. Patch in your regular maintenance window; no special escalation needed at this time.';
+      tone = 'medium';
+    } else {
+      action = 'Low priority. Track and remediate during routine cycles. Re-evaluate if asset criticality or exploit signals change.';
+      tone = 'low';
+    }
+  } else if (sev === 'critical' || sev === 'high') {
+    action = 'Patch promptly via your normal severity-driven SLA. Click Enrich to add real-world exploit signals so the priority gets sharper.';
+    tone = sev === 'critical' ? 'critical' : 'high';
+  } else if (sev) {
+    action = 'Track and patch in your regular cycle. Enrichment data may sharpen the urgency.';
+    tone = sev === 'medium' ? 'medium' : 'low';
+  } else {
+    action = 'Triage this finding and assign an owner so it does not stall.';
+  }
+
+  return { paragraph: bits.join(' '), action, tone };
+}
+
+const NARRATIVE_TONE_STYLES: Record<string, { card: string; chip: string; label: string }> = {
+  critical: { card: 'border-red-200 bg-red-50', chip: 'bg-red-100 text-red-800', label: 'CRITICAL — ACT NOW' },
+  high:     { card: 'border-orange-200 bg-orange-50', chip: 'bg-orange-100 text-orange-800', label: 'HIGH PRIORITY' },
+  medium:   { card: 'border-yellow-200 bg-yellow-50', chip: 'bg-yellow-100 text-yellow-800', label: 'STANDARD PRIORITY' },
+  low:      { card: 'border-blue-200 bg-blue-50', chip: 'bg-blue-100 text-blue-700', label: 'LOW PRIORITY' },
+  unknown:  { card: 'border-slate-200 bg-slate-50', chip: 'bg-slate-100 text-slate-700', label: 'NOT YET TRIAGED' },
+};
 
 
 // ---------------------------------------------------------------------------
@@ -1537,6 +2737,7 @@ export default function VulnerabilityDetailPage() {
 
 function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetail }) {
   const qc = useQueryClient();
+  const [showAllRefs, setShowAllRefs] = useState(false);
   const enrichMutation = useMutation({
     mutationFn: () => vulnManagementApi.vulnerabilities.enrich(vulnerability.id),
     onSuccess: () => {
@@ -1544,12 +2745,98 @@ function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetai
     },
   });
 
+  // "Add as remediation" buttons next to each KB / advisory / remediation
+  // guidance block. Tracks which keys have been added so a re-click can't
+  // create a duplicate mitigation row.
+  const [addedRemediations, setAddedRemediations] = useState<Set<string>>(new Set());
+  const addRemediationMutation = useMutation({
+    mutationFn: async (payload: { key: string; data: Record<string, unknown> }) => {
+      await vulnManagementApi.mitigations.create(vulnerability.id, payload.data);
+      return payload.key;
+    },
+    onSuccess: (key) => {
+      qc.invalidateQueries({ queryKey: ['vuln-mitigations', vulnerability.id] });
+      setAddedRemediations((prev) => {
+        const next = new Set(prev);
+        next.add(key);
+        return next;
+      });
+    },
+  });
+
+  // Per-row click handler — generates the title/description from the patch
+  // ref / advisory ID / remediation text and dispatches the mutation.
+  const addPatchAsRemediation = (
+    key: string,
+    title: string,
+    description: string,
+  ) => {
+    if (addedRemediations.has(key) || addRemediationMutation.isPending) return;
+    addRemediationMutation.mutate({
+      key,
+      data: {
+        action_title: title.slice(0, 255),
+        action_description: description,
+        action_type: 'remediate',
+        // Vendor-published patches are almost always high priority for the
+        // affected vuln. Operators can adjust on the Mitigations tab.
+        priority: 'high',
+      },
+    });
+  };
+
   // Phase 6 — vendor patch intelligence sync. Independent mutation so the
   // operator can refresh KB articles without re-pulling EPSS/KEV.
+  // Tracks both success state AND a banner message so the user sees explicit
+  // feedback after clicking Sync (previously: silent no-op when MSRC said
+  // "not a Microsoft CVE", which read like a broken button).
+  const [patchSyncBanner, setPatchSyncBanner] = useState<{
+    tone: 'success' | 'info' | 'error';
+    text: string;
+  } | null>(null);
+
   const syncPatchMutation = useMutation({
-    mutationFn: () => vulnManagementApi.vulnerabilities.syncPatchInfo(vulnerability.id),
-    onSuccess: () => {
+    mutationFn: async () => {
+      const res = await vulnManagementApi.vulnerabilities.syncPatchInfo(vulnerability.id);
+      return res.data as {
+        patch_references?: Array<{ source: string; id: string; url: string; type: string }>;
+        vendor_advisory_ids?: string[];
+        remediation_guidance?: string | null;
+        psirt_source?: string | null;
+      };
+    },
+    onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: ['vulnerability', vulnerability.id] });
+      const patchCount = updated?.patch_references?.length ?? 0;
+      const advisoryCount = updated?.vendor_advisory_ids?.length ?? 0;
+      const hasRemediation = !!updated?.remediation_guidance;
+      const source = updated?.psirt_source || '';
+      if (patchCount > 0 || advisoryCount > 0) {
+        const sourceLabel = source ? ` from ${source.toUpperCase().replace('_', ' ')}` : '';
+        setPatchSyncBanner({
+          tone: 'success',
+          text: `Found ${patchCount} patch link${patchCount === 1 ? '' : 's'}${advisoryCount > 0 ? ` and ${advisoryCount} advisory${advisoryCount === 1 ? '' : ' IDs'}` : ''}${sourceLabel}.`,
+        });
+      } else if (hasRemediation) {
+        setPatchSyncBanner({
+          tone: 'success',
+          text: source === 'cisa_kev'
+            ? 'Pulled CISA KEV remediation guidance.'
+            : 'Pulled vendor remediation guidance.',
+        });
+      } else {
+        setPatchSyncBanner({
+          tone: 'info',
+          text: 'No vendor patches found for this CVE. Check NVD references in the Threat Intelligence panel — they often include the upstream advisory link.',
+        });
+      }
+    },
+    onError: (err: unknown) => {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setPatchSyncBanner({
+        tone: 'error',
+        text: detail || 'Patch sync failed. Check network / try again.',
+      });
     },
   });
 
@@ -1581,136 +2868,258 @@ function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetai
     }
   };
 
+  const refHostname = (url: string) => {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+      return url.replace(/^https?:\/\//, '').split('/')[0];
+    }
+  };
+  const refTail = (url: string) => {
+    try {
+      const u = new URL(url);
+      return (u.pathname + u.search).slice(0, 80);
+    } catch {
+      return url.replace(/^https?:\/\/[^/]+/, '').slice(0, 80);
+    }
+  };
+
+  // Auto-trigger enrichment on first view when the vuln has a CVE but has
+  // never been enriched. The narrative card and dashboard charts both rely
+  // on these fields, so the operator shouldn't have to click anything for
+  // them to populate. Idempotent — once nvd_last_synced_at is set, the
+  // effect short-circuits.
+  React.useEffect(() => {
+    if (!vulnerability.cve_id) return;
+    if (vulnerability.nvd_last_synced_at) return;
+    if (enrichMutation.isPending || enrichMutation.isSuccess) return;
+    enrichMutation.mutate();
+    // We deliberately depend only on the vuln id + a flip-flag derived from
+    // enrichment state to avoid re-firing on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vulnerability.id, vulnerability.nvd_last_synced_at]);
+
+  const narrative = buildThreatNarrative(vulnerability);
+  const narrativeStyle = NARRATIVE_TONE_STYLES[narrative.tone] ?? NARRATIVE_TONE_STYLES.unknown;
+
   return (
-    <div className="cw-card p-4">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-sm font-semibold cw-text flex items-center gap-1.5">
-          <Shield className="h-4 w-4 text-slate-600" />
-          Threat Intelligence
-        </h2>
-        <button
-          onClick={() => enrichMutation.mutate()}
-          disabled={enrichMutation.isPending}
-          className="inline-flex items-center gap-1.5 text-xs rounded-md border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          title="Pull latest NVD + EPSS + CISA KEV for this CVE"
-        >
-          {enrichMutation.isPending ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <RefreshCw size={12} />
+    <div className="space-y-4">
+    {/* What this means — plain-English explanation of EPSS / KEV / NVD /
+        priority signals. Generated client-side from the row's columns, so
+        the user never has to know what these acronyms mean. Always visible
+        when a CVE is present (it educates even before enrichment runs). */}
+    <div className={`cw-card p-4 border ${narrativeStyle.card}`}>
+      <div className="flex items-start gap-3 flex-wrap">
+        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${narrativeStyle.chip}`}>
+          {narrativeStyle.label}
+        </span>
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <p className="text-sm text-slate-800 leading-relaxed">
+            {narrative.paragraph}
+          </p>
+          <p className="text-sm font-medium text-slate-900 leading-relaxed">
+            <strong>What to do:</strong> {narrative.action}
+          </p>
+          {enrichMutation.isPending && !vulnerability.nvd_last_synced_at && (
+            <p className="text-xs text-slate-500 italic flex items-center gap-1.5">
+              <Loader2 size={11} className="animate-spin" />
+              Fetching threat intelligence in the background…
+            </p>
           )}
-          {hasEnrichment ? 'Re-enrich' : 'Enrich'}
-        </button>
+        </div>
+      </div>
+    </div>
+
+    <div className="grid gap-4 lg:grid-cols-2">
+      {/* ── Threat Intelligence (left card) ───────────────────────────── */}
+      <div className="cw-card p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold cw-text flex items-center gap-1.5">
+            <Shield className="h-4 w-4 text-slate-600" />
+            Threat Intelligence
+          </h2>
+          <button
+            onClick={() => enrichMutation.mutate()}
+            disabled={enrichMutation.isPending}
+            className="inline-flex items-center gap-1.5 text-xs rounded-md border border-slate-300 bg-white px-2.5 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            title="Pull latest NVD + EPSS + CISA KEV for this CVE"
+          >
+            {enrichMutation.isPending ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <RefreshCw size={12} />
+            )}
+            {hasEnrichment ? 'Re-enrich' : 'Enrich'}
+          </button>
+        </div>
+
+        {!hasEnrichment && !enrichMutation.isSuccess && (
+          <p className="text-xs text-slate-500 italic">
+            Click <strong>Enrich</strong> to pull CISA KEV, EPSS, and NVD
+            metadata for {vulnerability.cve_id}.
+          </p>
+        )}
+
+        {hasEnrichment && (
+          <div className="space-y-4">
+            {/* CISA KEV — strongest signal, render first when present. */}
+            {vulnerability.kev_flag && (
+              <div className="rounded-md border border-red-300 bg-red-50 p-3">
+                <div className="text-xs font-bold text-red-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <AlertCircle size={12} />
+                  CISA Known Exploited
+                </div>
+                <div className="text-xs text-red-700 mt-1">
+                  Listed in the CISA KEV catalogue — actively exploited in the wild.
+                  {vulnerability.kev_date_added && (
+                    <> Added <strong>{fmt(vulnerability.kev_date_added)}</strong>.</>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Public exploit (GitHub PoC) — second-strongest signal after KEV.
+                A non-zero count means an unskilled attacker can clone-and-run. */}
+            {typeof vulnerability.public_exploit_count === 'number' && vulnerability.public_exploit_count > 0 && (
+              <div className="rounded-md border border-rose-200 bg-rose-50 p-3">
+                <div className="text-xs font-bold text-rose-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <AlertCircle size={12} />
+                  Public Exploit Available
+                </div>
+                <div className="text-xs text-rose-700 mt-1">
+                  <strong>{vulnerability.public_exploit_count}</strong>{' '}
+                  public {vulnerability.public_exploit_count === 1 ? 'repository' : 'repositories'} on GitHub
+                  reference this CVE — clone-and-run exploit code is in the wild.
+                </div>
+                {vulnerability.public_exploit_refs && vulnerability.public_exploit_refs.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {vulnerability.public_exploit_refs.slice(0, 4).map((ref) => (
+                      <a
+                        key={ref.full_name}
+                        href={ref.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-[11px] text-rose-700 hover:text-rose-900 hover:underline"
+                        title={ref.description || ref.full_name}
+                      >
+                        <ExternalLink size={10} className="flex-shrink-0" />
+                        <span className="font-mono truncate flex-1 min-w-0">{ref.full_name}</span>
+                        <span className="flex-shrink-0 text-rose-500">★ {ref.stars}</span>
+                      </a>
+                    ))}
+                    {vulnerability.public_exploit_refs.length > 4 && (
+                      <p className="text-[10px] text-rose-500 italic">
+                        + {vulnerability.public_exploit_refs.length - 4} more
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Stat row — EPSS, Priority, NVD Published, Last Synced. */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {typeof vulnerability.epss_score === 'number' && (
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">EPSS</div>
+                  <div className="text-sm font-semibold text-slate-900 mt-0.5">
+                    {vulnerability.epss_score.toFixed(4)}
+                  </div>
+                  {typeof vulnerability.epss_percentile === 'number' && (
+                    <div className="text-[10px] text-slate-500 mt-0.5">
+                      {(vulnerability.epss_percentile * 100).toFixed(1)}th pct
+                    </div>
+                  )}
+                </div>
+              )}
+              {typeof vulnerability.composite_priority === 'number' && (
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Priority</div>
+                  <div className="text-sm font-semibold text-slate-900 mt-0.5">
+                    {vulnerability.composite_priority.toFixed(2)} / 10
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    CVSS + EPSS + KEV + asset
+                  </div>
+                </div>
+              )}
+              {vulnerability.nvd_published_at && (
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">NVD Published</div>
+                  <div className="text-sm font-semibold text-slate-900 mt-0.5">
+                    {fmt(vulnerability.nvd_published_at)}
+                  </div>
+                </div>
+              )}
+              {vulnerability.nvd_last_synced_at && (
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Last Synced</div>
+                  <div className="text-xs font-medium text-slate-700 mt-0.5">
+                    {new Date(vulnerability.nvd_last_synced_at).toLocaleDateString()}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    {new Date(vulnerability.nvd_last_synced_at).toLocaleTimeString()}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* References — 2-column grid; toggle reveals the rest. */}
+            {vulnerability.exploit_references && vulnerability.exploit_references.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    References ({vulnerability.exploit_references.length})
+                  </div>
+                  {vulnerability.exploit_references.length > 6 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllRefs((v) => !v)}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      {showAllRefs ? 'Show less' : `Show all`}
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                  {(showAllRefs
+                    ? vulnerability.exploit_references
+                    : vulnerability.exploit_references.slice(0, 6)
+                  ).map((url, idx) => (
+                    <a
+                      key={idx}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 hover:border-blue-300 hover:bg-blue-50 min-w-0"
+                      title={url}
+                    >
+                      <ExternalLink size={11} className="text-slate-400 shrink-0 group-hover:text-blue-500" />
+                      <span className="truncate">
+                        <span className="font-medium text-slate-800">{refHostname(url)}</span>
+                        <span className="text-slate-500">{refTail(url)}</span>
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {!hasEnrichment && !enrichMutation.isSuccess && (
-        <p className="text-xs text-slate-500 italic">
-          Click <strong>Enrich</strong> to pull CISA KEV, EPSS, and NVD
-          metadata for {vulnerability.cve_id}.
-        </p>
-      )}
-
-      {hasEnrichment && (
-        <dl className="space-y-2">
-          {/* CISA KEV — strongest signal, render first when present. */}
-          {vulnerability.kev_flag && (
-            <div className="rounded-md border border-red-300 bg-red-50 p-2.5">
-              <dt className="text-xs font-bold text-red-800 uppercase tracking-wider flex items-center gap-1.5">
-                <AlertCircle size={12} />
-                CISA Known Exploited
-              </dt>
-              <dd className="text-xs text-red-700 mt-1">
-                Listed in the CISA KEV catalogue — actively exploited in the wild.
-                {vulnerability.kev_date_added && (
-                  <> Added <strong>{fmt(vulnerability.kev_date_added)}</strong>.</>
-                )}
-              </dd>
-            </div>
-          )}
-
-          {typeof vulnerability.epss_score === 'number' && (
-            <div>
-              <dt className="text-sm text-slate-600">EPSS</dt>
-              <dd className="cw-text text-sm">
-                <span className="font-medium">{vulnerability.epss_score.toFixed(4)}</span>
-                {typeof vulnerability.epss_percentile === 'number' && (
-                  <span className="text-slate-500 ml-1.5">
-                    ({(vulnerability.epss_percentile * 100).toFixed(1)}th percentile)
-                  </span>
-                )}
-              </dd>
-            </div>
-          )}
-
-          {typeof vulnerability.composite_priority === 'number' && (
-            <div>
-              <dt className="text-sm text-slate-600">Priority</dt>
-              <dd className="cw-text text-sm font-medium">
-                {vulnerability.composite_priority.toFixed(2)} / 10
-                <span className="text-slate-500 ml-1.5 text-xs">
-                  (CVSS + EPSS + KEV + asset)
-                </span>
-              </dd>
-            </div>
-          )}
-
-          {vulnerability.nvd_published_at && (
-            <div>
-              <dt className="text-sm text-slate-600">NVD Published</dt>
-              <dd className="cw-text text-sm">{fmt(vulnerability.nvd_published_at)}</dd>
-            </div>
-          )}
-
-          {vulnerability.nvd_last_synced_at && (
-            <div>
-              <dt className="text-sm text-slate-600">Last Synced</dt>
-              <dd className="cw-text text-xs text-slate-500">
-                {new Date(vulnerability.nvd_last_synced_at).toLocaleString()}
-              </dd>
-            </div>
-          )}
-
-          {vulnerability.exploit_references && vulnerability.exploit_references.length > 0 && (
-            <div>
-              <dt className="text-sm text-slate-600 mb-1">References</dt>
-              <dd className="space-y-1">
-                {vulnerability.exploit_references.slice(0, 6).map((url, idx) => (
-                  <a
-                    key={idx}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-xs text-blue-600 hover:underline truncate"
-                    title={url}
-                  >
-                    <ExternalLink size={10} className="inline mr-1" />
-                    {url.replace(/^https?:\/\//, '').slice(0, 60)}
-                    {url.replace(/^https?:\/\//, '').length > 60 ? '…' : ''}
-                  </a>
-                ))}
-                {vulnerability.exploit_references.length > 6 && (
-                  <p className="text-xs text-slate-500">
-                    + {vulnerability.exploit_references.length - 6} more
-                  </p>
-                )}
-              </dd>
-            </div>
-          )}
-        </dl>
-      )}
-
-      {/* ── Phase 6: Vendor Patch Intelligence ─────────────────────────── */}
-      <div className="mt-4 pt-3 border-t border-slate-200">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600 flex items-center gap-1.5">
-            <FileCheck className="h-3.5 w-3.5 text-slate-500" />
+      {/* ── Patch Information (right card) ────────────────────────────── */}
+      <div className="cw-card p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold cw-text flex items-center gap-1.5">
+            <FileCheck className="h-4 w-4 text-slate-600" />
             Patch Information
             {vulnerability.psirt_source && (
               <span className="ml-1 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
                 {vulnerability.psirt_source}
               </span>
             )}
-          </h3>
+          </h2>
           <button
             onClick={() => syncPatchMutation.mutate()}
             disabled={syncPatchMutation.isPending}
@@ -1726,92 +3135,210 @@ function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetai
           </button>
         </div>
 
+        {patchSyncBanner && (
+          <div
+            className={`mb-3 rounded-md border p-2.5 text-xs ${
+              patchSyncBanner.tone === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : patchSyncBanner.tone === 'error'
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : 'border-blue-200 bg-blue-50 text-blue-800'
+            }`}
+          >
+            {patchSyncBanner.text}
+          </div>
+        )}
+
         {!hasPatchIntel && !syncPatchMutation.isSuccess && (
           <p className="text-xs text-slate-500 italic">
-            Click <strong>Sync patch info</strong> to ask MSRC for KB articles
-            and vendor remediation for {vulnerability.cve_id}.
+            Click <strong>Sync patch info</strong> to look up KB articles,
+            vendor advisories, and CISA-published remediation guidance for {vulnerability.cve_id}.
           </p>
         )}
 
         {hasPatchIntel && (
-          <dl className="space-y-2.5">
+          <div className="space-y-4">
             {vulnerability.patch_references && vulnerability.patch_references.length > 0 && (
               <div>
-                <dt className="text-sm text-slate-600 mb-1">KB Articles & Patches</dt>
-                <dd className="flex flex-wrap gap-1.5">
-                  {vulnerability.patch_references.slice(0, 12).map((ref, idx) => (
-                    <a
-                      key={`${ref.source}-${ref.id}-${idx}`}
-                      href={ref.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={ref.url}
-                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium transition-colors ${
-                        ref.type === 'kb'
-                          ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
-                          : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      <ExternalLink size={10} />
-                      {ref.id}
-                    </a>
-                  ))}
-                  {vulnerability.patch_references.length > 12 && (
-                    <span className="text-xs text-slate-500 self-center">
-                      + {vulnerability.patch_references.length - 12} more
-                    </span>
-                  )}
-                </dd>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1.5">
+                  KB Articles & Patches ({vulnerability.patch_references.length})
+                </div>
+                <p className="text-[10px] text-slate-500 mb-2">
+                  Click <strong>+ Add</strong> on any patch to push it to the Mitigations tab as a remediation action.
+                </p>
+                <div className="space-y-1.5">
+                  {vulnerability.patch_references.map((ref, idx) => {
+                    const key = `kb:${ref.source}:${ref.id}:${idx}`;
+                    const added = addedRemediations.has(key);
+                    const title = ref.source === 'msrc'
+                      ? `Apply Microsoft patch ${ref.id}`
+                      : `Apply ${ref.source.replace('_', ' ')} update: ${ref.id}`;
+                    const description = `Vendor patch/advisory: ${ref.id}\nSource: ${ref.source}\nURL: ${ref.url}`;
+                    return (
+                      <div
+                        key={key}
+                        className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-1.5"
+                      >
+                        <a
+                          href={ref.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={ref.url}
+                          className={`inline-flex items-center gap-1.5 text-xs font-medium ${
+                            ref.type === 'kb'
+                              ? 'text-blue-700 hover:text-blue-900'
+                              : 'text-slate-700 hover:text-slate-900'
+                          }`}
+                        >
+                          <ExternalLink size={11} />
+                          {ref.id}
+                        </a>
+                        <span className="text-[10px] uppercase tracking-wide text-slate-400">{ref.source.replace('_', ' ')}</span>
+                        <div className="flex-1" />
+                        <button
+                          type="button"
+                          onClick={() => addPatchAsRemediation(key, title, description)}
+                          disabled={added || addRemediationMutation.isPending}
+                          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                            added
+                              ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 cursor-default'
+                              : 'border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50'
+                          }`}
+                          title={added ? 'Already added as a mitigation' : 'Add this patch as a Mitigation row'}
+                        >
+                          {added ? (
+                            <>
+                              <CheckCircle size={10} />
+                              Added
+                            </>
+                          ) : (
+                            <>
+                              <Plus size={10} />
+                              Add
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
             {vulnerability.vendor_advisory_ids && vulnerability.vendor_advisory_ids.length > 0 && (
               <div>
-                <dt className="text-sm text-slate-600 mb-1">Vendor Advisories</dt>
-                <dd className="flex flex-wrap gap-1.5">
-                  {vulnerability.vendor_advisory_ids.map((adv) => (
-                    <span
-                      key={adv}
-                      className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800"
-                    >
-                      {adv}
-                    </span>
-                  ))}
-                </dd>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1.5">
+                  Vendor Advisories
+                </div>
+                <div className="space-y-1.5">
+                  {vulnerability.vendor_advisory_ids.map((adv) => {
+                    const key = `advisory:${adv}`;
+                    const added = addedRemediations.has(key);
+                    const title = `Follow vendor advisory ${adv}`;
+                    const description = `Vendor advisory: ${adv}\nFor ${vulnerability.cve_id || vulnerability.title}.\nRefer to the linked KB articles for patch deployment steps.`;
+                    return (
+                      <div
+                        key={key}
+                        className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50/60 px-2.5 py-1.5"
+                      >
+                        <span className="inline-flex items-center text-xs font-medium text-amber-800">
+                          {adv}
+                        </span>
+                        <div className="flex-1" />
+                        <button
+                          type="button"
+                          onClick={() => addPatchAsRemediation(key, title, description)}
+                          disabled={added || addRemediationMutation.isPending}
+                          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                            added
+                              ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 cursor-default'
+                              : 'border border-amber-400 bg-white text-amber-800 hover:bg-amber-100 disabled:opacity-50'
+                          }`}
+                          title={added ? 'Already added as a mitigation' : 'Add this advisory as a Mitigation row'}
+                        >
+                          {added ? (
+                            <>
+                              <CheckCircle size={10} />
+                              Added
+                            </>
+                          ) : (
+                            <>
+                              <Plus size={10} />
+                              Add
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
-            {vulnerability.remediation_guidance && (
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <dt className="text-sm text-slate-600">Remediation Guidance</dt>
-                  <button
-                    onClick={() => copyToClipboard(vulnerability.remediation_guidance || '')}
-                    className="text-[10px] text-slate-500 hover:text-slate-700"
-                    title="Copy remediation text to clipboard"
-                  >
-                    Copy
-                  </button>
+            {vulnerability.remediation_guidance && (() => {
+              const key = 'remediation_guidance';
+              const added = addedRemediations.has(key);
+              const guidance = vulnerability.remediation_guidance || '';
+              const sourceTag = vulnerability.psirt_source ? ` (${vulnerability.psirt_source.toUpperCase()})` : '';
+              return (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      Remediation Guidance
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => copyToClipboard(guidance)}
+                        className="text-[10px] text-slate-500 hover:text-slate-700"
+                        title="Copy remediation text to clipboard"
+                      >
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addPatchAsRemediation(
+                          key,
+                          `Apply vendor remediation${sourceTag}`,
+                          guidance,
+                        )}
+                        disabled={added || addRemediationMutation.isPending}
+                        className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                          added
+                            ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 cursor-default'
+                            : 'border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50'
+                        }`}
+                        title={added ? 'Already added as a mitigation' : 'Add this guidance as a Mitigation row'}
+                      >
+                        {added ? (
+                          <>
+                            <CheckCircle size={10} />
+                            Added
+                          </>
+                        ) : (
+                          <>
+                            <Plus size={10} />
+                            Add as Remediation
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 whitespace-pre-wrap break-words">
+                    {guidance}
+                  </div>
                 </div>
-                <dd className="rounded-md border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700 whitespace-pre-wrap">
-                  {vulnerability.remediation_guidance.length > 600
-                    ? vulnerability.remediation_guidance.slice(0, 600) + '…'
-                    : vulnerability.remediation_guidance}
-                </dd>
-              </div>
-            )}
+              );
+            })()}
 
             {vulnerability.psirt_synced_at && (
-              <div>
-                <dt className="text-sm text-slate-600">Last PSIRT Sync</dt>
-                <dd className="text-xs text-slate-500">
-                  {new Date(vulnerability.psirt_synced_at).toLocaleString()}
-                </dd>
+              <div className="text-[11px] text-slate-500">
+                Last PSIRT sync: {new Date(vulnerability.psirt_synced_at).toLocaleString()}
               </div>
             )}
-          </dl>
+          </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

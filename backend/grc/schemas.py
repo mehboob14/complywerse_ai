@@ -1677,7 +1677,11 @@ class LikelihoodImpactScaleResponse(BaseModel):
 # =============================================================================
 
 class InternalControlBase(BaseModel):
-    control_id: str
+    # Optional on create — when omitted, the create endpoint auto-generates
+    # the next IC-NNNN sequence for the caller's tenant. Explicit values are
+    # still accepted so imports / migrations that bring their own IDs keep
+    # working unchanged.
+    control_id: Optional[str] = None
     name: str
     description: Optional[str] = None
     category: Optional[str] = None
@@ -2112,6 +2116,12 @@ class VulnerabilityResponse(BaseModel):
     nvd_last_synced_at: Optional[datetime] = None
     exploit_references: Optional[List[str]] = None
     composite_priority: Optional[float] = None
+    # Public-exploit detection (GitHub PoC). When count > 0, attackers
+    # can clone-and-run; the UI shows a red "Exploit publicly available"
+    # badge. References list the top-N most-starred repos.
+    public_exploit_count: Optional[int] = None
+    public_exploit_refs: Optional[List[Dict[str, Any]]] = None
+    public_exploit_synced_at: Optional[datetime] = None
     # Phase 6 — Vendor patch intelligence (MSRC first). Same nullable
     # discipline: a vuln that hasn't been patch-intel-synced renders with
     # the Patch Information section hidden.
@@ -2265,6 +2275,10 @@ class VulnerabilityControlLinkResponse(BaseModel):
     framework_control_id: Optional[int]
     normalized_control_id: Optional[int]
     internal_control_id: Optional[int]
+    # New: ParsedFrameworkControl FK — populated by the CWE auto-mapper
+    # because upload-driven seeded frameworks land in the parsed-control
+    # tables, not the legacy Framework/FrameworkControl chain.
+    parsed_framework_control_id: Optional[int] = None
     compliance_impact: Optional[str]
     notes: Optional[str]
     created_at: datetime
@@ -2274,6 +2288,17 @@ class VulnerabilityControlLinkResponse(BaseModel):
     normalized_control_code: Optional[str] = None
     normalized_control_name: Optional[str] = None
     internal_control_name: Optional[str] = None
+    # New: when the link targets a ParsedFrameworkControl, these mirror
+    # the legacy framework_control_code/name so the UI doesn't have to
+    # check which FK is set.
+    parsed_control_code: Optional[str] = None
+    parsed_control_name: Optional[str] = None
+    parsed_framework_name: Optional[str] = None
+    # CWE auto-mapping additions. `source` is derived from the notes-field
+    # marker (`auto:cwe:...` → "auto_cwe", anything else → "manual").
+    source: Optional[str] = None
+    auto_cwe: Optional[str] = None
+    framework_short_code: Optional[str] = None
 
     class Config:
         from_attributes = True
