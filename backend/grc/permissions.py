@@ -121,6 +121,25 @@ PERMISSION_MATRIX = [
                 "name": "frameworks",
                 "display_name": "Frameworks",
                 "actions": ["view", "create", "edit", "delete"]
+            },
+            # CIS integration: three scanning permissions gated by the
+            # `Scanning Admin` preset role. Administrators auto-bypass; any
+            # other role needs the explicit grant. Names match exactly what
+            # the new module routers check via require_tenant_permission(...).
+            {
+                "name": "scan",
+                "display_name": "Compliance Scans (CIS)",
+                "actions": ["execute"]
+            },
+            {
+                "name": "agents",
+                "display_name": "Compliance Agents",
+                "actions": ["manage"]
+            },
+            {
+                "name": "discover",
+                "display_name": "Bulk Host Discovery",
+                "actions": ["execute"]
             }
         ]
     },

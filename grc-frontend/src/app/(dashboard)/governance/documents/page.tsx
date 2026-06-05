@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import { governanceApi } from '@/lib/api';
@@ -42,9 +42,12 @@ import {
   Globe,
   Users,
   ShieldCheck,
+  BookMarked,
 } from 'lucide-react';
 import Link from 'next/link';
 import NcaTemplateSelect, { NcaTemplateMeta } from '@/components/governance/NcaTemplateSelect';
+import RecommendedDocsModal, { NCA_DOC_TYPE_MAP, ARTIFACT_DOC_TYPE_MAP } from './_RecommendedDocsModal';
+import type { RecommendedDoc } from './_recommendedDocsCatalog';
 
 interface TenantUser {
   id: number;
@@ -211,6 +214,7 @@ type SortOrder = 'asc' | 'desc';
 
 export default function GovernanceDocumentsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('governance:policies:create');
   const canEdit = hasPermission('governance:policies:edit');
@@ -234,6 +238,34 @@ export default function GovernanceDocumentsPage() {
   const [parseResult, setParseResult] = useState<{ documentId: number; count: number } | null>(null);
   const [attestationTargetDocument, setAttestationTargetDocument] = useState<DocumentItem | null>(null);
   const [isAIDraftModalOpen, setIsAIDraftModalOpen] = useState(false);
+  // Recommended Documents picker — opens a categorised browse of pre-curated
+  // bank-grade artefacts. Picking one feeds `aiDraftPrefill` into the AI
+  // Draft modal which then opens with title + description + doc_type
+  // already populated.
+  const [isRecommendedOpen, setIsRecommendedOpen] = useState(false);
+  const [aiDraftPrefill, setAIDraftPrefill] = useState<{
+    title: string;
+    description: string;
+    doc_type: 'policy' | 'standard' | 'procedure' | 'guideline';
+    parent_document_id?: number | null;
+    /**
+     * Set when the user picked an NCA template from the Document Templates
+     * modal — the AI Draft form seeds its NCA-template select from this so
+     * the generate call routes to /governance/nca-templates/{id}/ai-draft.
+     */
+    nca_template_id?: string | null;
+    /**
+     * UploadedFramework ids to pre-select in the AI Draft multi-select.
+     * Set when the user picked an artifact from the Artifact Templates
+     * tab so the new document auto-links back to the source framework.
+     */
+    framework_ids?: number[] | null;
+  } | null>(null);
+  // Path to navigate back to when the AI Draft modal is closed without
+  // saving. Populated only when the modal was opened from the "+ Draft"
+  // button on a reference inside another document's body. Cleared as soon
+  // as the navigation happens so subsequent modal opens don't bounce.
+  const [aiDraftReturnUrl, setAiDraftReturnUrl] = useState<string | null>(null);
   const [aiDraftResult, setAIDraftResult] = useState<{
     generated_content: string;
     suggested_title: string;
@@ -245,6 +277,56 @@ export default function GovernanceDocumentsPage() {
   const [autoParseAfterCreate, setAutoParseAfterCreate] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Auto-open the AI Draft modal pre-filled when the user arrives from a
+  // "+ Draft" button on a document-detail page's Related Documents section.
+  // The detail page navigates here with ?aiDraftTitle=…&aiDraftType=…
+  // (optionally &aiDraftDescription=…); we consume the params exactly once,
+  // then strip them from the URL so refresh / back doesn't re-open the
+  // modal. Without the strip, hitting back from the new draft would
+  // re-trigger the modal in a confusing way.
+  useEffect(() => {
+    if (!searchParams) return;
+    const title = searchParams.get('aiDraftTitle');
+    const typeRaw = searchParams.get('aiDraftType');
+    if (!title) return;
+    const validTypes = ['policy', 'standard', 'procedure', 'guideline'] as const;
+    const docType = (validTypes as readonly string[]).includes(typeRaw || '')
+      ? (typeRaw as typeof validTypes[number])
+      : 'policy';
+    const parentIdRaw = searchParams.get('aiDraftParentId');
+    const parentId = parentIdRaw && /^\d+$/.test(parentIdRaw) ? Number(parentIdRaw) : null;
+    const returnUrl = searchParams.get('aiDraftReturn');
+    // Comma-separated framework ids piped through from the parent doc's
+    // "+ Draft" button — keeps the new draft inside the same compliance
+    // scope as the document it was referenced from.
+    const frameworkIdsRaw = searchParams.get('aiDraftFrameworkIds');
+    const frameworkIds: number[] | null = frameworkIdsRaw
+      ? frameworkIdsRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => /^\d+$/.test(s))
+          .map((s) => Number(s))
+      : null;
+    setAIDraftPrefill({
+      title,
+      description: searchParams.get('aiDraftDescription') || '',
+      doc_type: docType,
+      parent_document_id: parentId,
+      framework_ids: frameworkIds && frameworkIds.length > 0 ? frameworkIds : null,
+    });
+    // Stash the return URL only if it looks like an in-app path — guards
+    // against open-redirect via a forged ?aiDraftReturn=https://attacker.
+    if (returnUrl && returnUrl.startsWith('/governance/documents/')) {
+      setAiDraftReturnUrl(returnUrl);
+    }
+    setIsAIDraftModalOpen(true);
+    // Clean the URL so a refresh / back navigation doesn't loop us back
+    // into the modal. router.replace preserves the listing state.
+    router.replace('/governance/documents');
+    // We only react to the *initial* arrival, not subsequent navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const invalidateDocumentQueries = () => {
     queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
@@ -893,6 +975,16 @@ export default function GovernanceDocumentsPage() {
         <div className="flex gap-2 flex-wrap">
           {canCreate && (
             <button
+              onClick={() => setIsRecommendedOpen(true)}
+              title="Browse standard, NCA, and per-framework artifact templates"
+              className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-gradient-to-r from-indigo-50 to-violet-50 px-3 sm:px-4 py-2 text-sm font-medium text-indigo-700 hover:from-indigo-100 hover:to-violet-100 transition-colors whitespace-nowrap"
+            >
+              <BookMarked size={16} />
+              Document Templates
+            </button>
+          )}
+          {canCreate && (
+            <button
               onClick={() => setIsAIDraftModalOpen(true)}
               className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap"
             >
@@ -1504,18 +1596,87 @@ export default function GovernanceDocumentsPage() {
         />
       )}
 
+      {isRecommendedOpen && (
+        <RecommendedDocsModal
+          onClose={() => setIsRecommendedOpen(false)}
+          onPick={(doc: RecommendedDoc) => {
+            // Legacy callback (kept so the modal's internal fall-through still
+            // works). The recommended-doc flow is handled fully by `onPickAny`
+            // below, so we don't need to repeat the prefill here.
+            void doc;
+          }}
+          onPickAny={(pick) => {
+            // Single funnel for every tab — derive the AI-draft prefill from
+            // whichever payload the picker emitted. Closing the templates
+            // modal and opening AI Draft happens once at the bottom so all
+            // three tabs share the navigation behaviour.
+            let prefill: typeof aiDraftPrefill = null;
+            if (pick.kind === 'recommended') {
+              prefill = {
+                title: pick.doc.title,
+                description: pick.doc.description,
+                doc_type: pick.doc.doc_type,
+              };
+            } else if (pick.kind === 'nca') {
+              const docType = NCA_DOC_TYPE_MAP[pick.template.category] ?? 'policy';
+              prefill = {
+                title: pick.template.title,
+                description: `Seeded from NCA template "${pick.template.title}" (${pick.template.category}).`,
+                doc_type: docType,
+                nca_template_id: pick.template.id,
+              };
+            } else if (pick.kind === 'artifact') {
+              const docType = ARTIFACT_DOC_TYPE_MAP(pick.item.artifact_type);
+              prefill = {
+                title: pick.item.name,
+                description:
+                  pick.item.description ||
+                  `Artifact "${pick.item.name}" from the ${pick.frameworkName} catalogue (${pick.item.artifact_type}${pick.item.control_ref ? `, control ${pick.item.control_ref}` : ''}).`,
+                doc_type: docType,
+                // Auto-select the source framework so the new document is
+                // linked back automatically — the user can still
+                // add/remove frameworks inside the AI Draft modal.
+                framework_ids: pick.frameworkUploadedId ? [pick.frameworkUploadedId] : undefined,
+              };
+            }
+            if (!prefill) return;
+            setAIDraftPrefill(prefill);
+            setIsRecommendedOpen(false);
+            setIsAIDraftModalOpen(true);
+          }}
+        />
+      )}
+
       {isAIDraftModalOpen && (
         <AIDraftPolicyModal
           parentDocuments={parentDocumentOptions}
+          prefill={aiDraftPrefill}
           onClose={() => {
             setIsAIDraftModalOpen(false);
             setAIDraftResult(null);
+            // Clear prefill so the next open from "AI Draft Document"
+            // starts blank again, not carrying the recommended preset.
+            setAIDraftPrefill(null);
+            // If we got here from a "+ Draft" button on a document detail
+            // page, route the operator back to where they were so a cancel
+            // doesn't strand them on the listing page. Clear the stash
+            // first so reopening the modal manually doesn't bounce them
+            // back unexpectedly.
+            if (aiDraftReturnUrl) {
+              const url = aiDraftReturnUrl;
+              setAiDraftReturnUrl(null);
+              router.push(url);
+            }
           }}
           onGenerate={(data) => aiDraftMutation.mutate(data)}
           onUseContent={(content: string, title: string, docType?: string, description?: string, parentDocumentId?: number, frameworkIds?: number[]) => {
             setIsAIDraftModalOpen(false);
             setAIDraftResult(null);
             setAutoParseAfterCreate(true);
+            // The return URL is only meaningful for the *cancel* path; once
+            // the user opts to use the generated content we fall into the
+            // normal create-document flow, so drop the stash here too.
+            setAiDraftReturnUrl(null);
             setEditingDocument({
               title,
               content,
@@ -2655,7 +2816,6 @@ interface DraftingStageProgressProps {
 }
 
 const STAGE_FLOW = [
-  { key: 'context',          label: 'Reading your organisation profile', detail: 'Picking up committees, password policy, active framework journeys' },
   { key: 'outline',          label: 'Planning the document outline',     detail: 'Choosing topics per section from your active frameworks' },
   { key: 'expand_sections',  label: 'Drafting sections in parallel',     detail: 'Citing your frameworks and substituting tenant values inline' },
   { key: 'qa',               label: 'Validating depth and citations',    detail: 'Catching placeholders, hallucinated codes, thin sections' },
@@ -2665,6 +2825,13 @@ const STAGE_FLOW = [
 function DraftingStageProgress({ jobState }: DraftingStageProgressProps) {
   const activeStage = jobState?.stage || 'queued';
   const activeIdx = (() => {
+    // The backend still emits a 'context' stage at the very start (it reads
+    // committees / password policy / active framework journeys before stage A).
+    // We deliberately don't render a separate row for it — that detail is
+    // internal plumbing the user doesn't need to see. Collapse it into the
+    // first visible stage ('outline') so the progress UI still shows motion
+    // while context-loading runs.
+    if (activeStage === 'context' || activeStage === 'queued') return 0;
     const i = STAGE_FLOW.findIndex(s => s.key === activeStage);
     return i === -1 ? 0 : i;
   })();
@@ -2740,6 +2907,20 @@ function DraftingStageProgress({ jobState }: DraftingStageProgressProps) {
 
 interface AIDraftPolicyModalProps {
   parentDocuments: DocumentItem[];
+  /**
+   * Optional initial state when opened from the Recommended Documents picker
+   * OR from a "+ Draft" button next to a reference inside another document.
+   * The optional `parent_document_id` seeds the parent-document picker so
+   * the new draft inherits the source document's hierarchy automatically.
+   */
+  prefill?: {
+    title: string;
+    description: string;
+    doc_type: 'policy' | 'standard' | 'procedure' | 'guideline';
+    parent_document_id?: number | null;
+    nca_template_id?: string | null;
+    framework_ids?: number[] | null;
+  } | null;
   onClose: () => void;
   onGenerate: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; parent_document_id?: number; nca_template_id?: string }) => void;
   onUseContent: (
@@ -2765,15 +2946,26 @@ interface AIDraftPolicyModalProps {
   } | null;
 }
 
-function AIDraftPolicyModal({ parentDocuments, onClose, onGenerate, onUseContent, isLoading, jobState, result }: AIDraftPolicyModalProps) {
-  const [formData, setFormData] = useState({
-    doc_type: 'policy',
-    title: '',
-    description: '',
+function AIDraftPolicyModal({ parentDocuments, prefill, onClose, onGenerate, onUseContent, isLoading, jobState, result }: AIDraftPolicyModalProps) {
+  // When opened from the Recommended Documents picker, seed the form with
+  // the curated banking-grade brief so the user can hit Generate without
+  // editing. They can still edit any field before submission.
+  // doc_type stays a loose `string` so the existing setter (which can write
+  // an empty string when the user clears the dropdown) keeps compiling.
+  const [formData, setFormData] = useState<{ doc_type: string; title: string; description: string }>({
+    doc_type: prefill?.doc_type ?? 'policy',
+    title: prefill?.title ?? '',
+    description: prefill?.description ?? '',
   });
-  const [selectedFrameworkIds, setSelectedFrameworkIds] = useState<number[]>([]);
-  const [selectedParentDocumentId, setSelectedParentDocumentId] = useState<number | null>(null);
-  const [selectedNcaTemplateId, setSelectedNcaTemplateId] = useState<string | null>(null);
+  const [selectedFrameworkIds, setSelectedFrameworkIds] = useState<number[]>(
+    Array.isArray(prefill?.framework_ids) ? (prefill!.framework_ids as number[]) : [],
+  );
+  const [selectedParentDocumentId, setSelectedParentDocumentId] = useState<number | null>(
+    prefill?.parent_document_id ?? null,
+  );
+  const [selectedNcaTemplateId, setSelectedNcaTemplateId] = useState<string | null>(
+    prefill?.nca_template_id ?? null,
+  );
   const [suggestions, setSuggestions] = useState<any[] | null>(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);

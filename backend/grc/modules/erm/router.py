@@ -13,6 +13,7 @@ from .routers import (
     appetite_router,
     internal_controls_router,
     rcsa_router,
+    rcsa_custom_router,
     risk_assessments_router,
     framework_risk_assessments_router,
     advanced_analytics_router
@@ -36,6 +37,7 @@ router.include_router(scales_router, tags=["ERM Scales"])
 router.include_router(appetite_router, tags=["ERM Risk Appetite"])
 router.include_router(internal_controls_router, tags=["ERM Internal Controls"])
 router.include_router(rcsa_router, tags=["RCSA - Risk and Control Self-Assessment"])
+router.include_router(rcsa_custom_router, tags=["RCSA - Custom Templates"])
 router.include_router(risk_assessments_router, tags=["ERM - Risk Assessments"])
 router.include_router(framework_risk_assessments_router, tags=["ERM - Framework Risk Assessments"])
 router.include_router(advanced_analytics_router, tags=["ERM - Advanced Analytics"])

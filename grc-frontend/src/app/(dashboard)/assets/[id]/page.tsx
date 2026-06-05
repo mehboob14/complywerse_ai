@@ -6,7 +6,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
-import { apiClient, assetsApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
+import { apiClient, assetsApi, criticalityApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
+import type { IacaItem, IscaItem } from '@/lib/api';
 import type { ITAsset } from '@/types';
 import { SearchInput, InlineLinkPicker, PageLoader } from '@/components/ui';
 import {
@@ -14,9 +15,26 @@ import {
   Target, TrendingUp, FileCheck, AlertTriangle,
   ClipboardList, Plus, X, Trash2, Edit, RefreshCw,
   AppWindow, HardDrive, Database, Cloud, Building2,
-  Lock, ShieldCheck, MapPin, User, Bug
+  Lock, ShieldCheck, MapPin, User, Bug, Network,
+  Gauge, PackageSearch,
 } from 'lucide-react';
 import Link from 'next/link';
+
+import nextDynamic from 'next/dynamic';
+import { CreateIssueButton } from '@/components/issue-management/CreateIssueButton';
+import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesPanel';
+
+const TrajectoryMap = nextDynamic(
+  () => import('./_components/TrajectoryMap').then((m) => m.TrajectoryMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[500px] items-center justify-center rounded-xl border border-slate-200 bg-white">
+        <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+      </div>
+    ),
+  },
+);
 
 const ASSET_TYPE_ICONS: Record<string, React.ElementType> = {
   application: AppWindow,
@@ -34,7 +52,7 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   third_party: 'Third-Party System',
 };
 
-type TabType = 'details' | 'controls' | 'evidence' | 'risks' | 'security-compliance' | 'vulnerabilities';
+type TabType = 'details' | 'controls' | 'evidence' | 'risks' | 'security-compliance' | 'vulnerabilities' | 'criticality' | 'trajectory';
 
 interface LinkedControl {
   id: number;
@@ -264,6 +282,7 @@ export default function AssetDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
       queryClient.invalidateQueries({ queryKey: ['asset-coverage', assetId] });
+      queryClient.invalidateQueries({ queryKey: ['asset-trajectory', assetId] });
     },
   });
 
@@ -275,6 +294,7 @@ export default function AssetDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
       queryClient.invalidateQueries({ queryKey: ['asset-coverage', assetId] });
+      queryClient.invalidateQueries({ queryKey: ['asset-trajectory', assetId] });
       setShowLifecycleModal(false);
     },
   });
@@ -331,6 +351,7 @@ export default function AssetDetailPage() {
       vulnManagementApi.assetLinks.create(vulnId, { asset_id: assetId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+      queryClient.invalidateQueries({ queryKey: ['asset-trajectory', assetId] });
     },
   });
 
@@ -339,6 +360,7 @@ export default function AssetDetailPage() {
       vulnManagementApi.assetLinks.delete(vulnId, assetId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+      queryClient.invalidateQueries({ queryKey: ['asset-trajectory', assetId] });
     },
   });
 
@@ -460,6 +482,8 @@ export default function AssetDetailPage() {
     { id: 'evidence', label: 'Evidence', icon: FileCheck },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
     { id: 'risks', label: 'Risks', icon: AlertTriangle },
+    { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
+    { id: 'trajectory', label: 'Trajectory', icon: Network },
     { id: 'security-compliance', label: 'Security Compliance', icon: ShieldCheck },
   ];
 
@@ -512,6 +536,26 @@ export default function AssetDetailPage() {
                 Lifecycle
               </button>
             )}
+            {/* Spec cross-links: every asset should be one click away from
+                its CIS scan history and its composite risk posture. The
+                backend endpoints already key off ITAsset.id; these just
+                make the navigation discoverable. */}
+            <Link
+              href={`/compliance-plugins/asset/${assetId}`}
+              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
+              title="View this asset's CIS plugin runs (Plugin Automation → per-asset)"
+            >
+              <PackageSearch className="h-4 w-4" />
+              CIS scans
+            </Link>
+            <Link
+              href={`/risk-posture/asset/${assetId}`}
+              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
+              title="View this asset's composite risk posture (5-dimension breakdown)"
+            >
+              <Gauge className="h-4 w-4" />
+              Risk posture
+            </Link>
             <button
               onClick={() => assessRiskMutation.mutate()}
               disabled={assessRiskMutation.isPending}
@@ -525,6 +569,15 @@ export default function AssetDetailPage() {
               )}
               Assess Risk
             </button>
+            <CreateIssueButton
+              sourceType="asset"
+              sourceId={assetId}
+              presetFields={{
+                title: `Issue on ${asset.name}`,
+                category: 'operations',
+                issue_type: 'incident',
+              }}
+            />
             {canDelete && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
@@ -683,7 +736,28 @@ export default function AssetDetailPage() {
           />
         )}
         {activeTab === 'risks' && (
-          <RisksTab asset={asset} />
+          <div className="space-y-3">
+            {/* v2: surface Issues that have been raised against this asset
+                directly above the existing Risks list — gives the operator
+                a single "what's broken" view alongside risk scoring. */}
+            <RelatedIssuesPanel
+              sourceType="asset"
+              sourceId={assetId}
+              title="Linked Issues"
+              createFields={{
+                title: `Issue on ${asset.name}`,
+                category: 'operations',
+                issue_type: 'incident',
+              }}
+            />
+            <RisksTab asset={asset} />
+          </div>
+        )}
+        {activeTab === 'criticality' && (
+          <CriticalityAssessmentsTab assetId={assetId} />
+        )}
+        {activeTab === 'trajectory' && (
+          <TrajectoryMap assetId={assetId} />
         )}
         {activeTab === 'security-compliance' && (
           <SecurityComplianceTab assetId={assetId} />
@@ -2295,6 +2369,174 @@ function LifecycleTransitionModal({
           </form>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Criticality Assessments tab ─────────────────────────────────────────
+// Surfaces the ISCA + IACA items linked to this asset. Each card links
+// through to /assets/criticality-assessments with a deep-link so the
+// operator can open the assessment drawer directly from here.
+
+function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['criticality.byAsset', assetId],
+    queryFn: async () => (await criticalityApi.byAsset(assetId)).data,
+    enabled: !!assetId,
+  });
+
+  if (isLoading) {
+    return <PageLoader size="md" className="h-32" />;
+  }
+  if (error) {
+    return (
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700">
+        Failed to load criticality assessments.
+      </div>
+    );
+  }
+
+  const iscas = data?.isca ?? [];
+  const iacas = data?.iaca ?? [];
+  const empty = iscas.length === 0 && iacas.length === 0;
+
+  const bandColors: Record<string, string> = {
+    mission_critical: 'bg-rose-50 text-rose-700 border-rose-200',
+    high: 'bg-orange-50 text-orange-700 border-orange-200',
+    moderate: 'bg-amber-50 text-amber-700 border-amber-200',
+    low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  };
+  const statusColors: Record<string, string> = {
+    draft: 'bg-slate-100 text-slate-700 border-slate-200',
+    submitted: 'bg-blue-50 text-blue-700 border-blue-200',
+    business_owner_review: 'bg-amber-50 text-amber-700 border-amber-200',
+    ciso_review: 'bg-violet-50 text-violet-700 border-violet-200',
+    approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    rejected: 'bg-rose-50 text-rose-700 border-rose-200',
+    returned: 'bg-orange-50 text-orange-700 border-orange-200',
+  };
+
+  const renderRow = (
+    item: IscaItem | IacaItem,
+    kind: 'isca' | 'iaca',
+  ) => (
+    <tr key={`${kind}-${item.id}`} className="hover:bg-slate-50">
+      <td className="px-3 py-2 align-top">
+        <p className="text-sm font-medium text-slate-900">{item.name}</p>
+      </td>
+      <td className="px-3 py-2 align-top text-right font-mono text-sm text-slate-900">
+        {typeof item.total_score === 'number'
+          ? (kind === 'iaca' ? item.total_score.toFixed(2) : item.total_score)
+          : '—'}
+      </td>
+      <td className="px-3 py-2 align-top">
+        {item.criticality_level ? (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${bandColors[item.criticality_level] ?? 'border-slate-200'}`}>
+            {item.criticality_level.replace('_', ' ')}
+          </span>
+        ) : <span className="text-xs text-slate-400">—</span>}
+      </td>
+      <td className="px-3 py-2 align-top">
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${statusColors[item.approval_status || 'draft'] ?? 'border-slate-200'}`}>
+          {(item.approval_status || 'draft').replace('_', ' ')}
+        </span>
+      </td>
+      <td className="px-3 py-2 align-top text-right">
+        <Link
+          href={`/assets/criticality-assessments?open=${kind}:${item.id}`}
+          className="text-xs font-medium text-blue-600 hover:underline"
+        >
+          Open →
+        </Link>
+      </td>
+    </tr>
+  );
+
+  return (
+    <div className="space-y-4">
+      {empty ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+          <p className="text-sm text-slate-600">No criticality assessments linked to this asset yet.</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Use the buttons below to create one — the new assessment will be pre-linked to this asset.
+          </p>
+          <div className="mt-4 inline-flex items-center gap-2">
+            <Link
+              href={`/assets/criticality-assessments?create=isca&asset=${assetId}`}
+              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              + New Information System assessment
+            </Link>
+            <Link
+              href={`/assets/criticality-assessments?create=iaca&asset=${assetId}`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
+            >
+              + New Infrastructure Asset assessment
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <>
+          {iscas.length > 0 && (
+            <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <header className="bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Information System Criticality Assessments ({iscas.length})
+              </header>
+              <table className="min-w-full text-sm">
+                <thead className="bg-white border-b border-slate-100 text-left text-[10px] uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">Information System</th>
+                    <th className="px-3 py-2 text-right">Total</th>
+                    <th className="px-3 py-2">Criticality</th>
+                    <th className="px-3 py-2">Approval</th>
+                    <th className="px-3 py-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {iscas.map((i) => renderRow(i, 'isca'))}
+                </tbody>
+              </table>
+            </section>
+          )}
+
+          {iacas.length > 0 && (
+            <section className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <header className="bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                Infrastructure Asset Criticality Assessments ({iacas.length})
+              </header>
+              <table className="min-w-full text-sm">
+                <thead className="bg-white border-b border-slate-100 text-left text-[10px] uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">Infrastructure Asset</th>
+                    <th className="px-3 py-2 text-right">Score</th>
+                    <th className="px-3 py-2">Criticality</th>
+                    <th className="px-3 py-2">Approval</th>
+                    <th className="px-3 py-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {iacas.map((i) => renderRow(i, 'iaca'))}
+                </tbody>
+              </table>
+            </section>
+          )}
+
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/assets/criticality-assessments?create=isca&asset=${assetId}`}
+              className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+            >
+              + New ISCA
+            </Link>
+            <Link
+              href={`/assets/criticality-assessments?create=iaca&asset=${assetId}`}
+              className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+            >
+              + New IACA
+            </Link>
+          </div>
+        </>
+      )}
     </div>
   );
 }

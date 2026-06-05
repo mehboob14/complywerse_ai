@@ -69,6 +69,156 @@ def parse_policy_document(self, tenant_slug: str, document_id: int, user_id: int
         raise
 
 
+# ─── In-process fallback dispatchers ─────────────────────────────────────
+# When Celery is configured but no worker process is consuming, the broker
+# accepts the message yet no one runs it — the job sits "queued" forever
+# from the user's point of view. Mirrors what we did for ai_drafting:
+# `dispatch_parse_in_thread()` runs the same `_parse_policy_body` on a
+# daemon thread inside the FastAPI process so the feature works without
+# any worker. The Redis status writes use the same namespace as the
+# Celery path, so the existing polling endpoint is identical for both.
+
+
+def dispatch_parse_in_thread(tenant_slug: str, document_id: int, user_id: int) -> str:
+    """Kick off policy-statement parsing on a background thread.
+
+    Returns a synthetic task id that the API can return to the caller so
+    the response shape matches the Celery `.delay().id` path. The thread
+    opens its own tenant DB session, writes progress to Redis exactly the
+    same way the Celery task does, and never raises out to the caller.
+    """
+    import threading
+    import uuid
+
+    task_id = f"thread-{uuid.uuid4().hex[:12]}"
+    t = threading.Thread(
+        target=_run_parse_with_own_session,
+        args=(tenant_slug, document_id, user_id, task_id),
+        daemon=True,
+        name=f"policy-parse-{document_id}",
+    )
+    t.start()
+    return task_id
+
+
+def _run_parse_with_own_session(
+    tenant_slug: str, document_id: int, user_id: int, task_id: str,
+) -> None:
+    """Thread entry-point: open a tenant session, run the pure-Python body,
+    record status into Redis (parsing → completed / failed). Mirrors the
+    Celery task's behaviour exactly minus the broker round-trip.
+    """
+    from ..db import open_tenant_session
+    try:
+        db = open_tenant_session(tenant_slug)
+    except Exception as exc:
+        logger.exception("Failed to open tenant session for parse doc %s", document_id)
+        set_status(tenant_slug, "policy_parse", document_id,
+                   {"status": "failed", "error": f"Could not open tenant DB session: {exc}"})
+        return
+
+    try:
+        with tenant_lock(tenant_slug, f"policy_parse:{document_id}", ttl_seconds=1800, owner=task_id):
+            from ..modules.governance.routers.policy_parser import _parse_policy_body
+            set_status(tenant_slug, "policy_parse", document_id,
+                       {"status": "parsing",
+                        "message": "Thread worker picked up the job",
+                        "task_id": task_id})
+            _parse_policy_body(db, document_id, user_id, tenant_slug)
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+            logger.info("parse_policy_document(thread) DONE tenant=%s doc=%s task=%s",
+                        tenant_slug, document_id, task_id)
+    except LockNotAcquired:
+        set_status(tenant_slug, "policy_parse", document_id,
+                   {"status": "skipped",
+                    "message": "Another worker is already parsing this document"})
+    except Exception as exc:  # noqa: BLE001
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.exception("Parse-policy thread crashed: %s", exc)
+        set_status(tenant_slug, "policy_parse", document_id,
+                   {"status": "failed", "error": str(exc)[:500]})
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+
+def dispatch_gap_analysis_in_thread(
+    tenant_slug: str, run_ids: list, document_id: int, user_id: int,
+) -> str:
+    """Same fallback strategy as `dispatch_parse_in_thread`, applied to the
+    gap-analysis pipeline. Runs `_gap_analysis_body` on a daemon thread so
+    the feature works without a Celery worker.
+    """
+    import threading
+    import uuid
+
+    task_id = f"thread-{uuid.uuid4().hex[:12]}"
+    t = threading.Thread(
+        target=_run_gap_analysis_with_own_session,
+        args=(tenant_slug, run_ids, document_id, user_id, task_id),
+        daemon=True,
+        name=f"gap-analysis-{document_id}",
+    )
+    t.start()
+    return task_id
+
+
+def _run_gap_analysis_with_own_session(
+    tenant_slug: str, run_ids: list, document_id: int, user_id: int, task_id: str,
+) -> None:
+    from ..db import open_tenant_session
+    try:
+        db = open_tenant_session(tenant_slug)
+    except Exception as exc:
+        logger.exception("Failed to open tenant session for gap analysis doc %s", document_id)
+        set_status(tenant_slug, "gap_analysis", document_id,
+                   {"status": "failed", "error": f"Could not open tenant DB session: {exc}"})
+        return
+
+    try:
+        with tenant_lock(tenant_slug, f"gap_analysis:{document_id}", ttl_seconds=1800, owner=task_id):
+            from ..modules.governance.routers.gap_analysis import _gap_analysis_body
+            set_status(tenant_slug, "gap_analysis", document_id,
+                       {"status": "running",
+                        "message": "Thread worker picked up the job",
+                        "run_ids": run_ids,
+                        "task_id": task_id})
+            _gap_analysis_body(db, run_ids, document_id, user_id, tenant_slug)
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+            logger.info("run_gap_analysis(thread) DONE tenant=%s doc=%s task=%s",
+                        tenant_slug, document_id, task_id)
+    except LockNotAcquired:
+        set_status(tenant_slug, "gap_analysis", document_id,
+                   {"status": "skipped",
+                    "message": "Another worker is already running gap analysis"})
+    except Exception as exc:  # noqa: BLE001
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.exception("Gap-analysis thread crashed: %s", exc)
+        set_status(tenant_slug, "gap_analysis", document_id,
+                   {"status": "failed", "error": str(exc)[:500]})
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+
 @celery_app.task(
     base=TenantTask,
     bind=True,

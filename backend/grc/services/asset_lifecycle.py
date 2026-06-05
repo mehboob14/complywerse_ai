@@ -53,6 +53,27 @@ _ALLOWED_TRANSITIONS: dict[str, Set[str]] = {
 # hook below to decide whether linked vulns should be quietly closed.
 TERMINAL_STATES: Set[str] = {"decommissioned", "retired"}
 
+# Single source of truth for "this vuln has already reached a terminal state".
+# Must stay aligned with `_LIST_CLOSED_STATUSES` in
+# grc/modules/vuln_management/routers/vulnerabilities.py — both touch the
+# same column and any drift would mean either:
+#   (a) we re-close already-closed rows (harmless but wasteful, and would
+#       overwrite a proper resolution note with our auto-close note), or
+#   (b) we leave active rows on a retired asset (the bug the user reported).
+# We use this as a `notin_(...)` filter rather than enumerating the active
+# values, because the list of *active* vuln statuses has grown over time
+# (open / in_progress / triaged / confirmed / reopened / under_review / …)
+# and an allow-list is brittle. The closed-list is the stable source.
+_CLOSED_VULN_STATUSES: Set[str] = {
+    "resolved",
+    "remediated",
+    "verified",
+    "closed",
+    "accepted",
+    "false_positive",
+    "auto_closed_decommissioned",
+}
+
 
 def is_valid_state(state: Optional[str]) -> bool:
     return (state or "").strip().lower() in LIFECYCLE_STATES
@@ -74,11 +95,22 @@ def is_valid_transition(from_state: Optional[str], to_state: Optional[str]) -> b
 
 
 def _auto_close_linked_vulns(db: Session, asset) -> int:
-    """When an asset enters a terminal state, quietly close its open vulns.
+    """When an asset enters a terminal state (decommissioned OR retired),
+    quietly close every linked vulnerability that isn't already in a
+    closed/terminal state.
 
     Returns the count closed. Best-effort: any failure is logged and the
     caller still gets the asset transition. We don't raise so that the
     primary state change isn't blocked by a downstream issue.
+
+    Filter semantics: closes every vuln linked to this asset whose status
+    is NOT already in ``_CLOSED_VULN_STATUSES``. This catches the full set
+    of active states (open / in_progress / triaged / confirmed / reopened /
+    under_review / …) without us having to maintain an allow-list that drifts.
+
+    Tenant-id is enforced as a defensive double-check — `asset_id` alone is
+    unique across tenants but we still constrain by `asset.tenant_id` so a
+    bug elsewhere (e.g. cross-tenant link sneaking in) can't bleed.
     """
     try:
         # Local imports to avoid circulars during module init.
@@ -89,32 +121,48 @@ def _auto_close_linked_vulns(db: Session, asset) -> int:
 
     closed = 0
     try:
+        target_state = (asset.lifecycle_state or "").strip().lower()
         vulns = (
             db.query(Vulnerability)
             .join(VulnerabilityAssetLink, VulnerabilityAssetLink.vulnerability_id == Vulnerability.id)
             .filter(
                 VulnerabilityAssetLink.asset_id == asset.id,
-                Vulnerability.status.in_(("open", "in_progress", "in-progress")),
+                Vulnerability.tenant_id == getattr(asset, "tenant_id", None),
+                # Active = anything NOT already terminal. Robust against new
+                # active sub-states being introduced upstream.
+                ~Vulnerability.status.in_(_CLOSED_VULN_STATUSES),
             )
             .all()
         )
+        now = datetime.utcnow()
         for v in vulns:
-            # Use the dedicated `auto_closed_decommissioned` status (rather
-            # than plain `closed`) so dashboards + reports can distinguish
-            # "fixed by an engineer" from "no longer relevant because the
-            # host went away". The closed-statuses constants in the vuln
-            # router + Celery tasks include this value, so list filters
-            # treat it identically to other terminal states.
+            # Use the dedicated `auto_closed_decommissioned` status so the
+            # closed-list filter in the vuln list/dashboard treats this as
+            # terminal but reports can still distinguish "fixed by an
+            # engineer" from "no longer relevant because the host went away".
+            # Both terminal asset states (decommissioned + retired) collapse
+            # to this single closure status; the resolution_notes column
+            # records the exact target state for audit clarity.
             v.status = "auto_closed_decommissioned"
-            v.resolved_at = datetime.utcnow()
-            # Best-effort: stamp a closure note for the audit trail if the
-            # column exists. Skip silently when it doesn't.
-            if hasattr(v, "resolution_notes") and not getattr(v, "resolution_notes", None):
-                v.resolution_notes = (
-                    f"Auto-closed: linked asset '{asset.name}' transitioned to "
-                    f"'{asset.lifecycle_state}'."
+            v.resolved_at = now
+            if hasattr(v, "resolution_notes"):
+                stamp = (
+                    f"[{now.strftime('%Y-%m-%d %H:%M UTC')}] Auto-closed: "
+                    f"linked asset '{asset.name}' transitioned to "
+                    f"'{target_state or asset.lifecycle_state}'."
                 )
+                existing = getattr(v, "resolution_notes", None)
+                # Append rather than overwrite — preserves any engineer
+                # notes written before the host was decommissioned, while
+                # still leaving an unambiguous audit trail for the closure
+                # itself.
+                v.resolution_notes = f"{existing}\n\n{stamp}" if existing else stamp
             closed += 1
+        if closed:
+            logger.info(
+                "asset_lifecycle.auto_close asset_id=%s state=%s closed_vulns=%d",
+                getattr(asset, "id", "?"), target_state, closed,
+            )
     except Exception:
         logger.exception("Failed to auto-close vulns for asset %s", getattr(asset, "id", "?"))
     return closed

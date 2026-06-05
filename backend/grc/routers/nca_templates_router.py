@@ -165,27 +165,212 @@ def _template_path(template_id: str) -> Path:
 # ─── Content extraction ─────────────────────────────────────────────────────
 
 def _extract_docx_text(path: Path) -> str:
-    """Extract paragraphs + table cells from a .docx file as plain text."""
+    """Extract a .docx file into markdown.
+
+    Walks the document body in document order so headings, paragraphs, and
+    tables stay interleaved the way the author wrote them. Uses
+    `doc.iter_inner_content()` (python-docx ≥ 1.0) which yields Paragraph
+    and Table objects already wrapped — no fragile lxml lookups.
+
+    Word "Heading N" / "Title" styles become `#`-prefixed markdown
+    headings; tables become GFM tables with a header separator so
+    ReactMarkdown + remark-gfm renders them as real <table>s. Merged cells
+    (`gridSpan` / `vMerge`) are de-duplicated so the same content doesn't
+    repeat across columns.
+    """
     try:
         from docx import Document  # python-docx
+        from docx.table import Table as DocxTable
+        from docx.text.paragraph import Paragraph as DocxParagraph
     except ImportError:
         raise HTTPException(status_code=500, detail="python-docx not installed")
 
     doc = Document(str(path))
+
+    def _escape_md_text(s: str) -> str:
+        """Escape angle brackets so ReactMarkdown + remark-gfm doesn't try
+        to parse template placeholders like `<organization name>` as HTML
+        (which would silently eat the text). Backslash-escaped angle
+        brackets render as literal `<` / `>` characters.
+        """
+        return s.replace("<", "\\<").replace(">", "\\>")
+
+    _HEADING_STYLE_RE = re.compile(r"^heading\s*(\d{1,2})?", re.IGNORECASE)
+
+    def _heading_level_from_style(style_name: str) -> Optional[int]:
+        """Return a 1..6 heading level if the style name reads as a heading
+        ("Heading 1", "heading 12", "Heading", "HeadingTwo", etc.), else
+        None. NCA templates inconsistently capitalise and sometimes use
+        compound style names like 'heading 12' so a loose regex is safer
+        than a strict prefix-equals check.
+        """
+        m = _HEADING_STYLE_RE.match(style_name or "")
+        if not m:
+            return None
+        raw = m.group(1)
+        if not raw:
+            return 2
+        try:
+            level = int(raw)
+        except ValueError:
+            return 2
+        # 'heading 12' is a Word-internal style number, not a 12-level
+        # heading. Anything past markdown's 6 levels collapses to H2 so
+        # the structure still reads as a real section instead of as
+        # microscopic h6 text.
+        if level <= 0:
+            return 2
+        if level > 6:
+            return 2
+        return max(1, level)
+
+    def _is_visually_bold_heading(para) -> bool:
+        """Heuristic: a short paragraph whose entire content is bold and
+        which doesn't end in sentence punctuation is almost certainly a
+        section label even when the author skipped Word's Heading styles.
+
+        Checks bold at three layers — the run, the run's font, and the
+        paragraph style's font — because NCA templates sometimes inherit
+        bold from a custom 'Normal'-derived style instead of declaring it
+        on the run itself.
+        """
+        text = (para.text or "").strip()
+        if not text or len(text) > 80:
+            return False
+        if text.endswith((".", "?", "!", ":", ";")):
+            return False
+        try:
+            runs = [r for r in para.runs if (r.text or "").strip()]
+        except Exception:  # noqa: BLE001
+            return False
+        if not runs:
+            return False
+        # Style-level bold fallback
+        style_bold = False
+        try:
+            style_font = para.style.font if para.style else None
+            if style_font is not None and getattr(style_font, "bold", None):
+                style_bold = True
+        except Exception:  # noqa: BLE001
+            pass
+
+        def _run_is_bold(r) -> bool:
+            if getattr(r, "bold", False):
+                return True
+            font = getattr(r, "font", None)
+            if font is not None and getattr(font, "bold", False):
+                return True
+            return False
+
+        return all(_run_is_bold(r) or style_bold for r in runs)
+
+    def _format_paragraph(para) -> Optional[str]:
+        text = (para.text or "").strip()
+        if not text:
+            return None
+        style_name = ""
+        try:
+            style_name = (para.style.name or "") if para.style else ""
+        except Exception:  # noqa: BLE001 — defensive against malformed styles
+            style_name = ""
+        escaped = _escape_md_text(text)
+        # Title-style → top-level heading.
+        if style_name.lower() == "title":
+            return f"# {escaped}"
+        if style_name.lower() == "subtitle":
+            return f"## {escaped}"
+        # Any case-variant of "Heading N" (incl. odd compounds like "heading 12").
+        level = _heading_level_from_style(style_name)
+        if level is not None:
+            return f"{'#' * level} {escaped}"
+        # Bold-only short paragraphs ⇒ promote to H2 so NCA templates that
+        # use bold-runs (or style-inherited bold) instead of Heading
+        # styles still read as a hierarchical document.
+        if _is_visually_bold_heading(para):
+            return f"## {escaped}"
+        return escaped
+
+    def _format_table(table) -> Optional[str]:
+        """Render a Word table as a GFM markdown table.
+
+        Merged cells in python-docx return the SAME cell object for every
+        grid position they cover — which would otherwise produce
+        `| A | A | A | B |` rows. We de-duplicate by tracking which
+        underlying `cell._tc` (the lxml table-cell element) we've already
+        emitted within a row, and emit empty strings for the repeats so
+        the column count still lines up.
+        """
+        rows: List[List[str]] = []
+        for row in table.rows:
+            seen_in_row: set = set()
+            cells: List[str] = []
+            for cell in row.cells:
+                tc = getattr(cell, "_tc", None)
+                if tc is not None and id(tc) in seen_in_row:
+                    cells.append("")
+                    continue
+                if tc is not None:
+                    seen_in_row.add(id(tc))
+                txt = (cell.text or "").strip()
+                # Strip embedded newlines + escape any pipes that would
+                # break the GFM row delimiter. Also escape angle brackets
+                # so `<placeholder>` text in the template isn't silently
+                # consumed by remark-gfm's HTML parser.
+                txt = (
+                    txt.replace("\n", " ")
+                    .replace("\r", " ")
+                    .replace("|", "\\|")
+                    .replace("<", "\\<")
+                    .replace(">", "\\>")
+                )
+                # Collapse runs of internal whitespace introduced by the
+                # newline replacement.
+                txt = re.sub(r"\s{2,}", " ", txt)
+                cells.append(txt)
+            if any(c for c in cells):
+                rows.append(cells)
+        if not rows:
+            return None
+        # Pad short rows so column count is uniform.
+        width = max(len(r) for r in rows)
+        rows = [r + [""] * (width - len(r)) for r in rows]
+        header = rows[0]
+        body_rows = rows[1:] if len(rows) > 1 else []
+        lines = [
+            "| " + " | ".join(header) + " |",
+            "| " + " | ".join(["---"] * width) + " |",
+        ]
+        for r in body_rows:
+            lines.append("| " + " | ".join(r) + " |")
+        return "\n".join(lines)
+
     chunks: List[str] = []
 
+    # Preferred path — python-docx ≥ 1.0 exposes iter_inner_content()
+    # which yields Paragraph + Table in document order, no lxml plumbing.
+    iter_inner = getattr(doc, "iter_inner_content", None)
+    if callable(iter_inner):
+        for item in iter_inner():
+            if isinstance(item, DocxParagraph):
+                formatted = _format_paragraph(item)
+                if formatted:
+                    chunks.append(formatted)
+            elif isinstance(item, DocxTable):
+                formatted = _format_table(item)
+                if formatted:
+                    chunks.append(formatted)
+        return "\n\n".join(chunks)
+
+    # Fallback — older python-docx versions. Loses doc-order but keeps
+    # headings + tables. Acceptable until the dependency is bumped.
     for para in doc.paragraphs:
-        text = (para.text or "").strip()
-        if text:
-            chunks.append(text)
-
+        formatted = _format_paragraph(para)
+        if formatted:
+            chunks.append(formatted)
     for table in doc.tables:
-        for row in table.rows:
-            cells = [(cell.text or "").strip() for cell in row.cells]
-            line = " | ".join(c for c in cells if c)
-            if line:
-                chunks.append(line)
-
+        formatted = _format_table(table)
+        if formatted:
+            chunks.append(formatted)
     return "\n\n".join(chunks)
 
 

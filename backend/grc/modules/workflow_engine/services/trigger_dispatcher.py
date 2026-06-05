@@ -88,6 +88,94 @@ _MODULE_ALIASES: Dict[str, str] = {
 }
 
 
+# ────────────────────────────────────────────────────────────────────────
+# v6 canonical resource map (Workflow/Audit-AI integration)
+# Maps a (URL module, URL entity) pair from the FastAPI audit-log path to
+# the v6 Pattern-B catalog's (canonical_module, canonical_entity). Without
+# this, real CRUD audit logs only fire the legacy `risk_created`-style
+# workflows and the v6 Pattern-B workflows can never match (they use names
+# like `risk.risk_register.create`). The "*" wildcard catches sub-paths
+# whose second segment is a numeric ID (e.g. /grc/evidence/4).
+# ────────────────────────────────────────────────────────────────────────
+_CANONICAL_RESOURCE_MAP: Dict[tuple, tuple] = {
+    # /erm/* -> risk.<canonical_entity>
+    ("erm", "risks"):                ("risk", "risk_register"),
+    ("erm", "kris"):                 ("risk", "kris"),
+    ("erm", "internal-controls"):    ("risk", "internal_controls"),
+    ("erm", "internal_controls"):    ("risk", "internal_controls"),
+    ("erm", "mitigation-actions"):   ("risk", "mitigation_actions"),
+    ("erm", "mitigation_actions"):   ("risk", "mitigation_actions"),
+    ("erm", "incidents"):            ("risk", "incidents"),
+    ("erm", "rcsa"):                 ("risk", "rcsa"),
+    ("erm", "reviews"):              ("risk", "reviews"),
+    ("erm", "risk-assessments"):     ("risk", "risk_assessments"),
+    ("erm", "risk_assessments"):     ("risk", "risk_assessments"),
+    ("erm", "risk-framework"):       ("risk", "risk_framework"),
+    ("erm", "risk_framework"):       ("risk", "risk_framework"),
+    ("erm", "vendor-risk"):          ("risk", "vendor_risk"),
+    ("erm", "vendor_risk"):          ("risk", "vendor_risk"),
+    # Top-level vendor-risk shortcut routes used by some frontend pages
+    ("vendor-risk", "*"):            ("risk", "vendor_risk"),
+    ("vendor_risk", "*"):            ("risk", "vendor_risk"),
+    # Compliance
+    ("frameworks", "*"):                       ("compliance", "frameworks"),
+    ("controls", "*"):                         ("compliance", "controls"),
+    ("evidence", "*"):                         ("compliance", "evidence"),
+    ("evidence-requirements", "*"):            ("compliance", "evidence_requirements"),
+    ("evidence_requirements", "*"):            ("compliance", "evidence_requirements"),
+    ("control-library", "*"):                  ("compliance", "control_library"),
+    ("control_library", "*"):                  ("compliance", "control_library"),
+    ("compliance", "statements"):              ("compliance", "statements"),
+    ("compliance", "assessments"):             ("compliance", "assessments"),
+    ("compliance", "frameworks"):              ("compliance", "frameworks"),
+    ("compliance", "controls"):                ("compliance", "controls"),
+    ("compliance", "evidence"):                ("compliance", "evidence"),
+    ("compliance", "control-library"):         ("compliance", "control_library"),
+    ("compliance", "control_library"):         ("compliance", "control_library"),
+    # Governance
+    ("governance", "documents"):               ("governance", "documents"),
+    ("governance", "attestations"):            ("governance", "attestations"),
+    # The UI POSTs attestation campaign creates to
+    # /grc/governance/attestation-campaigns/campaigns — the canonical entity
+    # in the v6 catalog is still "attestations", so alias it.
+    ("governance", "attestation-campaigns"):   ("governance", "attestations"),
+    ("governance", "attestation_campaigns"):   ("governance", "attestations"),
+    ("governance", "committees"):              ("governance", "committees"),
+    ("governance", "regulatory-changes"):      ("governance", "regulatory_changes"),
+    ("governance", "regulatory_changes"):      ("governance", "regulatory_changes"),
+    ("governance", "regulatory-feeds"):        ("governance", "regulatory_feeds"),
+    ("governance", "regulatory_feeds"):        ("governance", "regulatory_feeds"),
+    ("governance", "clause-coverage"):         ("governance", "clause_coverage"),
+    ("governance", "clause_coverage"):         ("governance", "clause_coverage"),
+    ("governance", "patch-proposals"):         ("governance", "patch_proposals"),
+    ("governance", "patch_proposals"):         ("governance", "patch_proposals"),
+    ("governance", "critical-rules"):          ("governance", "critical_rules"),
+    ("governance", "critical_rules"):          ("governance", "critical_rules"),
+    # Vulnerability management
+    ("vulnerabilities", "departments"):        ("vulnmgmt", "departments"),
+    ("vulnerabilities", "reports"):            ("vulnmgmt", "reports"),
+    ("vulnerabilities", "sla"):                ("vulnmgmt", "sla_config"),
+    ("vulnerabilities", "sla-config"):         ("vulnmgmt", "sla_config"),
+    ("vulnerabilities", "sla_config"):         ("vulnmgmt", "sla_config"),
+    ("vulnerabilities", "*"):                  ("vulnmgmt", "vulnerabilities"),
+}
+
+
+def _resolve_canonical_resource(module: str, entity: str) -> tuple:
+    """Return (canonical_module, canonical_entity) for a (URL module, URL entity).
+
+    Falls back to (None, None) when no mapping applies — callers should then
+    use the legacy behaviour. The '*' wildcard entity matches whenever there's
+    no more-specific (module, entity) mapping — including the common case
+    where the second path segment is a numeric ID (e.g. /grc/evidence/4).
+    """
+    if (module, entity) in _CANONICAL_RESOURCE_MAP:
+        return _CANONICAL_RESOURCE_MAP[(module, entity)]
+    if (module, "*") in _CANONICAL_RESOURCE_MAP:
+        return _CANONICAL_RESOURCE_MAP[(module, "*")]
+    return (None, None)
+
+
 class TriggerDispatcher:
     def __init__(self, event_queue):
         self.event_queue = event_queue
@@ -185,6 +273,34 @@ class TriggerDispatcher:
                 module = parts[0].lower()
                 entity = parts[1].lower()
 
+                # v6 Workflow integration — Nested sub-resource handling.
+                # Paths like /erm/risks/65/mitigation-actions log
+                #   action="mitigation_actions" (sub-resource name)
+                #   resource_type="risks" (parent)
+                # Neither matches any workflow on its own. Detect the
+                # pattern and re-route to the sub-resource's canonical
+                # event so workflows for the child entity fire correctly.
+                if (
+                    len(parts) >= 4
+                    and parts[2].isdigit()
+                    and action in (parts[3].lower().replace("-", "_"), "create", "update", "delete")
+                ):
+                    sub_entity = parts[3].lower()
+                    sub_module = module
+                    sub_v6_module, sub_v6_entity = _resolve_canonical_resource(sub_module, sub_entity)
+                    # Treat the operation as a create on the sub-resource —
+                    # POST is the only way it gets logged with the sub name.
+                    sub_verb = "create" if action in (sub_entity.replace("-", "_"),) else action
+                    if sub_v6_module and sub_v6_entity:
+                        sub_event = f"{sub_v6_module}.{sub_v6_entity}.{sub_verb}"
+                        if sub_event not in event_names:
+                            event_names.append(sub_event)
+                    canonical_for_sub = _MODULE_ALIASES.get(sub_module, sub_module)
+                    if canonical_for_sub != sub_entity:
+                        generic_sub = f"{canonical_for_sub}.{sub_entity.replace('-', '_')}.{sub_verb}"
+                        if generic_sub not in event_names:
+                            event_names.append(generic_sub)
+
                 # Normalise module name
                 canonical = _MODULE_ALIASES.get(module, module)
                 # Only add a generic compound event when the entity is distinct
@@ -194,6 +310,22 @@ class TriggerDispatcher:
                     generic = f"{canonical}.{entity}.{action}"
                     if generic not in event_names:
                         event_names.append(generic)
+
+                # v6 Workflow integration — emit the canonical v6 event name
+                # so Pattern-B workflows (e.g. risk.risk_register.create)
+                # match real CRUD audit logs. Without this only legacy
+                # `<noun>_<verb>` workflows fire.
+                v6_module, v6_entity = _resolve_canonical_resource(module, entity)
+                if v6_module and v6_entity:
+                    v6_event = f"{v6_module}.{v6_entity}.{action}"
+                    if v6_event not in event_names:
+                        event_names.append(v6_event)
+                    # Also emit the .trigger flavour for non-CRUD success actions
+                    if (action not in ("create", "update", "delete", "read")
+                            and not action.endswith("_failed")):
+                        trig = f"{v6_module}.{v6_entity}.trigger"
+                        if trig not in event_names:
+                            event_names.append(trig)
 
                 # Apply entity-level event map after alias resolution
                 entity_map = _EVENT_MAP.get(canonical, {})

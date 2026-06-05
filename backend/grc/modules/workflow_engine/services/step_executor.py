@@ -141,11 +141,21 @@ class StepExecutor:
 
         # ── Notification node (in-app + optional email) ──────────────────────
         if node_type == "notification":
+            # v6 catalog workflows write recipients into config.payload.recipients
+            # rather than config.recipient_user_ids — check both shapes so the
+            # legacy nodes keep working AND the catalog nodes get delivery.
+            _payload_recipients = (config.get("payload") or {}).get("recipients") or []
             user_ids = self._normalize_user_ids(
-                config.get("user_ids") or config.get("recipient_user_ids") or []
+                config.get("user_ids")
+                or config.get("recipient_user_ids")
+                or _payload_recipients
+                or []
             )
             role_ids = self._normalize_role_ids(
-                config.get("role_ids") or config.get("recipient_role_ids") or []
+                config.get("role_ids")
+                or config.get("recipient_role_ids")
+                or (config.get("payload") or {}).get("recipient_role_ids")
+                or []
             )
             channels = self._notification_channels(config)
             subject = config.get("subject") or f"Workflow Notification: {definition.name}"
@@ -248,11 +258,16 @@ class StepExecutor:
         if node_type == "action":
             # ── In-app alert (no email, in-system only) ──────────────────────
             if config.get("action_name") == "send_in_app_alert":
+                # Same dual-shape lookup as the notification node above —
+                # catalog workflows put recipients in payload.recipients.
+                _payload_recipients = (config.get("payload") or {}).get("recipients") or []
                 user_ids = self._normalize_user_ids(
-                    config.get("recipient_user_ids") or []
+                    config.get("recipient_user_ids") or _payload_recipients or []
                 )
                 role_ids = self._normalize_role_ids(
-                    config.get("recipient_role_ids") or []
+                    config.get("recipient_role_ids")
+                    or (config.get("payload") or {}).get("recipient_role_ids")
+                    or []
                 )
                 subject = config.get("subject") or f"Alert: {definition.name}"
                 message = config.get("message") or "You have a new workflow alert."

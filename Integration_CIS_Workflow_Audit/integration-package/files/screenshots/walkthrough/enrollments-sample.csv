@@ -1,0 +1,4 @@
+hostname,agent_id,enrollment_token,install_command_windows
+HASSAN-PC01,30,enroll_9d2eb3b639c6114d162ed5c5d8ca2051cd4a554814aed00a3e8d4341bdb52dab,ComplyverseAgent-Setup-1.0.0.exe /S /TOKEN=enroll_9d2eb3b639c6114d162ed5c5d8ca2051cd4a554814aed00a3e8d4341bdb52dab /BACKEND=http://localhost:5000
+AISHA-PC02,31,enroll_21b69b421397be5e1bb39033edd916efdc6c40060bfbef07e9704a30f29d9033,ComplyverseAgent-Setup-1.0.0.exe /S /TOKEN=enroll_21b69b421397be5e1bb39033edd916efdc6c40060bfbef07e9704a30f29d9033 /BACKEND=http://localhost:5000
+AHMED-PC03,32,enroll_737981ad619f5ea5735e376265e3e10e5e3b008b3aa22a7a342b8171a8b9b9a7,ComplyverseAgent-Setup-1.0.0.exe /S /TOKEN=enroll_737981ad619f5ea5735e376265e3e10e5e3b008b3aa22a7a342b8171a8b9b9a7 /BACKEND=http://localhost:5000

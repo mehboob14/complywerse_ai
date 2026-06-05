@@ -52,8 +52,9 @@ def tenant_session(slug: str):
 def _seed_tenant_database(session: Session) -> None:
     """Run the platform's standard seed scripts against a fresh tenant DB.
 
-    Per product decision: seed frameworks (+ normalized controls) and workflow engine defaults.
-    RBAC defaults and document templates are NOT auto-seeded.
+    Per product decision: seed frameworks (+ normalized controls), workflow engine
+    defaults, and the built-in CIS Benchmark plugin catalog. RBAC defaults and
+    document templates are NOT auto-seeded.
     """
     # Frameworks + normalized controls.
     try:
@@ -70,6 +71,17 @@ def _seed_tenant_database(session: Session) -> None:
         seed_workflow_engine_defaults(session=session)
     except Exception:
         logger.exception("seed_workflow_engine_defaults failed for new tenant DB")
+        raise
+
+    # CIS Benchmark built-in plugin catalog (36 hand-curated AWS + Ubuntu rules).
+    # Idempotent UPSERT on plugin_key; safe to re-run on already-seeded DBs.
+    # Tenant_id=NULL in the seeded rows marks them as catalog/built-in so they
+    # appear in this tenant's library and are immutable from the UI.
+    try:
+        from .modules.compliance_plugins.seed import seed_compliance_plugins
+        seed_compliance_plugins(session)
+    except Exception:
+        logger.exception("seed_compliance_plugins failed for new tenant DB")
         raise
 
 

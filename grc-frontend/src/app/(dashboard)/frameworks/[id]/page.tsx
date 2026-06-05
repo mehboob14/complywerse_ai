@@ -12,6 +12,7 @@ import { CertificationJourney, ControlImplementation, ProgressSummary, Certifica
 import ControlImplementationModal from '@/components/ControlImplementationModal';
 import EvidenceViewer from '@/components/evidence/EvidenceViewer';
 import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
+import { InlineIssueBadge } from '@/components/issue-management/InlineIssueBadge';
 import {
   Loader2,
   AlertCircle,
@@ -2238,6 +2239,20 @@ export default function CertificationJourneyPage() {
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm text-blue-600">{control.control_code}</span>
                 <span className="font-medium text-black">{control.control_name}</span>
+                {/* v2 Issue Management — show open-issue badge against this
+                    control. Hides itself when there are none. Type guard via
+                    `as any` matches the wider control-object pattern used
+                    elsewhere in this file. */}
+                {(() => {
+                  const c = control as { framework_control_id?: number | null; parsed_control_id?: number | null };
+                  if (c.framework_control_id) {
+                    return <InlineIssueBadge sourceType="control_framework" sourceId={c.framework_control_id} />;
+                  }
+                  if (c.parsed_control_id) {
+                    return <InlineIssueBadge sourceType="control_parsed" sourceId={c.parsed_control_id} />;
+                  }
+                  return null;
+                })()}
               </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">

@@ -392,6 +392,17 @@ export default function TaskDetailPage() {
             {task.source_module && <span className="text-blue-600/70"> · via {task.source_module}</span>}
             {task.escalation_level > 0 && <span className="text-red-600"> · Escalation Level {task.escalation_level}</span>}
           </p>
+          {/* v2 Issue Management — when this task was promoted from a CAPA
+              action, show a chip linking back to the parent Issue. */}
+          {(task as { linked_issue_id?: number | null }).linked_issue_id && (
+            <a
+              href={`/issues/${(task as { linked_issue_id?: number }).linked_issue_id}`}
+              className="mt-2 inline-flex items-center gap-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
+              title="This Critical Task was promoted from a CAPA action — status syncs from here back to the Issue"
+            >
+              Linked Issue #{(task as { linked_issue_id?: number }).linked_issue_id} ↗
+            </a>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button onClick={handleAiRootCause} disabled={aiLoading === 'root-cause'}

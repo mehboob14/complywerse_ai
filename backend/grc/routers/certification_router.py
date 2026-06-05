@@ -18,9 +18,12 @@ logger = logging.getLogger(__name__)
 from ..models import (
     CertificationJourney, ControlImplementation, ImplementationEvidence,
     Framework, FrameworkControl, FrameworkDomain, ControlObjective,
-    FrameworkSubControl, Evidence, GRCUser, Tenant, CuratedEvidenceItem, 
+    FrameworkSubControl, Evidence, GRCUser, Tenant, CuratedEvidenceItem,
     CertificationPhase, UploadedFramework, ParsedFrameworkControl, get_db,
-    EvidenceAIAssessment, EvidenceControlMapping, ITAsset
+    EvidenceAIAssessment, EvidenceControlMapping, ITAsset,
+    # v2 — Issue Management open-issues-per-control read-only signal.
+    # Used to enrich /controls list with `open_issues_count`. Additive only.
+    Issue, IssueControlLink,
 )
 from ..schemas import (
     CertificationJourneyCreate, CertificationJourneyUpdate, CertificationJourneyResponse,
@@ -1133,8 +1136,51 @@ def list_journey_controls(
             "required_evidence_count": required_evidence_count,
             "approved_evidence_count": approved_evidence_count,
             "evidence_coverage": evidence_coverage,
-            "status_source": impl.status
+            "status_source": impl.status,
+            # v2: placeholder, filled in batch below to avoid N+1 queries.
+            "open_issues_count": 0,
         })
+
+    # ── v2 — fill open_issues_count for every control in one round trip.
+    # Two queries (framework + parsed) joined to Issue for open-state filter.
+    # Wrapped in try so any Issue Management schema-drift never breaks the
+    # control list (the field stays at 0 in that case).
+    try:
+        OPEN_STATES = ("new", "triage", "in_progress", "resolution", "closure_review")
+        fw_ids = sorted({r["framework_control_id"] for r in result if r.get("framework_control_id")})
+        parsed_ids = sorted({r["parsed_control_id"] for r in result if r.get("parsed_control_id")})
+
+        fw_counts: dict = {}
+        if fw_ids:
+            rows = db.query(IssueControlLink.framework_control_id, Issue.id).join(
+                Issue, Issue.id == IssueControlLink.issue_id,
+            ).filter(
+                IssueControlLink.framework_control_id.in_(fw_ids),
+                Issue.tenant_id == journey.tenant_id,
+                Issue.workflow_state.in_(OPEN_STATES),
+            ).all()
+            for cid, _ in rows:
+                fw_counts[cid] = fw_counts.get(cid, 0) + 1
+
+        parsed_counts: dict = {}
+        if parsed_ids:
+            rows = db.query(IssueControlLink.parsed_framework_control_id, Issue.id).join(
+                Issue, Issue.id == IssueControlLink.issue_id,
+            ).filter(
+                IssueControlLink.parsed_framework_control_id.in_(parsed_ids),
+                Issue.tenant_id == journey.tenant_id,
+                Issue.workflow_state.in_(OPEN_STATES),
+            ).all()
+            for cid, _ in rows:
+                parsed_counts[cid] = parsed_counts.get(cid, 0) + 1
+
+        for r in result:
+            fw_c = fw_counts.get(r.get("framework_control_id"), 0)
+            pc_c = parsed_counts.get(r.get("parsed_control_id"), 0)
+            r["open_issues_count"] = fw_c + pc_c
+    except Exception:
+        # Never let an Issue Management failure break the control list.
+        pass
 
     status_rank = {
         "verified": 5,

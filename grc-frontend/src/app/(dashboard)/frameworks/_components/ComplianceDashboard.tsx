@@ -143,7 +143,7 @@ function HeroGauge({ data }: { data: DashboardData }) {
               <Shield className="h-4 w-4 text-slate-700" />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">Overall Compliance Posture</h2>
+              <h2 className="text-sm font-semibold text-slate-900">Overall Framework Posture</h2>
               <p className="text-[11px] text-slate-500">
                 Aggregated across {kpis.active_journeys} active journey{kpis.active_journeys === 1 ? '' : 's'}
               </p>

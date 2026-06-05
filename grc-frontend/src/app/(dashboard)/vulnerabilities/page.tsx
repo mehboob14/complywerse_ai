@@ -10,6 +10,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
 import NcaVulnRegisterTab from '@/components/vulnerabilities/NcaVulnRegisterTab';
 import NcaVulnQuickAddModal from '@/components/vulnerabilities/NcaVulnQuickAddModal';
+import { Abbr } from '@/components/common/Abbr';
 import {
   Upload,
   Bug,
@@ -854,7 +855,7 @@ export default function VulnerabilitiesPage() {
 
           {/* 3 — SLA gauge + MTTR */}
           <div className="cw-card rounded-xl p-4 flex flex-col justify-between">
-            <p className="text-xs font-semibold cw-text-muted uppercase tracking-wide mb-3">SLA Compliance</p>
+            <p className="text-xs font-semibold cw-text-muted uppercase tracking-wide mb-3"><Abbr code="SLA" /> Compliance</p>
             <div className="flex flex-col items-center gap-3">
               <div className="relative w-full">
                 <div className="mb-1 flex items-center justify-between text-xs cw-text-muted">
@@ -878,7 +879,7 @@ export default function VulnerabilitiesPage() {
               {dashboard?.mttr_days != null && (
                 <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 w-full justify-center">
                   <Clock className="h-3.5 w-3.5" />
-                  <span>MTTR: <strong>{dashboard.mttr_days} days</strong></span>
+                  <span><Abbr code="MTTR" />: <strong>{dashboard.mttr_days} days</strong></span>
                 </div>
               )}
             </div>

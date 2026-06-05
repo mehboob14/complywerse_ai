@@ -9,8 +9,9 @@ import {
 } from 'lucide-react';
 import { searchApi, reportsApi } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
+import { Abbr } from '@/components/common/Abbr';
 
-type Tab = 'executive' | 'analyst' | 'correlation' | 'vendor';
+type Tab = 'executive' | 'analyst' | 'correlation';
 
 export default function VulnerabilityAnalyticsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('executive');
@@ -19,7 +20,6 @@ export default function VulnerabilityAnalyticsPage() {
     { id: 'executive', label: 'Executive', icon: TrendingUp },
     { id: 'analyst', label: 'My Work', icon: Target },
     { id: 'correlation', label: 'Patch Correlation', icon: Layers },
-    { id: 'vendor', label: 'Vendor Risk', icon: Cloud },
   ];
 
   return (
@@ -49,7 +49,6 @@ export default function VulnerabilityAnalyticsPage() {
       {activeTab === 'executive' && <ExecutiveTab />}
       {activeTab === 'analyst' && <AnalystTab />}
       {activeTab === 'correlation' && <CorrelationTab />}
-      {activeTab === 'vendor' && <VendorTab />}
     </div>
   );
 }
@@ -64,6 +63,10 @@ function ExecutiveTab() {
   const { data: aging } = useQuery({
     queryKey: ['exception-aging'],
     queryFn: () => searchApi.exceptionAging().then((r) => r.data),
+  });
+  const { data: cweData } = useQuery({
+    queryKey: ['vendor-risk-cwe'],
+    queryFn: () => searchApi.vendorRisk().then((r) => r.data),
   });
 
   if (isLoading) return <PageLoader className="h-64" />;
@@ -95,14 +98,14 @@ function ExecutiveTab() {
           tone="rose"
         />
         <KpiCard
-          label="KEV exposure"
+          label={<><Abbr code="KEV" /> exposure</>}
           value={kev}
           icon={Shield}
           tone="rose"
           subLabel="Actively exploited"
         />
         <KpiCard
-          label="SLA performance"
+          label={<><Abbr code="SLA" /> performance</>}
           value={`${sla_pct}%`}
           icon={TrendingUp}
           tone={sla_pct >= 90 ? 'emerald' : sla_pct >= 70 ? 'amber' : 'rose'}
@@ -207,6 +210,27 @@ function ExecutiveTab() {
           </table>
         )}
       </div>
+
+      {cweData && (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-card p-5">
+          <h3 className="text-sm font-semibold text-slate-900 mb-3"><Abbr code="CWE" /> distribution</h3>
+          {cweData.by_cwe.length === 0 ? (
+            <p className="text-xs text-slate-500">No <Abbr code="CWE" showIcon={false}>CWE</Abbr>-tagged vulns yet.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {cweData.by_cwe.map((r) => (
+                <span key={r.cwe_id} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs">
+                  <span className="font-mono">{r.cwe_id}</span>
+                  <span className="text-slate-500">·</span>
+                  <span className="font-semibold text-slate-700">{r.count}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <ReportsPanel />
     </div>
   );
 }
@@ -341,15 +365,15 @@ function CorrelationTab() {
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-card p-5">
         <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
-          <Layers size={14} /> Top CVEs by finding count
+          <Layers size={14} /> Top <Abbr code="CVE">CVEs</Abbr> by finding count
         </h3>
         {data.by_cve.length === 0 ? (
-          <p className="text-xs text-slate-500">No CVE-tagged vulns yet.</p>
+          <p className="text-xs text-slate-500">No <Abbr code="CVE" showIcon={false}>CVE</Abbr>-tagged vulns yet.</p>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-xs text-slate-500 border-b border-slate-200">
               <tr>
-                <th className="text-left py-1.5">CVE</th>
+                <th className="text-left py-1.5"><Abbr code="CVE" /></th>
                 <th className="text-right">Findings</th>
               </tr>
             </thead>
@@ -376,75 +400,7 @@ function CorrelationTab() {
   );
 }
 
-// ── Vendor risk ────────────────────────────────────────────────────────────
-
-function VendorTab() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['vendor-risk'],
-    queryFn: () => searchApi.vendorRisk().then((r) => r.data),
-  });
-  if (isLoading) return <PageLoader className="h-64" />;
-  if (!data) return null;
-
-  return (
-    <div className="space-y-4">
-      <div className="bg-white border border-slate-200 rounded-xl shadow-card p-5">
-        <h3 className="text-sm font-semibold text-slate-900 mb-3">
-          Open vulnerabilities by vendor
-        </h3>
-        {data.by_vendor.length === 0 ? (
-          <p className="text-xs text-slate-500">No vendor-tagged assets / vulns yet.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="text-xs text-slate-500 border-b border-slate-200">
-              <tr>
-                <th className="text-left py-1.5">Vendor</th>
-                <th className="text-right">Total</th>
-                <th className="text-right text-rose-700">Critical</th>
-                <th className="text-right text-amber-700">High</th>
-                <th className="text-right text-blue-700">Medium</th>
-                <th className="text-right text-slate-500">Low</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.by_vendor.slice(0, 30).map((r) => (
-                <tr key={r.vendor} className="border-b border-slate-100">
-                  <td className="py-1.5 text-slate-700">{r.vendor}</td>
-                  <td className="text-right font-semibold text-slate-900">{r.vuln_count}</td>
-                  <td className="text-right text-rose-700">{r.critical_count}</td>
-                  <td className="text-right text-amber-700">{r.high_count}</td>
-                  <td className="text-right text-blue-700">{r.medium_count}</td>
-                  <td className="text-right text-slate-500">{r.low_count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      <div className="bg-white border border-slate-200 rounded-xl shadow-card p-5">
-        <h3 className="text-sm font-semibold text-slate-900 mb-3">CWE distribution</h3>
-        {data.by_cwe.length === 0 ? (
-          <p className="text-xs text-slate-500">No CWE-tagged vulns yet.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {data.by_cwe.map((r) => (
-              <span key={r.cwe_id} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs">
-                <span className="font-mono">{r.cwe_id}</span>
-                <span className="text-slate-500">·</span>
-                <span className="font-semibold text-slate-700">{r.count}</span>
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <ReportsPanel />
-    </div>
-  );
-}
-
-// ── Reports panel (shared at the bottom of Vendor tab) ─────────────────────
+// ── Reports panel ──────────────────────────────────────────────────────────
 
 function ReportsPanel() {
   const [busy, setBusy] = useState<string | null>(null);
@@ -562,7 +518,9 @@ const TONE_STYLES: Record<string, string> = {
 function KpiCard({
   label, value, icon: Icon, tone = 'slate', subLabel,
 }: {
-  label: string;
+  // Widened to ReactNode so callers can pass an <Abbr> inline (e.g.
+  // "<Abbr code='KEV'/> exposure"). String callers keep working unchanged.
+  label: React.ReactNode;
   value: number | string;
   icon: typeof Activity;
   tone?: 'slate' | 'rose' | 'amber' | 'emerald' | 'blue';

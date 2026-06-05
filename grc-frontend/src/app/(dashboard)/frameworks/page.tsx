@@ -14,6 +14,7 @@ import { PageLoader } from '@/components/ui';
 import { ComplianceDashboard } from './_components/ComplianceDashboard';
 import { FrameworkJourneyPicker } from './_components/FrameworkJourneyPicker';
 import { FrameworksTabs } from './_components/FrameworksTabs';
+import { FrameworkDeepDive } from './_components/FrameworkDeepDive';
 import { UploadedFramework } from './_components/shared';
 
 export default function FrameworksDashboardPage() {
@@ -75,6 +76,10 @@ export default function FrameworksDashboardPage() {
           cards, domain heat-map, activity timeline. Hides when there are no
           journeys yet. */}
       <ComplianceDashboard />
+
+      {/* Single-framework deep-dive — operator picks one journey and sees
+          KPIs, status mix, per-domain progress and live gap analysis. */}
+      <FrameworkDeepDive journeys={(certifications as CertificationJourney[]) || []} />
     </div>
   );
 }

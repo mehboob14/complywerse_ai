@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic';
 
 import { useQuery } from '@tanstack/react-query';
 import { vulnManagementApi } from '@/lib/api';
+import { Abbr } from '@/components/common/Abbr';
 import {
   Loader2,
   RefreshCw,
@@ -407,8 +408,12 @@ function ThreatIntelligenceSection({ data }: { data?: ThreatIntelDashboard }) {
         {/* KEV exposure donut */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="mb-2">
-            <p className="text-xs font-semibold text-gray-700">Actively Exploited (CISA KEV)</p>
-            <p className="text-[11px] text-gray-500">CVEs CISA has confirmed are being used in real attacks.</p>
+            <p className="text-xs font-semibold text-gray-700 inline-flex items-baseline gap-1">
+              Actively Exploited (<Abbr code="CISA" /> <Abbr code="KEV" />)
+            </p>
+            <p className="text-[11px] text-gray-500">
+              <Abbr code="CVE" showIcon={false}>CVEs</Abbr> <Abbr code="CISA" showIcon={false}>CISA</Abbr> has confirmed are being used in real attacks.
+            </p>
           </div>
           {kevExposure === 0 ? (
             <div className="h-44 flex items-center justify-center text-xs text-gray-400">No data</div>
@@ -425,7 +430,7 @@ function ThreatIntelligenceSection({ data }: { data?: ThreatIntelDashboard }) {
               <div className="flex items-center justify-between text-xs mt-1">
                 <span className="flex items-center gap-1.5 text-gray-700">
                   <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: KEV_COLORS.kev }} />
-                  KEV <span className="font-semibold text-red-700">{data.kev_exposure.kev}</span>
+                  <Abbr code="KEV" showIcon={false} /> <span className="font-semibold text-red-700">{data.kev_exposure.kev}</span>
                 </span>
                 <span className="flex items-center gap-1.5 text-gray-500">
                   <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: KEV_COLORS.non_kev }} />
@@ -440,7 +445,9 @@ function ThreatIntelligenceSection({ data }: { data?: ThreatIntelDashboard }) {
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="mb-2">
             <p className="text-xs font-semibold text-gray-700">Composite Priority</p>
-            <p className="text-[11px] text-gray-500">Blends CVSS, EPSS, KEV, and the criticality of the assets each vuln affects.</p>
+            <p className="text-[11px] text-gray-500">
+              Blends <Abbr code="CVSS" showIcon={false} />, <Abbr code="EPSS" showIcon={false} />, <Abbr code="KEV" showIcon={false} />, and the criticality of the assets each vuln affects.
+            </p>
           </div>
           {priorityTotal === 0 ? (
             <div className="h-44 flex items-center justify-center text-xs text-gray-400">No data</div>
@@ -462,8 +469,12 @@ function ThreatIntelligenceSection({ data }: { data?: ThreatIntelDashboard }) {
         {/* EPSS bands */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="mb-2">
-            <p className="text-xs font-semibold text-gray-700">Exploit Likelihood (EPSS)</p>
-            <p className="text-[11px] text-gray-500">FIRST.org&apos;s 30-day probability that a CVE will be exploited in the wild.</p>
+            <p className="text-xs font-semibold text-gray-700 inline-flex items-baseline gap-1">
+              Exploit Likelihood (<Abbr code="EPSS" />)
+            </p>
+            <p className="text-[11px] text-gray-500">
+              <Abbr code="FIRST" showIcon={false}>FIRST.org</Abbr>&apos;s 30-day probability that a <Abbr code="CVE" showIcon={false} /> will be exploited in the wild.
+            </p>
           </div>
           <ResponsiveContainer width="100%" height={170}>
             <BarChart data={epssData} layout="vertical" margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
@@ -513,7 +524,9 @@ function ThreatIntelligenceSection({ data }: { data?: ThreatIntelDashboard }) {
         <div className="bg-white border border-gray-200 rounded-xl p-4 overflow-hidden">
           <div className="mb-2">
             <p className="text-xs font-semibold text-gray-700">Top 10 — Fix These First</p>
-            <p className="text-[11px] text-gray-500">Ranked by composite priority. KEV = actively exploited in the wild.</p>
+            <p className="text-[11px] text-gray-500">
+              Ranked by composite priority. <Abbr code="KEV" showIcon={false} /> = actively exploited in the wild.
+            </p>
           </div>
           {data.top_priority_vulns.length === 0 ? (
             <div className="h-44 flex items-center justify-center text-xs text-gray-400">No open vulnerabilities</div>
@@ -524,10 +537,10 @@ function ThreatIntelligenceSection({ data }: { data?: ThreatIntelDashboard }) {
                   <tr className="text-left text-gray-500 uppercase tracking-wider">
                     <th className="py-1.5 pr-2">#</th>
                     <th className="py-1.5 pr-2">Vuln</th>
-                    <th className="py-1.5 pr-2">CVE</th>
+                    <th className="py-1.5 pr-2"><Abbr code="CVE" /></th>
                     <th className="py-1.5 pr-2 text-right">Priority</th>
-                    <th className="py-1.5 pr-2 text-right">CVSS</th>
-                    <th className="py-1.5 pr-2 text-right">EPSS</th>
+                    <th className="py-1.5 pr-2 text-right"><Abbr code="CVSS" /></th>
+                    <th className="py-1.5 pr-2 text-right"><Abbr code="EPSS" /></th>
                     <th className="py-1.5 pr-2 text-right">Assets</th>
                   </tr>
                 </thead>
@@ -990,12 +1003,12 @@ export default function VulnerabilityDashboardPage() {
           <p className="text-xs text-gray-400 mt-1">immediate attention</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-3 border-l-4 border-l-amber-500">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">MTTR</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide"><Abbr code="MTTR" /></p>
           <p className="text-2xl font-bold text-amber-600 mt-1">{mttr != null ? `${mttr}d` : '-'}</p>
           <p className="text-xs text-gray-400 mt-1">mean time to remediate</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-3 border-l-4" style={{ borderLeftColor: slaColor }}>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">SLA Compliance</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide"><Abbr code="SLA" /> Compliance</p>
           <p className="text-2xl font-bold mt-1" style={{ color: slaColor }}>{slaPercent}%</p>
           <p className="text-xs text-gray-400 mt-1">{overdueCount} overdue</p>
         </div>
@@ -1127,7 +1140,7 @@ export default function VulnerabilityDashboardPage() {
             </p>
           </div>
           <div className="rounded-lg border border-gray-100 bg-gray-50 p-2">
-            <p className="text-[10px] uppercase tracking-wide text-gray-500">MTTR (in window)</p>
+            <p className="text-[10px] uppercase tracking-wide text-gray-500"><Abbr code="MTTR" /> (in window)</p>
             <p className="text-lg font-bold text-amber-600">
               {trends?.summary?.mttr_days_within_window != null
                 ? `${trends.summary.mttr_days_within_window}d`

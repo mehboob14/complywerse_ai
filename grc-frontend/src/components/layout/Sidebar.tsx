@@ -33,6 +33,12 @@ import {
   Wifi,
   FolderKanban,
   ListTodo,
+  ShieldCheck,
+  // CIS integration icons
+  Cpu,
+  Gauge,
+  Radar,
+  PackageSearch,
   type LucideIcon,
 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -131,7 +137,18 @@ const navigation: NavEntry[] = [
       { name: 'Pending Approvals', href: '/compliance/assessments/approvals', icon: Clock, requiredPermissions: ['compliance:assessments:*'] },
       { name: 'Evidence', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
       { name: 'Control Library', href: '/control-library', icon: Library, requiredPermissions: ['controls:control_library:*'] },
+      // CIS integration: plugin library + per-asset run history (Hassan's branch)
+      { name: 'Plugin Automation', href: '/compliance-plugins', icon: PackageSearch, requiredPermissions: ['compliance:scan:execute'] },
+      // Risk Posture — composite per-asset score combining CIS results, vulns, CIA, controls, linked risks
+      { name: 'Risk Posture', href: '/risk-posture', icon: Gauge, requiredPermissions: ['compliance:scan:execute', 'erm:risks:*'] },
     ],
+  },
+  {
+    name: 'Auditor Portal',
+    href: '/auditor-portal',
+    icon: ShieldCheck,
+    requiredModules: ['frameworks', 'compliance'],
+    requiredPermissions: ['compliance:frameworks:*'],
   },
   {
     name: 'Vulnerability Mgmt',
@@ -149,6 +166,7 @@ const navigation: NavEntry[] = [
     ],
   },
     { name: 'IT Assets', href: '/assets', icon: Bot, requiredPermissions: ['dashboard:assets*'] },
+    { name: 'Criticality Assessments', href: '/assets/criticality-assessments', icon: Gauge, requiredPermissions: ['assets:criticality_assessments:view'] },
 
   {
     name: 'Projects',
@@ -164,7 +182,37 @@ const navigation: NavEntry[] = [
     requiredModules: ['critical_tasks'],
     requiredPermissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view']
   },
+  {
+    name: 'Issues',
+    href: '/issues',
+    icon: AlertCircle,
+    requiredModules: ['issue_management'],
+    requiredPermissions: ['issue_management:issues:view']
+  },
   { name: 'ComplyChat', href: '/complychat', icon: Bot, requiredPermissions: ['dashboard:ai_insights:*'] },
+  // CIS integration: admin-side scanning surfaces. Compliance Agents owns the
+  // enroll/list/revoke UI for collector + endpoint agents; Bulk Discovery is
+  // the CIDR network scanner that feeds the enrollment wizard.
+  {
+    name: 'Compliance Agents',
+    href: '/admin/agents',
+    icon: Cpu,
+    requiredPermissions: ['compliance:agents:manage'],
+  },
+  {
+    name: 'Bulk Discovery',
+    href: '/admin/discover',
+    icon: Radar,
+    requiredPermissions: ['compliance:discover:execute'],
+  },
+  // Connect Wizard — agentless first-connection flow for Windows / Linux /
+  // AWS / DigitalOcean. Pairs with /connect-wizard/handshake on the backend.
+  {
+    name: 'Connect Wizard',
+    href: '/admin/integrations/connect',
+    icon: Wifi,
+    requiredPermissions: ['compliance:agents:manage'],
+  },
   {
     name: 'Administration',
     href: '/admin',

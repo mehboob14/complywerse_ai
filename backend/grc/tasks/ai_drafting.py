@@ -178,7 +178,7 @@ def _execute_drafting(
     started = time.monotonic()
     started_iso = datetime.utcnow().isoformat()
 
-    from ..models import CertificationJourney, GovernanceDocument
+    from ..models import CertificationJourney, GovernanceDocument, PolicyStatement
     from ..modules.governance.ai_drafting import (
         build_framework_index,
         build_tenant_context,
@@ -227,14 +227,95 @@ def _execute_drafting(
                 GovernanceDocument.tenant_id == tenant_id,
             ).first()
             if parent:
+                # Previously the parent was reduced to a 6 KB excerpt with no
+                # structure. The pipeline could not see how many policy
+                # statements lived on the parent, so a child Procedure would
+                # be drafted in isolation and only loosely follow the parent.
+                # We now:
+                #   1. Load every PolicyStatement attached to the parent so
+                #      the child draft has a hard list it must cover.
+                #   2. Raise the parent-content cap to 20 KB (still bounded).
+                #   3. Emit a single structured block that the Stage A / B
+                #      prompts both treat as authoritative.
                 excerpt = (parent.content or "").strip()
-                if len(excerpt) > 6000:
-                    excerpt = excerpt[:6000] + "\n...[truncated]"
+                if len(excerpt) > 20000:
+                    excerpt = excerpt[:20000] + "\n...[truncated for prompt size]"
+
+                # Pull every active statement on the parent. Cap at 60 so a
+                # pathological parent (e.g. a regulator's 400-clause catalog)
+                # can't blow the prompt; the cap is logged so we can spot it.
+                statements = (
+                    db.query(PolicyStatement)
+                    .filter(
+                        PolicyStatement.tenant_id == tenant_id,
+                        PolicyStatement.document_id == parent.id,
+                        PolicyStatement.status == "active",
+                    )
+                    .order_by(PolicyStatement.id.asc())
+                    .limit(60)
+                    .all()
+                )
+                statements_total = (
+                    db.query(PolicyStatement)
+                    .filter(
+                        PolicyStatement.tenant_id == tenant_id,
+                        PolicyStatement.document_id == parent.id,
+                        PolicyStatement.status == "active",
+                    )
+                    .count()
+                )
+
+                statement_lines: list[str] = []
+                if statements:
+                    if statements_total > len(statements):
+                        statement_lines.append(
+                            f"PARENT POLICY STATEMENTS ({len(statements)} of {statements_total} shown — "
+                            "the remaining statements are summarised by the excerpts that follow):"
+                        )
+                    else:
+                        statement_lines.append(
+                            f"PARENT POLICY STATEMENTS ({len(statements)} total) — every statement "
+                            "below MUST be addressed end-to-end in the new document. For a Procedure, "
+                            "produce ordered procedural steps that operationalise each statement; for "
+                            "a Standard, produce mandatory requirements that satisfy each statement; "
+                            "for a Guideline, produce implementation guidance for each statement."
+                        )
+                    for idx, s in enumerate(statements, start=1):
+                        code = s.statement_code or f"PS-{idx:03d}"
+                        prio = (s.priority or "medium").upper()
+                        cat = s.category or "general"
+                        # Bound each statement to 800 chars so 60 statements
+                        # never alone push the prompt past the model window.
+                        txt = (s.statement_text or "").strip()
+                        if len(txt) > 800:
+                            txt = txt[:800] + "…"
+                        summary = (s.statement_summary or "").strip()
+                        suffix = f"  Summary: {summary}" if summary else ""
+                        statement_lines.append(
+                            f"{idx}. [{code}] [priority={prio}] [category={cat}]\n"
+                            f"   Statement: {txt}{suffix}"
+                        )
+                else:
+                    statement_lines.append(
+                        "PARENT POLICY STATEMENTS: none extracted yet. Treat the parent "
+                        "document's content excerpt below as the authoritative source of "
+                        "requirements the new document must cover."
+                    )
+
+                statements_block = "\n".join(statement_lines)
+
                 parent_document_context = (
-                    f"Parent Document Title: {parent.title}\n"
-                    f"Parent Document Type: {parent.doc_type}\n"
-                    f"Parent Document Description: {parent.description or ''}\n"
-                    f"Parent Document Content Excerpt:\n{excerpt or '(none)'}"
+                    "PARENT DOCUMENT — the document being drafted is SUBORDINATE to this "
+                    "and must cover every parent requirement end-to-end.\n"
+                    f"Title: {parent.title}\n"
+                    f"Type:  {parent.doc_type}\n"
+                    f"Description: {parent.description or '(none)'}\n"
+                    "\n"
+                    f"{statements_block}\n"
+                    "\n"
+                    "PARENT DOCUMENT FULL CONTENT (use as the source of intent, terminology, "
+                    "definitions, role names, and control objectives — do NOT contradict it):\n"
+                    f"{excerpt or '(parent has no body content; rely on statements above)'}"
                 )
 
         # Mark running before the slow part.

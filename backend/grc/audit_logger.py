@@ -152,7 +152,17 @@ def write_audit_log(
     response: Response,
     started_at: float,
     request_payload: Optional[Dict[str, Any]] = None,
+    response_error: Optional[Any] = None,
 ) -> None:
+    """Append one audit-log row for this request.
+
+    Workflow/Audit-AI integration: when the middleware passes a captured
+    non-2xx JSON response body via ``response_error``, it is stashed under
+    ``changes.response_error`` so the audit-log AI summary endpoint can
+    surface the actual failure reason (validator messages, detail strings)
+    instead of just the HTTP status code. ``response_error`` is optional
+    and existing callers that omit it keep working unchanged.
+    """
     try:
         path = request.url.path or ""
         tenant = getattr(request.state, "tenant", None)
@@ -193,7 +203,18 @@ def write_audit_log(
             duration_ms = int((time.time() - started_at) * 1000)
             method = request.method.upper()
 
-            details = {
+            # Promote a human-readable resource name out of the request body
+            # so the audit-log UI (and the AI summary endpoint) can render it
+            # without re-fetching the referenced row.
+            resource_name: Optional[str] = None
+            if isinstance(request_payload, dict):
+                for k in ("name", "title", "username", "email", "label", "subject"):
+                    v = request_payload.get(k)
+                    if isinstance(v, str) and v.strip():
+                        resource_name = v.strip()
+                        break
+
+            details: Dict[str, Any] = {
                 "method": method,
                 "path": path,
                 "query": dict(request.query_params),
@@ -204,7 +225,15 @@ def write_audit_log(
                 # Store actor info so display always works even if user is later deleted
                 "actor": actor_username,
                 "actor_display": actor_display,
+                "actor_type": "user",
+                # v2 audit-AI: resource_name + (optional) response_error feed
+                # the AI-summary prompt. resource_name is always set when the
+                # request body has a name-like field; response_error is set
+                # only when middleware captured a non-2xx JSON body.
+                "resource_name": resource_name,
             }
+            if response_error is not None:
+                details["response_error"] = _sanitize_value(response_error)
 
             log = AuditLog(
                 tenant_id=tenant_id,

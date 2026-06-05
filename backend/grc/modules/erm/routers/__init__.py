@@ -10,6 +10,7 @@ from .scales import router as scales_router
 from .appetite import router as appetite_router
 from .internal_controls import router as internal_controls_router
 from .rcsa import router as rcsa_router
+from .rcsa_custom import router as rcsa_custom_router
 from .risk_assessments import router as risk_assessments_router
 from .framework_risk_assessments import router as framework_risk_assessments_router
 from .advanced_analytics import router as advanced_analytics_router
@@ -27,6 +28,7 @@ __all__ = [
     "appetite_router",
     "internal_controls_router",
     "rcsa_router",
+    "rcsa_custom_router",
     "risk_assessments_router",
     "framework_risk_assessments_router",
     "advanced_analytics_router"

@@ -9,15 +9,17 @@ import {
   FileText,
   AlertTriangle,
   CheckSquare,
+  Sheet,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { label: 'Dashboard',   href: '/risks/rcsa',               icon: LayoutDashboard, exact: true },
-  { label: 'Campaigns',   href: '/risks/rcsa/campaigns',     icon: Megaphone },
-  { label: 'Assessments', href: '/risks/rcsa/assessments',   icon: ClipboardList },
-  { label: 'Templates',   href: '/risks/rcsa/templates',     icon: FileText },
-  { label: 'Findings',    href: '/risks/rcsa/findings',      icon: AlertTriangle },
-  { label: 'Approvals',   href: '/risks/rcsa/approvals',     icon: CheckSquare },
+  { label: 'Dashboard',         href: '/risks/rcsa',                  icon: LayoutDashboard, exact: true },
+  { label: 'Campaigns',         href: '/risks/rcsa/campaigns',        icon: Megaphone },
+  { label: 'Assessments',       href: '/risks/rcsa/assessments',      icon: ClipboardList },
+  { label: 'Templates',         href: '/risks/rcsa/templates',        icon: FileText },
+  { label: 'Custom Templates',  href: '/risks/rcsa/custom-templates', icon: Sheet },
+  { label: 'Findings',          href: '/risks/rcsa/findings',         icon: AlertTriangle },
+  { label: 'Approvals',         href: '/risks/rcsa/approvals',        icon: CheckSquare },
 ];
 
 export default function RCSALayout({ children }: { children: React.ReactNode }) {

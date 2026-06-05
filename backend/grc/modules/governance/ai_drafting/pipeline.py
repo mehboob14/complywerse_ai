@@ -39,6 +39,10 @@ ProgressCallback = Optional[Callable[[str, Dict[str, Any]], None]]
 from fastapi import HTTPException, status
 from openai import OpenAI
 
+from .enterprise_craft import (
+    SME_SYSTEM_ADDENDUM,
+    enterprise_drafting_block,
+)
 from .exemplars import get_exemplar
 from .framework_index import FrameworkCitation, FrameworkIndex
 from .qa import SectionQAResult, regeneration_hint, validate_section
@@ -49,9 +53,18 @@ from .tenant_context import TenantContextBundle
 logger = logging.getLogger(__name__)
 
 
-_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY") or os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY")
 _OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
-_OPENAI_MODEL = os.environ.get("OPENAI_DRAFT_MODEL", "gpt-4o")
+# GPT-5 is the current flagship for governance drafting. Override via
+# `OPENAI_DRAFT_MODEL` in .env if you need to pin a specific revision
+# (e.g. `gpt-5-2026-01-15`) for change-control reasons.
+_OPENAI_MODEL = os.environ.get("OPENAI_DRAFT_MODEL", "gpt-5")
+# Auto-fallback model when the primary model produces empty content (most
+# common GPT-5 failure mode: reasoning eats the entire token budget, leaving
+# zero output tokens). Without a fallback we'd render the whole document as
+# the "could not be generated automatically" stub. Set
+# OPENAI_DRAFT_FALLBACK_MODEL to override or to "" to disable.
+_OPENAI_FALLBACK_MODEL = os.environ.get("OPENAI_DRAFT_FALLBACK_MODEL", "gpt-4o")
 
 _STAGE_B_PARALLELISM = int(os.environ.get("AI_DRAFT_PARALLELISM", "4"))
 
@@ -80,27 +93,126 @@ def _client() -> OpenAI:
     return OpenAI(api_key=_OPENAI_API_KEY, base_url=_OPENAI_BASE_URL)
 
 
-def _chat_json(prompt: str, *, system: str, temperature: float = 0.45, max_tokens: int = 3200) -> dict:
-    """Helper: chat completion with json_object response format."""
+def _is_reasoning_model(model: str) -> bool:
+    """Models whose `max_completion_tokens` budget is split between hidden
+    reasoning tokens and visible output. They need a much larger budget than
+    older chat models for the same output size — otherwise reasoning eats the
+    entire allowance and we get an empty `content` back."""
+    m = (model or "").lower()
+    return m.startswith("gpt-5") or m.startswith("o1") or m.startswith("o3") or m.startswith("o4")
+
+
+def _call_chat_json_once(
+    model: str,
+    *,
+    prompt: str,
+    system: str,
+    temperature: float,
+    max_tokens: int,
+) -> dict:
+    """One shot at the OpenAI chat-completions API.
+
+    Returns the parsed JSON dict on success. Raises on:
+      - the SDK raising any exception (auth, 4xx, network, etc.)
+      - the response having `content` empty/None (typical of reasoning models
+        that exhaust their budget on hidden reasoning); the caller decides
+        whether to retry on a fallback model.
+    Returns ``{}`` only on malformed-JSON (treated as soft failure — we still
+    have content, it just wasn't a JSON object the model promised).
+    """
+    kwargs: Dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
+        "response_format": {"type": "json_object"},
+    }
+    # GPT-5 / reasoning models need (a) `max_completion_tokens`, (b) a budget
+    # that has room for the hidden reasoning trace + the actual output. We
+    # bump the floor 2.5x for reasoning models so a typical 2200-token section
+    # call still leaves ≥ 1000 output tokens after the model finishes thinking.
+    if _is_reasoning_model(model):
+        kwargs["max_completion_tokens"] = max(max_tokens * 5 // 2, 4000)
+    else:
+        kwargs["max_completion_tokens"] = max_tokens
+    # GPT-5 / o-series currently only support temperature=1. Sending anything
+    # else raises a 400 `unsupported_value`. Older GPT-4o-family models still
+    # respect a custom temperature.
+    if not _is_reasoning_model(model):
+        kwargs["temperature"] = temperature
+
+    resp = _client().chat.completions.create(**kwargs)
+    content = resp.choices[0].message.content
+    finish_reason = getattr(resp.choices[0], "finish_reason", None)
+    if not content:
+        # Build a diagnostic so the operator sees WHY the call returned empty
+        # rather than silently rendering a stub document.
+        usage = getattr(resp, "usage", None)
+        detail = f"model={model} finish_reason={finish_reason}"
+        if usage is not None:
+            detail += (
+                f" usage(prompt={getattr(usage, 'prompt_tokens', '?')},"
+                f" completion={getattr(usage, 'completion_tokens', '?')},"
+                f" total={getattr(usage, 'total_tokens', '?')})"
+            )
+            # OpenAI exposes completion_tokens_details.reasoning_tokens for
+            # reasoning models — log it so we can tell exactly how many of the
+            # tokens went to hidden thinking vs the visible output.
+            details = getattr(usage, "completion_tokens_details", None)
+            if details is not None:
+                detail += f" reasoning_tokens={getattr(details, 'reasoning_tokens', '?')}"
+        raise RuntimeError(f"OpenAI returned empty content. {detail}")
     try:
-        resp = _client().chat.completions.create(
-            model=_OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt},
-            ],
-            response_format={"type": "json_object"},
+        return json.loads(content)
+    except json.JSONDecodeError:
+        logger.warning("Stage call returned malformed JSON; falling back to empty dict")
+        return {}
+
+
+def _chat_json(prompt: str, *, system: str, temperature: float = 0.45, max_tokens: int = 3200) -> dict:
+    """Helper: chat completion with json_object response format.
+
+    Tries the primary model first; if it raises (most commonly because a
+    reasoning model returned empty content after spending its entire budget
+    on hidden reasoning), retries once on the fallback model. Returns ``{}``
+    only after BOTH have failed — at which point Stage B's caller renders
+    the "could not be generated automatically" stub.
+    """
+    try:
+        return _call_chat_json_once(
+            _OPENAI_MODEL,
+            prompt=prompt,
+            system=system,
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        content = resp.choices[0].message.content or "{}"
-        return json.loads(content)
-    except json.JSONDecodeError:
-        logger.exception("Stage call returned malformed JSON; falling back to empty dict")
-        return {}
-    except Exception:
-        logger.exception("OpenAI call failed in drafting pipeline")
-        return {}
+    except Exception as primary_exc:  # noqa: BLE001
+        # Don't log the full traceback for an empty-content RuntimeError — it
+        # is expected when GPT-5 exhausts its budget. Log a single concise
+        # warning + fall back. For everything else, log the traceback.
+        primary_msg = str(primary_exc)
+        if isinstance(primary_exc, RuntimeError) and primary_msg.startswith("OpenAI returned empty content"):
+            logger.warning("Primary model empty content; will try fallback. %s", primary_msg)
+        else:
+            logger.exception("Primary model %r failed: %s", _OPENAI_MODEL, primary_msg)
+
+        fallback = _OPENAI_FALLBACK_MODEL
+        if not fallback or fallback == _OPENAI_MODEL:
+            return {}
+        try:
+            result = _call_chat_json_once(
+                fallback,
+                prompt=prompt,
+                system=system,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            logger.info("Drafting fallback %r succeeded after primary %r failed.", fallback, _OPENAI_MODEL)
+            return result
+        except Exception as fallback_exc:  # noqa: BLE001
+            logger.exception("Fallback model %r also failed: %s", fallback, fallback_exc)
+            return {}
 
 
 # ─── Tenant context block (shared by every Stage B call) ─────────────
@@ -211,13 +323,32 @@ def _stage_outline(
         f"- {s.number} {s.heading}" for s in open_sections
     )
 
+    # When a parent document is supplied, the outline MUST be driven by what
+    # the parent actually requires — otherwise Stage A picks generic topics
+    # and the child document drifts from its parent's intent. We surface the
+    # parent block to the outliner and tell it to weight parent statements
+    # over generic framework hits when both could fit.
+    parent_block = ""
+    if parent_document_context:
+        parent_block = (
+            "\n"
+            + parent_document_context
+            + "\n\n"
+            + "OUTLINE RULE — when a parent document is supplied:\n"
+            + "- Every open-topic section's assigned topic must collectively cover "
+            + "every parent policy statement. Pick the topic that BEST surfaces the "
+            + "statements that aren't already covered by a fixed-topic section.\n"
+            + "- Two sections can share a topic only if no single topic is enough "
+            + "to cover all the parent's statements in that area.\n"
+        )
+
     prompt = f"""Decide which governance topic each open-topic section of a {scaffold.label} should focus on.
 
 Document title: {user_title}
 Document description: {user_description or "(none supplied — infer from the title)"}
 
 {_tenant_context_block(ctx, scaffold)}
-
+{parent_block}
 {_active_codes_block(idx)}
 
 Available citation topics (chosen from the tenant's active frameworks):
@@ -279,7 +410,32 @@ def _build_section_prompt(
     if user_description:
         parts.append(f"Document brief: {user_description}")
     if parent_document_context:
-        parts.append("Parent document context (the new document is subordinate to this):\n" + parent_document_context)
+        # The parent context block already self-describes ("PARENT DOCUMENT
+        # — the document being drafted is SUBORDINATE to this …") and
+        # enumerates policy statements one per line. Emit it verbatim, then
+        # add a hard rule that this section must explicitly map its content
+        # back to the parent's requirements. Without this rule the LLM
+        # treats the parent block as background colour and drifts.
+        parts.append(parent_document_context)
+        parts.append("")
+        parts.append(
+            "PARENT COVERAGE RULE — non-negotiable for this section:\n"
+            "- This section must explicitly operationalise every parent policy "
+            "statement that falls within its scope. Do not silently skip any "
+            "applicable statement, even if it overlaps with another section.\n"
+            "- When a parent statement is addressed, reference it inline using "
+            "its code in brackets, e.g. `[PS-003]`. Multiple statements per "
+            "clause are fine; missing-coverage clauses are not.\n"
+            f"- Because this document is a {scaffold.label}, every parent "
+            f"statement that is in scope for this section must be translated "
+            f"into the appropriate artefact type "
+            f"(procedural step / mandatory requirement / implementation "
+            f"guidance / atomic policy clause). End-to-end means: trigger, "
+            f"prerequisites, roles, sequence, evidence, exception handling — "
+            f"for procedures specifically.\n"
+            "- Use the parent's terminology, role names, defined terms, and "
+            "control objectives verbatim. Do not redefine or contradict them."
+        )
 
     parts.append("")
     parts.append("SECTION INSTRUCTIONS:")
@@ -313,6 +469,14 @@ def _build_section_prompt(
         )
         parts.append(exemplar)
 
+    # Enterprise SME craft block — banking-reality grounding + doc-type
+    # characteristics. This is the difference between "generic LLM
+    # governance copy" and "what a senior bank SME actually writes".
+    # Goes near the end so it stays close to the model's attention when
+    # generating the final tokens.
+    parts.append("")
+    parts.append(enterprise_drafting_block(scaffold.doc_type))
+
     if correction_hint:
         parts.append("")
         parts.append("CORRECTION HINT (your previous attempt failed validation): " + correction_hint)
@@ -323,7 +487,9 @@ def _build_section_prompt(
         "full section in markdown. Begin the markdown with the heading line "
         f"`## {section.full_heading}`. Never use placeholder text like "
         "`[Insert ...]` or `Your Organization`. Never reference yourself as "
-        "an AI."
+        "an AI. Never use the generic verbs `ensure`, `make sure`, `consider`, "
+        "`where possible`, or `as appropriate` — replace each with a "
+        "prescriptive verb and a named owner."
     )
     return "\n".join(parts)
 
@@ -354,9 +520,13 @@ def _stage_expand_section(
     )
     # Larger sections (statements, procedure steps) deserve more token budget.
     max_tokens = 4000 if (section.min_clauses or 0) >= 10 else 2200
+    # System prompt = the scaffold's per-doc-type voice (e.g. "senior security
+    # architect authoring a mandatory technical standard") + the universal
+    # banking-SME addendum so the model anchors to a real bank reviewer's tone
+    # before it ever reads the user prompt.
     raw = _chat_json(
         prompt,
-        system=scaffold.prompt_voice,
+        system=scaffold.prompt_voice + SME_SYSTEM_ADDENDUM,
         temperature=0.5,
         max_tokens=max_tokens,
     )

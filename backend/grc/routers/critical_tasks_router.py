@@ -1089,6 +1089,16 @@ def update_task(
 
     task.updated_at = datetime.utcnow()
     db.commit()
+    # ── v2 Issue Management hook: mirror status back onto the linked CAPA
+    # action, if any. No-op for tasks not promoted from issues. Wrapped in
+    # try/except so the Issue Management module can never break a Critical
+    # Tasks write.
+    try:
+        from ..modules.issue_management.services.task_sync import sync_action_from_task
+        sync_action_from_task(task.id, db, user_id=current_user.id)
+        db.commit()
+    except Exception:
+        db.rollback()
     db.refresh(task)
     if "assigned_owner_id" in update_data and task.assigned_owner_id and task.assigned_owner_id != old_owner_id:
         _notify_task_event(db, task, "assignment", background_tasks=background_tasks)
@@ -1170,6 +1180,13 @@ def transition_status(
         db.add(comment)
 
     db.commit()
+    # ── v2 Issue Management hook: mirror status onto linked CAPA action.
+    try:
+        from ..modules.issue_management.services.task_sync import sync_action_from_task
+        sync_action_from_task(task.id, db, user_id=current_user.id)
+        db.commit()
+    except Exception:
+        db.rollback()
     db.refresh(task)
     return _serialize_task(task)
 

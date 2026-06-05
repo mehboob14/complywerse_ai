@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi, assetsApi, ermApi, apiClient } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { InlineLinkPicker, PageLoader, ComboBoxInput, type ComboBoxOption } from '@/components/ui';
+import { Abbr } from '@/components/common/Abbr';
 import {
   Bug,
   Loader2,
@@ -34,6 +35,8 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import Link from 'next/link';
+import { CreateIssueButton } from '@/components/issue-management/CreateIssueButton';
+import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesPanel';
 
 interface VulnerabilityDetail {
   id: number;
@@ -107,12 +110,19 @@ interface Mitigation {
   id: number;
   action_title: string;
   action_description?: string;
+  action_type?: string;
   status: string;
   priority?: string;
   target_date?: string;
   owner_id?: number;
   owner_name?: string;
   completed_at?: string;
+  effort_estimate?: string;
+  actual_effort?: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+  creator_name?: string;
 }
 
 interface AssetLink {
@@ -353,6 +363,26 @@ export default function VulnerabilityDetailPage() {
 
   const [activeTab, setActiveTab] = useState('overview');
   const [showMitigationModal, setShowMitigationModal] = useState(false);
+  // When the user clicks "Add as Mitigation" on an AI suggestion, we don't
+  // create it instantly anymore — we stage the suggestion here, open the
+  // existing Add Mitigation modal pre-filled with title/description/priority,
+  // and let the user set due_date + assignee + tweak anything else before
+  // confirming. The same modal handles both manual and AI-seeded creates,
+  // so the operator gets a consistent UX and the AI path never bypasses
+  // the assignment/due-date controls.
+  const [mitigationPrefill, setMitigationPrefill] = useState<{
+    title: string;
+    description?: string;
+    priority?: string;
+    action_type?: string;
+    /** AI suggestion provenance — surfaced as a banner inside the modal. */
+    source?: 'ai' | 'manual';
+  } | null>(null);
+  // Detail panel for an already-created mitigation. Click a row in the
+  // table to open this — it lets the operator view every field and
+  // transition status / re-assign / change due date without going back
+  // to the create form.
+  const [selectedMitigation, setSelectedMitigation] = useState<Mitigation | null>(null);
   const [showRetestModal, setShowRetestModal] = useState(false);
   const [showExceptionModal, setShowExceptionModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -382,6 +412,18 @@ export default function VulnerabilityDetailPage() {
     staleTime: 5 * 60 * 1000,
   });
   const currentUserId = currentUser?.id ?? null;
+
+  // Tenant users for the mitigation assignee dropdown. Reuses the existing
+  // /assets/tenant-users endpoint — same shape ({id, display_name, email}),
+  // same tenant scoping, no new backend route needed.
+  const { data: tenantUsers } = useQuery({
+    queryKey: ['vuln.tenant-users'],
+    queryFn: async () => {
+      const r = await apiClient.get<Array<{ id: number; display_name: string; email: string }>>('/assets/tenant-users');
+      return r.data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
   const { data: mitigations } = useQuery({
     queryKey: ['vuln-mitigations', vulnId],
@@ -521,6 +563,29 @@ export default function VulnerabilityDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vuln-mitigations', vulnId] });
       setShowMitigationModal(false);
+      // Always clear staged AI-suggestion data on close — both success and
+      // cancel paths funnel through this state, so the next manual "Add
+      // Mitigation" click opens a blank form.
+      setMitigationPrefill(null);
+    },
+  });
+
+  // Update existing mitigation — status transitions (in_progress → completed),
+  // re-assignment, due-date changes, and free-form notes from the detail panel.
+  const updateMitigationMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
+      vulnManagementApi.mitigations.update(vulnId, id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vuln-mitigations', vulnId] });
+      setSelectedMitigation(null);
+    },
+  });
+
+  const deleteMitigationMutation = useMutation({
+    mutationFn: (id: number) => vulnManagementApi.mitigations.delete(vulnId, id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vuln-mitigations', vulnId] });
+      setSelectedMitigation(null);
     },
   });
 
@@ -742,7 +807,7 @@ export default function VulnerabilityDetailPage() {
                 {vulnerability.kev_flag && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-800">
                     <AlertCircle size={9} />
-                    CISA KEV
+                    <Abbr code="CISA" showIcon={false}>CISA</Abbr>{' '}<Abbr code="KEV" showIcon={false}>KEV</Abbr>
                   </span>
                 )}
                 {hasPublicExploit && !vulnerability.kev_flag && (
@@ -767,6 +832,16 @@ export default function VulnerabilityDetailPage() {
               >
                 Change Status
               </button>
+              <CreateIssueButton
+                sourceType="vulnerability"
+                sourceId={vulnerability.id}
+                presetFields={{
+                  title: `VULN-${vulnerability.id} — ${vulnerability.title}`,
+                  description: vulnerability.description || undefined,
+                  category: 'security',
+                  issue_type: vulnerability.kev_flag ? 'incident' : 'audit_finding',
+                }}
+              />
             </div>
           </div>
 
@@ -778,20 +853,21 @@ export default function VulnerabilityDetailPage() {
               <span className="text-[9px] uppercase tracking-wider opacity-75">Severity</span>
               <span className="text-xs font-bold">{severityStyle.label}</span>
             </div>
+            {/* CVSS / EPSS / Priority pills */}
             {cvssValue !== null && (
               <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1">
-                <span className="text-[9px] uppercase tracking-wider text-slate-500">CVSS</span>
+                <span className="text-[9px] uppercase tracking-wider text-slate-500"><Abbr code="CVSS" showIcon={false} /></span>
                 <span className="text-xs font-bold text-slate-900">{cvssValue.toFixed(1)}</span>
               </div>
             )}
             {epssValue !== null && (
-              <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1" title="Exploit Prediction Scoring System — 30-day probability of in-the-wild exploitation">
-                <span className="text-[9px] uppercase tracking-wider text-slate-500">EPSS</span>
+              <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1">
+                <span className="text-[9px] uppercase tracking-wider text-slate-500"><Abbr code="EPSS" showIcon={false} /></span>
                 <span className="text-xs font-bold text-slate-900">{(epssValue * 100).toFixed(1)}%</span>
               </div>
             )}
             {priorityValue !== null && (
-              <div className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 ${priorityTone}`} title="Composite priority — CVSS + EPSS + KEV + asset criticality">
+              <div className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 ${priorityTone}`} title="Composite priority — blends CVSS, EPSS, KEV, and asset criticality">
                 <span className="text-[9px] uppercase tracking-wider opacity-75">Priority</span>
                 <span className="text-xs font-bold">{priorityValue.toFixed(2)} / 10</span>
               </div>
@@ -847,6 +923,21 @@ export default function VulnerabilityDetailPage() {
 
       {activeTab === 'overview' && (
         <div className="space-y-4">
+          {/* v2: Issue Management linkage — surfaces any Issues that have
+              been opened against this vulnerability. Hidden when there are
+              none (the panel handles its own empty state). */}
+          <RelatedIssuesPanel
+            sourceType="vulnerability"
+            sourceId={vulnerability.id}
+            title="Linked Issues"
+            createFields={{
+              title: `VULN-${vulnerability.id} — ${vulnerability.title}`,
+              description: vulnerability.description || undefined,
+              category: 'security',
+              issue_type: vulnerability.kev_flag ? 'incident' : 'audit_finding',
+            }}
+          />
+
           {/* Description card — primary card. Slightly larger padding +
               accent border so the operator's eye lands here first. */}
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -909,19 +1000,19 @@ export default function VulnerabilityDetailPage() {
                 <dl className="space-y-2">
                   {vulnerability.cve_id && (
                     <div className="flex items-baseline justify-between gap-2">
-                      <dt className="text-xs text-slate-500 flex-shrink-0">CVE ID</dt>
+                      <dt className="text-xs text-slate-500 flex-shrink-0"><Abbr code="CVE" /> ID</dt>
                       <dd className="text-xs font-mono text-slate-900 text-right truncate">{vulnerability.cve_id}</dd>
                     </div>
                   )}
                   {vulnerability.cwe_id && /^cwe-/i.test(vulnerability.cwe_id) && (
                     <div className="flex items-baseline justify-between gap-2">
-                      <dt className="text-xs text-slate-500 flex-shrink-0">CWE ID</dt>
+                      <dt className="text-xs text-slate-500 flex-shrink-0"><Abbr code="CWE" /> ID</dt>
                       <dd className="text-xs font-mono text-slate-900 text-right truncate">{vulnerability.cwe_id}</dd>
                     </div>
                   )}
                   {typeof vulnerability.cvss_score === 'number' && (
                     <div className="flex items-baseline justify-between gap-2">
-                      <dt className="text-xs text-slate-500 flex-shrink-0">CVSS</dt>
+                      <dt className="text-xs text-slate-500 flex-shrink-0"><Abbr code="CVSS" /></dt>
                       <dd className="text-xs font-semibold text-slate-900">{vulnerability.cvss_score.toFixed(1)} / 10</dd>
                     </div>
                   )}
@@ -1019,23 +1110,42 @@ export default function VulnerabilityDetailPage() {
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Title</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Priority</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Due Date</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Assigned To</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-slate-600"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {mitigations.map((m) => (
-                    <tr key={m.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 cw-text">{m.action_title}</td>
+                    <tr
+                      key={m.id}
+                      onClick={() => setSelectedMitigation(m)}
+                      className="hover:bg-slate-50 cursor-pointer"
+                      title="View / edit details"
+                    >
+                      <td className="px-4 py-3 cw-text">
+                        <div className="font-medium">{m.action_title}</div>
+                        {m.action_description && (
+                          <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{m.action_description}</div>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
-                          m.status === 'completed' ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'
+                          m.status === 'completed' ? 'bg-green-50 text-green-700' :
+                          m.status === 'in_progress' ? 'bg-blue-50 text-blue-700' :
+                          m.status === 'cancelled' || m.status === 'deferred' ? 'bg-slate-100 text-slate-600' :
+                          'bg-yellow-50 text-yellow-700'
                         }`}>
                           {m.status}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-slate-600 capitalize">{m.priority || '-'}</td>
                       <td className="px-4 py-3 text-slate-600">{m.target_date ? new Date(m.target_date).toLocaleDateString() : '-'}</td>
                       <td className="px-4 py-3 text-slate-600">{m.owner_name || '-'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-xs text-blue-600 hover:underline">View</span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1571,7 +1681,22 @@ export default function VulnerabilityDetailPage() {
         <AIAnalysisTab
           vulnerability={vulnerability}
           suggestFixMutation={suggestFixMutation}
-          onAcceptSuggestion={(payload) => createMitigationMutation.mutate(payload)}
+          onAcceptSuggestion={(payload) => {
+            // Stage the AI suggestion into the existing Add Mitigation
+            // modal so the user can pick a due date / assignee / tweak any
+            // field before it lands in the register. This gives the AI
+            // path the same controls as a manual create — no silent
+            // bypass of assignment + due-date setting.
+            const title = String(payload.action_title ?? '').replace(/^\[AI\]\s*/, '');
+            setMitigationPrefill({
+              title,
+              description: typeof payload.action_description === 'string' ? payload.action_description : undefined,
+              priority: typeof payload.priority === 'string' ? payload.priority : undefined,
+              action_type: 'remediate',
+              source: 'ai',
+            });
+            setShowMitigationModal(true);
+          }}
           acceptingSuggestion={createMitigationMutation.isPending}
         />
       )}
@@ -1675,20 +1800,50 @@ export default function VulnerabilityDetailPage() {
 
       {showMitigationModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="cw-card w-full max-w-md p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold cw-text">Add Mitigation</h2>
-              <button onClick={() => setShowMitigationModal(false)} className="text-slate-600 hover:text-slate-900">
+          <div className="cw-card w-full max-w-lg p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xl font-bold cw-text">
+                {mitigationPrefill?.source === 'ai' ? 'Accept AI Suggestion' : 'Add Mitigation'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowMitigationModal(false);
+                  setMitigationPrefill(null);
+                }}
+                className="text-slate-600 hover:text-slate-900"
+              >
                 <X size={20} />
               </button>
             </div>
+            {mitigationPrefill?.source === 'ai' && (
+              <div className="mb-4 flex items-start gap-2 rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-800">
+                <Sparkles className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <div>
+                  <strong className="block">Pre-filled from AI suggestion.</strong>
+                  Review the brief, set a due date and assignee, and click Create.
+                  Editing any field here is fine — your changes are what land in the register.
+                </div>
+              </div>
+            )}
             <form
+              // Re-mount the form whenever the prefill changes so the
+              // uncontrolled inputs pick up the new defaultValue. Without
+              // this, switching between manual / AI-staged opens would
+              // re-use the previous render's input values.
+              key={mitigationPrefill ? `prefill-${mitigationPrefill.title}` : 'blank'}
               onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
+                const ownerRaw = formData.get('owner_id');
+                const ownerId = ownerRaw && String(ownerRaw).length ? Number(ownerRaw) : undefined;
+                const priority = (formData.get('priority') as string) || undefined;
+                const actionType = (formData.get('action_type') as string) || undefined;
                 createMitigationMutation.mutate({
                   action_title: formData.get('title'),
                   action_description: formData.get('description') || undefined,
+                  action_type: actionType,
+                  owner_id: ownerId,
+                  priority,
                   target_date: formData.get('due_date') ? new Date(`${formData.get('due_date')}T00:00:00Z`).toISOString() : undefined,
                 });
               }}
@@ -1696,23 +1851,272 @@ export default function VulnerabilityDetailPage() {
             >
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1">Title *</label>
-                <input type="text" name="title" required className="input-field w-full" />
+                <input
+                  type="text"
+                  name="title"
+                  required
+                  className="input-field w-full"
+                  defaultValue={mitigationPrefill?.title ?? ''}
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1">Description</label>
-                <textarea name="description" rows={3} className="input-field w-full" />
+                <textarea
+                  name="description"
+                  rows={mitigationPrefill?.source === 'ai' ? 6 : 3}
+                  className="input-field w-full"
+                  defaultValue={mitigationPrefill?.description ?? ''}
+                />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1">Due Date</label>
-                <input type="date" name="due_date" className="input-field w-full" />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Action Type</label>
+                  <select
+                    name="action_type"
+                    defaultValue={mitigationPrefill?.action_type ?? 'remediate'}
+                    className="input-field w-full"
+                  >
+                    <option value="remediate">Remediate</option>
+                    <option value="mitigate">Mitigate</option>
+                    <option value="accept">Accept risk</option>
+                    <option value="transfer">Transfer</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Priority</label>
+                  <select
+                    name="priority"
+                    defaultValue={(mitigationPrefill?.priority || 'medium').toLowerCase()}
+                    className="input-field w-full"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Due Date</label>
+                  <input type="date" name="due_date" className="input-field w-full" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Assigned To</label>
+                  <select name="owner_id" defaultValue="" className="input-field w-full">
+                    <option value="">— Unassigned —</option>
+                    {(tenantUsers || []).map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.display_name} {u.email ? `(${u.email})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="flex justify-end gap-3">
-                <button type="button" onClick={() => setShowMitigationModal(false)} className="btn-secondary">Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMitigationModal(false);
+                    setMitigationPrefill(null);
+                  }}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
                 <button type="submit" disabled={createMitigationMutation.isPending} className="btn-primary">
-                  {createMitigationMutation.isPending ? 'Creating...' : 'Create'}
+                  {createMitigationMutation.isPending
+                    ? 'Creating...'
+                    : mitigationPrefill?.source === 'ai'
+                      ? 'Accept & Create'
+                      : 'Create'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Mitigation detail panel — click a row in the Mitigations table to
+          open this. Shows every field on the row plus inline edit controls
+          for status / due date / assignee / notes. Status transitions
+          set completed_at server-side; the panel auto-closes on save. */}
+      {selectedMitigation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="cw-card w-full max-w-2xl p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between mb-4">
+              <div className="min-w-0">
+                <h2 className="text-xl font-bold cw-text truncate">{selectedMitigation.action_title}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Mitigation #{selectedMitigation.id}
+                  {selectedMitigation.action_type ? ` · ${selectedMitigation.action_type}` : ''}
+                  {selectedMitigation.creator_name ? ` · created by ${selectedMitigation.creator_name}` : ''}
+                </p>
+              </div>
+              <button onClick={() => setSelectedMitigation(null)} className="text-slate-600 hover:text-slate-900">
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Read-only summary grid */}
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 mb-5 text-sm">
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Status</dt>
+                <dd className="mt-0.5">
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
+                    selectedMitigation.status === 'completed' ? 'bg-green-50 text-green-700' :
+                    selectedMitigation.status === 'in_progress' ? 'bg-blue-50 text-blue-700' :
+                    selectedMitigation.status === 'cancelled' ? 'bg-slate-100 text-slate-600' :
+                    'bg-yellow-50 text-yellow-700'
+                  }`}>
+                    {selectedMitigation.status}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Priority</dt>
+                <dd className="mt-0.5 text-slate-800 capitalize">{selectedMitigation.priority || '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Due Date</dt>
+                <dd className="mt-0.5 text-slate-800">
+                  {selectedMitigation.target_date ? new Date(selectedMitigation.target_date).toLocaleDateString() : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Assigned To</dt>
+                <dd className="mt-0.5 text-slate-800">{selectedMitigation.owner_name || '— Unassigned —'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Effort Estimate</dt>
+                <dd className="mt-0.5 text-slate-800">{selectedMitigation.effort_estimate || '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Completed At</dt>
+                <dd className="mt-0.5 text-slate-800">
+                  {selectedMitigation.completed_at ? new Date(selectedMitigation.completed_at).toLocaleString() : '—'}
+                </dd>
+              </div>
+              {selectedMitigation.action_description && (
+                <div className="col-span-2">
+                  <dt className="text-xs uppercase tracking-wide text-slate-500">Description</dt>
+                  <dd className="mt-1 text-slate-700 text-sm whitespace-pre-wrap break-words">
+                    {selectedMitigation.action_description}
+                  </dd>
+                </div>
+              )}
+              {selectedMitigation.notes && (
+                <div className="col-span-2">
+                  <dt className="text-xs uppercase tracking-wide text-slate-500">Notes</dt>
+                  <dd className="mt-1 text-slate-700 text-sm whitespace-pre-wrap break-words">
+                    {selectedMitigation.notes}
+                  </dd>
+                </div>
+              )}
+            </dl>
+
+            {/* Inline edit form — only the fields most often updated mid-flight */}
+            {canEdit && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const fd = new FormData(e.currentTarget);
+                  const ownerRaw = fd.get('owner_id');
+                  const dueRaw = fd.get('due_date');
+                  const newStatus = (fd.get('status') as string) || selectedMitigation.status;
+                  const data: Record<string, unknown> = {
+                    status: newStatus,
+                    priority: fd.get('priority'),
+                    notes: fd.get('notes') || undefined,
+                    owner_id: ownerRaw && String(ownerRaw).length ? Number(ownerRaw) : null,
+                    target_date: dueRaw ? new Date(`${dueRaw}T00:00:00Z`).toISOString() : null,
+                  };
+                  // Stamp completed_at client-side too — backend already does
+                  // this on transition to 'completed' but we send it explicitly
+                  // so the optimistic UI shows the right date immediately.
+                  if (newStatus === 'completed' && !selectedMitigation.completed_at) {
+                    data.completed_at = new Date().toISOString();
+                  }
+                  updateMitigationMutation.mutate({ id: selectedMitigation.id, data });
+                }}
+                className="space-y-4 border-t border-slate-200 pt-4"
+              >
+                <h3 className="text-sm font-semibold text-slate-700">Update</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-600 mb-1">Status</label>
+                    <select name="status" defaultValue={selectedMitigation.status} className="input-field w-full">
+                      <option value="planned">Planned</option>
+                      <option value="in_progress">In progress</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="deferred">Deferred</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-600 mb-1">Priority</label>
+                    <select name="priority" defaultValue={selectedMitigation.priority || 'medium'} className="input-field w-full">
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-600 mb-1">Due Date</label>
+                    <input
+                      type="date"
+                      name="due_date"
+                      defaultValue={selectedMitigation.target_date ? new Date(selectedMitigation.target_date).toISOString().slice(0, 10) : ''}
+                      className="input-field w-full"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-600 mb-1">Assigned To</label>
+                    <select name="owner_id" defaultValue={selectedMitigation.owner_id ?? ''} className="input-field w-full">
+                      <option value="">— Unassigned —</option>
+                      {(tenantUsers || []).map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.display_name} {u.email ? `(${u.email})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Notes</label>
+                  <textarea
+                    name="notes"
+                    rows={3}
+                    defaultValue={selectedMitigation.notes || ''}
+                    placeholder="Progress notes, blockers, next steps…"
+                    className="input-field w-full"
+                  />
+                </div>
+                <div className="flex justify-between items-center gap-3 pt-2 border-t border-slate-100">
+                  {canDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`Delete mitigation "${selectedMitigation.action_title}"? This cannot be undone.`)) {
+                          deleteMitigationMutation.mutate(selectedMitigation.id);
+                        }
+                      }}
+                      disabled={deleteMitigationMutation.isPending}
+                      className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                    >
+                      {deleteMitigationMutation.isPending ? 'Deleting…' : 'Delete'}
+                    </button>
+                  ) : <span />}
+                  <div className="flex gap-3">
+                    <button type="button" onClick={() => setSelectedMitigation(null)} className="btn-secondary">Close</button>
+                    <button type="submit" disabled={updateMitigationMutation.isPending} className="btn-primary">
+                      {updateMitigationMutation.isPending ? 'Saving…' : 'Save changes'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -2380,6 +2784,11 @@ function AIAnalysisTab({
   acceptingSuggestion: boolean;
 }) {
   const [acceptedTitles, setAcceptedTitles] = useState<Set<string>>(new Set());
+  // Per-card expand toggle so the operator can read the full AI payload
+  // (description + metadata) before deciding whether to stage it as a
+  // mitigation. Keyed on the suggestion title which is what the parent
+  // uses to dedup the "already accepted" set.
+  const [expandedTitles, setExpandedTitles] = useState<Set<string>>(new Set());
 
   const job = suggestFixMutation.data ?? null;
   const output = job?.output_data ?? null;
@@ -2409,12 +2818,18 @@ function AIAnalysisTab({
       ? (s.priority || '').toLowerCase()
       : 'medium';
     const titlePrefix = '[AI] ';
+    // The parent stages this suggestion into the Add Mitigation modal
+    // pre-filled — it does NOT instantly create the row. We deliberately
+    // don't add to `acceptedTitles` here, because the user can still cancel
+    // the modal and re-stage; the authoritative "this is now in the
+    // register" signal is the Mitigations tab refresh after createSuccess.
+    // (The state lookup stays in place for any callers that want to wire
+    // a confirmed-add hook later.)
     onAcceptSuggestion({
       action_title: (titlePrefix + s.title).slice(0, 255),
       action_description: s.description || undefined,
       priority,
     });
-    setAcceptedTitles((prev) => new Set(prev).add(s.title));
   };
 
   return (
@@ -2521,16 +2936,46 @@ function AIAnalysisTab({
                       </span>
                     )}
                   </div>
-                  {s.description && (
-                    <div className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap flex-1">
-                      {s.description}
+                  {s.description && (() => {
+                    const isExpanded = expandedTitles.has(s.title);
+                    const isLong = (s.description?.length ?? 0) > 220;
+                    return (
+                      <>
+                        <div
+                          className={`text-xs text-slate-700 leading-relaxed whitespace-pre-wrap flex-1 ${
+                            isLong && !isExpanded ? 'line-clamp-4' : ''
+                          }`}
+                        >
+                          {s.description}
+                        </div>
+                        {isLong && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExpandedTitles((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(s.title)) next.delete(s.title);
+                                else next.add(s.title);
+                                return next;
+                              });
+                            }}
+                            className="mt-1 text-[11px] font-medium text-primary-700 hover:underline self-start"
+                          >
+                            {isExpanded ? 'Show less' : 'View details'}
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
+                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400">
+                      AI suggestion
                     </div>
-                  )}
-                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-end">
                     <button
                       type="button"
                       onClick={() => acceptSuggestion(s)}
                       disabled={accepted || acceptingSuggestion}
+                      title={accepted ? 'Already in mitigations' : 'Open the Add Mitigation form pre-filled with this AI suggestion'}
                       className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                         accepted
                           ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 cursor-default'

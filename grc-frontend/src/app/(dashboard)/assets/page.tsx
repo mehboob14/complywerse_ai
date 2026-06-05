@@ -35,6 +35,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import { assetsApi } from '@/lib/api';
+import { CriticalityCoverageWidget } from '@/components/assets/CriticalityCoverageWidget';
 import { ITAsset, AssetType } from '@/types';
 import { SearchInput, MultiSelectDropdown, PageLoader, ComboBoxInput, type ComboBoxOption } from '@/components/ui';
 import {
@@ -393,6 +394,11 @@ export default function AssetsPage() {
 
   return (
     <div className="assets-light space-y-4 sm:space-y-5 px-3 sm:px-4 pt-3">
+      {/* Criticality coverage banner — shows how many assets carry a
+          criticality assessment + band distribution. Drop-in component
+          that runs its own data fetch so the parent stays unchanged. */}
+      <CriticalityCoverageWidget />
+
       {/* Visual overview — 3 chart panels */}
       <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
 

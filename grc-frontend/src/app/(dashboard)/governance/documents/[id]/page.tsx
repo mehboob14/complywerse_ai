@@ -57,6 +57,7 @@ import {
   Search,
 } from 'lucide-react';
 import NcaCompareModal from '@/components/governance/NcaCompareModal';
+import { GovernanceDocumentMarkdown } from '@/components/governance/GovernanceDocumentMarkdown';
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   draft: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Draft' },
@@ -188,6 +189,102 @@ const sanitizeDocumentHtml = (html: string | null | undefined) => {
   });
 };
 
+// Pulls the items from any heading whose title matches a "related documents"
+// / "references" pattern. Returns a Map<normalized-text, {raw, doc_type}> so
+// the markdown renderer can look up each <li> and decide whether to inject
+// a "+ Draft" button without re-parsing on every render.
+type ReferenceEntry = { raw: string; doc_type: 'policy' | 'standard' | 'procedure' | 'guideline' };
+const REFERENCE_HEADING_PATTERN = /(related\s+documents(?:\s+and\s+references)?|normative\s+references|references|supporting\s+documents)/i;
+
+const inferDocType = (title: string): ReferenceEntry['doc_type'] => {
+  const t = title.toLowerCase();
+  if (/\bstandard(s)?\b/.test(t)) return 'standard';
+  if (/\bprocedure(s)?\b/.test(t)) return 'procedure';
+  if (/\b(guideline|guide|playbook|handbook|manual)\b/.test(t)) return 'guideline';
+  return 'policy';
+};
+
+const cleanReferenceLine = (text: string): string => {
+  // Strip markdown emphasis, link syntax, leading clause numbers, and
+  // trailing punctuation / version suffixes so each of these:
+  //   "**Information Classification Standard** v1.0 —"
+  //   "11.2.1 Information Classification Standard."
+  //   "11.2.5 Secure SDLC Standard (including secure coding, code review)."
+  // all reduce to: "Information Classification Standard" / "Secure SDLC Standard".
+  let out = text
+    .replace(/\*\*/g, '')
+    .replace(/__/g, '')
+    .replace(/`/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .trim();
+  // Leading clause number — "11.2.1 ", "5. ", "A.3 ", "(11.2) ".
+  out = out.replace(/^\(?(?:[A-Z]\.?\d+(?:\.\d+)*|\d+(?:\.\d+)+|\d+\.)\)?\s+/, '').trim();
+  // Drop a trailing parenthetical or "— description" so we keep just the name.
+  out = out.replace(/\s*\([^)]*\)\s*$/, '').replace(/\s*[—–-]\s+.+$/, '').trim();
+  // Trailing punctuation.
+  out = out.replace(/[.,;:]+$/, '').trim();
+  return out;
+};
+
+const extractReferenceEntries = (raw: string): Map<string, ReferenceEntry> => {
+  const out = new Map<string, ReferenceEntry>();
+  if (!raw) return out;
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+  let inSection = false;
+  let sectionLevel = 0;
+  for (const line of lines) {
+    const headingMatch = line.match(/^(#{1,6})\s+(.+?)\s*$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const titleRaw = headingMatch[2].replace(/^\d+(\.\d+)*\s+/, '').trim();
+      if (REFERENCE_HEADING_PATTERN.test(titleRaw)) {
+        inSection = true;
+        sectionLevel = level;
+      } else if (inSection && level <= sectionLevel) {
+        inSection = false;
+      }
+      continue;
+    }
+    if (!inSection) continue;
+    // Match bullets (`- foo`), simple numbered list items (`1. foo`), AND
+    // numbered clause paragraphs (`11.2.1 Information Classification
+    // Standard.`) which is how the AI-drafting scaffold lays them out.
+    let candidate: string | null = null;
+    const bulletMatch = line.match(/^\s*(?:[-*+]|\d+\.)\s+(.+?)\s*$/);
+    if (bulletMatch) {
+      candidate = bulletMatch[1];
+    } else {
+      const clauseMatch = line.match(/^\s*(?:\d+(?:\.\d+)+|\d+\.\d+)\s+(.+?)\s*$/);
+      if (clauseMatch) candidate = clauseMatch[1];
+    }
+    if (!candidate) continue;
+    const cleaned = cleanReferenceLine(candidate);
+    // Filter: a reference document name is short-ish, not a sentence, and
+    // not obviously a regulation citation like "ISO/IEC 27001:2022" which
+    // already exists outside the platform. Reject sentences that read like
+    // a clause body ("The CISO shall …") rather than a document name.
+    if (cleaned.length < 4 || cleaned.length > 140) continue;
+    if (/^\s*(see|refer|note|e\.g\.|i\.e\.)\b/i.test(cleaned)) continue;
+    if (/\b(shall|must|will|should|may)\b/i.test(cleaned)) continue;
+    out.set(cleaned.toLowerCase(), { raw: cleaned, doc_type: inferDocType(cleaned) });
+  }
+  return out;
+};
+
+// Flatten a ReactMarkdown <li>'s children prop into a plain string so we
+// can match it against the pre-extracted reference set. Handles nested
+// elements that come through as JSX (e.g. <strong>, <em>) by recursing.
+const childrenToText = (node: React.ReactNode): string => {
+  if (node === null || node === undefined) return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(childrenToText).join('');
+  if (typeof node === 'object') {
+    const maybeElement = node as { props?: { children?: React.ReactNode } };
+    if (maybeElement.props) return childrenToText(maybeElement.props.children);
+  }
+  return '';
+};
+
 type TabKey = 'viewer' | 'statements' | 'controls' | 'gap-analysis' | 'review-history';
 
 export default function PolicyDetailPage() {
@@ -196,6 +293,30 @@ export default function PolicyDetailPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const id = Number(params.id);
+
+  // Restore the operator's scroll position after they round-tripped through
+  // /governance/documents to draft a referenced standard. handleDraftReference
+  // writes window.scrollY to sessionStorage under `gov-doc-scroll-<id>`
+  // before navigating away; we read it on remount and clear the key so the
+  // next visit isn't surprised by a stale offset.
+  useEffect(() => {
+    if (!id || Number.isNaN(id)) return;
+    const key = `gov-doc-scroll-${id}`;
+    try {
+      const saved = sessionStorage.getItem(key);
+      if (!saved) return;
+      const y = Number(saved);
+      sessionStorage.removeItem(key);
+      if (!Number.isNaN(y) && y > 0) {
+        // Defer to after the document content paints — otherwise the page
+        // is still short and the scroll is clamped to 0.
+        const t = window.setTimeout(() => window.scrollTo({ top: y, behavior: 'auto' }), 250);
+        return () => window.clearTimeout(t);
+      }
+    } catch {
+      // sessionStorage disabled — silently no-op.
+    }
+  }, [id]);
 
   const [activeTab, setActiveTab] = useState<TabKey>('viewer');
   const [showGapModal, setShowGapModal] = useState(false);
@@ -1890,11 +2011,76 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
 }
 
 function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }: any) {
-  // Detect if doc.content is markdown (AI-generated docs always are)
+  // Detect if doc.content is markdown (AI-generated docs always are).
+  // Markdown rendering + normalization is delegated to
+  // GovernanceDocumentMarkdown — see _src/components/governance/_ for the
+  // normalization pipeline (heading-space, GFM table-separator inject,
+  // orphan-bullet merge, blank-line collapse). Keeping it in one place is
+  // how the doc viewer and the NCA preview stay visually identical.
   const rawContent: string = doc?.content || '';
   const isMarkdown = /^#{1,6}\s|^\*\*|^-\s|^\d+\.\s/m.test(rawContent);
-  const normalizedMarkdown = useMemo(() => normalizeAiMarkdown(rawContent), [rawContent]);
   const renderedHtml = useMemo(() => sanitizeDocumentHtml(htmlContent?.html), [htmlContent?.html]);
+  const router = useRouter();
+  const { toast } = useToast();
+
+  // Pre-compute the set of bullet items that live inside any
+  // "Related Documents and References" / "Normative References" / "References"
+  // section. The <li> renderer below uses this to decide whether the bullet
+  // should sprout a single-click "+ Draft" button.
+  const referenceItems = useMemo(() => extractReferenceEntries(rawContent), [rawContent]);
+
+  // Single-click handler — jumps to /governance/documents with prefill query
+  // params. The listing page reads these on mount and opens the AI Draft
+  // modal pre-populated so the operator stays in the existing draft flow
+  // (review AI output, accept, save) without retyping the title.
+  //
+  // Two UX guarantees baked in:
+  //   1. The reference's parent (THIS document) is pre-selected in the
+  //      modal's parent-document picker, so the new draft inherits the
+  //      hierarchy automatically.
+  //   2. If the operator cancels the draft, they land back on THIS document
+  //      page at the same scroll offset they left — `aiDraftReturn` carries
+  //      the return path and sessionStorage carries the scroll Y so a
+  //      session-state hop doesn't lose their place.
+  const handleDraftReference = (entry: ReferenceEntry, parentTitle: string) => {
+    const params = new URLSearchParams({
+      aiDraftTitle: entry.raw,
+      aiDraftType: entry.doc_type,
+    });
+    if (parentTitle) {
+      params.set('aiDraftDescription', `Referenced from "${parentTitle}".`);
+    }
+    if (doc?.id) {
+      params.set('aiDraftParentId', String(doc.id));
+      const returnPath = `/governance/documents/${doc.id}`;
+      params.set('aiDraftReturn', returnPath);
+      try {
+        sessionStorage.setItem(`gov-doc-scroll-${doc.id}`, String(window.scrollY));
+      } catch {
+        // sessionStorage can be disabled in private/embedded contexts —
+        // we still navigate, the user just loses scroll position.
+      }
+    }
+    // Propagate the parent doc's framework linkage so the new draft
+    // inherits the same compliance scope automatically. The listing page
+    // parses this back into prefill.framework_ids → AI Draft's
+    // multi-select. Operator can still tweak inside the modal.
+    const parentFrameworkIds: number[] = Array.isArray((doc as { framework_ids?: number[] } | undefined)?.framework_ids)
+      ? ((doc as { framework_ids?: number[] }).framework_ids as number[]).filter((n) => Number.isFinite(n))
+      : [];
+    if (parentFrameworkIds.length > 0) {
+      params.set('aiDraftFrameworkIds', parentFrameworkIds.join(','));
+    }
+    const frameworkHint = parentFrameworkIds.length > 0
+      ? ` Framework${parentFrameworkIds.length === 1 ? '' : 's'} auto-selected from parent.`
+      : '';
+    toast({
+      type: 'info',
+      title: 'Opening AI Draft',
+      message: `Pre-filling "${entry.raw}" for drafting. Parent set to "${parentTitle}".${frameworkHint}`,
+    });
+    router.push(`/governance/documents?${params.toString()}`);
+  };
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1908,33 +2094,13 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
               <PageLoader size="md" />
             </div>
           ) : isMarkdown ? (
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                h1: ({ children }) => <h1 className="text-2xl font-bold text-black mt-6 mb-3 pb-2 border-b border-gray-200">{children}</h1>,
-                h2: ({ children }) => <h2 className="text-xl font-semibold text-black mt-5 mb-2">{children}</h2>,
-                h3: ({ children }) => <h3 className="text-lg font-semibold text-black mt-4 mb-2">{children}</h3>,
-                h4: ({ children }) => <h4 className="text-base font-semibold text-black mt-3 mb-1">{children}</h4>,
-                h5: ({ children }) => <h5 className="text-sm font-semibold text-black mt-2 mb-1">{children}</h5>,
-                h6: ({ children }) => <h6 className="text-sm font-medium text-gray-700 mt-2 mb-1">{children}</h6>,
-                p: ({ children }) => <p className="text-gray-800 mb-3 leading-relaxed">{children}</p>,
-                ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-1 text-gray-800 pl-4">{children}</ul>,
-                ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-1 text-gray-800 pl-4">{children}</ol>,
-                li: ({ children }) => <li className="text-gray-800">{children}</li>,
-                strong: ({ children }) => <strong className="font-semibold text-black">{children}</strong>,
-                em: ({ children }) => <em className="italic text-gray-800">{children}</em>,
-                blockquote: ({ children }) => <blockquote className="border-l-4 border-gray-300 pl-4 my-3 text-gray-700 italic">{children}</blockquote>,
-                code: ({ children }) => <code className="bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>,
-                pre: ({ children }) => <pre className="bg-gray-100 text-gray-800 p-4 rounded-lg overflow-x-auto mb-3 text-sm font-mono">{children}</pre>,
-                hr: () => <hr className="border-gray-200 my-4" />,
-                a: ({ href, children }) => <a href={href} className="text-blue-600 underline hover:text-blue-800">{children}</a>,
-                table: ({ children }) => <div className="overflow-x-auto mb-4"><table className="w-full border-collapse border border-gray-300 text-sm">{children}</table></div>,
-                th: ({ children }) => <th className="border border-gray-300 bg-gray-100 px-3 py-2 text-left font-semibold text-black">{children}</th>,
-                td: ({ children }) => <td className="border border-gray-300 px-3 py-2 text-gray-800">{children}</td>,
-              }}
-            >
-              {normalizedMarkdown}
-            </ReactMarkdown>
+            <GovernanceDocumentMarkdown
+              content={rawContent}
+              references={referenceItems}
+              onDraftReference={handleDraftReference}
+              parentTitle={doc?.title || ''}
+              cleanReferenceLine={cleanReferenceLine}
+            />
           ) : renderedHtml ? (
             <>
               <style dangerouslySetInnerHTML={{ __html: `

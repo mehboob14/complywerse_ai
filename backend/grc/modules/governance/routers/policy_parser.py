@@ -738,15 +738,50 @@ def parse_policy_document(
     except RateLimitExceeded:
         raise HTTPException(status_code=429, detail="Too many parse jobs in the last minute; try again shortly")
 
-    from ....tasks.governance import parse_policy_document as _parse_task
-    async_result = _parse_task.delay(tenant_slug, document_id, current_user.id)
-    print(f"[DISPATCH] policy_parse → celery task_id={async_result.id} tenant={tenant_slug} doc={document_id}", flush=True)
+    # Dispatch strategy: try Celery first (works when a worker is running),
+    # fall back to a daemon thread inside the FastAPI process if the broker
+    # is unreachable OR if `DISABLE_CELERY_DISPATCH=1` is set. The thread
+    # writes to the same Redis namespace as the Celery task so the polling
+    # endpoint is identical for both paths. Without this fallback, a queued
+    # task with no consumer sits "queued" forever — which is exactly what
+    # was happening before this change.
+    import os as _os
+    task_id: str
+    dispatched_via = "celery"
+    force_thread = _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
+
+    if not force_thread:
+        try:
+            from ....tasks.governance import parse_policy_document as _parse_task
+            async_result = _parse_task.delay(tenant_slug, document_id, current_user.id)
+            task_id = async_result.id
+        except Exception as _celery_exc:  # noqa: BLE001
+            # Broker unreachable / Celery misconfigured. Fall through to
+            # the thread path so the user's parse runs anyway.
+            print(
+                f"[DISPATCH] policy_parse → celery FAILED, falling back to thread "
+                f"(reason: {type(_celery_exc).__name__}: {_celery_exc!s:.140s})",
+                flush=True,
+            )
+            force_thread = True
+
+    if force_thread:
+        from ....tasks.governance import dispatch_parse_in_thread
+        task_id = dispatch_parse_in_thread(tenant_slug, document_id, current_user.id)
+        dispatched_via = "thread"
+
+    print(
+        f"[DISPATCH] policy_parse → {dispatched_via} task_id={task_id} "
+        f"tenant={tenant_slug} doc={document_id}",
+        flush=True,
+    )
 
     return {
         "status": "queued",
-        "task_id": async_result.id,
+        "task_id": task_id,
+        "dispatched_via": dispatched_via,
         "message": "Policy parsing queued. Poll /parse-status for progress.",
-        "document_id": document_id
+        "document_id": document_id,
     }
 
 

@@ -1,9 +1,12 @@
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
+import logging
 import os
 import uuid
 import json
 import html
+
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
@@ -1855,17 +1858,91 @@ Return a JSON object with:
 }}"""
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": "You are an expert governance and compliance consultant that creates mature ISO-aligned governance documents for enterprise organizations. Always respond with valid JSON. Never return brief or generic output."},
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"},
-            max_completion_tokens=12000
+        # Use the same env-driven model as the async drafting pipeline so a
+        # single setting (`OPENAI_DRAFT_MODEL` in .env) drives both paths.
+        # Default to GPT-5; GPT-5 currently rejects custom temperature, so
+        # we omit it on that family and rely on the default.
+        _legacy_model = os.environ.get("OPENAI_DRAFT_MODEL", "gpt-5")
+        # Layer enterprise SME craft onto the prompt and system message — the
+        # legacy generator was previously a single-shot call with a vague
+        # "expert consultant" system message that produced generic output.
+        # We inject the doc-type-specific drafting craft block + banking
+        # reality block so the legacy path produces work matching the
+        # multi-stage pipeline's quality bar.
+        from ..ai_drafting.enterprise_craft import (
+            SME_SYSTEM_ADDENDUM,
+            enterprise_drafting_block,
         )
-        
-        result_text = response.choices[0].message.content or "{}"
+        _craft_block = enterprise_drafting_block(doc_type)
+        _system_msg = (
+            "You are an expert governance and compliance consultant that "
+            "creates mature ISO-aligned governance documents for enterprise "
+            "organizations. Always respond with valid JSON. Never return "
+            "brief or generic output."
+            + SME_SYSTEM_ADDENDUM
+        )
+        _user_msg = prompt + "\n\n" + _craft_block + (
+            "\n\nFinal reminder: replace every generic governance verb "
+            "(`ensure`, `make sure`, `consider`, `where possible`, `as "
+            "appropriate`) with a prescriptive verb and a named owner. "
+            "Output must read like a real bank's policy library — not a "
+            "SaaS startup blog."
+        )
+        # GPT-5 / o-series are reasoning models — `max_completion_tokens`
+        # has to cover BOTH hidden reasoning AND visible output. 12k was OK
+        # on gpt-4o (no reasoning trace); for GPT-5 we double it so a long
+        # policy body doesn't get cut to empty after the model finishes
+        # thinking. Reasoning models also reject custom `temperature`.
+        _is_reasoning = _legacy_model.lower().startswith(("gpt-5", "o1", "o3", "o4"))
+        _legacy_kwargs: Dict[str, Any] = {
+            "model": _legacy_model,
+            "messages": [
+                {"role": "system", "content": _system_msg},
+                {"role": "user", "content": _user_msg},
+            ],
+            "response_format": {"type": "json_object"},
+            "max_completion_tokens": 24000 if _is_reasoning else 12000,
+        }
+
+        def _call(kwargs: Dict[str, Any]):
+            resp = client.chat.completions.create(**kwargs)
+            txt = resp.choices[0].message.content
+            return resp, txt
+
+        try:
+            response, result_text = _call(_legacy_kwargs)
+        except Exception as primary_exc:  # noqa: BLE001
+            logger.warning("Legacy generator primary model %r failed: %s", _legacy_model, primary_exc)
+            response, result_text = None, None
+
+        # Auto-fallback when the primary returns empty content (GPT-5 ate the
+        # whole budget on reasoning) or raises. Falls back to gpt-4o so the
+        # user still gets a real document instead of an empty-body stub.
+        if not result_text:
+            _fallback_model = os.environ.get("OPENAI_DRAFT_FALLBACK_MODEL", "gpt-4o")
+            if _fallback_model and _fallback_model != _legacy_model:
+                logger.info(
+                    "Legacy generator falling back from %r to %r after empty primary output",
+                    _legacy_model, _fallback_model,
+                )
+                _fallback_kwargs = dict(_legacy_kwargs)
+                _fallback_kwargs["model"] = _fallback_model
+                _fallback_kwargs["temperature"] = 0.4  # gpt-4o accepts this
+                _fallback_kwargs["max_completion_tokens"] = 12000
+                try:
+                    response, result_text = _call(_fallback_kwargs)
+                except Exception as fb_exc:  # noqa: BLE001
+                    logger.exception("Legacy generator fallback %r also failed: %s", _fallback_model, fb_exc)
+
+        if not result_text:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=(
+                    "OpenAI returned empty content from both the primary model "
+                    f"({_legacy_model}) and the fallback. Check the API key "
+                    "billing/quota, OPENAI_DRAFT_MODEL value, and server logs."
+                ),
+            )
         result = json.loads(result_text)
         return result
     

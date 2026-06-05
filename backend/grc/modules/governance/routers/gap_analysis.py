@@ -623,14 +623,44 @@ def run_gap_analysis(
     except RateLimitExceeded:
         raise HTTPException(status_code=429, detail="Too many gap-analysis runs in the last minute; try again shortly")
 
-    from ....tasks.governance import run_gap_analysis as _gap_task
-    async_result = _gap_task.delay(tenant_slug, run_ids, request.document_id, current_user.id)
-    print(f"[DISPATCH] gap_analysis → celery task_id={async_result.id} tenant={tenant_slug} doc={request.document_id} runs={len(run_ids)}", flush=True)
+    # Same fallback strategy as the parse-policy endpoint — Celery first,
+    # in-thread daemon if the broker is unreachable or DISABLE_CELERY_DISPATCH=1.
+    import os as _os
+    task_id: str
+    dispatched_via = "celery"
+    force_thread = _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
+
+    if not force_thread:
+        try:
+            from ....tasks.governance import run_gap_analysis as _gap_task
+            async_result = _gap_task.delay(tenant_slug, run_ids, request.document_id, current_user.id)
+            task_id = async_result.id
+        except Exception as _celery_exc:  # noqa: BLE001
+            print(
+                f"[DISPATCH] gap_analysis → celery FAILED, falling back to thread "
+                f"(reason: {type(_celery_exc).__name__}: {_celery_exc!s:.140s})",
+                flush=True,
+            )
+            force_thread = True
+
+    if force_thread:
+        from ....tasks.governance import dispatch_gap_analysis_in_thread
+        task_id = dispatch_gap_analysis_in_thread(
+            tenant_slug, run_ids, request.document_id, current_user.id,
+        )
+        dispatched_via = "thread"
+
+    print(
+        f"[DISPATCH] gap_analysis → {dispatched_via} task_id={task_id} "
+        f"tenant={tenant_slug} doc={request.document_id} runs={len(run_ids)}",
+        flush=True,
+    )
 
     return {
         "message": f"Gap analysis queued for {len(all_runs)} framework(s). Check status for results.",
         "document_id": request.document_id,
-        "task_id": async_result.id,
+        "task_id": task_id,
+        "dispatched_via": dispatched_via,
         "runs": serialized,
         "status": "queued"
     }

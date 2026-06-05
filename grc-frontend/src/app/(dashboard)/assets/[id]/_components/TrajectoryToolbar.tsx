@@ -1,11 +1,11 @@
 'use client';
 
-import { RefreshCw, Loader2, Zap, AlertTriangle, Sparkles, Maximize2, Info } from 'lucide-react';
+import { RefreshCw, Loader2, Zap, AlertTriangle, Filter, Maximize2, Info } from 'lucide-react';
 
 export interface TrajectoryFilters {
   kevOnly: boolean;
   criticalOnly: boolean;
-  hideAutoLinks: boolean;
+  riskBearingOnly: boolean;
   hideDirect: boolean;
 }
 
@@ -18,7 +18,8 @@ interface Props {
   stats: {
     open_vulns: number;
     kev_count: number;
-    controls: number;
+    vulns_with_risk_path: number;
+    bridge_controls_total: number;
     risks_direct: number;
     risks_transitive: number;
     max_residual: number;
@@ -51,6 +52,7 @@ function Chip({
 export function TrajectoryToolbar({
   filters, setFilters, onRefresh, isFetching, onShowLegend, stats,
 }: Props) {
+  const totalRisks = stats.risks_direct + stats.risks_transitive;
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50/70 px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -61,8 +63,10 @@ export function TrajectoryToolbar({
             {stats.kev_count > 0 && (
               <> · <span className="font-semibold text-rose-700">{stats.kev_count}</span> KEV</>
             )}
-            {' · '}<span className="font-semibold text-slate-900">{stats.controls}</span> ctrls
-            {' · '}<span className="font-semibold text-slate-900">{stats.risks_direct + stats.risks_transitive}</span> risks
+            {' · '}<span className="font-semibold text-slate-900">{stats.vulns_with_risk_path}</span> with risk path
+            {' · '}<span className="font-semibold text-slate-900">{totalRisks}</span> risks
+            {' '}(<span className="text-rose-700">{stats.risks_direct}</span>↑direct
+            {' / '}<span className="text-blue-700">{stats.risks_transitive}</span>↑via ctrl)
             {stats.max_residual > 0 && (
               <> · max residual <span className="font-semibold text-rose-700 tabular-nums">{stats.max_residual}</span></>
             )}
@@ -81,10 +85,10 @@ export function TrajectoryToolbar({
           onClick={() => setFilters({ ...filters, criticalOnly: !filters.criticalOnly })}
         />
         <Chip
-          active={filters.hideAutoLinks}
-          label="Hide auto-CWE"
-          icon={Sparkles}
-          onClick={() => setFilters({ ...filters, hideAutoLinks: !filters.hideAutoLinks })}
+          active={filters.riskBearingOnly}
+          label="Risk-bearing only"
+          icon={Filter}
+          onClick={() => setFilters({ ...filters, riskBearingOnly: !filters.riskBearingOnly })}
         />
         <Chip
           active={filters.hideDirect}

@@ -1388,6 +1388,333 @@ export const tenantApi = {
   },
 };
 
+
+// ─── Criticality Assessments (ISCA + IACA) ───────────────────────────────
+// Mirrors the bank-provided templates: each assessment type has its own
+// CRUD family, and the shared `/users` + `/assets` pickers drive the
+// dropdowns on the create/edit drawer.
+
+export type CriticalityUserOption = {
+  id: number;
+  display_name: string;
+  email?: string | null;
+  designation?: string | null;
+};
+
+export type CriticalityAssetOwnerDetail = {
+  user_id?: number | null;
+  name?: string | null;
+  designation?: string | null;
+  email?: string | null;
+  phone?: string | null;
+};
+
+export type CriticalityAssetOption = {
+  id: number;
+  name: string;
+  asset_type?: string | null;
+  criticality?: string | null;
+  description?: string | null;
+  location?: string | null;
+  vendor?: string | null;
+  host_name?: string | null;
+  ip_address?: string | null;
+  address?: string | null;
+  associated_ips?: string | null;
+  business_owner?: CriticalityAssetOwnerDetail | null;
+  primary_owner?: CriticalityAssetOwnerDetail | null;
+  secondary_owner?: CriticalityAssetOwnerDetail | null;
+};
+
+// Phase 2 additions shared across both kinds.
+export type CriticalityApprovalStatus =
+  | 'draft'
+  | 'submitted'
+  | 'business_owner_review'
+  | 'ciso_review'
+  | 'approved'
+  | 'rejected'
+  | 'returned';
+
+type CriticalityApprovalFields = {
+  approval_status?: CriticalityApprovalStatus | null;
+  current_approval_tier?: number | null;
+  submitted_at?: string | null;
+  submitted_by?: number | null;
+  submitted_by_name?: string | null;
+  approved_at?: string | null;
+  approved_by?: number | null;
+  approved_by_name?: string | null;
+  rejected_at?: string | null;
+  rejected_by?: number | null;
+  rejected_by_name?: string | null;
+  rejection_reason?: string | null;
+  linked_risk_id?: number | null;
+  evidence_count?: number;
+  comment_count?: number;
+};
+
+export type IscaItem = CriticalityApprovalFields & {
+  id: number;
+  tenant_id: number;
+  linked_asset_id?: number | null;
+  linked_asset_name?: string | null;
+  name: string;
+  description?: string | null;
+  address?: string | null;
+  business_owner_user_id?: number | null;
+  business_owner_user_name?: string | null;
+  business_owner_name?: string | null;
+  business_owner_designation?: string | null;
+  business_owner_phone?: string | null;
+  business_owner_email?: string | null;
+  service_owner_user_id?: number | null;
+  service_owner_user_name?: string | null;
+  service_owner_name?: string | null;
+  service_owner_designation?: string | null;
+  service_owner_phone?: string | null;
+  service_owner_email?: string | null;
+  assessor_user_id?: number | null;
+  assessor_user_name?: string | null;
+  assessor_name?: string | null;
+  assessor_designation?: string | null;
+  assessor_phone?: string | null;
+  assessor_email?: string | null;
+  date_of_assessment?: string | null;
+  operational_dependency?: number | null;
+  financial_impact?: number | null;
+  customer_stakeholder_impact?: number | null;
+  data_sensitivity?: number | null;
+  unauthorized_access_risk?: number | null;
+  rto_rpo_requirements?: number | null;
+  internet_facing?: number | null;
+  b2b_exposure?: number | null;
+  total_score?: number | null;
+  criticality_level?: 'mission_critical' | 'high' | 'moderate' | 'low' | null;
+  comments?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type IacaItem = CriticalityApprovalFields & {
+  id: number;
+  tenant_id: number;
+  linked_asset_id?: number | null;
+  linked_asset_name?: string | null;
+  name: string;
+  description?: string | null;
+  make_model?: string | null;
+  location?: string | null;
+  associated_ips?: string | null;
+  fault_tolerance?: string | null;
+  custodian_user_id?: number | null;
+  custodian_user_name?: string | null;
+  custodian_name?: string | null;
+  custodian_designation?: string | null;
+  custodian_phone?: string | null;
+  custodian_email?: string | null;
+  administrator_user_id?: number | null;
+  administrator_user_name?: string | null;
+  administrator_name?: string | null;
+  administrator_designation?: string | null;
+  administrator_phone?: string | null;
+  administrator_email?: string | null;
+  assessor_user_id?: number | null;
+  assessor_user_name?: string | null;
+  assessor_name?: string | null;
+  assessor_designation?: string | null;
+  assessor_phone?: string | null;
+  assessor_email?: string | null;
+  date_of_assessment?: string | null;
+  business_impact?: number | null;
+  service_dependency?: number | null;
+  data_sensitivity?: number | null;
+  redundancy_failover?: number | null;
+  rto?: number | null;
+  availability_requirement?: number | null;
+  operational_disruption?: number | null;
+  regulatory_dependency?: number | null;
+  exposure?: number | null;
+  total_score?: number | null;
+  criticality_level?: 'mission_critical' | 'high' | 'moderate' | 'low' | null;
+  comments?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CriticalityActivityRow = {
+  id: number;
+  type: string;
+  user: { id?: number | null; display_name?: string | null };
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+
+export type CriticalityCommentRow = {
+  id: number;
+  parent_id?: number | null;
+  body: string;
+  user: { id?: number | null; display_name?: string | null };
+  created_at: string;
+  edited_at?: string | null;
+};
+
+export type CriticalityEvidenceRow = {
+  id: number;
+  file_name: string;
+  file_size?: number | null;
+  mime_type?: string | null;
+  description?: string | null;
+  uploaded_by?: number | null;
+  uploaded_by_name?: string | null;
+  uploaded_at: string;
+};
+
+export type CriticalityCoverage = {
+  total_assets: number;
+  assessed_assets: number;
+  unassessed_assets: number;
+  by_band: Record<string, number>;
+  by_kind: Record<string, number>;
+  by_approval_status: Record<string, number>;
+};
+
+export type CriticalityKind = 'isca' | 'iaca';
+
+export const criticalityApi = {
+  // Pickers
+  listUsers: () =>
+    apiClient.get<CriticalityUserOption[]>('/criticality-assessments/users'),
+  listAssets: (params?: { asset_type?: string; search?: string }) =>
+    apiClient.get<CriticalityAssetOption[]>('/criticality-assessments/assets', { params }),
+
+  // Information System Criticality Assessment
+  infoSystem: {
+    list: () => apiClient.get<IscaItem[]>('/criticality-assessments/info-system'),
+    get: (id: number) =>
+      apiClient.get<IscaItem>(`/criticality-assessments/info-system/${id}`),
+    create: (data: Partial<IscaItem>) =>
+      apiClient.post<IscaItem>('/criticality-assessments/info-system', data),
+    update: (id: number, data: Partial<IscaItem>) =>
+      apiClient.put<IscaItem>(`/criticality-assessments/info-system/${id}`, data),
+    delete: (id: number) =>
+      apiClient.delete(`/criticality-assessments/info-system/${id}`),
+  },
+
+  // Infrastructure Asset Criticality Assessment
+  infraAsset: {
+    list: () => apiClient.get<IacaItem[]>('/criticality-assessments/infra-asset'),
+    get: (id: number) =>
+      apiClient.get<IacaItem>(`/criticality-assessments/infra-asset/${id}`),
+    create: (data: Partial<IacaItem>) =>
+      apiClient.post<IacaItem>('/criticality-assessments/infra-asset', data),
+    update: (id: number, data: Partial<IacaItem>) =>
+      apiClient.put<IacaItem>(`/criticality-assessments/infra-asset/${id}`, data),
+    delete: (id: number) =>
+      apiClient.delete(`/criticality-assessments/infra-asset/${id}`),
+  },
+
+  // ── Phase 2: kind-discriminated families ──────────────────────────
+  activity: {
+    list: (kind: CriticalityKind, itemId: number, limit = 200) =>
+      apiClient.get<CriticalityActivityRow[]>(
+        `/criticality-assessments/${kind}/${itemId}/activity`,
+        { params: { limit } },
+      ),
+  },
+  comments: {
+    list: (kind: CriticalityKind, itemId: number) =>
+      apiClient.get<CriticalityCommentRow[]>(
+        `/criticality-assessments/${kind}/${itemId}/comments`,
+      ),
+    add: (kind: CriticalityKind, itemId: number, body: string, parentId?: number | null) =>
+      apiClient.post<CriticalityCommentRow>(
+        `/criticality-assessments/${kind}/${itemId}/comments`,
+        { body, parent_id: parentId ?? null },
+      ),
+  },
+  evidence: {
+    list: (kind: CriticalityKind, itemId: number) =>
+      apiClient.get<CriticalityEvidenceRow[]>(
+        `/criticality-assessments/${kind}/${itemId}/evidence`,
+      ),
+    upload: (kind: CriticalityKind, itemId: number, file: File, description?: string) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      if (description) fd.append('description', description);
+      return apiClient.post<CriticalityEvidenceRow>(
+        `/criticality-assessments/${kind}/${itemId}/evidence`,
+        fd,
+        { headers: { 'Content-Type': undefined }, timeout: 2 * 60 * 1000 },
+      );
+    },
+    delete: (kind: CriticalityKind, itemId: number, evidenceId: number) =>
+      apiClient.delete(
+        `/criticality-assessments/${kind}/${itemId}/evidence/${evidenceId}`,
+      ),
+    downloadUrl: (kind: CriticalityKind, itemId: number, evidenceId: number) =>
+      `/criticality-assessments/${kind}/${itemId}/evidence/${evidenceId}/download`,
+  },
+  approval: {
+    submit: (kind: CriticalityKind, itemId: number) =>
+      apiClient.post<IscaItem | IacaItem>(
+        `/criticality-assessments/${kind}/${itemId}/submit`,
+      ),
+    approveBusinessOwner: (kind: CriticalityKind, itemId: number, notes?: string) =>
+      apiClient.post<IscaItem | IacaItem>(
+        `/criticality-assessments/${kind}/${itemId}/approve`,
+        { notes: notes ?? null },
+      ),
+    approveCiso: (kind: CriticalityKind, itemId: number, notes?: string) =>
+      apiClient.post<IscaItem | IacaItem>(
+        `/criticality-assessments/${kind}/${itemId}/ciso-approve`,
+        { notes: notes ?? null },
+      ),
+    reject: (kind: CriticalityKind, itemId: number, reason: string) =>
+      apiClient.post<IscaItem | IacaItem>(
+        `/criticality-assessments/${kind}/${itemId}/reject`,
+        { reason },
+      ),
+    return: (kind: CriticalityKind, itemId: number, reason: string) =>
+      apiClient.post<IscaItem | IacaItem>(
+        `/criticality-assessments/${kind}/${itemId}/return`,
+        { reason },
+      ),
+  },
+  promote: {
+    toRisk: (kind: CriticalityKind, itemId: number) =>
+      apiClient.post<{ risk_id: number; created: boolean }>(
+        `/criticality-assessments/${kind}/${itemId}/promote-to-risk`,
+      ),
+  },
+  followUpTask: (
+    kind: CriticalityKind,
+    itemId: number,
+    data?: { title?: string; description?: string; due_in_days?: number; assignee_user_id?: number | null },
+  ) =>
+    apiClient.post<{ task_id: number; title: string }>(
+      `/criticality-assessments/${kind}/${itemId}/follow-up-task`,
+      data || {},
+    ),
+  byAsset: (assetId: number) =>
+    apiClient.get<{ isca: IscaItem[]; iaca: IacaItem[] }>(
+      `/criticality-assessments/by-asset/${assetId}`,
+    ),
+  coverage: () =>
+    apiClient.get<CriticalityCoverage>('/criticality-assessments/coverage'),
+  exportXlsxUrl: (kind: CriticalityKind, itemId: number) =>
+    `/criticality-assessments/${kind}/${itemId}/export.xlsx`,
+  bulkImport: (kind: CriticalityKind, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post<{ imported: Array<{ row: number; item_id: number; name: string }>; errors: Array<{ row: number; message: string }> }>(
+      `/criticality-assessments/${kind}/bulk-import`,
+      fd,
+      { headers: { 'Content-Type': undefined }, timeout: 2 * 60 * 1000 },
+    );
+  },
+};
+
 export const vendorRiskApi = {
   getModuleInfo: () => apiClient.get('/vendor-risk'),
 
@@ -2016,7 +2343,139 @@ export const rcsaApi = {
       params,
     }),
   downloadTemplate: (id: number) => apiClient.get(`/erm/rcsa/templates/download/${id}`, { responseType: 'blob' }),
-  
+
+  // ── Custom (bring-your-own-Excel) RCSA templates ─────────────────────────
+  // Upload an Excel file once; the platform parses its column structure and
+  // drives every downstream feature (row CRUD, export, AI suggestions, risk
+  // register linking) using that exact layout. Coexists with the question-
+  // based template endpoints above — neither replaces the other.
+  customTemplates: {
+    list: (includeInactive = false) =>
+      apiClient.get('/erm/rcsa/custom-templates', { params: { include_inactive: includeInactive } }),
+    get: (id: number) => apiClient.get(`/erm/rcsa/custom-templates/${id}`),
+    upload: (
+      file: File,
+      opts?: { name?: string; description?: string; function_area?: string; sheet_name?: string; seed_from_file?: boolean },
+    ) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      if (opts?.name) fd.append('name', opts.name);
+      if (opts?.description) fd.append('description', opts.description);
+      if (opts?.function_area) fd.append('function_area', opts.function_area);
+      if (opts?.sheet_name) fd.append('sheet_name', opts.sheet_name);
+      // Default seed=true on backend — only send false explicitly when needed.
+      if (opts?.seed_from_file === false) fd.append('seed_from_file', 'false');
+      // Do NOT set Content-Type manually — axios needs to attach the
+      // multipart boundary itself; specifying a bare value strips it.
+      return apiClient.post('/erm/rcsa/custom-templates', fd, {
+        headers: { 'Content-Type': undefined },
+        timeout: 2 * 60 * 1000,
+      });
+    },
+    deactivate: (id: number) => apiClient.delete(`/erm/rcsa/custom-templates/${id}`),
+    download: (id: number) =>
+      apiClient.get(`/erm/rcsa/custom-templates/${id}/download`, { responseType: 'blob' }),
+    exportCurrent: (id: number) =>
+      apiClient.post(`/erm/rcsa/custom-templates/${id}/export`, undefined, { responseType: 'blob' }),
+    reimport: (id: number, replace = false) =>
+      apiClient.post(`/erm/rcsa/custom-templates/${id}/import-rows`, undefined, { params: { replace } }),
+    listRows: (id: number, params?: { limit?: number; offset?: number }) =>
+      apiClient.get(`/erm/rcsa/custom-templates/${id}/rows`, { params }),
+    createRow: (id: number, data: { data: Record<string, unknown>; risk_id_text?: string }) =>
+      apiClient.post(`/erm/rcsa/custom-templates/${id}/rows`, data),
+    getRow: (id: number, rowId: number) =>
+      apiClient.get(`/erm/rcsa/custom-templates/${id}/rows/${rowId}`),
+    updateRow: (id: number, rowId: number, data: { data?: Record<string, unknown>; risk_id_text?: string }) =>
+      apiClient.put(`/erm/rcsa/custom-templates/${id}/rows/${rowId}`, data),
+    deleteRow: (id: number, rowId: number) =>
+      apiClient.delete(`/erm/rcsa/custom-templates/${id}/rows/${rowId}`),
+    promoteRowToRisk: (id: number, rowId: number, data: { title_override?: string; description_override?: string } = {}) =>
+      apiClient.post(`/erm/rcsa/custom-templates/${id}/rows/${rowId}/promote-to-risk`, data),
+
+    // ── Tenant users available for row assignment ─────────────────────
+    listTenantUsers: () =>
+      apiClient.get<Array<{ id: number; display_name: string; email?: string | null }>>(
+        '/erm/rcsa/custom-templates/tenant-users',
+      ),
+
+    // ── Row-level: AI explanation, evidence, assignment ───────────────
+    assignRow: (id: number, rowId: number, assignedUserId: number | null) =>
+      apiClient.patch(
+        `/erm/rcsa/custom-templates/${id}/rows/${rowId}/assign`,
+        { assigned_user_id: assignedUserId },
+      ),
+    explainRow: (id: number, rowId: number, refresh = false) =>
+      apiClient.post<{
+        row_id: number;
+        explanation: string;
+        generated_at: string;
+        from_cache: boolean;
+      }>(`/erm/rcsa/custom-templates/${id}/rows/${rowId}/explain`, undefined, {
+        params: { refresh },
+      }),
+    listRowEvidence: (id: number, rowId: number) =>
+      apiClient.get<Array<{
+        id: number;
+        row_id: number;
+        file_name: string;
+        file_size?: number | null;
+        mime_type?: string | null;
+        description?: string | null;
+        uploaded_by?: number | null;
+        uploaded_by_name?: string | null;
+        uploaded_at: string;
+        linked_evidence_id?: number | null;
+      }>>(`/erm/rcsa/custom-templates/${id}/rows/${rowId}/evidence`),
+    uploadRowEvidence: (id: number, rowId: number, file: File, description?: string) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      if (description) fd.append('description', description);
+      return apiClient.post(`/erm/rcsa/custom-templates/${id}/rows/${rowId}/evidence`, fd, {
+        headers: { 'Content-Type': undefined },
+        timeout: 2 * 60 * 1000,
+      });
+    },
+    /** Link an existing Evidence Library item to the assessment item. */
+    linkRowEvidenceFromLibrary: (id: number, rowId: number, evidenceId: number, description?: string) =>
+      apiClient.post(
+        `/erm/rcsa/custom-templates/${id}/rows/${rowId}/evidence/from-library`,
+        { evidence_id: evidenceId, description: description || null },
+      ),
+    deleteRowEvidence: (id: number, rowId: number, evidenceId: number) =>
+      apiClient.delete(`/erm/rcsa/custom-templates/${id}/rows/${rowId}/evidence/${evidenceId}`),
+    downloadRowEvidenceUrl: (id: number, rowId: number, evidenceId: number) =>
+      `/erm/rcsa/custom-templates/${id}/rows/${rowId}/evidence/${evidenceId}/download`,
+
+    // ── Evidence Library search (drives the "Pick from library" combobox) ──
+    listEvidenceLibrary: (search?: string) =>
+      apiClient.get<Array<{
+        id: number;
+        name: string;
+        file_name?: string | null;
+        file_type?: string | null;
+        evidence_type?: string | null;
+        status?: string | null;
+        uploaded_at?: string | null;
+      }>>('/erm/rcsa/custom-templates/evidence-library', {
+        params: search ? { search } : undefined,
+      }),
+
+    // ── Cross-template "My Assignments" — items owned by the caller ───
+    listMyAssignments: () =>
+      apiClient.get<Array<{
+        row_id: number;
+        template_id: number;
+        template_name: string;
+        risk_id_text?: string | null;
+        inherent_overall_label?: string | null;
+        residual_overall_label?: string | null;
+        inherent_overall_score?: number | null;
+        residual_overall_score?: number | null;
+        evidence_count: number;
+        updated_at: string;
+      }>>('/erm/rcsa/custom-templates/my-assignments'),
+  },
+
   getCampaigns: (params?: { status?: string; period?: string }) => apiClient.get('/erm/rcsa/campaigns', { params }),
   getCampaign: (id: number) => apiClient.get(`/erm/rcsa/campaigns/${id}`),
   getCampaignDetail: (id: number) => apiClient.get(`/erm/rcsa/campaigns/${id}/detail`),
@@ -2912,6 +3371,14 @@ export const adminApi = {
   getAuditLogs: (params?: { limit?: number; offset?: number; action?: string; module?: string; user_id?: number; start_date?: string; end_date?: string }) =>
     apiClient.get('/admin/audit-logs', { params }),
   getAuditLogFilters: () => apiClient.get<{ actions: string[]; modules: string[]; date_presets: string[] }>('/admin/audit-logs/filters'),
+  // v2 audit-AI: lazily generate (or fetch cached) a human-readable summary
+  // for one audit-log row. Set force=true to bypass the server-side cache and
+  // re-generate. Backend caches the result on the row's `changes.ai_summary`.
+  generateAuditLogAiSummary: (logId: number, force = false) =>
+    apiClient.post<{ ai_summary: string | null; cached: boolean; fallback: boolean }>(
+      `/admin/audit-logs/${logId}/ai-summary`,
+      { force },
+    ),
 };
 
 export interface IdpConfig {
@@ -3130,6 +3597,298 @@ export const workflowEngineApi = {
     testEmailConfig: (id: number, testEmail: string) =>
       apiClient.post(`/workflow-engine/notifications/email-config/${id}/test`, undefined, { params: { test_email: testEmail } }),
   },
+};
+
+// ── Issue Management ────────────────────────────────────────────────────
+// CRUD + transitions + linkages + CAPA + matrices for the Issues module
+// (sibling to Critical Tasks). Backend at /issue-management/*.
+export const issuesApi = {
+  list: (params?: {
+    search?: string;
+    severity?: string;
+    workflow_state?: string;
+    issue_type?: string;
+    category?: string;
+    assignee_id?: number;
+    source_type?: string;
+    sla_breached?: boolean;
+    sort_by?: string;
+    sort_order?: 'asc' | 'desc';
+    skip?: number;
+    limit?: number;
+  }) => apiClient.get('/issue-management/issues', { params }),
+  get: (id: number) => apiClient.get(`/issue-management/issues/${id}`),
+  create: (body: Record<string, unknown>) =>
+    apiClient.post('/issue-management/issues', body),
+  patch: (id: number, body: Record<string, unknown>) =>
+    apiClient.patch(`/issue-management/issues/${id}`, body),
+  transition: (id: number, body: { to_state: string; notes?: string }) =>
+    apiClient.post(`/issue-management/issues/${id}/transition`, body),
+  close: (id: number, body: { closure_notes: string }) =>
+    apiClient.post(`/issue-management/issues/${id}/close`, body),
+  reopen: (id: number, body: { reason: string }) =>
+    apiClient.post(`/issue-management/issues/${id}/reopen`, body),
+  delete: (id: number) => apiClient.delete(`/issue-management/issues/${id}`),
+
+  // "Create Issue from <upstream>" — used by the +button on vuln/risk/asset/control detail pages.
+  fromSource: (body: {
+    source_type:
+      | 'vulnerability' | 'risk' | 'asset'
+      | 'control_framework' | 'control_parsed' | 'control_normalized' | 'control_internal'
+      // v2 — governance + policy source types accepted by /issues/from-source
+      | 'governance_document' | 'policy_statement';
+    source_id: number;
+    title?: string;
+    description?: string;
+    impact?: string;
+    urgency?: string;
+    severity_override?: string;
+    severity_override_reason?: string;
+    category?: string;
+    issue_type?: string;
+    owner_id?: number;
+    assignee_id?: number;
+  }) => apiClient.post('/issue-management/issues/from-source', body),
+
+  actions: {
+    listForIssue: (issueId: number) =>
+      apiClient.get(`/issue-management/issues/${issueId}/actions`),
+    create: (issueId: number, body: Record<string, unknown>) =>
+      apiClient.post(`/issue-management/issues/${issueId}/actions`, body),
+    listAll: (params?: { status_filter?: string; action_type?: string; assignee_id?: number }) =>
+      apiClient.get('/issue-management/actions', { params }),
+    patch: (actionId: number, body: Record<string, unknown>) =>
+      apiClient.patch(`/issue-management/actions/${actionId}`, body),
+    verify: (actionId: number, body: { effectiveness_review_at?: string; notes?: string }) =>
+      apiClient.post(`/issue-management/actions/${actionId}/verify`, body),
+    delete: (actionId: number) =>
+      apiClient.delete(`/issue-management/actions/${actionId}`),
+    // v2 — promote a CAPA action into the Critical Tasks register; returns
+    // {task_id, code, already_linked}.
+    promoteToTask: (actionId: number, body?: { title?: string; description?: string; priority?: string; sla_days?: number }) =>
+      apiClient.post(`/issue-management/actions/${actionId}/promote-to-task`, body || {}),
+  },
+
+  links: {
+    vulns: {
+      list: (issueId: number) => apiClient.get(`/issue-management/issues/${issueId}/links/vulns`),
+      add: (issueId: number, body: { vulnerability_id: number; notes?: string }) =>
+        apiClient.post(`/issue-management/issues/${issueId}/links/vulns`, body),
+      remove: (issueId: number, vulnId: number) =>
+        apiClient.delete(`/issue-management/issues/${issueId}/links/vulns/${vulnId}`),
+    },
+    risks: {
+      list: (issueId: number) => apiClient.get(`/issue-management/issues/${issueId}/links/risks`),
+      add: (issueId: number, body: { risk_id: number; link_type?: string; notes?: string }) =>
+        apiClient.post(`/issue-management/issues/${issueId}/links/risks`, body),
+      remove: (issueId: number, riskId: number) =>
+        apiClient.delete(`/issue-management/issues/${issueId}/links/risks/${riskId}`),
+    },
+    assets: {
+      list: (issueId: number) => apiClient.get(`/issue-management/issues/${issueId}/links/assets`),
+      add: (issueId: number, body: { asset_id: number; notes?: string }) =>
+        apiClient.post(`/issue-management/issues/${issueId}/links/assets`, body),
+      remove: (issueId: number, assetId: number) =>
+        apiClient.delete(`/issue-management/issues/${issueId}/links/assets/${assetId}`),
+    },
+    controls: {
+      list: (issueId: number) => apiClient.get(`/issue-management/issues/${issueId}/links/controls`),
+      add: (issueId: number, body: {
+        target_type: 'framework' | 'parsed' | 'normalized' | 'internal';
+        control_id: number;
+        link_type?: string;
+        notes?: string;
+      }) => apiClient.post(`/issue-management/issues/${issueId}/links/controls`, body),
+      remove: (issueId: number, linkId: number) =>
+        apiClient.delete(`/issue-management/issues/${issueId}/links/controls/${linkId}`),
+    },
+    evidence: {
+      list: (issueId: number) => apiClient.get(`/issue-management/issues/${issueId}/links/evidence`),
+      add: (issueId: number, body: { evidence_id: number; relationship_type?: string; notes?: string }) =>
+        apiClient.post(`/issue-management/issues/${issueId}/links/evidence`, body),
+      remove: (issueId: number, evidenceId: number) =>
+        apiClient.delete(`/issue-management/issues/${issueId}/links/evidence/${evidenceId}`),
+    },
+    vendors: {
+      list: (issueId: number) => apiClient.get(`/issue-management/issues/${issueId}/links/vendors`),
+      add: (issueId: number, body: { vendor_id: number; contract_reference?: string; breach_clause?: string; notes?: string }) =>
+        apiClient.post(`/issue-management/issues/${issueId}/links/vendors`, body),
+      remove: (issueId: number, vendorId: number) =>
+        apiClient.delete(`/issue-management/issues/${issueId}/links/vendors/${vendorId}`),
+    },
+    // v2 — new linkage families.
+    projects: {
+      list: (issueId: number) => apiClient.get(`/issue-management/issues/${issueId}/links/projects`),
+      add: (issueId: number, body: { is_project_id: number; role?: string; notes?: string }) =>
+        apiClient.post(`/issue-management/issues/${issueId}/links/projects`, body),
+      remove: (issueId: number, projectId: number) =>
+        apiClient.delete(`/issue-management/issues/${issueId}/links/projects/${projectId}`),
+    },
+    governance: {
+      list: (issueId: number) => apiClient.get(`/issue-management/issues/${issueId}/links/governance`),
+      add: (issueId: number, body: { target_type: 'governance_document' | 'policy_statement'; target_id: number; link_type?: string; notes?: string }) =>
+        apiClient.post(`/issue-management/issues/${issueId}/links/governance`, body),
+      remove: (issueId: number, linkId: number) =>
+        apiClient.delete(`/issue-management/issues/${issueId}/links/governance/${linkId}`),
+    },
+  },
+
+  // v2 — reverse-direction lookup: "what issues are linked to <entity>?".
+  // Used by the shared <RelatedIssuesPanel> component dropped onto every
+  // detail page in the platform.
+  bySource: (sourceType: string, sourceId: number, includeClosed = false) =>
+    apiClient.get(`/issue-management/by-source/${sourceType}/${sourceId}`, {
+      params: { include_closed: includeClosed },
+    }),
+
+  // v2 — per-tenant automation toggles (KRI red breach, overdue mitigation,
+  // governance review fast-forward, control evidence rejected). All default
+  // OFF so v1 behaviour is preserved until the tenant opts in.
+  automationFlags: {
+    get: () => apiClient.get('/issue-management/automation-flags'),
+    update: (body: Partial<{
+      refresh_document_review: boolean;
+      kri_red_breach: boolean;
+      overdue_mitigation: boolean;
+      control_evidence_rejected: boolean;
+      all_enabled: boolean;
+    }>) => apiClient.put('/issue-management/automation-flags', body),
+  },
+
+  comments: {
+    list: (issueId: number) => apiClient.get(`/issue-management/issues/${issueId}/comments`),
+    create: (issueId: number, body: { body: string; parent_id?: number }) =>
+      apiClient.post(`/issue-management/issues/${issueId}/comments`, body),
+  },
+  activity: {
+    list: (issueId: number, limit = 100) =>
+      apiClient.get(`/issue-management/issues/${issueId}/activity`, { params: { limit } }),
+  },
+
+  dashboard: () => apiClient.get('/issue-management/dashboard/aggregate'),
+
+  matrices: {
+    getSeverity: () => apiClient.get('/issue-management/matrices/severity'),
+    putSeverityCell: (impact: string, urgency: string, body: { severity: string; sla_ack_hours: number; sla_resolve_hours: number }) =>
+      apiClient.put(`/issue-management/matrices/severity/${impact}/${urgency}`, body),
+    getClassification: () => apiClient.get('/issue-management/matrices/classification'),
+    putClassificationCell: (issueType: string, severity: string, body: {
+      default_owner_team_id?: number | null;
+      default_owner_user_id?: number | null;
+      response_sla_hours?: number | null;
+      escalation_sla_hours?: number | null;
+    }) => apiClient.put(`/issue-management/matrices/classification/${issueType}/${severity}`, body),
+  },
+};
+
+// =============================================================================
+// CIS Integration — Compliance Plugins, Risk Posture, Agents, Onboarding
+// All endpoints live under /grc and are tenant-scoped server-side. Purely
+// additive: no existing api group is changed.
+// =============================================================================
+
+export const compliancePluginsApi = {
+  list: (params?: Record<string, unknown>) => apiClient.get('/compliance-plugins', { params }),
+  get: (id: number) => apiClient.get(`/compliance-plugins/${id}`),
+  benchmarks: () => apiClient.get('/compliance-plugins/benchmarks'),
+  seed: () => apiClient.post('/compliance-plugins/seed'),
+  execute: (pluginId: number, data: { asset_id?: number; connection_id?: number }) =>
+    apiClient.post(`/compliance-plugins/${pluginId}/runs`, data),
+  listRuns: (params?: Record<string, unknown>) => apiClient.get('/compliance-plugins/runs', { params }),
+  getRun: (runId: number) => apiClient.get(`/compliance-plugins/runs/${runId}`),
+  createControlMapping: (pluginId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/compliance-plugins/${pluginId}/control-mappings`, data),
+  listControlMappings: (pluginId: number) =>
+    apiClient.get(`/compliance-plugins/${pluginId}/control-mappings`),
+  scanAll: (data: Record<string, unknown> = {}) =>
+    apiClient.post('/compliance-plugins/scan-all', {}, { params: data }),
+  perUserSummary: () => apiClient.get('/compliance-plugins/per-user-summary'),
+  assetsOverview: () => apiClient.get('/compliance-plugins/assets-overview'),
+  perAssetCoverage: (assetId: number) =>
+    apiClient.get('/compliance-plugins/per-asset-coverage', { params: { asset_id: assetId } }),
+  reviewBulk: (pluginIds: number[], decision: 'approve' | 'reject') =>
+    apiClient.post('/compliance-plugins/review-bulk', { plugin_ids: pluginIds, decision }),
+  updateSchedule: (pluginId: number, cron: string | null) =>
+    apiClient.patch(`/compliance-plugins/${pluginId}/schedule`, { schedule_cron: cron }),
+  getAssetScope: (pluginId: number) => apiClient.get(`/compliance-plugins/${pluginId}/asset-scope`),
+  updateAssetScope: (pluginId: number, mode: 'all' | 'include' | 'exclude', assetIds: number[]) =>
+    apiClient.put(`/compliance-plugins/${pluginId}/asset-scope`, { mode, asset_ids: assetIds }),
+  ingestPdf: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    // The apiClient instance defaults Content-Type to application/json.
+    // For multipart uploads we MUST clear that so axios falls back to its
+    // FormData branch and emits the correct
+    // 'multipart/form-data; boundary=...' header. Setting it to undefined
+    // (not a string) is the documented way to delete a default header on
+    // a per-request basis. Long parser timeout (synchronous PDF→OCR).
+    return apiClient.post('/compliance-plugins/ingest', fd, {
+      headers: { 'Content-Type': undefined },
+      timeout: 5 * 60 * 1000,
+    });
+  },
+  listIngestJobs: () => apiClient.get('/compliance-plugins/ingest'),
+  getIngestJob: (jobId: number) => apiClient.get(`/compliance-plugins/ingest/${jobId}`),
+  reparseIngestJob: (jobId: number) => apiClient.post(`/compliance-plugins/ingest/${jobId}/reparse`),
+  deleteIngestJob: (jobId: number) => apiClient.delete(`/compliance-plugins/ingest/${jobId}`),
+  getReviewQueue: (params?: { ingest_job_id?: number }) =>
+    apiClient.get('/compliance-plugins/review-queue', { params }),
+  reviewPlugin: (
+    pluginId: number,
+    decision: 'approve' | 'reject',
+    patch?: {
+      check_definition?: Record<string, unknown>;
+      runner_type?: string;
+      severity?: string;
+      title?: string;
+      description?: string | null;
+      rationale?: string | null;
+      remediation?: string | null;
+    },
+  ) => apiClient.post(`/compliance-plugins/${pluginId}/review`, { decision, ...(patch || {}) }),
+  importJson: (plugins: unknown[], autoApprove = false) =>
+    apiClient.post('/compliance-plugins/import-json', { plugins, auto_approve: autoApprove }),
+};
+
+export const riskPostureApi = {
+  dashboard: () => apiClient.get('/risk-posture/dashboard'),
+  asset: (assetId: number) => apiClient.get(`/risk-posture/asset/${assetId}`),
+  getWeights: () => apiClient.get('/risk-posture/weights'),
+  updateWeights: (data: {
+    weight_cis: number;
+    weight_vuln: number;
+    weight_cia: number;
+    weight_ctrl: number;
+    weight_risk: number;
+    preset_name?: string;
+  }) => apiClient.put('/risk-posture/weights', data),
+};
+
+export const agentsApi = {
+  list: () => apiClient.get('/agents'),
+  enroll: (data: { agent_name: string; mode?: 'collector' | 'endpoint'; asset_id?: number; os_family?: string }) =>
+    apiClient.post('/agents', data),
+  bulkEnroll: (data: {
+    hosts: Array<{ hostname: string; mode?: 'collector' | 'endpoint'; os_family?: string; asset_id?: number }>;
+    backend_url?: string;
+  }) => apiClient.post('/agents/bulk-enroll', data),
+  revoke: (agentId: number, reason?: string) =>
+    apiClient.post(`/agents/${agentId}/revoke${reason ? `?reason=${encodeURIComponent(reason)}` : ''}`),
+};
+
+export const onboardingApi = {
+  discover: (data: { cidr: string; runner_type?: string; port_override?: number; timeout_s?: number }) =>
+    apiClient.post('/onboarding/discover', data),
+  bulkImport: (data: {
+    runner_type: string;
+    asset_type?: string;
+    criticality?: string;
+    asset_name_prefix?: string;
+    username: string;
+    password: string;
+    port?: number;
+    hosts: Array<{ ip: string; hostname?: string | null; asset_name?: string | null }>;
+  }) => apiClient.post('/onboarding/import', data),
 };
 
 export default apiClient;

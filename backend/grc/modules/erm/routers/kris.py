@@ -431,11 +431,44 @@ def record_kri_measurement(
         notes=measurement.notes
     )
     db.add(db_measurement)
-    
+
     kri.current_value = measurement.value
     kri.last_measured_at = datetime.utcnow()
-    
+
     db.commit()
+    # ── v2 Issue Management hook: when the KRI flips to red AND the tenant
+    # has opted in (kri_red_breach flag), auto-spawn an Issue. Gated +
+    # de-duplicated inside the helper so it can never double-fire.
+    # Wrapped in try/except so issue-management drift can never break the
+    # core KRI measurement write.
+    if status_val == "red":
+        try:
+            from ....modules.issue_management.services.auto_create import from_event
+            risk_for_tenant = db.query(Risk).filter(Risk.id == kri.risk_id).first()
+            tenant_id = risk_for_tenant.tenant_id if risk_for_tenant else None
+            if tenant_id:
+                from_event(
+                    db=db,
+                    tenant_id=tenant_id,
+                    source_type="kri_breach",
+                    source_id=kri.id,
+                    title=f"KRI breach (RED): {kri.name}",
+                    description=(
+                        f"KRI '{kri.name}' measured at {measurement.value} "
+                        f"{kri.unit or ''} — red-threshold breach.\n"
+                        f"Notes: {measurement.notes or '—'}"
+                    ),
+                    impact="high",
+                    urgency="high",
+                    issue_type="incident",
+                    category="operations",
+                    reporter_id=current_user.id,
+                    feature_flag="kri_red_breach",
+                )
+                db.commit()
+        except Exception:
+            db.rollback()
+
     db.refresh(db_measurement)
     return db_measurement
 

@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useParams } from 'next/navigation';
 import { assetsApi, isProjectsApi, risksApi } from '@/lib/api';
+import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesPanel';
 import {
   Loader2,
   AlertCircle,
@@ -1027,6 +1028,14 @@ export default function ProjectDetailPage() {
 
       {activeTab === 'risks' && (
         <div className="space-y-4">
+          {/* v2 Issue Management linkage — surfaces *platform* Issues
+              linked to this project alongside the existing project-scoped
+              risks list below. Hides itself when there are none. */}
+          <RelatedIssuesPanel
+            sourceType="is_project"
+            sourceId={projectId}
+            title="Linked Platform Issues"
+          />
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-[var(--color-text)]">Risks & Issues</h3>
             <div className="flex items-center gap-2">

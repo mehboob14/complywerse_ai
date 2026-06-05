@@ -91,6 +91,42 @@ _COLUMN_ADDS = [
      "ix_grc_critical_tasks_linked_framework_id"),
     ("grc_critical_tasks", "linked_requirement_id", "INTEGER",
      "ix_grc_critical_tasks_linked_requirement_id"),
+    # RCSA custom rows: per-row ownership + cached AI explanation (new feature).
+    ("grc_rcsa_custom_rows", "assigned_user_id", "INTEGER",
+     "ix_grc_rcsa_custom_rows_assigned_user_id"),
+    ("grc_rcsa_custom_rows", "ai_explanation", "TEXT", None),
+    ("grc_rcsa_custom_rows", "ai_explanation_at", "TIMESTAMP", None),
+    # Evidence pick-from-library: lineage column on the RCSA row evidence
+    # table. NULL when the operator uploaded a fresh file, FK when linked.
+    ("grc_rcsa_custom_row_evidence", "linked_evidence_id", "INTEGER",
+     "ix_grc_rcsa_custom_row_evidence_linked"),
+    # Criticality assessments (Phase 2): approval workflow + risk linkage on
+    # both ISCA and IACA. Tables are auto-created via Base.metadata; only
+    # the new columns on existing tables need an ALTER.
+    ("grc_info_system_criticality_items", "approval_status", "VARCHAR(32) DEFAULT 'draft'",
+     "ix_grc_isca_approval_status"),
+    ("grc_info_system_criticality_items", "current_approval_tier", "INTEGER", None),
+    ("grc_info_system_criticality_items", "submitted_at", "TIMESTAMP", None),
+    ("grc_info_system_criticality_items", "submitted_by", "INTEGER", None),
+    ("grc_info_system_criticality_items", "approved_at", "TIMESTAMP", None),
+    ("grc_info_system_criticality_items", "approved_by", "INTEGER", None),
+    ("grc_info_system_criticality_items", "rejected_at", "TIMESTAMP", None),
+    ("grc_info_system_criticality_items", "rejected_by", "INTEGER", None),
+    ("grc_info_system_criticality_items", "rejection_reason", "TEXT", None),
+    ("grc_info_system_criticality_items", "linked_risk_id", "INTEGER",
+     "ix_grc_isca_linked_risk_id"),
+    ("grc_infra_asset_criticality_items", "approval_status", "VARCHAR(32) DEFAULT 'draft'",
+     "ix_grc_iaca_approval_status"),
+    ("grc_infra_asset_criticality_items", "current_approval_tier", "INTEGER", None),
+    ("grc_infra_asset_criticality_items", "submitted_at", "TIMESTAMP", None),
+    ("grc_infra_asset_criticality_items", "submitted_by", "INTEGER", None),
+    ("grc_infra_asset_criticality_items", "approved_at", "TIMESTAMP", None),
+    ("grc_infra_asset_criticality_items", "approved_by", "INTEGER", None),
+    ("grc_infra_asset_criticality_items", "rejected_at", "TIMESTAMP", None),
+    ("grc_infra_asset_criticality_items", "rejected_by", "INTEGER", None),
+    ("grc_infra_asset_criticality_items", "rejection_reason", "TEXT", None),
+    ("grc_infra_asset_criticality_items", "linked_risk_id", "INTEGER",
+     "ix_grc_iaca_linked_risk_id"),
     # DCC assessment item columns
     ("grc_compliance_assessment_document_items", "control_source", "VARCHAR(50)", None),
     ("grc_compliance_assessment_document_items", "control_type", "VARCHAR(20)", None),
@@ -291,6 +327,39 @@ _COLUMN_ADDS = [
     # overridden by a user with a reason captured here for the audit trail.
     ("grc_it_assets", "criticality_manual_override", "BOOLEAN DEFAULT FALSE", None),
     ("grc_it_assets", "criticality_override_reason", "TEXT", None),
+    # Issue Management — extends the skeleton Issue table with the columns
+    # needed for the new module. All nullable so existing rows render
+    # unchanged. New tables (grc_issue_actions, grc_issue_comments, etc.)
+    # are auto-created via Base.metadata.create_all(checkfirst=True).
+    ("grc_issues", "code", "VARCHAR(50)", "ix_issue_tenant_code"),
+    ("grc_issues", "issue_type", "VARCHAR(40)", None),
+    ("grc_issues", "category", "VARCHAR(40)", None),
+    ("grc_issues", "urgency", "VARCHAR(20)", None),
+    ("grc_issues", "impact", "VARCHAR(20)", None),
+    ("grc_issues", "severity_override", "VARCHAR(20)", None),
+    ("grc_issues", "severity_override_reason", "TEXT", None),
+    ("grc_issues", "root_cause", "VARCHAR(255)", None),
+    ("grc_issues", "root_cause_analysis", "TEXT", None),
+    ("grc_issues", "detected_at", "TIMESTAMP", None),
+    ("grc_issues", "target_closure_date", "TIMESTAMP", None),
+    ("grc_issues", "resolved_at", "TIMESTAMP", None),
+    ("grc_issues", "reporter_id", "INTEGER", None),
+    ("grc_issues", "assignee_id", "INTEGER", None),
+    ("grc_issues", "source_type", "VARCHAR(40)", "ix_issue_tenant_source"),
+    ("grc_issues", "source_id", "INTEGER", None),
+    ("grc_issues", "workflow_state", "VARCHAR(40) DEFAULT 'new'", "ix_issue_tenant_workflow_state"),
+    ("grc_issues", "sla_breached", "BOOLEAN DEFAULT FALSE", "ix_issue_sla_breached"),
+    ("grc_issues", "approved_by_id", "INTEGER", None),
+    ("grc_issues", "approved_at", "TIMESTAMP", None),
+    ("grc_issues", "closure_notes", "TEXT", None),
+    # Issue Management v2 — bidirectional CriticalTask <-> CAPA action link.
+    # All nullable; existing rows untouched. The reverse FK (linked_critical_task_id
+    # on grc_issue_actions) and forward FKs (linked_issue_id, linked_issue_action_id
+    # on grc_critical_tasks) live as plain INTEGER columns at the SQL layer;
+    # SQLAlchemy enforces them on new writes.
+    ("grc_issue_actions", "linked_critical_task_id", "INTEGER", "ix_issue_action_linked_task"),
+    ("grc_critical_tasks", "linked_issue_id", "INTEGER", "ix_critical_task_linked_issue"),
+    ("grc_critical_tasks", "linked_issue_action_id", "INTEGER", "ix_critical_task_linked_action"),
 ]
 
 
