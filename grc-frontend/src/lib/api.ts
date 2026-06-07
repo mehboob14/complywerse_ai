@@ -3602,6 +3602,31 @@ export const workflowEngineApi = {
 // ── Issue Management ────────────────────────────────────────────────────
 // CRUD + transitions + linkages + CAPA + matrices for the Issues module
 // (sibling to Critical Tasks). Backend at /issue-management/*.
+/**
+ * Inline-linkage payload for `POST /issue-management/issues`. Each list is
+ * optional; the backend silently drops unknown / cross-tenant ids so a
+ * malformed pick never blocks the create. Controls have two paths —
+ * `linked_internal_control_ids` is the common case the IssueForm uses;
+ * `linked_controls` is the polymorphic escape hatch for framework /
+ * parsed / normalized control links.
+ */
+export type IssueCreateLinkages = {
+  linked_vulnerability_ids?: number[];
+  linked_risk_ids?: number[];
+  linked_asset_ids?: number[];
+  linked_evidence_ids?: number[];
+  linked_vendor_ids?: number[];
+  linked_is_project_ids?: number[];
+  linked_governance_document_ids?: number[];
+  linked_policy_statement_ids?: number[];
+  linked_internal_control_ids?: number[];
+  linked_controls?: Array<{
+    target_type: 'framework' | 'parsed' | 'normalized' | 'internal';
+    control_id: number;
+  }>;
+  linked_task_ids?: number[];
+};
+
 export const issuesApi = {
   list: (params?: {
     search?: string;

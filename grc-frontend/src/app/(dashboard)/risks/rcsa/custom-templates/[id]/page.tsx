@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -10,6 +10,7 @@ import { rcsaApi } from '@/lib/api';
 import {
   ArrowLeft, Plus, Save, X, Trash2, Link2, Download, RefreshCw,
   Sparkles, Paperclip, UserCheck, Upload, FileText, Loader2,
+  Search, ChevronDown, Check, Library,
 } from 'lucide-react';
 import apiClient from '@/lib/api';
 
@@ -86,6 +87,8 @@ type EvidenceItem = {
   description?: string | null;
   uploaded_by_name?: string | null;
   uploaded_at: string;
+  /** Set when the item came from the global Evidence Library (link, not upload). */
+  linked_evidence_id?: number | null;
 };
 
 type DrawerTab = 'fields' | 'explain' | 'evidence' | 'assign';
@@ -119,6 +122,27 @@ export default function RCSACustomTemplateDetailPage() {
     queryFn: async () => (await rcsaApi.customTemplates.listRows(templateId, { limit: 2000 })).data,
     enabled: templateId > 0,
   });
+
+  // Deep-link `?open=ITEM_ID` arriving from the My Assignments tab on the
+  // index page auto-opens the matching item's drawer once the row list
+  // has loaded. URL is cleaned so refresh / back doesn't replay.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const openRaw = params.get('open');
+    if (!openRaw) return;
+    const id = Number(openRaw);
+    if (!Number.isFinite(id) || id <= 0) return;
+    const list = rowsQ.data ?? [];
+    if (list.length === 0) return;
+    const match = list.find((r) => r.id === id);
+    if (match) {
+      setSelectedRow(match);
+      const url = new URL(window.location.href);
+      url.search = '';
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [rowsQ.data]);
 
   const createRowM = useMutation({
     mutationFn: () => rcsaApi.customTemplates.createRow(templateId, { data: draft }),
@@ -363,7 +387,7 @@ export default function RCSACustomTemplateDetailPage() {
                         {r.has_ai_explanation ? (
                           <span
                             className="inline-flex items-center gap-1 text-[10px] font-medium text-violet-700 bg-violet-50 border border-violet-200 rounded-full px-1.5 py-0.5"
-                            title="AI explanation cached — open the row to read"
+                            title="AI explanation cached — open the assessment item to read"
                           >
                             <Sparkles className="h-2.5 w-2.5" />
                             AI
@@ -392,7 +416,7 @@ export default function RCSACustomTemplateDetailPage() {
                           onClick={() => promoteM.mutate(r.id)}
                           disabled={promoteM.isPending}
                           className="inline-flex items-center gap-1 text-xs text-gray-700 hover:text-gray-900 disabled:opacity-50"
-                          title="Create a Risk Register entry from this row"
+                          title="Create a Risk Register entry from this assessment item"
                         >
                           <Link2 className="h-3 w-3" />
                           Promote
@@ -420,10 +444,10 @@ export default function RCSACustomTemplateDetailPage() {
         />
       )}
 
-      {/* Edit row drawer — gets the AI/evidence/assign tabs for existing rows. */}
+      {/* Edit drawer — gets the AI/evidence/assign tabs for existing items. */}
       {selectedRow && (
         <RowDrawer
-          title={`Edit row #${selectedRow.id}`}
+          title={`Edit assessment item #${selectedRow.id}`}
           schema={t.column_schema}
           values={Object.fromEntries(
             Object.entries(selectedRow.data || {}).map(([k, v]) => [k, v == null ? '' : String(v)])
@@ -436,7 +460,7 @@ export default function RCSACustomTemplateDetailPage() {
           }}
           onSave={() => updateRowM.mutate({ rowId: selectedRow.id, data: selectedRow.data })}
           onDelete={() => {
-            if (confirm(`Delete row #${selectedRow.id}? This cannot be undone.`)) {
+            if (confirm(`Delete assessment item #${selectedRow.id}? This cannot be undone.`)) {
               deleteRowM.mutate(selectedRow.id);
             }
           }}
@@ -611,7 +635,7 @@ function RowDrawer({
               className="inline-flex items-center gap-1 text-xs text-red-600 hover:underline"
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Delete row
+              Delete item
             </button>
           ) : <span />}
           <div className="flex items-center gap-2">
@@ -660,11 +684,11 @@ function ExplainPanel({ templateId, row }: { templateId: number; row: Row }) {
     <div className="space-y-3">
       <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3 text-xs text-violet-800">
         <p className="font-medium">
-          AI can summarise this row in plain language — useful when handing it off to a process
-          owner who isn&apos;t a risk specialist.
+          AI can summarise this assessment item in plain language — useful when handing it off to a
+          process owner who isn&apos;t a risk specialist.
         </p>
         <p className="mt-1 text-[11px] text-violet-700/80">
-          Output is cached on the row; click <em>Re-analyze</em> to regenerate after edits.
+          Output is cached on the assessment item; click <em>Re-analyze</em> to regenerate after edits.
         </p>
       </div>
 
@@ -771,43 +795,25 @@ function EvidencePanel({ templateId, row }: { templateId: number; row: Row }) {
 
   return (
     <div className="space-y-3">
-      {/* Upload row */}
-      <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
-        <div className="flex items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            onChange={(e) => setPendingFile(e.target.files?.[0] || null)}
-            className="text-xs"
-          />
-          {pendingFile && (
-            <span className="text-[11px] text-gray-600 truncate">
-              {pendingFile.name} ({Math.round(pendingFile.size / 1024)} KB)
-            </span>
-          )}
-        </div>
-        <textarea
-          rows={2}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Optional description — what does this evidence prove?"
-          className="block w-full text-sm rounded-md border border-gray-300 px-3 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-        />
-        <div className="flex justify-end">
-          <button
-            type="button"
-            disabled={!pendingFile || uploadM.isPending}
-            onClick={() => pendingFile && uploadM.mutate({ file: pendingFile, desc: description })}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {uploadM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-            Upload evidence
-          </button>
-        </div>
-        {uploadM.isError && (
-          <p className="text-[11px] text-rose-700">Upload failed. Try a smaller file or check your connection.</p>
-        )}
-      </div>
+      {/* Attach card — two modes: upload a fresh file, or pick one from the
+          tenant Evidence Library via the searchable combobox. Uploaded
+          files are stored under uploads/rcsa_custom_evidence/; library
+          links reuse the existing file path so deleting the link doesn't
+          remove the source. */}
+      <EvidenceAttachCard
+        templateId={templateId}
+        rowId={row.id}
+        description={description}
+        setDescription={setDescription}
+        pendingFile={pendingFile}
+        setPendingFile={setPendingFile}
+        fileInputRef={fileInputRef}
+        uploadPending={uploadM.isPending}
+        onUpload={() => pendingFile && uploadM.mutate({ file: pendingFile, desc: description })}
+      />
+      {uploadM.isError && (
+        <p className="text-[11px] text-rose-700">Upload failed. Try a smaller file or check your connection.</p>
+      )}
 
       {/* Existing evidence list */}
       {listQ.isLoading ? (
@@ -821,16 +827,24 @@ function EvidencePanel({ templateId, row }: { templateId: number; row: Row }) {
               key={ev.id}
               className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white p-3"
             >
-              <FileText className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+              <FileText className={`h-4 w-4 shrink-0 mt-0.5 ${ev.linked_evidence_id ? 'text-indigo-600' : 'text-emerald-600'}`} />
               <div className="min-w-0 flex-1">
-                <button
-                  type="button"
-                  onClick={() => handleDownload(ev.id, ev.file_name)}
-                  className="text-sm font-medium text-gray-900 hover:text-emerald-700 hover:underline truncate text-left"
-                  title={ev.file_name}
-                >
-                  {ev.file_name}
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(ev.id, ev.file_name)}
+                    className="text-sm font-medium text-gray-900 hover:text-emerald-700 hover:underline truncate text-left"
+                    title={ev.file_name}
+                  >
+                    {ev.file_name}
+                  </button>
+                  {ev.linked_evidence_id && (
+                    <span className="inline-flex items-center gap-0.5 text-[9px] uppercase tracking-wide font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1 py-0.5">
+                      <Link2 className="h-2.5 w-2.5" />
+                      Library
+                    </span>
+                  )}
+                </div>
                 <p className="text-[10px] text-gray-500">
                   {ev.uploaded_by_name || 'Someone'} ·{' '}
                   {new Date(ev.uploaded_at).toLocaleString()}
@@ -880,31 +894,25 @@ function AssignPanel({
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 text-xs text-indigo-800">
-        Assigning this row to a tenant user makes them the named owner on dashboards and audit
-        reports. They&apos;ll still need to be granted access to the template separately if they
-        don&apos;t already have <code>erm:rcsa:view</code>.
+        Assigning this assessment item to a tenant user makes them the named owner on dashboards
+        and audit reports. They&apos;ll still need to be granted access to the template separately
+        if they don&apos;t already have <code>erm:rcsa:view</code>.
       </div>
 
       <label className="block text-xs font-medium text-gray-700">Assignee</label>
       {tenantUsersLoading ? (
         <p className="text-xs text-gray-500">Loading users…</p>
+      ) : tenantUsers.length === 0 ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+          No active users found in this tenant. Add users from <code>Administration → Users</code>.
+        </div>
       ) : (
-        <select
-          value={row.assigned_user_id == null ? '' : String(row.assigned_user_id)}
-          onChange={(e) =>
-            onAssignChange(e.target.value === '' ? null : Number(e.target.value))
-          }
+        <UserCombobox
+          users={tenantUsers}
+          value={row.assigned_user_id ?? null}
           disabled={assignPending}
-          className="block w-full text-sm rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-        >
-          <option value="">— Unassigned —</option>
-          {tenantUsers.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.display_name}
-              {u.email ? ` (${u.email})` : ''}
-            </option>
-          ))}
-        </select>
+          onChange={onAssignChange}
+        />
       )}
 
       {row.assigned_user_id && row.assigned_user_name && (
@@ -917,6 +925,432 @@ function AssignPanel({
               {row.assigned_user_email ? ` (${row.assigned_user_email})` : ''}
             </span>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Reusable: searchable user combobox (assignee picker) ───────────────
+// Single-control replacement for the previous native <select>. Click to
+// open, type to filter, click an option to select. Forces a white
+// background and slate text so the dropdown looks consistent with the
+// rest of the drawer.
+
+function UserCombobox({
+  users,
+  value,
+  onChange,
+  disabled,
+}: {
+  users: TenantUserOption[];
+  value: number | null;
+  onChange: (id: number | null) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const selected = users.find((u) => u.id === value) || null;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) requestAnimationFrame(() => inputRef.current?.focus());
+  }, [open]);
+
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? users.filter((u) =>
+        (u.display_name || '').toLowerCase().includes(q)
+        || (u.email || '').toLowerCase().includes(q)
+      )
+    : users;
+
+  const pick = (u: TenantUserOption | null) => {
+    onChange(u?.id ?? null);
+    setOpen(false);
+    setSearch('');
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+        className={`w-full flex items-center gap-2 rounded-md border bg-white text-slate-900 px-3 py-2 text-sm transition-colors disabled:opacity-50 ${
+          open ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300 hover:border-gray-400'
+        }`}
+      >
+        {selected ? (
+          <span className="min-w-0 flex-1 flex items-center gap-1.5 text-left">
+            <UserCheck className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+            <span className="truncate text-slate-900">{selected.display_name}</span>
+            {selected.email && (
+              <span className="truncate text-[10px] text-slate-500">({selected.email})</span>
+            )}
+          </span>
+        ) : (
+          <span className="min-w-0 flex-1 flex items-center gap-1.5 text-left text-slate-500">
+            <UserCheck className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+            — Unassigned —
+          </span>
+        )}
+        {value != null && !disabled && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); pick(null); }}
+            className="shrink-0 inline-flex items-center justify-center h-4 w-4 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+            title="Clear assignee"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+        <ChevronDown className={`h-3.5 w-3.5 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
+          <div className="relative border-b border-gray-100">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Type to search users…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
+              className="w-full pl-8 pr-2 py-2 text-xs bg-white text-slate-900 focus:outline-none"
+            />
+          </div>
+          <div className="max-h-72 overflow-y-auto py-1">
+            <button
+              type="button"
+              onClick={() => pick(null)}
+              className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
+                value == null ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <X className="h-3 w-3 text-gray-400" />
+              Unassigned
+              {value == null && <Check className="ml-auto h-3 w-3 text-blue-600" />}
+            </button>
+            {filtered.length === 0 ? (
+              <p className="px-3 py-3 text-xs text-gray-500 text-center">
+                {q ? `No users matching "${q}"` : 'No active users in this tenant.'}
+              </p>
+            ) : (
+              filtered.map((u) => {
+                const isSelected = u.id === value;
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => pick(u)}
+                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
+                      isSelected ? 'bg-blue-50 text-blue-800' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <UserCheck className={`h-3 w-3 shrink-0 ${isSelected ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <span className="truncate font-medium">{u.display_name}</span>
+                    {u.email && <span className="truncate text-[10px] text-gray-500">({u.email})</span>}
+                    {isSelected && <Check className="ml-auto h-3 w-3 text-blue-600 shrink-0" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Reusable: Evidence attach card (upload + pick-from-library tabs) ──
+// Two-mode card: either drop a fresh file or pick an existing item from
+// the tenant Evidence Library via a searchable combobox. Both paths share
+// the optional-description textarea.
+
+function EvidenceAttachCard({
+  templateId, rowId,
+  description, setDescription,
+  pendingFile, setPendingFile, fileInputRef,
+  uploadPending, onUpload,
+}: {
+  templateId: number;
+  rowId: number;
+  description: string;
+  setDescription: (v: string) => void;
+  pendingFile: File | null;
+  setPendingFile: (f: File | null) => void;
+  fileInputRef: React.MutableRefObject<HTMLInputElement | null>;
+  uploadPending: boolean;
+  onUpload: () => void;
+}) {
+  const qc = useQueryClient();
+  const [mode, setMode] = useState<'upload' | 'library'>('upload');
+  const [pickedEvidenceId, setPickedEvidenceId] = useState<number | null>(null);
+
+  const linkM = useMutation({
+    mutationFn: ({ evidenceId, desc }: { evidenceId: number; desc?: string }) =>
+      rcsaApi.customTemplates.linkRowEvidenceFromLibrary(templateId, rowId, evidenceId, desc),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rcsa.custom-template.row.evidence', templateId, rowId] });
+      qc.invalidateQueries({ queryKey: ['rcsa.custom-template.rows', templateId] });
+      setPickedEvidenceId(null);
+      setDescription('');
+    },
+  });
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+      {/* Mode tabs */}
+      <div className="flex gap-1 border-b border-gray-100 -mx-3 px-3 pb-2 mb-2">
+        {(['upload', 'library'] as const).map((m) => {
+          const Icon = m === 'upload' ? Upload : Library;
+          const active = mode === m;
+          return (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                active
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'text-gray-600 hover:bg-gray-50 border border-transparent'
+              }`}
+            >
+              <Icon className="h-3 w-3" />
+              {m === 'upload' ? 'Upload file' : 'Pick from library'}
+            </button>
+          );
+        })}
+      </div>
+
+      {mode === 'upload' ? (
+        <>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={(e) => setPendingFile(e.target.files?.[0] || null)}
+              className="text-xs"
+            />
+            {pendingFile && (
+              <span className="text-[11px] text-gray-600 truncate">
+                {pendingFile.name} ({Math.round(pendingFile.size / 1024)} KB)
+              </span>
+            )}
+          </div>
+          <textarea
+            rows={2}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Optional description — what does this evidence prove?"
+            className="block w-full text-sm rounded-md border border-gray-300 bg-white text-slate-900 px-3 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+          <div className="flex justify-end">
+            <button
+              type="button"
+              disabled={!pendingFile || uploadPending}
+              onClick={onUpload}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {uploadPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              Upload evidence
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <EvidenceLibraryCombobox
+            value={pickedEvidenceId}
+            onChange={setPickedEvidenceId}
+          />
+          <textarea
+            rows={2}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Optional description — how does this evidence apply here?"
+            className="block w-full text-sm rounded-md border border-gray-300 bg-white text-slate-900 px-3 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+          <div className="flex justify-end">
+            <button
+              type="button"
+              disabled={!pickedEvidenceId || linkM.isPending}
+              onClick={() => pickedEvidenceId && linkM.mutate({ evidenceId: pickedEvidenceId, desc: description })}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {linkM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Library className="h-3.5 w-3.5" />}
+              Link from library
+            </button>
+          </div>
+          {linkM.isError && (
+            <p className="text-[11px] text-rose-700">Failed to link evidence. Check your selection and try again.</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Reusable: Evidence Library combobox (search + pick) ───────────────
+function EvidenceLibraryCombobox({
+  value, onChange,
+}: {
+  value: number | null;
+  onChange: (id: number | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Debounce search → server query.
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search), 250);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  const listQ = useQuery({
+    queryKey: ['rcsa.evidence-library', debouncedSearch],
+    queryFn: async () =>
+      (await rcsaApi.customTemplates.listEvidenceLibrary(debouncedSearch || undefined)).data,
+    staleTime: 30_000,
+  });
+
+  // Always include the currently-selected item so its label shows even
+  // when search filters it out of the live list.
+  const selectedQ = useQuery({
+    queryKey: ['rcsa.evidence-library.byId', value],
+    queryFn: async () => {
+      const list = (await rcsaApi.customTemplates.listEvidenceLibrary()).data;
+      return list.find((e) => e.id === value) ?? null;
+    },
+    enabled: typeof value === 'number' && value > 0,
+    staleTime: 5 * 60_000,
+  });
+  const selected = selectedQ.data ?? null;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+  useEffect(() => {
+    if (open) requestAnimationFrame(() => inputRef.current?.focus());
+  }, [open]);
+
+  const items = listQ.data ?? [];
+  const pick = (id: number | null) => { onChange(id); setOpen(false); setSearch(''); };
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`w-full flex items-center gap-2 rounded-md border bg-white text-slate-900 px-3 py-2 text-sm transition-colors ${
+          open ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300 hover:border-gray-400'
+        }`}
+      >
+        {selected ? (
+          <span className="min-w-0 flex-1 flex items-center gap-1.5 text-left">
+            <Library className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+            <span className="truncate text-slate-900">{selected.name}</span>
+            {selected.file_name && selected.file_name !== selected.name && (
+              <span className="truncate text-[10px] text-slate-500">({selected.file_name})</span>
+            )}
+          </span>
+        ) : (
+          <span className="min-w-0 flex-1 flex items-center gap-1.5 text-left text-slate-500">
+            <Library className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+            Select evidence from library…
+          </span>
+        )}
+        {value != null && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); pick(null); }}
+            className="shrink-0 inline-flex items-center justify-center h-4 w-4 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+            title="Clear selection"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+        <ChevronDown className={`h-3.5 w-3.5 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
+          <div className="relative border-b border-gray-100">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Search by name or filename…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
+              className="w-full pl-8 pr-2 py-2 text-xs bg-white text-slate-900 focus:outline-none"
+            />
+          </div>
+          <div className="max-h-72 overflow-y-auto py-1">
+            {listQ.isLoading ? (
+              <div className="flex items-center justify-center py-6 text-xs text-gray-400">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </div>
+            ) : items.length === 0 ? (
+              <p className="px-3 py-3 text-xs text-gray-500 text-center">
+                {search.trim()
+                  ? `No evidence matching "${search.trim()}"`
+                  : 'No evidence in this tenant\'s library yet.'}
+              </p>
+            ) : (
+              items.map((e) => {
+                const isSelected = e.id === value;
+                return (
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={() => pick(e.id)}
+                    className={`w-full flex items-start gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
+                      isSelected ? 'bg-blue-50 text-blue-800' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <FileText className={`h-3 w-3 shrink-0 mt-0.5 ${isSelected ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{e.name}</p>
+                      <p className="text-[10px] text-gray-500 truncate">
+                        {e.file_name || '—'}
+                        {e.evidence_type ? ` · ${e.evidence_type}` : ''}
+                        {e.status ? ` · ${e.status}` : ''}
+                      </p>
+                    </div>
+                    {isSelected && <Check className="h-3 w-3 text-blue-600 shrink-0 mt-0.5" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+          {items.length === 200 && (
+            <p className="px-3 py-1.5 text-[10px] text-gray-400 border-t border-gray-100 bg-gray-50">
+              Showing first 200 results — refine your search to narrow.
+            </p>
+          )}
         </div>
       )}
     </div>

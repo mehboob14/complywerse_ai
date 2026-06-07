@@ -266,9 +266,212 @@ def create_issue(
         "resolve_hours": resolve_hours,
         "override": severity_override,
     })
+
+    # ── Inline linkages ───────────────────────────────────────────────────
+    # Operator picked one or more entities to link in the same create
+    # action (see IssueForm's Linkages section). Each list is silently
+    # ignored when missing; unknown / cross-tenant IDs are filtered out
+    # so a malformed pick never poisons the whole create. Each link
+    # family also writes its own activity entry so the audit feed shows
+    # the relationship history.
+    link_counts = _apply_inline_linkages(
+        db, issue=issue, tenant_id=tenant_id, body=body, user_id=current_user.id,
+    )
+    if link_counts:
+        _log_activity(db, issue.id, current_user.id, "linked_on_create", link_counts)
+
     db.commit()
     db.refresh(issue)
     return _serialize_issue_summary(issue)
+
+
+def _apply_inline_linkages(
+    db: Session,
+    *,
+    issue: Issue,
+    tenant_id: int,
+    body: Dict[str, Any],
+    user_id: Optional[int],
+) -> Dict[str, int]:
+    """Create link rows for every `linked_*_ids` array in the create body.
+
+    Returns a per-family count of created links so the caller can emit a
+    single summary activity row. Each family is tenant-scoped to defend
+    against cross-tenant id-probing in a payload.
+    """
+    # Local imports keep the create endpoint's module-level imports lean —
+    # link tables aren't needed by any other path in this file.
+    from ....models import (
+        IssueAssetLink, IssueControlLink, IssueEvidenceLink, IssueGovernanceLink,
+        IssueISProjectLink, IssueRiskLink, IssueVendorLink, IssueVulnerabilityLink,
+        Vulnerability, Risk, ITAsset, Evidence, Vendor, ISProject,
+        GovernanceDocument, PolicyStatement, CriticalTask,
+        FrameworkControl, ParsedFrameworkControl, NormalizedControl, InternalControl,
+    )
+
+    def _ids_in_tenant(model, raw_ids: List[Any]) -> List[int]:
+        """Filter a payload list of ids down to those that exist in this
+        tenant. Drops nulls, non-ints, and cross-tenant ids silently."""
+        clean: List[int] = []
+        for v in raw_ids or []:
+            try:
+                n = int(v)
+            except (TypeError, ValueError):
+                continue
+            if n > 0:
+                clean.append(n)
+        if not clean:
+            return []
+        rows = (
+            db.query(model.id)
+            .filter(model.id.in_(clean), model.tenant_id == tenant_id)
+            .all()
+        )
+        return [r[0] for r in rows]
+
+    counts: Dict[str, int] = {}
+
+    # Vulnerabilities
+    for vuln_id in _ids_in_tenant(Vulnerability, body.get("linked_vulnerability_ids") or []):
+        db.add(IssueVulnerabilityLink(
+            issue_id=issue.id, vulnerability_id=vuln_id, created_by=user_id,
+        ))
+        counts["vulnerabilities"] = counts.get("vulnerabilities", 0) + 1
+
+    # Risks
+    for risk_id in _ids_in_tenant(Risk, body.get("linked_risk_ids") or []):
+        db.add(IssueRiskLink(
+            issue_id=issue.id, risk_id=risk_id, created_by=user_id,
+        ))
+        counts["risks"] = counts.get("risks", 0) + 1
+
+    # Assets
+    for asset_id in _ids_in_tenant(ITAsset, body.get("linked_asset_ids") or []):
+        db.add(IssueAssetLink(
+            issue_id=issue.id, asset_id=asset_id, created_by=user_id,
+        ))
+        counts["assets"] = counts.get("assets", 0) + 1
+
+    # Evidence
+    for ev_id in _ids_in_tenant(Evidence, body.get("linked_evidence_ids") or []):
+        db.add(IssueEvidenceLink(
+            issue_id=issue.id, evidence_id=ev_id, created_by=user_id,
+        ))
+        counts["evidence"] = counts.get("evidence", 0) + 1
+
+    # Vendors
+    for ven_id in _ids_in_tenant(Vendor, body.get("linked_vendor_ids") or []):
+        db.add(IssueVendorLink(
+            issue_id=issue.id, vendor_id=ven_id, created_by=user_id,
+        ))
+        counts["vendors"] = counts.get("vendors", 0) + 1
+
+    # IS Projects
+    for proj_id in _ids_in_tenant(ISProject, body.get("linked_is_project_ids") or []):
+        db.add(IssueISProjectLink(
+            issue_id=issue.id, is_project_id=proj_id, created_by=user_id,
+        ))
+        counts["projects"] = counts.get("projects", 0) + 1
+
+    # Governance documents — written through the polymorphic IssueGovernanceLink
+    for doc_id in _ids_in_tenant(GovernanceDocument, body.get("linked_governance_document_ids") or []):
+        db.add(IssueGovernanceLink(
+            issue_id=issue.id,
+            governance_document_id=doc_id,
+            created_by=user_id,
+        ))
+        counts["governance_documents"] = counts.get("governance_documents", 0) + 1
+
+    # Policy statements — same polymorphic family, different FK column
+    for stmt_id in _ids_in_tenant(PolicyStatement, body.get("linked_policy_statement_ids") or []):
+        db.add(IssueGovernanceLink(
+            issue_id=issue.id,
+            policy_statement_id=stmt_id,
+            created_by=user_id,
+        ))
+        counts["policy_statements"] = counts.get("policy_statements", 0) + 1
+
+    # Controls — the polymorphic link table needs a target_type discriminator.
+    # The frontend defaults to internal controls; advanced users can write
+    # framework/parsed/normalized links via the detail-page link panel.
+    _CONTROL_MODEL_MAP = {
+        "framework": (FrameworkControl, "framework_control_id"),
+        "parsed":    (ParsedFrameworkControl, "parsed_framework_control_id"),
+        "normalized": (NormalizedControl, "normalized_control_id"),
+        "internal":  (InternalControl, "internal_control_id"),
+    }
+    for ic_id in _ids_in_tenant(InternalControl, body.get("linked_internal_control_ids") or []):
+        db.add(IssueControlLink(
+            issue_id=issue.id,
+            target_type="internal",
+            internal_control_id=ic_id,
+            created_by=user_id,
+        ))
+        counts["internal_controls"] = counts.get("internal_controls", 0) + 1
+    # Explicit polymorphic picker — `linked_controls` is a list of
+    # `{target_type, control_id}` so the frontend can mix in other control
+    # families later without churn here.
+    for entry in body.get("linked_controls") or []:
+        if not isinstance(entry, dict):
+            continue
+        target_type = (entry.get("target_type") or "").strip()
+        control_id = entry.get("control_id")
+        mapping = _CONTROL_MODEL_MAP.get(target_type)
+        if not mapping or control_id is None:
+            continue
+        model, fk_name = mapping
+        try:
+            cid = int(control_id)
+        except (TypeError, ValueError):
+            continue
+        # Tenant-scope where the model carries tenant_id; framework /
+        # parsed / normalized tables are tenant-agnostic (catalog data)
+        # so a plain existence check is enough.
+        if hasattr(model, "tenant_id"):
+            ok = (
+                db.query(model.id)
+                .filter(model.id == cid, model.tenant_id == tenant_id)
+                .first()
+            )
+        else:
+            ok = db.query(model.id).filter(model.id == cid).first()
+        if not ok:
+            continue
+        link_row = IssueControlLink(
+            issue_id=issue.id,
+            target_type=target_type,
+            created_by=user_id,
+        )
+        setattr(link_row, fk_name, cid)
+        db.add(link_row)
+        counts[f"controls_{target_type}"] = counts.get(f"controls_{target_type}", 0) + 1
+
+    # Critical Tasks — no dedicated link table; we set the existing
+    # `CriticalTask.linked_issue_id` column so the task ↔ issue bridge
+    # used by the CAPA-promotion flow doubles as our linkage primitive.
+    task_ids_raw = body.get("linked_task_ids") or []
+    task_ids_clean: List[int] = []
+    for v in task_ids_raw:
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            continue
+        if n > 0:
+            task_ids_clean.append(n)
+    if task_ids_clean:
+        tasks = (
+            db.query(CriticalTask)
+            .filter(
+                CriticalTask.id.in_(task_ids_clean),
+                CriticalTask.tenant_id == tenant_id,
+            )
+            .all()
+        )
+        for task in tasks:
+            task.linked_issue_id = issue.id
+            counts["tasks"] = counts.get("tasks", 0) + 1
+
+    return counts
 
 
 # ────────────────────────────────────────────────────────────────────────

@@ -249,6 +249,16 @@ PERMISSION_MATRIX = [
                 "name": "asset_classification",
                 "display_name": "Asset Classification",
                 "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                # Criticality Assessments (ISCA + IACA per the bank
+                # templates). `approve_ciso` is the dedicated tier-3
+                # sign-off permission — keep it distinct from `edit` so
+                # business owners can act at tier 2 without doubling as
+                # the CISO.
+                "name": "criticality_assessments",
+                "display_name": "Criticality Assessments",
+                "actions": ["view", "create", "edit", "delete", "approve_ciso"]
             }
         ]
     },
@@ -441,6 +451,23 @@ PERMISSION_MATRIX = [
                 "name": "ai",
                 "display_name": "Task AI",
                 "actions": ["view", "create"]
+            }
+        ]
+    },
+    {
+        # Issue Management — gates set on every endpoint in
+        # backend/grc/modules/issue_management/routers/* (CRUD on Issues,
+        # CAPA actions, comments, links, dashboard, matrices, automation
+        # flags, and the activity / audit-log feed at /issues/{id}/activity).
+        # Admin role and primary-contact bypass remain intact; non-admin
+        # custom roles need at least the `view` action to use the module.
+        "module": "issue_management",
+        "display_name": "Issue Management",
+        "submodules": [
+            {
+                "name": "issues",
+                "display_name": "Issues, CAPA, Links & Audit Log",
+                "actions": ["view", "create", "edit", "delete"]
             }
         ]
     }

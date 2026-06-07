@@ -242,6 +242,9 @@ interface Escalation {
   status: string;
 }
 
+// Note: AI Analysis lives inside the Overview tab (bottom card) — no
+// dedicated tab here. Keep the slot collapsed so muscle memory still
+// works for anyone bookmarking ?tab=overview to reach the AI panel.
 const TABS = [
   { id: 'overview', label: 'Overview', icon: FileText },
   { id: 'mitigations', label: 'Mitigations', icon: CheckCircle },
@@ -251,7 +254,6 @@ const TABS = [
   { id: 'departments', label: 'Departments', icon: Users },
   { id: 'workflow', label: 'Workflow', icon: GitBranch },
   { id: 'escalations', label: 'Escalations', icon: Bell },
-  { id: 'ai', label: 'AI Analysis', icon: Sparkles },
   { id: 'exception', label: 'Exception', icon: AlertCircle },
 ];
 
@@ -1089,6 +1091,27 @@ export default function VulnerabilityDetailPage() {
               the description+sidebar grid. Panel hides itself when the
               vuln has no CVE-ID. Exception Workflow lives in its own tab. */}
           <ThreatIntelPanel vulnerability={vulnerability} />
+
+          {/* AI Analysis — moved from a dedicated tab into the Overview so
+              the operator gets the full read on the vuln + suggested fixes
+              in a single scroll. Component is unchanged — same CTA, same
+              "stage into Add Mitigation" handoff. */}
+          <AIAnalysisTab
+            vulnerability={vulnerability}
+            suggestFixMutation={suggestFixMutation}
+            onAcceptSuggestion={(payload) => {
+              const title = String(payload.action_title ?? '').replace(/^\[AI\]\s*/, '');
+              setMitigationPrefill({
+                title,
+                description: typeof payload.action_description === 'string' ? payload.action_description : undefined,
+                priority: typeof payload.priority === 'string' ? payload.priority : undefined,
+                action_type: 'remediate',
+                source: 'ai',
+              });
+              setShowMitigationModal(true);
+            }}
+            acceptingSuggestion={createMitigationMutation.isPending}
+          />
         </div>
       )}
 
@@ -1676,30 +1699,6 @@ export default function VulnerabilityDetailPage() {
         </div>
       )}
 
-
-      {activeTab === 'ai' && (
-        <AIAnalysisTab
-          vulnerability={vulnerability}
-          suggestFixMutation={suggestFixMutation}
-          onAcceptSuggestion={(payload) => {
-            // Stage the AI suggestion into the existing Add Mitigation
-            // modal so the user can pick a due date / assignee / tweak any
-            // field before it lands in the register. This gives the AI
-            // path the same controls as a manual create — no silent
-            // bypass of assignment + due-date setting.
-            const title = String(payload.action_title ?? '').replace(/^\[AI\]\s*/, '');
-            setMitigationPrefill({
-              title,
-              description: typeof payload.action_description === 'string' ? payload.action_description : undefined,
-              priority: typeof payload.priority === 'string' ? payload.priority : undefined,
-              action_type: 'remediate',
-              source: 'ai',
-            });
-            setShowMitigationModal(true);
-          }}
-          acceptingSuggestion={createMitigationMutation.isPending}
-        />
-      )}
 
       {activeTab === 'exception' && (
         <div className="space-y-4">

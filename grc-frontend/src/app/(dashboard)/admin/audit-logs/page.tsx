@@ -116,6 +116,12 @@ const MODULE_LABELS: Record<string, string> = {
   documents: 'Documents',
   system: 'System',
   risks: 'Risks & ERM',
+  // Issue Management — URL prefix `/issue-management/...` from the
+  // issue_management module routers.
+  'issue-management': 'Issue Management',
+  // Criticality Assessments — `/criticality-assessments/...` for the
+  // ISCA + IACA endpoints under Asset Management.
+  'criticality-assessments': 'Criticality Assessments',
 };
 
 const SUBMODULE_LABELS: Record<string, string> = {
@@ -178,12 +184,28 @@ const SUBMODULE_LABELS: Record<string, string> = {
   parser: 'Parser',
   controls: 'Controls',
   alignment: 'Alignment',
+  // Issue Management (URL: /issue-management/{issues|actions|comments|links|...})
+  issues: 'Issues',
+  actions: 'CAPA Actions',
+  comments: 'Comments',
+  links: 'Linked Items',
+  matrices: 'Severity & Classification Matrices',
+  'automation-flags': 'Automation Flags',
+  'by-source': 'By Source',
+  'from-source': 'Auto-Create from Source',
+  // Criticality Assessments
+  'info-system': 'Information System Assessments',
+  'infra-asset': 'Infrastructure Asset Assessments',
+  'by-asset': 'By Asset',
+  coverage: 'Coverage Stats',
 };
 
 const SUB_ENTITY_MODULES = new Set([
   'erm', 'evidence-mgmt', 'vuln-management', 'audit-management',
   'control-library', 'governance', 'compliance', 'vendor-risk',
   'workflow-engine', 'framework-upload',
+  // Phase-2 additions — both surfaces nest resources under module prefix.
+  'issue-management', 'criticality-assessments',
 ]);
 
 function titleCase(s: string): string {

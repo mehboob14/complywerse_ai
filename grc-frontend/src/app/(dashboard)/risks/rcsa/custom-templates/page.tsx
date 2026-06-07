@@ -6,7 +6,25 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { rcsaApi } from '@/lib/api';
-import { FileSpreadsheet, Upload, Download, Trash2, Eye, RefreshCw } from 'lucide-react';
+import {
+  FileSpreadsheet, Upload, Download, Trash2, Eye, RefreshCw,
+  ClipboardList, ListChecks, ArrowRight,
+} from 'lucide-react';
+
+type IndexTab = 'templates' | 'mine';
+
+type MyAssignment = {
+  row_id: number;
+  template_id: number;
+  template_name: string;
+  risk_id_text?: string | null;
+  inherent_overall_label?: string | null;
+  residual_overall_label?: string | null;
+  inherent_overall_score?: number | null;
+  residual_overall_score?: number | null;
+  evidence_count: number;
+  updated_at: string;
+};
 
 type CustomTemplate = {
   id: number;
@@ -30,6 +48,16 @@ export default function RCSACustomTemplatesPage() {
   const [functionArea, setFunctionArea] = useState('');
   const [description, setDescription] = useState('');
   const [includeInactive, setIncludeInactive] = useState(false);
+  const [tab, setTab] = useState<IndexTab>('templates');
+
+  // "Items assigned to me" feed — cross-template view of every row the
+  // current operator owns. Used by the My Assignments tab so a user can
+  // walk into their work without first selecting a template.
+  const myQ = useQuery<MyAssignment[]>({
+    queryKey: ['rcsa.custom-templates.my-assignments'],
+    queryFn: async () => (await rcsaApi.customTemplates.listMyAssignments()).data,
+    enabled: tab === 'mine',
+  });
 
   const listQ = useQuery<CustomTemplate[]>({
     queryKey: ['rcsa.custom-templates', includeInactive],
@@ -172,7 +200,40 @@ export default function RCSACustomTemplatesPage() {
         </div>
       </section>
 
-      {/* List */}
+      {/* Tab bar — Templates vs. My Assignments */}
+      <div className="rounded-lg border border-gray-200 bg-white px-3">
+        <nav className="flex gap-1">
+          {([
+            { key: 'templates' as const, label: 'Templates',       icon: ClipboardList },
+            { key: 'mine'      as const, label: 'My Assignments',  icon: ListChecks    },
+          ]).map(({ key, label, icon: Icon }) => {
+            const active = tab === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  active
+                    ? 'border-blue-600 text-blue-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+                {key === 'mine' && (myQ.data?.length ?? 0) > 0 && (
+                  <span className="ml-0.5 inline-flex items-center justify-center min-w-[18px] h-4 px-1 rounded-full bg-blue-100 text-[10px] font-semibold text-blue-700">
+                    {myQ.data?.length}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {/* List (Templates tab) */}
+      {tab === 'templates' && (
       <section>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-gray-900">Your custom templates</h3>
@@ -303,6 +364,83 @@ export default function RCSACustomTemplatesPage() {
           </div>
         )}
       </section>
+      )}
+
+      {/* My Assignments tab */}
+      {tab === 'mine' && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-900">Assessment items assigned to me</h3>
+            <button
+              type="button"
+              onClick={() => qc.invalidateQueries({ queryKey: ['rcsa.custom-templates.my-assignments'] })}
+              className="inline-flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900"
+              title="Refresh"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Refresh
+            </button>
+          </div>
+          {myQ.isLoading ? (
+            <p className="text-sm text-gray-500">Loading…</p>
+          ) : (myQ.data ?? []).length === 0 ? (
+            <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center">
+              <ListChecks className="mx-auto h-10 w-10 text-gray-300" />
+              <p className="mt-3 text-sm font-medium text-gray-700">No items assigned to you yet</p>
+              <p className="mt-1 text-xs text-gray-500">
+                When someone assigns an assessment item to you from the template detail page,
+                it shows up here so you can walk straight into your work.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="px-4 py-2">Template</th>
+                    <th className="px-4 py-2">Risk ID</th>
+                    <th className="px-4 py-2">Inherent</th>
+                    <th className="px-4 py-2">Residual</th>
+                    <th className="px-4 py-2 text-right">Evidence</th>
+                    <th className="px-4 py-2">Updated</th>
+                    <th className="px-4 py-2 text-right">Open</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {(myQ.data ?? []).map((row) => (
+                    <tr key={`${row.template_id}-${row.row_id}`} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-900">{row.template_name}</div>
+                        <div className="text-[11px] text-gray-500">Item #{row.row_id}</div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 font-mono text-xs">{row.risk_id_text || '—'}</td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {row.inherent_overall_label || (row.inherent_overall_score != null ? row.inherent_overall_score : '—')}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">
+                        {row.residual_overall_label || (row.residual_overall_score != null ? row.residual_overall_score : '—')}
+                      </td>
+                      <td className="px-4 py-3 text-right text-gray-700">{row.evidence_count}</td>
+                      <td className="px-4 py-3 text-[11px] text-gray-500">
+                        {new Date(row.updated_at).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link
+                          href={`/risks/rcsa/custom-templates/${row.template_id}?open=${row.row_id}`}
+                          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                        >
+                          Open
+                          <ArrowRight className="h-3 w-3" />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
