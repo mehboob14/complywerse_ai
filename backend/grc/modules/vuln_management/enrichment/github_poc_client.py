@@ -32,6 +32,8 @@ from typing import List, Optional
 
 import requests
 
+from ....config import REDIS_URL
+
 logger = logging.getLogger(__name__)
 
 GITHUB_SEARCH_URL = "https://api.github.com/search/repositories"
@@ -78,7 +80,7 @@ def _redis_client():
         import redis  # type: ignore
     except Exception:
         return None
-    url = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
+    url = REDIS_URL
     try:
         return redis.from_url(url, socket_connect_timeout=2, socket_timeout=2)
     except Exception:

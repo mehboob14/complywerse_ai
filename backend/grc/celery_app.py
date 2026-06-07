@@ -41,9 +41,11 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
-BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/1")
-RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/2")
+from .config import (
+    REDIS_URL,
+    CELERY_BROKER_URL as BROKER_URL,
+    CELERY_RESULT_BACKEND as RESULT_BACKEND,
+)
 
 
 celery_app = Celery(

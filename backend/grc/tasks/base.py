@@ -26,6 +26,7 @@ import redis
 from celery import Task
 from sqlalchemy.orm import Session
 
+from ..config import REDIS_URL
 from ..db import open_tenant_session, validate_slug
 
 logger = logging.getLogger(__name__)
@@ -41,8 +42,7 @@ def get_redis() -> redis.Redis:
     own instance — `redis-py` connection pools are thread-safe."""
     global _redis_client
     if _redis_client is None:
-        url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
-        _redis_client = redis.Redis.from_url(url, decode_responses=True, socket_timeout=5)
+        _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=5)
     return _redis_client
 
 

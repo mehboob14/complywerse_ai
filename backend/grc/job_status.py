@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional
 
 import redis
 
+from .config import REDIS_URL
 from .db import validate_slug
 
 logger = logging.getLogger(__name__)
@@ -36,8 +37,7 @@ _redis_client: Optional[redis.Redis] = None
 def _get_redis() -> redis.Redis:
     global _redis_client
     if _redis_client is None:
-        url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
-        _redis_client = redis.Redis.from_url(url, decode_responses=True, socket_timeout=5)
+        _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=5)
     return _redis_client
 
 

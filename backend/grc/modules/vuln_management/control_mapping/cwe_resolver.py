@@ -47,6 +47,7 @@ from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from ....config import REDIS_URL
 from ....models import (
     CweControlOverride,
     ParsedFrameworkControl, UploadedFramework,
@@ -114,7 +115,7 @@ def _redis_client():
         import redis  # type: ignore
     except Exception:
         return None
-    url = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
+    url = REDIS_URL
     try:
         return redis.from_url(url, socket_connect_timeout=2, socket_timeout=2)
     except Exception:
