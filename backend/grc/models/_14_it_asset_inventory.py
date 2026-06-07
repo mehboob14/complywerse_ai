@@ -1,0 +1,232 @@
+from ._13_governance_document_management_enhanced import *  # noqa: F401,F403
+
+# =============================================================================
+# 11. IT Asset Inventory
+# =============================================================================
+
+class ITAsset(Base):
+    __tablename__ = "grc_it_assets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    asset_type = Column(String(50), nullable=False)  # application, infrastructure, data, cloud, third_party
+    owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    owner_name = Column(String(255), nullable=True)
+    custodian = Column(String(255), nullable=True)
+    host_name = Column(String(255), nullable=True)
+    ip_address = Column(String(50), nullable=True)
+    criticality = Column(String(50), default="medium")  # low, medium, high, critical
+    confidentiality_rating = Column(Integer, nullable=True)
+    integrity_rating = Column(Integer, nullable=True)
+    availability_rating = Column(Integer, nullable=True)
+    valuation = Column(Float, nullable=True)
+    vendor = Column(String(255), nullable=True)
+    location = Column(String(255), nullable=True)
+    status = Column(String(50), default="active")  # active, inactive, decommissioned
+    cde_environment = Column(Boolean, default=False)
+
+    # ── Phase 5.1: Exposure metadata ───────────────────────────────────────
+    # Operational context that the existing `criticality`/`status` columns
+    # don't capture. All nullable / safe-defaulted so existing rows behave
+    # identically until a writer sets them.
+    internet_facing = Column(Boolean, default=False)
+    network_segment = Column(String(100), nullable=True)  # e.g. "dmz", "prod-app-tier"
+    data_classification = Column(String(50), nullable=True)  # public, internal, confidential, restricted
+    business_function = Column(String(100), nullable=True)  # e.g. "Payments", "HR Operations"
+    compliance_scope = Column(JSON, default=list)  # ["PCI-DSS", "HIPAA", ...]
+
+    # ── Phase 5.2: Ownership chain ─────────────────────────────────────────
+    # Richer ownership model than the single legacy `owner_id`. Reads should
+    # prefer `primary_owner_id` when set, else fall back to `owner_id`.
+    # `owning_team` is a free-text label until a dedicated Teams table lands.
+    primary_owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    secondary_owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    # Legacy text label — kept for back-compat with existing rows. New
+    # writers prefer `owning_team_id` (FK to grc_teams). The detail
+    # response derives a single human-readable team name from whichever is
+    # populated.
+    owning_team = Column(String(100), nullable=True)
+    owning_team_id = Column(Integer, ForeignKey("grc_teams.id"), nullable=True, index=True)
+    escalation_contact_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    business_owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+
+    # ── Phase 5.3: Lifecycle state machine ─────────────────────────────────
+    # `lifecycle_state` runs alongside the legacy `status` column (working
+    # agreement: additive only). Allowed transitions:
+    #   planned → active → maintenance → decommissioned → retired
+    # See services/asset_lifecycle.py for the machine.
+    lifecycle_state = Column(String(30), default="active")
+    decommissioned_at = Column(DateTime, nullable=True)
+    retirement_reason = Column(Text, nullable=True)
+    replacement_asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=True)
+
+    # ── Phase 5.4: Derived criticality score ───────────────────────────────
+    # 0.0-10.0 numeric score derived ISO 27005-style from the CIA ratings +
+    # exposure adjustments (data_classification, internet_facing,
+    # business_function). Always computed on write; never user-supplied.
+    # Read by the composite-priority formula in priority.py.
+    criticality_score = Column(Float, nullable=True)
+    # Audit-traceable override of the textual `criticality` bucket. When
+    # `criticality_manual_override=True`, the `criticality` column is set
+    # by the user (with an explanation in `criticality_override_reason`);
+    # the numeric `criticality_score` still reflects the derived value so
+    # the audit trail captures both "what the system computed" and "what
+    # the user chose to publish".
+    criticality_manual_override = Column(Boolean, default=False, nullable=True)
+    criticality_override_reason = Column(Text, nullable=True)
+
+    # ── Phase 5.5: Last-seen tracking ──────────────────────────────────────
+    # Bumped by scanner ingest paths. Stale-asset filter on the UI checks
+    # `last_seen_at < now - 30d`.
+    last_seen_at = Column(DateTime, nullable=True)
+    last_seen_source = Column(String(50), nullable=True)  # e.g. "nessus", "manual", "azure_defender"
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    tenant = relationship("Tenant", back_populates="it_assets")
+    # `owner` (legacy): back_populated by GRCUser.owned_assets. Kept for
+    # backward compat — list/detail pages still resolve display_name from it
+    # when the new ownership chain isn't populated.
+    owner = relationship("GRCUser", back_populates="owned_assets", foreign_keys=[owner_id])
+    # New ownership relationships are one-way (no back_populates) so we don't
+    # have to touch GRCUser — `foreign_keys=...` disambiguates which FK each
+    # relationship binds to since multiple columns now point at grc_users.id.
+    primary_owner = relationship("GRCUser", foreign_keys=[primary_owner_id])
+    secondary_owner = relationship("GRCUser", foreign_keys=[secondary_owner_id])
+    escalation_contact = relationship("GRCUser", foreign_keys=[escalation_contact_id])
+    business_owner = relationship("GRCUser", foreign_keys=[business_owner_id])
+    owning_team_obj = relationship("Team", foreign_keys=[owning_team_id])
+    # Self-referential: which asset replaced this one when retired.
+    replacement_asset = relationship(
+        "ITAsset",
+        remote_side="ITAsset.id",
+        foreign_keys=[replacement_asset_id],
+    )
+    control_links = relationship("AssetControlLink", back_populates="asset", cascade="all, delete-orphan")
+    internal_control_links = relationship("AssetInternalControlLink", back_populates="asset", cascade="all, delete-orphan")
+    risk_links = relationship("RiskAssetLink", back_populates="asset", cascade="all, delete-orphan")
+    risk_assessments = relationship("AssetRiskAssessment", back_populates="asset", cascade="all, delete-orphan")
+    framework_control_links = relationship("AssetFrameworkControlLink", back_populates="asset", cascade="all, delete-orphan")
+    evidence_links = relationship("AssetEvidenceLink", back_populates="asset", cascade="all, delete-orphan")
+    security_compliance_selections = relationship(
+        "AssetSecurityComplianceSelection",
+        back_populates="asset",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("ix_it_asset_tenant_type", "tenant_id", "asset_type"),
+        Index("ix_it_asset_tenant_criticality", "tenant_id", "criticality"),
+        # Phase 5 indexes — filters on the list page + stale-asset sweep.
+        Index("ix_it_asset_lifecycle_state", "lifecycle_state"),
+        Index("ix_it_asset_data_classification", "data_classification"),
+        Index("ix_it_asset_internet_facing", "internet_facing"),
+        Index("ix_it_asset_last_seen_at", "last_seen_at"),
+        Index("ix_it_asset_criticality_score", "criticality_score"),
+    )
+
+
+class AssetControlLink(Base):
+    __tablename__ = "grc_asset_control_links"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
+    normalized_control_id = Column(Integer, ForeignKey("grc_normalized_controls.id"), nullable=False, index=True)
+    
+    asset = relationship("ITAsset", back_populates="control_links")
+    normalized_control = relationship("NormalizedControl", back_populates="asset_links")
+    
+    __table_args__ = (
+        Index("ix_asset_control_link", "asset_id", "normalized_control_id"),
+    )
+
+
+class AssetInternalControlLink(Base):
+    """Links assets to ERM internal controls"""
+    __tablename__ = "grc_asset_internal_control_links"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
+    internal_control_id = Column(Integer, ForeignKey("grc_internal_controls.id"), nullable=False, index=True)
+    coverage_status = Column(String(50), default="partial")
+    
+    asset = relationship("ITAsset", back_populates="internal_control_links")
+    internal_control = relationship("InternalControl")
+    
+    __table_args__ = (
+        UniqueConstraint("asset_id", "internal_control_id", name="uq_asset_internal_control"),
+    )
+
+
+class AssetFrameworkControlLink(Base):
+    """Links assets to framework controls"""
+    __tablename__ = "grc_asset_framework_control_links"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
+    framework_control_id = Column(Integer, ForeignKey("grc_framework_controls.id"), nullable=False, index=True)
+    coverage_status = Column(String(50), default="partial")
+    notes = Column(Text, nullable=True)
+    
+    asset = relationship("ITAsset", back_populates="framework_control_links")
+    framework_control = relationship("FrameworkControl")
+    
+    __table_args__ = (
+        UniqueConstraint("asset_id", "framework_control_id", name="uq_asset_framework_control"),
+    )
+
+
+class AssetEvidenceLink(Base):
+    """Links assets to evidence items"""
+    __tablename__ = "grc_asset_evidence_links"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
+    evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=False, index=True)
+    relationship_type = Column(String(50), default="supports")
+    
+    asset = relationship("ITAsset", back_populates="evidence_links")
+    evidence = relationship("Evidence", back_populates="asset_links")
+    
+    __table_args__ = (
+        UniqueConstraint("asset_id", "evidence_id", name="uq_asset_evidence"),
+    )
+
+
+class AssetRiskAssessment(Base):
+    __tablename__ = "grc_asset_risk_assessments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
+    assessment_date = Column(DateTime, default=datetime.utcnow)
+    risk_score = Column(Float, nullable=True)
+    coverage_percentage = Column(Float, nullable=True)
+    gaps = Column(JSON, default={})
+    assessor_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    
+    asset = relationship("ITAsset", back_populates="risk_assessments")
+    assessor = relationship("GRCUser", back_populates="asset_assessments")
+
+
+class AssetSecurityComplianceSelection(Base):
+    """Stores selected security compliance controls for an asset."""
+    __tablename__ = "grc_asset_security_compliance_selections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=False, index=True)
+    benchmark = Column(String(100), nullable=False, default="CIS_WS2012R2")
+    control_id = Column(String(128), nullable=False)
+    selected_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    asset = relationship("ITAsset", back_populates="security_compliance_selections")
+    selector = relationship("GRCUser")
+
+    __table_args__ = (
+        UniqueConstraint("asset_id", "benchmark", "control_id", name="uq_asset_security_compliance_selection"),
+        Index("ix_asset_security_compliance_asset_benchmark", "asset_id", "benchmark"),
+    )
+
