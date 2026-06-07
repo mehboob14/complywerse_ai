@@ -294,9 +294,9 @@ If you see `404` or wrong route matched:
 
 ## Additional Documentation
 
-- [SETUP.md](SETUP.md): Detailed installation and configuration
-- [replit.md](replit.md): Full project overview and feature specifications
-- [TESTING_GUIDE.md](TESTING_GUIDE.md): Gap analysis and theme testing
+- [docs/INDEX.md](../docs/INDEX.md): Index of all project documentation
+- [docs/SETUP.md](../docs/SETUP.md): Detailed installation and configuration
+- [docs/DATABASE_SCHEMA.md](../docs/DATABASE_SCHEMA.md): Full database schema reference
 - `/grc/docs`: Live OpenAPI documentation (FastAPI auto-generated)
 
 ---
