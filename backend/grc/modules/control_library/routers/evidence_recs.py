@@ -1,3 +1,4 @@
+from ....config import get_openai_api_key
 import os
 import json
 from typing import List, Optional
@@ -95,7 +96,7 @@ def check_ai_available() -> bool:
     is_modelfarm = "modelfarm" in base_url
     if is_modelfarm:
         return True
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     if not api_key:
         return False
     if not is_modelfarm and (api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20):
@@ -118,7 +119,7 @@ def raise_ai_unavailable(fallback_available: bool = False):
 def get_openai_client() -> OpenAI:
     if not check_ai_available():
         raise_ai_unavailable(fallback_available=False)
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     return OpenAI(
         api_key=api_key,

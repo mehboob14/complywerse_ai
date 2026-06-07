@@ -1,3 +1,4 @@
+from ..config import get_openai_api_key
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, case, and_, or_
@@ -369,7 +370,7 @@ VALID_TRANSITIONS = {
 
 
 def _get_openai_client():
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     if not api_key:
         raise HTTPException(status_code=503, detail="AI service not configured")

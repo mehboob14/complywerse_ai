@@ -1,3 +1,4 @@
+from ....config import get_openai_api_key
 import json
 import logging
 import os
@@ -133,7 +134,7 @@ class ControlMappingService:
         if not vuln:
             raise ValueError("Vulnerability not found")
 
-        api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        api_key = get_openai_api_key()
         base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
 
         if not api_key or len(api_key) < 20:

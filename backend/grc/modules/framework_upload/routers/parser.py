@@ -1,3 +1,4 @@
+from ....config import get_openai_api_key
 import os
 import json
 import threading
@@ -25,7 +26,7 @@ AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_UR
 
 def get_openai_client() -> OpenAI:
     """Get OpenAI client with runtime API key reading."""
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     if not api_key:
         raise HTTPException(
@@ -50,7 +51,7 @@ def get_openai_client() -> OpenAI:
 
 def check_ai_available() -> bool:
     """Check if OpenAI API key is configured (at runtime)."""
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     if not api_key:
         return False

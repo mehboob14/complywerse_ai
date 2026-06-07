@@ -29,6 +29,7 @@ Permission model: re-uses ``erm:rcsa:*`` permissions already in the catalog.
 
 from __future__ import annotations
 
+from ....config import get_openai_api_key
 import hashlib
 import json
 import logging
@@ -1083,7 +1084,7 @@ def explain_row(
 
     explanation: Optional[str] = None
     try:
-        api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        api_key = get_openai_api_key()
         base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
         if api_key:
             from openai import OpenAI

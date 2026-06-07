@@ -1,3 +1,4 @@
+from ....config import get_openai_api_key
 from typing import Any, Dict, List, Optional
 from datetime import datetime, date
 from io import BytesIO
@@ -2633,7 +2634,7 @@ class RiskAISuggestionResponse(BaseModel):
 
 
 def get_openai_client() -> OpenAI:
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     is_modelfarm = base_url and "modelfarm" in base_url
     if not api_key and not is_modelfarm:

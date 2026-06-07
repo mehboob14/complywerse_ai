@@ -1,3 +1,4 @@
+from ....config import get_openai_api_key
 import os
 import json
 import uuid
@@ -89,7 +90,7 @@ def raise_ai_unavailable(fallback_available: bool = False):
 def get_openai_client() -> OpenAI:
     if not check_ai_available():
         raise_ai_unavailable(fallback_available=False)
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     return OpenAI(
         api_key=api_key,

@@ -1,3 +1,4 @@
+from ....config import get_openai_api_key
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import json
@@ -75,7 +76,7 @@ def serialize_feed_item(item: RegulatoryFeedItem) -> RegulatoryFeedItemResponse:
 
 def get_openai_client() -> OpenAI:
     """Get OpenAI client with proper configuration"""
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     if not api_key or api_key.startswith("_DUMMY") or len(api_key) < 20:
         raise HTTPException(status_code=503, detail="AI features unavailable. OpenAI API key not configured.")

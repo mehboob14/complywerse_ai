@@ -1,3 +1,4 @@
+from ..config import get_openai_api_key
 import os
 import json
 import logging
@@ -821,7 +822,7 @@ def get_unified_dashboard(
 
 
 def get_openai_client() -> OpenAI:
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     if not api_key:
         return None

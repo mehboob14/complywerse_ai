@@ -1,3 +1,4 @@
+from ..config import get_openai_api_key
 from typing import List, Optional
 from datetime import datetime, timedelta
 import json
@@ -18,7 +19,7 @@ def _check_ai_available() -> bool:
     if base_url and "modelfarm" in base_url:
         return True
 
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     if not api_key:
         return False
     if api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
@@ -71,7 +72,7 @@ def _generate_exception_suggestion(title: str, document: GovernanceDocument) -> 
     try:
         from openai import OpenAI
 
-        api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        api_key = get_openai_api_key()
         base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
         model = os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4o"
 

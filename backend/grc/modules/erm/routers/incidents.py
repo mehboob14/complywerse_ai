@@ -1,3 +1,4 @@
+from ....config import get_openai_api_key
 import os
 import json
 from typing import List, Optional
@@ -36,7 +37,7 @@ class IncidentAISuggestRequest(BaseModel):
 
 def get_openai_client():
     from openai import OpenAI
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     if not api_key:
         raise HTTPException(

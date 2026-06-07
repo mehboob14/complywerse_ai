@@ -5,6 +5,7 @@ the KPI definitions and the quarterly measurement targets/actuals — under a
 single flat table so the user can upload the template Excel as-is and edit
 everything in one form.
 """
+from ..config import get_openai_api_key
 import json
 import logging
 import os
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/risks/nca-kpi", tags=["NCA KPI Report"])
 
-OPENAI_API_KEY = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+OPENAI_API_KEY = get_openai_api_key()
 OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
 
 

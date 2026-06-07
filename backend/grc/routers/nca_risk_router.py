@@ -1,4 +1,5 @@
 """NCA Cybersecurity Risk Management register router."""
+from ..config import get_openai_api_key
 import json
 import logging
 import os
@@ -119,7 +120,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/risks/nca", tags=["NCA Risk Register"])
 
-OPENAI_API_KEY = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+OPENAI_API_KEY = get_openai_api_key()
 OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
 
 

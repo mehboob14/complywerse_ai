@@ -1,3 +1,4 @@
+from ..config import get_openai_api_key
 import os
 import uuid
 import json
@@ -270,7 +271,7 @@ def serialize_dependency(dep: ISProjectDependency) -> dict:
 
 
 def _get_openai_client():
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     if not api_key:
         raise HTTPException(status_code=503, detail="AI service not configured")

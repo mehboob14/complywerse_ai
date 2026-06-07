@@ -1,3 +1,4 @@
+from ..config import get_openai_api_key
 import os
 import uuid
 import io
@@ -3451,7 +3452,7 @@ def check_ai_available() -> bool:
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     if base_url and "modelfarm" in base_url:
         return True
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     if not api_key:
         return False
     if api_key.startswith("_DUMMY") or api_key == "your-api-key-here" or len(api_key) < 20:
@@ -3465,7 +3466,7 @@ def get_openai_client() -> OpenAI:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI features unavailable. OpenAI API key not configured."
         )
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
     return OpenAI(api_key=api_key, base_url=base_url)
 

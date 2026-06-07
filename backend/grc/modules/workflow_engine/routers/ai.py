@@ -1,3 +1,4 @@
+from ....config import get_openai_api_key
 import json
 import os
 from datetime import datetime, timedelta
@@ -31,7 +32,7 @@ def _get_openai_client():
     except ImportError:
         raise HTTPException(status_code=503, detail="openai package not installed")
 
-    api_key = os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     if not api_key:
         raise HTTPException(status_code=503, detail="AI service not configured — set OPENAI_API_KEY")
 
