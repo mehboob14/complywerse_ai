@@ -6,6 +6,7 @@ Central index of project documentation. Start with [SETUP.md](SETUP.md) to run t
 - [SETUP.md](SETUP.md) — Local setup: prerequisites, backend/frontend install, env vars, running, multi-tenant notes, default credentials.
 
 ## Architecture & data
+- [ARCHITECTURE.md](ARCHITECTURE.md) — **Start here to build/extend.** Structure, request flow, conventions, and step-by-step recipes for adding a feature module or integrating external (e.g. Replit) code.
 - [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) — Full database schema reference (tables, columns, relationships).
 - [../.github/copilot-instructions.md](../.github/copilot-instructions.md) — Architecture conventions, critical files, multi-tenant patterns, router-ordering gotchas (also used as AI-assistant context).
 
