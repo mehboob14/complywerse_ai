@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
 import apiClient, { frameworksApi } from '@/lib/api';
+import { useToast } from '@/components/ui';
 import {
   Library,
   Loader2,
@@ -89,6 +90,7 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; icon: typeof Che
 
 export default function ControlLibraryPage() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('controls:control_library:create');
   const canEdit = hasPermission('controls:control_library:edit');
@@ -337,8 +339,32 @@ export default function ControlLibraryPage() {
 
   const populateFromFrameworksMutation = useMutation({
     mutationFn: () => apiClient.post('/control-library/groups/populate-all-groups'),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['control-groups'] });
+      const added = res.data?.total_added;
+      if (typeof added === 'number') {
+        toast({
+          type: added > 0 ? 'success' : 'info',
+          title: added > 0 ? 'Frameworks populated' : 'No new matches',
+          message: added > 0
+            ? `Added ${added} framework control(s) to your existing groups.`
+            : 'Existing groups already cover every framework control. Try AI Auto-Grouping to surface new themes.',
+        });
+      }
+    },
+    onError: (err: any) => {
+      // The backend returns a structured 400 when there are no groups to
+      // populate (operator clicked Populate before running AI Auto-Grouping).
+      // Surface a clear toast pointing at the right next step.
+      const detail = err?.response?.data?.detail;
+      const message = typeof detail === 'object'
+        ? (detail.message || 'Unable to populate from frameworks.')
+        : (detail || err?.message || 'Unable to populate from frameworks.');
+      toast({
+        type: 'error',
+        title: 'Nothing to populate',
+        message,
+      });
     },
   });
 

@@ -387,6 +387,47 @@ def submit_exception(
     return _exception_to_dict(exception, db)
 
 
+def _is_tenant_administrator(user: GRCUser, db: Session) -> bool:
+    """True when the user has the Administrator system role OR is the
+    tenant's primary contact. Used to bypass separation-of-duties
+    checks on tenants where the same person both raised and approves
+    a request (typical single-admin SaaS deployments).
+
+    `db` is already bound to the user's tenant DB (we're inside a
+    request that resolved tenant context), so:
+      * Role lookup goes through UserRole rows in the tenant DB.
+      * Primary-contact lookup uses the tenant's self-row (every
+        tenant DB carries one Tenant row describing itself).
+    """
+    from ..models import Role, UserRole, Tenant
+    # Administrator role bypass
+    try:
+        admin_role_rows = (
+            db.query(UserRole)
+            .join(Role, Role.id == UserRole.role_id)
+            .filter(UserRole.user_id == user.id, Role.name == "Administrator")
+            .all()
+        )
+        if admin_role_rows:
+            return True
+    except Exception:
+        pass
+    # Primary-contact bypass. Per-tenant DB normally has exactly one
+    # Tenant row (its own self-row). The match is case-insensitive.
+    try:
+        tenant_row = db.query(Tenant).first()
+        if (
+            tenant_row
+            and tenant_row.primary_contact_email
+            and user.email
+            and tenant_row.primary_contact_email.lower() == user.email.lower()
+        ):
+            return True
+    except Exception:
+        pass
+    return False
+
+
 @router.post("/{exception_id}/approve")
 def approve_exception(
     exception_id: int,
@@ -403,8 +444,18 @@ def approve_exception(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
     if exception.status != "pending_approval":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only pending exceptions can be approved")
-    if exception.requested_by == current_user.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot approve your own exception request")
+    # Separation-of-duties guard: a regular user can't approve the
+    # exception they raised themselves. Administrators bypass — a
+    # single-admin tenant would otherwise have no path to clear its
+    # own queue, which is the common SaaS reality. The audit log
+    # still records *which* admin approved + that they were the
+    # original requester, so any policy review can trace it.
+    if exception.requested_by == current_user.id and not _is_tenant_administrator(current_user, db):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=("Cannot approve your own exception request. "
+                    "Ask a tenant Administrator (or the primary contact) to approve.")
+        )
 
     exception.status = "approved"
     exception.approved_by = current_user.id

@@ -169,7 +169,12 @@ Return JSON:
 # anything larger we batch + merge so the model never runs out of output tokens
 # and silently drops controls (the original bug — `[:100]` slice + max_tokens=4000
 # meant ~70% of selected frameworks' controls never made it into a group).
-_AI_GROUP_BATCH_SIZE = 60
+# Batch size tuned for the FULL-text payload (up to ~8KB per control,
+# previously 400 chars). Multi-turn pipeline already merges across
+# batches so reducing this from 60 just adds more turns — quality
+# unchanged, no controls dropped.  Math: 30 controls * 8000 chars / 4
+# tokens-per-char ≈ 60k tokens of input, well under gpt-4o's 128k cap.
+_AI_GROUP_BATCH_SIZE = 30
 _AI_GROUP_MAX_TOKENS = 8000
 
 
@@ -463,12 +468,27 @@ def _fetch_controls_for_grouping(
             fw_id_to_name[fw.id] = fw.name
 
     for pc in parsed_controls:
+        # Use the RICHEST available text for the AI grouping prompt:
+        # prefer full_text (the raw control body extracted from the PDF
+        # — typically several paragraphs of rationale, requirements,
+        # and references). Fall back to description (one paragraph) and
+        # finally an empty string. The previous truncation at 400 chars
+        # stripped most of the semantic content the model needed to
+        # group accurately.
+        #
+        # We DO clamp to a generous per-control ceiling (8000 chars,
+        # roughly 2000 tokens) so a single pathological control can't
+        # blow the batch budget. With the batch size below this still
+        # leaves comfortable headroom under gpt-4o's 128k context.
+        body = (pc.full_text or pc.description or "").strip()
+        if len(body) > 8000:
+            body = body[:8000] + "\n...[truncated for prompt size]"
         controls_list.append({
             "id": pc.id,
             "type": "parsed",
             "code": pc.original_reference or pc.control_id,
             "name": pc.title,
-            "statement": pc.description or (pc.full_text[:400] if pc.full_text else ""),
+            "statement": body,
             "framework": fw_id_to_name.get(pc.uploaded_framework_id, "Unknown"),
         })
     return controls_list
@@ -1191,6 +1211,7 @@ def auto_group_dispatch(
 
     job_id = uuid.uuid4().hex
     framework_ids = list(request.framework_ids or [])
+    user_id = current_user.id
 
     set_job_status(tenant_slug, "control_auto_group", job_id, {
         "status": "queued",
@@ -1200,22 +1221,50 @@ def auto_group_dispatch(
         "framework_ids": framework_ids,
     })
 
-    # Run the work in a daemon thread so the dispatch endpoint returns
-    # immediately and we don't depend on a separate Celery worker process.
-    # Status updates flow through Redis-backed job_status so the polling
-    # endpoint always returns a fresh snapshot.
-    user_id = current_user.id
-    thread = threading.Thread(
-        target=_run_auto_grouping_threaded,
-        args=(tenant_slug, job_id, framework_ids, user_id),
-        name=f"auto_group:{job_id}",
-        daemon=True,
-    )
-    thread.start()
-    _jobs_logger.info(
-        "[auto_group] DISPATCH tenant=%s job=%s framework_ids=%s — thread started",
-        tenant_slug, job_id, framework_ids,
-    )
+    # Preferred path: dispatch to Celery so the work runs on the dedicated
+    # `parsing` queue worker. The worker carries its own DB session per the
+    # TenantTask base, status flows through Redis-backed job_status, and a
+    # restart of the API process can't lose the job mid-flight.
+    #
+    # Fallback path (in-process thread) kicks in when Celery's broker is
+    # not reachable from this process. Useful for dev boxes without Redis
+    # and for catastrophic recovery on prod — surfaces as a log line so
+    # ops can see it happened.
+    use_thread_fallback = False
+    try:
+        from ....tasks.control_library import ai_auto_group as _ai_auto_group_task
+        # IMPORTANT: TenantTask.__call__ enforces tenant_slug as the FIRST
+        # positional arg (backend/grc/tasks/base.py:177-183). Pass it via
+        # `args=[...]`, not kwargs, otherwise the worker raises
+        # `ValueError: ... called without tenant_slug as first arg`.
+        async_result = _ai_auto_group_task.apply_async(
+            args=[tenant_slug, job_id],
+            kwargs={"framework_ids": framework_ids, "user_id": user_id},
+            queue="parsing",
+        )
+        _jobs_logger.info(
+            "[auto_group] DISPATCH (celery) tenant=%s job=%s framework_ids=%s task_id=%s",
+            tenant_slug, job_id, framework_ids, async_result.id,
+        )
+    except Exception as exc:
+        _jobs_logger.warning(
+            "[auto_group] Celery dispatch failed (%s) — falling back to in-process thread",
+            exc,
+        )
+        use_thread_fallback = True
+
+    if use_thread_fallback:
+        thread = threading.Thread(
+            target=_run_auto_grouping_threaded,
+            args=(tenant_slug, job_id, framework_ids, user_id),
+            name=f"auto_group:{job_id}",
+            daemon=True,
+        )
+        thread.start()
+        _jobs_logger.info(
+            "[auto_group] DISPATCH (thread fallback) tenant=%s job=%s framework_ids=%s",
+            tenant_slug, job_id, framework_ids,
+        )
 
     return {"job_id": job_id, "status": "queued"}
 
@@ -1535,14 +1584,32 @@ def populate_all_groups_from_frameworks(
 ):
     tenant_id = get_user_primary_tenant(current_user, db)
     user_tenants = get_user_tenants(current_user, db)
-    
+
     groups = db.query(CommonControlGroup).filter(
         or_(
             CommonControlGroup.tenant_id.in_(user_tenants),
             CommonControlGroup.tenant_id.is_(None)
         )
     ).all()
-    
+
+    # If no groups exist yet, the operator clicked "Populate from
+    # Frameworks" without first creating any groups via AI Auto-Grouping.
+    # The previous behaviour silently returned "Added 0 controls from N
+    # frameworks" and looked broken. Return a clear actionable message
+    # instead so the UI can surface "Run AI Auto-Grouping first" instead
+    # of an empty success toast.
+    if not groups:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "no_groups_to_populate",
+                "message": ("No control groups exist yet. Click 'AI Auto-Grouping' "
+                            "first to let the AI create groups from the frameworks "
+                            "you've uploaded, then come back here to populate."),
+                "fix": "ai_auto_group",
+            },
+        )
+
     uploaded_fws = db.query(UploadedFramework).filter(
         or_(
             UploadedFramework.tenant_id == tenant_id,

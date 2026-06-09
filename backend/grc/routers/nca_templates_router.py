@@ -402,6 +402,93 @@ def _extract_template_text(template_id: str) -> str:
     raise HTTPException(status_code=415, detail=f"Unsupported template format: {path.suffix}")
 
 
+def _split_template_into_sections(text: str) -> List[Dict[str, str]]:
+    """Split the NCA template markdown into (heading, content) sections.
+
+    Cheap regex — looks for markdown headings (# / ## / ### …) and
+    splits the body between them. The preview UI uses these to render
+    a per-section accordion. If no markdown headings exist (unlikely
+    for NCA templates which are always section-numbered), returns the
+    whole body as a single "Document" section.
+    """
+    import re
+    if not text or not text.strip():
+        return []
+    lines = text.splitlines()
+    sections: List[Dict[str, str]] = []
+    current_heading: Optional[str] = None
+    current_body: list[str] = []
+    heading_re = re.compile(r"^\s*(#{1,6})\s+(.+?)\s*$")
+    for line in lines:
+        m = heading_re.match(line)
+        if m:
+            if current_heading is not None or current_body:
+                sections.append({
+                    "heading": current_heading or "Preamble",
+                    "content": "\n".join(current_body).strip(),
+                })
+            current_heading = m.group(2).strip()
+            current_body = []
+        else:
+            current_body.append(line)
+    if current_heading is not None or current_body:
+        sections.append({
+            "heading": current_heading or "Document",
+            "content": "\n".join(current_body).strip(),
+        })
+    return [s for s in sections if s["content"] or s["heading"]]
+
+
+def _estimate_review_minutes(word_count: int) -> str:
+    """Rough reading-rate estimate (200 wpm) for the UI banner."""
+    if word_count <= 0:
+        return "~1 minute"
+    minutes = max(1, round(word_count / 200))
+    if minutes == 1:
+        return "~1 minute"
+    if minutes < 60:
+        return f"~{minutes} minutes"
+    hours = minutes // 60
+    rem = minutes % 60
+    return f"~{hours}h{rem:02d}m" if rem else f"~{hours}h"
+
+
+def _persist_document_from_text(
+    *,
+    db: Session,
+    tenant_id: int,
+    user: GRCUser,
+    title: str,
+    doc_type: str,
+    classification: str,
+    content: str,
+    source_template_id: str,
+    source_template_title: str,
+):
+    """Save the verbatim NCA template text as a new GovernanceDocument.
+
+    Mirrors the post-AI persistence path so the document looks identical
+    in the documents list regardless of how it was created. Audit log
+    will tag it with the source_template_id so reviewers know the
+    content came straight from the NCA library — no AI in the loop.
+    """
+    from ..models import GovernanceDocument
+    doc = GovernanceDocument(
+        tenant_id=tenant_id,
+        title=title,
+        content=content,
+        doc_type=doc_type,
+        classification=classification,
+        status="draft",
+        owner_id=getattr(user, "id", None),
+        author_id=getattr(user, "id", None),
+        tags=[f"nca-template:{source_template_id}", "verbatim"],
+    )
+    db.add(doc)
+    db.flush()
+    return doc
+
+
 # ─── Schemas ────────────────────────────────────────────────────────────────
 
 class CreateFromTemplateBody(BaseModel):
@@ -419,6 +506,11 @@ class AIDraftFromTemplateBody(BaseModel):
     classification: Optional[str] = "internal"
     doc_type: Optional[str] = None
     save_as_document: bool = False  # If True, persists the result as a GovernanceDocument
+    # Default behaviour for NCA templates: use the template text VERBATIM
+    # as the draft content. Senior's ask — the NCA documents are official
+    # control-text, AI re-drafting actively damages them. The legacy AI
+    # path is still available by setting ai_redraft=True.
+    ai_redraft: bool = False
 
 
 class CompareBody(BaseModel):
@@ -602,12 +694,61 @@ def ai_draft_from_template(
     if not item:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    if not OPENAI_API_KEY:
-        raise HTTPException(status_code=503, detail="AI not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY.")
-
     tenant_id = get_user_primary_tenant(user, db)
     if not tenant_id:
         raise HTTPException(status_code=403, detail="No tenant context for drafting")
+
+    # ── Default fast path: return the exact NCA template text as the draft.
+    # No AI call, no job queue, no async polling. Senior's requirement:
+    # NCA templates are official control-text that the regulator publishes
+    # — re-drafting them with an LLM corrupts the wording. The frontend
+    # accepts a "synchronous, no job_id" response shape; we use it here
+    # so the existing UI just renders the result immediately.
+    if not body.ai_redraft:
+        template_text = _extract_template_text(template_id) or ""
+        doc_type = body.doc_type or CATEGORY_TO_DOC_TYPE.get(item["category"], "policy")
+        sections = _split_template_into_sections(template_text)
+        word_count = len(template_text.split())
+        if body.save_as_document:
+            doc = _persist_document_from_text(
+                db=db,
+                tenant_id=tenant_id,
+                user=user,
+                title=body.title,
+                doc_type=doc_type,
+                classification=body.classification or "internal",
+                content=template_text,
+                source_template_id=template_id,
+                source_template_title=item["title"],
+            )
+            db.commit()
+            return {
+                "document_id": doc.id,
+                "synchronous": True,
+                "source_template": {"id": template_id, "title": item["title"], "category": item["category"]},
+                "generated_content": template_text,
+                "suggested_title": body.title,
+                "suggested_sections": sections,
+                "framework_alignment": [],
+                "word_count": word_count,
+                "estimated_review_time": _estimate_review_minutes(word_count),
+            }
+        # Preview-only return — frontend opens its preview modal with this
+        # payload (same shape AI flow returns on completion).
+        return {
+            "synchronous": True,
+            "source_template": {"id": template_id, "title": item["title"], "category": item["category"]},
+            "generated_content": template_text,
+            "suggested_title": body.title,
+            "suggested_sections": sections,
+            "framework_alignment": [],
+            "word_count": word_count,
+            "estimated_review_time": _estimate_review_minutes(word_count),
+        }
+
+    # ── Legacy AI re-draft path (opt-in via ai_redraft=true) ─────────────
+    if not OPENAI_API_KEY:
+        raise HTTPException(status_code=503, detail="AI not configured. Set AI_INTEGRATIONS_OPENAI_API_KEY.")
 
     reference = _extract_template_text(template_id) or ""
     parent_excerpt = reference.strip()

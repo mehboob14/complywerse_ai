@@ -64,6 +64,12 @@ attached_assets/
 cookies.txt
 *.sql
 
+# Data dumps produced by backend/scripts/export_*.py — these are
+# tenant snapshots meant to scp to other environments, not source.
+cis_library.json
+*_library.json
+*_dump.json
+
 # ALL zip/archive files anywhere in the repo
 **/*.zip
 **/*.tar.gz

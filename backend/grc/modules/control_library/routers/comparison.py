@@ -1573,13 +1573,24 @@ def ai_compare_dispatch(
 
     user_tenants = get_user_tenants(current_user, db)
 
+    # Frameworks may be tenant-scoped (uploaded by this tenant) OR global
+    # (tenant_id IS NULL — seeded into every tenant DB by the framework
+    # seeder and conceptually shared). Both are valid sources for an
+    # AI comparison; the original `tenant_id.in_(user_tenants)` filter
+    # silently dropped global frameworks, leaving fresh tenants with
+    # only built-in frameworks unable to compare at all.
+    from sqlalchemy import or_
+    _scope = or_(
+        UploadedFramework.tenant_id.is_(None),
+        UploadedFramework.tenant_id.in_(user_tenants),
+    )
     source_fw = db.query(UploadedFramework).filter(
         UploadedFramework.id == body.source_framework_id,
-        UploadedFramework.tenant_id.in_(user_tenants),
+        _scope,
     ).first()
     dest_fw = db.query(UploadedFramework).filter(
         UploadedFramework.id == body.dest_framework_id,
-        UploadedFramework.tenant_id.in_(user_tenants),
+        _scope,
     ).first()
     if not source_fw or not dest_fw:
         raise HTTPException(
