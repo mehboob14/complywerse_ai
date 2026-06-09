@@ -93,12 +93,20 @@ class WorkflowRuntime:
             try:
                 polled = self.dispatcher.poll_platform_events(db)
                 scheduled = self.timer_service.schedule_due_steps(db)
+                # Threshold events (issue SLA breach, agent offline, CIS
+                # pass-rate drop) — self-throttled to once per 60 s by
+                # the dispatcher; cheap to call every loop tick because
+                # the dispatcher returns immediately when not due. The
+                # method opens its own per-tenant sessions, so we don't
+                # pass the master `db` in.
+                threshold_fired = self.dispatcher.poll_threshold_events()
                 db.commit()
-                if polled or scheduled:
+                if polled or scheduled or threshold_fired:
                     logger.info(
-                        "workflow.runtime.cycle polled_events=%s scheduled_items=%s queue_size=%s",
+                        "workflow.runtime.cycle polled_events=%s scheduled_items=%s threshold_events=%s queue_size=%s",
                         polled,
                         scheduled,
+                        threshold_fired,
                         self.event_queue.size(),
                     )
             except Exception as exc:

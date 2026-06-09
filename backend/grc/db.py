@@ -96,7 +96,30 @@ def get_tenant_engine(slug: str) -> Engine:
     with _tenant_cache_lock:
         if slug not in _tenant_engines:
             url = tenant_db_url(slug)
-            engine = create_engine(url, pool_pre_ping=True, future=True)
+            # Pool sized for the CIS scan-all path. Each parallel scan
+            # worker holds a tenant connection for the duration of its
+            # WinRM/SSH probe (seconds, sometimes minutes per rule). With
+            # the default pool (5 + 10 overflow = 15 max), a 10-worker
+            # scan + concurrent UI polls (per-user-summary, auth/me,
+            # workflow notifications…) exhausted the pool in seconds and
+            # every request started returning 500 with
+            # ``QueuePool limit reached, timed out``. The CIS handoff
+            # ships ``COMPLYVERSE_SCAN_CONCURRENCY=10`` by default, so we
+            # provision 20 + 20 = 40 to keep ~half the pool free for
+            # request-serving even during the largest scan. Per-engine
+            # is per-tenant, so multi-tenant deployments multiply this
+            # by tenant count against Postgres' ``max_connections`` (100
+            # by default) — bump pg's setting if you onboard >5 tenants
+            # scanning concurrently.
+            engine = create_engine(
+                url,
+                pool_pre_ping=True,
+                future=True,
+                pool_size=20,
+                max_overflow=20,
+                pool_timeout=10,       # fail-fast: 30 s timeout was hiding the real problem
+                pool_recycle=3600,     # recycle every hour to avoid stale-connection edge cases
+            )
             _tenant_engines[slug] = engine
             _tenant_sessions[slug] = sessionmaker(autocommit=False, autoflush=False, bind=engine, future=True)
             # Run any registered idempotent schema self-heals so this engine

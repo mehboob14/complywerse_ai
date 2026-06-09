@@ -3873,11 +3873,143 @@ export const compliancePluginsApi = {
   ) => apiClient.post(`/compliance-plugins/${pluginId}/review`, { decision, ...(patch || {}) }),
   importJson: (plugins: unknown[], autoApprove = false) =>
     apiClient.post('/compliance-plugins/import-json', { plugins, auto_approve: autoApprove }),
+
+  // ─── CIS Phase 4 backend additions ────────────────────────────────────
+  // Wrappers for the 18 new endpoints surfaced by the compliance_plugins
+  // router merge: benchmark-mappings CRUD, library-tree navigation, OS
+  // registry, match-preview, classify-stream, normalise-os, connection
+  // scope-preview + persistence, asset OS re-detection, benchmark promote.
+
+  /** List integration connections this user can scan against, grouped by category. */
+  listConnections: () => apiClient.get('/compliance-plugins/connections'),
+  /** Preview which assets a scope would cover BEFORE saving it. */
+  previewConnectionScope: (connectionId: number, body: Record<string, unknown>) =>
+    apiClient.post(`/compliance-plugins/connections/${connectionId}/scope-preview`, body),
+  /** Persist the scope (which assets to scan via this connection). */
+  updateConnectionScope: (connectionId: number, body: Record<string, unknown>) =>
+    apiClient.put(`/compliance-plugins/connections/${connectionId}/scope`, body),
+
+  /** Hierarchical library: vendor → product → benchmark → rule. */
+  libraryTree: (params?: Record<string, unknown>) =>
+    apiClient.get('/compliance-plugins/library-tree', { params }),
+  /** Section-level breakdown for one benchmark. */
+  libraryTreeBenchmarkSections: (params?: Record<string, unknown>) =>
+    apiClient.get('/compliance-plugins/library-tree/benchmark-sections', { params }),
+  /** Rule-target counts per (benchmark, runner_type). */
+  libraryTreeRuleTargets: (params?: Record<string, unknown>) =>
+    apiClient.get('/compliance-plugins/library-tree/rule-targets', { params }),
+  /** Positional-arg aliases — the CIS-merged Library / per-plugin pages
+   *  call these by benchmark name / rule id. Kept alongside the
+   *  params-dict variants above for back-compat. */
+  benchmarkSections: (benchmark: string) =>
+    apiClient.get('/compliance-plugins/library-tree/benchmark-sections', { params: { benchmark } }),
+  ruleTargets: (ruleId: number) =>
+    apiClient.get('/compliance-plugins/library-tree/rule-targets', { params: { rule_id: ruleId } }),
+
+  /** Canonical OS taxonomy used by the strict-match table. */
+  osRegistry: () => apiClient.get('/compliance-plugins/os-registry'),
+  /** Coerce a free-form OS string into the canonical normalized form. */
+  normaliseOs: (raw: string) =>
+    apiClient.post('/compliance-plugins/normalise-os', { os: raw }),
+  /** Re-probe and re-store an asset's OS profile (uses os_detector under the hood). */
+  reDetectOs: (assetId: number) =>
+    apiClient.post(`/compliance-plugins/assets/${assetId}/re-detect-os`),
+
+  /** What benchmark would match this OS pattern right now? */
+  matchPreview: (params: { os_normalized?: string; asset_id?: number } | number) =>
+    typeof params === 'number'
+      ? apiClient.get('/compliance-plugins/match-preview', { params: { asset_id: params } })
+      : apiClient.get('/compliance-plugins/match-preview', { params }),
+  /** Re-trigger OS detection on an asset (probes via WinRM / SSH / etc).
+   *  Used by the Compliance tab's "Re-detect OS" button to refresh the
+   *  AI Classification block + recompute matched benchmark count. */
+  reDetectAssetOs: (assetId: number) =>
+    apiClient.post(`/compliance-plugins/assets/${assetId}/re-detect-os`, {}),
+
+  // ── Benchmark-OS mappings (strict-single-stage matcher) ──
+  listBenchmarkMappings: () =>
+    apiClient.get('/compliance-plugins/benchmark-mappings'),
+  /** AI-assisted mapping suggestions for the unmapped OS patterns. */
+  suggestBenchmarkMapping: (params?: Record<string, unknown>) =>
+    apiClient.get('/compliance-plugins/benchmark-mappings/suggest', { params }),
+  /** Per-asset suggestion (one row picked for one asset's os_normalized). */
+  suggestBenchmarkMappingForAsset: (assetId: number) =>
+    apiClient.get(`/compliance-plugins/benchmark-mappings/suggest-for-asset/${assetId}`),
+  /** Same endpoint, package-style alias used by the Compliance tab's
+   *  NoMappingCallout component. Kept alongside the longer name for
+   *  back-compat with other callers. */
+  suggestMappingForAsset: (assetId: number) =>
+    apiClient.get(`/compliance-plugins/benchmark-mappings/suggest-for-asset/${assetId}`),
+  createBenchmarkMapping: (body: Record<string, unknown>) =>
+    apiClient.post('/compliance-plugins/benchmark-mappings', body),
+  deleteBenchmarkMapping: (mappingId: number) =>
+    apiClient.delete(`/compliance-plugins/benchmark-mappings/${mappingId}`),
+
+  /** Promote a benchmark to "active" version (archives older same-product
+   *  benchmarks + flips active mapping rows). Operator action. */
+  promoteBenchmark: (body: Record<string, unknown>) =>
+    apiClient.post('/compliance-plugins/benchmarks/promote', body),
+
+  /** SSE stream of OS-classification progress for a batch of assets. */
+  classifyStreamUrl: '/compliance-plugins/classify-stream',
+  /** Classification stats (passed/failed/skipped counts per OS family). */
+  classificationStats: () =>
+    apiClient.get('/compliance-plugins/classification-stats'),
+};
+
+// ─── CIS Phase 3 agent installer + scan-push helpers ─────────────────────
+// agentsApi already exists elsewhere in this file; these helpers wrap the
+// new per-OS installer endpoints + scan-now-push the backend ships with
+// the agents/router.py merge. Kept as a sibling export so the InstallerButtons
+// component on /admin/agents can call them with type safety.
+export const agentsCisApi = {
+  /** Stream the per-OS installer .cmd / .sh / .command as a binary
+   *  download. Caller is responsible for turning the response into a
+   *  Blob + triggering the browser download (see InstallerButtons in
+   *  /admin/agents/page.tsx). Pass `fleet=1` + `expires_hours` to mint
+   *  a multi-host fleet token. */
+  downloadInstaller: (
+    ext: 'cmd' | 'sh' | 'command',
+    params: Record<string, string | number>,
+  ) => apiClient.get(`/agents/installer.${ext}`, { params, responseType: 'blob' }),
+
+  /** Skip the agent's 30s heartbeat tick — next /jobs poll returns the
+   *  asset's full rule batch immediately. */
+  scanNowPush: (assetId: number) =>
+    apiClient.post(`/agents/scan-now-push/${assetId}`),
+};
+
+// ─── CIS Connect Wizard handshake API ────────────────────────────────────
+// Used by the ConnectWizard.tsx page (translated to Next.js at
+// /connect-wizard) to mint a one-time token, poll status, and complete
+// the handshake when the bank's installer / collector dials home with
+// stored credentials.
+export const connectWizardApi = {
+  issueToken: (body: Record<string, unknown>) =>
+    apiClient.post('/connect-wizard/issue-token', body),
+  status: (nonce: string) =>
+    apiClient.get(`/connect-wizard/status/${nonce}`),
+  /** Plain-text Windows install snippet streamed under the token URL. */
+  windowsScript: (token: string) =>
+    apiClient.get(`/connect-wizard/windows/${token}`, { responseType: 'text' }),
+  /** Plain-text Linux install snippet. */
+  linuxScript: (token: string) =>
+    apiClient.get(`/connect-wizard/linux/${token}`, { responseType: 'text' }),
+  /** Final handshake — installer POSTs creds, server stores them
+   *  encrypted + auto-creates the asset record + probes the OS. */
+  handshake: (body: Record<string, unknown>) =>
+    apiClient.post('/connect-wizard/handshake', body),
 };
 
 export const riskPostureApi = {
   dashboard: () => apiClient.get('/risk-posture/dashboard'),
   asset: (assetId: number) => apiClient.get(`/risk-posture/asset/${assetId}`),
+  /** v2 live-preview: send proposed Business Context toggles and get
+   *  back what the asset's risk score WOULD be without persisting.
+   *  Used by the asset detail page's Live Preview pane so the operator
+   *  can see the score impact before clicking Save. */
+  previewAsset: (assetId: number, body: Record<string, unknown>) =>
+    apiClient.post(`/risk-posture/asset/${assetId}/preview`, body),
   getWeights: () => apiClient.get('/risk-posture/weights'),
   updateWeights: (data: {
     weight_cis: number;

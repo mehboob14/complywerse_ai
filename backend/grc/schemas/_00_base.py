@@ -878,6 +878,17 @@ class ITAssetCreate(ITAssetBase):
     integrity_rating: Optional[int] = None
     availability_rating: Optional[int] = None
     valuation: Optional[float] = None
+    # CIS / Compliance tab compatibility. Operators creating an asset
+    # manually in IT Assets often already know the OS — accepting these
+    # fields up-front means the strict matcher can resolve a benchmark
+    # without a Connect Wizard handshake first. Without them, manually
+    # created assets land with os_normalized=NULL → 0 applicable rules
+    # → "OS not in feed yet" banner on the Compliance tab.
+    os_family: Optional[str] = None
+    os_version: Optional[str] = None
+    os_normalized: Optional[str] = None
+    os_build: Optional[str] = None
+    os_edition: Optional[str] = None
 
 
 class ITAssetUpdate(BaseModel):
@@ -894,6 +905,25 @@ class ITAssetUpdate(BaseModel):
     integrity_rating: Optional[int] = None
     availability_rating: Optional[int] = None
     valuation: Optional[float] = None
+    # OS profile fields — match what ITAssetCreate accepts so an asset
+    # imported with vague OS data ("Windows 11") can be patched to the
+    # exact build (windows-11-23H2) without going through Connect Wizard.
+    os_family: Optional[str] = None
+    os_version: Optional[str] = None
+    os_normalized: Optional[str] = None
+    os_build: Optional[str] = None
+    os_edition: Optional[str] = None
+    # ── Risk Posture v2 business-context fields ────────────────────────
+    # The Risk Posture asset detail page Save button writes through this
+    # endpoint. `operational_dependency` is the v2 wire name; the assets
+    # router translates it to the renamed column `op_dep_business_impact`
+    # (the existing Integer column with the same wire name is for
+    # Criticality Assessments — separate domain).
+    is_customer_facing: Optional[bool] = None
+    is_internet_facing: Optional[bool] = None
+    regulated_data_type: Optional[str] = None
+    operational_dependency: Optional[str] = None   # v2 wire name; maps to op_dep_business_impact
+    business_impact_notes: Optional[str] = None
     vendor: Optional[str] = None
     location: Optional[str] = None
     status: Optional[str] = None

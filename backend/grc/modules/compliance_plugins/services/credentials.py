@@ -93,9 +93,20 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
                 .replace("http://", "")
                 .rstrip("/")
             )
-            scheme = (env("WINRM_SCHEME") or "https").lower()
+            # Pick scheme by stored port FIRST, then fall back to env default.
+            # The Connect Wizard auto-probe picks the working port (5986
+            # HTTPS preferred, 5985 HTTP fallback) and saves it to
+            # connection.console_port. The executor must honour that choice
+            # — using HTTPS on a 5985 host produces SSL: WRONG_VERSION_NUMBER.
+            stored_port = connection.console_port
+            if env("WINRM_SCHEME"):
+                scheme = env("WINRM_SCHEME").lower()
+            elif stored_port == 5985:
+                scheme = "http"
+            else:
+                scheme = "https"
             default_port = 5986 if scheme == "https" else 5985
-            port = env("WINRM_PORT") or str(connection.console_port or default_port)
+            port = env("WINRM_PORT") or str(stored_port or default_port)
             if host:
                 endpoint = f"{scheme}://{host}:{port}/wsman"
         username = env("WINRM_USERNAME") or connection.username or ""
@@ -165,4 +176,70 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
         }
 
 
+    # ─── Extended integrations (MSSQL / Postgres / MySQL / LDAP / Azure / K8s)
+    # All stored their structured creds in IntegrationConnection.credentials_extra_json
+    # by the Connect Wizard. Decrypt the secret fields and return the dict
+    # shape each runner expects (matches extended_runners.py field names).
+    extra = getattr(connection, "credentials_extra_json", None) or {}
+
+    if integration_type == "mssql_sql":
+        return {
+            "mssql_host": extra.get("mssql_host") or connection.console_url,
+            "mssql_port": extra.get("mssql_port") or connection.console_port or 1433,
+            "mssql_username": extra.get("mssql_username") or connection.username,
+            "mssql_password": decrypt_secret(extra.get("mssql_password") or connection.password),
+            "mssql_database": extra.get("mssql_database") or "master",
+        }
+    if integration_type == "postgres_sql":
+        return {
+            "postgres_host": extra.get("postgres_host") or connection.console_url,
+            "postgres_port": extra.get("postgres_port") or connection.console_port or 5432,
+            "postgres_username": extra.get("postgres_username") or connection.username,
+            "postgres_password": decrypt_secret(extra.get("postgres_password") or connection.password),
+            "postgres_database": extra.get("postgres_database") or "postgres",
+        }
+    if integration_type == "mysql_sql":
+        return {
+            "mysql_host": extra.get("mysql_host") or connection.console_url,
+            "mysql_port": extra.get("mysql_port") or connection.console_port or 3306,
+            "mysql_username": extra.get("mysql_username") or connection.username,
+            "mysql_password": decrypt_secret(extra.get("mysql_password") or connection.password),
+            "mysql_database": extra.get("mysql_database") or "information_schema",
+        }
+    if integration_type == "ldap_query":
+        return {
+            "ldap_host": extra.get("ldap_host") or connection.console_url,
+            "ldap_port": extra.get("ldap_port") or connection.console_port or 389,
+            "ldap_use_ssl": bool(extra.get("ldap_use_ssl")),
+            "ldap_bind_dn": extra.get("ldap_bind_dn") or extra.get("ldap_username") or connection.username,
+            "ldap_username": extra.get("ldap_username") or connection.username,
+            "ldap_password": decrypt_secret(extra.get("ldap_password") or connection.password),
+        }
+    if integration_type == "azure_readonly":
+        return {
+            "azure_subscription_id": extra.get("azure_subscription_id"),
+            "azure_tenant_id": extra.get("azure_tenant_id"),
+            "azure_client_id": extra.get("azure_client_id"),
+            "azure_client_secret": decrypt_secret(extra.get("azure_client_secret") or ""),
+        }
+    if integration_type == "k8s_api":
+        out: dict = {}
+        if extra.get("kubeconfig"):
+            out["kubeconfig"] = decrypt_secret(extra["kubeconfig"])
+        if extra.get("k8s_server"):
+            out["k8s_server"] = extra["k8s_server"]
+            out["k8s_token"] = decrypt_secret(extra.get("k8s_token") or "")
+            out["k8s_ca_cert"] = extra.get("k8s_ca_cert")
+        return out
+
     return {}
+
+
+# CIS-merge alias — the package's ``agents/router.py`` imports
+# ``credentials_for`` while the package's own ``credentials.py`` exports
+# ``resolve_credentials_for_connection``. Same shape, same behaviour.
+# Without this alias the collector-agent /jobs endpoint crashes with
+# ``ImportError: cannot import name 'credentials_for'`` the first time
+# a collector polls for work. Keep both names exported.
+credentials_for = resolve_credentials_for_connection
+

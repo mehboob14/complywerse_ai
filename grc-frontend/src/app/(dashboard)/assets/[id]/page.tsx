@@ -2,11 +2,11 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/hooks/usePermissions';
-import { apiClient, assetsApi, criticalityApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
+import { apiClient, assetsApi, compliancePluginsApi, criticalityApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
 import type { IacaItem, IscaItem } from '@/lib/api';
 import type { ITAsset } from '@/types';
 import { SearchInput, InlineLinkPicker, PageLoader } from '@/components/ui';
@@ -17,6 +17,8 @@ import {
   AppWindow, HardDrive, Database, Cloud, Building2,
   Lock, ShieldCheck, MapPin, User, Bug, Network,
   Gauge, PackageSearch,
+  // CIS Module Updated drop — ComplianceTab + NoMappingCallout + ScanSessions
+  Cpu, Play, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -52,7 +54,7 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   third_party: 'Third-Party System',
 };
 
-type TabType = 'details' | 'controls' | 'evidence' | 'risks' | 'security-compliance' | 'vulnerabilities' | 'criticality' | 'trajectory';
+type TabType = 'details' | 'compliance' | 'controls' | 'evidence' | 'risks' | 'security-compliance' | 'vulnerabilities' | 'criticality' | 'trajectory';
 
 interface LinkedControl {
   id: number;
@@ -163,6 +165,12 @@ interface AssetDetailData {
   criticality_score?: number | null;
   last_seen_at?: string | null;
   last_seen_source?: string | null;
+  // CIS Module Updated drop — OS profile fields consumed by the
+  // Compliance tab (AI Classification + Matched benchmark panels).
+  // All optional; the panel handles "unknown" gracefully when missing.
+  os_family?: string | null;
+  os_version?: string | null;
+  os_normalized?: string | null;
 }
 
 interface SecurityComplianceControl {
@@ -478,6 +486,12 @@ export default function AssetDetailPage() {
 
   const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
     { id: 'details', label: 'Details', icon: ClipboardList },
+    // CIS Module Updated drop — Compliance tab. Position #2 to match
+    // Hassan's reference layout. Holds AI Classification (OS profile),
+    // Matched benchmark count, Benchmark resolution chain, scan
+    // controls + run history. Distinct from the rightmost "Security
+    // Compliance" tab which is the manual-controls linkage view.
+    { id: 'compliance', label: 'Compliance', icon: Cpu },
     { id: 'controls', label: 'Controls', icon: Shield },
     { id: 'evidence', label: 'Evidence', icon: FileCheck },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
@@ -688,6 +702,9 @@ export default function AssetDetailPage() {
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         {activeTab === 'details' && (
           <DetailsTab asset={asset} />
+        )}
+        {activeTab === 'compliance' && (
+          <ComplianceTab asset={asset} />
         )}
         {activeTab === 'controls' && (
           <ControlsTab
@@ -1571,21 +1588,88 @@ function ControlsTab({
     return 'border-slate-200 bg-slate-100 text-slate-600';
   };
   
+  // Risk Posture uses target=12 as the "full coverage" threshold for an
+  // asset. Anything less is treated as a gap that contributes to the
+  // asset's risk score. We surface this here so operators understand
+  // why linking 1 of 12 controls still shows the dimension as "low".
+  const CTRL_TARGET = 12;
+  const coveragePct = Math.min(100, Math.round((totalControls / CTRL_TARGET) * 100));
+  const coverageTone =
+    coveragePct >= 75 ? { bar: 'bg-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', label: 'Solid coverage' } :
+    coveragePct >= 33 ? { bar: 'bg-amber-500',   text: 'text-amber-700',   bg: 'bg-amber-50',   border: 'border-amber-200',   label: 'Partial coverage' } :
+                        { bar: 'bg-red-500',     text: 'text-red-700',     bg: 'bg-red-50',     border: 'border-red-200',     label: 'Low coverage' };
+  const fullCount  = [...(asset.linked_internal_controls || []), ...(asset.linked_framework_controls || []), ...(asset.linked_controls || [])]
+                       .filter((c: any) => c.coverage_status === 'full').length;
+  const partialCount = [...(asset.linked_internal_controls || []), ...(asset.linked_framework_controls || []), ...(asset.linked_controls || [])]
+                       .filter((c: any) => c.coverage_status === 'partial').length;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-          <Shield className="h-4 w-4 text-blue-600" />
-          Linked Controls ({totalControls})
-        </h3>
-        <InlineLinkPicker
-          triggerLabel="Link Control"
-          items={controlPickerItems}
-          isLoading={controlsLoading || isLinkingControl}
-          emptyText="No controls available"
-          searchPlaceholder="Search controls"
-          onSelect={(value) => onLinkControl(Number(value))}
-        />
+      {/* Header card — coverage summary + Link Control CTA */}
+      <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+              <Shield className="h-5 w-5 text-blue-600" />
+              Linked Controls
+              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">
+                {totalControls}
+              </span>
+            </h3>
+            <p className="mt-1 text-xs text-slate-600">
+              Controls applied to this asset across Internal Controls, Framework Controls,
+              and the Normalized Control Library. Linking more controls reduces this
+              asset's contribution to the tenant's risk score.
+            </p>
+          </div>
+          <InlineLinkPicker
+            triggerLabel="+ Link Control"
+            items={controlPickerItems}
+            isLoading={controlsLoading || isLinkingControl}
+            emptyText="No controls available"
+            searchPlaceholder="Search controls"
+            onSelect={(value) => onLinkControl(Number(value))}
+          />
+        </div>
+
+        {/* Coverage progress + breakdown */}
+        <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-700">Coverage</span>
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${coverageTone.text} ${coverageTone.bg} ${coverageTone.border}`}>
+                {coverageTone.label}
+              </span>
+            </div>
+            <span className="font-mono font-semibold text-slate-700">
+              {totalControls} <span className="text-slate-400">of {CTRL_TARGET} target</span> · {coveragePct}%
+            </span>
+          </div>
+          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className={`h-full rounded-full transition-all ${coverageTone.bar}`} style={{ width: `${coveragePct}%` }} />
+          </div>
+          {totalControls > 0 && (
+            <div className="mt-2 flex gap-4 text-[11px] text-slate-600">
+              {fullCount > 0 && <span><span className="inline-block h-2 w-2 rounded-full bg-green-500 mr-1" />{fullCount} fully covered</span>}
+              {partialCount > 0 && <span><span className="inline-block h-2 w-2 rounded-full bg-yellow-500 mr-1" />{partialCount} partial</span>}
+              {totalControls > fullCount + partialCount && (
+                <span><span className="inline-block h-2 w-2 rounded-full bg-slate-400 mr-1" />{totalControls - fullCount - partialCount} not rated</span>
+              )}
+            </div>
+          )}
+          {totalControls === 0 && (
+            <p className="mt-2 text-[11px] italic text-slate-500">
+              No controls linked yet — risk posture treats this dimension as
+              unmeasured and excludes it from the score. Link at least one to start scoring.
+            </p>
+          )}
+          {totalControls > 0 && coveragePct < 75 && (
+            <p className="mt-2 text-[11px] text-amber-700">
+              View the asset's Risk Posture page for a per-dimension contribution
+              breakdown — adding more controls reduces the coverage gap and the score.
+            </p>
+          )}
+        </div>
       </div>
 
       {asset.linked_internal_controls && asset.linked_internal_controls.length > 0 && (
@@ -2537,6 +2621,900 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+
+// CIS Module Updated drop -- ComplianceTab + NoMappingCallout + ScanSessions
+// Ported verbatim from the package so the new Compliance tab on the
+// asset page shows AI Classification, Matched benchmark resolution and
+// run history. All API calls go through compliancePluginsApi.
+
+function ComplianceTab({ asset }: { asset: AssetDetailData }) {
+  // Compliverse onboards assets via the bank's CMDB API (we do not do
+  // network discovery). For each onboarded asset we DO run CIS compliance
+  // rules — that's our core job. This tab combines four blocks:
+  //   1. AI Classification — OS profile from the asset feed
+  //   2. AI verdict — how many of the 4854 library rules apply
+  //   3. Funnel visualization — regex stage → AI stage → applicable
+  //   4. Scan controls + Recent runs — execute the applicable rules,
+  //      see pass/fail history
+
+  const queryClient = useQueryClient();
+  const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
+
+  const previewQuery = useQuery({
+    queryKey: ['compliance-plugins', 'match-preview', asset.id],
+    queryFn: () => compliancePluginsApi.matchPreview(asset.id).then((r: any) => r.data),
+  });
+
+  const reDetectMut = useMutation({
+    mutationFn: () => compliancePluginsApi.reDetectAssetOs(asset.id).then((r: any) => r.data),
+    onSuccess: (data: any) => {
+      const changed = data?.any_changed;
+      const a = data?.after || {};
+      setToast({
+        kind: 'success',
+        message: changed
+          ? `OS refreshed. Normalized: ${a.os_normalized || 'unknown'}${a.os_build ? ' (' + a.os_build + ')' : ''}${a.os_edition ? ' ' + a.os_edition : ''}`
+          : `OS already up to date: ${a.os_normalized || 'unknown'}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['compliance-plugins', 'match-preview', asset.id] });
+      queryClient.invalidateQueries({ queryKey: ['assets', asset.id] });
+    },
+    onError: (e: any) => setToast({ kind: 'error', message: e?.response?.data?.detail || e?.message || 'Re-detect failed' }),
+  });
+
+  const runsQuery = useQuery({
+    queryKey: ['compliance-plugins', 'runs', asset.id],
+    // Fetch a wide window of runs (~3000) so ScanSessions can group
+    // multiple historical scans, not just the last 10 runs.
+    queryFn: () => compliancePluginsApi.listRuns({ asset_id: asset.id, limit: 3000 }).then((r: any) => r.data),
+  });
+
+  // Live progress polling — scan-all is synchronous on the backend so
+  // the response only comes back after every rule has run. While it's
+  // blocked, we poll /runs every 2s and count new rows since scan start
+  // to surface "X of Y rules done" instead of a blank spinner.
+  const [scanProgress, setScanProgress] = useState<{
+    running: boolean;
+    startedAt?: number;
+    done: number;
+    total: number;
+  }>({ running: false, done: 0, total: 0 });
+
+  const scanMutation = useMutation({
+    mutationFn: async () => {
+      const startedAt = Date.now();
+      // Capture the max run-id BEFORE we kick off the scan so we can
+      // count "runs created since scan start" by simple subtraction.
+      let baselineMaxId = 0;
+      try {
+        const pre = await compliancePluginsApi.listRuns({ asset_id: asset.id, limit: 1 });
+        const preList = Array.isArray(pre.data) ? pre.data : (pre.data?.runs || []);
+        baselineMaxId = preList[0]?.id ?? 0;
+      } catch { /* first-ever scan — baseline stays 0 */ }
+
+      // Fire-and-forget agent push (no-op if no agent installed).
+      apiClient.post(`/agents/scan-now-push/${asset.id}`).catch(() => {});
+
+      // Kick off scan-all. New backend behaviour: returns IMMEDIATELY
+      // with {queued: true, total: N}. Previously it blocked for
+      // minutes which timed out the proxy + browser → spurious 500.
+      const resp = await compliancePluginsApi.scanAll({ asset_id: asset.id });
+      const scanData = resp.data || {};
+      const projectedTotal = scanData.total ?? scanData.executed ?? applicable.count ?? 0;
+      setScanProgress({ running: true, startedAt, done: 0, total: projectedTotal });
+
+      // Now poll /runs every 2s until either:
+      //   a) `done` reaches `projectedTotal` — scan complete
+      //   b) 5 minutes elapsed with no new runs — scan stalled
+      //   c) 30 minutes total — hard cap
+      // The backend's scan_lock is held by the worker thread the whole
+      // time, so any spurious "already running" comes from the real
+      // scan still in flight.
+      const POLL_INTERVAL_MS = 2000;
+      const STALL_TIMEOUT_MS = 5 * 60 * 1000;
+      const HARD_TIMEOUT_MS = 30 * 60 * 1000;
+      let lastDone = 0;
+      let lastChangeAt = Date.now();
+      const startTime = Date.now();
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+        let done = 0;
+        try {
+          const r = await compliancePluginsApi.listRuns({ asset_id: asset.id, limit: 5000 });
+          const list = Array.isArray(r.data) ? r.data : (r.data?.runs || []);
+          done = list.filter((run: any) => (run.id ?? 0) > baselineMaxId).length;
+        } catch { /* transient — keep polling */ }
+
+        setScanProgress((prev) => prev.running ? { ...prev, done } : prev);
+
+        if (done > lastDone) {
+          lastDone = done;
+          lastChangeAt = Date.now();
+        }
+        if (projectedTotal > 0 && done >= projectedTotal) break;     // complete
+        if (Date.now() - lastChangeAt > STALL_TIMEOUT_MS) break;     // stalled
+        if (Date.now() - startTime > HARD_TIMEOUT_MS) break;         // hard cap
+      }
+
+      setScanProgress((prev) => ({ ...prev, running: false }));
+      // Return a synthetic summary so onSuccess can show a clean toast.
+      return { executed: lastDone, projectedTotal };
+    },
+    onSuccess: (data: any) => {
+      const executed = data?.executed ?? 0;
+      const projected = data?.projectedTotal ?? 0;
+      setToast({
+        kind: 'success',
+        message: projected && executed >= projected
+          ? `Scan complete. ${executed} of ${projected} rule(s) finished.`
+          : `Scan finished. ${executed} run(s) created${projected ? ` (${projected} projected)` : ''}.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['compliance-plugins', 'runs', asset.id] });
+      queryClient.invalidateQueries({ queryKey: ['compliance-plugins', 'match-preview', asset.id] });
+    },
+    onError: (e: any) => {
+      setScanProgress((prev) => ({ ...prev, running: false }));
+      setToast({ kind: 'error', message: e?.response?.data?.detail || e?.message || 'Scan failed' });
+    },
+  });
+
+  const runs = Array.isArray(runsQuery.data) ? runsQuery.data : (runsQuery.data?.runs || []);
+  const lastRun = runs[0];
+  const formatTime = (iso?: string | null) => {
+    if (!iso) return '-';
+    try { return new Date(iso).toLocaleString(); } catch { return iso; }
+  };
+  // Each run = ONE CIS check executed. Backend stores its outcome as
+  // `status` (passed | failed | error | running) — not a pass/fail count.
+  const passFailBadge = (run: any) => {
+    const status = (run.status || '').toLowerCase();
+    if (status === 'running' || status === 'pending') {
+      return <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700"><Loader2 className="h-3 w-3 animate-spin" />Running</span>;
+    }
+    if (status === 'passed') {
+      return <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">✓ Passed</span>;
+    }
+    if (status === 'failed') {
+      return <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-700">✗ Failed</span>;
+    }
+    if (status === 'error') {
+      return <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-xs text-orange-700">⚠ Error</span>;
+    }
+    return <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5 text-xs text-gray-700">{status || 'unknown'}</span>;
+  };
+
+  // Map run-shape → plugin label / duration. Backend returns plugin_title,
+  // plugin_key, duration_ms — not the names my old code guessed.
+  const pluginLabel = (run: any): string => {
+    if (run.plugin_title) return run.plugin_title;
+    if (run.plugin_name) return run.plugin_name;
+    if (run.plugin?.title) return run.plugin.title;
+    if (run.plugin_key) return run.plugin_key;
+    return `#${run.plugin_id}`;
+  };
+
+  const fmtDuration = (run: any): string => {
+    const ms = run.duration_ms ?? (run.duration_seconds ? run.duration_seconds * 1000 : null);
+    if (ms == null) return '-';
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+  };
+
+  const preview = previewQuery.data || {};
+  const stage1 = preview.stage1_regex || {};
+  const stage2 = preview.stage2_ai || {};
+  const applicable = preview.applicable || {};
+  const total = preview.total_plugins ?? 0;
+
+  const osFamily = asset.os_family || preview.asset?.os_family || null;
+  const osVersion = asset.os_version || preview.asset?.os_version || null;
+  const osNormalized = asset.os_normalized || preview.asset?.os_normalized || null;
+  const criticality = asset.criticality || null;
+
+  const Pct = ({ num, denom }: { num: number; denom: number }) => {
+    if (!denom) return <span className="text-slate-400">-</span>;
+    return <span className="text-[10px] text-slate-500">({Math.round((num / denom) * 100)}%)</span>;
+  };
+
+  const ExampleList = ({ items, emptyText }: { items?: Array<any>; emptyText: string }) => {
+    if (!items || items.length === 0) return <div className="text-xs italic text-slate-400">{emptyText}</div>;
+    return (
+      <ul className="space-y-1">
+        {items.map((it: any, i: number) => (
+          <li key={i} className="text-xs text-slate-600">
+            <span className="font-mono text-[10px] text-slate-500">{it.rule_id}</span>{' '}
+            <span>{it.title}</span>
+            {it.benchmark && <div className="ml-0 mt-0.5 truncate text-[10px] text-slate-400">{it.benchmark}</div>}
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
+  if (previewQuery.isLoading) {
+    return <div className="flex items-center gap-2 p-6 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Running AI rule classification…</div>;
+  }
+
+  if (previewQuery.isError) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        Couldn't load the rule classification. Try refreshing.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* AI Classification panel — OS data from the asset API. */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <Cpu className="h-4 w-4 text-blue-600" /> AI Classification
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                {preview.asset?.os_knowledge?.display_name || 'OS profile received from your asset feed'}
+              </p>
+            </div>
+            <button
+              onClick={() => reDetectMut.mutate()}
+              disabled={reDetectMut.isPending}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              title="Re-probe this asset's OS via its stored connection"
+            >
+              {reDetectMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Cpu className="h-3 w-3" />}
+              Re-detect OS
+            </button>
+          </div>
+          <dl className="mt-3 grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <dt className="text-slate-500">Family</dt>
+              <dd className="mt-0.5 font-medium text-slate-900">{preview.asset?.os_knowledge?.family || osFamily || <span className="text-slate-400">unknown</span>}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Product</dt>
+              <dd className="mt-0.5 font-medium text-slate-900">{preview.asset?.os_knowledge?.product || <span className="text-slate-400">-</span>}</dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Build</dt>
+              <dd className="mt-0.5 font-medium text-slate-900">
+                {preview.asset?.os_knowledge?.build || <span className="text-slate-400">family-level</span>}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-slate-500">Criticality</dt>
+              <dd className="mt-0.5 font-medium capitalize text-slate-900">{criticality || '-'}</dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="text-slate-500">Version string</dt>
+              <dd className="mt-0.5 text-slate-800">{osVersion || <span className="text-slate-400">unknown</span>}</dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="text-slate-500">Normalized key</dt>
+              <dd className="mt-0.5 font-mono text-xs text-slate-700">{osNormalized || <span className="font-sans text-slate-400">unknown</span>}</dd>
+            </div>
+            {preview.asset?.os_knowledge?.eol_year && (
+              <div className="col-span-2">
+                <dt className="text-slate-500">Support window</dt>
+                <dd className={`mt-0.5 text-xs ${preview.asset.os_knowledge.is_supported ? 'text-emerald-700' : 'text-red-700'}`}>
+                  {preview.asset.os_knowledge.is_supported ? 'Supported' : 'End-of-life'} · EOL {preview.asset.os_knowledge.eol_year}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-gradient-to-br from-indigo-50 to-blue-50 p-4">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <ClipboardList className="h-4 w-4 text-indigo-600" /> Matched benchmark
+          </h3>
+          <p className="mt-1 text-xs text-slate-500">Of {total.toLocaleString()} CIS rules in the library</p>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-4xl font-bold text-slate-900">{applicable.count ?? 0}</span>
+            <span className="text-xs text-slate-600">apply to this asset</span>
+          </div>
+          {stage2.primary_benchmark ? (
+            <div className="mt-2 rounded-md border border-indigo-200 bg-white px-2 py-1.5 text-xs">
+              <div className="text-slate-500">Primary benchmark</div>
+              <div className="mt-0.5 font-medium text-slate-900">{stage2.primary_benchmark}</div>
+            </div>
+          ) : !osNormalized ? (
+            <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-2 text-xs text-amber-900">
+              <div className="font-semibold">No OS classified for this asset yet.</div>
+              <div className="mt-1">Pick any of the below to populate:</div>
+              <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                <li>Click <strong>Re-detect OS</strong> above (needs an active credential for this host).</li>
+                <li>Onboard via <Link href="/admin/integrations/connect" className="underline">Connect Wizard</Link> — handshake stamps the OS automatically.</li>
+                <li>Open <strong>Edit</strong> on this asset and set the OS family / version manually.</li>
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* ── Benchmark resolution trace ────────────────────────────────────
+          Single-stage strict matcher. Shows the actual decision: asset OS
+          key → mapped pattern → benchmark name, with the mapping row's
+          provenance (scope, priority, mapping_id). Replaces the legacy
+          two-stage "Regex / AI router" funnel — there is only one stage
+          now and the previous UI was lying about the second one.        */}
+      {(() => {
+        const mm = preview.matcher_mapping || {};
+        const mode = preview.matcher_mode || '';
+        const isStrict = mode === 'strict_single_stage';
+        const benchmark = mm.benchmark_name || stage2.primary_benchmark || null;
+        const pattern = mm.os_pattern || null;
+        const scope = mm.scope || null;
+        const mappingId = mm.mapping_id || null;
+        const candidates = stage1.kept ?? 0;
+        const skipped = stage1.skipped ?? 0;
+        const applicableN = applicable.count ?? 0;
+
+        return (
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <Cpu className="h-4 w-4 text-indigo-600" /> Benchmark resolution
+                </h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {isStrict
+                    ? 'Strict single-stage match: asset OS → operator-confirmed mapping → benchmark. No family-walk, no AI guess.'
+                    : 'Mode: ' + (mode || 'unknown')}
+                </p>
+              </div>
+              {isStrict && (
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700">
+                  Strict
+                </span>
+              )}
+            </div>
+
+            {/* Mapping chain */}
+            {benchmark ? (
+              <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="rounded border border-slate-300 bg-white px-2 py-1 font-mono text-slate-800">
+                    {osNormalized || '—'}
+                  </span>
+                  <span className="text-slate-400">matches pattern</span>
+                  <span className="rounded border border-slate-300 bg-white px-2 py-1 font-mono text-slate-800">
+                    {pattern || '—'}
+                  </span>
+                  <span className="text-slate-400">→</span>
+                  <span className="rounded border border-indigo-200 bg-white px-2 py-1 font-medium text-indigo-900">
+                    {benchmark}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                  {scope && (
+                    <span>
+                      <span className="text-slate-400">scope</span>{' '}
+                      <span className="font-medium text-slate-700">{scope}</span>
+                    </span>
+                  )}
+                  {mappingId && (
+                    <span>
+                      <span className="text-slate-400">mapping_id</span>{' '}
+                      <span className="font-mono text-slate-700">#{mappingId}</span>
+                    </span>
+                  )}
+                  <span>
+                    <span className="text-slate-400">archived benchmarks</span>{' '}
+                    <span className="font-medium text-slate-700">never picked</span>
+                  </span>
+                </div>
+              </div>
+            ) : (
+              // Gap B — actionable no-mapping callout. Three distinct
+              // failure modes get distinct copy so the operator knows
+              // which lever to pull:
+              //   (a) OS is unknown — asset has no os_normalized at all
+              //       (manual create with no os_version, or AI normaliser
+              //       returned null). Suggest "Re-detect OS" or edit.
+              //   (b) OS is known but no mapping row covers it — operator
+              //       hasn't wired this OS family to a benchmark yet.
+              //       Offer "Suggest mapping (AI)" + "Add mapping manually".
+              <NoMappingCallout
+                osNormalized={osNormalized}
+                assetId={asset.id}
+              />
+            )}
+
+            {/* Numbers strip */}
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <div className="rounded border border-slate-200 bg-white p-2.5">
+                <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Library total</div>
+                <div className="mt-0.5 text-xl font-semibold text-slate-900">{total.toLocaleString()}</div>
+                <p className="text-[11px] text-slate-500">approved CIS plugins</p>
+              </div>
+              <div className="rounded border border-indigo-200 bg-indigo-50/40 p-2.5">
+                <div className="text-[10px] font-medium uppercase tracking-wide text-indigo-700">From matched benchmark</div>
+                <div className="mt-0.5 text-xl font-semibold text-indigo-900">{candidates.toLocaleString()}</div>
+                <p className="text-[11px] text-slate-500">{skipped.toLocaleString()} from other benchmarks skipped</p>
+              </div>
+              <div className="rounded border border-emerald-200 bg-emerald-50/40 p-2.5">
+                <div className="text-[10px] font-medium uppercase tracking-wide text-emerald-700">Applicable to scan</div>
+                <div className="mt-0.5 text-xl font-semibold text-emerald-900">{applicableN.toLocaleString()}</div>
+                <p className="text-[11px] text-slate-500">
+                  {total > 0 ? `${Math.round((applicableN / total) * 100)}% of library` : '—'}
+                </p>
+              </div>
+            </div>
+
+            {/* Sample rules from the matched benchmark */}
+            {Array.isArray(stage1.examples_kept) && stage1.examples_kept.length > 0 && (
+              <div className="mt-3 border-t border-slate-200 pt-3">
+                <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                  Sample rules from this benchmark
+                </div>
+                <ExampleList items={stage1.examples_kept} emptyText="—" />
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Final applicable list */}
+      <div className="rounded-lg border border-slate-200 bg-white">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Applicable rules</h3>
+            <p className="text-xs text-slate-500">Sample of what will appear when scan results arrive via the asset API</p>
+          </div>
+          <span className="text-xs font-medium text-slate-700">{applicable.count ?? 0} total</span>
+        </div>
+        <div className="p-4">
+          <ExampleList items={applicable.examples} emptyText="No applicable rules until OS data lands." />
+        </div>
+      </div>
+
+      {toast && (
+        <div className={`rounded-lg border p-3 text-xs ${toast.kind === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'}`}>
+          {toast.message}
+          <button onClick={() => setToast(null)} className="float-right text-xs underline">dismiss</button>
+        </div>
+      )}
+
+      {/* Scan controls — execute the applicable rules (the ones the AI funnel above kept). */}
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <Play className="h-4 w-4 text-emerald-600" /> Compliance scan
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {applicable.count ?? 0} applicable rules. Last scan: {formatTime(lastRun?.started_at || lastRun?.created_at)}.
+              {' '}Scans also run automatically — agent every 30s when installed, or via your scheduled cron.
+            </p>
+          </div>
+          {/* Scan now — manual trigger. Disabled when:
+              - 0 applicable rules (nothing to run — usually means no OS classified)
+              - a scan is already in flight (scanProgress.running or scanMutation.isPending)
+              The backend rejects with a clear 400 when the asset has no
+              integration connection, so we let the click fire and surface
+              the error in the toast instead of trying to pre-detect here. */}
+          <button
+            type="button"
+            onClick={() => scanMutation.mutate()}
+            disabled={
+              !applicable.count ||
+              scanMutation.isPending ||
+              scanProgress.running
+            }
+            className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+            title={
+              !applicable.count
+                ? 'No applicable rules. Classify the OS first (Re-detect OS or Edit the asset).'
+                : scanProgress.running || scanMutation.isPending
+                ? 'A scan is already running.'
+                : `Scan ${applicable.count} rules now`
+            }
+          >
+            {scanMutation.isPending || scanProgress.running ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Scanning…
+              </>
+            ) : (
+              <>
+                <Play className="h-3.5 w-3.5" /> Scan now
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Live progress bar — polls /runs every 2s while scan-all is in flight */}
+        {scanProgress.running && scanProgress.total > 0 && (() => {
+          const shown = Math.min(scanProgress.done, scanProgress.total);
+          const pct = Math.min(100, Math.round((shown / scanProgress.total) * 100));
+          return (
+            <div className="mt-3 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] text-slate-700">
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin text-blue-600" />
+                  Scanning <strong>{shown}</strong> of <strong>{scanProgress.total}</strong> rules…
+                </span>
+                <span className="font-mono text-slate-500">
+                  {pct}%
+                  {scanProgress.startedAt && (
+                    <span className="ml-2 text-slate-400">
+                      {Math.round((Date.now() - scanProgress.startedAt) / 1000)}s elapsed
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-300"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-slate-500">
+                Backend opens a WinRM/SSH session per rule and stores each result. You can leave this tab — runs continue server-side.
+              </p>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* Scan sessions — group runs by time proximity into expandable sessions */}
+      <ScanSessions
+        runs={runs}
+        isLoading={runsQuery.isLoading}
+        passFailBadge={passFailBadge}
+        pluginLabel={pluginLabel}
+        fmtDuration={fmtDuration}
+        formatTime={formatTime}
+      />
+      <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-600">
+        Compliverse onboards assets through the bank's CMDB API — we don't probe the network. Once an asset is here, the AI classifier above picks the right CIS rules and they execute automatically on the next agent tick (or scheduled cron).
+      </div>
+    </div>
+  );
+}
+
+function NoMappingCallout({
+  osNormalized,
+  assetId,
+}: {
+  osNormalized: string | null;
+  assetId: number;
+}) {
+  const [suggestion, setSuggestion] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const fetchSuggestion = async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const { compliancePluginsApi } = await import('@/lib/api');
+      const r = await compliancePluginsApi.suggestMappingForAsset(assetId);
+      setSuggestion(r.data || null);
+    } catch (e: any) {
+      setErr(e?.response?.data?.detail || e?.message || 'Suggestion failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Case 1 — OS itself is unknown. Nothing for the mapping suggester to
+  // chew on. Direct the operator at OS classification first.
+  if (!osNormalized) {
+    return (
+      <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3">
+        <div className="text-xs font-semibold text-amber-900">
+          OS not classified
+        </div>
+        <p className="mt-1 text-xs text-amber-800">
+          This asset has no normalized OS key, so the strict matcher can't
+          resolve a benchmark. Use{' '}
+          <strong>Re-detect OS</strong> on the AI Classification panel
+          above (requires a stored connection), or open the asset Edit
+          dialog and set <code className="font-mono">os_version</code> +{' '}
+          <code className="font-mono">os_normalized</code> manually.
+        </p>
+      </div>
+    );
+  }
+
+  // Case 2 — OS known but no mapping row covers it. Offer AI suggestion.
+  return (
+    <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold text-amber-900">
+            No benchmark mapped for{' '}
+            <span className="font-mono">{osNormalized}</span>
+          </div>
+          <p className="mt-1 text-xs text-amber-800">
+            The strict matcher needs an{' '}
+            <code className="font-mono">os_pattern → benchmark_name</code>{' '}
+            row covering this OS. Add one in admin, or have AI suggest one
+            from the ingested benchmark library.
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            onClick={fetchSuggestion}
+            disabled={loading}
+            className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {loading ? 'Asking AI…' : 'Suggest mapping (AI)'}
+          </button>
+          <Link
+            href="/compliance/plugins/library?tab=mappings"
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Add manually
+          </Link>
+        </div>
+      </div>
+
+      {err && (
+        <div className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-700">
+          {err}
+        </div>
+      )}
+
+      {suggestion && (
+        <div className="mt-3 rounded-md border border-amber-200 bg-white p-2.5">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+            AI suggestion · confidence{' '}
+            <span className="font-semibold">
+              {suggestion.confidence || '?'}
+            </span>
+          </div>
+          {suggestion.benchmark_name ? (
+            <>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                <span className="rounded border border-slate-300 bg-slate-50 px-2 py-1 font-mono text-slate-800">
+                  {osNormalized}
+                </span>
+                <span className="text-slate-400">→</span>
+                <span className="rounded border border-indigo-200 bg-indigo-50 px-2 py-1 font-medium text-indigo-900">
+                  {suggestion.benchmark_name}
+                </span>
+              </div>
+              {suggestion.reasoning && (
+                <p className="mt-1.5 text-[11px] italic text-slate-600">
+                  {suggestion.reasoning}
+                </p>
+              )}
+              <p className="mt-2 text-[11px] text-slate-500">
+                Review and accept this mapping in{' '}
+                <Link
+                  href="/compliance/plugins/library?tab=mappings"
+                  className="text-indigo-600 underline"
+                >
+                  admin → mappings
+                </Link>
+                . Per anti-hallucination policy, AI never auto-applies — an
+                operator must confirm.
+              </p>
+            </>
+          ) : (
+            <p className="mt-1 text-xs text-slate-700">
+              AI couldn't pick a benchmark with confidence. Most likely the
+              required benchmark PDF hasn't been ingested yet — upload it
+              via{' '}
+              <Link
+                href="/compliance/plugins/library?tab=ingest"
+                className="text-indigo-600 underline"
+              >
+                Rules library → Ingest
+              </Link>{' '}
+              and the suggester will pick it up next time.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+function ScanSessions({
+  runs, isLoading, passFailBadge, pluginLabel, fmtDuration, formatTime,
+}: {
+  runs: any[];
+  isLoading: boolean;
+  passFailBadge: (r: any) => React.ReactNode;
+  pluginLabel: (r: any) => string;
+  fmtDuration: (r: any) => string;
+  formatTime: (iso?: string | null) => string;
+}) {
+  const [openSessions, setOpenSessions] = useState<Set<string>>(new Set([]));
+  const [hasInteracted, setHasInteracted] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'failed' | 'error' | 'passed' | 'running'>('all');
+
+  const sessions = useMemo(() => {
+    if (!runs || runs.length === 0) return [];
+    const sorted = [...runs].sort((a, b) => {
+      const ta = new Date(a.started_at || a.created_at || 0).getTime() || (a.id ?? 0);
+      const tb = new Date(b.started_at || b.created_at || 0).getTime() || (b.id ?? 0);
+      return tb - ta;
+    });
+    // 5-minute gap between consecutive runs starts a new session. The
+    // earlier code compared against `current.startedAt` (the first run in
+    // the group) and used a 60s threshold, which capped every session at
+    // 60s of wall-clock — slicing one 12-minute Scan-all into 12 fake
+    // sessions. Compare against the previously-added run instead.
+    const GAP_MS = 5 * 60 * 1000;
+    const groups: { id: string; runs: any[]; startedAt: number; endedAt: number }[] = [];
+    let current: typeof groups[0] | null = null;
+    let prevT = 0;
+    for (const r of sorted) {
+      const t = new Date(r.started_at || r.created_at || 0).getTime();
+      if (!current || (prevT - t) > GAP_MS) {
+        current = { id: 's-' + r.id, runs: [r], startedAt: t, endedAt: t };
+        groups.push(current);
+      } else {
+        current.runs.push(r);
+        current.endedAt = Math.min(current.endedAt, t);
+        current.startedAt = Math.max(current.startedAt, t);
+      }
+      prevT = t;
+    }
+    return groups;
+  }, [runs]);
+
+  const toggle = (id: string) => {
+    setOpenSessions(prev => {
+      // First click after mount: prev is empty (initial useState) but
+      // `effectiveOpen` is auto-opening the first session. Toggle from
+      // the user's POV, which is what they SEE — so on first interaction
+      // we seed from {firstId} (matches effectiveOpen) before flipping.
+      // Otherwise the first click on the auto-opened session is a
+      // no-op (would re-add firstId to an empty set).
+      const startingSet = hasInteracted
+        ? prev
+        : (firstId ? new Set<string>([firstId]) : new Set<string>());
+      const next = new Set(startingSet);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    setHasInteracted(true);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-500">
+        <Loader2 className="inline h-4 w-4 animate-spin" /> Loading runs...
+      </div>
+    );
+  }
+  if (sessions.length === 0) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white p-6 text-center text-xs text-slate-500">
+        No scans yet. Results will appear here on the next agent tick or scheduled scan.
+      </div>
+    );
+  }
+
+  const firstId = sessions[0]?.id;
+  // Auto-open the first session on initial render only. Once the user
+  // clicks anything, respect their open set verbatim — otherwise closing
+  // the first card would immediately re-open it (size===0 trigger).
+  const effectiveOpen = !hasInteracted && firstId ? new Set([firstId]) : openSessions;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-3">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Scan sessions</h3>
+          <p className="text-[11px] text-slate-500">Each session = one Scan-all invocation. Click to expand and see individual rule outcomes.</p>
+        </div>
+        <div className="flex items-center gap-1 text-[10px]">
+          {(['all', 'failed', 'error', 'passed', 'running'] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={'rounded-full border px-2 py-0.5 ' + (filter === f ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50')}
+            >{f}</button>
+          ))}
+        </div>
+      </div>
+
+      {sessions.map((session: any) => {
+        const isOpen = effectiveOpen.has(session.id);
+        const totals = session.runs.reduce(
+          (a: any, r: any) => {
+            const s = (r.status || '').toLowerCase();
+            a.total += 1;
+            if (s === 'passed') a.passed += 1;
+            else if (s === 'failed') a.failed += 1;
+            else if (s === 'error') a.error += 1;
+            else if (s === 'running' || s === 'pending') a.running += 1;
+            else a.other += 1;
+            return a;
+          },
+          { total: 0, passed: 0, failed: 0, error: 0, running: 0, other: 0 },
+        );
+        const span = Math.max(0, session.endedAt ? (session.startedAt - session.endedAt) : 0);
+        const spanSec = Math.round(span / 1000);
+        const passRate = totals.total ? Math.round((totals.passed / totals.total) * 100) : 0;
+        const filteredRuns = session.runs.filter((r: any) => filter === 'all' ? true : (r.status || '').toLowerCase() === filter);
+
+        return (
+          <div key={session.id} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <button
+              onClick={() => toggle(session.id)}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50"
+            >
+              {isOpen ? <ChevronDown className="h-4 w-4 text-slate-500" /> : <ChevronRight className="h-4 w-4 text-slate-500" />}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="text-sm font-semibold text-slate-900">
+                    Scan at {formatTime(new Date(session.startedAt).toISOString())}
+                  </span>
+                  <span className="text-[10px] text-slate-500">{totals.total} rules &middot; {spanSec}s elapsed</span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px]">
+                  <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700">PASS {totals.passed}</span>
+                  <span className="rounded-full bg-red-50 px-1.5 py-0.5 font-medium text-red-700">FAIL {totals.failed}</span>
+                  {totals.error > 0 && <span className="rounded-full bg-orange-50 px-1.5 py-0.5 font-medium text-orange-700">ERR {totals.error}</span>}
+                  {totals.running > 0 && <span className="rounded-full bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700">RUN {totals.running}</span>}
+                  <span className="ml-auto font-mono text-slate-600">Pass rate: <strong>{passRate}%</strong></span>
+                </div>
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400" style={{ width: passRate + '%' }} />
+                </div>
+              </div>
+            </button>
+
+            {isOpen && (
+              <div className="border-t border-slate-200 bg-slate-50/30">
+                {filteredRuns.length === 0 ? (
+                  <div className="p-3 text-center text-[11px] text-slate-500">
+                    No runs match filter <strong>{filter}</strong>.
+                  </div>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-3 py-1.5 text-left font-medium">Rule</th>
+                        <th className="px-3 py-1.5 text-left font-medium w-32">Started</th>
+                        <th className="px-3 py-1.5 text-left font-medium w-24">Result</th>
+                        <th className="px-3 py-1.5 text-left font-medium w-16">Duration</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredRuns.slice(0, 100).map((run: any) => (
+                        <tr key={run.id} className="hover:bg-white">
+                          <td className="px-3 py-1.5 align-top text-slate-800">
+                            <div className="font-medium leading-snug">{pluginLabel(run)}</div>
+                            {run.result_summary && (
+                              <div className="mt-0.5 text-[10px] text-slate-500 line-clamp-2">{run.result_summary}</div>
+                            )}
+                          </td>
+                          <td className="px-3 py-1.5 align-top text-[10px] text-slate-500">{formatTime(run.started_at || run.created_at)}</td>
+                          <td className="px-3 py-1.5 align-top">{passFailBadge(run)}</td>
+                          <td className="px-3 py-1.5 align-top text-[11px] text-slate-600">{fmtDuration(run)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {filteredRuns.length > 100 && (
+                  <div className="border-t border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] text-slate-500">
+                    Showing first 100 of {filteredRuns.length} runs.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

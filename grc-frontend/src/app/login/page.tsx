@@ -200,14 +200,24 @@ export default function LoginPage() {
         // eslint-disable-next-line no-console
         console.log('[login] currentSub=%s targetSub=%s host=%s', currentSub, targetSub, host);
 
-        // Cross-subdomain redirect only makes sense when we're already on
-        // a subdomain that differs from the authenticated tenant. On a
-        // bare IP host (currentSub === null) there's no subdomain to
-        // diverge from — prefixing the IP with the tenant slug would
-        // produce an unreachable hostname like `company.68.183.198.54`.
-        // For IP-only / single-tenant deployments, skip the cross-host
-        // hand-off entirely and just go to /dashboard on the same origin.
-        if (targetSub && currentSub && currentSub !== targetSub) {
+        // Subdomain-first tenant routing (restored from the temporary
+        // single-host mode):
+        //   - On `localhost` / `.localhost` hosts we ALWAYS redirect to
+        //     `{tenant_subdomain}.localhost:{port}/dashboard` so the
+        //     browser hostname carries the tenant identity. Modern OSes
+        //     (Win 10+, macOS, Linux) auto-resolve *.localhost to
+        //     127.0.0.1; no /etc/hosts edit needed.
+        //   - On dotted-domain hosts (e.g. `app.example.com`) we redirect
+        //     to `{subdomain}.example.com` when current ≠ target.
+        //   - Bare IPv4 hosts (e.g. `68.183.198.54`) STILL skip the
+        //     redirect — prefixing the IP would produce an unreachable
+        //     hostname like `company.68.183.198.54`. The `baseHost`
+        //     calculation above keeps IP hosts pointing at the IP.
+        const isBareIPv4 = _IPV4_RE.test(host);
+        const shouldRedirect = !!targetSub
+          && !isBareIPv4
+          && (currentSub !== targetSub);
+        if (shouldRedirect) {
           // localStorage on the destination is a SEPARATE storage area
           // (per-origin), so we hand off the token + tenant context via
           // URL fragment. Fragments are not sent to the server, so the

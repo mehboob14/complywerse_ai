@@ -20,9 +20,12 @@ Security:
 """
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 import time
+
+logger = logging.getLogger(__name__)
 from datetime import datetime
 from typing import Optional
 
@@ -39,7 +42,11 @@ from grc.routers.auth_router import get_user_primary_tenant, require_auth, GRCUs
 router = APIRouter(prefix="/connect-wizard", tags=["Connect Wizard"])
 
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "dev-secret")
-TOKEN_TTL_SECONDS = 15 * 60  # 15 minutes
+TOKEN_TTL_SECONDS = 60 * 60  # 60 minutes — gives operators headroom for
+                              # first-time WinRM/SSH setup on the target before
+                              # the handshake fires. Was 15 min, which expired
+                              # mid-config for anyone reading the docs while
+                              # configuring the target's auth/firewall/cert.
 
 # Hints rendered to the operator in the wizard UI when pre-flight rejects
 # their credentials. Keep these in one place so we don't drift between
@@ -90,6 +97,28 @@ class HandshakeIn(BaseModel):
     service_account: Optional[str] = None
     agent_password: Optional[str] = None
     cert_fingerprint: Optional[str] = None
+    # CIS Module Updated — when the operator clicks "Connect" on an
+    # asset row in /assets, the wizard URL carries `?asset_id=N`. We
+    # forward it here so the backend can bind the new connection
+    # DIRECTLY to that asset row, instead of relying on the host_name
+    # fallback match (which breaks when the operator types IP vs FQDN).
+    asset_id: Optional[int] = None
+    # ─── Extended platforms (banks: MSSQL/Postgres/MySQL/AD/Azure/K8s) ──
+    # Optional, only present when the operator picks one of the new
+    # platforms in the Connect Wizard. The handshake handler reads only
+    # the fields relevant to the chosen platform.
+    database_name: Optional[str] = None          # SQL DBs (mssql/postgres/mysql)
+    db_port: Optional[int] = None                # SQL DBs (overrides default 1433/5432/3306)
+    ldap_bind_dn: Optional[str] = None           # AD/LDAP bind DN
+    ldap_use_ssl: Optional[bool] = None          # AD/LDAP — true for ldaps:// (port 636)
+    azure_subscription_id: Optional[str] = None  # Azure
+    azure_tenant_id: Optional[str] = None        # Azure
+    azure_client_id: Optional[str] = None        # Azure
+    azure_client_secret: Optional[str] = None    # Azure
+    kubeconfig: Optional[str] = None             # Kubernetes (YAML blob)
+    k8s_server: Optional[str] = None             # Kubernetes (alt: server+token+ca)
+    k8s_token: Optional[str] = None              # Kubernetes
+    k8s_ca_cert: Optional[str] = None            # Kubernetes
 
 
 # In-memory status store. Production would use Redis; for v1 this is fine
@@ -122,8 +151,23 @@ def issue_token(
     Frontend calls this when the customer picks a platform in the wizard.
     The token gets embedded in the one-liner script URL.
     """
-    if body.platform not in {"windows", "linux", "aws", "digitalocean"}:
-        raise HTTPException(422, "platform must be windows | linux | aws | digitalocean")
+    # cisco + oracle added so the agentless quick-start covers network
+    # devices and DB targets, not just OS hosts. The /handshake endpoint
+    # already handles ssh_endpoint + sql_endpoint fields, so the only
+    # backend gate that needed widening was this validator.
+    # Banking-relevant additions: mssql/postgres/mysql DBs, AD/LDAP, Azure
+    # cloud, Kubernetes. Each one has a registered runner; the handshake
+    # path stores the supplied credentials in an IntegrationConnection and
+    # the credentials.py picker dispatches by integration_type.
+    _allowed_platforms = {
+        "windows", "linux", "aws", "digitalocean", "cisco", "oracle",
+        "mssql", "postgres", "mysql", "ad", "azure", "k8s",
+    }
+    if body.platform not in _allowed_platforms:
+        raise HTTPException(
+            422,
+            f"platform must be one of: {', '.join(sorted(_allowed_platforms))}",
+        )
     tenant_id = get_user_primary_tenant(current_user, db)
     nonce = secrets.token_urlsafe(16)
     now = int(time.time())
@@ -197,6 +241,28 @@ def handshake(body: HandshakeIn, db: Session = Depends(get_db)):
     embedded in the script (only the customer who started the wizard could
     have received it).
     """
+    try:
+        return _handshake_inner(body, db)
+    except HTTPException as exc:
+        # CIS-merge debug shim — log the full preflight detail to the
+        # server console so the operator doesn't have to open DevTools
+        # to see WHY the 400 fired. Keeps the response shape identical
+        # (Starlette still serialises `exc.detail` as the body) so the
+        # frontend's existing handler isn't affected.
+        if exc.status_code == 400 and isinstance(exc.detail, dict):
+            logger.warning(
+                "connect-wizard handshake 400 — code=%s stage=%s message=%s",
+                exc.detail.get("code"),
+                exc.detail.get("stage"),
+                exc.detail.get("message"),
+            )
+            checks = exc.detail.get("checks_run") or []
+            for line in checks:
+                logger.warning("  · check: %s", line)
+        raise
+
+
+def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
     payload = _verify(body.tenant_token)
     tenant_id = payload["tenant_id"]
     user_id = payload.get("user_id")
@@ -231,14 +297,59 @@ def handshake(body: HandshakeIn, db: Session = Depends(get_db)):
         "linux": "linux_ssh",
         "aws": "aws_readonly",
         "digitalocean": "linux_ssh",
+        "cisco": "netdev_ssh",
+        "oracle": "oracle_sql",
+        "mssql": "mssql_sql",
+        "postgres": "postgres_sql",
+        "mysql": "mysql_sql",
+        "ad": "ldap_query",
+        "azure": "azure_readonly",
+        "k8s": "k8s_api",
     }[platform]
     console_url = body.hostname
+
+    # Default port per platform — Windows WinRM 5986, Linux/DO SSH 22, AWS HTTPS 443.
+    # If the operator gave us a custom port in the *_endpoint URL we honour that
+    # instead, so the form's "Port" field actually means something. Without this,
+    # any non-default port (jump host, lab on 2222, hardened Cisco on 2022, etc.)
+    # silently reverted to the platform default and pre-flight would fail with
+    # the wrong reason ("Cannot reach <host>:22" even when the operator typed 2222).
     if platform == "windows":
         console_port = 5986
-    elif platform == "aws":
+    elif platform == "aws" or platform == "azure":
         console_port = 443
-    else:  # linux, digitalocean
-        console_port = 22
+    elif platform == "mssql":
+        console_port = body.db_port or 1433
+    elif platform == "postgres":
+        console_port = body.db_port or 5432
+    elif platform == "mysql":
+        console_port = body.db_port or 3306
+    elif platform == "ad":
+        console_port = 636 if body.ldap_use_ssl else 389
+    elif platform == "k8s":
+        console_port = 443  # k8s API
+    else:  # linux, digitalocean, cisco, oracle
+        console_port = 22 if platform != "oracle" else 1521
+
+    def _extract_port(endpoint: Optional[str], fallback: int) -> int:
+        if not endpoint:
+            return fallback
+        # Forms: ssh://host:2222, oracle://host:1521/orcl, https://host:5986/wsman
+        try:
+            from urllib.parse import urlparse
+            p = urlparse(endpoint)
+            if p.port:
+                return int(p.port)
+        except Exception:
+            pass
+        return fallback
+
+    if platform == "windows":
+        console_port = _extract_port(body.winrm_endpoint, console_port)
+    elif platform == "aws":
+        pass  # AWS has no port in this flow
+    else:
+        console_port = _extract_port(body.ssh_endpoint, console_port)
     prefix = f"WIZARD_{nonce.upper().replace('-','')[:10]}"
 
     # ──────────────────────────────────────────────────────────────────
@@ -257,15 +368,207 @@ def handshake(body: HandshakeIn, db: Session = Depends(get_db)):
     # errors — exactly the issue we hit on the first attempt today.
     # ──────────────────────────────────────────────────────────────────
     from grc.modules.compliance_plugins.services.preflight import preflight_check
+
+    # ─── Skip preflight for the new banking platforms ─────────────────
+    # MSSQL/Postgres/MySQL/AD/Azure/K8s have rich, structured credentials
+    # that the preflight_check helper doesn't yet know how to test. Rather
+    # than block the connect flow, we trust the operator-provided creds
+    # and let the runner surface a clear error on first scan. Once we
+    # write per-platform `preflight_*` probes, we can re-enable here.
+    if platform in ("mssql", "postgres", "mysql", "ad", "azure", "k8s"):
+        # Skip preflight; just proceed to persistence.
+        pass
+    # ─── Universal TCP probe helper ───────────────────────────────
+    # Used by all platforms to test reachability before paying for a
+    # full protocol handshake. Fast — 2s timeout.
+    import socket as _sock
+    def _tcp_open(host: str, port: int, timeout: float = 2.0) -> bool:
+        try:
+            with _sock.create_connection((host, port), timeout=timeout):
+                return True
+        except Exception:
+            return False
+
     if platform == "windows":
+        # ─── WinRM auto-probe with diagnostic ─────────────────────────
+        # We distinguish FOUR failure modes and surface a specific cause +
+        # copy-paste fix command for each, instead of a generic "check
+        # firewall and WinRM service" hint.
+        explicit_port = _extract_port(body.winrm_endpoint, 0)
+        if explicit_port and explicit_port not in (0,):
+            scheme = "http" if explicit_port == 5985 else "https"
+            probe_candidates = [(explicit_port, scheme)]
+        else:
+            probe_candidates = [(5986, "https"), (5985, "http")]
+
+        # Stage 1: ICMP ping to distinguish "host gone" vs "host up but
+        # ports closed". Both Windows and Linux raw ICMP need privileges
+        # so we use the OS ping command instead.
+        import subprocess as _sp
+        def _ping_alive(host: str) -> bool:
+            try:
+                if os.name == "nt":
+                    out = _sp.run(["ping", "-n", "2", "-w", "1500", host],
+                                  capture_output=True, timeout=6)
+                else:
+                    out = _sp.run(["ping", "-c", "2", "-W", "2", host],
+                                  capture_output=True, timeout=6)
+                # 0 only when at least one reply was received
+                return out.returncode == 0
+            except Exception:
+                return False
+
+        host_alive = _ping_alive(body.hostname)
+        port_results = [(p, s, _tcp_open(body.hostname, p)) for p, s in probe_candidates]
+        any_open = next(((p, s) for p, s, ok in port_results if ok), None)
+
+        if not host_alive and not any_open:
+            # Host completely unreachable — likely wrong IP / different network
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "preflight_failed": True,
+                    "code": "host_unreachable",
+                    "stage": "icmp",
+                    "message": (
+                        f"Host {body.hostname} does not respond to ping AND no WinRM "
+                        f"port answered. The IP is likely wrong, the host is offline, "
+                        f"or the two of you aren't on the same network."
+                    ),
+                    "checks_run": [
+                        f"ping {body.hostname} — no reply",
+                        *[f"TCP {body.hostname}:{p} — refused/timeout" for p, _, ok in port_results if not ok],
+                    ],
+                    "fix_steps": [
+                        {
+                            "title": "Verify the IP is correct (target's admin runs this)",
+                            "code": "ipconfig | findstr /R \"Wireless Ethernet IPv4\"",
+                            "explain": "Pick the IP under the *real* Wi-Fi or Ethernet adapter, NOT vEthernet/Docker/WSL bridges.",
+                        },
+                        {
+                            "title": "Verify you're on the same network (target's admin runs this)",
+                            "code": "ipconfig | findstr Gateway",
+                            "explain": "Your machine and the target must share a default gateway, OR be on the same Wi-Fi.",
+                        },
+                    ],
+                },
+            )
+
+        if host_alive and not any_open:
+            # Host reachable but WinRM ports closed — service stopped OR
+            # firewall blocks (Public profile is the usual culprit).
+            tried = " / ".join(f"{p}" for p, _, _ in port_results)
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "preflight_failed": True,
+                    "code": "winrm_ports_closed",
+                    "stage": "tcp",
+                    "message": (
+                        f"Host {body.hostname} responds to ping but BOTH WinRM ports "
+                        f"({tried}) are closed. WinRM service is stopped, the firewall "
+                        f"blocks it, or the network profile is Public (default-blocks WinRM)."
+                    ),
+                    "checks_run": [
+                        f"ping {body.hostname} — replies received",
+                        *[f"TCP {body.hostname}:{p} — closed" for p, _, ok in port_results if not ok],
+                    ],
+                    "fix_steps": [
+                        {
+                            "title": "On the target PC — open POWERSHELL as a real Administrator. Win+X menu often gives non-admin even when it says 'Admin'. Best way: Start menu → type 'powershell' → right-click 'Windows PowerShell' → 'Run as administrator' → UAC Yes. The title bar MUST say 'Administrator: Windows PowerShell' — otherwise the cmdlets below will fail with Access Denied.",
+                            "code": (
+                                "Enable-PSRemoting -SkipNetworkProfileCheck -Force\n"
+                                "winrm set winrm/config/service '@{AllowUnencrypted=\"true\"}'\n"
+                                "winrm set winrm/config/service/auth '@{Basic=\"true\"}'\n"
+                                "Get-Service WinRM"
+                            ),
+                            "explain": (
+                                "Starts the WinRM service, opens 5985/5986 in firewall, lets the demo "
+                                "use Basic auth over plain HTTP. The last line should print "
+                                "'Status: Running' — that's the success signal."
+                            ),
+                        },
+                        {
+                            "title": "Verify the firewall rules (still in Admin PowerShell)",
+                            "code": "Get-NetFirewallRule -DisplayName '*WinRM*' | Format-Table DisplayName, Enabled",
+                            "explain": "At least one WinRM-In rule must show Enabled: True. If all are False, the previous block didn't actually run as admin — re-open PowerShell with 'Run as administrator'.",
+                        },
+                    ],
+                },
+            )
+
+        # One or more ports open — proceed to actual WinRM handshake with
+        # the first open port.
+        console_port, winrm_scheme = any_open
         test_creds = {
-            "winrm_endpoint": f"https://{body.hostname}:{console_port}/wsman",
+            "winrm_endpoint": f"{winrm_scheme}://{body.hostname}:{console_port}/wsman",
             "winrm_username": body.service_account,
             "winrm_password": body.agent_password,
             "winrm_transport": "ntlm",
             "winrm_server_cert_validation": "ignore",
         }
-    elif platform in ("linux", "digitalocean"):
+    elif platform in ("linux", "digitalocean", "cisco"):
+        # ─── SSH auto-probe ─────────────────────────────────────────
+        # Operator gives only IP. We try the standard SSH port 22 first,
+        # then common alternates (2222 for jump hosts / labs, 2022 for
+        # hardened Cisco). Explicit port in ssh_endpoint short-circuits.
+        explicit_port = _extract_port(body.ssh_endpoint, 0)
+        if explicit_port:
+            ssh_probe = [explicit_port]
+        else:
+            ssh_probe = [22, 2222, 2022]
+        chosen_ssh: Optional[int] = None
+        for p in ssh_probe:
+            if _tcp_open(body.hostname, p):
+                chosen_ssh = p
+                break
+        if chosen_ssh is None:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "preflight_failed": True,
+                    "code": "ssh_unreachable",
+                    "message": (
+                        f"Could not reach {body.hostname} on any common SSH port "
+                        f"(tried {', '.join(str(x) for x in ssh_probe)}). Check that "
+                        f"SSH is running and a port is open."
+                    ),
+                    "hint": _PREFLIGHT_HINTS.get("network", "Check firewall and sshd."),
+                },
+            )
+        console_port = chosen_ssh
+        test_creds = {
+            "ssh_host": body.hostname,
+            "ssh_port": console_port,
+            "ssh_username": body.service_account,
+            "ssh_password": body.agent_password,
+        }
+    elif platform == "oracle":
+        # ─── Oracle TNS auto-probe ──────────────────────────────────
+        explicit_port = _extract_port(body.ssh_endpoint, 0)
+        if explicit_port:
+            ora_probe = [explicit_port]
+        else:
+            ora_probe = [1521, 1522]
+        chosen_ora: Optional[int] = None
+        for p in ora_probe:
+            if _tcp_open(body.hostname, p):
+                chosen_ora = p
+                break
+        if chosen_ora is None:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "preflight_failed": True,
+                    "code": "oracle_unreachable",
+                    "message": (
+                        f"Could not reach {body.hostname} on Oracle listener "
+                        f"(tried {', '.join(str(x) for x in ora_probe)})."
+                    ),
+                    "hint": _PREFLIGHT_HINTS.get("network", "Check listener + firewall."),
+                },
+            )
+        console_port = chosen_ora
         test_creds = {
             "ssh_host": body.hostname,
             "ssh_port": console_port,
@@ -288,12 +591,55 @@ def handshake(body: HandshakeIn, db: Session = Depends(get_db)):
     if test_creds is not None:
         pf = preflight_check(integration_type, test_creds)
         if not pf.ok:
+            # Map preflight code → exact-cause fix recipe. Different code
+            # families need different fixes (auth vs cert vs network).
+            fix_steps_by_code = {
+                "auth_failed": [
+                    {
+                        "title": "Most likely: wrong username/password OR account locked on target",
+                        "code": "net user <username>",
+                        "explain": "Run on the target PC to confirm the account exists and isn't disabled. Try logging in with the same creds via RDP to verify they work.",
+                    },
+                    {
+                        "title": "If using local account on a non-domain host",
+                        "code": "winrm set winrm/config/service '@{AllowUnencrypted=\"true\"}'; winrm set winrm/config/service/auth '@{Basic=\"true\"}'",
+                        "explain": "Local accounts require Basic auth over HTTP for WinRM. Domain accounts use NTLM/Kerberos automatically.",
+                    },
+                ],
+                "tls_error": [
+                    {
+                        "title": "Target's HTTPS WinRM cert isn't trusted by our scanner",
+                        "code": "winrm delete winrm/config/Listener?Address=*+Transport=HTTPS; $cert = New-SelfSignedCertificate -DnsName $env:COMPUTERNAME -CertStoreLocation Cert:\\LocalMachine\\My; winrm create winrm/config/Listener?Address=*+Transport=HTTPS \"@{Hostname=$env:COMPUTERNAME;CertificateThumbprint=$cert.Thumbprint}\"",
+                        "explain": "Rebuild the HTTPS listener with a fresh self-signed cert. Our scanner has cert_validation=ignore so any cert works.",
+                    },
+                ],
+                "ssh_handshake_failed": [
+                    {
+                        "title": "SSH server rejected our connection",
+                        "code": "systemctl status sshd; tail -20 /var/log/auth.log",
+                        "explain": "Run on the target to see why sshd rejected the connection. Common causes: PasswordAuthentication=no, user not in AllowUsers, account locked.",
+                    },
+                ],
+                "network": [
+                    {
+                        "title": "Verify network path from this server to target",
+                        "code": f"Test-NetConnection {body.hostname or '<target>'} -Port <port>",
+                        "explain": "If TcpTestSucceeded is False, fix the network/firewall before any creds will work.",
+                    },
+                ],
+            }
             raise HTTPException(
                 status_code=400,
                 detail={
                     "preflight_failed": True,
                     "code": pf.code,
+                    "stage": "protocol",
                     "message": pf.detail,
+                    "exact_error": getattr(pf, "raw", None) or pf.detail,
+                    "fix_steps": fix_steps_by_code.get(
+                        pf.code,
+                        [{"title": "Generic fallback", "code": "", "explain": pf.detail}],
+                    ),
                     "hint": _PREFLIGHT_HINTS.get(pf.code, "Review credentials and target host configuration."),
                 },
             )
@@ -306,12 +652,58 @@ def handshake(body: HandshakeIn, db: Session = Depends(get_db)):
         )
         .first()
     )
+    # ─── Build credentials_extra_json for runners that need richer creds.
+    # The runner code in extended_runners.py reads from a dict like:
+    #   {"mssql_host": ..., "mssql_username": ..., "mssql_password": ...}
+    # We assemble that here using the prefix expected by each runner.
+    # Encrypted secret bits (passwords, client secrets, tokens) go through
+    # encrypt_secret(); structured public bits (DN, server URLs, subscription
+    # IDs) are stored plain so the runners can read them without decryption.
+    extra: Optional[dict] = None
+    if platform in ("mssql", "postgres", "mysql"):
+        prefix_map = {"mssql": "mssql", "postgres": "postgres", "mysql": "mysql"}
+        p = prefix_map[platform]
+        extra = {
+            f"{p}_host": body.hostname,
+            f"{p}_port": console_port,
+            f"{p}_username": body.service_account,
+            f"{p}_password": encrypt_secret(body.agent_password),
+            f"{p}_database": body.database_name or None,
+        }
+    elif platform == "ad":
+        extra = {
+            "ldap_host": body.hostname,
+            "ldap_port": console_port,
+            "ldap_use_ssl": bool(body.ldap_use_ssl),
+            "ldap_bind_dn": body.ldap_bind_dn or body.service_account,
+            "ldap_username": body.service_account,
+            "ldap_password": encrypt_secret(body.agent_password),
+        }
+    elif platform == "azure":
+        extra = {
+            "azure_subscription_id": body.azure_subscription_id,
+            "azure_tenant_id": body.azure_tenant_id,
+            "azure_client_id": body.azure_client_id,
+            "azure_client_secret": encrypt_secret(body.azure_client_secret or ""),
+        }
+    elif platform == "k8s":
+        if body.kubeconfig:
+            extra = {"kubeconfig": encrypt_secret(body.kubeconfig)}
+        elif body.k8s_server and body.k8s_token:
+            extra = {
+                "k8s_server": body.k8s_server,
+                "k8s_token": encrypt_secret(body.k8s_token),
+                "k8s_ca_cert": body.k8s_ca_cert,
+            }
+
     if existing:
         conn = existing
         conn.console_url = console_url
         conn.console_port = console_port
         conn.username = body.service_account or f"complivrs_t{tenant_id}"
-        conn.password = encrypt_secret(body.agent_password)
+        conn.password = encrypt_secret(body.agent_password) if body.agent_password else conn.password
+        if extra is not None:
+            conn.credentials_extra_json = extra
         conn.status = "connected"
         conn.is_active = True
     else:
@@ -324,7 +716,8 @@ def handshake(body: HandshakeIn, db: Session = Depends(get_db)):
             auth_method="basic",
             credential_env_prefix=prefix,
             username=body.service_account or f"complivrs_t{tenant_id}",
-            password=encrypt_secret(body.agent_password),
+            password=encrypt_secret(body.agent_password) if body.agent_password else None,
+            credentials_extra_json=extra,
             is_active=True,
             status="connected",
             created_by_user_id=user_id,
@@ -334,14 +727,38 @@ def handshake(body: HandshakeIn, db: Session = Depends(get_db)):
 
     # Also auto-create an Asset for this host so the customer can
     # immediately scan it.
-    asset = (
-        db.query(ITAsset)
-        .filter(
-            ITAsset.tenant_id == tenant_id,
-            ITAsset.host_name == body.hostname,
+    # Lookup order:
+    #   1. explicit asset_id (sent by the /assets "Connect" button so
+    #      the link is reliable even when operator types IP-vs-FQDN)
+    #   2. host_name match (legacy / wizard-only flow)
+    #   3. create a new asset (auto-discovered host)
+    asset = None
+    if body.asset_id is not None:
+        asset = (
+            db.query(ITAsset)
+            .filter(ITAsset.id == int(body.asset_id),
+                    ITAsset.tenant_id == tenant_id)
+            .first()
         )
-        .first()
+    if asset is None:
+        asset = (
+            db.query(ITAsset)
+            .filter(
+                ITAsset.tenant_id == tenant_id,
+                ITAsset.host_name == body.hostname,
+            )
+            .first()
+        )
+    # Block B/D — always probe OS at handshake time, even if the asset
+    # already exists. Banker may have onboarded the asset previously with
+    # vague CMDB OS data ("Windows 11") — we want to refresh to the exact
+    # build ("windows-11-23H2") now that we have working credentials.
+    # The probe is best-effort; failure preserves whatever data was there.
+    from grc.modules.compliance_plugins.services.os_detector import detect_for_runner_full
+    os_family, os_version, os_normalized, os_build, os_edition = detect_for_runner_full(
+        integration_type, test_creds or {}
     )
+
     if not asset:
         asset = ITAsset(
             tenant_id=tenant_id,
@@ -349,10 +766,24 @@ def handshake(body: HandshakeIn, db: Session = Depends(get_db)):
             description=f"Auto-discovered via Connect Wizard ({platform})",
             asset_type="infrastructure",
             host_name=body.hostname,
+            os_family=os_family,
+            os_version=os_version,
+            os_normalized=os_normalized,
+            os_build=os_build,
+            os_edition=os_edition,
             criticality="medium",
             status="active",
         )
         db.add(asset)
+    else:
+        # Refresh existing asset's OS profile — only overwrite when probe
+        # returned something. Don't clobber valid data with nulls if the
+        # probe failed (e.g. credentials wrong now).
+        if os_family:     asset.os_family = os_family
+        if os_version:    asset.os_version = os_version
+        if os_normalized: asset.os_normalized = os_normalized
+        if os_build:      asset.os_build = os_build
+        if os_edition:    asset.os_edition = os_edition
 
     db.commit()
     db.refresh(conn)

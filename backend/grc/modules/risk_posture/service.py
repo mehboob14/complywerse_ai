@@ -133,23 +133,94 @@ def _band_for(score: float) -> Dict[str, str]:
 # Each returns a dict with at minimum {score: float 0-1, known: bool}.
 
 def _cis_gap(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
-    """0-1 (1 = worst). `known` is True only if at least one run exists
-    for this asset, regardless of total rule count."""
-    total = (
-        db.query(CompliancePlugin)
+    """0-1 (1 = worst).
+
+    Bug fix: total used to be the WHOLE library count (e.g. 4855), which
+    made a Windows host's pass-rate be 63/4855=1.3% instead of the real
+    63/538=12% against rules actually applicable to it. Now `total` is
+    the count of rules whose os_keys family-walk matches the asset's
+    os_normalized — i.e. the same Stage 1 set the matcher uses at scan
+    time. Stage 2 narrowing is not used here because we want coverage
+    to be conservative (any rule that could apply counts as expected).
+    """
+    # ─── Applicable rule count for THIS asset (Stage 1 family-walk) ─────
+    # Fetch the asset's os_normalized; if unset, fall back to whole-library
+    # count (preserving previous behavior for unprofiled assets).
+    asset = db.query(ITAsset).filter(ITAsset.id == asset_id).first()
+    asset_os = (asset.os_normalized or "").strip() if asset else ""
+
+    def _stage1_ok(plugin_os_keys, asset_key):
+        if not asset_key:
+            return True  # no OS data → all rules are "candidates"
+        if not plugin_os_keys:
+            return False
+        if asset_key in plugin_os_keys:
+            return True
+        if "-" in asset_key:
+            parts = asset_key.split("-")
+            for i in range(len(parts) - 1, 0, -1):
+                if "-".join(parts[:i]) in plugin_os_keys:
+                    return True
+        return False
+
+    all_plugins = (
+        db.query(CompliancePlugin.id, CompliancePlugin.os_keys, CompliancePlugin.benchmark)
         .filter(
             (CompliancePlugin.tenant_id.is_(None)) | (CompliancePlugin.tenant_id == tenant_id),
             CompliancePlugin.review_status.in_(["approved", "auto_approved"]),
             CompliancePlugin.enabled.is_(True),
         )
-        .count()
+        .all()
     )
+
+    # Prefer Stage-2 narrowing: if the asset has been scanned, the SPECIFIC
+    # benchmark its (non-leaked) runs hit IS the applicable benchmark. That
+    # gives the correct denominator (538 for Win11 25H2 Enterprise v5.0.1)
+    # instead of the broader Stage 1 family count (962, which includes the
+    # archived Stand-alone v2.0.0). Fall back to Stage 1 family-walk when no
+    # runs exist yet.
+    from collections import Counter
+    bench_counter = Counter(
+        p.benchmark for p, run in
+        db.query(CompliancePlugin, CompliancePluginRun)
+        .join(CompliancePluginRun, CompliancePluginRun.plugin_id == CompliancePlugin.id)
+        .filter(
+            CompliancePluginRun.asset_id == asset_id,
+            CompliancePluginRun.tenant_id == tenant_id,
+            CompliancePluginRun.is_leaked.is_(False),
+        ).all()
+        if p.benchmark
+    )
+    picked_benchmark = bench_counter.most_common(1)[0][0] if bench_counter else None
+
+    if picked_benchmark:
+        applicable_plugin_ids = {p.id for p in all_plugins if p.benchmark == picked_benchmark}
+    elif asset_os:
+        # ── STRICT MATCHER FALLBACK ──
+        # Asset has OS but no runs yet → use the operator-owned mapping
+        # table, not the legacy Stage 1 family-walk. Keeps _cis_gap()
+        # consistent with /jobs, /scan-all, and /match-preview which all
+        # use the strict matcher. If no mapping row exists for this OS,
+        # the dimension stays "unknown" rather than falling back to a
+        # broader (potentially over-counted) candidate set.
+        from grc.modules.compliance_plugins.services.strict_matcher import pick_benchmark_for_os
+        mapping = pick_benchmark_for_os(db, tenant_id, asset_os)
+        if mapping:
+            applicable_plugin_ids = {
+                p.id for p in all_plugins if p.benchmark == mapping.benchmark_name
+            }
+        else:
+            applicable_plugin_ids = set()
+    else:
+        applicable_plugin_ids = {p.id for p in all_plugins}
+    total = len(applicable_plugin_ids)
 
     runs = (
         db.query(CompliancePluginRun)
         .filter(
             CompliancePluginRun.tenant_id == tenant_id,
             CompliancePluginRun.asset_id == asset_id,
+            CompliancePluginRun.is_leaked.is_(False),
         )
         .order_by(
             CompliancePluginRun.started_at.desc().nullslast(),
@@ -157,9 +228,12 @@ def _cis_gap(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
         )
         .all()
     )
+    # Only count runs against applicable plugins. (A run whose plugin isn't
+    # in the Stage 1 applicable set is treated as not-counting — that's a
+    # leftover from before the matcher fix and should not poison coverage.)
     latest: Dict[int, str] = {}
     for r in runs:
-        if r.plugin_id not in latest:
+        if r.plugin_id not in latest and r.plugin_id in applicable_plugin_ids:
             latest[r.plugin_id] = r.status
 
     if not latest or total == 0:
@@ -172,17 +246,12 @@ def _cis_gap(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
     passed = sum(1 for s in latest.values() if s == "passed")
     failed = sum(1 for s in latest.values() if s == "failed")
     never_scanned = total - len(latest)
-    # Among scanned rules, gap = failed / scanned. Never-scanned rules
-    # contribute proportionally as "unknown" with neutral 0.5 weight, but
-    # we ALSO surface them separately so the operator sees coverage gap.
     scanned = passed + failed
     pass_rate = round(passed / total * 100, 1)
     if scanned == 0:
         score = 0.0
     else:
         scanned_gap = failed / scanned
-        # Blend: 80% of weight on actually-scanned outcomes, 20% on
-        # never-scanned penalty (so coverage matters but doesn't dominate).
         coverage_penalty = never_scanned / total
         score = 0.8 * scanned_gap + 0.2 * coverage_penalty
 
@@ -193,7 +262,22 @@ def _cis_gap(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
     }
 
 
-def _vuln_score(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
+def _vuln_score(
+    db: Session, tenant_id: int, asset_id: int,
+    *, persist: bool = True,
+) -> Dict[str, Any]:
+    """Compute the vulnerability dimension for one asset.
+
+    `persist=True` (default): writes the computed per-vuln effective_risk
+    fields back to grc_vulnerabilities + commits. Used by the dashboard
+    and asset detail endpoints — caching the result for subsequent reads.
+
+    `persist=False`: pure read. Used by the live-preview endpoint so
+    toggling Business Context sliders in the UI doesn't keep mutating
+    grc_vulnerabilities + ticking effective_risk_computed_at on every
+    keystroke. The preview was supposed to be no-write — the original
+    code lied about it. This flag actually makes it true.
+    """
     """0-1. `known` only if at least one vulnerability is linked to this
     asset. Otherwise treat as unknown (operator hasn't run a vuln scan
     or imported a report yet). This matches the same gate-on-evidence
@@ -219,49 +303,170 @@ def _vuln_score(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
     active = [v for v in links if _is_active_vuln(v.status)]
     breakdown: Dict[str, int] = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
     by_status: Dict[str, int] = {}
-    points = 0.0
     for v in active:
         sev = (v.severity or "low").lower()
         if sev in breakdown:
             breakdown[sev] += 1
-        points += VULN_SEVERITY_POINTS.get(sev, 0)
     for v in links:
         st = (v.status or "open").lower()
         by_status[st] = by_status.get(st, 0) + 1
-    normalized = min(1.0, points / VULN_POINTS_CAP)
+
+    # ── Effective-risk path (Risk Posture v2, plan §2 + §4) ─────────────
+    # Replaces the old severity-bucket points sum (10/7/3/1) with the
+    # weighted formula combining CVSS + EPSS + KEV + asset CIA +
+    # business_impact. The formula module owns the math and the
+    # explanation; we just feed it typed inputs.
+    #
+    # We compute one RiskOutput per active vuln, then take the MAX
+    # across the asset's open vulns as the dimension score. MAX is the
+    # honest aggregation: one weaponised KEV-listed RCE on this asset
+    # should dominate the dimension, not be diluted by 50 low-severity
+    # findings. The legacy raw_points figure is kept for backward
+    # compat with the existing UI strip and audit log, derived from the
+    # same severity bucket counts.
+    from grc.models import ITAsset
+    from grc.modules.risk_posture.effective_risk import (
+        RiskInputs, compute_effective_risk,
+    )
+
+    asset = db.query(ITAsset).filter(ITAsset.id == asset_id).first()
+    asset_cia_max = None
+    if asset is not None:
+        cia_vals = [
+            asset.confidentiality_rating,
+            asset.integrity_rating,
+            asset.availability_rating,
+        ]
+        cia_vals = [v for v in cia_vals if v is not None]
+        if cia_vals:
+            asset_cia_max = max(cia_vals)
+
+    best_score = 0.0
+    best_breakdown: Optional[dict] = None
+    best_reason: Optional[str] = None
+    per_vuln_scores: list = []
+    for v in active:
+        inp = RiskInputs(
+            cvss_score=v.cvss_score,
+            epss_score=v.epss_score,
+            kev_flag=bool(v.kev_flag),
+            asset_cia_max=asset_cia_max,
+            is_customer_facing=bool(getattr(asset, "is_customer_facing", False)) if asset else False,
+            is_internet_facing=bool(getattr(asset, "is_internet_facing", False)) if asset else False,
+            regulated_data_type=(getattr(asset, "regulated_data_type", "none") if asset else "none"),
+            # Renamed from the v2 plan's `operational_dependency` because
+            # we already have a column with that name on ITAsset (Integer
+            # 1-4 — the Criticality Assessment scoring field, untouched).
+            # The v2 business-impact field uses the new name + varchar enum.
+            op_dep_business_impact=(getattr(asset, "op_dep_business_impact", "medium") if asset else "medium"),
+        )
+        out = compute_effective_risk(inp)
+        per_vuln_scores.append({
+            "vuln_id": v.id,
+            "cve_id": v.cve_id,
+            "title": v.title,
+            "severity": v.severity,
+            "cvss_score": v.cvss_score,
+            "epss_score": v.epss_score,
+            "kev_flag": bool(v.kev_flag),
+            "score": out.score,
+            "band": out.band,
+            "escalated": out.escalated,
+            "contributions": out.contributions,
+            "business_impact_factor": out.business_impact_factor,
+            "reason": out.reason,
+        })
+        # Persist the per-vuln effective risk back so the per-vuln UI can
+        # cite numbers without recomputing. Best-effort — a malformed row
+        # shouldn't break the dimension score. Gated on `persist` so the
+        # preview endpoint can compute without writing.
+        if persist:
+            try:
+                from datetime import datetime as _dt
+                v.effective_risk_score = out.score
+                v.effective_risk_reason = out.reason
+                v.effective_risk_computed_at = _dt.utcnow()
+            except Exception:  # noqa: BLE001
+                pass
+        if out.score > best_score:
+            best_score = out.score
+            best_breakdown = out.contributions
+            best_reason = out.reason
+    # Commit the effective_risk writes (best-effort — caller's transaction
+    # boundary owns rollback semantics). Skipped for preview-mode reads.
+    if persist:
+        try:
+            db.commit()
+        except Exception:  # noqa: BLE001
+            db.rollback()
+
+    # ── Legacy raw_points kept for the existing UI strip ────────────
+    legacy_points = sum(
+        VULN_SEVERITY_POINTS.get((v.severity or "low").lower(), 0) for v in active
+    )
+
     return {
-        "score": round(normalized, 4), "known": True,
-        "raw_points": round(points, 2),
+        "score": round(best_score, 4), "known": True,
+        "raw_points": round(legacy_points, 2),
         "open_count": len(active),
         "active_count": len(active),
         "total_linked": len(links),
         "by_severity": breakdown,
         "by_status": by_status,
+        # NEW (Risk Posture v2): explainable breakdown of the dimension.
+        # Surfaces in the asset detail page's "Why this score" callout
+        # and on the per-vuln breakdown in the Vulnerabilities tab.
+        "effective_risk": {
+            "method": "weighted_cvss_epss_kev_cia_biz",
+            "best_score": round(best_score, 4),
+            "best_contributions": best_breakdown,
+            "best_reason": best_reason,
+            "per_vuln": per_vuln_scores,
+        },
     }
 
 
 def _cia_value(asset: ITAsset) -> Dict[str, Any]:
-    """0-1. `known` only when at least one of C/I/A is set."""
-    vals = [
+    """0-1. `known` only when at least one of C/I/A is set, OR when we
+    can derive sensible defaults from the asset's criticality.
+
+    Banks set criticality on every asset (low/medium/high/critical) but
+    rarely fill in C/I/A individually until a formal classification
+    exercise — which delays risk-posture scoring forever. We provide a
+    safe default: critical→5, high→4, medium→3, low→2, unknown→3
+    (mid-scale). The flag `auto_derived` makes it clear the operator
+    hasn't yet provided explicit ratings, so they can override.
+    """
+    explicit = [
         asset.confidentiality_rating,
         asset.integrity_rating,
         asset.availability_rating,
     ]
-    present = [v for v in vals if v is not None]
-    if not present:
-        return {
-            "score": 0.0, "known": False,
-            "confidentiality": None, "integrity": None, "availability": None,
-            "missing": True,
-        }
-    avg = sum(present) / len(present)
+    has_any_explicit = any(v is not None for v in explicit)
+
+    # Default ladder keyed by criticality. Mid-scale neutral when
+    # criticality itself is unknown.
+    crit = (asset.criticality or "").lower()
+    DEFAULTS = {
+        "critical": 5, "high": 4, "medium": 3, "low": 2,
+    }
+    default_val = DEFAULTS.get(crit, 3)
+
+    c = asset.confidentiality_rating if asset.confidentiality_rating is not None else default_val
+    i = asset.integrity_rating       if asset.integrity_rating       is not None else default_val
+    a = asset.availability_rating    if asset.availability_rating    is not None else default_val
+
+    avg = (c + i + a) / 3.0
+    # Normalize 1..5 → 0..1. Higher CIA value → higher risk weight.
     norm = max(0.0, (avg - 1) / 4)
     return {
         "score": round(norm, 4), "known": True,
-        "confidentiality": asset.confidentiality_rating,
-        "integrity": asset.integrity_rating,
-        "availability": asset.availability_rating,
-        "missing": False,
+        "confidentiality": c,
+        "integrity": i,
+        "availability": a,
+        "missing": not has_any_explicit,
+        "auto_derived": not has_any_explicit,
+        "derived_from": f"criticality={crit!r}" if not has_any_explicit else None,
     }
 
 
@@ -359,16 +564,22 @@ def _risk_score(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
 
 def compute_asset_risk(
     db: Session, tenant_id: int, asset: ITAsset,
+    *, persist: bool = True,
 ) -> Dict[str, Any]:
     """Full breakdown + composite score for one asset.
 
     Components with `known=False` are excluded from the weighted sum and
     their weight is REMOVED from the denominator — so a brand-new asset
     isn't penalized for what we haven't measured yet.
+
+    `persist=False` propagates to `_vuln_score()` so the live-preview
+    endpoint can compute without writing back to grc_vulnerabilities.
+    The original code violated its own "no data is written" promise
+    on every preview tick.
     """
     components = {
         "cis":  _cis_gap(db, tenant_id, asset.id),
-        "vuln": _vuln_score(db, tenant_id, asset.id),
+        "vuln": _vuln_score(db, tenant_id, asset.id, persist=persist),
         "cia":  _cia_value(asset),
         "ctrl": _control_coverage(db, asset.id),
         "risk": _risk_score(db, tenant_id, asset.id),
@@ -410,7 +621,36 @@ def compute_asset_risk(
             "asset_type": asset.asset_type,
             "criticality": asset.criticality,
             "owner_name": asset.owner_name,
+            # ── Risk Posture v2: business-context fields ────────────────
+            # The asset detail page's Business Impact panel pre-fills
+            # its toggles from these. Without them, the form starts at
+            # default values and the dirty-check fires preview against
+            # the wrong baseline. We expose `operational_dependency`
+            # under the v2 spec name (matches the Live Preview wire
+            # body) but read from the renamed column to avoid the
+            # collision with the Criticality-Assessments Integer column.
+            "is_customer_facing": getattr(asset, "is_customer_facing", None),
+            "is_internet_facing": getattr(asset, "is_internet_facing", None),
+            "regulated_data_type": getattr(asset, "regulated_data_type", None),
+            "operational_dependency": getattr(asset, "op_dep_business_impact", None),
+            "business_impact_notes": getattr(asset, "business_impact_notes", None),
+            "confidentiality_rating": getattr(asset, "confidentiality_rating", None),
+            "integrity_rating": getattr(asset, "integrity_rating", None),
+            "availability_rating": getattr(asset, "availability_rating", None),
         },
+        # Mirror the same business-context fields at the top level so
+        # frontend code that doesn't drill into `.asset` (e.g. the
+        # original v2 page uses `data.is_customer_facing`) still works.
+        # Both paths now return the same values.
+        "is_customer_facing": getattr(asset, "is_customer_facing", None),
+        "is_internet_facing": getattr(asset, "is_internet_facing", None),
+        "regulated_data_type": getattr(asset, "regulated_data_type", None),
+        "operational_dependency": getattr(asset, "op_dep_business_impact", None),
+        "business_impact_notes": getattr(asset, "business_impact_notes", None),
+        "confidentiality_rating": getattr(asset, "confidentiality_rating", None),
+        "integrity_rating": getattr(asset, "integrity_rating", None),
+        "availability_rating": getattr(asset, "availability_rating", None),
+        "criticality": asset.criticality,
         "score": composite,
         "band": composite_band,
         "weights": weights,
@@ -423,17 +663,24 @@ def compute_asset_risk(
 
 def compute_tenant_posture(
     db: Session, tenant_id: int,
+    owner_id: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Tenant-wide rollup — per-asset rows + aggregate stats."""
+    """Tenant-wide rollup — per-asset rows + aggregate stats.
+
+    `owner_id`, if set, scopes the rollup to assets the caller owns. The
+    Banking User (and any other non-tenant-wide role) only gets to see
+    their own slice of the posture so the dashboard shows their
+    responsibility, not the whole bank's. Administrators / Auditors /
+    Scanning Admins call this without the filter and get the full estate.
+    """
     # Pull this tenant's effective weights once; same number that drives
     # every per-asset compute below, so the response field and the math
     # stay in lock-step.
     weights = resolve_weights_for_tenant(db, tenant_id)
-    assets = (
-        db.query(ITAsset)
-        .filter(ITAsset.tenant_id == tenant_id)
-        .all()
-    )
+    asset_q = db.query(ITAsset).filter(ITAsset.tenant_id == tenant_id)
+    if owner_id is not None:
+        asset_q = asset_q.filter(ITAsset.owner_id == owner_id)
+    assets = asset_q.all()
     rows: List[Dict[str, Any]] = []
     for a in assets:
         r = compute_asset_risk(db, tenant_id, a)

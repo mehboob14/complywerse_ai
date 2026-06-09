@@ -774,3 +774,121 @@ def seed_compliance_plugins(db: Session | None = None) -> int:
         logger.exception("seed_compliance_plugins failed: %s", exc)
         raise
     return touched
+
+
+# ─── Global-library sync (PDF-ingested CIS benchmarks) ──────────────────────
+# `seed_compliance_plugins` only loads the 36 built-in PLUGIN_LIBRARY rows.
+# The other ~5,300 rules that operators expect to see (CIS Windows 11,
+# Ubuntu, etc.) are PDF-ingested via the /compliance-plugins/ingest UI
+# into ONE tenant's DB — they land with `tenant_id IS NULL` (conceptually
+# "global to that DB") but DO NOT auto-propagate to other tenants because
+# the platform is database-per-tenant.
+#
+# Result: tenants created AFTER the operator did their PDF ingest get a
+# near-empty library (the 36 built-ins only). This function copies the
+# global rows from a canonical source tenant into a target tenant DB so
+# every tenant sees the same library.
+#
+# Provisioning: call this from tenant_manager._seed_tenant_database
+# right after seed_compliance_plugins so new tenants start fully loaded.
+# One-shot backfill: call directly against an under-seeded tenant.
+def sync_global_plugins_from_source(
+    target_db: Session,
+    source_db: Session,
+) -> int:
+    """Copy all `tenant_id IS NULL` rows from source_db into target_db.
+
+    Idempotent on (plugin_key). If a target row with the same plugin_key
+    already exists (e.g. one of the 36 built-ins), it's left untouched —
+    we only INSERT the rows that target_db is missing. This means re-running
+    the sync against an already-synced tenant is a no-op (insert count = 0).
+
+    Returns the number of rows actually inserted.
+    """
+    from sqlalchemy import select
+
+    # Pull all existing plugin_keys on the target so we know what to skip.
+    existing_keys = {
+        k for (k,) in target_db.execute(
+            select(CompliancePlugin.plugin_key).where(CompliancePlugin.tenant_id.is_(None))
+        )
+    }
+
+    # Stream global rows from source.
+    src_rows = source_db.query(CompliancePlugin).filter(
+        CompliancePlugin.tenant_id.is_(None)
+    ).all()
+    if not src_rows:
+        logger.warning(
+            "sync_global_plugins_from_source: source tenant has no global plugins"
+            " — backfill source likely under-seeded itself"
+        )
+        return 0
+
+    inserted = 0
+    try:
+        # SQLAlchemy ORM-level copy: enumerate columns from the mapper so
+        # we don't have to keep this in sync with the model schema as it
+        # grows. Skip id (autoincrement) + tenant_id (force NULL).
+        # Skip parent_plugin_id on the first pass — that's a self-FK
+        # pointing at source-DB ids which don't exist in target. We fix
+        # parent links in a second pass after the new rows have target ids.
+        col_names = [c.name for c in CompliancePlugin.__table__.columns
+                     if c.name not in ('id', 'tenant_id', 'parent_plugin_id')]
+        # src.id -> (target row + remembered parent_plugin_id from source)
+        # so we can resolve the FK after all inserts settle.
+        parent_link_pending: list[tuple[int, int]] = []  # (target_id, src_parent_id)
+        src_id_to_target_id: dict[int, int] = {}
+        for src in src_rows:
+            if src.plugin_key in existing_keys:
+                continue
+            data = {col: getattr(src, col) for col in col_names}
+            new_row = CompliancePlugin(tenant_id=None, **data)
+            target_db.add(new_row)
+            target_db.flush()  # populate new_row.id
+            src_id_to_target_id[src.id] = new_row.id
+            if src.parent_plugin_id is not None:
+                parent_link_pending.append((new_row.id, src.parent_plugin_id))
+            inserted += 1
+            # Commit in batches so memory stays bounded and a single bad
+            # row doesn't abort everything.
+            if inserted % 500 == 0:
+                target_db.commit()
+        target_db.commit()
+
+        # Second pass: fix parent_plugin_id FKs using the src->target map.
+        # parent might be an EXISTING target row (one of the 36 built-ins)
+        # — in that case the source-id won't be in our map, so we look it
+        # up on the source by plugin_key and find the target's id by key.
+        fixed_links = 0
+        for target_id, src_parent_id in parent_link_pending:
+            target_parent_id = src_id_to_target_id.get(src_parent_id)
+            if target_parent_id is None:
+                # Parent was already on target before sync ran — resolve
+                # by plugin_key. Falls through to NULL if no match.
+                parent_src = source_db.query(CompliancePlugin).get(src_parent_id)
+                if parent_src is not None:
+                    match = (
+                        target_db.query(CompliancePlugin)
+                        .filter(CompliancePlugin.plugin_key == parent_src.plugin_key,
+                                CompliancePlugin.tenant_id.is_(None))
+                        .first()
+                    )
+                    target_parent_id = match.id if match else None
+            if target_parent_id is not None:
+                target_db.query(CompliancePlugin).filter(
+                    CompliancePlugin.id == target_id
+                ).update({"parent_plugin_id": target_parent_id})
+                fixed_links += 1
+        target_db.commit()
+
+        logger.info(
+            "sync_global_plugins_from_source: inserted %d global plugin(s)"
+            " (source had %d total, target already had %d, parent FKs fixed=%d)",
+            inserted, len(src_rows), len(existing_keys), fixed_links,
+        )
+    except Exception as exc:
+        target_db.rollback()
+        logger.exception("sync_global_plugins_from_source failed: %s", exc)
+        raise
+    return inserted

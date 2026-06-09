@@ -67,10 +67,9 @@ export default function RiskPosturePage() {
   const [sortKey, setSortKey] = useState<SortKey>('score');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [weightsOpen, setWeightsOpen] = useState(false);
-  // Spec: only Tenant Admin can change weights. Scanning Admin / Auditor /
-  // Banking User see the button locked with a 🔒 + tooltip.
-  const { isAdmin, isLoading: permsLoading } = usePermissions();
-  const canTuneWeights = isAdmin;
+  // Tune Weights modifies tenant-wide scoring formula — Tenant Admin only.
+  // Scanning Admin can read but not change. Auditor / Banking User can't see.
+  const { isAdmin } = usePermissions();
 
   const q = useQuery<Dashboard>({
     queryKey: ['risk-posture.dashboard'],
@@ -133,27 +132,38 @@ export default function RiskPosturePage() {
             vulnerabilities, CIA criticality, and control coverage. Score is
             0-100, higher means more risk.
           </p>
+          <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
+            <span className="font-semibold uppercase tracking-wider text-emerald-700">v2 enhanced</span>
+            <span>
+              The vulnerabilities dimension now uses CVSS + EPSS likelihood + CISA
+              KEV + business impact. Click <strong>Drill down</strong> on any
+              asset to see the per-vuln breakdown, the Before/After triage view,
+              and the live Business Context preview.
+            </span>
+          </div>
         </div>
         <button
           onClick={() => {
-            if (!canTuneWeights) return;
+            if (!isAdmin) {
+              // Show toast instead of hiding the button — normal users
+              // still see Compliverse the same way the admin does,
+              // they just bump into a lock when they try to change
+              // tenant-wide settings.
+              alert("🔒 Permission required\n\nOnly the Tenant Administrator can change risk weights. Ask your admin to give you the Administrator role if you need to tune the scoring formula.");
+              return;
+            }
             setWeightsOpen(true);
           }}
-          disabled={permsLoading || !canTuneWeights}
           className={`px-3 py-2 text-sm rounded-md border whitespace-nowrap flex-shrink-0 ${
-            canTuneWeights
-              ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-              : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+            isAdmin
+              ? "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              : "border-gray-300 bg-gray-50 text-gray-400 cursor-not-allowed hover:bg-gray-50"
           }`}
-          title={
-            permsLoading
-              ? 'Checking permissions…'
-              : canTuneWeights
-              ? 'Customise how each dimension contributes to the composite score'
-              : 'Only Tenant Admin can change risk-scoring weights. Ask your tenant admin to grant the Administrator role.'
-          }
+          title={isAdmin
+            ? "Customise how each dimension contributes to the composite score"
+            : "Tenant Administrators only — your role can view the scoring formula but not change it"}
         >
-          {canTuneWeights ? '⚙ Tune weights' : '🔒 Tune weights'}
+          {isAdmin ? "⚙ Tune weights" : "🔒 Tune weights"}
         </button>
       </div>
 
@@ -200,16 +210,24 @@ export default function RiskPosturePage() {
       </div>
 
       {/* Weights explanation */}
-      <div className="bg-blue-50 border border-blue-100 rounded-md px-4 py-3 text-xs text-blue-900">
-        <strong className="text-blue-700">Formula:</strong>{' '}
-        Score = {Math.round(weights.cis * 100)}% CIS gap
-        + {Math.round(weights.vuln * 100)}% vulnerabilities
-        + {Math.round(weights.cia * 100)}% CIA criticality
-        + {Math.round(weights.ctrl * 100)}% control gap
-        + {Math.round(weights.risk * 100)}% linked-risk residual.
-        Dimensions with no data are excluded and remaining weights are
-        renormalized — the <strong>Data Quality</strong> column shows what
-        percentage of the formula could actually be measured.
+      <div className="bg-blue-50 border border-blue-100 rounded-md px-4 py-3 text-xs text-blue-900 space-y-1.5">
+        <div>
+          <strong className="text-blue-700">Composite formula:</strong>{' '}
+          Score = {Math.round(weights.cis * 100)}% CIS gap
+          + {Math.round(weights.vuln * 100)}% vulnerabilities (effective)
+          + {Math.round(weights.cia * 100)}% CIA criticality
+          + {Math.round(weights.ctrl * 100)}% control gap
+          + {Math.round(weights.risk * 100)}% linked-risk residual.
+          Dimensions with no data are excluded and remaining weights are
+          renormalized — the <strong>Data Quality</strong> column shows
+          what percentage of the formula could actually be measured.
+        </div>
+        <div className="border-t border-blue-200 pt-1.5">
+          <strong className="text-blue-700">Vulnerabilities sub-formula (v2):</strong>{' '}
+          effective_risk = 0.30 × CVSS/10 + 0.25 × EPSS + 0.20 × KEV + 0.10 × CIA/5 + 0.15 × (business_impact_factor − 1).
+          Floor at 0.85 when (EPSS ≥ 0.7 OR KEV) AND (CIA ≥ 4 OR business ≥ 1.3).
+          Open the per-asset page for the breakdown.
+        </div>
       </div>
 
       {/* Search + sort toolbar */}
@@ -280,16 +298,15 @@ export default function RiskPosturePage() {
                       description={
                         searchQ || filterBand
                           ? 'Try clearing filters above.'
-                          : 'Add assets via the IT Assets module or use Bulk Discovery to find them on your network.'
+                          : 'Add assets via the IT Assets module — they arrive over the asset API from your CMDB or push agents, then AI classifies them for the right CIS rules.'
                       }
                       primaryAction={
                         searchQ || filterBand
                           ? { label: 'Clear filters', onClick: () => { setSearchQ(''); setFilterBand(''); } }
-                          : { label: 'Add asset', href: '/assets' }
+                          : { label: 'Go to IT Assets', href: '/assets' }
                       }
-                      secondaryAction={
-                        !searchQ && !filterBand ? { label: 'Bulk discover', href: '/admin/discover' } : undefined
-                      }
+                      // Bulk Discovery secondary action removed — feature was
+                      // cut per product owner direction.
                     />
                   </td>
                 </tr>

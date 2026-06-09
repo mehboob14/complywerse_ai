@@ -155,8 +155,21 @@ export default function CompliancePluginsPage() {
       if (benchmark) params.benchmark = benchmark;
       if (runner) params.runner_type = runner;
       if (severity) params.severity = severity;
+      // When the operator narrows by benchmark/runner/severity, bump the
+      // API cap so we actually see every rule that matches the filter.
+      // Default backend limit is 500 — Windows 11 Enterprise has 548
+      // rules, so without this the filter would cut off the last 48
+      // (sorted alphabetically by rule_id) and look broken.
+      const hasFilter = Boolean(benchmark || runner || severity);
+      if (hasFilter) params.limit = '5000';
       const r = await compliancePluginsApi.list(params);
-      return r.data as { plugins: Plugin[]; total: number; available_runner_types: string[] };
+      return r.data as {
+        plugins: Plugin[];
+        total: number;
+        returned?: number;
+        limit?: number;
+        available_runner_types: string[];
+      };
     },
   });
 
@@ -356,7 +369,12 @@ export default function CompliancePluginsPage() {
   // own runs (filtered by email match against runs feed) rather than from
   // the all-tenant aggregated stats stored on each plugin row.
   const kpi = useMemo(() => {
-    const total = plugins.length;
+    // `Total Rules` reflects every rule that matches the *current filter*,
+    // not the truncated page slice. Server returns the full count in
+    // `total` even when it caps the rows it actually ships back; using
+    // plugins.length here used to show "500" when the real number is 5,385
+    // (or 548 for the Windows 11 benchmark filter).
+    const total = pluginsQ.data?.total ?? plugins.length;
     const critical = plugins.filter((p) => p.severity === 'critical').length;
     const high = plugins.filter((p) => p.severity === 'high').length;
     const enabled = plugins.filter((p) => p.enabled).length;
@@ -415,7 +433,7 @@ export default function CompliancePluginsPage() {
     // the approved library. Approximate as 0 unless surfaced.
     const pendingTotal = (pluginsQ.data as { pending_total?: number } | undefined)?.pending_total ?? 0;
     return { total, critical, high, enabled, totalRuns, passed, failed, passRate, passRateDenominator, pendingTotal };
-  }, [plugins, runScope, runsQ.data, meQ.data]);
+  }, [plugins, pluginsQ.data, runScope, runsQ.data, meQ.data]);
   const assets = useMemo<Array<{ id: number; name: string }>>(() => {
     const a = assetsQ.data;
     if (Array.isArray(a)) return a;
@@ -513,7 +531,7 @@ export default function CompliancePluginsPage() {
               (Windows / Linux / AWS) connected to this tenant. Launch the Connect Wizard
               from <strong>Administration → Integrations</strong> to onboard your first
               asset; checks will start running automatically after the wizard finishes.
-              Until then you can browse the {Array.isArray(plugins) ? plugins.length : 0}{' '}
+              Until then you can browse the {pluginsQ.data?.total ?? (Array.isArray(plugins) ? plugins.length : 0)}{' '}
               rules below in read-only mode.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -682,7 +700,7 @@ export default function CompliancePluginsPage() {
           onClick={() => setTab('library')}
           data-testid="tab-library"
         >
-          Plugin Library ({plugins.length})
+          Plugin Library ({pluginsQ.data?.total ?? plugins.length})
         </button>
         <button
           className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === 'assets' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-600'}`}

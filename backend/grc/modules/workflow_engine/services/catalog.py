@@ -41,7 +41,23 @@ TRIGGER_NODE_TYPES = [
     # ── IT Asset triggers ─────────────────────────────────────────────────────
     {"key": "asset_created", "label": "IT asset created"},
     {"key": "asset_updated", "label": "IT asset updated"},
-    {"key": "asset_deleted", "label": "IT asset deleted"},]
+    {"key": "asset_deleted", "label": "IT asset deleted"},
+    # ── Issue Management triggers ─────────────────────────────────────────────
+    {"key": "issue_created", "label": "Issue created"},
+    {"key": "issue_severity_changed", "label": "Issue severity changed"},
+    {"key": "issue_state_changed", "label": "Issue workflow state changed"},
+    {"key": "issue_sla_breached", "label": "Issue SLA breached (target_closure_date passed)"},
+    # ── CIS Compliance triggers ───────────────────────────────────────────────
+    # Plugin-run lifecycle events come off the run-row create / status update
+    # audit-log entries.  Polling-based events (pass-rate drop, agent offline)
+    # are dispatched from the periodic check inside the trigger loop.
+    {"key": "cis_check_failed", "label": "CIS check failed (single plugin run)"},
+    {"key": "cis_scan_completed", "label": "CIS scan batch completed"},
+    {"key": "cis_pass_rate_dropped", "label": "CIS tenant pass rate dropped below threshold"},
+    {"key": "agent_offline", "label": "Compliance agent offline (no heartbeat)"},
+    {"key": "agent_enrolled", "label": "Compliance agent enrolled / came online"},
+    {"key": "connection_handshake_completed", "label": "Connect Wizard handshake completed"},
+]
 
 ACTION_NODE_TYPES = [
     # ── Notifications & communication ─────────────────────────────────────────
@@ -79,6 +95,16 @@ ACTION_NODE_TYPES = [
     # ── Control library actions ───────────────────────────────────────────────
     {"key": "update_control_effectiveness", "label": "Update control effectiveness rating"},
     {"key": "set_control_not_applicable", "label": "Mark control as not applicable"},
+    # ── Issue Management actions ──────────────────────────────────────────────
+    {"key": "create_issue", "label": "Create issue"},
+    {"key": "assign_issue", "label": "Assign issue (owner / assignee)"},
+    {"key": "transition_issue_state", "label": "Transition issue workflow state"},
+    {"key": "add_capa_action", "label": "Add corrective action (CAPA) to issue"},
+    # ── CIS Compliance actions ────────────────────────────────────────────────
+    {"key": "trigger_cis_scan_all", "label": "Trigger CIS scan-all (optional asset/benchmark filters)"},
+    {"key": "revoke_cis_agent", "label": "Revoke compliance agent api_token"},
+    {"key": "create_issue_from_failed_check", "label": "Create issue from failed CIS check"},
+    {"key": "update_plugin_review_status", "label": "Bulk approve / reject CIS plugins by filter"},
 ]
 
 PLATFORM_FUNCTION_NODE_TYPES: list[dict] = []

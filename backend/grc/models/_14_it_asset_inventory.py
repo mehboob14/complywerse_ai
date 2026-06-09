@@ -83,6 +83,18 @@ class ITAsset(Base):
     last_seen_at = Column(DateTime, nullable=True)
     last_seen_source = Column(String(50), nullable=True)  # e.g. "nessus", "manual", "azure_defender"
 
+    # ── CIS OS profile ─────────────────────────────────────────────────────
+    # Populated by the Connect Wizard handshake (probes via WinRM / SSH /
+    # boto3 on every connection) and by agent heartbeats. Drives the
+    # BenchmarkOsMapping strict matcher that picks the right CIS plugin
+    # set per asset. Free-form so we never lose a probe result we can't
+    # categorize yet.
+    os_family = Column(String(50), nullable=True)      # 'windows' | 'linux' | 'macos'
+    os_version = Column(String(255), nullable=True)    # human display, e.g. "Microsoft Windows 11 Pro 23H2"
+    os_normalized = Column(String(80), nullable=True, index=True)  # 'windows-11-23H2', 'ubuntu-22.04', …
+    os_build = Column(String(40), nullable=True)       # '23H2' / '22H2' / '22.04.4'
+    os_edition = Column(String(80), nullable=True)     # 'Enterprise' / 'Pro' / 'LTSC'
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     tenant = relationship("Tenant", back_populates="it_assets")
@@ -115,6 +127,25 @@ class ITAsset(Base):
         back_populates="asset",
         cascade="all, delete-orphan",
     )
+
+    # ── Risk Posture v2: business-impact context ────────────────────────
+    # Used by the effective-risk formula in
+    # `grc.modules.risk_posture.effective_risk.compute_effective_risk`
+    # to apply business-impact multipliers ON TOP of CVSS / EPSS / KEV /
+    # CIA contributions. All optional; if blank the formula treats the
+    # asset as neutral (multiplier 1.0 = no boost).
+    #
+    # `op_dep_business_impact` is named distinctly from the existing
+    # `operational_dependency` Integer column (Criticality Assessment
+    # field, line 499 of _37_*) to avoid a column-name collision. The
+    # business-impact field uses a varchar enum: low|medium|high|critical.
+    is_customer_facing = Column(Boolean, nullable=False, server_default="false", default=False)
+    is_internet_facing = Column(Boolean, nullable=False, server_default="false", default=False)
+    regulated_data_type = Column(String(20), nullable=False, server_default="none", default="none")
+    # values: none | pii | pci | phi | financial | multiple
+    op_dep_business_impact = Column(String(20), nullable=False, server_default="medium", default="medium")
+    # values: low | medium | high | critical
+    business_impact_notes = Column(Text, nullable=True)
 
     __table_args__ = (
         Index("ix_it_asset_tenant_type", "tenant_id", "asset_type"),

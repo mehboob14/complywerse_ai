@@ -122,6 +122,15 @@ const MODULE_LABELS: Record<string, string> = {
   // Criticality Assessments — `/criticality-assessments/...` for the
   // ISCA + IACA endpoints under Asset Management.
   'criticality-assessments': 'Criticality Assessments',
+  // CIS Compliance Plugins — `/compliance-plugins/...` (library
+  // listing, runs, benchmark-mappings, library-tree, scan-all, ingest).
+  'compliance-plugins': 'CIS Compliance Plugins',
+  // Connect Wizard — `/connect-wizard/...` (issue-token, status poll,
+  // windows/linux script download, handshake).
+  'connect-wizard': 'Connect Wizard',
+  // Compliance Agents — `/agents/...` (enrollment, installer downloads,
+  // results push, revoke, scan-now-push).
+  agents: 'Compliance Agents',
 };
 
 const SUBMODULE_LABELS: Record<string, string> = {
@@ -198,6 +207,54 @@ const SUBMODULE_LABELS: Record<string, string> = {
   'infra-asset': 'Infrastructure Asset Assessments',
   'by-asset': 'By Asset',
   coverage: 'Coverage Stats',
+  // CIS Compliance Plugins (URL: /compliance-plugins/{runs|benchmarks|ingest|...})
+  runs: 'Plugin Runs',
+  benchmarks: 'Benchmarks',
+  ingest: 'CIS PDF Ingest',
+  'benchmark-mappings': 'Benchmark Mappings',
+  'library-tree': 'Library Tree',
+  'os-registry': 'OS Registry',
+  'match-preview': 'Match Preview',
+  'normalise-os': 'OS Normalisation',
+  'classify-stream': 'Classification Stream',
+  'classification-stats': 'Classification Stats',
+  'review-queue': 'Review Queue',
+  'review-bulk': 'Bulk Review',
+  'scan-all': 'Scan-All',
+  'per-asset-coverage': 'Per-Asset Coverage',
+  'per-user-summary': 'Per-User Summary',
+  'assets-overview': 'Assets Overview',
+  'import-json': 'Import JSON',
+  // Plugin-level paths nested under /compliance-plugins/{id}/{action}
+  'control-mappings': 'Plugin Control Mappings',
+  'asset-scope': 'Plugin Asset Scope',
+  schedule: 'Plugin Schedule',
+  // Compliance Agents (URL: /agents/{enroll|heartbeat|results|installer.*|...})
+  enroll: 'Agent Enrollment',
+  heartbeat: 'Agent Heartbeat',
+  results: 'Agent Results',
+  jobs: 'Agent Jobs Poll',
+  revoke: 'Agent Revoke',
+  'bulk-enroll': 'Bulk Enrollment',
+  'fetch-creds': 'Collector Credentials Fetch',
+  'scan-now-push': 'Scan-Now Push',
+  // Per-OS installer download endpoints
+  'installer.cmd': 'Windows Installer Download',
+  'installer.sh': 'Linux Installer Download',
+  'installer.command': 'macOS Installer Download',
+  'installer.msi': 'Installer (MSI placeholder)',
+  'installer.deb': 'Installer (DEB placeholder)',
+  'installer.rpm': 'Installer (RPM placeholder)',
+  'installer.pkg': 'Installer (PKG placeholder)',
+  // Connect Wizard (URL: /connect-wizard/{issue-token|status|windows|linux|handshake})
+  'issue-token': 'Issue Wizard Token',
+  status: 'Wizard Status Poll',
+  windows: 'Wizard Windows Script',
+  linux: 'Wizard Linux Script',
+  handshake: 'Wizard Handshake',
+  // Connections under compliance-plugins
+  connections: 'Connections',
+  'connections-scope': 'Connection Scope',
 };
 
 const SUB_ENTITY_MODULES = new Set([
@@ -206,6 +263,9 @@ const SUB_ENTITY_MODULES = new Set([
   'workflow-engine', 'framework-upload',
   // Phase-2 additions — both surfaces nest resources under module prefix.
   'issue-management', 'criticality-assessments',
+  // CIS additions — all three modules nest resources under the
+  // top-level URL prefix (e.g. /compliance-plugins/runs/...).
+  'compliance-plugins', 'connect-wizard', 'agents',
 ]);
 
 function titleCase(s: string): string {
@@ -323,6 +383,18 @@ export default function AuditLogsPage() {
     }
     if (dateFilter === 'last_30_days') {
       const from = new Date(now); from.setDate(now.getDate() - 29);
+      return { start_date: from.toISOString().slice(0, 10), end_date: toDate };
+    }
+    if (dateFilter === 'last_90_days') {
+      const from = new Date(now); from.setDate(now.getDate() - 89);
+      return { start_date: from.toISOString().slice(0, 10), end_date: toDate };
+    }
+    if (dateFilter === 'year_to_date') {
+      const from = new Date(now.getFullYear(), 0, 1);
+      return { start_date: from.toISOString().slice(0, 10), end_date: toDate };
+    }
+    if (dateFilter === 'last_year') {
+      const from = new Date(now); from.setFullYear(now.getFullYear() - 1);
       return { start_date: from.toISOString().slice(0, 10), end_date: toDate };
     }
     return {};
@@ -607,9 +679,14 @@ export default function AuditLogsPage() {
   const actionItems  = availableActions.map((a) => ({ value: a, label: ACTION_CFG[a]?.label ?? a }));
   const moduleItems  = availableModules.map((m) => ({ value: m, label: m }));
   const dateItems    = [
-    { value: 'today',        label: 'Today' },
-    { value: 'last_7_days',  label: 'Last 7 Days' },
-    { value: 'last_30_days', label: 'Last 30 Days' },
+    { value: 'today',         label: 'Today' },
+    { value: 'last_7_days',   label: 'Last 7 days' },
+    { value: 'last_30_days',  label: 'Last 30 days' },
+    { value: 'last_90_days',  label: 'Last 90 days' },
+    { value: 'year_to_date',  label: 'Year to date' },
+    { value: 'last_year',     label: 'Last 12 months' },
+    // 'all' is handled by the Clear-filters button + the trigger label
+    // showing "All time" when nothing is picked.
   ];
 
   return (
@@ -685,30 +762,60 @@ export default function AuditLogsPage() {
         )}
       </div>
 
-      {/* Pagination */}
-      {total > limit && (
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-slate-600">
-            {page * limit + 1}–{Math.min((page + 1) * limit, total)} of {total.toLocaleString()}
-          </span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-black rounded text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setPage((p) => p + 1)}
-              disabled={(page + 1) * limit >= total}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-black rounded text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Next
-            </button>
+      {/* Pagination — operators reading audit history need to see WHICH
+          page they're on and TOTAL pages, not just Prev/Next. Without
+          this they'd think the history ends at page 4 (or whatever).
+          We surface first / last jumps too so they can leap to the
+          oldest entries instantly. */}
+      {total > limit && (() => {
+        const totalPages = Math.ceil(total / limit);
+        const currentPage = page + 1;  // 1-indexed for display
+        return (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <div className="text-sm text-slate-700">
+              <strong className="text-slate-900">{page * limit + 1}–{Math.min((page + 1) * limit, total)}</strong>
+              <span className="text-slate-500"> of </span>
+              <strong className="text-slate-900">{total.toLocaleString()}</strong>
+              <span className="text-slate-500"> rows · page </span>
+              <strong className="text-slate-900">{currentPage}</strong>
+              <span className="text-slate-500"> of </span>
+              <strong className="text-slate-900">{totalPages.toLocaleString()}</strong>
+            </div>
+            <div className="flex gap-1.5">
+              <button
+                onClick={() => setPage(0)}
+                disabled={page === 0}
+                title="Jump to newest"
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                « First
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ‹ Prev
+              </button>
+              <button
+                onClick={() => setPage((p) => p + 1)}
+                disabled={(page + 1) * limit >= total}
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next ›
+              </button>
+              <button
+                onClick={() => setPage(totalPages - 1)}
+                disabled={(page + 1) * limit >= total}
+                title="Jump to oldest (tenant-creation era)"
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Last »
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {modal}
     </div>

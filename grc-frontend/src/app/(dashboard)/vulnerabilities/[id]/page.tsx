@@ -377,8 +377,12 @@ export default function VulnerabilityDetailPage() {
     description?: string;
     priority?: string;
     action_type?: string;
-    /** AI suggestion provenance — surfaced as a banner inside the modal. */
-    source?: 'ai' | 'manual';
+    /** Provenance — surfaced as a banner inside the modal.
+     *  - 'ai':    AI suggestion staged from the AI Analysis card
+     *  - 'patch': patch / advisory / remediation-guidance row in the
+     *             Threat Intelligence panel
+     *  - 'manual': operator opened the modal directly */
+    source?: 'ai' | 'manual' | 'patch';
   } | null>(null);
   // Detail panel for an already-created mitigation. Click a row in the
   // table to open this — it lets the operator view every field and
@@ -1089,8 +1093,24 @@ export default function VulnerabilityDetailPage() {
 
           {/* Threat Intelligence + Patch Information — full-width below
               the description+sidebar grid. Panel hides itself when the
-              vuln has no CVE-ID. Exception Workflow lives in its own tab. */}
-          <ThreatIntelPanel vulnerability={vulnerability} />
+              vuln has no CVE-ID. Exception Workflow lives in its own tab.
+              The Add buttons on each patch / advisory / remediation
+              guidance row stage their content into the Add Mitigation
+              modal pre-filled — operator picks Action Type / Override
+              Priority / Due Date / Assigned To before creating. */}
+          <ThreatIntelPanel
+            vulnerability={vulnerability}
+            onAddRemediation={(prefill) => {
+              setMitigationPrefill({
+                title: prefill.title,
+                description: prefill.description,
+                priority: prefill.priority,
+                action_type: prefill.action_type ?? 'remediate',
+                source: 'patch',
+              });
+              setShowMitigationModal(true);
+            }}
+          />
 
           {/* AI Analysis — moved from a dedicated tab into the Overview so
               the operator gets the full read on the vuln + suggested fixes
@@ -1802,7 +1822,11 @@ export default function VulnerabilityDetailPage() {
           <div className="cw-card w-full max-w-lg p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xl font-bold cw-text">
-                {mitigationPrefill?.source === 'ai' ? 'Accept AI Suggestion' : 'Add Mitigation'}
+                {mitigationPrefill?.source === 'ai'
+                  ? 'Accept AI Suggestion'
+                  : mitigationPrefill?.source === 'patch'
+                  ? 'Add Mitigation from Patch'
+                  : 'Add Mitigation'}
               </h2>
               <button
                 onClick={() => {
@@ -1821,6 +1845,17 @@ export default function VulnerabilityDetailPage() {
                   <strong className="block">Pre-filled from AI suggestion.</strong>
                   Review the brief, set a due date and assignee, and click Create.
                   Editing any field here is fine — your changes are what land in the register.
+                </div>
+              </div>
+            )}
+            {mitigationPrefill?.source === 'patch' && (
+              <div className="mb-4 flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                <Plus className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <div>
+                  <strong className="block">Pre-filled from a vendor patch / advisory.</strong>
+                  Title and description carry the patch context. Choose the
+                  Action Type, set Override Priority, Due Date, and Assigned
+                  To, then Create.
                 </div>
               </div>
             )}
@@ -1882,11 +1917,12 @@ export default function VulnerabilityDetailPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1">Priority</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1">Override Priority</label>
                   <select
                     name="priority"
                     defaultValue={(mitigationPrefill?.priority || 'medium').toLowerCase()}
                     className="input-field w-full"
+                    title="Defaults to medium (or the suggested priority when staged from a patch / AI). Pick a value here to override."
                   >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -2053,8 +2089,13 @@ export default function VulnerabilityDetailPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-600 mb-1">Priority</label>
-                    <select name="priority" defaultValue={selectedMitigation.priority || 'medium'} className="input-field w-full">
+                    <label className="block text-sm font-medium text-slate-600 mb-1">Override Priority</label>
+                    <select
+                      name="priority"
+                      defaultValue={selectedMitigation.priority || 'medium'}
+                      className="input-field w-full"
+                      title="The mitigation row's priority. Change to override what was set at creation."
+                    >
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
                       <option value="high">High</option>
@@ -3179,7 +3220,20 @@ const NARRATIVE_TONE_STYLES: Record<string, { card: string; chip: string; label:
 // The panel is hidden entirely for vulns with no CVE-ID since there's
 // nothing the enrichment service can look up.
 
-function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetail }) {
+function ThreatIntelPanel({
+  vulnerability, onAddRemediation,
+}: {
+  vulnerability: VulnerabilityDetail;
+  /** Open the parent's Add Mitigation modal pre-filled with the patch
+   *  title + description. Operator picks Action Type / Priority / Due
+   *  Date / Assigned To before the row is created. */
+  onAddRemediation: (prefill: {
+    title: string;
+    description: string;
+    priority?: string;
+    action_type?: string;
+  }) => void;
+}) {
   const qc = useQueryClient();
   const [showAllRefs, setShowAllRefs] = useState(false);
   const enrichMutation = useMutation({
@@ -3189,43 +3243,25 @@ function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetai
     },
   });
 
-  // "Add as remediation" buttons next to each KB / advisory / remediation
-  // guidance block. Tracks which keys have been added so a re-click can't
-  // create a duplicate mitigation row.
-  const [addedRemediations, setAddedRemediations] = useState<Set<string>>(new Set());
-  const addRemediationMutation = useMutation({
-    mutationFn: async (payload: { key: string; data: Record<string, unknown> }) => {
-      await vulnManagementApi.mitigations.create(vulnerability.id, payload.data);
-      return payload.key;
-    },
-    onSuccess: (key) => {
-      qc.invalidateQueries({ queryKey: ['vuln-mitigations', vulnerability.id] });
-      setAddedRemediations((prev) => {
-        const next = new Set(prev);
-        next.add(key);
-        return next;
-      });
-    },
-  });
-
   // Per-row click handler — generates the title/description from the patch
-  // ref / advisory ID / remediation text and dispatches the mutation.
+  // ref / advisory ID / remediation text and asks the parent to open the
+  // Add Mitigation modal pre-filled. The parent owns the modal + the real
+  // mutation; this panel just feeds it candidates. The previous "direct
+  // POST with hard-coded high priority + remediate type" path is gone —
+  // operators now choose Action Type / Priority (override) / Due Date /
+  // Assigned To explicitly.
   const addPatchAsRemediation = (
-    key: string,
+    _key: string,
     title: string,
     description: string,
   ) => {
-    if (addedRemediations.has(key) || addRemediationMutation.isPending) return;
-    addRemediationMutation.mutate({
-      key,
-      data: {
-        action_title: title.slice(0, 255),
-        action_description: description,
-        action_type: 'remediate',
-        // Vendor-published patches are almost always high priority for the
-        // affected vuln. Operators can adjust on the Mitigations tab.
-        priority: 'high',
-      },
+    onAddRemediation({
+      title: title.slice(0, 255),
+      description,
+      // Vendor patches default to remediate + high priority — the operator
+      // can override either in the modal before submitting.
+      action_type: 'remediate',
+      priority: 'high',
     });
   };
 
@@ -3608,12 +3644,11 @@ function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetai
                   KB Articles & Patches ({vulnerability.patch_references.length})
                 </div>
                 <p className="text-[10px] text-slate-500 mb-2">
-                  Click <strong>+ Add</strong> on any patch to push it to the Mitigations tab as a remediation action.
+                  Click <strong>+ Add</strong> on any patch to open the Add Mitigation form, pre-filled with the patch details — set the action type, priority, due date and assignee before creating.
                 </p>
                 <div className="space-y-1.5">
                   {vulnerability.patch_references.map((ref, idx) => {
                     const key = `kb:${ref.source}:${ref.id}:${idx}`;
-                    const added = addedRemediations.has(key);
                     const title = ref.source === 'msrc'
                       ? `Apply Microsoft patch ${ref.id}`
                       : `Apply ${ref.source.replace('_', ' ')} update: ${ref.id}`;
@@ -3642,25 +3677,11 @@ function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetai
                         <button
                           type="button"
                           onClick={() => addPatchAsRemediation(key, title, description)}
-                          disabled={added || addRemediationMutation.isPending}
-                          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold transition-colors ${
-                            added
-                              ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 cursor-default'
-                              : 'border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50'
-                          }`}
-                          title={added ? 'Already added as a mitigation' : 'Add this patch as a Mitigation row'}
+                          className="inline-flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                          title="Open the Add Mitigation form pre-filled with this patch"
                         >
-                          {added ? (
-                            <>
-                              <CheckCircle size={10} />
-                              Added
-                            </>
-                          ) : (
-                            <>
-                              <Plus size={10} />
-                              Add
-                            </>
-                          )}
+                          <Plus size={10} />
+                          Add
                         </button>
                       </div>
                     );
@@ -3677,7 +3698,6 @@ function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetai
                 <div className="space-y-1.5">
                   {vulnerability.vendor_advisory_ids.map((adv) => {
                     const key = `advisory:${adv}`;
-                    const added = addedRemediations.has(key);
                     const title = `Follow vendor advisory ${adv}`;
                     const description = `Vendor advisory: ${adv}\nFor ${vulnerability.cve_id || vulnerability.title}.\nRefer to the linked KB articles for patch deployment steps.`;
                     return (
@@ -3692,25 +3712,11 @@ function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetai
                         <button
                           type="button"
                           onClick={() => addPatchAsRemediation(key, title, description)}
-                          disabled={added || addRemediationMutation.isPending}
-                          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold transition-colors ${
-                            added
-                              ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 cursor-default'
-                              : 'border border-amber-400 bg-white text-amber-800 hover:bg-amber-100 disabled:opacity-50'
-                          }`}
-                          title={added ? 'Already added as a mitigation' : 'Add this advisory as a Mitigation row'}
+                          className="inline-flex items-center gap-1 rounded border border-amber-400 bg-white px-2 py-0.5 text-[10px] font-semibold text-amber-800 transition-colors hover:bg-amber-100"
+                          title="Open the Add Mitigation form pre-filled with this advisory"
                         >
-                          {added ? (
-                            <>
-                              <CheckCircle size={10} />
-                              Added
-                            </>
-                          ) : (
-                            <>
-                              <Plus size={10} />
-                              Add
-                            </>
-                          )}
+                          <Plus size={10} />
+                          Add
                         </button>
                       </div>
                     );
@@ -3721,7 +3727,6 @@ function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetai
 
             {vulnerability.remediation_guidance && (() => {
               const key = 'remediation_guidance';
-              const added = addedRemediations.has(key);
               const guidance = vulnerability.remediation_guidance || '';
               const sourceTag = vulnerability.psirt_source ? ` (${vulnerability.psirt_source.toUpperCase()})` : '';
               return (
@@ -3745,25 +3750,11 @@ function ThreatIntelPanel({ vulnerability }: { vulnerability: VulnerabilityDetai
                           `Apply vendor remediation${sourceTag}`,
                           guidance,
                         )}
-                        disabled={added || addRemediationMutation.isPending}
-                        className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold transition-colors ${
-                          added
-                            ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 cursor-default'
-                            : 'border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50'
-                        }`}
-                        title={added ? 'Already added as a mitigation' : 'Add this guidance as a Mitigation row'}
+                        className="inline-flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                        title="Open the Add Mitigation form pre-filled with this guidance"
                       >
-                        {added ? (
-                          <>
-                            <CheckCircle size={10} />
-                            Added
-                          </>
-                        ) : (
-                          <>
-                            <Plus size={10} />
-                            Add as Remediation
-                          </>
-                        )}
+                        <Plus size={10} />
+                        Add as Remediation
                       </button>
                     </div>
                   </div>

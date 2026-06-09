@@ -35,6 +35,12 @@ from ....models import (
     VulnerabilitySLAConfig,
     WorkflowAuditLog,
     WorkflowNotification,
+    # CIS / Issue Management — handler models
+    Issue,
+    IssueAction,
+    ComplianceAgent,
+    CompliancePlugin,
+    CompliancePluginRun,
 )
 from .condition_evaluator import ConditionEvaluator
 from .email_service import send_email
@@ -321,6 +327,98 @@ def _build_template_context(db, instance, definition) -> Dict[str, Any]:
                 if not ctx.get("name"):
                     ctx["name"] = request_body.get("name") or f"Asset #{rid}"
 
+        # ── Issue Management ────────────────────────────────────────────
+        elif resource_type == "issues":
+            obj = db.query(Issue).filter(Issue.id == rid, Issue.tenant_id == tid).first()
+            if obj:
+                ctx.update({
+                    "title":            obj.title or "",
+                    "description":      obj.description or "",
+                    "severity":         obj.severity or "",
+                    "impact":           obj.impact or "",
+                    "urgency":          obj.urgency or "",
+                    "category":         obj.category or "",
+                    "issue_type":       obj.issue_type or "",
+                    "status":           obj.status or "",
+                    "workflow_state":   obj.workflow_state or "",
+                    "code":             obj.code or "",
+                    "due_date":         obj.due_date.isoformat() if obj.due_date else "",
+                    "target_closure_date": obj.target_closure_date.isoformat() if obj.target_closure_date else "",
+                    "sla_breached":     "yes" if getattr(obj, "sla_breached", False) else "no",
+                })
+                for fk, prefix in (
+                    (obj.owner_id, "owner"),
+                    (obj.assignee_id, "assignee"),
+                    (obj.reporter_id, "reporter"),
+                ):
+                    if not fk:
+                        continue
+                    try:
+                        u = db.query(GRCUser).filter(GRCUser.id == fk).first()
+                        if u:
+                            ctx[f"{prefix}_name"]  = u.display_name or u.username or ""
+                            ctx[f"{prefix}_email"] = u.email or ""
+                    except Exception:
+                        pass
+
+        # ── CIS Compliance plugin runs ──────────────────────────────────
+        elif resource_type == "runs":
+            obj = db.query(CompliancePluginRun).filter(
+                CompliancePluginRun.id == rid,
+                CompliancePluginRun.tenant_id == tid,
+            ).first()
+            if obj:
+                ctx.update({
+                    "run_status":       obj.status or "",
+                    "run_result":       (obj.result_summary or "")[:500],
+                    "run_error":        (obj.error_message or "")[:500],
+                    "run_duration_ms":  str(obj.duration_ms or ""),
+                    "run_triggered_by": obj.triggered_by or "",
+                    "started_at":       obj.started_at.isoformat() if obj.started_at else "",
+                    "completed_at":     obj.completed_at.isoformat() if obj.completed_at else "",
+                })
+                # Pull plugin meta so emails can name the failing rule.
+                try:
+                    plugin = db.query(CompliancePlugin).filter(CompliancePlugin.id == obj.plugin_id).first()
+                    if plugin:
+                        ctx["plugin_title"]     = plugin.title or ""
+                        ctx["plugin_key"]       = plugin.plugin_key or ""
+                        ctx["plugin_rule_id"]   = plugin.rule_id or ""
+                        ctx["plugin_benchmark"] = plugin.benchmark or ""
+                        ctx["plugin_severity"]  = plugin.severity or ""
+                        ctx["plugin_runner"]    = plugin.runner_type or ""
+                except Exception:
+                    pass
+                # Pull affected asset so emails can name the host.
+                if obj.asset_id:
+                    try:
+                        asset = db.query(ITAsset).filter(ITAsset.id == obj.asset_id).first()
+                        if asset:
+                            ctx["asset_name"]     = asset.name or ""
+                            ctx["asset_host"]     = asset.host_name or ""
+                            ctx["asset_ip"]       = asset.ip_address or ""
+                            ctx["asset_os"]       = asset.os_normalized or asset.os_family or ""
+                    except Exception:
+                        pass
+
+        # ── Compliance agents (enroll / offline / scan-push) ────────────
+        elif resource_type == "agents":
+            obj = db.query(ComplianceAgent).filter(
+                ComplianceAgent.id == rid,
+                ComplianceAgent.tenant_id == tid,
+            ).first()
+            if obj:
+                ctx.update({
+                    "agent_name":      obj.agent_name or "",
+                    "agent_mode":      obj.mode or "",
+                    "agent_status":    obj.status or "",
+                    "agent_os":        obj.os_family or "",
+                    "agent_hostname":  obj.hostname or "",
+                    "agent_ip":        obj.ip_address or "",
+                    "agent_version":   obj.agent_version or "",
+                    "last_heartbeat":  obj.last_heartbeat_at.isoformat() if obj.last_heartbeat_at else "",
+                })
+
     except Exception:
         pass  # enrichment failure must not prevent email delivery
 
@@ -552,6 +650,16 @@ class WorkflowActionHandlers:
             "update_risk_tolerance": WorkflowActionHandlers._update_risk_tolerance,
             # Risk dependencies (v2 integration)
             "add_risk_dependency": WorkflowActionHandlers._add_risk_dependency,
+            # ── Issue Management ─────────────────────────────────────────
+            "create_issue": WorkflowActionHandlers._create_issue,
+            "assign_issue": WorkflowActionHandlers._assign_issue,
+            "transition_issue_state": WorkflowActionHandlers._transition_issue_state,
+            "add_capa_action": WorkflowActionHandlers._add_capa_action,
+            # ── CIS Compliance Plugins ───────────────────────────────────
+            "trigger_cis_scan_all": WorkflowActionHandlers._trigger_cis_scan_all,
+            "revoke_cis_agent": WorkflowActionHandlers._revoke_cis_agent,
+            "create_issue_from_failed_check": WorkflowActionHandlers._create_issue_from_failed_check,
+            "update_plugin_review_status": WorkflowActionHandlers._update_plugin_review_status,
         }
 
         handler = dispatch.get(action_name)
@@ -3860,3 +3968,372 @@ class WorkflowActionHandlers:
             return {"action": "add_risk_dependency", "dependency_id": dep_id, "source_risk_id": source_risk_id, "target_risk_id": target_risk_id}
         except Exception as exc:
             return {"action": "add_risk_dependency", "result": "error", "error": str(exc)}
+
+    # ═════════════════════════════════════════════════════════════════════
+    # Issue Management handlers
+    # ═════════════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _create_issue(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Open a new Issue.
+
+        Payload keys: title (required); description, severity, impact,
+        urgency, category, issue_type, owner_id, assignee_id, reporter_id,
+        source_type, source_id, root_cause (all optional).
+        """
+        try:
+            title = (payload.get("title") or "").strip()
+            if not title:
+                return {"action": "create_issue", "result": "missing_title"}
+            issue = Issue(
+                tenant_id=instance.tenant_id,
+                title=title,
+                description=payload.get("description"),
+                severity=payload.get("severity") or "medium",
+                impact=payload.get("impact"),
+                urgency=payload.get("urgency"),
+                issue_type=payload.get("issue_type") or "incident",
+                category=payload.get("category") or "security",
+                root_cause=payload.get("root_cause"),
+                owner_id=payload.get("owner_id"),
+                assignee_id=payload.get("assignee_id"),
+                reporter_id=payload.get("reporter_id"),
+                source_type=payload.get("source_type") or "workflow",
+                source_id=payload.get("source_id"),
+                status="open",
+                workflow_state="new",
+            )
+            db.add(issue)
+            db.flush()
+            db.add(WorkflowAuditLog(
+                tenant_id=instance.tenant_id,
+                workflow_definition_id=definition.id,
+                workflow_instance_id=instance.id,
+                event_type="action.create_issue",
+                message=f"Issue #{issue.id} opened by workflow: {title[:120]}",
+                payload={"issue_id": issue.id, "severity": issue.severity},
+            ))
+            return {"action": "create_issue", "issue_id": issue.id, "severity": issue.severity}
+        except Exception as exc:  # noqa: BLE001
+            return {"action": "create_issue", "result": "error", "error": str(exc)}
+
+    @staticmethod
+    def _assign_issue(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Set owner_id and/or assignee_id on an existing issue.
+
+        Payload: issue_id (required); owner_id, assignee_id (at least one).
+        """
+        try:
+            issue_id = payload.get("issue_id")
+            if not issue_id:
+                return {"action": "assign_issue", "result": "missing_issue_id"}
+            issue = db.query(Issue).filter(
+                Issue.id == int(issue_id),
+                Issue.tenant_id == instance.tenant_id,
+            ).first()
+            if not issue:
+                return {"action": "assign_issue", "result": "issue_not_found"}
+            owner_id = payload.get("owner_id")
+            assignee_id = payload.get("assignee_id")
+            if owner_id is None and assignee_id is None:
+                return {"action": "assign_issue", "result": "no_assignment_provided"}
+            if owner_id is not None:
+                issue.owner_id = int(owner_id) if owner_id else None
+            if assignee_id is not None:
+                issue.assignee_id = int(assignee_id) if assignee_id else None
+            db.add(WorkflowAuditLog(
+                tenant_id=instance.tenant_id,
+                workflow_definition_id=definition.id,
+                workflow_instance_id=instance.id,
+                event_type="action.assign_issue",
+                message=f"Issue #{issue.id} assigned (owner={issue.owner_id}, assignee={issue.assignee_id})",
+                payload={"issue_id": issue.id, "owner_id": issue.owner_id, "assignee_id": issue.assignee_id},
+            ))
+            return {"action": "assign_issue", "issue_id": issue.id, "owner_id": issue.owner_id, "assignee_id": issue.assignee_id}
+        except Exception as exc:  # noqa: BLE001
+            return {"action": "assign_issue", "result": "error", "error": str(exc)}
+
+    @staticmethod
+    def _transition_issue_state(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Move an issue along its workflow_state machine.
+
+        Payload: issue_id (required); to_state (required: new|triage|
+        in_progress|resolution|closure_review|closed|cancelled); notes
+        (optional).
+        """
+        try:
+            issue_id = payload.get("issue_id")
+            to_state = (payload.get("to_state") or "").strip().lower()
+            if not issue_id or not to_state:
+                return {"action": "transition_issue_state", "result": "missing_fields"}
+            valid_states = {"new", "triage", "in_progress", "resolution", "closure_review", "closed", "cancelled"}
+            if to_state not in valid_states:
+                return {"action": "transition_issue_state", "result": "invalid_to_state", "to_state": to_state}
+            issue = db.query(Issue).filter(
+                Issue.id == int(issue_id),
+                Issue.tenant_id == instance.tenant_id,
+            ).first()
+            if not issue:
+                return {"action": "transition_issue_state", "result": "issue_not_found"}
+            from_state = issue.workflow_state
+            issue.workflow_state = to_state
+            # Mirror to legacy status column on terminal transitions so
+            # the existing Issue dashboards / KPI rollups stay correct.
+            if to_state in ("closed", "cancelled"):
+                issue.status = to_state
+                issue.closed_at = datetime.utcnow()
+            db.add(WorkflowAuditLog(
+                tenant_id=instance.tenant_id,
+                workflow_definition_id=definition.id,
+                workflow_instance_id=instance.id,
+                event_type="action.transition_issue_state",
+                message=f"Issue #{issue.id} state {from_state} → {to_state}",
+                payload={"issue_id": issue.id, "from_state": from_state, "to_state": to_state, "notes": payload.get("notes")},
+            ))
+            return {"action": "transition_issue_state", "issue_id": issue.id, "from_state": from_state, "to_state": to_state}
+        except Exception as exc:  # noqa: BLE001
+            return {"action": "transition_issue_state", "result": "error", "error": str(exc)}
+
+    @staticmethod
+    def _add_capa_action(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Append a CAPA action row to an existing issue.
+
+        Payload: issue_id + title (required); description, action_type
+        (corrective|preventive|containment|verification, default
+        corrective), assignee_id, due_in_days (defaults to 14), priority.
+        """
+        try:
+            issue_id = payload.get("issue_id")
+            title = (payload.get("title") or "").strip()
+            if not issue_id or not title:
+                return {"action": "add_capa_action", "result": "missing_fields"}
+            issue = db.query(Issue).filter(
+                Issue.id == int(issue_id),
+                Issue.tenant_id == instance.tenant_id,
+            ).first()
+            if not issue:
+                return {"action": "add_capa_action", "result": "issue_not_found"}
+            due_in_days = int(payload.get("due_in_days") or 14)
+            action_row = IssueAction(
+                issue_id=issue.id,
+                action_type=(payload.get("action_type") or "corrective"),
+                title=title,
+                description=payload.get("description"),
+                assignee_id=payload.get("assignee_id"),
+                due_date=datetime.utcnow() + timedelta(days=due_in_days),
+                status="planned",
+                created_by=payload.get("created_by"),
+            )
+            db.add(action_row)
+            db.flush()
+            db.add(WorkflowAuditLog(
+                tenant_id=instance.tenant_id,
+                workflow_definition_id=definition.id,
+                workflow_instance_id=instance.id,
+                event_type="action.add_capa_action",
+                message=f"CAPA #{action_row.id} added to issue #{issue.id}",
+                payload={"action_id": action_row.id, "issue_id": issue.id, "action_type": action_row.action_type},
+            ))
+            return {"action": "add_capa_action", "action_id": action_row.id, "issue_id": issue.id}
+        except Exception as exc:  # noqa: BLE001
+            return {"action": "add_capa_action", "result": "error", "error": str(exc)}
+
+    # ═════════════════════════════════════════════════════════════════════
+    # CIS Compliance Plugins handlers
+    # ═════════════════════════════════════════════════════════════════════
+
+    @staticmethod
+    def _trigger_cis_scan_all(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Kick off a CIS scan-all for this tenant in a background thread.
+
+        Workflows shouldn't BLOCK the runtime loop waiting for a scan
+        (can take minutes against a real fleet), so we spawn a worker
+        thread that calls the underlying scan function. Returns
+        ``{action, status: 'queued'}`` immediately. The scan's own
+        audit-log entry captures completion + counts.
+
+        Payload (all optional): asset_id, benchmark, runner_type,
+        connection_id, user_id (defaults to definition.created_by).
+        """
+        try:
+            import threading as _threading
+            # Resolve actor — workflow definitions carry created_by_user_id
+            # which becomes the "triggered_by_user" on the resulting runs.
+            user_id = payload.get("user_id") or getattr(definition, "created_by_user_id", None)
+            actor = db.query(GRCUser).filter(GRCUser.id == int(user_id)).first() if user_id else None
+            tenant_id = instance.tenant_id
+
+            # We capture the tenant engine BEFORE handing off to the
+            # background thread — the worker can't reach the request's
+            # session-local state once we return. Pattern mirrors the
+            # scan-all parallel-worker fix already applied to the route.
+            tenant_engine = db.get_bind()
+
+            def _run_scan_in_background():
+                from sqlalchemy.orm import sessionmaker
+                Sess = sessionmaker(bind=tenant_engine, expire_on_commit=False)
+                worker_db = Sess()
+                try:
+                    from ...compliance_plugins.router import _do_scan_all
+                    _do_scan_all(
+                        worker_db, tenant_id,
+                        asset_id=payload.get("asset_id"),
+                        current_user=actor,
+                        benchmark=payload.get("benchmark"),
+                        runner_type=payload.get("runner_type"),
+                        connection_id=payload.get("connection_id"),
+                    )
+                except Exception:
+                    logger.exception("workflow trigger_cis_scan_all background scan failed")
+                finally:
+                    worker_db.close()
+
+            _threading.Thread(target=_run_scan_in_background, daemon=True,
+                              name=f"wf-scan-all-tenant-{tenant_id}").start()
+
+            db.add(WorkflowAuditLog(
+                tenant_id=tenant_id,
+                workflow_definition_id=definition.id,
+                workflow_instance_id=instance.id,
+                event_type="action.trigger_cis_scan_all",
+                message=f"CIS scan-all queued for tenant {tenant_id} (asset_id={payload.get('asset_id')})",
+                payload={"asset_id": payload.get("asset_id"), "benchmark": payload.get("benchmark")},
+            ))
+            return {"action": "trigger_cis_scan_all", "status": "queued"}
+        except Exception as exc:  # noqa: BLE001
+            return {"action": "trigger_cis_scan_all", "result": "error", "error": str(exc)}
+
+    @staticmethod
+    def _revoke_cis_agent(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Revoke a compliance agent's api_token.
+
+        Payload: agent_id (required); reason (optional).
+        """
+        try:
+            agent_id = payload.get("agent_id")
+            if not agent_id:
+                return {"action": "revoke_cis_agent", "result": "missing_agent_id"}
+            agent = db.query(ComplianceAgent).filter(
+                ComplianceAgent.id == int(agent_id),
+                ComplianceAgent.tenant_id == instance.tenant_id,
+            ).first()
+            if not agent:
+                return {"action": "revoke_cis_agent", "result": "agent_not_found"}
+            if agent.status == "revoked":
+                return {"action": "revoke_cis_agent", "status": "already_revoked", "agent_id": agent.id}
+            agent.status = "revoked"
+            agent.api_token_hash = None
+            agent.revoked_at = datetime.utcnow()
+            agent.revoke_reason = (payload.get("reason") or "Revoked by workflow")[:500]
+            agent.revoked_by_user_id = payload.get("user_id") or getattr(definition, "created_by_user_id", None)
+            db.add(WorkflowAuditLog(
+                tenant_id=instance.tenant_id,
+                workflow_definition_id=definition.id,
+                workflow_instance_id=instance.id,
+                event_type="action.revoke_cis_agent",
+                message=f"Agent #{agent.id} ({agent.agent_name}) revoked by workflow",
+                payload={"agent_id": agent.id, "reason": agent.revoke_reason},
+            ))
+            return {"action": "revoke_cis_agent", "agent_id": agent.id, "revoked": True}
+        except Exception as exc:  # noqa: BLE001
+            return {"action": "revoke_cis_agent", "result": "error", "error": str(exc)}
+
+    @staticmethod
+    def _create_issue_from_failed_check(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Cross-module bridge — open an Issue when a CIS check fails.
+
+        Reads the failed CompliancePluginRun row + its parent plugin to
+        synthesize a title / description, links to the affected asset,
+        and inherits severity from the plugin row.
+
+        Payload: run_id (required); category (optional, defaults to
+        'security'); issue_type (optional, defaults to 'audit_finding').
+        """
+        try:
+            run_id = payload.get("run_id")
+            if not run_id:
+                return {"action": "create_issue_from_failed_check", "result": "missing_run_id"}
+            run = db.query(CompliancePluginRun).filter(
+                CompliancePluginRun.id == int(run_id),
+                CompliancePluginRun.tenant_id == instance.tenant_id,
+            ).first()
+            if not run:
+                return {"action": "create_issue_from_failed_check", "result": "run_not_found"}
+            plugin = db.query(CompliancePlugin).filter(CompliancePlugin.id == run.plugin_id).first()
+            if not plugin:
+                return {"action": "create_issue_from_failed_check", "result": "plugin_not_found"}
+            asset = db.query(ITAsset).filter(ITAsset.id == run.asset_id).first() if run.asset_id else None
+            issue = Issue(
+                tenant_id=instance.tenant_id,
+                title=f"CIS check failed: {plugin.title[:200]}",
+                description=(
+                    f"CIS plugin {plugin.plugin_key} (rule {plugin.rule_id}) failed "
+                    f"on {asset.name if asset else 'unspecified asset'}.\n\n"
+                    f"Benchmark: {plugin.benchmark}\n"
+                    f"Severity: {plugin.severity}\n"
+                    f"Result summary: {run.result_summary or '—'}\n\n"
+                    f"Remediation: {plugin.remediation or '—'}"
+                )[:8000],
+                severity=plugin.severity or "medium",
+                category=payload.get("category") or "security",
+                issue_type=payload.get("issue_type") or "audit_finding",
+                source_type="compliance_plugin_run",
+                source_id=run.id,
+                status="open",
+                workflow_state="new",
+            )
+            db.add(issue)
+            db.flush()
+            db.add(WorkflowAuditLog(
+                tenant_id=instance.tenant_id,
+                workflow_definition_id=definition.id,
+                workflow_instance_id=instance.id,
+                event_type="action.create_issue_from_failed_check",
+                message=f"Issue #{issue.id} opened from failed plugin run #{run.id} ({plugin.plugin_key})",
+                payload={"issue_id": issue.id, "run_id": run.id, "plugin_id": plugin.id, "asset_id": run.asset_id},
+            ))
+            return {"action": "create_issue_from_failed_check", "issue_id": issue.id, "run_id": run.id}
+        except Exception as exc:  # noqa: BLE001
+            return {"action": "create_issue_from_failed_check", "result": "error", "error": str(exc)}
+
+    @staticmethod
+    def _update_plugin_review_status(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Bulk approve / reject pending CIS plugins matching a filter.
+
+        Payload: decision (required: 'approve'|'reject'); benchmark
+        (optional substring filter); max_rows (optional cap, default 500).
+        """
+        try:
+            decision = (payload.get("decision") or "").strip().lower()
+            if decision not in ("approve", "reject"):
+                return {"action": "update_plugin_review_status", "result": "invalid_decision"}
+            benchmark_filter = payload.get("benchmark")
+            max_rows = int(payload.get("max_rows") or 500)
+
+            q = db.query(CompliancePlugin).filter(
+                (CompliancePlugin.tenant_id == instance.tenant_id) | (CompliancePlugin.tenant_id.is_(None)),
+                CompliancePlugin.review_status == "pending_review",
+            )
+            if benchmark_filter:
+                q = q.filter(CompliancePlugin.benchmark.ilike(f"%{benchmark_filter}%"))
+            rows = q.limit(max_rows).all()
+            updated = 0
+            for p in rows:
+                if decision == "approve":
+                    p.review_status = "auto_approved"
+                    p.enabled = True
+                else:
+                    p.review_status = "rejected"
+                    p.enabled = False
+                updated += 1
+            db.add(WorkflowAuditLog(
+                tenant_id=instance.tenant_id,
+                workflow_definition_id=definition.id,
+                workflow_instance_id=instance.id,
+                event_type="action.update_plugin_review_status",
+                message=f"Bulk {decision}d {updated} CIS plugin(s)" + (f" matching '{benchmark_filter}'" if benchmark_filter else ""),
+                payload={"decision": decision, "benchmark_filter": benchmark_filter, "updated": updated},
+            ))
+            return {"action": "update_plugin_review_status", "decision": decision, "updated": updated}
+        except Exception as exc:  # noqa: BLE001
+            return {"action": "update_plugin_review_status", "result": "error", "error": str(exc)}

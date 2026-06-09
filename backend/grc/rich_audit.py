@@ -36,12 +36,20 @@ def write_rich_audit_log(
     user_id: Optional[int],
     action: str,
     resource_type: str,
-    resource_id: Optional[int],
+    resource_id: Optional[int] = None,
     resource_name: Optional[str] = None,
     resource_url: Optional[str] = None,
     summary: Optional[str] = None,
     snapshot: Optional[Dict[str, Any]] = None,
     ip_address: Optional[str] = None,
+    # CIS-merge extension — accepted (and merged into snapshot when
+    # provided) so the audit_logger.py shim can pass through the
+    # extended signature it expects. Backward-compatible: existing
+    # callers that don't pass these stay unchanged.
+    before: Optional[Dict[str, Any]] = None,
+    after: Optional[Dict[str, Any]] = None,
+    actor_type: Optional[str] = None,
+    actor_workflow_id: Optional[int] = None,
 ) -> None:
     """Append one audit-log row from non-HTTP code (workflows, schedulers).
 
@@ -51,6 +59,16 @@ def write_rich_audit_log(
     caller's transaction.
     """
     try:
+        # Merge the CIS-shim extensions into snapshot so a single payload
+        # carries everything an audit-UI renderer needs.
+        merged_snapshot: Dict[str, Any] = dict(snapshot or {})
+        if before is not None:
+            merged_snapshot["before"] = before
+        if after is not None:
+            merged_snapshot["after"] = after
+        if actor_workflow_id is not None:
+            merged_snapshot["actor_workflow_id"] = actor_workflow_id
+        resolved_actor_type = actor_type or ("user" if user_id else "workflow")
         changes: Dict[str, Any] = {
             "method": None,
             "path": resource_url,
@@ -61,10 +79,10 @@ def write_rich_audit_log(
             "request": None,
             "actor": None,
             "actor_display": None,
-            "actor_type": "user" if user_id else "workflow",
+            "actor_type": resolved_actor_type,
             "resource_name": resource_name,
             "summary": summary,
-            "snapshot": snapshot or {},
+            "snapshot": merged_snapshot,
         }
         row = AuditLog(
             tenant_id=tenant_id,

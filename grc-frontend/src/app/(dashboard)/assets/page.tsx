@@ -59,7 +59,10 @@ import {
   Download,
   Upload,
   FileSpreadsheet,
-  CheckCircle2
+  CheckCircle2,
+  // CIS Module Updated — per-row "Connect" button that deep-links into
+  // the Connect Wizard with hostname pre-filled.
+  Plug,
 } from 'lucide-react';
 
 type StatusFilter = 'all' | 'active' | 'inactive' | 'decommissioned';
@@ -171,6 +174,39 @@ export default function AssetsPage() {
       return response.data;
     },
   });
+
+  // Connection list — used to compute "X of N assets connected" on the
+  // guidance card. Endpoint requires admin:integrations:view; on 403 we
+  // silently render the static guidance without the live count.
+  const { data: connectionsData } = useQuery({
+    queryKey: ['assets-page-connections'],
+    queryFn: async () => {
+      try {
+        const r = await apiClient.get('/integrations/connections');
+        const conns = (r.data?.connections ?? (Array.isArray(r.data) ? r.data : [])) as Array<{ console_url?: string }>;
+        return conns;
+      } catch {
+        return [] as Array<{ console_url?: string }>;
+      }
+    },
+    retry: false,
+  });
+
+  // Local guidance dismissal — operators who've gone through it once
+  // can hide it on subsequent visits. Persisted in localStorage so it
+  // sticks across tabs/sessions but is per-browser.
+  const [guidanceDismissed, setGuidanceDismissed] = useState<boolean>(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setGuidanceDismissed(window.localStorage.getItem('assets.guidance.dismissed') === '1');
+    }
+  }, []);
+  const dismissGuidance = () => {
+    setGuidanceDismissed(true);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('assets.guidance.dismissed', '1');
+    }
+  };
 
   const createMutation = useMutation({
     mutationFn: (data: Parameters<typeof assetsApi.create>[0]) => assetsApi.create(data),
@@ -334,6 +370,66 @@ export default function AssetsPage() {
   const handleView = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
     router.push(`/assets/${id}`);
+  };
+
+  /** Open Connect Wizard with hostname + asset_id + platform pre-filled
+   *  from the asset row. Maps os_family / asset_type to the wizard's
+   *  Platform key — most common case is windows / linux. For
+   *  unsupported families we fall through to the platform picker so the
+   *  operator can choose. */
+  const handleConnect = (e: React.MouseEvent, asset: ITAsset) => {
+    e.stopPropagation();
+    const fam = ((asset as any).os_family || '').toLowerCase();
+    const platform =
+      fam === 'windows' ? 'windows' :
+      fam === 'linux' ? 'linux' :
+      fam === 'cisco' ? 'cisco' :
+      fam === 'oracle' || fam === 'oracle_db' ? 'oracle' :
+      fam === 'mssql' ? 'mssql' :
+      fam === 'postgres' ? 'postgres' :
+      fam === 'mysql' ? 'mysql' :
+      fam === 'aws' ? 'aws' :
+      fam === 'azure' ? 'azure' :
+      '';
+    const host = asset.host_name || asset.ip_address || '';
+    const params = new URLSearchParams();
+    if (platform) params.set('platform', platform);
+    if (host) params.set('hostname', host);
+    params.set('asset_id', String(asset.id));
+    router.push(`/admin/integrations/connect?${params.toString()}`);
+  };
+
+  // Multi-select for bulk-connect. Stored as a Set of asset ids so
+  // toggling is O(1) regardless of how many rows are on screen.
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<number>>(new Set());
+  const toggleAssetSelected = (id: number) => {
+    setSelectedAssetIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedAssetIds(new Set());
+
+  /** Open Connect Wizard in bulk mode — passes the selected asset ids
+   *  via ?asset_ids=1,2,3. Wizard prompts for credentials ONCE then
+   *  iterates handshake against each asset. */
+  const handleBulkConnect = () => {
+    if (selectedAssetIds.size === 0) return;
+    // Determine the platform — must be uniform across the selection
+    // (you can't share Windows creds across a Linux box). We pick the
+    // platform from the first selected asset; the wizard will reject
+    // any in the batch with a different os_family.
+    const idList = Array.from(selectedAssetIds);
+    const first = (assets as ITAsset[] | undefined)?.find((a) => a.id === idList[0]);
+    const fam = ((first as any)?.os_family || '').toLowerCase();
+    const platform =
+      fam === 'windows' ? 'windows' :
+      fam === 'linux' ? 'linux' : '';
+    const params = new URLSearchParams();
+    if (platform) params.set('platform', platform);
+    params.set('asset_ids', idList.join(','));
+    router.push(`/admin/integrations/connect?${params.toString()}`);
   };
 
   const assetTypeChartData = useMemo(() => {
@@ -648,10 +744,150 @@ export default function AssetsPage() {
         </div>
       </div>
 
+      {/* ─── Bulk-connect toolbar — visible only while assets are selected */}
+      {selectedAssetIds.size > 0 && (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2.5">
+          <div className="flex items-center gap-2 text-sm text-indigo-900">
+            <span className="font-semibold">{selectedAssetIds.size}</span>
+            <span>asset{selectedAssetIds.size === 1 ? '' : 's'} selected</span>
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="ml-2 text-xs text-indigo-700 underline hover:text-indigo-900"
+            >
+              Clear
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={handleBulkConnect}
+            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+          >
+            <Plug className="h-4 w-4" />
+            Connect {selectedAssetIds.size} selected — shared credentials
+          </button>
+        </div>
+      )}
+
+      {/* ─── Connection guidance card ───────────────────────────────────
+          Shown until the operator dismisses it. Explains both flows:
+          1) connect one asset at a time (click 🔌 on the row)
+          2) connect N assets in bulk (tick checkboxes → "Connect N selected")
+          Plus the live count so the operator knows what's left to do. */}
+      {!guidanceDismissed && Array.isArray(assets) && assets.length > 0 && (() => {
+        const connectedHosts = new Set(
+          (connectionsData || [])
+            .map((c) => (c.console_url || '').toLowerCase().trim())
+            .filter((h) => !!h)
+        );
+        const assetsWithHost = (assets as ITAsset[]).filter((a) => !!a.host_name);
+        const connectedCount = assetsWithHost.filter(
+          (a) => connectedHosts.has((a.host_name || '').toLowerCase().trim()),
+        ).length;
+        const remainingCount = assetsWithHost.length - connectedCount;
+        return (
+          <div className="mb-4 rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 flex-1">
+                <span className="text-3xl flex-shrink-0">🔌</span>
+                <div className="flex-1">
+                  <h2 className="text-base font-semibold text-blue-900">
+                    Connect your assets so we can scan them
+                  </h2>
+                  <p className="mt-1 text-xs text-blue-800">
+                    {assetsWithHost.length === 0
+                      ? `You have ${assets.length} asset(s), but none have a host_name set yet. Edit each one and fill in the Host Name / IP first — without it we don't know what to connect to.`
+                      : connectedCount === assetsWithHost.length
+                      ? `All ${assetsWithHost.length} asset(s) with a host are connected. You're ready to scan from the Compliance tab on each asset.`
+                      : `${connectedCount} of ${assetsWithHost.length} asset(s) connected · ${remainingCount} still need credentials.`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={dismissGuidance}
+                className="text-xs text-blue-700 hover:underline whitespace-nowrap"
+                title="Hide this guidance — you can re-show by clearing browser storage"
+              >
+                Dismiss
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              {/* Single-asset flow */}
+              <div className="rounded-lg border border-blue-200 bg-white p-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-blue-900 mb-2">
+                  Connect ONE asset
+                </h3>
+                <ol className="space-y-1.5 text-xs text-slate-700 list-decimal pl-4">
+                  <li>
+                    Find the asset in the table below. Make sure it has a <strong>Host Name</strong> set (Edit the row if not).
+                  </li>
+                  <li>
+                    Click the <Plug className="inline-block h-3.5 w-3.5 text-blue-600 mx-0.5 align-text-bottom" /> <strong>plug icon</strong> in the actions column.
+                  </li>
+                  <li>
+                    Wizard opens with <strong>hostname pre-filled</strong>. Enter the username + password for that device's service account.
+                  </li>
+                  <li>
+                    Click <strong>Connect server</strong>. We run a live pre-flight (WinRM / SSH whoami) before saving — you know immediately if creds are wrong.
+                  </li>
+                </ol>
+              </div>
+
+              {/* Bulk flow */}
+              <div className="rounded-lg border border-indigo-200 bg-white p-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-indigo-900 mb-2">
+                  Connect MANY assets at once
+                </h3>
+                <ol className="space-y-1.5 text-xs text-slate-700 list-decimal pl-4">
+                  <li>
+                    Tick the <strong>checkbox</strong> on each asset row you want to connect (or use the header checkbox to select all).
+                  </li>
+                  <li>
+                    Click <strong className="text-indigo-700">Connect N selected</strong> in the toolbar above the table.
+                  </li>
+                  <li>
+                    Enter the <strong>shared credentials once</strong> — same service account that has WinRM/SSH on every selected box (typical for AD-joined fleet).
+                  </li>
+                  <li>
+                    Wizard iterates through each asset, runs handshake + pre-flight, and shows a live <strong>X of N done</strong> progress with any failures.
+                  </li>
+                </ol>
+                <p className="mt-2 text-[11px] text-indigo-700 italic">
+                  Tip: if assets in your selection use different credentials, do them in groups — one group per credential set.
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <table className="w-full">
           <thead className="bg-slate-50">
             <tr>
+              <th className="px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500" style={{ width: 36 }}>
+                {/* Select-all checkbox — covers only assets that have a
+                    host_name (others can't be connected anyway). */}
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 cursor-pointer rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  checked={
+                    Array.isArray(assets) &&
+                    (assets as ITAsset[]).filter((a) => !!a.host_name).length > 0 &&
+                    (assets as ITAsset[]).filter((a) => !!a.host_name).every((a) => selectedAssetIds.has(a.id))
+                  }
+                  onChange={(e) => {
+                    if (!Array.isArray(assets)) return;
+                    if (e.target.checked) {
+                      setSelectedAssetIds(new Set((assets as ITAsset[]).filter((a) => !!a.host_name).map((a) => a.id)));
+                    } else {
+                      clearSelection();
+                    }
+                  }}
+                  title="Select all assets with a host_name"
+                />
+              </th>
               <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Asset</th>
               <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 md:table-cell">Type</th>
               <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">CIA Ratings</th>
@@ -676,10 +912,26 @@ export default function AssetsPage() {
               })();
               return (
                 <React.Fragment key={asset.id}>
-                  <tr 
+                  <tr
                     className="cursor-pointer bg-white transition-colors hover:bg-slate-50"
                     onClick={() => setExpandedAsset(isExpanded ? null : asset.id)}
                   >
+                    {/* Bulk-connect checkbox — disabled for assets with
+                        no host_name (nothing to connect to). */}
+                    <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 cursor-pointer rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+                        checked={selectedAssetIds.has(asset.id)}
+                        onChange={() => toggleAssetSelected(asset.id)}
+                        disabled={!asset.host_name}
+                        title={
+                          !asset.host_name
+                            ? 'Set a Host Name on this asset before selecting it for bulk-connect.'
+                            : 'Select for bulk-connect'
+                        }
+                      />
+                    </td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-3">
                         {getAssetIcon(asset.asset_type)}
@@ -714,6 +966,21 @@ export default function AssetsPage() {
                     <td className="px-3 py-2.5">{getStatusBadge(asset.status)}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-end gap-2">
+                        {/* Connect — opens the Connect Wizard with this
+                            asset's hostname pre-filled, so the operator
+                            only enters username + password. Shown only
+                            for assets that don't have a connection yet
+                            (host_name is set but no IntegrationConnection
+                            row points at it). */}
+                        {asset.host_name && (
+                          <button
+                            onClick={(e) => handleConnect(e, asset)}
+                            className="rounded p-1 text-slate-500 hover:bg-blue-50 hover:text-blue-700"
+                            title="Connect — opens wizard pre-filled with this host"
+                          >
+                            <Plug className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
                           onClick={(e) => handleView(e, asset.id)}
                           className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
@@ -749,7 +1016,7 @@ export default function AssetsPage() {
                   </tr>
                   {isExpanded && (
                     <tr key={`${asset.id}-expanded`}>
-                      <td colSpan={7} className="bg-slate-50 px-3 py-3">
+                      <td colSpan={8} className="bg-slate-50 px-3 py-3">
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
                           <div>
                             <h4 className="text-sm font-medium text-slate-500">Description</h4>

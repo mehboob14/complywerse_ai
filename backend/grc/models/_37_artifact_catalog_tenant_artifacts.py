@@ -791,6 +791,28 @@ class ComplianceAgent(Base):
     revoked_by_user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     revoke_reason = Column(Text, nullable=True)
 
+    # ─── Fleet enrollment (one token → N hosts) ──────────────────────────
+    # A "fleet template" agent is a row whose enrollment_token can be used
+    # by multiple hosts. Each successful enrollment spawns a new endpoint
+    # agent child instead of burning the token. Quota + expiry let the
+    # operator cap blast radius if the .cmd leaks.
+    #   - kind='single'    → standard one-shot enrollment (default; legacy)
+    #   - kind='template'  → fleet token, may be claimed up to enrollment_max_uses times
+    #   - kind='spawned'   → endpoint agent created from a template; not a template itself
+    kind = Column(String(20), nullable=False, server_default="single")
+    enrollment_max_uses = Column(Integer, nullable=True)  # None = unlimited (still bounded by expiry)
+    enrollment_uses = Column(Integer, nullable=False, server_default="0")
+    enrollment_expires_at = Column(DateTime, nullable=True)
+    spawned_from_agent_id = Column(Integer, ForeignKey("grc_compliance_agents.id"), nullable=True)
+
+    # ─── Scan-now push (set by the asset page's Scan-now button) ─────────
+    # When set, the next /jobs poll from this agent skips its normal 30s
+    # tick and returns IMMEDIATELY with the asset's full rule batch. After
+    # the agent has consumed the batch it clears the flag. Without this,
+    # Scan-now had to wait up to 30s for the agent's natural heartbeat.
+    pending_scan_at = Column(DateTime, nullable=True)
+    pending_scan_user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+
     tenant = relationship("Tenant")
     asset = relationship("ITAsset")
     created_by = relationship("GRCUser", foreign_keys=[created_by_user_id])
@@ -866,6 +888,20 @@ class CompliancePlugin(Base):
     review_status = Column(String(30), default="auto_approved")
     auto_generated_check = Column(Boolean, default=False)
     source_ingest_job_id = Column(Integer, ForeignKey("grc_cis_ingest_jobs.id"), nullable=True, index=True)
+    # ── Block A: AI-determined os_keys (regex/AI pre-classification, persisted) ──
+    # Required by /library-tree (jsonb_array_elements_text(os_keys)) and
+    # /os-registry (`p.os_keys ? v.normalized_key`). Without these the
+    # library page renders "Couldn't load the library tree" because the
+    # tree query SQL fails on the missing column.
+    os_keys = Column(JSON, nullable=True, default=list)
+    classification_source = Column(String(20), nullable=True)  # 'regex' | 'ai' | 'unknown'
+    classified_at = Column(DateTime, nullable=True)
+    # ── Block H: rule numbering validation ──
+    benchmark_version = Column(String(40), nullable=True)
+    target_builds = Column(JSON, nullable=True, default=list)
+    benchmark_section_path = Column(String(500), nullable=True)
+    rule_id_validated_at = Column(DateTime, nullable=True)
+    rule_id_validation_status = Column(String(20), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -957,6 +993,9 @@ class CompliancePluginRun(Base):
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
 
+
+    is_leaked = Column(Boolean, nullable=False, server_default="false", default=False, index=True)
+
     plugin = relationship("CompliancePlugin", back_populates="runs")
     asset = relationship("ITAsset")
     connection = relationship("IntegrationConnection")
@@ -987,4 +1026,64 @@ class TenantRiskWeights(Base):
     preset_name = Column(String(40), nullable=True)
     updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by  = Column(Integer, ForeignKey("grc_users.id", ondelete="SET NULL"), nullable=True)
+
+
+class BenchmarkOsMapping(Base):
+    """Strict-single-stage matcher map (CIS integration).
+
+    Replaces the AI Stage-2 router with an explicit, auditable lookup:
+    asset.os_normalized prefix → benchmark name. Most-specific pattern
+    wins. Operator owns this mapping. Archive benchmarks just don't get
+    a row → never in scope. No AI call, no mixing of versions.
+
+    Examples:
+      pattern='windows-11', benchmark='CIS_Microsoft_Windows_11_Enterprise_Benchmark_v5.0.1'
+      pattern='windows-10', benchmark='CIS_Microsoft_Windows_10_Enterprise_Benchmark_v3.0.0'
+      pattern='ubuntu-22.04', benchmark='CIS_Ubuntu_Linux_22.04_LTS_Benchmark_v3.0.0'
+
+    Matching:
+      asset 'windows-11-25H2' → walks down to 'windows-11' → finds row → benchmark v5.0.1
+    """
+    __tablename__ = "grc_benchmark_os_mappings"
+
+    id = Column(Integer, primary_key=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=True, index=True)
+    os_pattern = Column(String(80), nullable=False, index=True)
+    benchmark_name = Column(String(200), nullable=False)
+    notes = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False, server_default="true")
+    priority = Column(Integer, default=100, nullable=False)  # lower = higher priority when multiple match
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_bos_tenant_active", "tenant_id", "is_active"),
+        UniqueConstraint("tenant_id", "os_pattern", "benchmark_name",
+                         name="uq_benchmark_os_map_tenant_pattern_bench"),
+    )
+
+
+
+class OsVersion(Base):
+
+
+    __tablename__ = "grc_os_versions"
+    id = Column(Integer, primary_key=True, index=True)
+    family = Column(String(40), nullable=False, index=True)          # 'windows' | 'linux' | 'cisco' | 'cloud' | 'db' | 'container' | 'macos'
+    product = Column(String(80), nullable=True)                       # 'windows-11' | 'ubuntu' | 'cisco-ios-xe'
+    build = Column(String(40), nullable=True)                         # '23H2' | '22.04' | '17.6.4'
+    normalized_key = Column(String(80), nullable=False, unique=True)  # join key, e.g. 'windows-11-23H2'
+    parent_key = Column(String(80), nullable=True, index=True)        # FK by string to another row's normalized_key
+    display_name = Column(String(120), nullable=False)
+    release_year = Column(Integer, nullable=True)
+    eol_year = Column(Integer, nullable=True)
+    is_supported = Column(Boolean, default=True, nullable=False, server_default="true")
+    benchmark_hint = Column(String(200), nullable=True)               # suggested benchmark this OS most often maps to
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_os_version_family_product", "family", "product"),
+        Index("ix_os_version_parent", "parent_key"),
+    )
 

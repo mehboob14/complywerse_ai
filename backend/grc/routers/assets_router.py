@@ -424,6 +424,14 @@ def create_asset(
         # subsequent moves go through /lifecycle-transition so the machine
         # validates them).
         lifecycle_state=(asset.lifecycle_state or "active"),
+        # CIS Compliance tab — operator-supplied OS profile so the strict
+        # matcher resolves a benchmark immediately without needing a
+        # Connect Wizard handshake first.
+        os_family=getattr(asset, "os_family", None),
+        os_version=getattr(asset, "os_version", None),
+        os_normalized=getattr(asset, "os_normalized", None) or getattr(asset, "os_family", None),
+        os_build=getattr(asset, "os_build", None),
+        os_edition=getattr(asset, "os_edition", None),
     )
 
     # Auto-resolve owner_name from owner_id if not provided
@@ -1025,7 +1033,28 @@ def update_asset(
             )
 
     for field, value in update_data.items():
+        # ── Risk Posture v2 column rename translation ───────────────────
+        # The wire field `operational_dependency` (v2 spec) maps to the
+        # asset column `op_dep_business_impact` (renamed to avoid
+        # collision with the Criticality-Assessments Integer column of
+        # the same name). Without this mapping, the Save button on the
+        # Risk Posture asset detail page would silently no-op.
+        if field == "operational_dependency":
+            setattr(asset, "op_dep_business_impact", value)
+            continue
         setattr(asset, field, value)
+
+    # Auto-derive os_normalized from os_family when the caller set the
+    # family but didn't supply a normalized key. Lets the operator pick
+    # "windows" from a dropdown without having to know the canonical
+    # normalized_key. The family-fallback BenchmarkOsMapping (e.g.
+    # pattern='windows' → Win 11 v5.0.1) picks it up from there.
+    if (
+        "os_family" in update_data
+        and update_data.get("os_family")
+        and not asset.os_normalized
+    ):
+        asset.os_normalized = update_data["os_family"]
 
     # When the caller explicitly turns the override OFF, clear the
     # reason so we don't keep stale audit text around. The recompute

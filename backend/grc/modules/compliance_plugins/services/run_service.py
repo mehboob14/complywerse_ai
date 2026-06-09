@@ -214,35 +214,20 @@ def execute_plugin(
             )
             db.add(sel)
 
-    # ── Workflow audit emission.
+    # ── Workflow audit emission (single row per plugin run).
     # Action is `execute` for completed runs and `failed` for failures, so the
     # workflow engine fires the matching `compliance.plugin_runs.{execute,failed}`
     # trigger family. resource_type uses the dotted "compliance.plugin_runs"
     # form so the dispatcher's _EVENT_MAP keys match directly with no
     # post-hoc mutation of the audit row.
-    # Emit a canonical `create` audit event at run-row creation time so
-    # workflow recipes that subscribe to compliance.plugin_runs.create
-    # fire deterministically. The execute/failed events below are kept
-    # for status-aware automations (e.g. notify on fail).
-    write_rich_audit_log(
-        db=db,
-        tenant_id=tenant_id,
-        user_id=user_id,
-        action="create",
-        resource_type="compliance.plugin_runs",
-        resource_id=run.id,
-        resource_name=f"plugin_run:{plugin.plugin_key}",
-        resource_url=f"/grc/compliance/plugin_runs/{run.id}",
-        summary=f"Plugin run created for '{plugin.title}' [{plugin.rule_id}]",
-        snapshot={
-            "plugin_id": plugin.id,
-            "plugin_key": plugin.plugin_key,
-            "asset_id": run.asset_id,
-            "connection_id": run.connection_id,
-            "triggered_by": triggered_by,
-        },
-    )
-
+    #
+    # Previously emitted TWO audit rows per run (`create` + `execute`/`failed`)
+    # so workflow subscribers to `create` would also fire — but that doubled
+    # the audit log volume from compliance scans (40% of the entire audit
+    # table came from these duplicates). The `create` emit is removed; any
+    # workflow that genuinely needs creation signal should subscribe to
+    # `execute`/`failed` instead (same row = same row_id), which fires the
+    # moment the result is recorded.
     audit_action = "failed" if result.status == "failed" else "execute"
     write_rich_audit_log(
         db=db,

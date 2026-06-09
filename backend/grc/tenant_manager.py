@@ -84,6 +84,45 @@ def _seed_tenant_database(session: Session) -> None:
         logger.exception("seed_compliance_plugins failed for new tenant DB")
         raise
 
+    # Sync the PDF-ingested CIS benchmark library from the canonical
+    # source tenant. The 36 built-ins above are only the hand-curated
+    # rules; the ~5,300 CIS benchmark rules that operators have ingested
+    # via /compliance-plugins/ingest live in ONE tenant's DB only (they
+    # have tenant_id=NULL but the platform is database-per-tenant, so
+    # they don't auto-propagate). Without this step, NEW tenants land
+    # with only 36 rules visible in /library and operators report the
+    # library as "broken".
+    #
+    # Source tenant defaults to the one named in CANONICAL_LIBRARY_SOURCE_SLUG
+    # (env), or 'company' as a hard fallback. If the source has no global
+    # rules (fresh deploy / first tenant) this is a silent no-op.
+    try:
+        import os as _os
+        from .db import open_tenant_session as _open_tenant
+        from .modules.compliance_plugins.seed import sync_global_plugins_from_source
+        source_slug = _os.environ.get("CANONICAL_LIBRARY_SOURCE_SLUG", "").strip() or "company"
+        # Avoid syncing a tenant from itself when CANONICAL points at the
+        # tenant currently being provisioned (e.g. the very first one).
+        if source_slug:
+            try:
+                source_session = _open_tenant(source_slug)
+            except Exception:
+                source_session = None
+            if source_session is not None:
+                try:
+                    sync_global_plugins_from_source(session, source_session)
+                finally:
+                    source_session.close()
+    except Exception:
+        # Don't fail tenant creation if the library sync fails — operator
+        # can backfill later via the admin endpoint. Log loudly so it's
+        # visible in the provisioning trail.
+        logger.exception(
+            "sync_global_plugins_from_source failed for new tenant DB — "
+            "tenant will land with built-in library only (36 rules). "
+            "Operator should run the sync backfill manually after diagnosing."
+        )
+
 
 def _create_tenant_self_row(session: Session, *, tenant_id: int, name: str, slug: str,
                             subdomain: Optional[str], primary_contact_name: Optional[str],

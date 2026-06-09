@@ -73,6 +73,41 @@ _EVENT_MAP: Dict[str, Dict[str, List[str]]] = {
         "update": ["asset_updated", "assets.update"],
         "delete": ["asset_deleted", "assets.delete"],
     },
+    # ── Issue Management ─────────────────────────────────────────────────
+    # `resource_type='issues'` comes from the audit_logger's
+    # _MODULE_SUB_ENTITY_PREFIXES extraction on /issue-management/issues/...
+    # paths.  Severity / state semantics are split out in the special-case
+    # block below this map (same pattern governance uses for policy
+    # submissions vs generic updates).
+    "issues": {
+        "create": ["issue_created", "issue-management.issues.create"],
+        "update": ["issue_severity_changed", "issue_state_changed",
+                   "issue-management.issues.update"],
+        "delete": ["issue-management.issues.delete"],
+    },
+    # ── CIS Compliance Plugins ───────────────────────────────────────────
+    # plugin-run rows: created when a scan starts; the per-run check pass/
+    # fail status comes through as an update.  cis_scan_completed is the
+    # coarser-grained event fired from the scan-all endpoint's audit row.
+    "runs": {
+        "create": ["compliance-plugins.runs.create"],
+        "update": ["cis_check_failed", "compliance-plugins.runs.update"],
+    },
+    "scan-all": {
+        "create": ["cis_scan_completed", "compliance-plugins.scan-all"],
+    },
+    # ── Compliance Agents ────────────────────────────────────────────────
+    # `agent_enrolled` fires on the enroll endpoint write.  The offline
+    # event is dispatched from the periodic heartbeat-staleness check (not
+    # audit-log driven); see _periodic_threshold_checks below.
+    "enroll": {
+        "create": ["agent_enrolled", "agents.enroll"],
+    },
+    # ── Connect Wizard ───────────────────────────────────────────────────
+    # handshake POST = a new IntegrationConnection got persisted.
+    "handshake": {
+        "create": ["connection_handshake_completed", "connect-wizard.handshake"],
+    },
 }
 
 # Module path aliases → normalised resource type
@@ -186,6 +221,22 @@ class TriggerDispatcher:
         # Read events are typically high-volume and low-signal for workflow automation.
         self.include_read_events = _env_bool("WORKFLOW_DISPATCH_INCLUDE_READ_EVENTS", False)
 
+        # ── Periodic-threshold checks (issue_sla_breached, agent_offline,
+        # cis_pass_rate_dropped) ──────────────────────────────────────────
+        # These can't come off the audit log because nothing WRITES when a
+        # deadline silently passes.  Tracked separately and run inside the
+        # runtime loop at a coarser cadence (default 60 s) so the per-tenant
+        # query cost doesn't multiply across the 500ms audit-log poll.
+        self._last_threshold_check_at = 0.0
+        # Edge-trigger memory so we don't re-fire identical alerts every
+        # cycle.  Keys are tenant_id; values are sets of resource ids that
+        # have already been alerted at their current state.  Cleared when
+        # the resource transitions back (agent heartbeats again, issue
+        # gets closed, pass-rate recovers).
+        self._alerted_offline_agents: Dict[int, set] = {}
+        self._alerted_sla_breached_issues: Dict[int, set] = {}
+        self._alerted_pass_rate_drop_tenants: set = set()
+
     def poll_platform_events(self, db: Session) -> int:
         if not self._bootstrap_complete:
             self._bootstrap_complete = True
@@ -242,6 +293,213 @@ class TriggerDispatcher:
 
         return processed
 
+    # ── Periodic threshold checks ────────────────────────────────────────
+    # Called from the runtime loop. Self-throttles to once per
+    # WORKFLOW_THRESHOLD_CHECK_INTERVAL seconds (default 60). Each check
+    # is wrapped in try/except so one tenant's bad data can't kill the
+    # whole pass.
+    def poll_threshold_events(self) -> int:
+        import time as _time
+        interval = float(__import__("os").environ.get("WORKFLOW_THRESHOLD_CHECK_INTERVAL", "60"))
+        now = _time.time()
+        if (now - self._last_threshold_check_at) < interval:
+            return 0
+        self._last_threshold_check_at = now
+
+        fired = 0
+        try:
+            fired += self._check_issue_sla_breached()
+        except Exception:  # noqa: BLE001
+            logger.exception("threshold-check: issue_sla_breached failed")
+        try:
+            fired += self._check_agent_offline()
+        except Exception:  # noqa: BLE001
+            logger.exception("threshold-check: agent_offline failed")
+        try:
+            fired += self._check_cis_pass_rate_dropped()
+        except Exception:  # noqa: BLE001
+            logger.exception("threshold-check: cis_pass_rate_dropped failed")
+        if fired:
+            logger.info("workflow.dispatcher.threshold_cycle fired_events=%s", fired)
+        return fired
+
+    def _iter_tenant_sessions(self):
+        """Yield (tenant_id, slug, session) for every active tenant.
+
+        Per-tenant DB pattern (see docs/ARCHITECTURE.md §1) — Issue,
+        ComplianceAgent, and CompliancePluginRun live in the tenant's own
+        ``grc_<slug>`` database, NOT in the master catalog. We open one
+        short-lived session per tenant and close it after the per-tenant
+        check returns. Quiet on errors (e.g. tenant DB unreachable).
+        """
+        from grc.models import Tenant, SessionLocal as _MasterSession
+        from grc.db import open_tenant_session
+        master = _MasterSession()
+        try:
+            tenants = master.query(Tenant).filter(Tenant.is_active.is_(True)).all() \
+                if hasattr(Tenant, "is_active") else master.query(Tenant).all()
+        finally:
+            master.close()
+        for t in tenants:
+            slug = getattr(t, "slug", None) or getattr(t, "schema_name", None)
+            if not slug:
+                continue
+            try:
+                sess = open_tenant_session(slug)
+            except Exception:  # noqa: BLE001
+                logger.warning("threshold-check: could not open session for tenant=%s", slug)
+                continue
+            try:
+                yield t.id, slug, sess
+            finally:
+                try:
+                    sess.close()
+                except Exception:  # noqa: BLE001
+                    pass
+
+    def _check_issue_sla_breached(self) -> int:
+        """Fire ``issue_sla_breached`` for any Issue whose
+        target_closure_date is in the past and that's not already in a
+        terminal state. Edge-trigger via ``_alerted_sla_breached_issues``
+        so the workflow doesn't refire every 60 s for the same issue."""
+        from datetime import datetime
+        from grc.models import Issue
+        fired = 0
+        now = datetime.utcnow()
+        for tenant_id, _slug, sess in self._iter_tenant_sessions():
+            try:
+                breached = sess.query(Issue).filter(
+                    Issue.target_closure_date.isnot(None),
+                    Issue.target_closure_date < now,
+                    Issue.status.notin_(("closed", "cancelled")),
+                ).all()
+            except Exception:  # noqa: BLE001
+                continue
+            seen = self._alerted_sla_breached_issues.setdefault(tenant_id, set())
+            current_ids = {i.id for i in breached}
+            # New breaches → fire event + add to memo
+            for issue in breached:
+                if issue.id in seen:
+                    continue
+                seen.add(issue.id)
+                fired += 1
+                self.publish_event(
+                    event_name="issue_sla_breached",
+                    tenant_id=tenant_id,
+                    payload={
+                        "resource_type": "issues",
+                        "resource_id": issue.id,
+                        "severity": issue.severity,
+                        "status": issue.status,
+                        "title": issue.title,
+                        "target_closure_date": issue.target_closure_date.isoformat() if issue.target_closure_date else None,
+                        "owner_id": issue.owner_id,
+                    },
+                    correlation_id=f"sla_breach:issue:{issue.id}",
+                )
+            # Recovered (closed / cancelled) issues drop out of memo
+            self._alerted_sla_breached_issues[tenant_id] = current_ids & seen
+        return fired
+
+    def _check_agent_offline(self) -> int:
+        """Fire ``agent_offline`` for active ComplianceAgent rows whose
+        ``last_heartbeat_at`` is older than the configured threshold
+        (default 5 min). Edge-trigger so we alert once per offline
+        episode, not every cycle."""
+        from datetime import datetime, timedelta
+        from grc.models import ComplianceAgent
+        threshold_min = int(__import__("os").environ.get("WORKFLOW_AGENT_OFFLINE_AFTER_MIN", "5"))
+        cutoff = datetime.utcnow() - timedelta(minutes=threshold_min)
+        fired = 0
+        for tenant_id, _slug, sess in self._iter_tenant_sessions():
+            try:
+                offline = sess.query(ComplianceAgent).filter(
+                    ComplianceAgent.status == "active",
+                    ComplianceAgent.last_heartbeat_at.isnot(None),
+                    ComplianceAgent.last_heartbeat_at < cutoff,
+                ).all()
+            except Exception:  # noqa: BLE001
+                continue
+            seen = self._alerted_offline_agents.setdefault(tenant_id, set())
+            current_ids = {a.id for a in offline}
+            for agent in offline:
+                if agent.id in seen:
+                    continue
+                seen.add(agent.id)
+                fired += 1
+                self.publish_event(
+                    event_name="agent_offline",
+                    tenant_id=tenant_id,
+                    payload={
+                        "resource_type": "agents",
+                        "resource_id": agent.id,
+                        "agent_name": agent.agent_name,
+                        "hostname": agent.hostname,
+                        "os_family": agent.os_family,
+                        "last_heartbeat_at": agent.last_heartbeat_at.isoformat() if agent.last_heartbeat_at else None,
+                        "threshold_min": threshold_min,
+                    },
+                    correlation_id=f"offline:agent:{agent.id}",
+                )
+            # Agents that have come back online (no longer in offline set)
+            # drop out so they can re-alert next time they stall.
+            self._alerted_offline_agents[tenant_id] = current_ids & seen
+        return fired
+
+    def _check_cis_pass_rate_dropped(self) -> int:
+        """Fire ``cis_pass_rate_dropped`` when a tenant's overall CIS
+        pass rate (latest-run-per-plugin) falls below the configured
+        threshold (default 70%). Edge-trigger per tenant."""
+        from grc.models import CompliancePluginRun
+        from sqlalchemy import func as _f
+        threshold_pct = float(__import__("os").environ.get("WORKFLOW_CIS_PASS_RATE_THRESHOLD", "70"))
+        fired = 0
+        for tenant_id, _slug, sess in self._iter_tenant_sessions():
+            try:
+                # Cheap aggregate — count by status. is_leaked filter is on
+                # the post-CIS-merge column (see CIS_INTEGRATION_STATUS.md).
+                rows = (
+                    sess.query(CompliancePluginRun.status, _f.count(CompliancePluginRun.id))
+                    .filter(
+                        CompliancePluginRun.tenant_id == tenant_id,
+                        CompliancePluginRun.is_leaked.is_(False),
+                    )
+                    .group_by(CompliancePluginRun.status)
+                    .all()
+                )
+            except Exception:  # noqa: BLE001
+                continue
+            counts = {st: int(c) for st, c in rows}
+            passed = counts.get("passed", 0) + counts.get("pass", 0)
+            failed = counts.get("failed", 0) + counts.get("fail", 0)
+            evaluated = passed + failed
+            if evaluated < 20:  # not enough signal — skip
+                continue
+            pass_pct = (passed / evaluated) * 100.0
+            tenant_key = tenant_id
+            if pass_pct < threshold_pct:
+                if tenant_key in self._alerted_pass_rate_drop_tenants:
+                    continue  # already alerted; wait for recovery
+                self._alerted_pass_rate_drop_tenants.add(tenant_key)
+                fired += 1
+                self.publish_event(
+                    event_name="cis_pass_rate_dropped",
+                    tenant_id=tenant_id,
+                    payload={
+                        "resource_type": "compliance-plugins",
+                        "pass_rate_pct": round(pass_pct, 1),
+                        "threshold_pct": threshold_pct,
+                        "passed": passed,
+                        "failed": failed,
+                        "evaluated": evaluated,
+                    },
+                    correlation_id=f"pass_rate_drop:tenant:{tenant_id}",
+                )
+            else:
+                # Tenant recovered → clear memo so a future drop re-fires.
+                self._alerted_pass_rate_drop_tenants.discard(tenant_key)
+        return fired
+
     @staticmethod
     def _derive_event_names(log: AuditLog) -> List[str]:
         action = (log.action or "read").strip().lower()
@@ -263,6 +521,32 @@ class TriggerDispatcher:
             if isinstance(requested, dict) and requested.get("status") == "pending_review":
                 if "policy_submitted_for_review" not in event_names:
                     event_names.append("policy_submitted_for_review")
+
+        # Special: Issue Management update → split into severity_changed
+        # vs state_changed vs closed events based on what changed in the
+        # request payload. The base map adds both events on any update so
+        # workflows that only care about ONE bucket don't fire spuriously;
+        # this block strips out the irrelevant event when the request
+        # body indicates which field actually moved.
+        if resource_type == "issues" and action == "update":
+            changes_inner = (log.changes or {}) if isinstance(log.changes, dict) else {}
+            req = changes_inner.get("request") or {}
+            if isinstance(req, dict):
+                changed_severity = any(
+                    k in req for k in ("severity", "severity_override", "impact", "urgency")
+                )
+                changed_state = any(
+                    k in req for k in ("workflow_state", "status", "to_state")
+                )
+                if changed_severity and not changed_state:
+                    # Pure severity-only change → drop the state_changed event.
+                    event_names = [e for e in event_names if e != "issue_state_changed"]
+                elif changed_state and not changed_severity:
+                    event_names = [e for e in event_names if e != "issue_severity_changed"]
+                # If the request transitioned to closed, fire the closed event too.
+                if req.get("status") == "closed" or req.get("to_state") == "closed":
+                    if "issue_closed" not in event_names:
+                        event_names.append("issue_closed")
 
         # Path-based enrichment
         changes = (log.changes or {}) if isinstance(log.changes, dict) else {}

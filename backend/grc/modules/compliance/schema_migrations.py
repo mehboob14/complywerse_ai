@@ -57,6 +57,68 @@ def _ensure_column(engine: Engine, table: str, column: str, ddl_type: str) -> bo
         return False
 
 
+def _ensure_column_type(
+    engine: Engine, table: str, column: str, expected_type: str,
+) -> bool:
+    """Convert a column to the expected type if it's currently a different type.
+
+    Only ALTERs if the type is wrong — idempotent + safe to run on every
+    process start. Used for the os_keys / target_builds jsonb fixup:
+    tenants created BEFORE those columns were declared JSONB still have
+    them as plain JSON, which breaks jsonb_array_elements_text() in the
+    /library-tree endpoint.
+
+    The USING clause does an in-place conversion. For json→jsonb this
+    is lossless. Failed conversions don't raise; they log + return False
+    so the request can still complete.
+    """
+    try:
+        inspector = inspect(engine)
+        if not inspector.has_table(table):
+            return True
+        cols = inspector.get_columns(table)
+        target = next((c for c in cols if c["name"] == column), None)
+        if not target:
+            return True  # column doesn't exist yet → _ensure_column will add it
+        # Postgres reports JSON as "JSON" and JSONB as "JSONB" via type
+        # string. Compare case-insensitively against the expected name
+        # (we only call this for jsonb fixups today).
+        current = str(target["type"]).upper()
+        if expected_type.upper() in current:
+            return True  # already correct
+        with engine.begin() as conn:
+            sql = (
+                f'ALTER TABLE {table} ALTER COLUMN {column} '
+                f'TYPE {expected_type} USING {column}::{expected_type.lower()}'
+            )
+            conn.execute(text(sql))
+        logger.info(
+            "Upgraded column type %s.%s: %s → %s on engine %s",
+            table, column, current, expected_type,
+            getattr(engine.url, "database", "?"),
+        )
+        return True
+    except Exception:
+        logger.exception(
+            "Failed to convert column type %s.%s to %s on engine %s",
+            table, column, expected_type,
+            getattr(engine.url, "database", "?"),
+        )
+        return False
+
+
+# Type fixups: columns that landed with the wrong type on some tenant
+# DBs (typically a legacy JSON when the schema now requires JSONB).
+# _ensure_column won't catch these because it skips when the column
+# already exists; _ensure_column_type does the conversion idempotently.
+_COLUMN_TYPE_FIXUPS = [
+    # /library-tree uses jsonb_array_elements_text(os_keys); JSON breaks.
+    ("grc_compliance_plugins", "os_keys", "JSONB"),
+    # /os-registry uses jsonb operators on target_builds too.
+    ("grc_compliance_plugins", "target_builds", "JSONB"),
+]
+
+
 def _ensure_index(engine: Engine, table: str, column: str, index_name: str) -> None:
     try:
         inspector = inspect(engine)
@@ -322,6 +384,10 @@ _COLUMN_ADDS = [
     ("grc_integration_connections", "encrypted_credentials", "TEXT", None),
     ("grc_integration_connections", "oauth_tokens", "TEXT", None),
     ("grc_integration_connections", "provider_config", "JSON", None),
+    # CIS extension — per-integration structured-creds blob (MSSQL / Postgres
+    # / MySQL / LDAP / Azure / K8s) populated by the Connect Wizard so the
+    # bench-mark runners can pull the shape each adapter expects.
+    ("grc_integration_connections", "credentials_extra_json", "JSON", None),
     # ITAsset — manual criticality override audit columns. `criticality_score`
     # is always system-computed; the textual `criticality` bucket can be
     # overridden by a user with a reason captured here for the audit trail.
@@ -360,6 +426,87 @@ _COLUMN_ADDS = [
     ("grc_issue_actions", "linked_critical_task_id", "INTEGER", "ix_issue_action_linked_task"),
     ("grc_critical_tasks", "linked_issue_id", "INTEGER", "ix_critical_task_linked_issue"),
     ("grc_critical_tasks", "linked_issue_action_id", "INTEGER", "ix_critical_task_linked_action"),
+
+    # CIS Agent extensions — fleet enrollment + scan-now push columns on
+    # the ComplianceAgent table. Used by the per-OS installer endpoints
+    # (one-click mint a fleet token + .cmd / .sh download) and the
+    # asset-page Scan-now button (next /jobs poll skips its 30s tick).
+    ("grc_compliance_agents", "kind", "VARCHAR(20)", None),
+    ("grc_compliance_agents", "enrollment_max_uses", "INTEGER", None),
+    ("grc_compliance_agents", "enrollment_uses", "INTEGER", None),
+    ("grc_compliance_agents", "enrollment_expires_at", "TIMESTAMP", None),
+    ("grc_compliance_agents", "spawned_from_agent_id", "INTEGER", "ix_agent_spawned_from"),
+    ("grc_compliance_agents", "pending_scan_at", "TIMESTAMP", None),
+    ("grc_compliance_agents", "pending_scan_user_id", "INTEGER", None),
+
+    # CIS OS profile on ITAsset — populated by Connect Wizard probe + agent
+    # heartbeats; drives the BenchmarkOsMapping strict matcher (CIS plugin
+    # routing). Free-form so we don't lose any probe result we can't
+    # categorize yet.
+    ("grc_it_assets", "os_family", "VARCHAR(50)", None),
+    ("grc_it_assets", "os_version", "VARCHAR(255)", None),
+    ("grc_it_assets", "os_normalized", "VARCHAR(80)", "ix_it_assets_os_normalized"),
+    ("grc_it_assets", "os_build", "VARCHAR(40)", None),
+    ("grc_it_assets", "os_edition", "VARCHAR(80)", None),
+
+    # CIS Phase 4 fallout — package's compliance_plugins/router.py filters
+    # CompliancePluginRun.is_leaked.is_(False) on per_user_summary, runs
+    # listing, and analytics queries. Existing rows default to FALSE
+    # (not-leaked); the runs endpoint exposes ?include_leaked=true for
+    # audit traceback. DDL includes DEFAULT + NOT NULL so the column is
+    # safe to add to populated tables in a single ALTER.
+    ("grc_compliance_plugin_runs", "is_leaked",
+     "BOOLEAN DEFAULT FALSE NOT NULL", "ix_plugin_run_is_leaked"),
+    # ── CIS Module Updated drop — 8 columns required by /library-tree
+    # and /os-registry endpoints. Without these the library page renders
+    # "Couldn't load the library tree" because the tree-building SQL
+    # references os_keys (Block A) and grc_os_versions. JSON columns
+    # default to '[]'::json so existing rows have an empty list rather
+    # than NULL, keeping the tree query's jsonb_array_elements_text safe.
+    # os_keys + target_builds MUST be jsonb (not json) because the
+    # /library-tree and /os-registry endpoints use jsonb-only operators
+    # (jsonb_array_elements_text, `?` containment). Plain json doesn't
+    # have these operators; using JSON DEFAULT '[]'::json causes the
+    # tree query to fail with "function jsonb_array_elements_text(json)
+    # does not exist".
+    #
+    # os_keys is JSONB — needs GIN, not btree. _ensure_index only knows
+    # btree, so leave the index out here; a one-shot GIN index can be
+    # added manually if the library-tree group-by becomes hot:
+    #   CREATE INDEX CONCURRENTLY ix_compliance_plugin_os_keys_gin
+    #     ON grc_compliance_plugins USING gin (os_keys);
+    ("grc_compliance_plugins", "os_keys", "JSONB DEFAULT '[]'::jsonb", None),
+    ("grc_compliance_plugins", "classification_source", "VARCHAR(20)", None),
+    ("grc_compliance_plugins", "classified_at", "TIMESTAMP", None),
+    ("grc_compliance_plugins", "benchmark_version", "VARCHAR(40)", None),
+    ("grc_compliance_plugins", "target_builds", "JSONB DEFAULT '[]'::jsonb", None),
+    ("grc_compliance_plugins", "benchmark_section_path", "VARCHAR(500)", None),
+    ("grc_compliance_plugins", "rule_id_validated_at", "TIMESTAMP", None),
+    ("grc_compliance_plugins", "rule_id_validation_status", "VARCHAR(20)", None),
+    # ── Risk Posture v2 — business-impact context on ITAsset ────────────
+    # Required by effective_risk.compute_effective_risk to apply business
+    # multipliers ON TOP of CVSS/EPSS/KEV. Without these, the v2 service
+    # crashes (referenced via getattr — silent default, but the
+    # operator-facing UI panels won't render the toggles either).
+    # `op_dep_business_impact` is named distinctly from the existing
+    # `operational_dependency` Integer column (Criticality Assessment
+    # field) to avoid a column-name collision.
+    ("grc_it_assets", "is_customer_facing",
+     "BOOLEAN DEFAULT FALSE NOT NULL", None),
+    ("grc_it_assets", "is_internet_facing",
+     "BOOLEAN DEFAULT FALSE NOT NULL", None),
+    ("grc_it_assets", "regulated_data_type",
+     "VARCHAR(20) DEFAULT 'none' NOT NULL", None),
+    ("grc_it_assets", "op_dep_business_impact",
+     "VARCHAR(20) DEFAULT 'medium' NOT NULL", None),
+    ("grc_it_assets", "business_impact_notes", "TEXT", None),
+    # ── Risk Posture v2 — per-vuln effective-risk persistence ───────────
+    # Written by _vuln_score() after compute_effective_risk returns. The
+    # UI per-vuln cards read these directly so they don't have to
+    # recompute the formula on every dashboard load.
+    ("grc_vulnerabilities", "effective_risk_score", "FLOAT", None),
+    ("grc_vulnerabilities", "effective_risk_reason", "TEXT", None),
+    ("grc_vulnerabilities", "effective_risk_computed_at", "TIMESTAMP", None),
 ]
 
 
@@ -502,6 +649,15 @@ def _ensure_for_engine(engine: Engine) -> None:
             all_ok = all_ok and ok
             if ok and index_name:
                 _ensure_index(engine, table=table, column=column, index_name=index_name)
+
+        # Type-fixup pass: convert columns that ended up the wrong
+        # type on tenants created before the type was tightened in the
+        # canonical schema. Idempotent — no-op when the type is already
+        # correct.
+        for table, column, expected_type in _COLUMN_TYPE_FIXUPS:
+            ok = _ensure_column_type(engine, table=table, column=column,
+                                     expected_type=expected_type)
+            all_ok = all_ok and ok
 
         # Relax NOT NULL on columns the connector framework needs to leave
         # empty for non-scanner providers. Idempotent.

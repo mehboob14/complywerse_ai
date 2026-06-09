@@ -3,8 +3,10 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { agentsApi } from '@/lib/api';
+import { Plus } from 'lucide-react';
+import apiClient, { agentsApi } from '@/lib/api';
 import EmptyState from '@/components/common/EmptyState';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -169,6 +171,146 @@ export default function AgentsAdminPage() {
         discoveryPrefill={wizardPrefill}
       />
 
+      {/* ─── ENDPOINT AGENT PACKAGES ─────────────────────────────────────
+          Surfaces the per-OS installer endpoints from the CIS Phase 3
+          backend merge. The Setup Wizard above still handles the
+          enrollment-token generation flow; these cards give operators
+          the installer binary directly when they already have their own
+          fleet-management tool (GPO / Intune / Ansible / Jamf). Cisco /
+          AWS / Oracle DB etc don't get a native agent — they use the
+          Agentless Connect Wizard surfaced below. */}
+      <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div className="px-5 py-3 border-b border-gray-200">
+          <h2 className="text-sm font-semibold text-gray-900">Endpoint agent packages</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            For Windows / Linux / macOS hosts where you install the agent
+            directly. Each host runs its own copy; the agent dials out to
+            Compliverse, no inbound firewall rule needed.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-200">
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xl">🪟</span>
+              <span className="font-semibold text-sm text-gray-900">Windows</span>
+              <span
+                className="ml-auto text-[10px] text-gray-500"
+                title="Self-elevating .cmd wrapper that downloads setup.ps1 + agent.py. Notarised MSI is on the roadmap."
+              >
+                .cmd · x64
+              </span>
+            </div>
+            <div className="text-xs text-gray-600 mb-3">
+              Win 10 / 11 + Server 2016/19/22. Runs as
+              <code className="bg-gray-100 px-1 rounded mx-0.5">LocalSystem</code>.
+            </div>
+            <InstallerButtons
+              endpoint="installer.cmd"
+              label="Download Windows installer"
+              hint="One file. Runs on any Windows host. Will refuse to enrol on Linux/Mac."
+              toast={toast}
+            />
+            <Link href="/admin/integrations/connect?platform=windows" className="mt-1.5 block text-center text-[10px] text-gray-500 hover:text-blue-700 hover:underline">
+              or connect agentless (WinRM)
+            </Link>
+          </div>
+
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xl">🐧</span>
+              <span className="font-semibold text-sm text-gray-900">Linux</span>
+              <span
+                className="ml-auto text-[10px] text-gray-500"
+                title="Self-elevating .sh bootstrap that installs as systemd. Native .deb + .rpm packages are on the roadmap."
+              >
+                .sh bootstrap
+              </span>
+            </div>
+            <div className="text-xs text-gray-600 mb-3">
+              Ubuntu 20/22/24 · Debian 11/12 · RHEL 8/9 · AlmaLinux · Amazon Linux. Installs as
+              <code className="bg-gray-100 px-1 rounded mx-0.5">systemd</code> service.
+            </div>
+            <InstallerButtons
+              endpoint="installer.sh"
+              label="Download Linux installer"
+              hint="One file. Runs on any Linux host. Will refuse to enrol on Windows/Mac."
+              toast={toast}
+            />
+            <Link href="/admin/integrations/connect?platform=linux" className="mt-1.5 block text-center text-[10px] text-gray-500 hover:text-blue-700 hover:underline">
+              or connect agentless (SSH)
+            </Link>
+          </div>
+
+          <div className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xl">🍎</span>
+              <span className="font-semibold text-sm text-gray-900">macOS</span>
+              <span
+                className="ml-auto text-[10px] text-gray-500"
+                title="Double-clickable .command bootstrap (Terminal opens, asks for sudo). Signed .pkg is on the roadmap."
+              >
+                .command
+              </span>
+            </div>
+            <div className="text-xs text-gray-600 mb-3">
+              macOS 12 Monterey or later. Notarised PKG installs as a launch daemon.
+            </div>
+            <InstallerButtons
+              endpoint="installer.command"
+              label="Download macOS installer"
+              hint="One file. Runs on any Mac. Will refuse to enrol on Windows/Linux."
+              toast={toast}
+            />
+            <p className="mt-1.5 text-center text-[10px] text-gray-400">macOS uses agent-only onboarding</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── COLLECTOR AGENT (Linux, reaches OUT to remote targets) ─────── */}
+      <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        <div className="border-b border-gray-200 px-5 py-3">
+          <h2 className="text-sm font-semibold text-gray-900">Collector agent</h2>
+          <p className="mt-0.5 text-xs text-gray-500">
+            One Linux box inside the bank LAN. Reaches OUT to remote targets — Cisco / Oracle / MSSQL / Postgres / MySQL / AD / Azure / K8s.
+            Pulls credentials from your Connect Wizard connections, executes locally, posts results back.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-2 gap-4 p-4">
+          <div className="p-4 border border-gray-200 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xl">📡</span>
+              <span className="font-semibold text-sm text-gray-900">Collector agent (Linux)</span>
+              <span className="ml-auto text-[10px] text-gray-500">SSH / SQL / LDAP drivers preinstalled</span>
+            </div>
+            <div className="text-xs text-gray-600 mb-3">
+              Same agent binary as endpoint, runs in <code className="bg-gray-100 px-1 rounded">mode=collector</code>. Installer also
+              pip-installs <code className="bg-gray-100 px-1 rounded">paramiko</code>, <code className="bg-gray-100 px-1 rounded">pymssql</code>,
+              <code className="bg-gray-100 px-1 rounded">psycopg2</code>, <code className="bg-gray-100 px-1 rounded">pymysql</code>,
+              <code className="bg-gray-100 px-1 rounded">oracledb</code>, <code className="bg-gray-100 px-1 rounded">ldap3</code> so the box
+              can execute every remote-target runner.
+            </div>
+            <InstallerButtons
+              endpoint="installer.sh"
+              label="Download collector installer"
+              hint="One file. Use on one Linux box per LAN segment. Refuses non-Linux."
+              toast={toast}
+              extraParams={{ collector: 1 }}
+            />
+          </div>
+          <div className="p-4 border border-gray-200 rounded-lg bg-blue-50/40">
+            <div className="text-xs font-semibold text-blue-800 mb-2">When to use a collector vs server-side agentless?</div>
+            <ul className="text-[11px] text-gray-700 space-y-1.5 list-disc list-inside">
+              <li><strong>Use the collector</strong> when the bank's firewall blocks inbound from Compliverse — collector dials OUT, then dials IN to the targets it can already reach.</li>
+              <li><strong>Use agentless</strong> when Compliverse can reach the targets directly (cloud-hosted backend + targets with public IPs / VPN).</li>
+              <li>Both paths reuse the same Connect Wizard credentials. Switching is a one-line config change.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── AGENTLESS TARGETS ─────────────────────────────────────────── */}
+      <AgentlessTargetsSection />
+
       {/* Agents table */}
       <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -286,5 +428,109 @@ export default function AgentsAdminPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── InstallerButtons ────────────────────────────────────────────────────
+// Mints a fleet enrollment token (unlimited uses, 72h TTL) and streams the
+// per-OS installer file as a download. One file works on any host of the
+// SAME OS family — the installer + agent both refuse to enrol on a
+// mismatched OS. Powered by the CIS Phase 3 backend endpoints
+// (/agents/installer.cmd | .sh | .command). Revocable any time via the
+// Agents table below.
+function InstallerButtons({
+  endpoint, label, hint, toast, extraParams,
+}: {
+  endpoint: 'installer.cmd' | 'installer.sh' | 'installer.command';
+  label: string;
+  hint: string;
+  toast: ReturnType<typeof useToast>;
+  extraParams?: Record<string, string | number>;
+}) {
+  const download = async (params: Record<string, string | number>) => {
+    if (extraParams) params = { ...extraParams, ...params };
+    try {
+      const resp = await apiClient.get(`/agents/${endpoint}`, {
+        params,
+        responseType: 'blob',
+      });
+      const blob = new Blob([resp.data], { type: 'application/octet-stream' });
+      const cd = String(resp.headers['content-disposition'] || '');
+      const m = cd.match(/filename="?([^";]+)"?/);
+      const filename = m ? m[1] : `ComplyverseAgent.${endpoint.split('.').pop()}`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return filename;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      toast.toast({ title: 'Download failed', message: msg, type: 'error' });
+      return null;
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={async () => {
+          const filename = await download({ fleet: 1, expires_hours: 72 });
+          if (filename) {
+            toast.toast({
+              title: 'Installer ready',
+              message: `${filename} — share with any number of hosts. Reusable for 72h, revocable any time.`,
+              type: 'success',
+            });
+          }
+        }}
+        className="block w-full text-center px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700"
+      >
+        📥 {label}
+      </button>
+      <div className="mt-1 text-center text-[10px] text-gray-500">{hint}</div>
+    </>
+  );
+}
+
+// ─── AgentlessTargetsSection ─────────────────────────────────────────────
+// Single CTA card pointing operators to the Connect Wizard for non-agent
+// device classes (Cisco / AWS / Azure / DBs / AD / K8s). The package's
+// earlier version rendered a 12-tile grid; current shape is a single CTA
+// because the grouped tile UI already lives at /admin/integrations/connect
+// (one source of truth, not two pages of the same logic).
+function AgentlessTargetsSection() {
+  return (
+    <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-200 px-5 py-3">
+        <h2 className="text-sm font-semibold text-gray-900">Agentless targets</h2>
+        <p className="mt-0.5 text-xs text-gray-500">
+          Network devices, cloud accounts, databases — anything you can&apos;t or
+          don&apos;t want to install software on. Each integration is set up in
+          the Connect Wizard.
+        </p>
+      </div>
+      <div className="flex flex-col items-start gap-3 p-5 md:flex-row md:items-center md:justify-between">
+        <div className="max-w-xl">
+          <p className="text-sm text-gray-700">
+            The Connect Wizard groups the 12 supported integrations by
+            category (hosts · network devices · databases · identity · cloud)
+            with a one-line &ldquo;best for&rdquo; hint per group, so you know which
+            credential type fits your scenario before clicking through.
+          </p>
+        </div>
+        <Link
+          href="/admin/integrations/connect"
+          className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Open Connect Wizard
+        </Link>
+      </div>
+    </section>
   );
 }

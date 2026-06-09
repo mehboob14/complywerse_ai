@@ -139,8 +139,9 @@ const navigation: NavEntry[] = [
       { name: 'Control Library', href: '/control-library', icon: Library, requiredPermissions: ['controls:control_library:*'] },
       // CIS integration: plugin library + per-asset run history (Hassan's branch)
       { name: 'Plugin Automation', href: '/compliance-plugins', icon: PackageSearch, requiredPermissions: ['compliance:scan:execute'] },
-      // Risk Posture — composite per-asset score combining CIS results, vulns, CIA, controls, linked risks
-      { name: 'Risk Posture', href: '/risk-posture', icon: Gauge, requiredPermissions: ['compliance:scan:execute', 'erm:risks:*'] },
+      // Compliance Overview / Compliance Rules / Risk Posture / Agents
+      // moved to the dedicated IT ASSETS collapsible group below — the
+      // CIS Module Updated drop consolidates them under one parent.
     ],
   },
   {
@@ -165,8 +166,23 @@ const navigation: NavEntry[] = [
       // { name: 'SLA Config', href: '/vulnerabilities/sla', icon: Clock, requiredPermissions: ['vulnerabilities:sla_management:*'] },
     ],
   },
-    { name: 'IT Assets', href: '/assets', icon: Bot, requiredPermissions: ['dashboard:assets*'] },
-    { name: 'Criticality Assessments', href: '/assets/criticality-assessments', icon: Gauge, requiredPermissions: ['assets:criticality_assessments:view'] },
+  // IT ASSETS collapsible group — matches the CIS Module Updated drop's
+  // sidebar layout. Inventory + the 4 CIS-driven views (Compliance
+  // Overview / Compliance Rules / Risk Posture / Agents) all sit here
+  // under one parent so the operator's day-to-day landing surface is
+  // one click away. Criticality Assessments joins as the 6th item
+  // since it's an asset-level workflow.
+  {
+    name: 'IT Assets',
+    items: [
+      { name: 'Inventory',                 href: '/assets',                       icon: Bot,        requiredPermissions: ['dashboard:assets*'] },
+      { name: 'Compliance Overview',       href: '/compliance-overview',          icon: BarChart3,  requiredPermissions: ['compliance:scan:execute'] },
+      { name: 'Compliance Rules',          href: '/compliance-plugins/library',   icon: BookOpen,   requiredPermissions: ['compliance:scan:execute'] },
+      { name: 'Risk Posture',              href: '/risk-posture',                 icon: Gauge,      requiredPermissions: ['compliance:scan:execute', 'erm:risks:*'] },
+      { name: 'Agents',                    href: '/admin/agents',                 icon: Cpu,        requiredPermissions: ['compliance:agents:manage'] },
+      { name: 'Criticality Assessments',   href: '/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
+    ],
+  },
 
   {
     name: 'Projects',
@@ -190,15 +206,10 @@ const navigation: NavEntry[] = [
     requiredPermissions: ['issue_management:issues:view']
   },
   { name: 'ComplyChat', href: '/complychat', icon: Bot, requiredPermissions: ['dashboard:ai_insights:*'] },
-  // CIS integration: admin-side scanning surfaces. Compliance Agents owns the
-  // enroll/list/revoke UI for collector + endpoint agents; Bulk Discovery is
-  // the CIDR network scanner that feeds the enrollment wizard.
-  {
-    name: 'Compliance Agents',
-    href: '/admin/agents',
-    icon: Cpu,
-    requiredPermissions: ['compliance:agents:manage'],
-  },
+  // CIS integration: admin-side scanning surfaces. The "Agents" link
+  // itself now lives under the IT ASSETS group above (matching the
+  // CIS Module Updated layout); Bulk Discovery stays here as the
+  // CIDR network scanner that feeds the enrollment wizard.
   {
     name: 'Bulk Discovery',
     href: '/admin/discover',

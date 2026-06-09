@@ -53,6 +53,9 @@ build/
 
 # Uploads (user files)
 backend/uploads/
+# Older code wrote tenant evidence here; rule now covers BOTH paths
+# so any new tenant data stays out of source control.
+backend/grc/uploads/
 
 # Attached assets (reference screenshots)
 attached_assets/

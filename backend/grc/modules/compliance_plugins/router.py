@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from grc.models import (
@@ -30,6 +32,16 @@ from grc.routers.auth_router import (
 # Administrators bypass this check (they always pass). Other tenant users must
 # have `compliance:scan:execute` explicitly granted via their role.
 _require_scan_perm = require_tenant_permission("compliance:scan:execute")
+
+# CIS package shipped with `require_platform_admin` + `require_tenant_admin`
+# deps that don't exist in our auth layer (they would tighten certain
+# benchmark-mapping + promote endpoints to platform/tenant Administrator
+# only). Until the auth-layer merge brings them across, alias both to the
+# same compliance-plugins manage permission — Admins bypass via wildcard,
+# Scanning-Admin keeps its existing access. Matches pre-merge behaviour
+# of the destructive operations.
+require_tenant_admin = require_tenant_permission("compliance:scan:execute")
+require_platform_admin = require_tenant_permission("compliance:scan:execute")
 
 from .pdf_ingest import ingest_pdf
 from .runners import RUNNERS
@@ -244,6 +256,7 @@ def list_plugins(
     runner_type: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
     include_pending: bool = Query(False, description="If true, also include pending_review/rejected rules in the response. Default false: library only shows approved rules."),
+    limit: int = Query(500, ge=1, le=5000, description="Cap response size. Defaults to 500 so an unfiltered page load returns in ~3s instead of 30s+ (we have 4855 plugins)."),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -264,7 +277,8 @@ def list_plugins(
         q = q.filter(CompliancePlugin.runner_type == runner_type)
     if severity:
         q = q.filter(CompliancePlugin.severity == severity)
-    plugins = q.order_by(CompliancePlugin.benchmark.asc(), CompliancePlugin.rule_id.asc()).all()
+    total = q.count()
+    plugins = q.order_by(CompliancePlugin.benchmark.asc(), CompliancePlugin.rule_id.asc()).limit(limit).all()
     # Aggregate per-plugin pass/fail/error counts for the library table.
     from sqlalchemy import func as _f
     stats_rows = (
@@ -273,7 +287,10 @@ def list_plugins(
             CompliancePluginRun.status,
             _f.count(CompliancePluginRun.id),
         )
-        .filter(CompliancePluginRun.tenant_id == tenant_id)
+        .filter(
+            CompliancePluginRun.tenant_id == tenant_id,
+            CompliancePluginRun.is_leaked.is_(False),
+        )
         .group_by(CompliancePluginRun.plugin_id, CompliancePluginRun.status)
         .all()
     )
@@ -283,9 +300,27 @@ def list_plugins(
         if st in s:
             s[st] = int(cnt)
         s["total"] += int(cnt)
+
+    # Batch-load schedule overrides ONCE for this tenant. Without this,
+    # _effective_schedule was firing one query per plugin (4855 DB
+    # round-trips for an unfiltered library load), which timed out the
+    # /compliance-plugins page — Hassan saw it as "rules look gone".
+    overrides_q = (
+        db.query(PluginScheduleOverride)
+        .filter(PluginScheduleOverride.tenant_id == tenant_id)
+        .all()
+    )
+    overrides_by_plugin: dict[int, str] = {o.plugin_id: o.schedule_cron for o in overrides_q}
+
     out = []
     for p in plugins:
-        d = _plugin_to_dict(p, tenant_id=tenant_id, db=db)
+        d = _plugin_to_dict(p, tenant_id=None, db=None)  # skip per-row schedule lookup
+        if p.id in overrides_by_plugin:
+            d["schedule_cron"] = overrides_by_plugin[p.id]
+            d["schedule_overridden"] = True
+        else:
+            d["schedule_cron"] = getattr(p, "schedule_cron", None)
+            d["schedule_overridden"] = False
         d["stats"] = stats.get(p.id, {"passed": 0, "failed": 0, "error": 0, "total": 0})
         out.append(d)
 
@@ -304,7 +339,9 @@ def list_plugins(
 
     return {
         "plugins": out,
-        "total": len(plugins),
+        "total": total,             # full match count (may exceed len(plugins) when limit caps)
+        "returned": len(plugins),   # how many actually shipped in this response
+        "limit": limit,
         "pending_total": pending_total,
         "available_runner_types": sorted(RUNNERS.keys()),
     }
@@ -346,7 +383,10 @@ def per_user_summary(
     # them into "latest per (user, plugin)" in one pass.
     runs = (
         db.query(CompliancePluginRun)
-        .filter(CompliancePluginRun.tenant_id == tenant_id)
+        .filter(
+            CompliancePluginRun.tenant_id == tenant_id,
+            CompliancePluginRun.is_leaked.is_(False),
+        )
         .order_by(CompliancePluginRun.started_at.desc().nullslast(), CompliancePluginRun.id.desc())
         .all()
     )
@@ -361,37 +401,18 @@ def per_user_summary(
 
     # Build the FULL tenant member list — even users who have never run a
     # scan should appear in the panel with 0/total. That way the operator
-    # sees who hasn't onboarded yet and can chase them. We pull from the
-    # per-tenant schema's users table (the authoritative tenant roster),
-    # not just the public grc_users table, because tenant_a.users and
-    # tenant_b.users have different ID spaces.
-    from grc.models import Tenant
-    from grc.tenant_models import TenantUser as TenantSchemaUser
-    from grc.tenant_manager import get_tenant_session
-    from sqlalchemy import text as _sql_text
-
-    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    # sees who hasn't onboarded yet and can chase them.
+    #
+    # Our architecture is per-tenant DB (not schema-per-tenant): the
+    # injected `db` session is already pointed at this tenant's own
+    # `grc_<slug>` database, so `db.query(GRCUser).all()` IS the tenant
+    # roster — no `tenant_models` / `SET search_path` gymnastics needed.
+    # `tenant_users` stays as an empty list and the `public_users` block
+    # below feeds the merge directly (step-1 no-op, step-2 covers all).
     tenant_users: list[dict] = []
-    if tenant and tenant.schema_name:
-        try:
-            TenantSessionClass = get_tenant_session(tenant.schema_name)
-            tdb = TenantSessionClass()
-            try:
-                tdb.execute(_sql_text(f'SET search_path TO "{tenant.schema_name}", public'))
-                for tu in tdb.query(TenantSchemaUser).all():
-                    tenant_users.append({
-                        "id": tu.id,
-                        "username": tu.username,
-                        "email": tu.email,
-                        "display_name": getattr(tu, "display_name", None) or tu.username,
-                    })
-            finally:
-                tdb.close()
-        except Exception:
-            tenant_users = []
 
-    # Fallback: also try public grc_users matched by tenant_id (legacy
-    # rows that haven't been migrated to per-tenant schema yet).
+    # Public grc_users for this tenant — same DB, no cross-tenant leakage
+    # because the per-tenant connection only sees its own rows.
     public_users = {
         u.id: {
             "id": u.id,
@@ -604,7 +625,10 @@ def assets_overview(
     # (asset_id, plugin_id) so we count each rule once per asset.
     runs = (
         db.query(CompliancePluginRun)
-        .filter(CompliancePluginRun.tenant_id == tenant_id)
+        .filter(
+            CompliancePluginRun.tenant_id == tenant_id,
+            CompliancePluginRun.is_leaked.is_(False),
+        )
         .order_by(
             CompliancePluginRun.started_at.desc().nullslast(),
             CompliancePluginRun.id.desc(),
@@ -630,6 +654,27 @@ def assets_overview(
     total_pass_rate_sum = 0.0
     total_pass_rate_count = 0
 
+    # Strict matcher — per-asset applicable rule count AND benchmark name.
+    # The /compliance-overview page needs both: rule count for the
+    # KPI / pass-rate denominator, benchmark label so each asset card can
+    # show "what benchmark is this scanning against" without a second
+    # match-preview round-trip per asset.
+    from .services.strict_matcher import (
+        applicable_plugins_for_asset,
+        pick_benchmark_for_os,
+    )
+    applicable_count_by_asset: dict[int, int] = {}
+    matched_benchmark_by_asset: dict[int, Optional[str]] = {}
+    for a in assets:
+        if a.os_normalized:
+            plugins_for_a, _ = applicable_plugins_for_asset(db, tenant_id, a.os_normalized)
+            applicable_count_by_asset[a.id] = len(plugins_for_a)
+            mapping = pick_benchmark_for_os(db, tenant_id, a.os_normalized)
+            matched_benchmark_by_asset[a.id] = mapping.benchmark_name if mapping else None
+        else:
+            applicable_count_by_asset[a.id] = 0
+            matched_benchmark_by_asset[a.id] = None
+
     for a in assets:
         os_family = _classify_asset_os(a, connections_by_host)
         statuses = per_asset_latest.get(a.id, {})
@@ -637,7 +682,11 @@ def assets_overview(
         failed = sum(1 for s in statuses.values() if s == "failed")
         errored = sum(1 for s in statuses.values() if s == "error")
         scanned = len(statuses)
-        pass_rate = round(passed / total_rules * 100, 1) if total_rules else 0.0
+        # Pass rate uses the asset's APPLICABLE rule count (Stage 2 strict
+        # pick), not the whole library. Mehboob → 63 / 538 = 11.7%, not
+        # 63 / 4855 = 1.3% which was the historical mis-reporting.
+        applicable_for_this_asset = applicable_count_by_asset.get(a.id, 0) or total_rules
+        pass_rate = round(passed / applicable_for_this_asset * 100, 1) if applicable_for_this_asset else 0.0
         last_scan = per_asset_last_scan.get(a.id)
 
         # Connection match — STRICT, host_name → console_url only. We used
@@ -662,6 +711,7 @@ def assets_overview(
             "availability_rating": a.availability_rating,
             "status": a.status,
             "os_family": os_family,
+            "os_normalized": a.os_normalized,
             "runner_type": matched_conn.integration_type if matched_conn else None,
             "connection_id": matched_conn.id if matched_conn else None,
             "has_connection": matched_conn is not None,
@@ -671,6 +721,11 @@ def assets_overview(
             "failed": failed,
             "errored": errored,
             "pass_rate": pass_rate,
+            # New: strict-matcher resolution per asset so /compliance-overview
+            # can show "what benchmark covers this asset" + "how many rules
+            # apply" without a separate match-preview round-trip per row.
+            "matched_benchmark": matched_benchmark_by_asset.get(a.id),
+            "applicable_rules": applicable_count_by_asset.get(a.id, 0),
         })
 
         if scanned > 0:
@@ -747,6 +802,7 @@ def per_asset_coverage(
         .filter(
             CompliancePluginRun.tenant_id == tenant_id,
             CompliancePluginRun.asset_id == asset.id,
+            CompliancePluginRun.is_leaked.is_(False),
         )
         .order_by(
             CompliancePluginRun.started_at.desc().nullslast(),
@@ -831,6 +887,934 @@ def per_asset_coverage(
     }
 
 
+@router.get("/match-preview")
+def match_preview(
+    asset_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Visualisation of the 2-stage AI rule classification funnel.
+
+    Returns: total approved plugins, what the regex stage kept/skipped,
+    what the AI stage refined to, the primary benchmark picked, and
+    a few example plugins per bucket so the UI can show the user *why*
+    a given rule applies (or doesn't) to this asset.
+
+    Read-only: does NOT execute scans. Compliverse is not a scanner —
+    this endpoint just explains the classification.
+    """
+    # NOTE: legacy Stage 1 + Stage 2 helpers (benchmark_applies_to_asset,
+    # select_benchmarks_for_os, _stage1_match) are no longer imported here
+    # — the strict matcher fully replaced them. The strict-matcher code
+    # path lives below, after the asset lookup.
+
+    tenant_id = get_user_primary_tenant(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id == tenant_id,
+    ).first()
+    if not asset:
+        raise HTTPException(404, "Asset not found")
+
+    plugins = (
+        db.query(CompliancePlugin)
+        .filter(
+            (CompliancePlugin.tenant_id.is_(None)) | (CompliancePlugin.tenant_id == tenant_id),
+            CompliancePlugin.review_status.in_(["approved", "auto_approved"]),
+            CompliancePlugin.enabled.is_(True),
+        )
+        .all()
+    )
+    total = len(plugins)
+
+    def _sample(items, n=3):
+        out = []
+        for p in items[:n]:
+            out.append({
+                "rule_id": p.rule_id,
+                "title": (p.title or "")[:80],
+                "benchmark": p.benchmark,
+            })
+        return out
+
+    os_normalized = getattr(asset, "os_normalized", None)
+    os_version = getattr(asset, "os_version", None)
+    os_family = getattr(asset, "os_family", None)
+
+    # ── STRICT SINGLE-STAGE MATCHER ──
+    # Replaces the two-stage Stage 1 (os_keys family-walk) + Stage 2 (AI
+    # router) pipeline with a single deterministic lookup:
+    #
+    #   asset.os_normalized → grc_benchmark_os_mappings.os_pattern
+    #                       → mapping.benchmark_name
+    #                       → all approved+enabled plugins with that benchmark
+    #
+    # No mixing of archived/live versions. No AI call. Operator owns the
+    # mapping table. The UI keeps showing the same "stage1 / stage2" fields
+    # so existing dashboards don't break, but they now report the strict
+    # result.
+    from .services.strict_matcher import applicable_plugins_for_asset, pick_benchmark_for_os
+
+    mapping = pick_benchmark_for_os(db, tenant_id, os_normalized or "")
+    if mapping:
+        stage2_kept, picked_bench = applicable_plugins_for_asset(db, tenant_id, os_normalized or "")
+    else:
+        stage2_kept, picked_bench = [], None
+    primary_benchmark = picked_bench
+    ai_picks = [picked_bench] if picked_bench else None
+    ai_status = "strict_map" if mapping else "no_mapping"
+    stage2_skipped: list = []
+    stage1_kept = stage2_kept
+    stage1_skipped = [p for p in plugins if p not in stage2_kept]
+    candidate_benchmarks = [picked_bench] if picked_bench else []
+
+    # Look up the OS knowledge entry so the UI can render the canonical
+    # display name + parent + EOL flag without doing a second round trip.
+    from sqlalchemy import text as _sql_text
+    os_entry = None
+    if os_normalized:
+        r = db.execute(_sql_text(
+            "SELECT family, product, build, parent_key, display_name, "
+            "       is_supported, eol_year, benchmark_hint "
+            "FROM grc_os_versions WHERE normalized_key = :k"
+        ), {"k": os_normalized}).first()
+        if r:
+            os_entry = {
+                "family": r[0], "product": r[1], "build": r[2],
+                "parent_key": r[3], "display_name": r[4],
+                "is_supported": r[5], "eol_year": r[6],
+                "benchmark_hint": r[7],
+            }
+
+    return {
+        "asset": {
+            "id": asset.id,
+            "name": asset.name,
+            "os_family": os_family,
+            "os_version": os_version,
+            "os_normalized": os_normalized,
+            "os_build": getattr(asset, "os_build", None),
+            "os_edition": getattr(asset, "os_edition", None),
+            "criticality": asset.criticality,
+            "os_knowledge": os_entry,
+        },
+        "total_plugins": total,
+        "matcher_mode": "strict_single_stage",
+        "matcher_mapping": {
+            "os_pattern": mapping.os_pattern if mapping else None,
+            "benchmark_name": mapping.benchmark_name if mapping else None,
+            "scope": "tenant" if (mapping and mapping.tenant_id is not None) else ("global" if mapping else None),
+            "mapping_id": mapping.id if mapping else None,
+        },
+        "stage1_regex": {
+            "name": "Strict OS→Benchmark mapping",
+            "description": "Asset OS prefix is looked up in the strict mapping table. The single chosen benchmark's rules are the candidates — no family-walk mixing.",
+            "kept": len(stage1_kept),
+            "skipped": len(stage1_skipped),
+            "examples_kept": _sample(stage1_kept),
+            "examples_skipped": _sample(stage1_skipped),
+        },
+        "stage2_ai": {
+            "name": "Strict pick (no AI)",
+            "description": "Strict mode: Stage 2 is identity. The chosen benchmark is the single mapped one. Archived benchmarks never appear.",
+            "status": ai_status,
+            "candidates_in": len(candidate_benchmarks),
+            "kept": len(stage2_kept),
+            "skipped": 0,
+            "ai_picked_benchmarks": [primary_benchmark] if primary_benchmark else [],
+            "primary_benchmark": primary_benchmark,
+            "examples_kept": _sample(stage2_kept),
+            "examples_skipped": [],
+        },
+        "applicable": {
+            "count": len(stage2_kept),
+            "examples": _sample(stage2_kept, n=5),
+        },
+    }
+
+
+@router.post("/assets/{asset_id}/re-detect-os")
+def re_detect_asset_os(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Re-probe the asset's OS via its stored integration connection.
+
+    Used when:
+      - CMDB import gave vague OS data ("Windows 11") and operator wants
+        to refresh to the exact build (windows-11-23H2).
+      - An OS upgrade happened on the host (22H2 → 23H2 cycle).
+
+    Looks up the connection whose console_url matches the asset's host,
+    re-runs the OS probe, and writes the result back to the asset row.
+    Returns the before/after diff so the UI can show what changed.
+    """
+    from .services.credentials import resolve_credentials_for_connection
+    from .services.os_detector import detect_for_runner_full
+
+    tenant_id = get_user_primary_tenant(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id, ITAsset.tenant_id == tenant_id
+    ).first()
+    if not asset:
+        raise HTTPException(404, "Asset not found")
+    if not asset.host_name:
+        raise HTTPException(400, "Asset has no host_name to probe")
+
+    # Find the connection that targets this asset's host
+    conn = db.query(IntegrationConnection).filter(
+        IntegrationConnection.tenant_id == tenant_id,
+        IntegrationConnection.is_active.is_(True),
+        func.lower(IntegrationConnection.console_url) == asset.host_name.lower().strip(),
+    ).first()
+    if not conn:
+        raise HTTPException(
+            400,
+            f"No integration connection found for host '{asset.host_name}'. "
+            f"Add credentials via Connect Wizard first.",
+        )
+
+    try:
+        creds = resolve_credentials_for_connection(conn) or {}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"Failed to load credentials: {exc}")
+
+    before = {
+        "os_family": asset.os_family,
+        "os_version": asset.os_version,
+        "os_normalized": asset.os_normalized,
+        "os_build": asset.os_build,
+        "os_edition": asset.os_edition,
+    }
+    fam, ver, norm, build, edition = detect_for_runner_full(conn.integration_type, creds)
+    if fam:     asset.os_family = fam
+    if ver:     asset.os_version = ver
+    if norm:    asset.os_normalized = norm
+    if build:   asset.os_build = build
+    if edition: asset.os_edition = edition
+    db.commit()
+    after = {
+        "os_family": asset.os_family,
+        "os_version": asset.os_version,
+        "os_normalized": asset.os_normalized,
+        "os_build": asset.os_build,
+        "os_edition": asset.os_edition,
+    }
+    changes = {k: {"before": before[k], "after": after[k]} for k in after if before[k] != after[k]}
+    return {
+        "asset_id": asset.id,
+        "asset_name": asset.name,
+        "connection": {"id": conn.id, "name": conn.connection_name, "type": conn.integration_type},
+        "before": before,
+        "after": after,
+        "changes": changes,
+        "any_changed": bool(changes),
+    }
+
+
+@router.get("/connections")
+def list_connections(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """All agentless integration connections in the tenant with their
+    scope metadata + live resolution counts. The Connections UI lists
+    these and shows: "this SSH cred → 12 of 47 Linux hosts"."""
+    from .services.scope import resolve_assets
+    tenant_id = get_user_primary_tenant(current_user, db)
+    conns = db.query(IntegrationConnection).filter(
+        IntegrationConnection.tenant_id == tenant_id
+    ).all()
+    assets = db.query(ITAsset).filter(ITAsset.tenant_id == tenant_id).all()
+    out = []
+    for c in conns:
+        resolved = resolve_assets(c, assets)
+        out.append({
+            "id": c.id,
+            "name": c.connection_name,
+            "integration_type": c.integration_type,
+            "console_url": c.console_url,
+            "status": c.status,
+            "scope_mode": c.scope_mode or "tenant_all",
+            "scope_value": c.scope_value or {},
+            "resolved_asset_count": len(resolved),
+            "last_scope_resolution_count": c.last_scope_resolution_count,
+            "scope_updated_at": c.scope_updated_at.isoformat() if c.scope_updated_at else None,
+        })
+    return {"connections": out, "tenant_asset_total": len(assets)}
+
+
+@router.put("/connections/{connection_id}/scope")
+def update_connection_scope(
+    connection_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Set a credential's scope. Accepts:
+        {"scope_mode": "asset_list", "scope_value": {"asset_ids": [1,2]}}
+        {"scope_mode": "tenant_all"}
+        {"scope_mode": "asset_tag", "scope_value": {"tags": ["DMZ"]}}
+        {"scope_mode": "ip_range", "scope_value": {"cidrs": ["10.0.0.0/8"]}}
+    Returns the new resolution count.
+    """
+    from datetime import datetime, timezone
+    from .services.scope import resolve_assets
+    tenant_id = get_user_primary_tenant(current_user, db)
+    conn = db.query(IntegrationConnection).filter(
+        IntegrationConnection.id == connection_id,
+        IntegrationConnection.tenant_id == tenant_id,
+    ).first()
+    if not conn:
+        raise HTTPException(404, "Connection not found")
+    allowed_modes = {"tenant_all", "asset_list", "asset_tag", "ip_range"}
+    mode = (body.get("scope_mode") or "").strip()
+    if mode not in allowed_modes:
+        raise HTTPException(422, f"scope_mode must be one of {sorted(allowed_modes)}")
+    value = body.get("scope_value") or {}
+    if not isinstance(value, dict):
+        raise HTTPException(422, "scope_value must be an object")
+    conn.scope_mode = mode
+    conn.scope_value = value
+    conn.scope_updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(conn)
+    assets = db.query(ITAsset).filter(ITAsset.tenant_id == tenant_id).all()
+    resolved = resolve_assets(conn, assets)
+    conn.last_scope_resolution_count = len(resolved)
+    db.commit()
+    return {
+        "connection_id": conn.id,
+        "scope_mode": conn.scope_mode,
+        "scope_value": conn.scope_value,
+        "resolved_asset_count": len(resolved),
+        "sample": [{"id": a.id, "name": a.name, "host_name": a.host_name} for a in resolved[:10]],
+    }
+
+
+@router.post("/connections/{connection_id}/scope-preview")
+def preview_connection_scope(
+    connection_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Hypothetical: 'if I set scope to X, how many assets would resolve?'
+    Used by the Connect Wizard's scope step before the user commits."""
+    from .services.scope import preview_scope
+    tenant_id = get_user_primary_tenant(current_user, db)
+    conn = db.query(IntegrationConnection).filter(
+        IntegrationConnection.id == connection_id,
+        IntegrationConnection.tenant_id == tenant_id,
+    ).first()
+    if not conn:
+        raise HTTPException(404, "Connection not found")
+    # Stage a *shadow* connection with the proposed scope without persisting
+    class _Shadow:
+        def __init__(self, src, mode, value):
+            self.id = src.id
+            self.integration_type = src.integration_type
+            self.scope_mode = mode
+            self.scope_value = value
+    shadow = _Shadow(
+        conn,
+        (body.get("scope_mode") or conn.scope_mode or "tenant_all"),
+        (body.get("scope_value") or {}),
+    )
+    assets = db.query(ITAsset).filter(ITAsset.tenant_id == tenant_id).all()
+    return preview_scope(shadow, assets, sample=10)
+
+
+@router.get("/library-tree/rule-targets")
+def rule_targets(
+    rule_id: int = Query(..., description="grc_compliance_plugins.id"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """For a single rule, return the assets this rule applies to.
+
+    Uses the pre-computed os_keys (Block A persistence) to do a fast
+    intersection with asset.os_normalized — no live AI call. Returns:
+      {
+        rule: {rule_id, title, benchmark, os_keys, runner_type},
+        ai_verdict: {
+          applies_to_count: 3,
+          tenant_asset_count: 12,
+          confidence: "high" | "medium" | "low",
+          reasoning: "..."
+        },
+        assets: [{id, name, host_name, os_normalized, criticality}, ...]
+      }
+    """
+    tenant_id = get_user_primary_tenant(current_user, db)
+    rule = db.query(CompliancePlugin).filter(
+        CompliancePlugin.id == rule_id,
+        (CompliancePlugin.tenant_id.is_(None)) | (CompliancePlugin.tenant_id == tenant_id),
+    ).first()
+    if not rule:
+        raise HTTPException(404, "Rule not found")
+
+    all_assets = db.query(ITAsset).filter(ITAsset.tenant_id == tenant_id).all()
+    rule_os_keys = set(rule.os_keys or [])
+
+    # Match if asset's normalized key OR any ancestor (family-walk) is in
+    # the rule's os_keys. Stage 1 is permissive — Stage 2 AI does precision.
+    matching = []
+    for a in all_assets:
+        a_norm = (a.os_normalized or "").strip()
+        if not a_norm:
+            continue
+        if a_norm in rule_os_keys:
+            matching.append(a)
+            continue
+        # Family walk: windows-11-25H2 → windows-11 → windows
+        if "-" in a_norm:
+            parts = a_norm.split("-")
+            matched = False
+            for i in range(len(parts) - 1, 0, -1):
+                if "-".join(parts[:i]) in rule_os_keys:
+                    matched = True
+                    break
+            if matched:
+                matching.append(a)
+
+    # Confidence: high if rule has classified os_keys + matches exist
+    if rule.classification_source == "ai":
+        confidence = "high"
+        reasoning = f"AI router (gpt-4o-mini) tagged this rule to {len(rule_os_keys)} OS key(s): {sorted(rule_os_keys)}. Matched against {len(all_assets)} tenant assets."
+    elif rule.classification_source == "regex":
+        confidence = "high"
+        reasoning = f"Regex matcher confidently tagged this rule to {sorted(rule_os_keys) or 'unknown OS'}. Matched against {len(all_assets)} tenant assets."
+    else:
+        confidence = "low"
+        reasoning = "Rule has no pre-classified OS keys yet. Run the AI Classifier to tag."
+
+    return {
+        "rule": {
+            "id": rule.id,
+            "rule_id": rule.rule_id,
+            "title": rule.title,
+            "benchmark": rule.benchmark,
+            "os_keys": list(rule_os_keys),
+            "severity": rule.severity,
+            "runner_type": rule.runner_type,
+            "classification_source": rule.classification_source,
+        },
+        "ai_verdict": {
+            "applies_to_count": len(matching),
+            "tenant_asset_count": len(all_assets),
+            "confidence": confidence,
+            "reasoning": reasoning,
+        },
+        "assets": [
+            {
+                "id": a.id, "name": a.name, "host_name": a.host_name,
+                "ip_address": a.ip_address, "os_normalized": a.os_normalized,
+                "os_build": getattr(a, "os_build", None),
+                "criticality": a.criticality,
+            }
+            for a in matching
+        ],
+    }
+
+
+@router.get("/library-tree/benchmark-sections")
+def library_tree_benchmark_sections(
+    benchmark: str = Query(..., description="Exact benchmark name to drill into"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Drill into a single benchmark and return its rules grouped by
+    section / subsection — the way CIS PDFs organise content.
+
+    Example: "CIS_Microsoft_Windows_11_Enterprise_Benchmark_v5.0.1" →
+      [
+        { number: "1", label: "Section 1", rule_count: 11, subsections: [
+          { number: "1.1", label: "Subsection 1.1", rule_count: 7, rules: [
+            { rule_id: "1.1.1", title: "Enforce password history...", severity: "high" },
+            { rule_id: "1.1.2", title: "Maximum password age...", severity: "medium" }
+          ]},
+          { number: "1.2", ... }
+        ]},
+        { number: "2", ... }
+      ]
+
+    The section labels here are numeric ("Section 1") rather than human
+    ("Account Policies"). CIS PDFs do publish human section names but
+    they're not in our rule rows yet — Block H wired a section_path
+    column for future enrichment.
+    """
+    tenant_id = get_user_primary_tenant(current_user, db)
+    rules = (
+        db.query(CompliancePlugin)
+        .filter(
+            CompliancePlugin.benchmark == benchmark,
+            CompliancePlugin.enabled.is_(True),
+            CompliancePlugin.review_status.in_(["approved", "auto_approved"]),
+            (CompliancePlugin.tenant_id.is_(None)) | (CompliancePlugin.tenant_id == tenant_id),
+        )
+        .order_by(CompliancePlugin.rule_id)
+        .all()
+    )
+
+    if not rules:
+        raise HTTPException(404, f"No approved rules found for benchmark '{benchmark}'")
+
+    # Group: section_top → subsection → rules
+    sections: dict[str, dict] = {}
+    for r in rules:
+        rid = (r.rule_id or "").strip()
+        if not rid:
+            continue
+        parts = rid.split(".")
+        top = parts[0]
+        sub = ".".join(parts[:2]) if len(parts) >= 2 else top
+        section = sections.setdefault(top, {
+            "number": top,
+            "label": f"Section {top}",
+            "rule_count": 0,
+            "subsections": {},
+        })
+        subsection = section["subsections"].setdefault(sub, {
+            "number": sub,
+            "label": f"Subsection {sub}",
+            "rule_count": 0,
+            "rules": [],
+        })
+        subsection["rules"].append({
+            "id": r.id,
+            "rule_id": r.rule_id,
+            "title": r.title or "",
+            "severity": r.severity,
+            "runner_type": r.runner_type,
+            "os_keys": r.os_keys or [],
+        })
+        subsection["rule_count"] += 1
+        section["rule_count"] += 1
+
+    # Sort numerically (so 2.1 comes before 10.1)
+    def _num_sort(v: str) -> tuple:
+        try:
+            return tuple(int(p) for p in v.split("."))
+        except ValueError:
+            return (9999,) + tuple(ord(c) for c in v)
+
+    out = []
+    for sec in sorted(sections.values(), key=lambda s: _num_sort(s["number"])):
+        sec_subs = sorted(sec["subsections"].values(), key=lambda s: _num_sort(s["number"]))
+        out.append({
+            "number": sec["number"],
+            "label": sec["label"],
+            "rule_count": sec["rule_count"],
+            "subsections": sec_subs,
+        })
+    return {
+        "benchmark": benchmark,
+        "total_rules": len(rules),
+        "sections": out,
+    }
+
+
+@router.get("/library-tree")
+def library_tree(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Hierarchical rule library: OS family → product → build → benchmark.
+
+    For the Plugin Automation page hierarchy view. Each node carries a
+    rule_count so the operator can see at a glance "Windows 11 23H2 →
+    548 rules, Cisco ASA → 76 rules" without expanding everything.
+
+    Tree shape:
+      [
+        { key: "windows", label: "Windows", rule_count: 4023, children: [
+          { key: "windows-11", label: "Windows 11", rule_count: 538,
+            children: [
+              { key: "windows-11-23H2", label: "23H2 (build)", rule_count: 538,
+                children: [
+                  { key: "benchmark::CIS_...", label: "CIS Win 11 Ent v5.0.1",
+                    rule_count: 538, leaf: true }
+                ]}
+            ]}
+        ]}
+      ]
+    """
+    from sqlalchemy import text as _sql_text
+    tenant_id = get_user_primary_tenant(current_user, db)
+
+    # Per-OS-key rule count (uses Block A persisted os_keys column).
+    #
+    # The CAST(... AS jsonb) is defensive: schema_migrations declares
+    # os_keys as JSONB, but tenant DBs created BEFORE that migration
+    # landed with the column typed as plain JSON. Adding a column with
+    # CREATE-IF-NOT-EXISTS semantics is a no-op when the column already
+    # exists, so the type never got upgraded for those tenants. Casting
+    # in the query makes this endpoint work on both type variants
+    # without forcing a per-tenant ALTER COLUMN sweep.
+    key_counts_rows = db.execute(_sql_text(
+        "SELECT key, COUNT(*) AS n "
+        "FROM grc_compliance_plugins, "
+        "     jsonb_array_elements_text(CAST(os_keys AS jsonb)) AS key "
+        "WHERE enabled = TRUE AND review_status IN ('approved','auto_approved') "
+        "  AND (tenant_id IS NULL OR tenant_id = :tid) "
+        "GROUP BY key"
+    ), {"tid": tenant_id}).all()
+    rules_per_key: dict[str, int] = {row[0]: row[1] for row in key_counts_rows}
+
+    # Per-benchmark (rule_count + which os_keys it targets)
+    bench_rows = db.execute(_sql_text(
+        "SELECT benchmark, os_keys, COUNT(*) AS n "
+        "FROM grc_compliance_plugins "
+        "WHERE enabled = TRUE AND review_status IN ('approved','auto_approved') "
+        "  AND (tenant_id IS NULL OR tenant_id = :tid) "
+        "  AND benchmark IS NOT NULL "
+        "GROUP BY benchmark, os_keys"
+    ), {"tid": tenant_id}).all()
+
+    # OS registry entries (parent-child)
+    reg_rows = db.execute(_sql_text(
+        "SELECT family, normalized_key, parent_key, display_name, build, is_supported "
+        "FROM grc_os_versions ORDER BY family, normalized_key"
+    )).all()
+
+    # Build registry index
+    by_key: dict[str, dict] = {}
+    by_parent: dict[str | None, list[dict]] = {}
+    families: set[str] = set()
+    for fam, key, parent, label, build, supported in reg_rows:
+        node = {
+            "key": key, "label": label, "build": build,
+            "is_supported": supported, "family": fam,
+            "rule_count": rules_per_key.get(key, 0),
+            "children": [],
+            "benchmarks": [],
+        }
+        by_key[key] = node
+        by_parent.setdefault(parent, []).append(node)
+        families.add(fam)
+
+    # Attach benchmarks to their most-specific OS key (last item in os_keys[])
+    for bench, os_keys, n in bench_rows:
+        if not bench:
+            continue
+        keys_list = os_keys or []
+        target_key = keys_list[-1] if keys_list else None
+        bench_node = {
+            "kind": "benchmark", "key": f"benchmark::{bench}", "label": bench,
+            "rule_count": n, "os_keys": keys_list,
+        }
+        if target_key and target_key in by_key:
+            by_key[target_key]["benchmarks"].append(bench_node)
+        else:
+            # Orphan benchmark — bucket under a synthetic node
+            orphan = by_key.setdefault("__orphan__", {
+                "key": "__orphan__", "label": "Other / unclassified",
+                "family": "other", "rule_count": 0, "children": [],
+                "benchmarks": [],
+            })
+            orphan["benchmarks"].append(bench_node)
+            orphan["rule_count"] += n
+
+    # Wire children
+    for parent_key, kids in by_parent.items():
+        if parent_key and parent_key in by_key:
+            by_key[parent_key]["children"].extend(kids)
+
+    # Build family roots
+    family_labels = {"windows": "Windows", "linux": "Linux", "cisco": "Cisco",
+                     "cloud": "Cloud Accounts", "db": "Databases", "other": "Other"}
+    tree = []
+    for fam in sorted(families):
+        # roots inside this family = parent_key IS NULL nodes whose family matches
+        roots = [n for n in by_parent.get(None, []) if n.get("family") == fam]
+        total_rules = sum(rules_per_key.get(r["key"], 0) for r in roots)
+        tree.append({
+            "key": f"family::{fam}",
+            "label": family_labels.get(fam, fam.title()),
+            "kind": "family",
+            "rule_count": total_rules,
+            "children": roots,
+        })
+    if "__orphan__" in by_key:
+        orph = by_key["__orphan__"]
+        tree.append({
+            "key": "family::other",
+            "label": "Other / unclassified",
+            "kind": "family",
+            "rule_count": orph["rule_count"],
+            "children": [],
+            "benchmarks": orph["benchmarks"],
+        })
+
+    # Total-rules KPI must be the actual count of approved+enabled plugins,
+    # NOT the sum-over-os-keys (which double-counts: a plugin tagged
+    # ["windows", "windows-11"] would land in both rules_per_key buckets).
+    # The previous `sum(rules_per_key.values())` inflated the KPI by ~70%.
+    distinct_total = db.execute(_sql_text(
+        "SELECT COUNT(*) FROM grc_compliance_plugins "
+        "WHERE enabled = TRUE AND review_status IN ('approved','auto_approved') "
+        "  AND (tenant_id IS NULL OR tenant_id = :tid)"
+    ), {"tid": tenant_id}).scalar() or 0
+
+    return {
+        "tree": tree,
+        "total_rules": int(distinct_total),
+        "total_benchmarks": len(set(row[0] for row in bench_rows if row[0])),
+    }
+
+
+@router.get("/os-registry")
+def os_registry(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Canonical OS knowledge graph used for build-level rule routing.
+
+    Returns every supported OS family / product / build the system
+    recognises, with: normalized_key, parent_key, display_name, support
+    flag, suggested benchmark hint, and live counts of (plugins targeting
+    this key, assets running this OS). The UI uses this for the OS
+    Registry admin page and for the per-asset OS dropdown.
+    """
+    from sqlalchemy import text as _sql_text
+    tenant_id = get_user_primary_tenant(current_user, db)
+
+    rows = db.execute(_sql_text(
+        "SELECT v.id, v.family, v.product, v.build, v.normalized_key, "
+        "       v.parent_key, v.display_name, v.release_year, v.eol_year, "
+        "       v.is_supported, v.benchmark_hint, "
+        "       (SELECT COUNT(*) FROM grc_compliance_plugins p "
+        "        WHERE p.os_keys ? v.normalized_key "
+        "          AND p.enabled = TRUE "
+        "          AND p.review_status IN ('approved','auto_approved')"
+        "       ) AS plugin_count, "
+        "       (SELECT COUNT(*) FROM grc_it_assets a "
+        "        WHERE a.tenant_id = :tid "
+        "          AND a.os_normalized = v.normalized_key"
+        "       ) AS asset_count "
+        "FROM grc_os_versions v "
+        "ORDER BY v.family, v.product, v.build NULLS FIRST, v.normalized_key"
+    ), {"tid": tenant_id}).all()
+
+    items = [
+        {
+            "id": r[0],
+            "family": r[1],
+            "product": r[2],
+            "build": r[3],
+            "normalized_key": r[4],
+            "parent_key": r[5],
+            "display_name": r[6],
+            "release_year": r[7],
+            "eol_year": r[8],
+            "is_supported": r[9],
+            "benchmark_hint": r[10],
+            "plugin_count": r[11] or 0,
+            "asset_count": r[12] or 0,
+        }
+        for r in rows
+    ]
+    return {"items": items, "total": len(items)}
+
+
+@router.get("/classify-stream")
+async def classify_stream(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Stream live AI classification of every unique benchmark.
+
+    Walks all approved plugins, groups by benchmark, and for each unique
+    benchmark: (1) tries the deterministic regex matcher first, (2) falls
+    back to AI for unknown benchmarks, (3) persists the result to
+    `os_keys` + `classification_source` + `classified_at` on every plugin
+    sharing that benchmark.
+
+    Emits text/event-stream so the admin UI can render the funnel in real
+    time. Each event payload:
+        {i, total, benchmark, plugin_count, keys, source, reasoning?}
+    Final event:
+        {done: true, total, by_source: {regex: N, ai: N, unknown: N}}
+    """
+    import asyncio
+    import json as _json
+    from datetime import datetime, timezone
+    from fastapi.responses import StreamingResponse
+    from sqlalchemy import text as _sql_text
+    from .services.benchmark_matcher import benchmark_target_keys, BENCHMARK_PATTERNS, EXTRA_AI_OS_KEYS
+    from .services.ai_benchmark_router import classify_benchmark_with_ai
+
+    tenant_id = get_user_primary_tenant(current_user, db)
+
+    # Distinct benchmark → list[plugin_id] map (tenant + global pool)
+    rows = (
+        db.query(CompliancePlugin.id, CompliancePlugin.benchmark)
+        .filter(
+            (CompliancePlugin.tenant_id.is_(None)) | (CompliancePlugin.tenant_id == tenant_id),
+            CompliancePlugin.review_status.in_(["approved", "auto_approved"]),
+            CompliancePlugin.enabled.is_(True),
+        )
+        .all()
+    )
+    by_benchmark: dict[str, list[int]] = {}
+    for pid, bench in rows:
+        b = (bench or "").strip()
+        if not b:
+            continue
+        by_benchmark.setdefault(b, []).append(pid)
+
+    benchmarks = sorted(by_benchmark.keys())
+    total = len(benchmarks)
+
+    # Build the controlled vocabulary the AI is allowed to pick from
+    all_keys: set[str] = set(EXTRA_AI_OS_KEYS)
+    for _pat, keys in BENCHMARK_PATTERNS:
+        all_keys.update(keys)
+    known_keys_csv = ",".join(sorted(all_keys))
+
+    async def event_gen():
+        counts = {"regex": 0, "ai": 0, "unknown": 0}
+        yield f"data: {_json.dumps({'phase': 'start', 'total': total})}\n\n"
+        for i, bench in enumerate(benchmarks):
+            plugin_ids = by_benchmark[bench]
+            # Stage A — regex
+            keys = list(benchmark_target_keys(bench))
+            source = "regex" if keys else None
+            reasoning = ""
+            # Stage B — AI fallback
+            if not keys:
+                ai_keys, ai_reasoning = classify_benchmark_with_ai(bench, known_keys_csv)
+                if ai_keys:
+                    keys = list(ai_keys)
+                    source = "ai"
+                    reasoning = ai_reasoning
+                else:
+                    source = "unknown"
+                    reasoning = ai_reasoning or "no match found"
+            counts[source] = counts.get(source, 0) + 1
+            # Persist
+            now = datetime.now(timezone.utc)
+            db.execute(
+                _sql_text(
+                    "UPDATE grc_compliance_plugins SET "
+                    "os_keys = CAST(:keys AS jsonb), "
+                    "classification_source = :src, "
+                    "classified_at = :ts "
+                    "WHERE id = ANY(:ids)"
+                ),
+                {"keys": _json.dumps(keys), "src": source, "ts": now, "ids": plugin_ids},
+            )
+            db.commit()
+            payload = {
+                "phase": "tick",
+                "i": i,
+                "total": total,
+                "benchmark": bench,
+                "plugin_count": len(plugin_ids),
+                "keys": keys,
+                "source": source,
+                "reasoning": reasoning,
+            }
+            yield f"data: {_json.dumps(payload)}\n\n"
+            # Small pacing so UI can render frames; AI calls already slow.
+            await asyncio.sleep(0.02)
+        yield f"data: {_json.dumps({'phase': 'done', 'total': total, 'by_source': counts})}\n\n"
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    })
+
+
+@router.get("/classification-stats")
+def classification_stats(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Snapshot of how many plugins have been pre-classified."""
+    from sqlalchemy import text as _sql_text
+    tenant_id = get_user_primary_tenant(current_user, db)
+    row = db.execute(
+        _sql_text(
+            "SELECT "
+            "  COUNT(*) AS total, "
+            "  COUNT(*) FILTER (WHERE classification_source IS NOT NULL) AS classified, "
+            "  COUNT(*) FILTER (WHERE classification_source = 'regex') AS regex_cnt, "
+            "  COUNT(*) FILTER (WHERE classification_source = 'ai') AS ai_cnt, "
+            "  COUNT(*) FILTER (WHERE classification_source = 'unknown') AS unknown_cnt, "
+            "  COUNT(DISTINCT benchmark) AS unique_benchmarks, "
+            "  MAX(classified_at) AS last_run "
+            "FROM grc_compliance_plugins "
+            "WHERE (tenant_id IS NULL OR tenant_id = :tid) "
+            "  AND review_status IN ('approved', 'auto_approved') "
+            "  AND enabled = TRUE"
+        ),
+        {"tid": tenant_id},
+    ).first()
+    return {
+        "total": row[0] or 0,
+        "classified": row[1] or 0,
+        "regex": row[2] or 0,
+        "ai": row[3] or 0,
+        "unknown": row[4] or 0,
+        "unique_benchmarks": row[5] or 0,
+        "last_run": row[6].isoformat() if row[6] else None,
+    }
+
+
+class _PromoteBenchmarkRequest(BaseModel):
+    """Operator-driven promote request. The caller names a target
+    benchmark (the new version) and optionally a single specific old
+    sibling to promote. If old_label is omitted, every older sibling in
+    the same family is promoted (rare — usually the operator picks the
+    one specific older version they want to retire)."""
+    new_label: str
+    old_label: Optional[str] = None
+
+
+@router.post("/benchmarks/promote")
+def promote_benchmark(
+    body: _PromoteBenchmarkRequest,
+    db: Session = Depends(get_db),
+    # PLATFORM-ADMIN ONLY. Promotion mutates the shared global benchmark
+    # library (archives old version, flips every tenant's mapping). Must
+    # never be triggered by a tenant user, even an admin one.
+    current_user: GRCUser = Depends(require_platform_admin),
+):
+    """Promote a benchmark over an older sibling.
+
+    Renames the older version's rows to ``<label>-ARCHIVE`` and flips any
+    OS→benchmark mapping rows from old → new. This is the explicit
+    operator action that replaces the v1 ingest-time auto-flip.
+
+    Hassan's policy: ingestion never silently flips anything. A dev/
+    operator uploads a new PDF, both versions co-exist in the library,
+    and someone with admin rights clicks "Promote" when the bank is
+    ready to switch its assets to the new rulebook.
+    """
+    from .pdf_ingest.benchmark_supersession import promote_to_supersede
+    tenant_id = get_user_primary_tenant(current_user, db)
+    # The benchmark rows are written with tenant_id=NULL (global library)
+    # in the current ingest path. promote_to_supersede also accepts a
+    # tenant_id so per-tenant overrides remain possible later.
+    result = promote_to_supersede(
+        db, body.new_label,
+        tenant_id=None,
+        only_promote_label=body.old_label,
+    )
+    return {
+        "promoted_to": result.new_label,
+        "family": result.family,
+        "new_version": ".".join(str(p) for p in result.new_version),
+        "archived_siblings": result.archived_siblings,
+        "rules_archived": result.rules_archived,
+        "mapping_rows_repointed": result.mapping_rows_repointed,
+        "skipped_downgrade_of": result.skipped_downgrade_of,
+    }
+
+
 @router.get("/benchmarks")
 def list_benchmarks(
     db: Session = Depends(get_db),
@@ -855,7 +1839,10 @@ def list_benchmarks(
 async def ingest_cis_pdf(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
+    # PLATFORM-ADMIN ONLY. Per Hassan: tenants never upload benchmarks;
+    # Compliverse ingests them centrally. Anyone not in
+    # COMPLIVERSE_PLATFORM_ADMINS (.env) gets a 403.
+    current_user: GRCUser = Depends(require_platform_admin),
 ):
     """Upload a CIS Benchmark PDF and run the multi-layer extraction pipeline.
 
@@ -905,7 +1892,8 @@ def list_ingest_jobs(
 def reparse_ingest_job(
     job_id: int,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth),
+    # PLATFORM-ADMIN ONLY — same rationale as /ingest above.
+    current_user: GRCUser = Depends(require_platform_admin),
 ):
     """Re-run the extraction pipeline against this job's stored PDF bytes.
 
@@ -1114,6 +2102,7 @@ def review_plugin(
     body: dict,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _admin: bool = Depends(require_tenant_admin),
 ):
     """Approve or reject an ingested plugin.
 
@@ -1211,6 +2200,7 @@ def review_plugins_bulk(
     body: dict,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _admin: bool = Depends(require_tenant_admin),
 ):
     """Bulk approve or reject many plugins in one call.
 
@@ -1295,6 +2285,7 @@ def import_plugins_json(
     body: dict,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _admin: bool = Depends(require_tenant_admin),
 ):
     """Import one or more custom plugin definitions from a JSON payload.
 
@@ -1554,11 +2545,14 @@ def list_runs(
     asset_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=5000),
+    include_leaked: bool = Query(False, description="If true, include runs flagged as is_leaked=true (from before the Stage 2 fix). Default false so dashboards aren't poisoned by old wrong-benchmark rows."),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     tenant_id = get_user_primary_tenant(current_user, db)
     q = db.query(CompliancePluginRun).filter(CompliancePluginRun.tenant_id == tenant_id)
+    if not include_leaked:
+        q = q.filter(CompliancePluginRun.is_leaked.is_(False))
     if plugin_id:
         q = q.filter(CompliancePluginRun.plugin_id == plugin_id)
     if asset_id:
@@ -1614,6 +2608,129 @@ def get_run(
     conn = db.query(IntegrationConnection).filter(IntegrationConnection.id == run.connection_id).first() if run.connection_id else None
     trig_user = _user_by_id(db, getattr(run, "triggered_by_user_id", None))
     return _run_to_dict(run, plugin, asset, conn, triggered_by_user=trig_user)
+
+
+# ─── Strict benchmark→OS mapping admin endpoints ──────────────────────────
+# IMPORTANT: must be defined BEFORE the `/{plugin_id}` catch-all below,
+# otherwise FastAPI tries to parse "benchmark-mappings" as an int → 422.
+from grc.models import BenchmarkOsMapping
+
+
+@router.get("/benchmark-mappings")
+def list_benchmark_mappings(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    rows = (
+        db.query(BenchmarkOsMapping)
+        .filter(
+            (BenchmarkOsMapping.tenant_id == tenant_id) | (BenchmarkOsMapping.tenant_id.is_(None)),
+        )
+        .order_by(BenchmarkOsMapping.priority.asc(), BenchmarkOsMapping.os_pattern.asc())
+        .all()
+    )
+    return {"mappings": [
+        {
+            "id": m.id,
+            "os_pattern": m.os_pattern,
+            "benchmark_name": m.benchmark_name,
+            "scope": "tenant" if m.tenant_id is not None else "global",
+            "is_active": m.is_active,
+            "priority": m.priority,
+            "notes": m.notes,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        }
+        for m in rows
+    ]}
+
+
+class _MappingCreate(BaseModel):
+    os_pattern: str
+    benchmark_name: str
+    priority: int = 100
+    notes: Optional[str] = None
+    is_active: bool = True
+
+
+@router.post("/benchmark-mappings", status_code=201)
+def create_benchmark_mapping(
+    body: _MappingCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    m = BenchmarkOsMapping(
+        tenant_id=tenant_id,
+        os_pattern=body.os_pattern.strip().lower(),
+        benchmark_name=body.benchmark_name.strip(),
+        priority=body.priority,
+        notes=body.notes,
+        is_active=body.is_active,
+    )
+    db.add(m)
+    db.commit()
+    return {"id": m.id}
+
+
+@router.delete("/benchmark-mappings/{mapping_id}")
+def delete_benchmark_mapping(
+    mapping_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    m = db.query(BenchmarkOsMapping).filter(
+        BenchmarkOsMapping.id == mapping_id,
+        BenchmarkOsMapping.tenant_id == tenant_id,
+    ).first()
+    if not m:
+        raise HTTPException(404, "Mapping not found (or it's a global mapping — only Compliverse can delete those)")
+    db.delete(m)
+    db.commit()
+    return {"deleted": mapping_id}
+
+
+class _NormaliseOsRequest(BaseModel):
+    os_version: str
+
+
+@router.post("/normalise-os")
+def normalise_os(
+    body: _NormaliseOsRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    from .services.ai_os_normaliser import normalise_os_string
+    return normalise_os_string(body.os_version)
+
+
+@router.get("/benchmark-mappings/suggest")
+def suggest_benchmark_mappings(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    from .services.ai_mapping_suggester import suggest_for_all_unmapped
+    tenant_id = get_user_primary_tenant(current_user, db)
+    suggestions = suggest_for_all_unmapped(db, tenant_id)
+    return {"suggestions": suggestions, "count": len(suggestions)}
+
+
+@router.get("/benchmark-mappings/suggest-for-asset/{asset_id}")
+def suggest_mapping_for_asset(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    from .services.ai_mapping_suggester import suggest_for_unmapped_os
+    tenant_id = get_user_primary_tenant(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id == tenant_id,
+    ).first()
+    if not asset:
+        raise HTTPException(404, "Asset not found")
+    return suggest_for_unmapped_os(db, tenant_id, asset.os_normalized or "")
 
 
 @router.get("/{plugin_id}")
@@ -1934,6 +3051,111 @@ def scan_all(
             f"A scan is already running for this {'asset' if asset_id else 'tenant'} "
             f"(started {started}). Wait for it to finish or refresh the page.",
         )
+
+    # ─── Pre-flight checks (synchronous, fast) ─────────────────────────
+    # Validate the asset exists + has a usable connection BEFORE we
+    # spawn the background scan. Otherwise the operator would see "Scan
+    # queued" and then have no runs ever appear — they need a fast 4xx
+    # error to know to set up the connection first.
+    try:
+        if asset_id is not None:
+            _preflight_asset = db.query(ITAsset).filter(
+                ITAsset.id == asset_id, ITAsset.tenant_id == tenant_id,
+            ).first()
+            if _preflight_asset is None:
+                raise HTTPException(404, "Asset not found in this tenant")
+            if not _preflight_asset.os_normalized:
+                raise HTTPException(
+                    400,
+                    f"Asset '{_preflight_asset.name}' has no OS classified. "
+                    f"Click 'Re-detect OS' or set the OS via Edit before scanning.",
+                )
+            if _preflight_asset.host_name:
+                _host_lc = _preflight_asset.host_name.lower().strip()
+                _conn = (
+                    db.query(IntegrationConnection)
+                    .filter(IntegrationConnection.tenant_id == tenant_id,
+                            IntegrationConnection.is_active.is_(True),
+                            func.lower(IntegrationConnection.console_url) == _host_lc)
+                    .first()
+                )
+                if _conn is None and connection_id is None:
+                    raise HTTPException(
+                        400,
+                        f"Asset '{_preflight_asset.name}' has no integration "
+                        f"connection. Add credentials via Connect Wizard first.",
+                    )
+    except HTTPException:
+        _scan_lock_release(tenant_id, asset_id)
+        raise
+
+    # ─── Spawn the scan in a background thread ─────────────────────────
+    # _do_scan_all blocks for minutes when running 500+ rules against a
+    # real WinRM endpoint. Holding the HTTP connection open that long
+    # times out the browser AND the Next.js dev proxy, producing a
+    # 500/XML-parse error from a truncated response — even though the
+    # backend finishes successfully and writes every run to the DB.
+    # Background thread + immediate 202 keeps the lock held until the
+    # actual scan finishes, while the frontend's existing progress
+    # polling shows live "X of N rules done" via /runs?asset_id=N.
+    import threading
+    tenant_engine = db.get_bind()
+    actor_user_id = current_user.id  # capture before request session closes
+
+    def _scan_in_background():
+        from sqlalchemy.orm import sessionmaker
+        from ...models import GRCUser as _GRCUser
+        Sess = sessionmaker(bind=tenant_engine, expire_on_commit=False)
+        worker_db = Sess()
+        try:
+            actor = worker_db.query(_GRCUser).filter(_GRCUser.id == actor_user_id).first()
+            _do_scan_all(
+                worker_db, tenant_id, asset_id, actor,
+                benchmark=benchmark, runner_type=runner_type,
+                connection_id=connection_id,
+            )
+        except Exception:
+            logger.exception("scan-all background worker failed")
+        finally:
+            worker_db.close()
+            _scan_lock_release(tenant_id, asset_id)
+
+    threading.Thread(
+        target=_scan_in_background, daemon=True,
+        name=f"scan-all-tenant-{tenant_id}-asset-{asset_id}",
+    ).start()
+
+    # Compute the projected total so the frontend's progress bar has a
+    # target (otherwise it just spins indefinitely).
+    projected_total = 0
+    try:
+        if asset_id is not None and _preflight_asset and _preflight_asset.os_normalized:
+            from .services.strict_matcher import applicable_plugins_for_asset
+            plugins, _bench = applicable_plugins_for_asset(
+                db, tenant_id, _preflight_asset.os_normalized,
+            )
+            projected_total = len(plugins)
+    except Exception:  # noqa: BLE001
+        logger.exception("projected_total computation failed (non-fatal)")
+
+    return {
+        "queued": True,
+        "asset_id": asset_id,
+        "total": projected_total,
+        "message": (
+            f"Scan queued for {projected_total} rule(s). "
+            f"Watch progress in the Scan sessions table below — "
+            f"each completed rule shows up as a new run."
+        ),
+    }
+
+
+def _do_scan_all(
+    db, tenant_id, asset_id, current_user,
+    *, benchmark, runner_type, connection_id,
+):
+    """Body of scan_all — extracted so the lock-release lives in a single
+    try/finally in the caller, not 200 lines below the acquire."""
     q = db.query(CompliancePlugin).filter(
         (CompliancePlugin.tenant_id.is_(None)) | (CompliancePlugin.tenant_id == tenant_id),
         CompliancePlugin.enabled.is_(True),
@@ -1953,7 +3175,6 @@ def scan_all(
             ITAsset.id == asset_id, ITAsset.tenant_id == tenant_id,
         ).first()
         if not asset:
-            _scan_lock_release(tenant_id, asset_id)
             raise HTTPException(404, "Asset not found in this tenant")
 
     explicit_connection = None
@@ -1985,12 +3206,31 @@ def scan_all(
             None,
         )
     if asset is not None and explicit_connection is None and asset_pinned_connection is None:
-        _scan_lock_release(tenant_id, asset_id)
         raise HTTPException(
             400,
             f"Asset '{asset.name}' has no connection. Add credentials via "
             f"Administration → Integrations before scanning this asset.",
         )
+
+    # ─── Block A: credential scope enforcement ──────────────────────────
+    # If the auto-resolved (or explicitly chosen) connection has a scope
+    # that does NOT include this asset, refuse the scan. This is the
+    # mechanism that lets one stored credential cover the whole tenant
+    # while still letting the operator say "this Dev cred ONLY scopes
+    # to these 3 dev hosts, never touch the production fleet".
+    used_connection = explicit_connection or asset_pinned_connection
+    if asset is not None and used_connection is not None:
+        from .services.scope import resolve_assets
+        all_tenant_assets = db.query(ITAsset).filter(ITAsset.tenant_id == tenant_id).all()
+        in_scope = {a.id for a in resolve_assets(used_connection, all_tenant_assets)}
+        if asset.id not in in_scope:
+            raise HTTPException(
+                403,
+                f"Asset '{asset.name}' is not in the scope of credential "
+                f"'{used_connection.connection_name}' (scope_mode="
+                f"{used_connection.scope_mode}). Adjust the credential's "
+                f"scope in Connections, or use a different credential.",
+            )
 
     # Pre-compute (host → asset) so a tenant-wide Scan All can still tag
     # each run with the matching asset (lookup by connection.console_url).
@@ -2006,6 +3246,32 @@ def scan_all(
     # 972 times during a Scan All.
     conn_cache: dict[str, Optional[IntegrationConnection]] = {}
     runs: list[dict] = []
+    # Skip counter for visibility in the response. Without this the
+    # frontend modal can't honestly answer "did you actually run 4854
+    # rules or just a subset?" — the operator needs to see what was
+    # filtered out and why, especially for audit defensibility.
+    skipped_wrong_os_version = 0
+    skipped_ai_refinement = 0
+    skipped_no_connection = 0
+    _work_queue: list[tuple] = []   # (plugin, effective_asset, connection) tuples for the parallel pool
+    # ── STRICT SINGLE-STAGE MATCHER ──
+    # Pre-resolve the picked benchmark for each asset OS that this scan-all
+    # may touch. The mapping table is the ONLY source of truth — no AI
+    # fallback, no family-walk. Archived benchmarks have no mapping row so
+    # they never enter scope.
+    from .services.strict_matcher import pick_benchmark_for_os
+    picked_bench_by_os: dict[str, Optional[str]] = {}
+    assets_to_consider: list[ITAsset] = (
+        [asset] if asset is not None
+        else db.query(ITAsset).filter(ITAsset.tenant_id == tenant_id).all()
+    )
+    for a in assets_to_consider:
+        if not a.os_normalized:
+            continue
+        if a.os_normalized in picked_bench_by_os:
+            continue
+        m = pick_benchmark_for_os(db, tenant_id, a.os_normalized)
+        picked_bench_by_os[a.os_normalized] = m.benchmark_name if m else None
     for plugin in plugins:
         if asset is not None:
             # Pinned asset → ONLY the asset's own connection (or explicit
@@ -2025,24 +3291,140 @@ def scan_all(
                 effective_asset = asset_by_host.get(connection.console_url.lower().strip())
         # If still no matching connection AND the plugin needs one, skip.
         if connection is None and plugin.runner_type:
+            skipped_no_connection += 1
             continue
-        run = execute_plugin(
-            db=db,
-            tenant_id=tenant_id,
-            user_id=current_user.id,
-            plugin=plugin,
-            asset=effective_asset,
-            connection=connection,
-            triggered_by="scan_all",
-        )
-        runs.append(_run_to_dict(run, plugin, effective_asset, connection, triggered_by_user=current_user))
+        # ─── OS-version filter (the real fix) ───────────────────────
+        # Even when the runner_type matches (windows_winrm to a Windows
+        # host), the BENCHMARK targets a specific product — Win-11
+        # rules vs Server-2022 rules vs Win-10 rules. Without this gate
+        # we'd run all of them against every Windows host, marking
+        # hundreds of irrelevant checks as "failed" (registry path
+        # doesn't exist on this product, etc.) and inflating the risk
+        # score. Skip the plugin when the asset's detected OS doesn't
+        # match the benchmark's target; if either side is unknown,
+        # benchmark_applies_to_asset is permissive (back-compat).
+        asset_os = getattr(effective_asset, "os_normalized", None) if effective_asset is not None else None
+        asset_os_v = getattr(effective_asset, "os_version", None) if effective_asset is not None else None
 
-    # Release the scan lock for this tenant+asset key now that we're done.
-    # Any uncaught exception above will leave the lock acquired — that's
-    # safe in practice because backend restart clears the in-process dict,
-    # and a stale lock just means the user must restart their dev server.
-    _scan_lock_release(tenant_id, asset_id)
-    return {"executed": len(runs), "runs": runs, "tenant_connections_used": list(conn_cache.keys())}
+        # ── STRICT SINGLE-STAGE FILTER ──
+        # The picked benchmark for this asset OS is the ONLY benchmark whose
+        # rules will run. No family-walk, no AI fallback.
+        picked = picked_bench_by_os.get(asset_os) if asset_os else None
+        # Pinned-asset NO-OS guard. Without this, an asset whose
+        # os_normalized is NULL silently fell through every os-check
+        # below and got every approved+enabled plugin executed against
+        # it — producing thousands of bogus "failed" runs that
+        # contradicted the Compliance tab's "0 applicable" panel
+        # (the panel correctly used the strict matcher and returned 0).
+        # Now we explicitly skip ALL plugins when a pinned asset has
+        # no OS, matching what /match-preview reports to the operator.
+        if asset is not None and not asset_os:
+            skipped_wrong_os_version += 1
+            continue
+        if asset_os and not picked:
+            # No mapping for this OS → skip every plugin (operator must
+            # configure the mapping). Count under the same bucket so the
+            # response is comparable to legacy.
+            skipped_wrong_os_version += 1
+            continue
+        if picked and plugin.benchmark != picked:
+            skipped_ai_refinement += 1
+            continue
+        # Queue the work item rather than running it inline. The actual
+        # network round-trip (WinRM/SSH/Oracle/etc.) happens in parallel
+        # below via a ThreadPoolExecutor — without this, scanning a
+        # 50-host fleet against 538 rules each ran them serially and
+        # took ~hours instead of ~minutes.
+        _work_queue.append((plugin, effective_asset, connection))
+
+    # ─── Parallel execution of queued work items ─────────────────────────
+    # SQLAlchemy Session is NOT thread-safe, so each worker opens its own
+    # session and closes it on exit.  CRITICAL: the worker session must
+    # be bound to the **tenant** DB (the one the request `db` was opened
+    # against), NOT to `grc.models.SessionLocal` — that helper points at
+    # the master catalog DB which has no `grc_compliance_plugin_runs`
+    # table.  Using `db.get_bind()` gives us the exact tenant engine
+    # FastAPI's `Depends(get_db)` already resolved for this request, so
+    # every worker thread inserts into the same `grc_<slug>` database
+    # where the plugin / asset / connection rows live.
+    #
+    # Concurrency cap of 10 keeps WinRM/SSH connection counts well under
+    # what a typical target host will accept, and avoids overwhelming
+    # the backend's network/file-descriptor budget on a 1000-rule scan.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from sqlalchemy.orm import sessionmaker
+
+    # Resolve the request's tenant engine ONCE outside the worker so we
+    # don't re-touch the request-scoped Session in worker threads (which
+    # would defeat the thread-safety we're trying to preserve here).
+    _tenant_engine = db.get_bind()
+    _WorkerSession = sessionmaker(bind=_tenant_engine, expire_on_commit=False)
+
+    def _one(plugin, eff_asset, conn):
+        worker_db = _WorkerSession()
+        try:
+            run = execute_plugin(
+                db=worker_db,
+                tenant_id=tenant_id,
+                user_id=current_user.id,
+                plugin=plugin,
+                asset=eff_asset,
+                connection=conn,
+                triggered_by="scan_all",
+            )
+            # Build the response-dict view inside the worker session so
+            # all lazy attrs are resolved before we close the session.
+            return _run_to_dict(run, plugin, eff_asset, conn, triggered_by_user=current_user)
+        finally:
+            worker_db.close()
+
+    max_workers = int(os.environ.get("COMPLYVERSE_SCAN_CONCURRENCY", "10"))
+    if _work_queue:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(_one, p, a, c) for (p, a, c) in _work_queue]
+            for fut in as_completed(futures):
+                try:
+                    runs.append(fut.result())
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("scan-all parallel worker failed: %s", exc)
+
+    # Lock release now lives in the caller's try/finally — see scan_all
+    # above. This function may return or raise; either way the lock will
+    # be cleared.
+    # Hint message — surfaced as a banner in the Compliance tab when the
+    # operator clicks "Scan now" on an unclassified asset. Previously the
+    # response was a bare {executed: 0, ...} which the modal rendered as
+    # silent success.
+    hint: Optional[str] = None
+    if asset is not None and len(runs) == 0:
+        if not asset.os_normalized:
+            hint = (
+                f"Asset '{asset.name}' has no normalized OS — nothing scanned. "
+                f"Use 'Re-detect OS' on the Compliance tab, or set os_normalized "
+                f"manually via the Edit dialog, then retry."
+            )
+        elif skipped_wrong_os_version > 0 and skipped_ai_refinement == 0:
+            hint = (
+                f"No CIS benchmark mapped for OS '{asset.os_normalized}'. "
+                f"Add a mapping via Compliance Plugins → Benchmark Mappings."
+            )
+    return {
+        "executed": len(runs),
+        "runs": runs,
+        "tenant_connections_used": list(conn_cache.keys()),
+        "skipped_wrong_os_version": skipped_wrong_os_version,
+        "skipped_ai_refinement": skipped_ai_refinement,
+        "skipped_no_connection": skipped_no_connection,
+        "ai_routed_os_versions": [],
+        "hint": hint,
+    }
+
+
+# NOTE: the benchmark-mappings / normalise-os admin routes were defined
+# here originally but moved earlier in the file (before the `/{plugin_id}`
+# catch-all) to fix a route-shadowing 422 — FastAPI was trying to parse
+# `benchmark-mappings` as an int plugin_id. See the block immediately
+# above `@router.get("/{plugin_id}")` for the active definitions.
 
 
 @router.get("/{plugin_id}/control-mappings")

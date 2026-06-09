@@ -55,16 +55,104 @@ def _deb_path() -> Path:
 
 
 def _backend_url_from_request(request: Request) -> str:
-    """Build the canonical backend URL from the incoming request.
+    """Build the canonical backend URL the agent installer should
+    phone home to. Resolution order:
 
-    Banks behind a load balancer / reverse proxy will hit us via a
-    public hostname like `https://tenant.compliverse.app`. We use the
-    `X-Forwarded-Host` / `X-Forwarded-Proto` headers if present (set by
-    the proxy), otherwise fall back to the raw request scheme + host.
+      1. COMPLYVERSE_BACKEND_URL env var — set this in production to
+         the public URL (e.g. https://grc.bank.com). Always wins.
+      2. X-Forwarded-Host (+ X-Forwarded-Proto) — reverse-proxy
+         deployments behind nginx / a CDN.
+      3. Fallback: host from request Host header + port from
+         scope["server"] (uvicorn's actual bind). Port from Host
+         header is the proxy's port in dev, not what the agent should
+         target.
+
+    Production deploys MUST set COMPLYVERSE_BACKEND_URL.
     """
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "localhost:5000"
-    proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "http"
-    return f"{proto}://{host}"
+    env_url = (os.environ.get("COMPLYVERSE_BACKEND_URL") or "").strip().rstrip("/")
+    if env_url:
+        return env_url
+
+    xfh = request.headers.get("x-forwarded-host")
+    if xfh:
+        proto = request.headers.get("x-forwarded-proto") or "https"
+        return f"{proto}://{xfh}"
+
+    host_hdr = request.headers.get("host") or ""
+    host_only = host_hdr.split(":")[0] if host_hdr else "localhost"
+    server = request.scope.get("server") or (None, None)
+    bind_port = server[1] or 4000
+    proto = "http"
+    return f"{proto}://{host_only}:{bind_port}"
+
+
+# ───────────────────────────────────────────────────────────────────────
+# Python-direct install path (DEV — bypasses NSIS .exe)
+# ───────────────────────────────────────────────────────────────────────
+# The production install path packages the agent into a signed NSIS .exe
+# (build.ps1 in backend/agent/packaging/windows). That requires NSIS,
+# signtool, etc. — too much for a dev box.
+#
+# This zipapp endpoint serves the same Python agent module as a single
+# .pyz (zipapp) the operator's machine can run directly with
+# `python agent.pyz <command>`. install.ps1 prefers this path when
+# Python is on PATH and the .exe doesn't exist.
+
+
+def _build_agent_zipapp() -> bytes:
+    """Zip up backend/agent/complyverse_agent/ into a Python zipapp.
+
+    Cached in-process at module-load — the agent source rarely changes
+    in dev, and rebuilding on every download adds 50-100ms per request.
+    Call _invalidate_zipapp_cache() to force a rebuild (or restart
+    uvicorn — autoreload picks up source changes anyway).
+    """
+    import io
+    import zipfile
+
+    pkg_root = (Path(__file__).resolve().parents[3]
+                / "agent" / "complyverse_agent")
+    if not pkg_root.exists():
+        raise HTTPException(
+            500,
+            f"Agent source not found at {pkg_root}. "
+            "Operator: ensure backend/agent/complyverse_agent/ is committed."
+        )
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        # The zipapp entrypoint — runs `python -m complyverse_agent ...`
+        zf.writestr("__main__.py", "from complyverse_agent.__main__ import main\nmain()\n")
+        for f in pkg_root.rglob("*.py"):
+            rel = f.relative_to(pkg_root.parent)  # → complyverse_agent/...
+            zf.write(f, arcname=str(rel).replace("\\", "/"))
+    buf.seek(0)
+    return buf.getvalue()
+
+
+_ZIPAPP_CACHE: dict[str, bytes] = {}
+
+
+@router.get("/agent.pyz")
+def download_agent_pyz():
+    """Return the agent as a single Python zipapp.
+
+    Operator on the target machine:
+        Invoke-WebRequest 'http://backend/grc/agent/agent.pyz' -OutFile agent.pyz
+        python agent.pyz enroll --backend http://backend --token enroll_xxx
+        python agent.pyz run    # background loop
+    """
+    from fastapi.responses import Response
+    if "data" not in _ZIPAPP_CACHE:
+        _ZIPAPP_CACHE["data"] = _build_agent_zipapp()
+    return Response(
+        content=_ZIPAPP_CACHE["data"],
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="complyverse-agent.pyz"',
+            "X-Agent-Mode": "python-zipapp",
+        },
+    )
 
 
 @router.get("/install.exe")
@@ -152,18 +240,109 @@ def install_ps1(
       3. Cleans up the temp file
     """
     backend_url = _backend_url_from_request(request)
-    script = f"""# Compliverse Agent — one-line installer wrapper
+    # Two install paths, tried in order:
+    #   1. Python-direct (no NSIS) - download agent.pyz, run with system
+    #      Python. Works on any dev box with Python on PATH.
+    #   2. NSIS .exe - production path. Only kicks in if Python isn't
+    #      on PATH.
+    # IMPORTANT: this PS1 script is downloaded by Invoke-WebRequest
+    # which writes bytes to disk; PowerShell then reads it with the
+    # system codepage (cp1252 on en-US Windows). Any non-ASCII char
+    # (em-dash, smart quotes, box-drawing) gets mojibake-mangled and
+    # breaks the parser. Keep this template ASCII-only.
+    script = f"""# Compliverse Agent - one-line installer wrapper
 # Auto-generated by the cloud for token: {token[:18]}...
 $ErrorActionPreference = 'Stop'
-$tempExe = "$env:TEMP\\ComplyverseAgent-Setup.exe"
+
+$installDir = Join-Path $env:ProgramData 'Compliverse'
+$null = New-Item -ItemType Directory -Force -Path $installDir
+
+$pyzPath = Join-Path $installDir 'complyverse-agent.pyz'
+
+# Path A: Python-direct (preferred on dev boxes)
+# Try multiple candidates and verify each actually runs - venv shims
+# sometimes point at deleted Python installs and segfault.
+function Find-WorkingPython {{
+    $candidates = @()
+    # 1. py launcher with explicit version preferences
+    $py = (Get-Command py -ErrorAction SilentlyContinue).Path
+    if ($py) {{
+        foreach ($ver in @('-3.11', '-3.12', '-3.13', '-3.10', '-3')) {{
+            $candidates += ,@($py, $ver)
+        }}
+    }}
+    # 2. Standard install locations
+    foreach ($p in @(
+        "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python310\python.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe",
+        "C:\Python311\python.exe", "C:\Python312\python.exe",
+        "C:\Python310\python.exe", "C:\Python313\python.exe"
+    )) {{
+        if (Test-Path $p) {{ $candidates += ,@($p) }}
+    }}
+    # 3. python on PATH (last resort - might be a broken venv shim)
+    $px = (Get-Command python -ErrorAction SilentlyContinue).Path
+    if ($px) {{ $candidates += ,@($px) }}
+
+    foreach ($c in $candidates) {{
+        $exe = $c[0]
+        $args = if ($c.Count -gt 1) {{ @($c[1], '--version') }} else {{ @('--version') }}
+        try {{
+            $out = & $exe @args 2>&1
+            if ($LASTEXITCODE -eq 0 -and $out -match 'Python 3\.\d+') {{
+                if ($c.Count -gt 1) {{
+                    return @{{ Exe = $exe; PreArg = $c[1] }}
+                }} else {{
+                    return @{{ Exe = $exe; PreArg = $null }}
+                }}
+            }}
+        }} catch {{ continue }}
+    }}
+    return $null
+}}
+
+$pyInfo = Find-WorkingPython
+if ($pyInfo) {{ $python = $pyInfo.Exe; $pyPreArg = $pyInfo.PreArg }} else {{ $python = $null; $pyPreArg = $null }}
+
+if ($python) {{
+    Write-Host "==> Python found at $python - using Python-direct install"
+    Write-Host "==> Downloading agent zipapp from {backend_url}..."
+    try {{
+        Invoke-WebRequest -Uri '{backend_url}/grc/agent/agent.pyz' -OutFile $pyzPath -UseBasicParsing
+    }} catch {{
+        Write-Host "==> ERROR downloading agent.pyz: $($_.Exception.Message)"
+        exit 4
+    }}
+    Write-Host "==> Enrolling agent against {backend_url}"
+    if ($pyPreArg) {{
+        & $python $pyPreArg $pyzPath enroll --backend '{backend_url}' --token '{token}'
+    }} else {{
+        & $python $pyzPath enroll --backend '{backend_url}' --token '{token}'
+    }}
+    if ($LASTEXITCODE -ne 0) {{
+        Write-Host "==> Enrollment failed with exit code $LASTEXITCODE"
+        exit $LASTEXITCODE
+    }}
+    Write-Host "==> Agent enrolled. Start heartbeat loop with:"
+    if ($pyPreArg) {{ Write-Host "    $python $pyPreArg $pyzPath run" }} else {{ Write-Host "    $python $pyzPath run" }}
+    Write-Host "==> Or install as a Windows service:"
+    if ($pyPreArg) {{ Write-Host "    $python $pyPreArg $pyzPath service install" }} else {{ Write-Host "    $python $pyzPath service install" }}
+    exit 0
+}}
+
+# Path B: NSIS .exe fallback (production / Python-less hosts)
+Write-Host "==> Python not on PATH - falling back to .exe installer"
+$tempExe = Join-Path $env:TEMP 'ComplyverseAgent-Setup.exe'
 Write-Host "==> Downloading agent installer from {backend_url}..."
-Invoke-WebRequest -Uri '{backend_url}/agent/install.exe' -OutFile $tempExe -UseBasicParsing
-Write-Host "==> Running silent install (token={token[:14]}..., backend={backend_url})..."
+Invoke-WebRequest -Uri '{backend_url}/grc/agent/install.exe' -OutFile $tempExe -UseBasicParsing
+Write-Host "==> Running silent install"
 $p = Start-Process -FilePath $tempExe -ArgumentList '/S','/TOKEN={token}','/BACKEND={backend_url}' -Wait -PassThru
 if ($p.ExitCode -eq 0) {{
     Write-Host "==> Agent installed successfully."
 }} else {{
-    Write-Host "==> Installer exited with code $($p.ExitCode). Check %SystemRoot%\\Temp for logs."
+    Write-Host "==> Installer exited with code $($p.ExitCode)."
     exit $p.ExitCode
 }}
 Remove-Item $tempExe -ErrorAction SilentlyContinue
@@ -189,9 +368,9 @@ set -e
 TMP_DEB=$(mktemp /tmp/complyverse-agent-XXXXXX.deb)
 echo "==> Downloading agent .deb from {backend_url}..."
 if command -v curl >/dev/null 2>&1; then
-    curl -sSL '{backend_url}/agent/install.deb' -o "$TMP_DEB"
+    curl -sSL '{backend_url}/grc/agent/install.deb' -o "$TMP_DEB"
 elif command -v wget >/dev/null 2>&1; then
-    wget -q '{backend_url}/agent/install.deb' -O "$TMP_DEB"
+    wget -q '{backend_url}/grc/agent/install.deb' -O "$TMP_DEB"
 else
     echo "==> ERROR: neither curl nor wget installed. Install one and retry."
     exit 1

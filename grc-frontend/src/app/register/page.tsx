@@ -235,20 +235,20 @@ export default function RegisterPage() {
         // login page so they can authenticate explicitly.
         localStorage.clear();
 
-        // Decide whether the new tenant's login URL lives on a different
-        // hostname (acme.example.com vs current example.com) or on the
-        // current origin (bare IP, pure `localhost`, single-tenant Docker).
-        // Cross-host redirect to a non-existent subdomain (e.g.
-        // `layeron.68.183.198.54` or `acme.localhost` with no resolver) is
-        // what was producing the "An error occurred" toast — the browser
-        // failed the nav, and `formData.password` was lost in the process.
+        // Subdomain-first tenant routing (restored from the temporary
+        // single-host mode):
+        //   - From plain `localhost` we now DO redirect to
+        //     `{subdomain}.localhost:{port}/login` so the new tenant gets
+        //     its own subdomain origin from the moment the user logs in.
+        //     *.localhost auto-resolves to 127.0.0.1 on modern OSes.
+        //   - From a dotted host (`app.example.com`) we redirect to
+        //     `{subdomain}.example.com/login` as before.
+        //   - Bare IPv4 hosts still skip the redirect — `acme.10.0.0.5`
+        //     isn't reachable. Those deployments stay single-origin.
         const subdomain = data.tenant?.subdomain || data.tenant?.slug;
         const { protocol, hostname, port } = window.location;
         const isBareIPv4 = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
-        const isPureLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-        const isDottedHost = hostname.includes('.') && !isBareIPv4;
-        const canRedirectCrossSubdomain =
-          !!subdomain && !isBareIPv4 && !isPureLocalhost && isDottedHost;
+        const canRedirectCrossSubdomain = !!subdomain && !isBareIPv4;
 
         if (canRedirectCrossSubdomain) {
           const baseHost = hostname.endsWith('.localhost')
