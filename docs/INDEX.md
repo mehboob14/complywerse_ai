@@ -4,6 +4,7 @@ Central index of project documentation. Start with [SETUP.md](SETUP.md) to run t
 
 ## Setup & operations
 - [SETUP.md](SETUP.md) — Local setup: prerequisites, backend/frontend install, env vars, running, multi-tenant notes, default credentials.
+- [../DB_CHANGES.md](../DB_CHANGES.md) — Operational ledger of manual DB changes (kept at repo root; applied to every tenant by `backend/scripts/apply_all_db_changes_ubuntu.py`).
 
 ## Architecture & data
 - [ARCHITECTURE.md](ARCHITECTURE.md) — **Start here to build/extend.** Structure, request flow, conventions, and step-by-step recipes for adding a feature module or integrating external (e.g. Replit) code.
