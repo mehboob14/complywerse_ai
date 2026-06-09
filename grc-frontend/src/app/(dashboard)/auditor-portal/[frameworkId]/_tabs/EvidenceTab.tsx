@@ -318,6 +318,9 @@ export default function EvidenceTab({ frameworkId }: { frameworkId: string }) {
           a download CTA for formats that can't be previewed in-browser. */}
       <EvidenceViewer
         evidence={previewEvidence ? {
+          // evidence_id routes through /evidence/{id}/preview (the
+          // tenant-checked endpoint) instead of trying file_path as URL.
+          evidence_id: (previewEvidence as any).id,
           file_path: previewEvidence.file_path,
           file_name: previewEvidence.file_name,
           mime_type: previewEvidence.mime_type,

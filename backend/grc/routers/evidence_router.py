@@ -226,6 +226,110 @@ def get_evidence(
     }
 
 
+def _resolve_evidence_file(
+    evidence_id: int, db: Session, current_user: GRCUser,
+) -> tuple[str, str, str]:
+    """Look up an evidence row by id, tenant-check, and resolve the
+    absolute on-disk path. Returns (path, mime_type, file_name).
+
+    Raises HTTPException with a clear detail if any step fails. Used by
+    both /preview and /download to avoid duplicate logic.
+    """
+    import mimetypes
+
+    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+    validate_tenant_access(current_user, evidence.tenant_id, db)
+    if not evidence.file_path:
+        raise HTTPException(status_code=404, detail="Evidence has no file attached")
+
+    # Stored path may be absolute or relative — try several candidates so
+    # an old "backend/uploads/..." path still resolves after a working-
+    # directory change.
+    candidates = []
+    if os.path.isabs(evidence.file_path):
+        candidates.append(evidence.file_path)
+    else:
+        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        candidates.append(os.path.join(repo_root, evidence.file_path))
+        candidates.append(os.path.abspath(evidence.file_path))
+
+    on_disk = next((p for p in candidates if os.path.exists(p)), None)
+    if not on_disk:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"File not found on disk. Stored path: {evidence.file_path!r}. "
+                "The file may have been moved, deleted, or stored before the "
+                "current upload dir was wired up."
+            ),
+        )
+
+    # Prefer the stored MIME (matches what the upload middleware saw),
+    # fall back to an extension-based guess so unknown / missing values
+    # still let PDFs render and images inline.
+    mime = (evidence.file_type
+            or mimetypes.guess_type(on_disk)[0]
+            or "application/octet-stream")
+    return on_disk, mime, (evidence.file_name or os.path.basename(on_disk))
+
+
+@router.get("/{evidence_id}/preview")
+def serve_evidence_preview(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Stream an evidence file for INLINE rendering.
+
+    The EvidenceViewer modal hits this for the eye-icon previewer:
+    images are placed in an <img>, PDFs in an <iframe>, XLSX/CSV go
+    through the xlsx package, text formats render in a <pre>.
+
+    Why this endpoint exists: `evidence.file_path` is a server
+    filesystem path (e.g. `backend/grc/uploads/evidence/1/<uuid>.pdf`),
+    NOT a URL. The frontend was trying to GET it as a URL → backend
+    never mounted that directory → every preview 404'd. Resolving by
+    id keeps the disk layout server-internal.
+    """
+    from fastapi.responses import FileResponse
+    on_disk, mime, fname = _resolve_evidence_file(evidence_id, db, current_user)
+    return FileResponse(
+        path=on_disk,
+        media_type=mime,
+        # filename= would otherwise set Content-Disposition: attachment;
+        # we want inline so the browser renders it.
+        headers={
+            "Content-Disposition": f'inline; filename="{fname}"',
+            "Cache-Control": "private, max-age=60",
+        },
+    )
+
+
+@router.get("/{evidence_id}/download")
+def serve_evidence_download(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Stream an evidence file for SAVE-AS download.
+
+    Same backend logic as /preview but tells the browser to save the
+    file instead of rendering it inline. Useful when the operator
+    explicitly hits the download button on the preview modal, or for
+    file types we can't preview natively (docx, pptx, large binaries).
+    """
+    from fastapi.responses import FileResponse
+    on_disk, mime, fname = _resolve_evidence_file(evidence_id, db, current_user)
+    return FileResponse(
+        path=on_disk,
+        media_type=mime,
+        filename=fname,  # FastAPI sets Content-Disposition: attachment automatically
+    )
+
+
 @router.put("/{evidence_id}", response_model=EvidenceResponse)
 def update_evidence(
     evidence_id: int,

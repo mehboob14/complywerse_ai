@@ -1306,6 +1306,7 @@ export default function EvidenceDetailPage() {
           for non-previewable formats. */}
       <EvidenceViewer
         evidence={showFilePreview && evidence?.file_path ? {
+          evidence_id: evidence.id,
           file_path: evidence.file_path,
           file_name: evidence.file_name || 'evidence',
           mime_type: evidence.file_type,

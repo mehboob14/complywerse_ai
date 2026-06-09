@@ -32,6 +32,134 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-06-09 — Evidence preview call sites all wired through new endpoint (code-only)
+
+### What
+
+Followed up the new `/evidence/{id}/preview` endpoint by sweeping every
+page that opens the `EvidenceViewer` and adding `evidence_id` to the
+preview payload:
+
+  * `/evidence/page.tsx` — both card-grid and list-row preview buttons
+  * `/evidence/[id]/page.tsx` — detail page's full-screen previewer
+  * `/frameworks/[id]/page.tsx` — framework requirements evidence
+    preview
+  * `/auditor-portal/[frameworkId]/_tabs/EvidenceTab.tsx` — auditor
+    portal evidence review
+
+### Why
+
+The first round of the fix added the backend endpoint and updated the
+`EvidencePreviewButton` component, but the standalone pages above
+each call `EvidenceViewer` directly with their own preview payload
+construction. Those still passed only `file_path` (server filesystem
+path) — which the viewer tried to GET as a URL, producing 404s like
+`/grc/C%3A/Users/Admin/Documents/.../evidence/14/<uuid>.jpg`.
+
+Setting `evidence_id` on every call site routes them through
+`/evidence/{id}/preview` instead. The `file_path` field is preserved
+so legacy fallback callers (governance docs, agent installers) still
+work.
+
+### DB impact
+
+None. Pure frontend wire-up.
+
+### How (on Ubuntu)
+
+```bash
+cd ~/grc-final/complywerse_ai
+git pull
+# Frontend rebuild — depending on how you run the frontend
+cd grc-frontend && npm run build && pm2 restart grc-frontend
+# OR if you run dev mode: just hard-refresh, Next.js picks it up
+```
+
+### Auto-applied?
+
+**N/A — code only.** Restart frontend after `git pull`.
+
+---
+
+## 2026-06-09 — Evidence preview / download endpoints (code-only)
+
+### What
+
+Two new backend routes in
+[`backend/grc/routers/evidence_router.py`](backend/grc/routers/evidence_router.py):
+
+  * `GET /evidence/{id}/preview`  — stream with
+    `Content-Disposition: inline` for the EvidenceViewer modal
+    (PDF in iframe, image in `<img>`, XLSX via the xlsx package,
+    text in `<pre>`).
+  * `GET /evidence/{id}/download` — same backend resolution but
+    forces a save-as via `Content-Disposition: attachment`.
+
+Both endpoints look up the Evidence row, tenant-check via
+`validate_tenant_access`, resolve absolute path on disk (handles
+relative AND absolute legacy storage paths), and stream with the
+right MIME type — falling back to extension-based guess when
+`evidence.file_type` is null.
+
+### Why
+
+The frontend's `EvidenceViewer` was trying to fetch
+`evidence.file_path` directly as a URL — but `file_path` is a
+SERVER FILESYSTEM PATH like
+`backend/grc/uploads/evidence/1/<uuid>.pdf`, NOT a URL. The
+backend never mounted that directory as static files. Every
+"Couldn't load this file" / `Request failed with status code 404`
+operators saw came from this.
+
+### Frontend changes
+
+  * `EvidenceFile` interface (in `EvidenceViewer.tsx`) gained an
+    optional `evidence_id` field — set this and the viewer routes
+    through the new preview endpoint instead of treating
+    `file_path` as a URL.
+  * `EvidencePreviewButton.tsx` now passes `evidence_id` into the
+    viewer when it resolves an evidence row.
+  * Legacy callers that pass `file_path` as a real URL (governance
+    docs from `/governance/.../view-html`, agent installer file at
+    `/grc/agent/install.exe`) still work via the legacy fallback
+    in `resolveFileUrl()`.
+
+### DB impact
+
+None. Pure code change. No new tables, no new columns, no row
+mutations. Existing `file_path` values continue to work — the
+new endpoint just RESOLVES them properly instead of expecting
+the frontend to use them as URLs.
+
+### How (on Ubuntu)
+
+```bash
+cd ~/grc-final/complywerse_ai
+git pull
+sudo systemctl restart grc-backend.service
+```
+
+Hard-refresh the browser (Ctrl+Shift+R) and click the eye-icon
+preview on any compliance evidence row. PDFs / images / text /
+CSVs / XLSX all render inline. DOCX / PPTX fall through to the
+existing "download to open" UX.
+
+### Risk
+
+  * Pre-existing GET `/evidence/{id}` (metadata) still works —
+    the new routes have a different URL suffix, FastAPI routes
+    them by exact match.
+  * Tenant scoping enforced — operators can't read evidence from
+    a tenant they aren't a member of.
+  * Cache header `private, max-age=60` keeps repeated previews
+    cheap without leaking the file content into shared caches.
+
+### Auto-applied?
+
+**N/A — code only.** `git pull` + restart backend.
+
+---
+
 ## 2026-06-09 — One-shot orchestrator: apply EVERY DB change to all Ubuntu tenants
 
 ### Background

@@ -57,9 +57,13 @@ export default function EvidencePreviewButton({
       const r = res.data || {};
       if (!r.file_path) return null;
       return {
+        // Setting evidence_id makes the viewer hit
+        // /evidence/{id}/preview (tenant-checked, never 404s on
+        // moved files) instead of trying to GET file_path as a URL.
+        evidence_id: r.id ?? evidenceId,
         file_path: r.file_path,
         file_name: r.file_name || `Evidence ${r.id}`,
-        mime_type: r.mime_type ?? null,
+        mime_type: r.file_type ?? r.mime_type ?? null,
         file_size: r.file_size ?? null,
       };
     },

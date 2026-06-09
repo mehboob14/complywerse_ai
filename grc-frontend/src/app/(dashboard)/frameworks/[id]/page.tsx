@@ -2587,6 +2587,11 @@ export default function CertificationJourneyPage() {
                             {ev.file_path && (
                               <button
                                 onClick={() => setPreviewEvidenceFile({
+                                  // Set evidence_id so the viewer hits
+                                  // /evidence/{id}/preview (the tenant-
+                                  // checked endpoint) instead of trying
+                                  // to GET file_path as a URL.
+                                  evidence_id: ev.id,
                                   file_path: ev.file_path!,
                                   file_name: ev.file_name || 'evidence',
                                   mime_type: ev.mime_type,

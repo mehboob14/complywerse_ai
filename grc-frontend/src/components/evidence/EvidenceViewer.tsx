@@ -43,9 +43,17 @@ import DocumentAnnotationPanel from './DocumentAnnotationPanel';
  */
 
 export interface EvidenceFile {
-  /** Server-side path. Either `/uploads/...` (will be prefixed with `/api`)
-   *  or a full `/api/...` URL. Optional — content-only governance docs
-   *  (AI drafts that were never exported to a file) won't have one. */
+  /** PREFERRED for any file backed by an Evidence row — the viewer
+   *  will hit `/evidence/{evidence_id}/preview` which is tenant-
+   *  checked, mime-aware, and never 404s on a moved file. Set this
+   *  on every modern caller; `file_path` is the legacy fallback. */
+  evidence_id?: number | null;
+  /** LEGACY — server-side filesystem path. The previous frontend
+   *  tried to GET this directly as a URL, but the upload dir was
+   *  never mounted so every preview 404'd. Kept for backward compat
+   *  with a couple of callers (governance docs, criticality
+   *  templates) that pass a real URL here, e.g.
+   *  `/grc/agent/install.exe` for the agent download. */
   file_path?: string | null;
   /** Original filename including extension, used to drive type detection
    *  and the download button. */
@@ -86,11 +94,24 @@ function detectKind(file: EvidenceFile): Kind {
   return 'unknown';
 }
 
-/** Normalize a server-side file path to the URL axios should hit.
- *  Files are stored under `/uploads/...`; in production they're served
- *  from `/api/uploads/...`. apiClient already has the `/api` baseURL
- *  prefix, so we strip it here when present to avoid double-prefixing. */
-function resolveFileUrl(filePath: string): string {
+/** Build the apiClient URL the viewer should fetch the file blob from.
+ *
+ *  PREFERRED path: when `evidence_id` is set, hit
+ *  `/evidence/{id}/preview` — a tenant-checked endpoint that streams
+ *  the file with `Content-Disposition: inline` and the right mime
+ *  type. This is the only path that works for the standard upload
+ *  flow (file_path is a server filesystem path, not a URL).
+ *
+ *  LEGACY path: when only `file_path` is set, treat it as a URL —
+ *  some callers (governance docs, agent installers served from
+ *  `/grc/agent/install.exe`) pass a real URL here that's already
+ *  reachable. Strip an `/api/` prefix to avoid double-prefixing
+ *  through the apiClient baseURL. */
+function resolveFileUrl(file: EvidenceFile): string {
+  if (file.evidence_id != null) {
+    return `/evidence/${file.evidence_id}/preview`;
+  }
+  const filePath = file.file_path || '';
   if (!filePath) return '';
   let p = filePath.startsWith('/') ? filePath : `/${filePath}`;
   if (p.startsWith('/api/')) p = p.slice(4);
@@ -509,7 +530,8 @@ export default function EvidenceViewer({ evidence, onClose, documentId }: Props)
     return detectKind(evidence);
   }, [evidence, isInlineMode]);
   const fileUrl = useMemo(
-    () => (evidence && evidence.file_path ? resolveFileUrl(evidence.file_path) : ''),
+    () => (evidence && (evidence.evidence_id != null || evidence.file_path)
+            ? resolveFileUrl(evidence) : ''),
     [evidence],
   );
 
@@ -577,8 +599,12 @@ export default function EvidenceViewer({ evidence, onClose, documentId }: Props)
       triggerSave(data.url, false);
       return;
     }
-    if (!evidence || !evidence.file_path) return;
-    const path = resolveFileUrl(evidence.file_path);
+    if (!evidence || (evidence.evidence_id == null && !evidence.file_path)) return;
+    // For download we prefer /evidence/{id}/download (forces save-as);
+    // fall back to whatever resolveFileUrl returns for legacy callers.
+    const path = evidence.evidence_id != null
+      ? `/evidence/${evidence.evidence_id}/download`
+      : resolveFileUrl(evidence);
     apiClient.get(path, { responseType: 'blob' }).then((res) => {
       const url = URL.createObjectURL(res.data);
       triggerSave(url, true);

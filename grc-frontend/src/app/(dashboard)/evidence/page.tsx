@@ -523,9 +523,17 @@ export default function EvidencePage() {
                         {item.file_path ? (
                           <button
                             onClick={() => setPreviewFile({
+                              // evidence_id routes the viewer through
+                              // /evidence/{id}/preview — the tenant-
+                              // checked streaming endpoint. Without
+                              // this the viewer tries to GET file_path
+                              // as a URL, but file_path is a server
+                              // filesystem path (e.g. C:/Users/...) and
+                              // 404s.
+                              evidence_id: item.id,
                               file_path: item.file_path!,
                               file_name: item.file_name || `Evidence ${item.id}`,
-                              mime_type: (item as any).mime_type ?? null,
+                              mime_type: (item as any).mime_type ?? (item as any).file_type ?? null,
                               file_size: (item as any).file_size ?? null,
                             })}
                             title="Preview file"
@@ -640,9 +648,10 @@ export default function EvidencePage() {
                               {item.file_path ? (
                                 <button
                                   onClick={() => setPreviewFile({
+                                    evidence_id: item.id,
                                     file_path: item.file_path!,
                                     file_name: item.file_name || `Evidence ${item.id}`,
-                                    mime_type: (item as any).mime_type ?? null,
+                                    mime_type: (item as any).mime_type ?? (item as any).file_type ?? null,
                                     file_size: (item as any).file_size ?? null,
                                   })}
                                   title="Preview file"
