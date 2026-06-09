@@ -32,6 +32,106 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-06-09 — One-shot orchestrator: apply EVERY DB change to all Ubuntu tenants
+
+### Background
+
+`DB_CHANGES.md` had grown to 6+ separate items needing to be applied
+in the right order across every existing tenant + the canonical
+source. Easy to skip one and end up with mixed-state tenants. This
+orchestrator wraps them all up so a single command brings every
+tenant into a uniform good state, idempotent + safe to re-run.
+
+### What
+
+[`backend/scripts/apply_all_db_changes_ubuntu.py`](backend/scripts/apply_all_db_changes_ubuntu.py)
+runs four phases against every tenant in the master catalog:
+
+1. **Phase 1 — Schema migrations**: calls `_ensure_for_engine()`
+   per tenant, which runs every column-add in `_COLUMN_ADDS`
+   (Risk Posture v2 cols, vuln effective-risk cols, criticality
+   assessment cols, etc.) and `_COLUMN_TYPE_FIXUPS`
+   (os_keys / target_builds → jsonb).
+2. **Phase 2 — Data backfills**: `grc_vulnerabilities.is_exception`
+   NULL → FALSE.
+3. **Phase 3 — OS-version registry seed**: inserts the ~70 OS
+   rows into `grc_os_versions` on every tenant. Uses
+   `INSERT ... WHERE NOT EXISTS` so missing unique constraints
+   don't break idempotency.
+4. **Phase 4 — CIS library import + cross-tenant sync**: if
+   `/tmp/cis_library.json` is present, imports it into the
+   canonical source tenant (`CANONICAL_LIBRARY_SOURCE_SLUG` env
+   var, falls back to first tenant). Then iterates every OTHER
+   tenant and runs `sync_global_plugins_from_source` so they all
+   inherit the 5,385-rule library.
+
+### How
+
+```bash
+# On Ubuntu, after `git pull` of the latest code:
+cd ~/grc-final/complywerse_ai/backend
+source venv/bin/activate
+
+# OPTIONAL prerequisite (only if you want phase 4 to import the library):
+#   scp the JSON from dev to /tmp/cis_library.json BEFORE running.
+#   If absent, phase 4 only does the cross-tenant sync.
+
+# Optionally preview first
+python -m scripts.apply_all_db_changes_ubuntu --dry-run
+
+# Then for real
+python -m scripts.apply_all_db_changes_ubuntu
+
+# Restart backend so it picks up any code + .env changes
+sudo systemctl restart grc-backend.service
+sudo systemctl restart grc-worker-parsing.service
+```
+
+### Flags
+
+- `--phase N` — run only phase N (1..4)
+- `--skip-phase N` — skip phase N (repeatable)
+- `--dry-run` — print what would happen, no writes
+
+### Risk
+
+- Every phase is idempotent — re-running on a fully-converged
+  deploy prints `inserted=0` lines.
+- Phases 1-3 don't touch any tenant-scoped data — only schema +
+  global registry rows + a single backfill on a column that is
+  documented as `default = False`.
+- Phase 4 inserts only with `tenant_id IS NULL` (global rules);
+  existing global plugins on the target are skipped via
+  `plugin_key` uniqueness.
+- A single phase failing on one tenant doesn't cascade — the
+  next tenant is tried, and a clean error is logged. Re-run the
+  script after fixing the underlying issue.
+
+### Future tenants
+
+When a NEW tenant is created via the UI after Ubuntu has been
+brought up to state:
+
+- Phase 1's logic runs automatically on first request per tenant
+  (via `ensure_compliance_columns()` triggered by `get_db()`).
+- Phase 3 runs automatically during `_seed_tenant_database` in
+  `tenant_manager.py` via `seed_os_versions_and_backfill`.
+- Phase 4 runs automatically during `_seed_tenant_database` via
+  `sync_global_plugins_from_source` against
+  `CANONICAL_LIBRARY_SOURCE_SLUG`.
+
+No manual step needed for new tenants — they all inherit. The
+orchestrator is only for catching up tenants that existed BEFORE
+the relevant code landed.
+
+### Auto-applied?
+
+**No** — run this once on Ubuntu after `git pull`. After that, the
+deployment is in a uniform state and the script does nothing on
+re-run (every phase is no-op).
+
+---
+
 ## 2026-06-09 — Seed `grc_os_versions` registry on Ubuntu (DATA seed)
 
 ### Background
