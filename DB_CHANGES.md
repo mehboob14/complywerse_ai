@@ -32,6 +32,126 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-06-09 — Asset auto-create: heartbeat + wizard now stamp owner_id (code-only)
+
+### What
+
+Two changes to the asset-auto-create logic so newly-discovered
+hosts always show up on `/risk-posture`:
+
+  * **Heartbeat** ([backend/grc/modules/agents/router.py](backend/grc/modules/agents/router.py))
+      - Removed the `body.os_normalized` gate. A brand-new agent
+        that hasn't completed OS detection yet now still creates
+        its stub row on first heartbeat (OS fields refresh on the
+        next heartbeat with data).
+      - Stamps `owner_id = agent.created_by_user_id` (the operator
+        who enrolled the agent) + `owner_name` for the convenience
+        column.
+      - Added an else-branch that auto-links the agent to a
+        pre-existing host match (case-insensitive) instead of
+        loop-creating duplicates.
+  * **Connect Wizard handshake** ([backend/grc/routers/connect_wizard_router.py](backend/grc/routers/connect_wizard_router.py))
+      - Hostname lookup changed from
+        `ITAsset.host_name == body.hostname` to
+        `func.lower(ITAsset.host_name) == hn.lower()` so
+        `Win-SRV01.bank.local` matches `win-srv01.bank.local`
+        from a previous wizard run / heartbeat / CMDB import.
+      - Stamps `owner_id = user_id` (decoded from the wizard's
+        signed JWT payload, i.e. the operator who started the
+        wizard) + `owner_name`.
+
+Bulk discover ([backend/grc/modules/onboarding/router.py](backend/grc/modules/onboarding/router.py)) was
+already correct — both case-insensitive lookup AND `owner_id`
+stamping were in place. No change.
+
+### Why
+
+Risk Posture's dashboard query is owner-scoped for non-admin
+users — `WHERE owner_id = <viewer>`. Assets that landed in
+`grc_it_assets` with `owner_id IS NULL` were silently filtered
+out, so `/risk-posture` showed "0 assets" while `/assets`
+showed the same row fine. The case-sensitive wizard match was a
+secondary issue that produced duplicate rows when operators
+typed hostnames in different cases.
+
+### Live test (dev, on the `company` tenant)
+
+```
+=== Test 1: fresh agent heartbeat creates ITAsset with owner_id ===
+  user mehboob id=1
+  fake agent id=23 created_by_user_id=1
+  asset created id=5 owner_id=1 owner_name='mehboob'
+
+=== Test 2: Risk Posture owner-scoped query finds it ===
+  PASS: dashboard query returned the host
+```
+
+### DB impact
+
+**None.** Pure code change. No new tables, no new columns. The
+`owner_id` / `owner_name` columns already existed on
+`grc_it_assets` — we just weren't populating them on these two
+paths.
+
+### Existing assets
+
+Assets created BEFORE this fix landed will still have
+`owner_id IS NULL`. To backfill them so they show up in Risk
+Posture for the operator who likely owns them:
+
+```bash
+cd ~/grc-final/complywerse_ai/backend
+source venv/bin/activate
+python <<'PYEOF'
+from dotenv import load_dotenv; load_dotenv('.env')
+from grc.db import open_tenant_session
+from grc.models import GRCUser, ITAsset, Tenant, SessionLocal
+from sqlalchemy import text
+
+# Pick the canonical admin per tenant (the primary contact) and
+# stamp them on any orphan-owner assets. Adjust slugs as needed.
+master = SessionLocal()
+for t in master.query(Tenant).all():
+    if not t.slug or not t.primary_contact_email:
+        continue
+    sess = open_tenant_session(t.slug)
+    admin = sess.query(GRCUser).filter(
+        GRCUser.email == t.primary_contact_email
+    ).first()
+    if not admin:
+        sess.close(); continue
+    n = sess.execute(text(
+        "UPDATE grc_it_assets SET owner_id = :uid, "
+        "  owner_name = COALESCE(owner_name, :uname) "
+        "WHERE owner_id IS NULL"
+    ), {'uid': admin.id, 'uname': admin.display_name or admin.username}).rowcount
+    sess.commit()
+    print(f'{t.slug}: stamped {n} orphan-owner asset(s) to user {admin.email}')
+    sess.close()
+master.close()
+PYEOF
+```
+
+Idempotent — re-running affects 0 rows once cleaned.
+
+### How
+
+```bash
+cd ~/grc-final/complywerse_ai
+git pull
+sudo systemctl restart grc-backend.service
+# (optional) run the orphan-owner backfill snippet above
+```
+
+### Auto-applied?
+
+Code: **N/A — code only.** The optional backfill snippet is the
+only DATA write, and it's only needed for assets that already
+exist with NULL owner — new assets created via heartbeat / wizard
+land correctly stamped.
+
+---
+
 ## 2026-06-09 — Evidence preview call sites all wired through new endpoint (code-only)
 
 ### What

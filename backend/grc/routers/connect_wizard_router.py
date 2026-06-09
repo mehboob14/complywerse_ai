@@ -33,6 +33,7 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from grc.crypto import encrypt_secret
@@ -741,11 +742,17 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
             .first()
         )
     if asset is None:
+        # Case-insensitive hostname match — the operator may type
+        # `Win-SRV01.bank.local` while the existing row was created with
+        # `win-srv01.bank.local` from a previous wizard run / agent
+        # heartbeat / CMDB import. Without normalising on both sides we
+        # silently create a duplicate row and the inventory diverges.
+        hn = (body.hostname or "").strip()
         asset = (
             db.query(ITAsset)
             .filter(
                 ITAsset.tenant_id == tenant_id,
-                ITAsset.host_name == body.hostname,
+                func.lower(ITAsset.host_name) == hn.lower(),
             )
             .first()
         )
@@ -760,6 +767,18 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
     )
 
     if not asset:
+        # Stamp the operator who started the wizard (from the signed
+        # JWT payload) as owner. Without this the row has owner_id
+        # IS NULL and the Risk Posture owner-scoped query filters it
+        # out — operator sees "0 assets in tenant" on /risk-posture
+        # even though /assets shows the row.
+        owner_display = None
+        if user_id is not None:
+            from grc.models import GRCUser
+            _owner = db.query(GRCUser).filter(GRCUser.id == user_id).first()
+            if _owner is not None:
+                owner_display = (getattr(_owner, "display_name", None)
+                                 or getattr(_owner, "username", None))
         asset = ITAsset(
             tenant_id=tenant_id,
             name=label,
@@ -773,6 +792,8 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
             os_edition=os_edition,
             criticality="medium",
             status="active",
+            owner_id=user_id,
+            owner_name=owner_display,
         )
         db.add(asset)
     else:

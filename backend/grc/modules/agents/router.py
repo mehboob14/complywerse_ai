@@ -886,30 +886,54 @@ def agent_heartbeat(
             if asset is not None and not agent.asset_id:
                 agent.asset_id = asset.id
 
-    # Auto-create stub asset if heartbeat brought OS data but no asset is
-    # linked AND no other tenant asset uses this hostname. This is the
-    # "first heartbeat ever, no CMDB import yet" case — we'd rather have
-    # a stub row than lose the OS profile entirely.
-    if asset is None and (body.hostname or agent.hostname) and body.os_normalized:
+    # Auto-create stub asset on FIRST heartbeat — no longer gated on
+    # body.os_normalized. The previous gate meant a brand-new agent on
+    # a fresh PC that hadn't completed OS detection yet would heartbeat
+    # forever without an asset row → Risk Posture / Inventory never
+    # showed the host. Dropping the gate creates the stub immediately;
+    # OS fields refresh on the next heartbeat that has data.
+    #
+    # Stamps `owner_id` from `agent.created_by_user_id` (the operator who
+    # enrolled this agent) — without it the asset has owner_id IS NULL
+    # and the Risk Posture owner-scoped query filters it out, exactly
+    # the symptom we hit on Ubuntu.
+    if asset is None and (body.hostname or agent.hostname):
         wanted_host = (body.hostname or agent.hostname or "").strip()
-        existing = db.query(ITAsset).filter(
-            ITAsset.tenant_id == agent.tenant_id,
-            func.lower(ITAsset.host_name) == wanted_host.lower(),
-        ).first()
-        if existing is None:
-            asset = ITAsset(
-                tenant_id=agent.tenant_id,
-                name=f"agent-host:{wanted_host}",
-                description=f"Auto-created from agent heartbeat (agent #{agent.id})",
-                asset_type="infrastructure",
-                host_name=wanted_host,
-                ip_address=body.ip_address,
-                criticality="medium",
-                status="active",
-            )
-            db.add(asset)
-            db.flush()
-            agent.asset_id = asset.id
+        if wanted_host:
+            existing = db.query(ITAsset).filter(
+                ITAsset.tenant_id == agent.tenant_id,
+                func.lower(ITAsset.host_name) == wanted_host.lower(),
+            ).first()
+            if existing is None:
+                # Look up the enroller's display name for the owner_name
+                # convenience column (matches what bulk-discover stamps).
+                owner_user = None
+                if agent.created_by_user_id:
+                    from grc.models import GRCUser
+                    owner_user = db.query(GRCUser).filter(
+                        GRCUser.id == agent.created_by_user_id
+                    ).first()
+                asset = ITAsset(
+                    tenant_id=agent.tenant_id,
+                    name=f"agent-host:{wanted_host}",
+                    description=f"Auto-created from agent heartbeat (agent #{agent.id})",
+                    asset_type="infrastructure",
+                    host_name=wanted_host,
+                    ip_address=body.ip_address,
+                    criticality="medium",
+                    status="active",
+                    owner_id=agent.created_by_user_id,
+                    owner_name=(getattr(owner_user, "display_name", None)
+                                or getattr(owner_user, "username", None)) if owner_user else None,
+                )
+                db.add(asset)
+                db.flush()
+                agent.asset_id = asset.id
+            else:
+                # Reuse the existing host. Auto-link the agent to it so
+                # subsequent heartbeats skip the lookup branch.
+                asset = existing
+                agent.asset_id = asset.id
 
     # Write OS profile through if we ended up with an asset + agent sent
     # anything. Don't clobber non-null fields with nulls — only positive
