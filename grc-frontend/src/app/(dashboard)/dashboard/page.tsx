@@ -41,8 +41,26 @@ import {
   Lock,
   Layers,
   Link as LinkIcon,
+  LayoutDashboard, Scale, Bug as BugIcon, Server,
+  ClipboardList, ListTodo, AlertCircle, FileCheck as FileCheck2, BookOpen,
+  type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
+
+// ─── Module dashboard imports — each tab below mounts the existing default
+// export of that module's main page verbatim. Conditional render in the tab
+// body means each module's React-Query hooks (including refetchInterval
+// queries) only fire when that tab is the active one — so the tab strip is
+// free, opening Vulnerabilities doesn't double-fetch Compliance, etc.
+import GovernanceDashboardPage from '../governance/page';
+import ERMOverviewPage from '../erm/page';
+import ComplianceOverviewPage from '../compliance-overview/page';
+import VulnerabilitiesPage from '../vulnerabilities/page';
+import AssetsPage from '../assets/page';
+import FrameworksDashboardPage from '../frameworks/page';
+import IssuesPage from '../issues/page';
+import TaskBoardPage from '../tasks/page';
+import EvidencePage from '../evidence/page';
 
 // â”€â”€â”€ Color palettes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const STRATEGY_COLORS: Record<string, string> = {
@@ -1238,7 +1256,14 @@ function GrcNetworkFlow({ counts }: {
   );
 }
 
-export default function MainDashboard() {
+// ─── Executive Overview tab body ────────────────────────────────────────────
+// Lifted out of the former default export so the new `MainDashboard` below
+// can mount it as one of N tabs. Heavy cross-module visualisations
+// (InternalControlsSunburst / GrcNetworkFlow / ComplianceOrbitChart /
+// FrameworkControlsChart / ControlLibraryOverview) were removed per the
+// user's "slim down to KPI strip" decision — the data each consumed is
+// already visible via its dedicated module tab.
+function ExecutiveOverviewTab() {
   const { data: unified } = useQuery({
     queryKey: ['unified-dashboard'],
     queryFn: () => dashboardApi.getUnified().then((r) => r.data),
@@ -1534,6 +1559,13 @@ export default function MainDashboard() {
       </div>
 
       {/* â”€â”€ Row 1: Internal Controls Sunburst + Risk Treatment Strategy Mix â”€â”€ */}
+      {/* Heavy cross-module visualizations (InternalControlsSunburst,
+          GrcNetworkFlow, ComplianceOrbitChart, FrameworkControlsChart,
+          ControlLibraryOverview) were removed per the "slim down to KPI
+          strip" decision — each module's deep dashboard is reachable via
+          its tab below. */}
+      {false && (
+      <>
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
         {controlGroups.length > 0 || complianceStatements.length > 0 ? (
           <InternalControlsSunburst groups={controlGroups} statements={complianceStatements} />
@@ -1574,13 +1606,17 @@ export default function MainDashboard() {
           <ComplianceOrbitChart frameworks={frameworkCoverageData} compSummaryStats={compSummaryStats} />
         </div>
       </div>
+      </>
+      )}
 
-      
+
       <div className="grid gap-4 lg:grid-cols-2">
+        {false && (
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <SectionHeader title="Framework Controls by Domain" sub="Control compliance status across domains" href="/control-library" />
           <FrameworkControlsChart groups={controlGroups} statements={complianceStatements} />
         </div>
+        )}
 
         {/* Vulnerability Status */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -1651,6 +1687,7 @@ export default function MainDashboard() {
 
       {/* â”€â”€ Row 4: Control Library domain bar + GRC Snapshot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+        {false && (
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <SectionHeader
             title="Control Library Overview"
@@ -1659,6 +1696,7 @@ export default function MainDashboard() {
           />
           <ControlLibraryOverview groups={controlGroups} />
         </div>
+        )}
 
         {/* GRC Posture Snapshot */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
@@ -1734,11 +1772,85 @@ export default function MainDashboard() {
         </div>
       </div>
 
-      {/* ── Row 5: KRI Status + Incident Summary ─────────────────────────── */}
+      {/* Row 5: KRI Status + Incident Summary */}
       <div className="grid gap-4 lg:grid-cols-2">
         <KriStatusPanel kris={(kriList as KriItem[] | undefined) ?? []} />
         <IncidentSummaryPanel dash={incidentDash as IncidentDashData | undefined} />
       </div>
+    </div>
+  );
+}
+
+// ─── Default export: tabbed hub ─────────────────────────────────────────────
+// Top-level main dashboard. Default tab is the slimmed-down Executive
+// Overview; the rest mount each module's existing page verbatim. State-only
+// routing (no URL sync) matches the pattern used for Vulnerabilities and
+// Compliance & Scans consolidations. Conditional mount = each module's
+// queries fire only when that tab is the active one.
+
+type MainTab =
+  | 'executive'
+  | 'governance'
+  | 'risk'
+  | 'compliance'
+  | 'vulnerabilities'
+  | 'assets'
+  | 'frameworks'
+  | 'issues'
+  | 'tasks'
+  | 'evidence';
+
+const MAIN_TABS: { id: MainTab; label: string; icon: LucideIcon }[] = [
+  { id: 'executive',       label: 'Executive Overview', icon: LayoutDashboard },
+  { id: 'governance',      label: 'Governance',         icon: BookOpen },
+  { id: 'risk',            label: 'Risk',               icon: Scale },
+  { id: 'compliance',      label: 'Compliance',         icon: Shield },
+  { id: 'vulnerabilities', label: 'Vulnerabilities',    icon: BugIcon },
+  { id: 'assets',          label: 'Assets',             icon: Server },
+  { id: 'frameworks',      label: 'Frameworks',         icon: ClipboardList },
+  { id: 'issues',          label: 'Issues',             icon: AlertCircle },
+  { id: 'tasks',           label: 'Critical Tasks',     icon: ListTodo },
+  { id: 'evidence',        label: 'Evidence',           icon: FileCheck2 },
+];
+
+export default function MainDashboard() {
+  const [activeTab, setActiveTab] = useState<MainTab>('executive');
+
+  return (
+    <div className="-m-4 lg:-m-5">
+      <div className="border-b border-gray-200 bg-white px-3 sm:px-6">
+        <div className="flex items-center gap-0 overflow-x-auto -mb-px">
+          {MAIN_TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`relative inline-flex items-center gap-1.5 rounded-t-md px-3 sm:px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors -mb-px ${
+                activeTab === id
+                  ? 'text-blue-700 bg-blue-50/50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-slate-50'
+              }`}
+            >
+              <Icon size={14} />
+              {label}
+              {activeTab === id && (
+                <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-blue-600" />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === 'executive'       && <ExecutiveOverviewTab />}
+      {activeTab === 'governance'      && <GovernanceDashboardPage />}
+      {activeTab === 'risk'            && <ERMOverviewPage />}
+      {activeTab === 'compliance'      && <ComplianceOverviewPage />}
+      {activeTab === 'vulnerabilities' && <VulnerabilitiesPage />}
+      {activeTab === 'assets'          && <AssetsPage />}
+      {activeTab === 'frameworks'      && <FrameworksDashboardPage />}
+      {activeTab === 'issues'          && <IssuesPage />}
+      {activeTab === 'tasks'           && <TaskBoardPage />}
+      {activeTab === 'evidence'        && <EvidencePage />}
     </div>
   );
 }

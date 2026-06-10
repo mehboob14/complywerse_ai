@@ -17,7 +17,6 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
   '/vulnerabilities/sla': { title: 'SLA Configuration' },
   '/vulnerabilities/reports': { title: 'Vulnerability Reports' },
   '/vulnerabilities/departments': { title: 'Department Management' },
-  '/vulnerabilities/analytics': { title: 'Vulnerability Analytics', subtitle: 'Executive + analyst dashboards, correlation, vendor risk, and compliance reports' },
   '/vulnerabilities/exceptions': { title: 'Exception Queue', subtitle: 'Cross-tenant exception review and approval workflow' },
   '/dashboard': { title: 'Overview' },
   '/governance': { title: 'Governance', subtitle: 'Policy and document lifecycle management' },

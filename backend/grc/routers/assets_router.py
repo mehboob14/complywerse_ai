@@ -36,6 +36,7 @@ from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 # Phase 5.4 + 5.3 helpers — keep all logic out of the router body.
 from ..services.asset_criticality import recompute_for_asset as recompute_asset_criticality
 from ..services import asset_lifecycle
+from ..services.asset_control_recommender import recommend_for_asset
 # Per-database-per-tenant: the tenant DB *is* the active session, so tenant
 # users are just GRCUser rows in the current request's session.
 
@@ -2187,6 +2188,141 @@ def remove_framework_control_link(
     db.delete(link)
     db.commit()
     return None
+
+
+# ── Mapping recommendations ───────────────────────────────────────────────────
+# Regex-driven recommender that scores every framework control against this
+# asset's profile (OS family, asset type, network exposure, data class,
+# criticality, business function, vendor). See
+# services/asset_control_recommender.py for the signal library.
+
+class _AcceptRecommendationsRequest(BaseModel):
+    framework_control_ids: List[int]
+    coverage_status: str = "partial"
+    notes: Optional[str] = None
+
+
+@router.get("/{asset_id}/mapping-recommendations")
+def get_mapping_recommendations(
+    asset_id: int,
+    framework_id: Optional[int] = Query(None, description="Restrict to a single framework"),
+    min_score: int = Query(1, ge=1, le=20, description="Minimum score to surface (default 1 — surfaces universal-only matches for sparse-profile assets)"),
+    limit: int = Query(100, ge=1, le=500),
+    include_linked: bool = Query(False, description="Include controls already linked"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+
+    result = recommend_for_asset(
+        db,
+        asset,
+        min_score=min_score,
+        limit=limit,
+        framework_id=framework_id,
+        include_linked=include_linked,
+    )
+
+    return {
+        "recommendations": [
+            {
+                "framework_control_id": r.framework_control_id,
+                "framework_id": r.framework_id,
+                "framework_name": r.framework_name,
+                "framework_short_code": r.framework_short_code,
+                "code": r.code,
+                "name": r.name,
+                "statement": r.statement,
+                "score": r.score,
+                "confidence": r.confidence,
+                "matched_signals": [
+                    {"key": s.key, "label": s.label, "weight": s.weight}
+                    for s in r.matched_signals
+                ],
+                "negative_notes": r.negative_notes,
+            }
+            for r in result.recommendations
+        ],
+        "total_controls_scanned": result.total_controls_scanned,
+        "total_already_linked": result.total_already_linked,
+        "asset_profile": result.asset_profile,
+    }
+
+
+@router.post("/{asset_id}/mapping-recommendations/accept", status_code=status.HTTP_200_OK)
+def accept_mapping_recommendations(
+    asset_id: int,
+    payload: _AcceptRecommendationsRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+
+    coverage = (payload.coverage_status or "partial").lower()
+    if coverage not in {"partial", "full", "minimal"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="coverage_status must be one of: partial, full, minimal",
+        )
+
+    ids = list({int(fc_id) for fc_id in payload.framework_control_ids if int(fc_id) > 0})
+    if not ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="framework_control_ids is required",
+        )
+
+    existing_ids = {
+        row.framework_control_id
+        for row in db.query(AssetFrameworkControlLink.framework_control_id).filter(
+            AssetFrameworkControlLink.asset_id == asset_id,
+            AssetFrameworkControlLink.framework_control_id.in_(ids),
+        )
+    }
+    valid_ids = {
+        row.id
+        for row in db.query(FrameworkControl.id).filter(FrameworkControl.id.in_(ids))
+    }
+
+    linked: List[int] = []
+    skipped_existing = 0
+    skipped_missing = 0
+    for fc_id in ids:
+        if fc_id not in valid_ids:
+            skipped_missing += 1
+            continue
+        if fc_id in existing_ids:
+            skipped_existing += 1
+            continue
+        db_link = AssetFrameworkControlLink(
+            asset_id=asset_id,
+            framework_control_id=fc_id,
+            coverage_status=coverage,
+            notes=payload.notes,
+        )
+        db.add(db_link)
+        db.flush()
+        linked.append(db_link.id)
+
+    db.commit()
+    return {
+        "linked": len(linked),
+        "link_ids": linked,
+        "skipped_existing": skipped_existing,
+        "skipped_missing": skipped_missing,
+    }
 
 
 @router.post("/{asset_id}/link-evidence", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)

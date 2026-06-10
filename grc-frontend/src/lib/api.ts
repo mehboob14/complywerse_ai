@@ -620,26 +620,22 @@ export const assetsApi = {
     apiClient.post(`/assets/${id}/link-evidence`, data),
   unlinkEvidence: (id: number, linkId: number) => 
     apiClient.delete(`/assets/${id}/link-evidence/${linkId}`),
-  getSecurityComplianceControls: (
-    id: number,
-    params?: {
-      search?: string;
-      sort_by?: 'control_id' | 'title' | 'level' | 'section';
-      sort_order?: 'asc' | 'desc';
-      level?: string;
-      section?: string;
-      selected_only?: boolean;
-      skip?: number;
-      limit?: number;
-    }
-  ) => apiClient.get(`/assets/${id}/security-compliance/controls`, { params }),
-  getSecurityComplianceSelections: (id: number) =>
-    apiClient.get(`/assets/${id}/security-compliance/selections`),
-  addSecurityComplianceSelections: (id: number, controlIds: string[]) =>
-    apiClient.post(`/assets/${id}/security-compliance/selections`, { control_ids: controlIds }),
-  removeSecurityComplianceSelection: (id: number, controlId: string) =>
-    apiClient.delete(`/assets/${id}/security-compliance/selections/${encodeURIComponent(controlId)}`),
   getCoverageAnalysis: (id: number) => apiClient.get(`/assets/${id}/coverage-analysis`),
+  getMappingRecommendations: (
+    id: number,
+    params?: { framework_id?: number; min_score?: number; limit?: number; include_linked?: boolean }
+  ) => apiClient.get(`/assets/${id}/mapping-recommendations`, { params }),
+  acceptMappingRecommendations: (
+    id: number,
+    framework_control_ids: number[],
+    coverage_status: 'partial' | 'full' | 'minimal' = 'partial',
+    notes?: string
+  ) =>
+    apiClient.post(`/assets/${id}/mapping-recommendations/accept`, {
+      framework_control_ids,
+      coverage_status,
+      notes,
+    }),
   assessRisk: (id: number) => apiClient.post(`/assets/${id}/assess`),
   // Trajectory map data: Asset → Vulnerabilities → Controls → Risks (one-shot
   // aggregate). Powers the interactive xyflow diagram on the asset detail

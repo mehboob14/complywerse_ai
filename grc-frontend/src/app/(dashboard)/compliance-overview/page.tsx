@@ -21,7 +21,17 @@ import {
   Cloud, Database, Server, RouterIcon as RouterI, Users as UsersIcon,
   Container, CloudCog, Search, ChevronDown, ChevronRight, ExternalLink,
   Loader2, ShieldCheck, AlertTriangle, AlertCircle, CheckCircle2,
+  BarChart3, BookOpen, Gauge, Cpu,
+  type LucideIcon,
 } from 'lucide-react';
+// Consolidated "Compliance & Scans" host — Overview owns the URL, the
+// other three pages mount as siblings underneath the tab strip. All four
+// underlying routes (/compliance-overview, /compliance-plugins/library,
+// /risk-posture, /admin/agents) still resolve standalone so deep-links
+// from elsewhere in the app are unaffected.
+import RuleLibraryPage from '../compliance-plugins/library/page';
+import RiskPosturePage from '../risk-posture/page';
+import AgentsAdminPage from '../admin/agents/page';
 
 type AssetRow = {
   id: number;
@@ -196,7 +206,60 @@ function prettyVariant(v: string): string {
     .replace(/^linux_ssh$/, 'Linux (no distro detected)');
 }
 
+// ─── Default export: tabbed host ────────────────────────────────────────────
+// The four sidebar entries (Compliance Overview / Compliance Rules / Risk
+// Posture / Scanners) collapsed into a single "Compliance & Scans" entry.
+// This page now mounts them as four sibling tabs. State-only routing (no
+// URL sync) matches the pattern we used for the Vulnerabilities Overview
+// move — conditional mount means inactive tabs incur no fetch cost.
+
+type ComplianceScansTab = 'overview' | 'rules' | 'risk-posture' | 'scanners';
+
+const COMPLIANCE_TABS: { id: ComplianceScansTab; label: string; icon: LucideIcon }[] = [
+  { id: 'overview',      label: 'Compliance Overview', icon: BarChart3 },
+  { id: 'rules',         label: 'Compliance Rules',    icon: BookOpen },
+  { id: 'risk-posture',  label: 'Risk Posture',        icon: Gauge },
+  { id: 'scanners',      label: 'Scanners',            icon: Cpu },
+];
+
 export default function ComplianceOverviewPage() {
+  const [activeTab, setActiveTab] = useState<ComplianceScansTab>('overview');
+
+  return (
+    <div className="-m-4 lg:-m-5">
+      <div className="border-b border-gray-200 bg-white px-3 sm:px-6">
+        <div className="flex items-center gap-0 overflow-x-auto -mb-px">
+          {COMPLIANCE_TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`relative inline-flex items-center gap-1.5 rounded-t-md px-3 sm:px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors -mb-px ${
+                activeTab === id
+                  ? 'text-blue-700 bg-blue-50/50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-slate-50'
+              }`}
+            >
+              <Icon size={14} />
+              {label}
+              {activeTab === id && (
+                <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-blue-600" />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === 'overview' && <OverviewTabContent />}
+      {activeTab === 'rules' && <RuleLibraryPage />}
+      {activeTab === 'risk-posture' && <RiskPosturePage />}
+      {activeTab === 'scanners' && <AgentsAdminPage />}
+    </div>
+  );
+}
+
+// ─── Overview tab body (the original /compliance-overview page) ─────────────
+function OverviewTabContent() {
   const overviewQ = useQuery({
     queryKey: ['compliance-overview.assets'],
     queryFn: async () => (await apiClient.get('/compliance-plugins/assets-overview')).data as AssetsOverviewResp,

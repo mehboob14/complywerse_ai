@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Building2, Users as UsersIcon, ShieldCheck, ScrollText, Bot, GitPullRequest, KeyRound, Lock, Cloud, UsersRound, Plug } from 'lucide-react';
 import OrganizationProfilePage from './organization/page';
 import UsersManagementPage from './users/page';
@@ -16,8 +17,22 @@ import { IdentityProvidersCard } from '@/components/integrations/IdentityProvide
 
 type AdminTab = 'company' | 'users' | 'roles' | 'teams' | 'password-policy' | 'integrations' | 'cloud-connectors' | 'connectors' | 'identity' | 'workflow' | 'audit';
 
+const VALID_ADMIN_TABS = new Set<AdminTab>([
+  'company','users','roles','teams','password-policy','integrations',
+  'cloud-connectors','connectors','identity','workflow','audit',
+]);
+
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<AdminTab>('company');
+  const searchParams = useSearchParams();
+  // Sidebar Administration popover deep-links via ?tab=<id>. Default
+  // landing stays 'company' when no/invalid param is given — preserves
+  // existing behavior for anyone hitting /admin without a query string.
+  const initialTab = (() => {
+    const raw = searchParams?.get('tab');
+    if (raw && VALID_ADMIN_TABS.has(raw as AdminTab)) return raw as AdminTab;
+    return 'company';
+  })();
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
 
   const adminTabs: { id: AdminTab; label: string; icon: typeof Building2 }[] = [
     { id: 'company', label: 'Company', icon: Building2 },

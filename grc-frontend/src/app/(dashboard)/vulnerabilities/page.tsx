@@ -10,10 +10,16 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
 import NcaVulnRegisterTab from '@/components/vulnerabilities/NcaVulnRegisterTab';
 import NcaVulnQuickAddModal from '@/components/vulnerabilities/NcaVulnQuickAddModal';
+// The Overview tab reuses the standalone /vulnerabilities/dashboard page
+// component verbatim — its queries only fire when this tab is the active
+// one (conditional mount below), so picking the Vulnerabilities tab incurs
+// zero extra network calls.
+import VulnerabilityDashboardPage from './dashboard/page';
 import { Abbr } from '@/components/common/Abbr';
 import {
   Upload,
   Bug,
+  BarChart3,
   Loader2,
   Plus,
   X,
@@ -227,7 +233,7 @@ function getStatusStyle(status: string) {
 
 export default function VulnerabilitiesPage() {
   const { hasPermission } = usePermissions();
-  const [activeTab, setActiveTab] = useState('vulnerabilities' as 'vulnerabilities' | 'departments' | 'sla');
+  const [activeTab, setActiveTab] = useState('vulnerabilities' as 'overview' | 'vulnerabilities' | 'departments' | 'sla');
   const [registerType, setRegisterType] = useState<'standard' | 'nca'>('standard');
 
   // (queryClient is declared further down; the backfill effect references it
@@ -372,6 +378,7 @@ export default function VulnerabilitiesPage() {
   }, [registerType, queryClient]);
 
   const tabs = [
+    { id: 'overview', label: 'Overview', icon: BarChart3 },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
     { id: 'departments', label: 'Departments', icon: Building2 },
     { id: 'sla', label: 'SLA Config', icon: Clock },
@@ -756,7 +763,7 @@ export default function VulnerabilitiesPage() {
             {tabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
-                onClick={() => setActiveTab(id as 'vulnerabilities' | 'departments' | 'sla')}
+                onClick={() => setActiveTab(id as 'overview' | 'vulnerabilities' | 'departments' | 'sla')}
                 className={`relative inline-flex items-center gap-1.5 rounded-t-md px-3 sm:px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors -mb-px ${
                   activeTab === id
                     ? 'text-blue-700 bg-blue-50/50'
@@ -786,6 +793,15 @@ export default function VulnerabilitiesPage() {
             </div>
           )}
         </div>
+
+        {/* Overview tab — reuses the standalone Dashboard page component
+            verbatim. Conditional mount means its useQuery hooks (with their
+            60s refetchInterval) only run while this tab is active. */}
+        {activeTab === 'overview' && (
+          <div className="mt-3">
+            <VulnerabilityDashboardPage />
+          </div>
+        )}
 
 
         {/* Both registerType values use the SAME general view — only the

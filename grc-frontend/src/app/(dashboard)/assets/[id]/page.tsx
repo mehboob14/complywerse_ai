@@ -16,7 +16,7 @@ import {
   ClipboardList, Plus, X, Trash2, Edit, RefreshCw,
   AppWindow, HardDrive, Database, Cloud, Building2,
   Lock, ShieldCheck, MapPin, User, Bug, Network,
-  Gauge, PackageSearch,
+  Gauge, PackageSearch, Sparkles, Layers, Filter,
   // CIS Module Updated drop — ComplianceTab + NoMappingCallout + ScanSessions
   Cpu, Play, ChevronDown, ChevronRight,
 } from 'lucide-react';
@@ -54,7 +54,7 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   third_party: 'Third-Party System',
 };
 
-type TabType = 'details' | 'compliance' | 'controls' | 'evidence' | 'risks' | 'security-compliance' | 'vulnerabilities' | 'criticality' | 'trajectory';
+type TabType = 'details' | 'compliance' | 'controls' | 'evidence' | 'risks' | 'vulnerabilities' | 'criticality' | 'trajectory' | 'mapping-recommendations';
 
 interface LinkedControl {
   id: number;
@@ -171,29 +171,6 @@ interface AssetDetailData {
   os_family?: string | null;
   os_version?: string | null;
   os_normalized?: string | null;
-}
-
-interface SecurityComplianceControl {
-  control_id: string;
-  ControlID?: string;
-  Title?: string;
-  Level?: string;
-  Section?: string;
-  Assessment?: string;
-  selected: boolean;
-  [key: string]: unknown;
-}
-
-interface SecurityComplianceControlsResponse {
-  benchmark: string;
-  version?: string;
-  published?: string;
-  total_controls_in_source: number;
-  total: number;
-  skip: number;
-  limit: number;
-  selected_count: number;
-  controls: SecurityComplianceControl[];
 }
 
 type AssetUpdatePayload = Partial<
@@ -489,16 +466,17 @@ export default function AssetDetailPage() {
     // CIS Module Updated drop — Compliance tab. Position #2 to match
     // Hassan's reference layout. Holds AI Classification (OS profile),
     // Matched benchmark count, Benchmark resolution chain, scan
-    // controls + run history. Distinct from the rightmost "Security
-    // Compliance" tab which is the manual-controls linkage view.
+    // controls + run history.
     { id: 'compliance', label: 'Compliance', icon: Cpu },
     { id: 'controls', label: 'Controls', icon: Shield },
     { id: 'evidence', label: 'Evidence', icon: FileCheck },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
     { id: 'risks', label: 'Risks', icon: AlertTriangle },
     { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
-    { id: 'trajectory', label: 'Trajectory', icon: Network },
-    { id: 'security-compliance', label: 'Security Compliance', icon: ShieldCheck },
+    { id: 'mapping-recommendations', label: 'Mapping Recommendations', icon: Sparkles },
+    // Trajectory tab hidden from sidebar — render code below is intact
+    // so re-enabling is a one-line uncomment.
+    // { id: 'trajectory', label: 'Trajectory', icon: Network },
   ];
 
   return (
@@ -776,8 +754,8 @@ export default function AssetDetailPage() {
         {activeTab === 'trajectory' && (
           <TrajectoryMap assetId={assetId} />
         )}
-        {activeTab === 'security-compliance' && (
-          <SecurityComplianceTab assetId={assetId} />
+        {activeTab === 'mapping-recommendations' && (
+          <MappingRecommendationsTab assetId={assetId} />
         )}
       </div>
 
@@ -2055,215 +2033,447 @@ function RisksTab({ asset }: { asset: AssetDetailData }) {
   );
 }
 
-function SecurityComplianceTab({ assetId }: { assetId: number }) {
+// ── Mapping Recommendations tab ──────────────────────────────────────────────
+// Regex-driven recommender (no LLM). Backend scores every framework control
+// against this asset's profile (OS family, asset type, network exposure, data
+// class, criticality, business function, vendor) and returns a ranked list of
+// suggested links, grouped by confidence.
+
+interface MatchedSignal {
+  key: string;
+  label: string;
+  weight: number;
+}
+
+interface MappingRecommendation {
+  framework_control_id: number;
+  framework_id: number | null;
+  framework_name: string | null;
+  framework_short_code: string | null;
+  code: string;
+  name: string;
+  statement: string | null;
+  score: number;
+  confidence: 'high' | 'medium' | 'low';
+  matched_signals: MatchedSignal[];
+  negative_notes: string[];
+}
+
+interface MappingRecommendationsResponse {
+  recommendations: MappingRecommendation[];
+  total_controls_scanned: number;
+  total_already_linked: number;
+  asset_profile: Record<string, unknown>;
+}
+
+// Tailwind's JIT only ships CSS for class strings it can see as literals at
+// build time. Earlier this code interpolated `bg-${bandColor}-50` — those
+// strings never landed in the generated CSS, so the confidence-band headers
+// rendered with no color at all. Map keeps every class string literal.
+const BAND_CLASSES = {
+  high:   { headerBg: 'bg-emerald-50', pillBg: 'bg-emerald-100', pillText: 'text-emerald-800' },
+  medium: { headerBg: 'bg-amber-50',   pillBg: 'bg-amber-100',   pillText: 'text-amber-800'   },
+  low:    { headerBg: 'bg-slate-50',   pillBg: 'bg-slate-100',   pillText: 'text-slate-800'   },
+} as const;
+
+// Each signal in the backend recommender has an `applies(asset)` predicate
+// that gates whether the signal can fire. When the asset's underlying field
+// is null/empty, the signal is silently skipped — leading to the empty tab
+// the user reported. This map lets the empty-state UI tell the operator
+// which fields, if filled in, would unlock more recommendations.
+const PROFILE_FIELDS_FOR_SIGNALS: Array<{ key: string; label: string; explain: string }> = [
+  { key: 'os_family',           label: 'OS family',         explain: 'Windows / Linux / macOS signals' },
+  { key: 'vendor',              label: 'Vendor',            explain: 'Microsoft / Red Hat / Cisco / Oracle / AWS signals' },
+  { key: 'business_function',   label: 'Business function', explain: 'Payments / Email / Identity / Backup signals' },
+  { key: 'data_classification', label: 'Data classification', explain: 'Sensitive-data signals (only fires for confidential / restricted)' },
+  { key: 'network_segment',     label: 'Network segment',   explain: 'DMZ / edge / internet-facing exposure signal' },
+];
+
+function MappingRecommendationsTab({ assetId }: { assetId: number }) {
   const queryClient = useQueryClient();
-  const [searchInput, setSearchInput] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'control_id' | 'title' | 'level' | 'section'>('control_id');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [page, setPage] = useState(1);
-  const pageSize = 25;
+  const [frameworkFilter, setFrameworkFilter] = useState<number | ''>('');
+  const [minScore, setMinScore] = useState<number>(1);
+  const [includeLinked, setIncludeLinked] = useState<boolean>(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [coverageStatus, setCoverageStatus] = useState<'partial' | 'full' | 'minimal'>('partial');
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [bannerMessage, setBannerMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setSearchTerm(searchInput.trim());
-      setPage(1);
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [searchInput]);
-
-  const { data, isLoading, isFetching, error } = useQuery<SecurityComplianceControlsResponse>({
-    queryKey: ['asset-security-compliance-controls', assetId, searchTerm, sortBy, sortOrder, page],
+  const recsQuery = useQuery<MappingRecommendationsResponse>({
+    queryKey: ['asset-mapping-recommendations', assetId, frameworkFilter, minScore, includeLinked],
     queryFn: async () => {
-      const response = await assetsApi.getSecurityComplianceControls(assetId, {
-        search: searchTerm || undefined,
-        sort_by: sortBy,
-        sort_order: sortOrder,
-        skip: (page - 1) * pageSize,
-        limit: pageSize,
-      });
-      return response.data;
+      const params: Record<string, unknown> = { min_score: minScore, limit: 200 };
+      if (frameworkFilter !== '') params.framework_id = frameworkFilter;
+      if (includeLinked) params.include_linked = true;
+      const r = await assetsApi.getMappingRecommendations(assetId, params);
+      return r.data;
     },
     enabled: Number.isFinite(assetId) && assetId > 0,
   });
 
-  const addSelectionsMutation = useMutation({
-    mutationFn: (controlIds: string[]) => assetsApi.addSecurityComplianceSelections(assetId, controlIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['asset-security-compliance-controls', assetId] });
+  const acceptMutation = useMutation({
+    mutationFn: (ids: number[]) =>
+      assetsApi.acceptMappingRecommendations(assetId, ids, coverageStatus),
+    onSuccess: (response: { data: { linked: number; skipped_existing: number; skipped_missing: number } }) => {
+      const { linked, skipped_existing } = response.data;
+      setBannerMessage(
+        `Linked ${linked} control${linked === 1 ? '' : 's'}` +
+          (skipped_existing ? ` (${skipped_existing} already linked)` : '') +
+          '.'
+      );
+      setSelectedIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ['asset-mapping-recommendations', assetId] });
+      queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
     },
   });
 
-  const removeSelectionMutation = useMutation({
-    mutationFn: (controlId: string) => assetsApi.removeSecurityComplianceSelection(assetId, controlId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['asset-security-compliance-controls', assetId] });
-    },
-  });
+  const data = recsQuery.data;
+  const recs = data?.recommendations || [];
 
-  const controls = data?.controls || [];
-  const total = data?.total || 0;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const selectedVisible = controls.filter((item) => item.selected).map((item) => item.control_id);
-  const unselectedVisible = controls.filter((item) => !item.selected).map((item) => item.control_id);
+  const frameworkOptions = useMemo(() => {
+    const seen = new Map<number, string>();
+    recs.forEach((r) => {
+      if (r.framework_id != null && r.framework_name && !seen.has(r.framework_id)) {
+        seen.set(r.framework_id, r.framework_name);
+      }
+    });
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
+  }, [recs]);
 
-  const toggleSelection = (control: SecurityComplianceControl) => {
-    if (control.selected) {
-      removeSelectionMutation.mutate(control.control_id);
-      return;
-    }
-    addSelectionsMutation.mutate([control.control_id]);
+  const groups = useMemo(() => {
+    const buckets = { high: [] as MappingRecommendation[], medium: [] as MappingRecommendation[], low: [] as MappingRecommendation[] };
+    recs.forEach((r) => buckets[r.confidence].push(r));
+    return buckets;
+  }, [recs]);
+
+  const toggle = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllOfConfidence = (confidence: 'high' | 'medium' | 'low') => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      groups[confidence].forEach((r) => next.add(r.framework_control_id));
+      return next;
+    });
+  };
+
+  const acceptSelected = () => {
+    if (selectedIds.size === 0) return;
+    acceptMutation.mutate(Array.from(selectedIds));
+  };
+
+  const acceptOne = (id: number) => acceptMutation.mutate([id]);
+
+  if (recsQuery.isLoading) {
+    return (
+      <div className="flex items-center justify-center rounded-lg border border-slate-200 bg-white py-12">
+        <PageLoader size="sm" />
+      </div>
+    );
+  }
+
+  if (recsQuery.error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        Failed to load mapping recommendations.
+      </div>
+    );
+  }
+
+  const profile = (data?.asset_profile as Record<string, unknown>) || {};
+  const profileChip = (label: string, value: unknown) => {
+    const s = value == null || value === '' ? null : Array.isArray(value) ? value.join(', ') : String(value);
+    if (!s) return null;
+    return (
+      <span key={label} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
+        <span className="font-medium text-slate-500">{label}:</span>
+        <span>{s}</span>
+      </span>
+    );
   };
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">Security Compliance Plugin</h3>
-            <p className="text-xs text-slate-600">
-              {data?.benchmark || 'CIS_WS2012R2'} {data?.version ? `v${data.version}` : ''} | Selected: {data?.selected_count || 0}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            {isFetching && <Loader2 className="h-4 w-4 animate-spin" />}
-            <span>{total} controls</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-3 md:flex-row">
-        <div className="flex-1">
-          <SearchInput
-            value={searchInput}
-            onChange={setSearchInput}
-            placeholder="Search control ID, title, level, section..."
-            size="md"
-          />
-        </div>
-        <select
-          value={sortBy}
-          onChange={(e) => {
-            setSortBy(e.target.value as 'control_id' | 'title' | 'level' | 'section');
-            setPage(1);
-          }}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-        >
-          <option value="control_id">Sort: Control ID</option>
-          <option value="title">Sort: Title</option>
-          <option value="level">Sort: Level</option>
-          <option value="section">Sort: Section</option>
-        </select>
-        <select
-          value={sortOrder}
-          onChange={(e) => {
-            setSortOrder(e.target.value as 'asc' | 'desc');
-            setPage(1);
-          }}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
-        >
-          <option value="asc">Ascending</option>
-          <option value="desc">Descending</option>
-        </select>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={unselectedVisible.length === 0 || addSelectionsMutation.isPending}
-          onClick={() => addSelectionsMutation.mutate(unselectedVisible)}
-          className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
-        >
-          Select Visible ({unselectedVisible.length})
-        </button>
-        <button
-          type="button"
-          disabled={selectedVisible.length === 0 || removeSelectionMutation.isPending}
-          onClick={() => selectedVisible.forEach((controlId) => removeSelectionMutation.mutate(controlId))}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-        >
-          Unselect Visible ({selectedVisible.length})
-        </button>
-      </div>
-
-      {isLoading ? (
-        <div className="flex items-center justify-center rounded-lg border border-slate-200 bg-white py-10">
-          <PageLoader size="sm" />
-        </div>
-      ) : error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          Failed to load security compliance controls.
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="min-w-full divide-y divide-slate-200 bg-white text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">Select</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">Control ID</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">Title</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">Level</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">Section</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700">Assessment</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {controls.length > 0 ? controls.map((control) => (
-                <tr key={control.control_id} className={control.selected ? 'bg-blue-50/40' : 'bg-white'}>
-                  <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={control.selected}
-                      onChange={() => toggleSelection(control)}
-                      className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                    />
-                  </td>
-                  <td className="px-3 py-2 font-medium text-slate-900">{control.ControlID || control.control_id}</td>
-                  <td className="px-3 py-2 text-slate-700">{String(control.Title || '-')}</td>
-                  <td className="px-3 py-2 text-slate-700">{String(control.Level || '-')}</td>
-                  <td className="px-3 py-2 text-slate-700">{String(control.Section || '-')}</td>
-                  <td className="px-3 py-2 text-slate-600">{String(control.Assessment || '-')}</td>
-                </tr>
-              )) : (
-                <tr>
-                  <td className="px-3 py-6 text-center text-slate-500" colSpan={6}>
-                    No controls found for the current filters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      {bannerMessage && (
+        <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          <span>{bannerMessage}</span>
+          <button
+            type="button"
+            onClick={() => setBannerMessage(null)}
+            className="text-emerald-700 hover:text-emerald-900"
+            aria-label="Dismiss"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
-      <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-        <span>
-          Showing {controls.length === 0 ? 0 : (page - 1) * pageSize + 1}-{(page - 1) * pageSize + controls.length} of {total}
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-            disabled={page <= 1}
-            className="rounded border border-slate-300 px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <span>Page {page} / {totalPages}</span>
-          <button
-            type="button"
-            onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-            disabled={page >= totalPages}
-            className="rounded border border-slate-300 px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            Next
-          </button>
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <Sparkles className="h-4 w-4 text-amber-500" />
+              Auto-suggested framework controls
+            </h3>
+            <p className="mt-1 text-xs text-slate-600">
+              Scanned {data?.total_controls_scanned ?? 0} controls across {frameworkOptions.length} framework{frameworkOptions.length === 1 ? '' : 's'}.{' '}
+              {data?.total_already_linked ?? 0} already linked.
+            </p>
+          </div>
+          <div className="text-right text-xs text-slate-500">
+            <span className="rounded bg-slate-100 px-2 py-0.5">No LLM · regex-only</span>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {profileChip('OS', profile.os_family)}
+          {profileChip('Type', profile.asset_type)}
+          {profileChip('Vendor', profile.vendor)}
+          {profileChip('Criticality', profile.criticality)}
+          {profile.internet_facing ? profileChip('Exposure', 'internet-facing') : null}
+          {profileChip('Segment', profile.network_segment)}
+          {profileChip('Data class', profile.data_classification)}
+          {profileChip('Business function', profile.business_function)}
         </div>
       </div>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-slate-700">
+            <Filter className="h-3.5 w-3.5 text-slate-500" />
+            Framework
+            <select
+              value={frameworkFilter}
+              onChange={(e) => setFrameworkFilter(e.target.value === '' ? '' : Number(e.target.value))}
+              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">All</option>
+              {frameworkOptions.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-xs text-slate-700">
+            Min score
+            <input
+              type="range"
+              min={1}
+              max={12}
+              value={minScore}
+              onChange={(e) => setMinScore(Number(e.target.value))}
+              className="h-1 w-32"
+            />
+            <span className="w-6 text-center font-medium text-slate-800">{minScore}</span>
+          </label>
+          <label className="flex items-center gap-2 text-xs text-slate-700">
+            <input
+              type="checkbox"
+              checked={includeLinked}
+              onChange={(e) => setIncludeLinked(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            Include already-linked
+          </label>
+          <div className="ml-auto flex items-center gap-2">
+            <label className="flex items-center gap-1.5 text-xs text-slate-700">
+              Link as
+              <select
+                value={coverageStatus}
+                onChange={(e) => setCoverageStatus(e.target.value as 'partial' | 'full' | 'minimal')}
+                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="partial">Partial</option>
+                <option value="full">Full</option>
+                <option value="minimal">Minimal</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={selectedIds.size === 0 || acceptMutation.isPending}
+              onClick={acceptSelected}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {acceptMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Plus className="h-3.5 w-3.5" />
+              )}
+              Link {selectedIds.size} selected
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {recs.length === 0 ? (
+        (() => {
+          // Surface exactly which signal categories couldn't fire because the
+          // backing asset attribute is empty — so the operator sees a concrete
+          // checklist instead of generic advice.
+          const missing = PROFILE_FIELDS_FOR_SIGNALS.filter((f) => {
+            const v = profile[f.key];
+            return v == null || v === '' || (Array.isArray(v) && v.length === 0);
+          });
+          const allLinked = !!data?.total_already_linked
+            && (data?.total_controls_scanned ?? 0) > 0;
+          return (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-10 px-4 text-center">
+              <ShieldCheck className="mb-3 h-10 w-10 text-slate-400" />
+              <h4 className="text-base font-medium text-slate-900">No new recommendations</h4>
+              <p className="mt-1 text-sm text-slate-600 max-w-xl">
+                {allLinked
+                  ? 'All matched controls are already linked. Toggle "Include already-linked" above to see them.'
+                  : 'No framework controls scored above the current threshold. The matcher only fires signals when the asset has the relevant attribute set.'}
+              </p>
+              {!allLinked && missing.length > 0 && (
+                <div className="mt-4 w-full max-w-xl rounded-md border border-slate-200 bg-white p-3 text-left">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Profile fields to fill in
+                  </div>
+                  <ul className="mt-2 space-y-1.5">
+                    {missing.map((f) => (
+                      <li key={f.key} className="flex items-start gap-2 text-xs">
+                        <span className="mt-0.5 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-400" />
+                        <div>
+                          <span className="font-medium text-slate-800">{f.label}</span>
+                          <span className="text-slate-600"> — unlocks {f.explain}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-3 text-[11px] text-slate-500">
+                    Edit the asset from the Details tab to fill these in — every signal that fires adds its weight to the score.
+                  </p>
+                </div>
+              )}
+              {!allLinked && missing.length === 0 && (
+                <p className="mt-3 text-xs text-slate-500">
+                  Profile looks complete. Try lowering Min score, or check whether seeded frameworks contain controls relevant to this asset type.
+                </p>
+              )}
+            </div>
+          );
+        })()
+      ) : (
+        (['high', 'medium', 'low'] as const).map((band) => {
+          const list = groups[band];
+          if (list.length === 0) return null;
+          // Literal class names so Tailwind's JIT can extract them at build
+          // time. Template-literal interpolation like `bg-${color}-50` never
+          // appears in the generated CSS — that's why the bands were rendering
+          // uncolored before. Keep this map literal; no dynamic interpolation.
+          const cls = BAND_CLASSES[band];
+          return (
+            <div key={band} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+              <div className={`flex items-center justify-between border-b border-slate-200 ${cls.headerBg} px-3 py-2`}>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex h-5 items-center rounded-full ${cls.pillBg} px-2 text-xs font-medium ${cls.pillText} capitalize`}>
+                    {band} confidence
+                  </span>
+                  <span className="text-xs text-slate-600">{list.length} control{list.length === 1 ? '' : 's'}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => selectAllOfConfidence(band)}
+                  className="text-xs text-blue-700 hover:underline"
+                >
+                  Select all
+                </button>
+              </div>
+              <ul className="divide-y divide-slate-100">
+                {list.map((r) => {
+                  const isSelected = selectedIds.has(r.framework_control_id);
+                  const isExpanded = expandedId === r.framework_control_id;
+                  return (
+                    <li key={r.framework_control_id} className={isSelected ? 'bg-blue-50/40' : ''}>
+                      <div className="flex items-start gap-3 px-3 py-2.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggle(r.framework_control_id)}
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-700">{r.code}</span>
+                            <span className="text-sm font-medium text-slate-900">{r.name}</span>
+                            {r.framework_short_code && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[11px] text-slate-600">
+                                <Layers className="h-3 w-3" />
+                                {r.framework_short_code}
+                              </span>
+                            )}
+                            <span className={`ml-auto inline-flex items-center rounded-full ${cls.pillBg} px-2 py-0.5 text-[11px] font-medium ${cls.pillText}`}>
+                              Score {r.score}
+                            </span>
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {r.matched_signals.map((s) => (
+                              <span
+                                key={s.key}
+                                title={`+${s.weight}`}
+                                className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[11px] text-blue-800"
+                              >
+                                {s.label}
+                              </span>
+                            ))}
+                            {r.negative_notes.map((n, i) => (
+                              <span
+                                key={`n-${i}`}
+                                className="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[11px] text-rose-700"
+                              >
+                                {n}
+                              </span>
+                            ))}
+                          </div>
+                          {isExpanded && r.statement && (
+                            <p className="mt-2 rounded-md bg-slate-50 p-2 text-xs leading-relaxed text-slate-700">
+                              {r.statement}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedId(isExpanded ? null : r.framework_control_id)
+                            }
+                            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                            title={isExpanded ? 'Collapse' : 'Show statement'}
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={acceptMutation.isPending}
+                            onClick={() => acceptOne(r.framework_control_id)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          >
+                            <Plus className="h-3 w-3" /> Link
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }
-
 
 function DeleteConfirmModal({
   assetName,

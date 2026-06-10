@@ -24,21 +24,15 @@ import {
   Library,
   Bug,
   Clock,
-  BookOpen,
   Layers,
   Globe,
   Calendar,
   CheckCircle,
   Bot,
-  Wifi,
   FolderKanban,
   ListTodo,
   ShieldCheck,
   // CIS integration icons
-  Cpu,
-  Gauge,
-  Radar,
-  PackageSearch,
   type LucideIcon,
 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -55,6 +49,7 @@ interface NavItem {
   href: string;
   icon: LucideIcon;
   requiredPermissions?: string[];
+  requiredModules?: string[];
 }
 
 interface NavGroup {
@@ -137,11 +132,6 @@ const navigation: NavEntry[] = [
       { name: 'Pending Approvals', href: '/compliance/assessments/approvals', icon: Clock, requiredPermissions: ['compliance:assessments:*'] },
       { name: 'Evidence', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
       { name: 'Control Library', href: '/control-library', icon: Library, requiredPermissions: ['controls:control_library:*'] },
-      // CIS integration: plugin library + per-asset run history (Hassan's branch)
-      { name: 'Plugin Automation', href: '/compliance-plugins', icon: PackageSearch, requiredPermissions: ['compliance:scan:execute'] },
-      // Compliance Overview / Compliance Rules / Risk Posture / Agents
-      // moved to the dedicated IT ASSETS collapsible group below — the
-      // CIS Module Updated drop consolidates them under one parent.
     ],
   },
   {
@@ -151,36 +141,22 @@ const navigation: NavEntry[] = [
     requiredModules: ['frameworks', 'compliance'],
     requiredPermissions: ['compliance:frameworks:*'],
   },
-  {
-    name: 'Vulnerability Mgmt',
-    requiredModules: ['vulnerabilities'],
-    items: [
-      { name: 'Overview', href: '/vulnerabilities/dashboard', icon: BarChart3, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
-      { name: 'Vulnerabilities', href: '/vulnerabilities', icon: Bug, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
-      // Phase 9 — Analytics & reports (executive/analyst dashboards + correlation + vendor + 4 reports)
-      { name: 'Analytics', href: '/vulnerabilities/analytics', icon: BarChart3, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
-      // Phase 8 — Exception queue (across-vulns review view).
-      { name: 'Exceptions', href: '/vulnerabilities/exceptions', icon: FileText, requiredPermissions: ['vulnerabilities:vulnerability_register:*'] },
-      // { name: 'Departments', href: '/vulnerabilities/departments', icon: Users, requiredPermissions: ['vulnerabilities:remediation:*'] },
-      // { name: 'Reports', href: '/vulnerabilities/reports', icon: FileText, requiredPermissions: ['vulnerabilities:reports:*'] },
-      // { name: 'SLA Config', href: '/vulnerabilities/sla', icon: Clock, requiredPermissions: ['vulnerabilities:sla_management:*'] },
-    ],
-  },
-  // IT ASSETS collapsible group — matches the CIS Module Updated drop's
-  // sidebar layout. Inventory + the 4 CIS-driven views (Compliance
-  // Overview / Compliance Rules / Risk Posture / Agents) all sit here
-  // under one parent so the operator's day-to-day landing surface is
-  // one click away. Criticality Assessments joins as the 6th item
-  // since it's an asset-level workflow.
+  // IT ASSETS collapsible group — Inventory + the consolidated
+  // "Compliance & Scans" entry (which mounts Compliance Overview /
+  // Compliance Rules / Risk Posture / Scanners as 4 top tabs inside
+  // /compliance-overview) + Criticality Assessments + the absorbed
+  // Vulnerability-management items.
   {
     name: 'IT Assets',
     items: [
       { name: 'Inventory',                 href: '/assets',                       icon: Bot,        requiredPermissions: ['dashboard:assets*'] },
-      { name: 'Compliance Overview',       href: '/compliance-overview',          icon: BarChart3,  requiredPermissions: ['compliance:scan:execute'] },
-      { name: 'Compliance Rules',          href: '/compliance-plugins/library',   icon: BookOpen,   requiredPermissions: ['compliance:scan:execute'] },
-      { name: 'Risk Posture',              href: '/risk-posture',                 icon: Gauge,      requiredPermissions: ['compliance:scan:execute', 'erm:risks:*'] },
-      { name: 'Agents',                    href: '/admin/agents',                 icon: Cpu,        requiredPermissions: ['compliance:agents:manage'] },
+      // Single entry for the 4-tab Compliance & Scans hub. Standalone
+      // routes (/compliance-plugins/library, /risk-posture, /admin/agents)
+      // stay alive so deep-links elsewhere in the app keep working.
+      { name: 'Compliance & Scans',        href: '/compliance-overview',          icon: BarChart3,  requiredPermissions: ['compliance:scan:execute', 'erm:risks:*', 'compliance:agents:manage'] },
       { name: 'Criticality Assessments',   href: '/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
+      { name: 'Vulnerabilities',           href: '/vulnerabilities',              icon: Bug,        requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
+      { name: 'Vulnerability Exceptions',  href: '/vulnerabilities/exceptions',   icon: FileText,   requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
     ],
   },
 
@@ -206,32 +182,16 @@ const navigation: NavEntry[] = [
     requiredPermissions: ['issue_management:issues:view']
   },
   { name: 'ComplyChat', href: '/complychat', icon: Bot, requiredPermissions: ['dashboard:ai_insights:*'] },
-  // CIS integration: admin-side scanning surfaces. The "Agents" link
-  // itself now lives under the IT ASSETS group above (matching the
-  // CIS Module Updated layout); Bulk Discovery stays here as the
-  // CIDR network scanner that feeds the enrollment wizard.
-  {
-    name: 'Bulk Discovery',
-    href: '/admin/discover',
-    icon: Radar,
-    requiredPermissions: ['compliance:discover:execute'],
-  },
-  // Connect Wizard — agentless first-connection flow for Windows / Linux /
-  // AWS / DigitalOcean. Pairs with /connect-wizard/handshake on the backend.
-  {
-    name: 'Connect Wizard',
-    href: '/admin/integrations/connect',
-    icon: Wifi,
-    requiredPermissions: ['compliance:agents:manage'],
-  },
-  {
-    name: 'Administration',
-    href: '/admin',
-    icon: Settings,
-    adminOnly: true,
-    requiredModules: ['admin'],
-    requiredPermissions: ['admin:organization:*', 'admin:users:*', 'admin:roles:*', 'admin:audit_logs:*']
-  },
+  // Bulk Discovery's standalone sidebar entry was removed. The CIDR
+  // network scanner route at /admin/discover stays alive: the Setup
+  // Wizard on /admin/agents still hands off discovered hostnames into
+  // the agent-enrollment flow.
+  // Connect Wizard's standalone sidebar entry was removed — it now lives
+  // as a button on /admin/agents. Route at /admin/integrations/connect
+  // stays alive: per-asset Connect button on /assets and other entry
+  // points still deep-link into it.
+  // Administration was lifted out of the scrolling nav into a pinned
+  // bottom popover button — see <AdministrationPopover/> further down.
 ];
 
 function isGroup(item: NavEntry): item is NavGroup {
@@ -358,6 +318,145 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
     </div>
   );
 }
+
+// ─── Administration popover ──────────────────────────────────────────────────
+// The Administration entry used to live in the scrolling nav. It's now a
+// pinned button at the bottom of the sidebar that opens a flyout listing
+// every admin sub-section as a button. Each button deep-links to /admin
+// with a ?tab=<id> query param (admin/page.tsx reads it on mount), so the
+// internal admin tab bar lands on the right tab automatically.
+//
+// Permission gate: same as the old nav entry (adminOnly + admin module +
+// any of the four broad admin permissions). The popover itself only
+// renders for users who pass this check.
+
+const ADMIN_POPOVER_ITEMS: Array<{ id: string; label: string; icon: LucideIcon }> = [
+  { id: 'company',          label: 'Company',            icon: Settings },
+  { id: 'users',            label: 'User Management',    icon: Users },
+  { id: 'roles',            label: 'Role Management',    icon: ShieldCheck },
+  { id: 'teams',            label: 'Teams',              icon: Users },
+  { id: 'password-policy',  label: 'Password Policy',    icon: Shield },
+  { id: 'integrations',     label: 'Integrations',       icon: Bot },
+  { id: 'cloud-connectors', label: 'Cloud Connectors',   icon: Globe },
+  { id: 'connectors',       label: 'Connectors',         icon: Layers },
+  { id: 'identity',         label: 'Identity Providers', icon: Shield },
+  { id: 'workflow',         label: 'Workflow Engine',    icon: GitPullRequest },
+  { id: 'audit',            label: 'Audit Logs',         icon: ScrollText },
+];
+
+function AdministrationPopover({
+  collapsed,
+  visible,
+}: { collapsed: boolean; visible: boolean }) {
+  const [open, setOpen] = useState(false);
+
+  // Close on outside click + Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      if (target && target.closest('[data-admin-popover-root]')) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  if (!visible) return null;
+
+  return (
+    <div className="border-t border-[var(--sidebar-hover-bg)] p-2.5 relative" data-admin-popover-root>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={clsx(
+          'flex w-full items-center gap-2 rounded-[var(--radius-md)] px-2.5 py-2 text-sm transition-all duration-150',
+          open
+            ? 'bg-[var(--sidebar-hover-bg)] text-[var(--color-text)]'
+            : 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
+          collapsed && 'justify-center px-2'
+        )}
+        title={collapsed ? 'Administration' : undefined}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <Settings {...navIconProps} />
+        {!collapsed && <span className="truncate flex-1 text-left">Administration</span>}
+        {!collapsed && (
+          <ChevronRight
+            size={14}
+            className={clsx('transition-transform duration-200', open && 'rotate-90')}
+          />
+        )}
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className={clsx(
+            'absolute z-50 rounded-lg border border-slate-200 bg-white shadow-xl py-1.5',
+            'min-w-[220px] max-h-[70vh] overflow-y-auto',
+            // Anchor: appear to the right of the sidebar, bottom-aligned
+            // with the trigger so the menu grows upward.
+            'left-full bottom-2 ml-2',
+          )}
+        >
+          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-100 mb-1">
+            Administration
+          </div>
+          {ADMIN_POPOVER_ITEMS.map(({ id, label, icon: Icon }) => (
+            <Link
+              key={id}
+              href={`/admin?tab=${id}`}
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+            >
+              <Icon size={14} className="text-slate-500" />
+              <span className="truncate">{label}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Top-of-sidebar collapse toggle. Same chevron + label as the original
+// bottom row, just relocated. Kept as its own component so the parent
+// stays readable.
+function CollapseToggleRow({
+  collapsed,
+  onToggle,
+}: { collapsed: boolean; onToggle: () => void }) {
+  return (
+    <div className="border-b border-[var(--sidebar-hover-bg)] p-2.5">
+      <button
+        onClick={onToggle}
+        className={clsx(
+          'flex w-full items-center gap-2 rounded-[var(--radius-md)] px-2.5 py-1.5 text-[11px] transition-all duration-150',
+          'text-[var(--sidebar-text-collapse)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
+          collapsed && 'justify-center px-2'
+        )}
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        <ChevronRight
+          {...navIconProps}
+          className={clsx('transition-transform duration-300', !collapsed && 'rotate-180')}
+        />
+        {!collapsed && <span className="text-xs">Collapse</span>}
+      </button>
+    </div>
+  );
+}
+
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
@@ -523,6 +622,11 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* Collapse toggle moved from the bottom to the top — sits right
+          under the brand header, above the scrolling nav. Same behaviour
+          as before. */}
+      <CollapseToggleRow collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+
       <nav className="flex-1 overflow-y-auto scrollbar-thin p-2.5 space-y-0.5">
         {filteredNavigation.map((item) => {
           if (isGroup(item)) {
@@ -544,26 +648,11 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t border-[var(--sidebar-hover-bg)] p-2.5">
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className={clsx(
-            'flex w-full items-center gap-2 rounded-[var(--radius-md)] px-2.5 py-1.5 text-[11px] transition-all duration-150',
-            'text-[var(--sidebar-text-collapse)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
-            collapsed && 'justify-center px-2'
-          )}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          <ChevronRight
-            {...navIconProps}
-            className={clsx(
-              'transition-transform duration-300',
-              !collapsed && 'rotate-180'
-            )}
-          />
-          {!collapsed && <span className="text-xs">Collapse</span>}
-        </button>
-      </div>
+      {/* Administration popover — pinned at the bottom. The old nav
+          entry was `adminOnly: true`, and admins bypass module + perm
+          checks, so the effective gate is just "is admin". Non-admins
+          see no Administration row at all. */}
+      <AdministrationPopover collapsed={collapsed} visible={loaded && isAdmin} />
     </aside>
   );
 }

@@ -26,6 +26,12 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://127.0.0.1:63
 
 
 # ----- OpenAI ---------------------------------------------------------------
+# Default chat-completions model. Centralized so the model can be swapped in a
+# single place; mirrors the literal ``"gpt-4o"`` that was inlined across the
+# codebase. Behaviour is unchanged — the value is still ``"gpt-4o"``.
+DEFAULT_OPENAI_MODEL = "gpt-4o"
+
+
 def get_openai_api_key() -> str | None:
     """Resolve the OpenAI API key.
 
@@ -34,3 +40,23 @@ def get_openai_api_key() -> str | None:
     codebase. Returns ``None`` if neither is set (callers degrade gracefully).
     """
     return os.environ.get("AI_INTEGRATIONS_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+
+
+def get_openai_model(default: str = DEFAULT_OPENAI_MODEL) -> str:
+    """Resolve the OpenAI chat-completions model name.
+
+    Prefers ``AI_INTEGRATIONS_OPENAI_MODEL``, then ``OPENAI_MODEL``, then
+    ``default`` — the exact precedence that was previously duplicated inline as
+    ``os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4o"``.
+    """
+    return os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or default
+
+
+def get_openai_base_url() -> str | None:
+    """Resolve the OpenAI (or OpenAI-compatible, e.g. ModelFarm) base URL.
+
+    Returns ``AI_INTEGRATIONS_OPENAI_BASE_URL`` or ``None``. This is the bare
+    read that was inlined in many client factories; callers keep their own
+    error handling and any extra fallbacks (e.g. ``or OPENAI_BASE_URL``).
+    """
+    return os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")

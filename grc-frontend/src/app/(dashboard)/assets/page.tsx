@@ -490,10 +490,9 @@ export default function AssetsPage() {
 
   return (
     <div className="assets-light space-y-4 sm:space-y-5 px-3 sm:px-4 pt-3">
-      {/* Criticality coverage banner — shows how many assets carry a
-          criticality assessment + band distribution. Drop-in component
-          that runs its own data fetch so the parent stays unchanged. */}
-      <CriticalityCoverageWidget />
+      {/* Criticality coverage banner hidden — keep import + component
+          on disk so re-enabling is a single-line uncomment.
+      <CriticalityCoverageWidget /> */}
 
       {/* Visual overview — 3 chart panels */}
       <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">

@@ -141,6 +141,30 @@ export default function AgentsAdminPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <Link
+            href="/admin/integrations/connect"
+            title={!canManageAgents && !permsLoading
+              ? "You don't have permission to open the Connect Wizard"
+              : 'Open the agentless Connect Wizard (Windows / Linux / Cloud)'}
+            aria-disabled={!canManageAgents}
+            onClick={(e) => {
+              if (!canManageAgents) {
+                e.preventDefault();
+                toast.toast({
+                  title: 'Permission required',
+                  message: 'Only Scanning Admins / Administrators can open the Connect Wizard. Ask your tenant admin for "compliance:agents:manage".',
+                  type: 'warning',
+                });
+              }
+            }}
+            className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap border ${
+              canManageAgents
+                ? 'border-blue-200 bg-white text-blue-700 hover:bg-blue-50'
+                : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            {canManageAgents ? '🔌 Open Connect Wizard →' : '🔒 Open Connect Wizard'}
+          </Link>
           <button
             onClick={() => {
               if (!canManageAgents) {
