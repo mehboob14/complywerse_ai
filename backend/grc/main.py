@@ -20,6 +20,7 @@ from .routers import (
     enriched_dashboard_router,
     certification_router,
     advanced_erm_router,
+    ai_risk_assessment_router,
     compliance_assessments_router,
     critical_tasks_router,
     is_projects_router,
@@ -198,6 +199,7 @@ app.include_router(dashboard_router)
 app.include_router(enriched_dashboard_router)
 app.include_router(certification_router)
 app.include_router(advanced_erm_router)
+app.include_router(ai_risk_assessment_router)
 app.include_router(compliance_assessments_router)
 app.include_router(artifacts_router)
 app.include_router(dcc_router)

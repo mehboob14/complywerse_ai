@@ -1114,11 +1114,33 @@ const VENDOR_SUGGESTIONS: ComboBoxOption[] = [
   { value: 'AWS',        label: 'Amazon Web Services', group: 'Cloud / OS' },
   { value: 'Google Cloud', label: 'Google Cloud', group: 'Cloud / OS' },
   { value: 'Azure',      label: 'Microsoft Azure', group: 'Cloud / OS' },
+  // Database engines — listed here so manual Add-Asset can categorise
+  // postgres/mysql/etc. correctly. The wizard's platform inference reads
+  // this value when the asset's os_normalized is blank, so picking the
+  // right vendor here also skips the wizard's platform picker later.
+  { value: 'PostgreSQL', label: 'PostgreSQL', group: 'Database / ERP' },
+  { value: 'MySQL',      label: 'MySQL / MariaDB', group: 'Database / ERP' },
+  { value: 'MongoDB',    label: 'MongoDB',    group: 'Database / ERP' },
+  { value: 'Redis',      label: 'Redis',      group: 'Database / ERP' },
   { value: 'Oracle',     label: 'Oracle',     group: 'Database / ERP' },
   { value: 'SAP',        label: 'SAP',        group: 'Database / ERP' },
   { value: 'IBM',        label: 'IBM',        group: 'Database / ERP' },
   { value: 'Red Hat',    label: 'Red Hat',    group: 'OS / Platform' },
   { value: 'VMware',     label: 'VMware',     group: 'OS / Platform' },
+  // Web/app servers — common asset_type=application sources. Naming them
+  // up-front lets the wizard pre-select the right platform too.
+  { value: 'Apache',     label: 'Apache HTTP Server', group: 'Web / App Server' },
+  { value: 'Nginx',      label: 'Nginx',      group: 'Web / App Server' },
+  { value: 'Tomcat',     label: 'Apache Tomcat', group: 'Web / App Server' },
+  { value: 'IIS',        label: 'Microsoft IIS', group: 'Web / App Server' },
+  // Browsers — CIS publishes hardening benchmarks for Edge, Firefox and
+  // Chrome. Browsers are scanned via the parent host's WinRM / SSH
+  // connection (registry / GPO reads on Windows, preferences-file reads
+  // on Linux/macOS) — they do NOT need their own integration row, so the
+  // wizard CTA is suppressed for these vendors.
+  { value: 'Mozilla',          label: 'Mozilla (Firefox)',   group: 'Browser' },
+  { value: 'Google',           label: 'Google (Chrome)',     group: 'Browser' },
+  { value: 'Microsoft Edge',   label: 'Microsoft Edge',      group: 'Browser' },
   { value: 'Cisco',      label: 'Cisco',      group: 'Network / Security' },
   { value: 'Palo Alto',  label: 'Palo Alto Networks', group: 'Network / Security' },
   { value: 'Fortinet',   label: 'Fortinet',   group: 'Network / Security' },
@@ -1222,8 +1244,43 @@ function AssetModal({
     // Override
     criticality_manual_override: Boolean((initialData as any)?.criticality_manual_override),
     criticality_override_reason: ((initialData as any)?.criticality_override_reason || '') as string,
+    // CIS / OS profile — without these the benchmark matcher returns nothing
+    // and the asset's row in the Host-Applications panel shows "no benchmark"
+    // with no checkbox or scan buttons. Populated from the OS Knowledge
+    // Registry dropdown below so manual operators don't have to know the
+    // canonical normalized_key string.
+    os_normalized: ((initialData as any)?.os_normalized || '') as string,
+    os_family: ((initialData as any)?.os_family || '') as string,
+    os_version: ((initialData as any)?.os_version || '') as string,
   });
   const [customSubComponent, setCustomSubComponent] = useState('');
+
+  // OS Knowledge Registry — drives the OS/Product picker so the user can
+  // pick what kind of asset this is, and the benchmark matcher resolves the
+  // right CIS rules automatically.
+  const { data: osRegistryData } = useQuery<{ items: Array<{
+    normalized_key: string; display_name: string; family: string;
+    product: string | null; build: string | null; is_supported: boolean;
+    plugin_count: number;
+  }> }>({
+    queryKey: ['compliance-plugins', 'os-registry'],
+    queryFn: async () => (await apiClient.get('/compliance-plugins/os-registry')).data,
+    staleTime: 5 * 60_000,
+  });
+  // Order: scannable OSes first (have CIS plugins), then everything else.
+  // Within each, prefer supported and alphabetical by display_name.
+  const osOptions = useMemo(() => {
+    const items = osRegistryData?.items ?? [];
+    return items
+      .slice()
+      .sort((a, b) => {
+        const aScannable = (a.plugin_count > 0) ? 0 : 1;
+        const bScannable = (b.plugin_count > 0) ? 0 : 1;
+        if (aScannable !== bScannable) return aScannable - bScannable;
+        if (a.is_supported !== b.is_supported) return a.is_supported ? -1 : 1;
+        return (a.display_name || a.normalized_key).localeCompare(b.display_name || b.normalized_key);
+      });
+  }, [osRegistryData]);
 
   // Catalogue of business-function categories — drives the dropdown.
   const { data: businessFunctionsData } = useQuery<{ items: Array<{ id: string; label: string; group: string; high_impact: boolean }> }>({
@@ -1300,6 +1357,13 @@ function AssetModal({
       criticality_manual_override: formData.criticality_manual_override,
       criticality: formData.criticality_manual_override ? formData.criticality : undefined,
       criticality_override_reason: formData.criticality_manual_override ? formData.criticality_override_reason : undefined,
+      // OS profile — must be sent for the benchmark matcher to resolve a
+      // CIS benchmark on the Compliance tab. Without this the manually
+      // added asset lands with os_normalized=NULL and the panel shows
+      // "no benchmark" / no scan controls.
+      os_normalized: formData.os_normalized || undefined,
+      os_family: formData.os_family || undefined,
+      os_version: formData.os_version || undefined,
     };
     if (isEditMode) {
       submitData.status = formData.status;
@@ -1470,6 +1534,58 @@ function AssetModal({
                   placeholder="e.g., 10.0.10.15"
                 />
               </div>
+            </div>
+
+            {/* OS / Product picker — drives benchmark matching. Without
+                this, manually-added assets land with os_normalized=NULL and
+                the Host-Applications panel shows 'no benchmark' + no
+                checkbox / scan buttons. The dropdown pulls every supported
+                OS / product from the OS Knowledge Registry; scannable ones
+                (have CIS plugins seeded) appear first. */}
+            <div className="mb-3">
+              <label className="block text-xs font-medium text-slate-600 mb-0.5">
+                OS / Product <span className="font-normal text-slate-400">— drives CIS benchmark matching</span>
+              </label>
+              <select
+                value={formData.os_normalized}
+                onChange={(e) => {
+                  const selected = osOptions.find(o => o.normalized_key === e.target.value);
+                  setFormData({
+                    ...formData,
+                    os_normalized: e.target.value,
+                    // Auto-fill os_family from the chosen registry row so the
+                    // strict matcher's family-walk has something to work with.
+                    os_family: selected?.family || formData.os_family,
+                  });
+                }}
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="">— Not specified (no benchmark will match) —</option>
+                {osOptions.map((o) => {
+                  const label = o.display_name || o.normalized_key;
+                  const scannable = o.plugin_count > 0;
+                  const eol = !o.is_supported;
+                  return (
+                    <option key={o.normalized_key} value={o.normalized_key}>
+                      {label}
+                      {scannable ? '' : ' · no plugins'}
+                      {eol ? ' · EOL' : ''}
+                      {' '}({o.normalized_key})
+                    </option>
+                  );
+                })}
+              </select>
+              {formData.os_normalized && (
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Normalized key: <code className="font-mono text-slate-700">{formData.os_normalized}</code>
+                  {formData.os_family && <> · Family: <code className="font-mono text-slate-700">{formData.os_family}</code></>}
+                </p>
+              )}
+              {!formData.os_normalized && (
+                <p className="mt-1 text-[10px] text-amber-700">
+                  Leave blank if unknown — but Compliance tab will show &quot;no benchmark&quot; and the asset can&apos;t be checkbox-included in a room scan until this is set.
+                </p>
+              )}
             </div>
 
             {/* Sub-components */}

@@ -141,25 +141,52 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
         }
 
     if integration_type == "oracle_sql":
-        # Oracle DB connection — host/port/username come from the
-        # IntegrationConnection row, service_name OR sid lives in
-        # `credential_env_prefix` (we reuse the same column to avoid a
-        # schema migration; format is `service:ORCL` or `sid:ORCL`).
-        host = env("ORACLE_HOST") or (
-            (connection.console_url or "")
-            .replace("https://", "")
-            .replace("http://", "")
-            .rstrip("/")
+        # Oracle DB connection. Resolution order — same priority as the other
+        # DB platforms:
+        #   1. credentials_extra_json (set by the Connect Wizard form — the
+        #      first-class source, encrypted at rest, per-connection scope)
+        #   2. environment variables (ORACLE_HOST / ORACLE_USERNAME / …)
+        #   3. IntegrationConnection columns (console_url + username +
+        #      `credential_env_prefix` legacy hint "service:ORCL" / "sid:ORCL")
+        # The default service_name=ORCL fallback stays so very old manual
+        # rows that pre-date the wizard keep working.
+        extra = getattr(connection, "credentials_extra_json", None) or {}
+
+        host = (
+            extra.get("oracle_host")
+            or env("ORACLE_HOST")
+            or (
+                (connection.console_url or "")
+                .replace("https://", "")
+                .replace("http://", "")
+                .rstrip("/")
+            )
         )
-        port = env("ORACLE_PORT") or str(connection.console_port or 1521)
-        username = env("ORACLE_USERNAME") or connection.username
-        password = env("ORACLE_PASSWORD") or decrypt_secret(connection.password)
-        # Read service/sid hint stored on the connection row. Defaults to
-        # service ORCL — the most common Oracle install name.
-        prefix_hint = (connection.credential_env_prefix or "").lower()
-        service_name = env("ORACLE_SERVICE_NAME")
-        sid = env("ORACLE_SID")
+        port_raw = (
+            extra.get("oracle_port")
+            or env("ORACLE_PORT")
+            or connection.console_port
+            or 1521
+        )
+        username = (
+            extra.get("oracle_username")
+            or env("ORACLE_USERNAME")
+            or connection.username
+        )
+        # extra.oracle_password is the encrypted blob the wizard wrote;
+        # decrypt_secret() handles both wizard-encrypted and legacy-plaintext
+        # values seamlessly.
+        password = (
+            decrypt_secret(extra.get("oracle_password"))
+            if extra.get("oracle_password")
+            else (env("ORACLE_PASSWORD") or decrypt_secret(connection.password))
+        )
+
+        service_name = extra.get("oracle_service_name") or env("ORACLE_SERVICE_NAME")
+        sid = extra.get("oracle_sid") or env("ORACLE_SID")
         if not service_name and not sid:
+            # Legacy fallback: read service/sid from the env-prefix column.
+            prefix_hint = (connection.credential_env_prefix or "").lower()
             if prefix_hint.startswith("sid:"):
                 sid = prefix_hint[4:].upper()
             elif prefix_hint.startswith("service:"):
@@ -168,7 +195,7 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
                 service_name = "ORCL"
         return {
             "oracle_host": host,
-            "oracle_port": int(port) if str(port).isdigit() else 1521,
+            "oracle_port": int(port_raw) if str(port_raw).isdigit() else 1521,
             "oracle_service_name": service_name,
             "oracle_sid": sid,
             "oracle_username": username,

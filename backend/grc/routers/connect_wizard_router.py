@@ -110,6 +110,11 @@ class HandshakeIn(BaseModel):
     # the fields relevant to the chosen platform.
     database_name: Optional[str] = None          # SQL DBs (mssql/postgres/mysql)
     db_port: Optional[int] = None                # SQL DBs (overrides default 1433/5432/3306)
+    # Oracle uses TNS service name OR SID instead of a generic database name.
+    # The runner accepts either — service_name preferred; SID is the legacy
+    # form on older installs (Oracle 11g and earlier defaults like ORCL/XE).
+    oracle_service_name: Optional[str] = None    # Oracle (preferred over SID)
+    oracle_sid: Optional[str] = None             # Oracle (alternative to service_name)
     ldap_bind_dn: Optional[str] = None           # AD/LDAP bind DN
     ldap_use_ssl: Optional[bool] = None          # AD/LDAP — true for ldaps:// (port 636)
     azure_subscription_id: Optional[str] = None  # Azure
@@ -671,6 +676,22 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
             f"{p}_password": encrypt_secret(body.agent_password),
             f"{p}_database": body.database_name or None,
         }
+    elif platform == "oracle":
+        # Oracle runner expects oracle_host/port/username/password and EITHER
+        # oracle_service_name OR oracle_sid. Operator may supply either via
+        # the form's dedicated fields; we also accept `database_name` as a
+        # legacy alias for service_name so existing manual integrations keep
+        # working.
+        extra = {
+            "oracle_host": body.hostname,
+            "oracle_port": console_port,
+            "oracle_username": body.service_account,
+            "oracle_password": encrypt_secret(body.agent_password),
+            "oracle_service_name": (
+                body.oracle_service_name or body.database_name or None
+            ),
+            "oracle_sid": body.oracle_sid or None,
+        }
     elif platform == "ad":
         extra = {
             "ldap_host": body.hostname,
@@ -726,13 +747,28 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
         db.add(conn)
     db.flush()
 
+    # Asset-type the new asset should live as. OS-level integrations
+    # (windows/linux/DO/cisco) represent the host itself; DB/cloud/identity
+    # integrations represent application-level services on top of the host
+    # and need their OWN co-located asset rows (so they appear distinctly
+    # in the IP group / Host-Applications panel and can be ticked into a
+    # room scan independently).
+    _OS_HOST_PLATFORMS = {"windows", "linux", "digitalocean"}
+    target_asset_type = (
+        "infrastructure" if platform in _OS_HOST_PLATFORMS else "application"
+    )
+
     # Also auto-create an Asset for this host so the customer can
     # immediately scan it.
     # Lookup order:
     #   1. explicit asset_id (sent by the /assets "Connect" button so
     #      the link is reliable even when operator types IP-vs-FQDN)
-    #   2. host_name match (legacy / wizard-only flow)
-    #   3. create a new asset (auto-discovered host)
+    #   2. host_name match — but ONLY when the existing asset has the
+    #      same asset_type semantics (OS-host vs application). Without
+    #      this gate, a Postgres wizard targeting 127.0.0.1 would silently
+    #      bind to the existing Windows "host" asset at the same address,
+    #      losing the Postgres service as a separate scannable peer.
+    #   3. create a new asset (auto-discovered host or service)
     asset = None
     if body.asset_id is not None:
         asset = (
@@ -742,30 +778,43 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
             .first()
         )
     if asset is None:
-        # Case-insensitive hostname match — the operator may type
-        # `Win-SRV01.bank.local` while the existing row was created with
-        # `win-srv01.bank.local` from a previous wizard run / agent
-        # heartbeat / CMDB import. Without normalising on both sides we
-        # silently create a duplicate row and the inventory diverges.
+        # Case-insensitive hostname match, scoped to compatible asset_type.
+        # An OS wizard binds only to infrastructure rows; an app wizard
+        # binds only to application rows (same hostname, different service).
+        # That way: typing the same IP for the host AND for a co-located
+        # DB creates two rows — one infrastructure, one application —
+        # which is what the room-scan panel needs to surface as peers.
         hn = (body.hostname or "").strip()
-        asset = (
-            db.query(ITAsset)
-            .filter(
-                ITAsset.tenant_id == tenant_id,
-                func.lower(ITAsset.host_name) == hn.lower(),
+        if hn:
+            asset = (
+                db.query(ITAsset)
+                .filter(
+                    ITAsset.tenant_id == tenant_id,
+                    func.lower(ITAsset.host_name) == hn.lower(),
+                    ITAsset.asset_type == target_asset_type,
+                )
+                .first()
             )
-            .first()
-        )
     # Block B/D — always probe OS at handshake time, even if the asset
     # already exists. Banker may have onboarded the asset previously with
     # vague CMDB OS data ("Windows 11") — we want to refresh to the exact
     # build ("windows-11-23H2") now that we have working credentials.
     # The probe is best-effort; failure preserves whatever data was there.
-    from grc.modules.compliance_plugins.services.os_detector import detect_for_runner_full
+    from grc.modules.compliance_plugins.services.os_detector import (
+        detect_for_runner_full,
+        discover_services_for_runner,
+    )
     os_family, os_version, os_normalized, os_build, os_edition = detect_for_runner_full(
         integration_type, test_creds or {}
     )
+    # Probe what's ALSO running on this host (Linux/Windows only) so the
+    # Host-Applications panel can surface promotable services right after
+    # the wizard completes. DB/cloud/identity runners are themselves the
+    # service — no inner discovery to do, the function returns []. Failures
+    # never block — we still persist the asset with whatever OS info we got.
+    discovered_services = discover_services_for_runner(integration_type, test_creds or {})
 
+    asset_was_created = False
     if not asset:
         # Stamp the operator who started the wizard (from the signed
         # JWT payload) as owner. Without this the row has owner_id
@@ -779,23 +828,45 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
             if _owner is not None:
                 owner_display = (getattr(_owner, "display_name", None)
                                  or getattr(_owner, "username", None))
+        # If the operator didn't supply a distinctive display_label and we're
+        # creating an application-level asset (e.g. Postgres at the same IP
+        # as an existing Windows host), suffix the label with the platform
+        # so the two rows are visually distinguishable in inventory.
+        asset_label = label
+        if (
+            target_asset_type == "application"
+            and not (body.display_label or "").strip()
+            and asset_label == body.hostname
+        ):
+            asset_label = f"{body.hostname} ({platform})"
         asset = ITAsset(
             tenant_id=tenant_id,
-            name=label,
+            name=asset_label,
             description=f"Auto-discovered via Connect Wizard ({platform})",
-            asset_type="infrastructure",
+            asset_type=target_asset_type,
             host_name=body.hostname,
+            ip_address=(
+                body.hostname
+                if body.hostname and body.hostname.replace(".", "").isdigit()
+                else None
+            ),
             os_family=os_family,
             os_version=os_version,
             os_normalized=os_normalized,
             os_build=os_build,
             os_edition=os_edition,
+            # Services we found running on this host (Linux/Windows only).
+            # The Host-Applications panel's enrich_inventory step reads from
+            # this column to surface promotable peers right after onboard.
+            detected_software_json=(discovered_services or []),
+            asset_role="host" if target_asset_type == "infrastructure" else "application",
             criticality="medium",
             status="active",
             owner_id=user_id,
             owner_name=owner_display,
         )
         db.add(asset)
+        asset_was_created = True
     else:
         # Refresh existing asset's OS profile — only overwrite when probe
         # returned something. Don't clobber valid data with nulls if the
@@ -805,6 +876,39 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
         if os_normalized: asset.os_normalized = os_normalized
         if os_build:      asset.os_build = os_build
         if os_edition:    asset.os_edition = os_edition
+        # When the manually-added asset arrived with a blank host_name
+        # (operator didn't fill the Component field) and we now have a
+        # confirmed hostname from the wizard, populate it. Same for
+        # ip_address when the hostname parses as a numeric IP. Without
+        # this, the asset_pinned_connection lookup in _do_scan_all (which
+        # joins console_url → host_name) can't find any connection for
+        # this asset on the very next scan — operator sees "no integration
+        # connection" error after a successful wizard run.
+        if not (asset.host_name or "").strip() and (body.hostname or "").strip():
+            asset.host_name = body.hostname.strip()
+        if (
+            not (asset.ip_address or "").strip()
+            and body.hostname
+            and body.hostname.replace(".", "").isdigit()
+        ):
+            asset.ip_address = body.hostname.strip()
+        # Merge newly-discovered services with whatever was already there,
+        # de-duped by software_key. Re-running the wizard against the same
+        # host should refresh the listening-port snapshot — new services
+        # added, but existing promote-to-peer links not lost.
+        if discovered_services:
+            existing = list(asset.detected_software_json or [])
+            existing_keys = {
+                (e.get("software_key") or "").lower()
+                for e in existing if isinstance(e, dict)
+            }
+            merged = list(existing)
+            for svc in discovered_services:
+                k = (svc.get("software_key") or "").lower()
+                if k and k not in existing_keys:
+                    merged.append(svc)
+                    existing_keys.add(k)
+            asset.detected_software_json = merged
 
     db.commit()
     db.refresh(conn)
@@ -817,11 +921,19 @@ def _handshake_inner(body: "HandshakeIn", db: Session) -> dict:
         "tenant_id": tenant_id,
         "connection_id": conn.id,
         "asset_id": asset.id if asset else None,
+        "asset_name": asset.name if asset else None,
+        "asset_was_created": asset_was_created,
         "hostname": body.hostname,
         "os_name": body.os_name,
         "received_at": datetime.utcnow().isoformat(),
     }
-    return {"status": "ok", "connection_id": conn.id, "asset_id": asset.id if asset else None}
+    return {
+        "status": "ok",
+        "connection_id": conn.id,
+        "asset_id": asset.id if asset else None,
+        "asset_name": asset.name if asset else None,
+        "asset_was_created": asset_was_created,
+    }
 
 
 # ─── Script builders ─────────────────────────────────────────────────────────

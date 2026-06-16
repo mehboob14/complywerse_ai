@@ -1255,6 +1255,27 @@ def synthesise(audit_text: str, runner_type: str, *, rule_id: str | None = None,
                         friendly = mnice.group(1).strip()
                 label = friendly or field
                 expected_human = expected if expected != "TODO_expected" else "the configured value"
+                # COMPARATOR SEMANTICS from the title's range phrasing.
+                # CIS numeric titles come in three shapes:
+                #   "14 or more"               actual >= N
+                #   "365 or fewer, but not 0"  1 <= actual <= N
+                #   "5 or fewer"               actual <= N
+                # Plain equality graded "42" FAIL against "365 or fewer"
+                # (caught live against `net accounts`) a false positive on
+                # every range rule where the machine isn't at the exact
+                # boundary value.
+                title_l = (title or "").lower()
+                if re.search(r"\bor more\b", title_l):
+                    expect_kind = "secedit_field_gte"
+                    expected_human = f"{expected} or more"
+                elif re.search(r"\b(?:or fewer|or less)\b.*\bnot 0\b", title_l):
+                    expect_kind = "secedit_field_lte_nonzero"
+                    expected_human = f"1..{expected}"
+                elif re.search(r"\b(?:or fewer|or less)\b", title_l):
+                    expect_kind = "secedit_field_lte"
+                    expected_human = f"{expected} or fewer"
+                else:
+                    expect_kind = "secedit_field_equals"
                 return (
                     {
                         "shell": "cmd",
@@ -1263,11 +1284,11 @@ def synthesise(audit_text: str, runner_type: str, *, rule_id: str | None = None,
                             'SECURITYPOLICY /quiet && type "%TEMP%\\grc_secpol.inf"'
                         ),
                         "expect": {
-                            "kind": "secedit_field_equals",
+                            "kind": expect_kind,
                             "field": field,
                             "expected": expected,
                         },
-                        "pass_message": f"'{label}' is correctly set to {expected_human}.",
+                        "pass_message": f"'{label}' is compliant ({expected_human}).",
                         "fail_message": f"'{label}' does not match CIS requirement (expected {expected_human}).",
                         "_auto_generated": True,
                         "_audit_excerpt": txt[:400],

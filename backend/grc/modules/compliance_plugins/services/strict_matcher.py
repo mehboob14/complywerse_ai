@@ -116,9 +116,31 @@ def applicable_plugins_for_asset(
     Tuple shape: ``(plugins, benchmark_name)``. When the asset's OS
     doesn't resolve to a benchmark, returns ``([], None)`` — the package
     callers treat that as "no rules to run."
+
+    Resolution order:
+      1. Strict map (operator-owned ``BenchmarkOsMapping`` row).
+      2. Soft fallback: walk ``CompliancePlugin.os_keys`` for the OS
+         (and progressively-stripped version suffixes). Same lookup the
+         /ip-peers "Asset Benchmarks" panel uses — keeping the two paths
+         consistent so the UI doesn't show "1 benchmark available" while
+         the scan path sees 0 applicable rules. Strict still wins when
+         present; soft only fires when the operator hasn't mapped the OS.
     """
+    benchmark_name: Optional[str] = None
     mapping = pick_benchmark_for_os(db, tenant_id, os_normalized)
-    if mapping is None:
+    if mapping is not None:
+        benchmark_name = mapping.benchmark_name
+    elif os_normalized:
+        from .software_normaliser import benchmark_for_software_key
+        benchmark_name = benchmark_for_software_key(db, os_normalized)
+        if benchmark_name:
+            logger.info(
+                "strict_matcher: soft fallback resolved tenant_id=%s os=%s → %s "
+                "(no operator-owned mapping)",
+                tenant_id, os_normalized, benchmark_name,
+            )
+
+    if not benchmark_name:
         return ([], None)
 
     # Per-tenant DB architecture: every row in this tenant's DB *is* this
@@ -134,9 +156,9 @@ def applicable_plugins_for_asset(
                 CompliancePlugin.tenant_id == tenant_id,
                 CompliancePlugin.tenant_id.is_(None),
             ),
-            CompliancePlugin.benchmark == mapping.benchmark_name,
+            CompliancePlugin.benchmark == benchmark_name,
             CompliancePlugin.enabled.is_(True),
         )
         .all()
     )
-    return (plugins, mapping.benchmark_name)
+    return (plugins, benchmark_name)

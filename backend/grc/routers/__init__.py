@@ -11,6 +11,7 @@ from .dashboard_router import router as dashboard_router
 from .enriched_dashboard_router import router as enriched_dashboard_router
 from .certification_router import router as certification_router
 from .advanced_erm_router import router as advanced_erm_router
+from .ai_risk_assessment_router import router as ai_risk_assessment_router
 from .compliance_assessments_router import router as compliance_assessments_router
 from .critical_tasks_router import router as critical_tasks_router
 from .is_projects_router import router as is_projects_router
@@ -43,6 +44,7 @@ __all__ = [
     "enriched_dashboard_router",
     "certification_router",
     "advanced_erm_router",
+    "ai_risk_assessment_router",
     "compliance_assessments_router",
     "critical_tasks_router",
     "is_projects_router",

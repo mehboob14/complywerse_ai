@@ -1,7 +1,5 @@
 'use client';
-
 export const dynamic = 'force-dynamic';
-
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -57,6 +55,11 @@ type Posture = {
   contributions: { cis: number; vuln: number; cia: number; ctrl: number; risk: number };
 };
 
+// One per-vulnerability row in the effective_risk payload. Shared between
+// the main component (which decides whether to use the saved-state or the
+// preview-state list) and the TriagedVulnSection (which renders the cards).
+type PerVulnRow = NonNullable<Posture['components']['vuln']['effective_risk']>['per_vuln'][number];
+
 type AssetForBiz = {
   id: number;
   name: string;
@@ -99,7 +102,7 @@ const RING: Record<string, string> = {
 
 const REGULATED_DATA: Array<{ value: string; label: string; mult: string }> = [
   { value: 'none', label: 'None', mult: '1.0×' },
-  { value: 'pii', label: 'PII', mult: '1.4×' },
+  { value: 'pii', label: 'PII', mult: '1.3×' },
   { value: 'pci', label: 'PCI (cardholder)', mult: '1.4×' },
   { value: 'phi', label: 'PHI (health)', mult: '1.4×' },
   { value: 'financial', label: 'Financial records', mult: '1.4×' },
@@ -127,12 +130,18 @@ const bandPill = (label?: string) =>
 
 export default function RiskPostureAssetPage() {
   const params = useParams<{ id: string }>();
-  const assetId = params ? Number(params.id) : 0;
+  const assetId = params?.id ? Number(params.id) : 0;
   const queryClient = useQueryClient();
 
   const postureQ = useQuery<Posture>({
     queryKey: ['risk-posture.asset', assetId],
     queryFn: async () => (await riskPostureApi.asset(assetId)).data,
+    enabled: assetId > 0,
+  });
+
+  const ipPeersQ = useQuery({
+    queryKey: ['ip-peers', assetId],
+    queryFn: async () => (await assetsApi.getIPPeers(assetId)).data,
     enabled: assetId > 0,
   });
 
@@ -227,7 +236,17 @@ export default function RiskPostureAssetPage() {
 
   const { asset, score, band, weights, components, contributions, data_quality, known_dimensions } = postureQ.data;
   const bandLabel = band.label;
-  const perVuln = components.vuln?.effective_risk?.per_vuln || [];
+  // When the operator has unsaved changes AND the preview has come back,
+  // use the preview's per-vuln list so the breakdown cards reflect the
+  // pending state. Otherwise show the saved state. Without this merge the
+  // weighted-base equation on each card stays frozen at the saved values
+  // while everything else on the screen recomputes — confusing for the
+  // operator who toggled something and expects the math to follow.
+  const previewPerVuln = previewQ.data?.after_effective?.per_vuln as PerVulnRow[] | undefined;
+  const savedPerVuln = components.vuln?.effective_risk?.per_vuln || [];
+  const perVuln: PerVulnRow[] = (isDirty && previewPerVuln && previewPerVuln.length > 0)
+    ? previewPerVuln
+    : savedPerVuln;
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -264,6 +283,98 @@ export default function RiskPostureAssetPage() {
           </div>
         </div>
       </div>
+
+      {/* IP Group composite — shown when this asset shares an IP with others */}
+      {ipPeersQ.data && ipPeersQ.data.group && ipPeersQ.data.group.length > 1 && (() => {
+        const { group, composite } = ipPeersQ.data;
+        const effective = composite?.effective_score;
+        const hostScore = composite?.host_score;
+        const weakest = composite?.weakest;
+        const scoreColor = (s: number | null | undefined) =>
+          s == null ? 'text-gray-400' :
+          s >= 80 ? 'text-green-700' :
+          s >= 60 ? 'text-yellow-700' : 'text-red-700';
+
+        return (
+          <div className="rounded-lg border border-teal-200 bg-teal-50/50 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 bg-teal-600 text-white">
+              <div>
+                <div className="text-xs uppercase tracking-wider font-semibold opacity-80">IP Group — {asset.ip_address}</div>
+                <div className="text-sm font-semibold">{group.length} assets share this host · composite CIS compliance</div>
+              </div>
+              {effective != null && (
+                <div className="text-right">
+                  <div className="text-3xl font-bold">{effective.toFixed(1)}%</div>
+                  <div className="text-xs opacity-80">effective · host {hostScore}%</div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-4">
+              {/* Formula explanation */}
+              {composite && (
+                <div className="mb-3 text-xs text-teal-800 bg-teal-100 rounded-md px-3 py-2">
+                  <strong>Formula:</strong> 60% × host OS score + 40% × criticality-weighted app average
+                  {composite.penalty && (
+                    <span className="ml-2 text-amber-800">· −10 pts penalty (one app &lt; 50%)</span>
+                  )}
+                  {weakest && weakest.id !== assetId && (
+                    <span className="ml-2 text-amber-800">· weakest: <strong>{weakest.name.split(' @')[0]}</strong> {weakest.score}%</span>
+                  )}
+                </div>
+              )}
+
+              {/* Per-asset rows */}
+              <div className="space-y-1.5">
+                {group.map((g: any) => {
+                  const isHost = g.os_normalized && !['postgres', 'mssql', 'oracle', 'mysql', 'tomcat', 'iis', 'nginx', 'apache'].some((t: string) => (g.os_normalized || '').toLowerCase().includes(t));
+                  return (
+                    <div
+                      key={g.id}
+                      className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm ${
+                        g.is_self
+                          ? 'border-teal-400 bg-white font-medium'
+                          : 'border-teal-100 bg-white/60'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${
+                          g.score == null ? 'bg-gray-300' :
+                          g.score >= 80 ? 'bg-green-500' :
+                          g.score >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                        }`} />
+                        <span className="truncate text-gray-800">{g.name.split(' @')[0]}</span>
+                        {g.is_self && <span className="text-[10px] bg-teal-100 text-teal-700 rounded px-1.5 py-0.5 font-semibold">this asset</span>}
+                        {isHost && <span className="text-[10px] bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">host OS</span>}
+                        {g.criticality && (
+                          <span className={`text-[10px] rounded px-1.5 py-0.5 capitalize ${
+                            g.criticality === 'critical' ? 'bg-red-100 text-red-700' :
+                            g.criticality === 'high' ? 'bg-orange-100 text-orange-700' :
+                            g.criticality === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>{g.criticality}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0 ml-3">
+                        {g.score != null ? (
+                          <span className={`font-mono font-semibold ${scoreColor(g.score)}`}>{g.score}%</span>
+                        ) : (
+                          <span className="text-xs text-gray-400">not scanned</span>
+                        )}
+                        {!g.is_self && (
+                          <Link href={`/risk-posture/asset/${g.id}`} className="text-xs text-teal-700 hover:underline">
+                            posture →
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Business Impact + Live Preview — split pane */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -450,90 +561,6 @@ export default function RiskPostureAssetPage() {
                   </div>
                 </div>
 
-                {/* Business Impact Factor breakdown — explains WHY the
-                    score moved or didn't. The formula uses MAX of 4
-                    multipliers, so changing one rarely shifts the
-                    overall biz_factor unless it was THE one driving the
-                    MAX. Without this surface, operators rightly say
-                    "I changed 3 things, why did nothing happen?" */}
-                {(() => {
-                  // Recompute biz_factor on both sides from the form
-                  // values vs the asset's saved values. Keeps math
-                  // visible to the operator — same formula the backend
-                  // applies.
-                  const a = assetQ.data;
-                  if (!a) return null;
-                  // Keep these in sync with backend
-                  // _REGULATED_DATA_MULTIPLIER (effective_risk.py:35).
-                  // All four regulated-data categories share 1.4 per the
-                  // v2 spec; PII used to be 1.3 — fixed.
-                  const regulatedMult: Record<string, number> = {
-                    none: 1.0, pii: 1.4, pci: 1.4, phi: 1.4, financial: 1.4, multiple: 1.4,
-                  };
-                  const opDepMult: Record<string, number> = {
-                    low: 0.8, medium: 1.0, high: 1.3, critical: 1.5,
-                  };
-
-                  // BEFORE (current saved values from the API response)
-                  const beforeFactors = [
-                    { name: 'Customer-facing', on: !!a.is_customer_facing, val: a.is_customer_facing ? 1.2 : 1.0 },
-                    { name: 'Internet-facing', on: !!a.is_internet_facing, val: a.is_internet_facing ? 1.3 : 1.0 },
-                    { name: `Regulated data = ${(a.regulated_data_type || 'none').toUpperCase()}`, on: (a.regulated_data_type || 'none') !== 'none', val: regulatedMult[a.regulated_data_type || 'none'] ?? 1.0 },
-                    { name: `Op dependency = ${(a.operational_dependency || 'medium').toUpperCase()}`, on: (a.operational_dependency || 'medium') !== 'medium', val: opDepMult[a.operational_dependency || 'medium'] ?? 1.0 },
-                  ];
-                  const beforeMax = Math.max(...beforeFactors.map(f => f.val));
-                  const beforeDriver = beforeFactors.find(f => f.val === beforeMax && beforeMax > 1.0);
-
-                  // AFTER (form proposal)
-                  const afterFactors = [
-                    { name: 'Customer-facing', on: form.is_customer_facing, val: form.is_customer_facing ? 1.2 : 1.0 },
-                    { name: 'Internet-facing', on: form.is_internet_facing, val: form.is_internet_facing ? 1.3 : 1.0 },
-                    { name: `Regulated data = ${(form.regulated_data_type || 'none').toUpperCase()}`, on: (form.regulated_data_type || 'none') !== 'none', val: regulatedMult[form.regulated_data_type || 'none'] ?? 1.0 },
-                    { name: `Op dependency = ${(form.operational_dependency || 'medium').toUpperCase()}`, on: (form.operational_dependency || 'medium') !== 'medium', val: opDepMult[form.operational_dependency || 'medium'] ?? 1.0 },
-                  ];
-                  const afterMax = Math.max(...afterFactors.map(f => f.val));
-                  const afterDriver = afterFactors.find(f => f.val === afterMax && afterMax > 1.0);
-
-                  const sameMax = Math.abs(beforeMax - afterMax) < 0.001;
-
-                  return (
-                    <div className="mt-3 rounded-md border border-amber-200 bg-amber-50/70 p-2.5">
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-amber-800">Business impact factor (MAX of multipliers)</div>
-                      <div className="mt-1 grid grid-cols-2 gap-2 text-[11px]">
-                        <div>
-                          <div className="text-slate-600">Before</div>
-                          <div className="mt-0.5 font-mono text-base font-bold text-slate-900">{beforeMax.toFixed(2)}×</div>
-                          <div className="text-[10px] text-slate-500">
-                            driven by: {beforeDriver?.name || '(nothing — all defaults)'}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-blue-600">After</div>
-                          <div className="mt-0.5 font-mono text-base font-bold text-blue-900">{afterMax.toFixed(2)}×</div>
-                          <div className="text-[10px] text-blue-500">
-                            driven by: {afterDriver?.name || '(nothing — all defaults)'}
-                          </div>
-                        </div>
-                      </div>
-                      {sameMax && Math.abs(previewQ.data.delta) < 0.005 && (
-                        <div className="mt-2 text-[11px] text-amber-900">
-                          <strong>Score didn't move because:</strong> the MAX multiplier is unchanged at <strong>{beforeMax.toFixed(2)}×</strong> — only one factor needs to be high for the business impact to land at this value. To drop the score, every factor must fall below the current MAX.
-                        </div>
-                      )}
-                      {!sameMax && (
-                        <div className="mt-2 text-[11px] text-amber-900">
-                          MAX shifted from <strong>{beforeMax.toFixed(2)}×</strong> to <strong>{afterMax.toFixed(2)}×</strong>.
-                          {afterMax < beforeMax && ' Score should drop.'}
-                          {afterMax > beforeMax && ' Score should rise.'}
-                        </div>
-                      )}
-                      <div className="mt-2 text-[10px] text-slate-500 italic">
-                        Business impact is ~4.5% of the overall score weight, so visible movement requires either a large factor shift OR vulns at the escalation threshold.
-                      </div>
-                    </div>
-                  );
-                })()}
-
                 {/* Per-vuln re-score list */}
                 {previewQ.data.before_effective?.per_vuln && previewQ.data.after_effective?.per_vuln && (
                   <div className="mt-3 border-t border-blue-100 pt-2">
@@ -704,92 +731,22 @@ export default function RiskPostureAssetPage() {
             <div className="text-3xl font-semibold text-gray-900">{components.ctrl.coverage_pct}%</div>
             <div className="text-xs text-gray-500 pb-1">covered</div>
           </div>
-          {/* Progress bar — fills as coverage approaches target */}
-          <div className="mt-2 h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${
-                components.ctrl.coverage_pct >= 75 ? 'bg-emerald-500' :
-                components.ctrl.coverage_pct >= 25 ? 'bg-amber-500' :
-                'bg-red-500'
-              }`}
-              style={{ width: `${Math.min(100, components.ctrl.coverage_pct)}%` }}
-            />
-          </div>
           <div className="text-xs text-gray-600 mt-2">
             <strong>{components.ctrl.linked_count}</strong> of target <strong>{components.ctrl.target}</strong> controls linked.
           </div>
-          {/* Honest impact callout — explains the counter-intuitive "1st
-              control raises score" behaviour. When dimension flips from
-              known=False (excluded) to known=True (at low coverage), the
-              total risk score goes UP because we're now tracking a gap
-              that was previously invisible. Adding more controls fills
-              the gap and drops the score back down. */}
-          {components.ctrl.known && components.ctrl.coverage_pct < 75 && (
-            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900">
-              <strong className="block mb-0.5">Why adding 1 control didn't drop the score:</strong>
-              The Control dimension was previously <em>not measured</em> and excluded
-              from the formula. Linking your first control turns it ON at{' '}
-              <strong>{components.ctrl.coverage_pct}% coverage</strong> — counted as a{' '}
-              <strong>{Math.round((1 - components.ctrl.score) * 100)}%</strong> credit, but exposes a{' '}
-              <strong>{Math.round(components.ctrl.score * 100)}%</strong> uncovered gap.
-              Link more controls (target {components.ctrl.target}) to grow the credit.
-            </div>
-          )}
-          {components.ctrl.known && components.ctrl.coverage_pct >= 75 && (
-            <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-[11px] text-emerald-900">
-              <strong>Solid coverage.</strong> {components.ctrl.coverage_pct}% of the target met —
-              the Control dimension is reducing this asset's risk score.
-            </div>
-          )}
         </div>
       </div>
     </div>
   );
 }
 
-type PerVulnRow = NonNullable<Posture['components']['vuln']['effective_risk']>['per_vuln'][number];
+// Type moved to top of file so it can be referenced by the main component too.
 
 type TriageMode = 'scanner' | 'effective' | 'compare';
 
 function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: Posture['asset'] }) {
   const [mode, setMode] = useState<TriageMode>('compare');
   const [hideExploitSignals, setHideExploitSignals] = useState(false);
-
-  // ── Prioritization filters (CVSS + EPSS + KEV + Business signals) ────
-  // The effective-risk formula already weights all 4 signals, but
-  // operators also want to SLICE the list by them so they can answer:
-  //   "show me only what's KEV-listed AND likely to be exploited in
-  //    the next 30 days AND lives on a high-business-impact host"
-  // These four filters intersect; defaults are permissive (all vulns).
-  const [filterKev, setFilterKev] = useState<'all' | 'kev_only' | 'no_kev'>('all');
-  const [filterEpss, setFilterEpss] = useState<number>(0);     // 0 / 0.3 / 0.5 / 0.7
-  const [filterBiz, setFilterBiz] = useState<number>(1.0);     // 1.0 / 1.2 / 1.3 / 1.4
-  const [filterBand, setFilterBand] = useState<'all' | 'critical' | 'high_plus'>('all');
-
-  // Apply filters BEFORE sorting so the rerank arrows still make sense
-  // (they compare CVSS-order vs effective-order within the filtered set).
-  const filteredVulns = useMemo(() => {
-    return perVuln.filter((v) => {
-      // KEV
-      const isKev = !!v.kev_flag;
-      if (filterKev === 'kev_only' && !isKev) return false;
-      if (filterKev === 'no_kev'   &&  isKev) return false;
-      // EPSS (next-30d exploit likelihood from FIRST.org)
-      if (filterEpss > 0 && (v.epss_score ?? 0) < filterEpss) return false;
-      // Business impact factor on this asset (formula MAX of 4 multipliers)
-      if (filterBiz > 1.0 && (v.business_impact_factor ?? 1.0) < filterBiz) return false;
-      // Band (after-formula severity)
-      if (filterBand === 'critical' && v.band !== 'critical') return false;
-      if (filterBand === 'high_plus' && !['critical', 'high'].includes(v.band || '')) return false;
-      return true;
-    });
-  }, [perVuln, filterKev, filterEpss, filterBiz, filterBand]);
-
-  const filtersActive =
-    filterKev !== 'all' || filterEpss > 0 || filterBiz > 1.0 || filterBand !== 'all';
-  const resetFilters = () => {
-    setFilterKev('all'); setFilterEpss(0); setFilterBiz(1.0); setFilterBand('all');
-  };
 
   // When "hide exploit signals" is on, recompute effective rank treating
   // EPSS=0 and KEV=false (i.e. asks: "what if we ignored these signals?")
@@ -802,11 +759,11 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
   };
 
   const cvssSorted = useMemo(() =>
-    [...filteredVulns].sort((a, b) => (b.cvss_score ?? 0) - (a.cvss_score ?? 0)),
-    [filteredVulns]);
+    [...perVuln].sort((a, b) => (b.cvss_score ?? 0) - (a.cvss_score ?? 0)),
+    [perVuln]);
   const effSorted = useMemo(() =>
-    [...filteredVulns].sort((a, b) => effSortKey(b) - effSortKey(a)),
-    [filteredVulns, hideExploitSignals]);
+    [...perVuln].sort((a, b) => effSortKey(b) - effSortKey(a)),
+    [perVuln, hideExploitSignals]);
 
   const cvssRank = useMemo(() => {
     const m = new Map<number, number>();
@@ -820,11 +777,11 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
   }, [effSorted]);
 
   const movers = useMemo(() =>
-    filteredVulns
+    perVuln
       .map(v => ({ v, cvss: cvssRank.get(v.vuln_id) || 0, eff: effRank.get(v.vuln_id) || 0 }))
       .filter(x => x.cvss !== x.eff)
       .sort((a, b) => Math.abs(b.cvss - b.eff) - Math.abs(a.cvss - a.eff)),
-    [filteredVulns, cvssRank, effRank]);
+    [perVuln, cvssRank, effRank]);
 
   const sevColor = (sev?: string | null) => {
     switch ((sev || '').toLowerCase()) {
@@ -903,158 +860,12 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
         )}
       </div>
 
-      {/* ── Prioritization filters — slice by KEV / EPSS / Biz / Band ───
-          The effective_risk formula already INCLUDES all 4 signals; this
-          panel lets the operator FILTER the list by them so they can
-          answer "show me only what's exploit-known + likely + on a
-          high-biz host". Filters intersect; "Reset" sets all to permissive. */}
-      <div className="mb-4 rounded-lg border-2 border-indigo-200 bg-indigo-50/60 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-wider font-semibold text-indigo-700">Prioritize what to fix first</div>
-            <div className="text-xs text-gray-600">Slice the list by exploit signals + business impact. Applies to all views below.</div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className={`text-xs font-semibold ${filtersActive ? 'text-indigo-700' : 'text-gray-500'}`}>
-              {filtersActive ? (
-                <>Showing <strong>{filteredVulns.length}</strong> of {perVuln.length} vulns</>
-              ) : (
-                <>{perVuln.length} vulnerabilities</>
-              )}
-            </span>
-            {filtersActive && (
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="text-[11px] text-indigo-700 hover:text-indigo-900 underline"
-              >
-                Reset filters
-              </button>
-            )}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {/* KEV — exploit publicly known */}
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider font-semibold text-gray-600 mb-0.5">
-              🚨 Exploit known (KEV)
-            </label>
-            <select
-              value={filterKev}
-              onChange={(e) => setFilterKev(e.target.value as any)}
-              className="w-full rounded-md border border-indigo-200 bg-white px-2 py-1.5 text-xs font-medium text-gray-800"
-            >
-              <option value="all">Any</option>
-              <option value="kev_only">KEV-listed only</option>
-              <option value="no_kev">Not on KEV</option>
-            </select>
-          </div>
-          {/* EPSS — exploit likelihood in next 30 days */}
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider font-semibold text-gray-600 mb-0.5">
-              📈 Exploit likely next 30d (EPSS)
-            </label>
-            <select
-              value={filterEpss}
-              onChange={(e) => setFilterEpss(Number(e.target.value))}
-              className="w-full rounded-md border border-indigo-200 bg-white px-2 py-1.5 text-xs font-medium text-gray-800"
-            >
-              <option value={0}>Any</option>
-              <option value={0.3}>≥ 30% likely</option>
-              <option value={0.5}>≥ 50% likely</option>
-              <option value={0.7}>≥ 70% likely (high)</option>
-            </select>
-          </div>
-          {/* Business impact factor */}
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider font-semibold text-gray-600 mb-0.5">
-              🏢 Business impact (MAX×)
-            </label>
-            <select
-              value={filterBiz}
-              onChange={(e) => setFilterBiz(Number(e.target.value))}
-              className="w-full rounded-md border border-indigo-200 bg-white px-2 py-1.5 text-xs font-medium text-gray-800"
-            >
-              <option value={1.0}>Any</option>
-              <option value={1.2}>≥ 1.2× (customer-facing)</option>
-              <option value={1.3}>≥ 1.3× (internet-facing OR high-dep)</option>
-              <option value={1.4}>≥ 1.4× (regulated data)</option>
-              <option value={1.5}>≥ 1.5× (critical dependency)</option>
-            </select>
-          </div>
-          {/* After-formula band */}
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider font-semibold text-gray-600 mb-0.5">
-              🎯 Effective band (after formula)
-            </label>
-            <select
-              value={filterBand}
-              onChange={(e) => setFilterBand(e.target.value as any)}
-              className="w-full rounded-md border border-indigo-200 bg-white px-2 py-1.5 text-xs font-medium text-gray-800"
-            >
-              <option value="all">Any band</option>
-              <option value="critical">Critical only (≥ 0.85)</option>
-              <option value="high_plus">High + Critical (≥ 0.70)</option>
-            </select>
-          </div>
-        </div>
-        {/* Quick presets — common "fix-first" combinations operators ask for */}
-        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
-          <span className="text-gray-500 mr-1">Quick presets:</span>
-          <button
-            type="button"
-            onClick={() => { setFilterKev('kev_only'); setFilterEpss(0.7); setFilterBiz(1.0); setFilterBand('all'); }}
-            className="rounded-full border border-red-300 bg-red-50 px-2.5 py-0.5 text-red-800 hover:bg-red-100 font-medium"
-            title="KEV-listed + EPSS ≥ 70%"
-          >
-            🔥 Fix now (KEV + likely)
-          </button>
-          <button
-            type="button"
-            onClick={() => { setFilterKev('all'); setFilterEpss(0.5); setFilterBiz(1.3); setFilterBand('all'); }}
-            className="rounded-full border border-orange-300 bg-orange-50 px-2.5 py-0.5 text-orange-800 hover:bg-orange-100 font-medium"
-            title="EPSS ≥ 50% on high-impact host"
-          >
-            ⚠ Likely + high-impact
-          </button>
-          <button
-            type="button"
-            onClick={() => { setFilterKev('all'); setFilterEpss(0); setFilterBiz(1.0); setFilterBand('critical'); }}
-            className="rounded-full border border-purple-300 bg-purple-50 px-2.5 py-0.5 text-purple-800 hover:bg-purple-100 font-medium"
-            title="Effective score ≥ 0.85"
-          >
-            🚨 Critical band only
-          </button>
-          <button
-            type="button"
-            onClick={() => { setFilterKev('no_kev'); setFilterEpss(0); setFilterBiz(1.0); setFilterBand('all'); }}
-            className="rounded-full border border-green-300 bg-green-50 px-2.5 py-0.5 text-green-800 hover:bg-green-100 font-medium"
-            title="Not yet weaponised — lower urgency"
-          >
-            🛡 Not weaponised yet
-          </button>
-        </div>
-        {filtersActive && filteredVulns.length === 0 && (
-          <div className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            No vulnerabilities match these filters. Loosen one or click <strong>Reset filters</strong>.
-          </div>
-        )}
-      </div>
-
       {mode === 'compare' && (
       <div className="mb-4">
         <h2 className="text-base font-semibold text-gray-900">Before vs After applying real-world exploit signals</h2>
         <p className="mt-1 text-xs text-gray-500">
           Left = what the scanner alone says. Right = what you actually need to fix first once EPSS likelihood, CISA KEV, and business impact are factored in.
         </p>
-        <div className="mt-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900">
-          <strong>How to read the arrows in the right table:</strong>{' '}
-          <span className="inline-flex items-center gap-1 mx-1"><span className="text-green-700">▲ +3</span></span> means
-          "this CVE jumped UP 3 places — fix it sooner than CVSS suggests" ·
-          <span className="inline-flex items-center gap-1 mx-1"><span className="text-red-700">▼ -2</span></span> means
-          "this CVE dropped DOWN 2 places — less urgent than CVSS alone implied".{' '}
-          A CVE on KEV with high EPSS jumps up; a high-CVSS bug with EPSS &lt; 5% drops down because nobody's exploiting it.
-        </div>
       </div>
       )}
 
@@ -1176,9 +987,9 @@ function TriagedVulnSection({ perVuln, asset }: { perVuln: PerVulnRow[]; asset: 
           </ul>
         </div>
       )}
-      {mode === 'compare' && movers.length === 0 && filteredVulns.length > 0 && (
+      {mode === 'compare' && movers.length === 0 && (
         <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-2.5 mb-4 text-xs text-gray-600">
-          For these {filteredVulns.length} vulnerabilit{filteredVulns.length === 1 ? 'y' : 'ies'} the two lenses agree — same triage order either way.
+          For these {perVuln.length} vulnerabilit{perVuln.length === 1 ? 'y' : 'ies'} the two lenses agree — same triage order either way.
         </div>
       )}
 

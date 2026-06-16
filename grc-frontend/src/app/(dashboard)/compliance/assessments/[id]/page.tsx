@@ -258,6 +258,23 @@ export default function AssessmentDetailPage() {
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
   const [expandedAuditItems, setExpandedAuditItems] = useState<Set<number>>(new Set());
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
+  // Add new item drawer state.
+  const [newItemOpen, setNewItemOpen] = useState<boolean>(false);
+  const [newItemForm, setNewItemForm] = useState({
+    item_number: '',
+    area_domain: '',
+    control_description: '',
+    compliance_status: 'in_progress',
+    priority: 'medium',
+    responsible_party: '',
+    timeline: '',
+    gaps_identified: '',
+    proposed_solution: '',
+    evidence_reference: '',
+    remarks: '',
+  });
+  // Delete confirmation target. When set, the modal renders.
+  const [deleteItemTarget, setDeleteItemTarget] = useState<{ id: number; name: string } | null>(null);
   const [editingStatus, setEditingStatus] = useState<string>('');
   const [editingResponsibleParty, setEditingResponsibleParty] = useState<string>('');
   const [editingTimeline, setEditingTimeline] = useState<string>('');
@@ -433,6 +450,58 @@ export default function AssessmentDetailPage() {
       setEditingProposedSolution('');
       setEditingAreaDomain('');
       setEditingPriority('');
+    },
+  });
+
+  // Add / delete item parity with criticality assessments. Single body fits
+  // every assessment type since they all share ComplianceAssessmentDocumentItem.
+  const createItemMutation = useMutation({
+    mutationFn: async (body: {
+      item_number?: string;
+      area_domain?: string;
+      control_description: string;
+      compliance_status?: string;
+      gaps_identified?: string;
+      proposed_solution?: string;
+      responsible_party?: string;
+      timeline?: string;
+      priority?: string;
+      evidence_reference?: string;
+      remarks?: string;
+    }) => {
+      const response = await apiClient.post(
+        `/compliance/assessments/${assessmentId}/items`,
+        body,
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compliance-assessment-detail', assessmentId] });
+      setNewItemOpen(false);
+      setNewItemForm({
+        item_number: '',
+        area_domain: '',
+        control_description: '',
+        compliance_status: 'in_progress',
+        priority: 'medium',
+        responsible_party: '',
+        timeline: '',
+        gaps_identified: '',
+        proposed_solution: '',
+        evidence_reference: '',
+        remarks: '',
+      });
+    },
+  });
+
+  const deleteItemMutation = useMutation({
+    mutationFn: async (itemId: number) => {
+      await apiClient.delete(`/compliance/assessments/items/${itemId}`);
+      return itemId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compliance-assessment-detail', assessmentId] });
+      setDeleteItemTarget(null);
     },
   });
 
@@ -1122,6 +1191,14 @@ export default function AssessmentDetailPage() {
             <button onClick={collapseAll} className="px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors">
               Collapse All
             </button>
+            {canEdit && (
+              <button
+                onClick={() => setNewItemOpen(true)}
+                className="px-2.5 py-1.5 bg-blue-600 border border-blue-600 rounded-lg text-xs font-medium text-white hover:bg-blue-700 transition-colors inline-flex items-center gap-1"
+              >
+                <span className="text-base leading-none">+</span> New Item
+              </button>
+            )}
           </div>
         </div>
 
@@ -1424,6 +1501,15 @@ export default function AssessmentDetailPage() {
                                         title={isAuditMasterAssessment ? 'Edit control fields' : 'Edit status'}
                                       >
                                         <Edit2 className="h-4 w-4" />
+                                      </button>
+                                      )}
+                                      {canEdit && (
+                                      <button
+                                        onClick={() => setDeleteItemTarget({ id: item.id, name: item.control_description?.slice(0, 80) || `Item ${item.item_number}` })}
+                                        className="p-2 text-gray-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                        title="Delete item"
+                                      >
+                                        <X className="h-4 w-4" />
                                       </button>
                                       )}
                                       <button
@@ -1785,6 +1871,186 @@ export default function AssessmentDetailPage() {
         </div>
       </div>
       </>)}
+
+      {/* Add new item drawer. Compatible with every assessment type since
+          ComplianceAssessmentDocumentItem is the shared row schema. */}
+      {newItemOpen && (
+        <div className="fixed inset-0 z-50 flex items-stretch justify-end bg-slate-900/40">
+          <div className="w-full max-w-xl bg-white shadow-xl flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Add Assessment Item</h3>
+                <p className="text-[11px] text-slate-500">A new item under this assessment.</p>
+              </div>
+              <button onClick={() => setNewItemOpen(false)} className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100" aria-label="Close">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              <FieldRow label="Item Number">
+                <input
+                  value={newItemForm.item_number}
+                  onChange={(e) => setNewItemForm((s) => ({ ...s, item_number: e.target.value }))}
+                  placeholder="Auto generated when blank"
+                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </FieldRow>
+              <FieldRow label="Area / Domain">
+                <input
+                  value={newItemForm.area_domain}
+                  onChange={(e) => setNewItemForm((s) => ({ ...s, area_domain: e.target.value }))}
+                  placeholder="e.g. Access Control, Data Protection"
+                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </FieldRow>
+              <FieldRow label="Control Description" required>
+                <textarea
+                  value={newItemForm.control_description}
+                  onChange={(e) => setNewItemForm((s) => ({ ...s, control_description: e.target.value }))}
+                  rows={3}
+                  placeholder="Describe the control requirement, obligation, or audit point."
+                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </FieldRow>
+              <div className="grid grid-cols-2 gap-3">
+                <FieldRow label="Status">
+                  <select
+                    value={newItemForm.compliance_status}
+                    onChange={(e) => setNewItemForm((s) => ({ ...s, compliance_status: e.target.value }))}
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="in_progress">In Progress</option>
+                    <option value="complied">Complied</option>
+                    <option value="partially_complied">Partially Complied</option>
+                    <option value="not_complied">Not Complied</option>
+                    <option value="na">N/A</option>
+                  </select>
+                </FieldRow>
+                <FieldRow label="Priority">
+                  <select
+                    value={newItemForm.priority}
+                    onChange={(e) => setNewItemForm((s) => ({ ...s, priority: e.target.value }))}
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="critical">Critical</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </FieldRow>
+              </div>
+              <FieldRow label="Responsible Party">
+                <input
+                  value={newItemForm.responsible_party}
+                  onChange={(e) => setNewItemForm((s) => ({ ...s, responsible_party: e.target.value }))}
+                  placeholder="Owner team or person"
+                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </FieldRow>
+              <FieldRow label="Timeline">
+                <input
+                  value={newItemForm.timeline}
+                  onChange={(e) => setNewItemForm((s) => ({ ...s, timeline: e.target.value }))}
+                  placeholder="Target date or Q3 2026"
+                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </FieldRow>
+              <FieldRow label="Gaps Identified">
+                <textarea
+                  value={newItemForm.gaps_identified}
+                  onChange={(e) => setNewItemForm((s) => ({ ...s, gaps_identified: e.target.value }))}
+                  rows={2}
+                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </FieldRow>
+              <FieldRow label="Proposed Solution">
+                <textarea
+                  value={newItemForm.proposed_solution}
+                  onChange={(e) => setNewItemForm((s) => ({ ...s, proposed_solution: e.target.value }))}
+                  rows={2}
+                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </FieldRow>
+              <FieldRow label="Evidence Reference">
+                <input
+                  value={newItemForm.evidence_reference}
+                  onChange={(e) => setNewItemForm((s) => ({ ...s, evidence_reference: e.target.value }))}
+                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </FieldRow>
+              <FieldRow label="Remarks">
+                <textarea
+                  value={newItemForm.remarks}
+                  onChange={(e) => setNewItemForm((s) => ({ ...s, remarks: e.target.value }))}
+                  rows={2}
+                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </FieldRow>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3 bg-slate-50">
+              <button
+                onClick={() => setNewItemOpen(false)}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={!newItemForm.control_description.trim() || createItemMutation.isPending}
+                onClick={() => createItemMutation.mutate(newItemForm)}
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {createItemMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Create Item
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete item confirmation. */}
+      {deleteItemTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-xl">
+            <div className="mb-3 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-rose-600" />
+              <h3 className="text-sm font-semibold text-slate-900">Delete this item?</h3>
+            </div>
+            <p className="mb-5 text-sm text-slate-600">
+              <span className="text-slate-800 font-medium">{deleteItemTarget.name}</span>
+              <br />
+              This removes the item, its evidence links, and any AI recommendations. This cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setDeleteItemTarget(null)}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={deleteItemMutation.isPending}
+                onClick={() => deleteItemMutation.mutate(deleteItemTarget.id)}
+                className="inline-flex items-center gap-2 rounded-md bg-rose-600 px-3 py-1.5 text-sm text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                {deleteItemMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Field row helper ───────────────────────────────────────────────────────
+function FieldRow({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
+  return (
+    <div>
+      <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">
+        {label}{required && <span className="ml-0.5 text-rose-500">*</span>}
+      </label>
+      {children}
     </div>
   );
 }

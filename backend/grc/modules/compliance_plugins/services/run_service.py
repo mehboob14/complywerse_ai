@@ -120,6 +120,7 @@ def execute_plugin(
     asset: Optional[ITAsset],
     connection: Optional[IntegrationConnection],
     triggered_by: str = "manual",
+    attributed_to_asset: Optional[ITAsset] = None,
 ) -> CompliancePluginRun:
     """Execute a plugin and persist a CompliancePluginRun row.
 
@@ -127,16 +128,35 @@ def execute_plugin(
     long-running checks remain observable. After execution it is updated
     in-place with the outcome (immutable thereafter — we never mutate result
     fields once status moves out of running).
+
+    Room-scan model: ``attributed_to_asset`` overrides which asset_id is
+    stamped on the run row. The plugin still EXECUTES against ``asset``'s
+    connection (the host), but the run is attributed to whichever asset's
+    benchmark this plugin came from (a peer). This is what makes the peer's
+    own compliance history reflect a host-driven room-scan.
     """
     started = datetime.utcnow()
+    # Collector routing: if the operator assigned a collector to this
+    # connection, the run is "owned" by that collector. It will poll
+    # /agents/jobs, see this run as pending, execute it, and post results
+    # back. Backend skips local execution entirely in that case.
+    collector_agent_id = (
+        getattr(connection, "assigned_collector_agent_id", None)
+        if connection else None
+    )
+    # Attribute the run to the peer whose benchmark this plugin came from,
+    # or fall back to the asset whose connection is executing. In legacy
+    # single-asset scans these are the same.
+    run_asset = attributed_to_asset or asset
     run = CompliancePluginRun(
         tenant_id=tenant_id,
         plugin_id=plugin.id,
-        asset_id=asset.id if asset else None,
+        asset_id=run_asset.id if run_asset else None,
         connection_id=connection.id if connection else None,
-        status="running",
+        status="pending" if collector_agent_id else "running",
         triggered_by=triggered_by,
         triggered_by_user_id=user_id,
+        executed_by_agent_id=collector_agent_id,
         started_at=started,
         remediation_shown=plugin.remediation,
     )
@@ -144,6 +164,20 @@ def execute_plugin(
     db.flush()
     db.commit()  # commit running state so it's visible during execution
     db.refresh(run)
+
+    # Collector path: don't execute here. Return the pending row, the
+    # collector will pick it up via /agents/jobs and update it later.
+    if collector_agent_id:
+        # Nudge the collector to wake on its next long-poll tick.
+        try:
+            from grc.models import ComplianceAgent
+            agent = db.query(ComplianceAgent).get(collector_agent_id)
+            if agent and agent.pending_scan_at is None:
+                agent.pending_scan_at = datetime.utcnow()
+                db.commit()
+        except Exception:  # noqa: BLE001
+            pass
+        return run
 
     credentials = resolve_credentials_for_connection(connection) if connection else {}
     result = run_check(plugin.runner_type, plugin.check_definition or {}, credentials)
@@ -195,11 +229,14 @@ def execute_plugin(
     framework_controls_touched = _cascade_to_controls(
         db, tenant_id=tenant_id, plugin=plugin, run=run,
     )
-    if asset is not None and result.status in ("passed", "failed"):
+    # Legacy AssetSecurityComplianceSelection table tags the attributed asset
+    # (peer in room-scan, host otherwise) so its compliance page sees the
+    # selection alongside the run.
+    if run_asset is not None and result.status in ("passed", "failed"):
         existing = (
             db.query(AssetSecurityComplianceSelection)
             .filter(
-                AssetSecurityComplianceSelection.asset_id == asset.id,
+                AssetSecurityComplianceSelection.asset_id == run_asset.id,
                 AssetSecurityComplianceSelection.benchmark == "CIS_PLUGIN",
                 AssetSecurityComplianceSelection.control_id == plugin.plugin_key,
             )
@@ -207,7 +244,7 @@ def execute_plugin(
         )
         if existing is None:
             sel = AssetSecurityComplianceSelection(
-                asset_id=asset.id,
+                asset_id=run_asset.id,
                 benchmark="CIS_PLUGIN",
                 control_id=plugin.plugin_key,
                 selected_by=user_id,

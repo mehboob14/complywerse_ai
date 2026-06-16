@@ -1465,20 +1465,36 @@ def get_available_risks(
 EXCEL_HEADER_MAPPINGS = {
     "risk_id": ["risk id", "risk_id", "id", "ref", "reference", "risk ref", "risk reference", "risk no", "risk number"],
     "category": ["risk category", "category", "risk_category", "risk type", "type", "domain", "risk area", "risk area domain", "risk domain"],
-    "title": ["risk title", "title", "risk name", "name", "risk", "risk_title", "risk scenario", "scenario", "risk statement"],
+    # Title aliases include AI Risk Assessment Template headers ("AI System
+    # / Use Case", "Use Case", "System") so the operator can upload that
+    # template through the regular ERM upload flow without renaming columns.
+    "title": [
+        "risk title", "title", "risk name", "name", "risk", "risk_title",
+        "risk scenario", "scenario", "risk statement",
+        "ai system use case", "ai system", "use case", "system use case",
+        "system", "use case ai system",
+    ],
     "description": ["risk description", "description", "risk_description", "details", "risk detail", "risk details"],
     "owner": ["risk owner", "owner", "risk_owner", "assigned to", "responsible"],
     "inherent_likelihood": ["inherent likelihood", "inherent_likelihood", "inh likelihood", "inh. likelihood", "inherent probability", "likelihood", "l(1-5)", "inh l", "likelihood (1-5)"],
     "inherent_impact": ["inherent impact", "inherent_impact", "inh impact", "inh. impact", "impact", "i(1-5)", "inh i", "impact (1-5)"],
-    "inherent_score": ["inherent score", "inherent_score", "inh score", "inh. score", "inherent risk score", "inherent rating"],
+    "inherent_score": ["inherent score", "inherent_score", "inh score", "inh. score", "inherent risk score", "inherent rating", "risk score", "score", "rating"],
     "controls": ["controls", "control", "existing controls", "control description", "current controls", "mitigating controls", "key controls"],
     "control_effectiveness": ["control effectiveness", "control_effectiveness", "effectiveness", "control rating", "eff", "design eff", "control design effectiveness"],
     "residual_likelihood": ["residual likelihood", "residual_likelihood", "res likelihood", "res. likelihood", "res l", "residual l"],
     "residual_impact": ["residual impact", "residual_impact", "res impact", "res. impact", "res i", "residual i"],
-    "residual_score": ["residual score", "residual_score", "res score", "res. score", "residual risk score", "residual rating"],
+    "residual_score": ["residual score", "residual_score", "res score", "res. score", "residual risk score", "residual rating", "residual risk level", "residual level", "risk level"],
     "status": ["status", "risk status", "current status", "state", "level"],
-    "mitigation_actions": ["mitigation actions", "mitigation_actions", "mitigations", "action plan", "treatment", "mitigation", "treatment plan", "actions"],
-    "target_date": ["target date", "target_date", "due date", "deadline", "completion date", "target completion", "target"],
+    "mitigation_actions": [
+        "mitigation actions", "mitigation_actions", "mitigations", "action plan",
+        "treatment", "mitigation", "treatment plan", "actions",
+        "mitigation plan", "remediation plan", "remediation", "treatment actions",
+    ],
+    "target_date": [
+        "target date", "target_date", "due date", "deadline", "completion date",
+        "target completion", "target",
+        "target review date", "review date", "next review date", "next review",
+    ],
 }
 
 VALID_CATEGORIES = ["strategic", "operational", "financial", "compliance", "technology", "third_party", "project_change"]
@@ -1626,11 +1642,24 @@ async def upload_excel_risk_assessment(
                 col_map = candidate_map
                 header_row_index = idx
 
+        # Title fallback: when an explicit title column is missing but a
+        # description (or risk_id) column was matched, use it as the title
+        # source instead of rejecting the upload. Supports templates like the
+        # AI Risk Assessment workbook that ship without a "Risk Title" header.
         if "title" not in col_map:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Could not identify a 'Risk Title' or 'Title' column in the header row"
-            )
+            if "description" in col_map:
+                col_map["title"] = col_map["description"]
+            elif "risk_id" in col_map:
+                col_map["title"] = col_map["risk_id"]
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Could not identify a title-like column. Expected one of: "
+                        "'Risk Title', 'Title', 'AI System / Use Case', 'Risk Description', "
+                        "or any column listed in the upload guide."
+                    ),
+                )
 
         if header_row_index is None:
             header_row_index = 0
@@ -1682,7 +1711,22 @@ async def upload_excel_risk_assessment(
                 inh_score = _safe_float(row[col_map["inherent_score"]] if "inherent_score" in col_map else None)
                 res_likelihood = _safe_int(row[col_map["residual_likelihood"]] if "residual_likelihood" in col_map else None)
                 res_impact = _safe_int(row[col_map["residual_impact"]] if "residual_impact" in col_map else None)
-                res_score = _safe_float(row[col_map["residual_score"]] if "residual_score" in col_map else None)
+                res_score_raw = row[col_map["residual_score"]] if "residual_score" in col_map else None
+                res_score = _safe_float(res_score_raw)
+                # AI template stores Residual Risk Level as text ("High",
+                # "Medium", "Low"). Translate to a numeric score bucket so
+                # downstream charts continue to work.
+                if res_score is None and res_score_raw is not None:
+                    text_level = str(res_score_raw).strip().lower()
+                    text_score_map = {
+                        "critical": 22, "very high": 22,
+                        "high": 18, "h": 18,
+                        "medium": 12, "med": 12, "moderate": 12, "m": 12,
+                        "low": 6, "l": 6,
+                        "minimal": 3, "very low": 3, "negligible": 3,
+                    }
+                    if text_level in text_score_map:
+                        res_score = float(text_score_map[text_level])
 
                 if inh_score is None and inh_likelihood and inh_impact:
                     inh_score = float(inh_likelihood * inh_impact)

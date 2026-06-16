@@ -9,56 +9,27 @@ import {
   Shield,
   LayoutDashboard,
   ListChecks,
-  FileText,
-  AlertTriangle,
-  Server,
-  Bug,
-  Briefcase,
-  ShieldCheck,
-  History,
   FileBadge,
   Share2,
   Check,
-  ClipboardList,
 } from 'lucide-react';
 
 import OverviewTab from './_tabs/OverviewTab';
 import ControlsTab from './_tabs/ControlsTab';
 import EvidenceTab from './_tabs/EvidenceTab';
-import DocumentsTab from './_tabs/DocumentsTab';
-import RisksTab from './_tabs/RisksTab';
-import RiskAssessmentTab from './_tabs/RiskAssessmentTab';
-import AssetsTab from './_tabs/AssetsTab';
-import VulnerabilitiesTab from './_tabs/VulnerabilitiesTab';
-import VendorsTab from './_tabs/VendorsTab';
-import ExceptionsTab from './_tabs/ExceptionsTab';
-import AuditTrailTab from './_tabs/AuditTrailTab';
+// Other tab component files (Documents, Risks, RiskAssessment, Assets,
+// Vulnerabilities, Vendors, Exceptions, AuditTrail) are kept on disk for
+// future restoration but are not wired to the tab bar.
 
 type TabKey =
   | 'overview'
   | 'controls'
-  | 'evidence'
-  | 'documents'
-  | 'risks'
-  | 'risk-assessment'
-  | 'assets'
-  | 'vulnerabilities'
-  | 'vendors'
-  | 'exceptions'
-  | 'audit-trail';
+  | 'evidence';
 
 const TABS: Array<{ key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   { key: 'controls', label: 'Controls', icon: ListChecks },
   { key: 'evidence', label: 'Evidence', icon: FileBadge },
-  { key: 'documents', label: 'Documents', icon: FileText },
-  { key: 'risks', label: 'Risks', icon: AlertTriangle },
-  { key: 'risk-assessment', label: 'Risk Assessment', icon: ClipboardList },
-  { key: 'assets', label: 'Assets', icon: Server },
-  { key: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
-  { key: 'vendors', label: 'Vendors', icon: Briefcase },
-  { key: 'exceptions', label: 'Exceptions', icon: ShieldCheck },
-  { key: 'audit-trail', label: 'Audit Trail', icon: History },
 ];
 
 export default function AuditorPortalDetailPage() {
@@ -68,7 +39,12 @@ export default function AuditorPortalDetailPage() {
   const frameworkId = params.frameworkId as string;
 
   // Initial tab seeded from ?tab=... so URLs are shareable per-section.
-  const initialTab = (searchParams.get('tab') as TabKey | null) || 'overview';
+  // Validate against the trimmed TabKey set so legacy bookmarks (?tab=risks
+  // / ?tab=audit-trail / etc.) gracefully fall back to overview instead of
+  // rendering a blank panel.
+  const validKeys: TabKey[] = ['overview', 'controls', 'evidence'];
+  const rawTab = searchParams.get('tab');
+  const initialTab: TabKey = (rawTab && (validKeys as string[]).includes(rawTab)) ? (rawTab as TabKey) : 'overview';
   const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [shareCopied, setShareCopied] = useState(false);
 
@@ -123,17 +99,23 @@ export default function AuditorPortalDetailPage() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'overview': return <OverviewTab frameworkId={frameworkId} onJumpTab={(t) => handleTabClick(t as TabKey)} />;
+      case 'overview':
+        return (
+          <OverviewTab
+            frameworkId={frameworkId}
+            onJumpTab={(t) => {
+              // The Overview tab may emit jumps to legacy keys (risks, documents,
+              // assets, ...) that we no longer expose. Re route those to Controls
+              // or Evidence which still surface the relevant data.
+              const next = t === 'evidence' ? 'evidence'
+                : t === 'controls' ? 'controls'
+                : 'overview';
+              handleTabClick(next as TabKey);
+            }}
+          />
+        );
       case 'controls': return <ControlsTab frameworkId={frameworkId} />;
       case 'evidence': return <EvidenceTab frameworkId={frameworkId} />;
-      case 'documents': return <DocumentsTab frameworkId={frameworkId} />;
-      case 'risks': return <RisksTab frameworkId={frameworkId} />;
-      case 'risk-assessment': return <RiskAssessmentTab frameworkId={frameworkId} />;
-      case 'assets': return <AssetsTab frameworkId={frameworkId} />;
-      case 'vulnerabilities': return <VulnerabilitiesTab frameworkId={frameworkId} />;
-      case 'vendors': return <VendorsTab frameworkId={frameworkId} />;
-      case 'exceptions': return <ExceptionsTab frameworkId={frameworkId} />;
-      case 'audit-trail': return <AuditTrailTab frameworkId={frameworkId} />;
       default: return <OverviewTab frameworkId={frameworkId} />;
     }
   };

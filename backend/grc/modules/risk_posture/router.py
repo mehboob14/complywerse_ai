@@ -185,8 +185,11 @@ def preview_asset_posture(
     after_eff  = (after.get("components")  or {}).get("vuln", {}).get("effective_risk") or {}
 
     def _strip(eff: dict) -> dict:
-        """Keep the UI payload tight — only what the right-pane needs to
-        render the per-vuln re-score list."""
+        """Carry enough per-vuln data for the right-pane re-score list AND
+        for the per-vuln breakdown cards to re-render their weighted
+        equation when the operator is mid-preview. Fields below match what
+        the per-vuln cards on the page already consume from the posture
+        endpoint, so the frontend can use the same component."""
         return {
             "best_score": eff.get("best_score"),
             "per_vuln": [
@@ -196,6 +199,14 @@ def preview_asset_posture(
                     "score": p.get("score"),
                     "band": p.get("band"),
                     "escalated": p.get("escalated"),
+                    "title": p.get("title"),
+                    "severity": p.get("severity"),
+                    "cvss_score": p.get("cvss_score"),
+                    "epss_score": p.get("epss_score"),
+                    "kev_flag": p.get("kev_flag"),
+                    "contributions": p.get("contributions"),
+                    "business_impact_factor": p.get("business_impact_factor"),
+                    "reason": p.get("reason"),
                 }
                 for p in (eff.get("per_vuln") or [])
             ],

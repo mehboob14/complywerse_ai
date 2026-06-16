@@ -2736,3 +2736,426 @@ def delete_software_identifier(
     db.delete(row)
     db.commit()
     return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Detected-software inventory + promote to child assets
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PromoteSoftwareIn(BaseModel):
+    """Body for promote-software. Caller picks software_keys from the
+    detected inventory; criticality defaults to the parent's value."""
+    software_keys: List[str]
+    criticality: Optional[str] = None
+
+
+@router.get("/{asset_id}/detected-software")
+def get_detected_software(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """The agent's enriched software inventory for this host: each entry
+    carries software_key, benchmark availability, and (if already promoted)
+    the child asset id. Drives the "Detected on this server" panel."""
+    asset = _tenant_asset_or_404(db, current_user, asset_id)
+    inventory = asset.detected_software_json or []
+    promotable = [e for e in inventory if e.get("benchmark_available") and not e.get("promoted_asset_id")]
+    return {
+        "asset_id": asset.id,
+        "inventory": inventory,
+        "counts": {
+            "total": len(inventory),
+            "promotable": len(promotable),
+            "promoted": sum(1 for e in inventory if e.get("promoted_asset_id")),
+            "no_benchmark": sum(1 for e in inventory if not e.get("benchmark_available")),
+        },
+    }
+
+
+@router.post("/{asset_id}/promote-software")
+def promote_software(
+    asset_id: int,
+    body: PromoteSoftwareIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Turn selected detected-software entries into child assets.
+
+    Each promoted child gets parent_asset_id = this host, asset_role =
+    'application', os_normalized = the software_key (the matcher resolves
+    the application benchmark exactly like an OS), and inherits the
+    parent's owner + criticality + CIA ratings.
+
+    Idempotent: an entry already promoted is skipped, not duplicated.
+    """
+    import copy as _copy
+
+    asset = _tenant_asset_or_404(db, current_user, asset_id)
+    # Deep copy so SQLAlchemy sees the JSON column as mutated. A shallow
+    # list() shares the inner dicts with the ORM attribute, and after an
+    # in-place mutation the comparison returns equal — the UPDATE is then
+    # silently skipped and the promotions don't persist.
+    inventory = _copy.deepcopy(asset.detected_software_json or [])
+    by_key = {e.get("software_key"): e for e in inventory}
+    created, skipped = [], []
+    for key in body.software_keys:
+        entry = by_key.get(key)
+        if entry is None:
+            skipped.append({"software_key": key, "reason": "not in inventory"})
+            continue
+        if entry.get("promoted_asset_id"):
+            skipped.append({
+                "software_key": key,
+                "reason": "already promoted",
+                "asset_id": entry["promoted_asset_id"],
+            })
+            continue
+        child = ITAsset(
+            tenant_id=asset.tenant_id,
+            name=f"{entry.get('name') or key} @ {asset.host_name or asset.name}",
+            description=(
+                f"Application asset promoted from detected software on "
+                f"'{asset.name}' (source: {entry.get('source')})"
+            ),
+            asset_type="application",
+            asset_role="application",
+            parent_asset_id=asset.id,
+            host_name=asset.host_name,
+            ip_address=asset.ip_address,
+            os_family=asset.os_family,
+            os_version=(
+                f"{entry.get('name')} {entry.get('version')}"
+                if entry.get("version") else entry.get("name")
+            ),
+            os_normalized=key,
+            criticality=body.criticality or asset.criticality,
+            status="active",
+            owner_id=asset.owner_id,
+            owner_name=asset.owner_name,
+            confidentiality_rating=asset.confidentiality_rating,
+            integrity_rating=asset.integrity_rating,
+            availability_rating=asset.availability_rating,
+        )
+        db.add(child)
+        db.flush()
+        entry["promoted_asset_id"] = child.id
+        created.append({"software_key": key, "asset_id": child.id, "name": child.name})
+    asset.detected_software_json = inventory
+    db.commit()
+    return {"created": created, "skipped": skipped}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IP-group composite scoring ("room-and-chair" model)
+# ─────────────────────────────────────────────────────────────────────────────
+# Brought over from the Updated_CIS_Assests reference. The composite score is
+# 60% host-OS plus 40% criticality-weighted application average. Apps scoring
+# below 50% trigger a 10-point penalty against the room. Per-tenant weight
+# overrides live on Tenant.settings.composite_weights.
+
+_COMPOSITE_W_SELF = 0.6
+_COMPOSITE_W_CHILDREN = 0.4
+_BROKEN_CHAIR_PENALTY = 10.0   # percentage points
+_UNKNOWN_CHAIR_PENALTY = 5.0
+_CRIT_WEIGHT = {"low": 1.0, "medium": 2.0, "high": 3.0, "critical": 4.0}
+
+
+def _get_tenant_crit_weights(db: Session, tid: int) -> dict:
+    """Return the tenant's custom criticality weights, falling back to defaults."""
+    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
+    settings = tenant.settings or {} if tenant else {}
+    return settings.get("composite_weights", _CRIT_WEIGHT)
+
+
+def _tenant_asset_or_404(db: Session, current_user, asset_id: int) -> ITAsset:
+    """Tenant scoped fetch for an asset id. 404 when not found in any of the
+    user's tenants."""
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    return asset
+
+
+def _asset_own_compliance(db: Session, asset_id: int, tenant_id: int) -> Optional[float]:
+    """Latest-run pass-rate for the asset's own rules (percent), or None
+    when it has never been scanned. Uses each plugin's most recent
+    non-leaked run, mirroring the asset compliance page."""
+    rows = db.execute(text("""
+        SELECT r.status FROM grc_compliance_plugin_runs r
+        JOIN (
+            SELECT plugin_id, MAX(id) AS max_id
+            FROM grc_compliance_plugin_runs
+            WHERE asset_id = :aid AND tenant_id = :tid
+              AND is_leaked = false
+              AND status IN ('passed', 'failed')
+            GROUP BY plugin_id
+        ) latest ON latest.max_id = r.id
+    """), {"aid": asset_id, "tid": tenant_id}).fetchall()
+    if not rows:
+        return None
+    passed = sum(1 for r in rows if r[0] == "passed")
+    return round(100.0 * passed / len(rows), 1)
+
+
+class _CompositeWeightsIn(BaseModel):
+    low: float = 1.0
+    medium: float = 2.0
+    high: float = 3.0
+    critical: float = 4.0
+
+
+@router.get("/composite-weights")
+def get_composite_weights(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
+    settings = tenant.settings or {} if tenant else {}
+    is_custom = "composite_weights" in settings
+    weights = settings.get("composite_weights", _CRIT_WEIGHT)
+    return {"weights": weights, "is_custom": is_custom, "defaults": _CRIT_WEIGHT}
+
+
+@router.put("/composite-weights")
+def update_composite_weights(
+    body: _CompositeWeightsIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    weights = {"low": body.low, "medium": body.medium, "high": body.high, "critical": body.critical}
+    if any(v <= 0 for v in weights.values()):
+        raise HTTPException(400, "All weights must be positive numbers")
+    settings = dict(tenant.settings or {})
+    settings["composite_weights"] = weights
+    tenant.settings = settings
+    db.commit()
+    return {"weights": weights, "is_custom": True, "defaults": _CRIT_WEIGHT}
+
+
+@router.delete("/composite-weights")
+def reset_composite_weights(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tid = get_user_primary_tenant(current_user, db)
+    tenant = db.query(Tenant).filter(Tenant.id == tid).first()
+    if not tenant:
+        raise HTTPException(404, "Tenant not found")
+    settings = dict(tenant.settings or {})
+    settings.pop("composite_weights", None)
+    tenant.settings = settings
+    db.commit()
+    return {"weights": _CRIT_WEIGHT, "is_custom": False, "defaults": _CRIT_WEIGHT}
+
+
+@router.get("/{asset_id}/ip-peers")
+def get_ip_peers(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """IP-based asset group: all assets co-located at the same IP address.
+
+    Primary linking mechanism for inventory-imported assets (e.g. from the
+    bank's third-party CMDB). Assets sharing an IP are assumed to run on the
+    same physical/virtual host.
+
+    Returns per-asset benchmark availability, individual compliance scores,
+    and the composite IP-group score + formula.
+    """
+    # Late imports keep the module import graph from growing at startup;
+    # only loaded when the composite scoring endpoint is actually called.
+    from ..modules.compliance_plugins.services.strict_matcher import pick_benchmark_for_os
+    from ..modules.compliance_plugins.services.software_normaliser import benchmark_for_software_key
+    from ..models import CompliancePlugin
+
+    asset = _tenant_asset_or_404(db, current_user, asset_id)
+    tid = asset.tenant_id
+    ip = asset.ip_address
+
+    # Patterns that indicate an app-level software key (not an OS host)
+    _APP_PATTERNS = (
+        "sql", "postgres", "mysql", "mongo", "tomcat", "iis",
+        "apache", "nginx", "redis", "oracle-db", "mssql", "mariadb",
+        "jboss", "wildfly", "websphere", "weblogic",
+    )
+
+    def _benchmark_for(a: ITAsset):
+        bname = None
+        mapping = pick_benchmark_for_os(db, tid, a.os_normalized)
+        if mapping:
+            bname = mapping.benchmark_name
+        if not bname and a.os_normalized:
+            bname = benchmark_for_software_key(db, a.os_normalized)
+        count = 0
+        if bname:
+            count = db.query(CompliancePlugin).filter(
+                CompliancePlugin.benchmark == bname,
+                CompliancePlugin.enabled.is_(True),
+                (CompliancePlugin.tenant_id == tid) | (CompliancePlugin.tenant_id.is_(None)),
+            ).count()
+        return bname, count
+
+    # Pre-load every active integration connection in this tenant once so the
+    # per-asset is_connected flag is a dict lookup, not N+1 queries.
+    from ..models import IntegrationConnection as _IC
+    _active_console_urls: set[str] = {
+        (c.console_url or "").lower().strip()
+        for c in db.query(_IC).filter(
+            _IC.tenant_id == tid,
+            _IC.is_active.is_(True),
+        ).all()
+        if (c.console_url or "").strip()
+    }
+
+    def _build(a: ITAsset):
+        bname, rcount = _benchmark_for(a)
+        score = _asset_own_compliance(db, a.id, tid)
+        osk = (a.os_normalized or "").lower()
+        is_host_os = (
+            (a.asset_type or "") == "infrastructure" and
+            not any(p in osk for p in _APP_PATTERNS)
+        )
+        # An asset is "connected" when an active integration connection exists
+        # pinned to its host_name (matches the lookup _do_scan_all does). Drives
+        # the room-scan checkbox eligibility — a peer that has no own connection
+        # AND no host in its IP group with one can't actually be scanned.
+        own_host = (a.host_name or "").lower().strip()
+        is_connected = bool(own_host) and own_host in _active_console_urls
+        return {
+            "id": a.id,
+            "name": a.name,
+            "asset_type": a.asset_type or "infrastructure",
+            "os_normalized": a.os_normalized,
+            "criticality": a.criticality or "medium",
+            "status": a.status,
+            "benchmark_name": bname,
+            "benchmark_available": bname is not None,
+            "rule_count": rcount,
+            "score": score,
+            "never_scanned": score is None,
+            "is_host_os": is_host_os,
+            "is_self": a.id == asset_id,
+            "is_connected": is_connected,
+        }
+
+    crit_weights = _get_tenant_crit_weights(db, tid)
+
+    if not ip:
+        return {
+            "asset_id": asset_id,
+            "ip_address": None,
+            "group": [_build(asset)],
+            # Standalone asset has no peers, so "group connection availability"
+            # collapses to "is the opened asset itself connected?".
+            "connection_available": _build(asset)["is_connected"],
+            "composite": None,
+            "formula": {
+                "description": "Asset has no IP address. Standalone, not part of an IP group.",
+                "weights": {"host": _COMPOSITE_W_SELF, "applications": _COMPOSITE_W_CHILDREN},
+                "criticality_weights": crit_weights,
+            },
+        }
+
+    all_at_ip = db.query(ITAsset).filter(
+        ITAsset.tenant_id == tid,
+        ITAsset.ip_address == ip,
+    ).order_by(ITAsset.asset_type, ITAsset.id).all()
+
+    # Duplicate guard: deduplicate by id (shouldn't happen, but be safe)
+    seen_ids = set()
+    deduped = []
+    for a in all_at_ip:
+        if a.id not in seen_ids:
+            seen_ids.add(a.id)
+            deduped.append(a)
+
+    group = [_build(a) for a in deduped]
+
+    # Composite score (room-and-chair formula, IP-group edition)
+    host_entry = next((g for g in group if g["is_host_os"]), None)
+    app_entries = [g for g in group if not g["is_host_os"]]
+
+    host_score = host_entry["score"] if host_entry else None
+    app_contributions = []
+    weighted_sum, weight_total = 0.0, 0.0
+    any_broken = False
+    for a in app_entries:
+        w = crit_weights.get((a["criticality"] or "medium").lower(), 2.0)
+        s = a["score"]
+        app_contributions.append({
+            "asset_id": a["id"], "name": a["name"],
+            "score": s, "weight": w, "criticality": a["criticality"],
+            "os_normalized": a.get("os_normalized"),
+        })
+        if s is not None:
+            weighted_sum += s * w
+            weight_total += w
+            if s < 50.0:
+                any_broken = True
+
+    effective = None
+    penalties = []
+    if host_score is not None:
+        if weight_total > 0:
+            app_avg = weighted_sum / weight_total
+            effective = _COMPOSITE_W_SELF * host_score + _COMPOSITE_W_CHILDREN * app_avg
+        else:
+            effective = float(host_score)
+        if any_broken:
+            effective -= _BROKEN_CHAIR_PENALTY
+            penalties.append({"reason": "application scoring below 50%", "points": _BROKEN_CHAIR_PENALTY})
+        effective = round(max(0.0, min(100.0, effective)), 1)
+    elif app_entries:
+        # No OS host in the group, equal-weight average of all apps
+        scored = [a["score"] for a in app_entries if a["score"] is not None]
+        if scored:
+            effective = round(sum(scored) / len(scored), 1)
+
+    weakest = None
+    scored_all = [g for g in group if g["score"] is not None]
+    if scored_all:
+        weakest = min(scored_all, key=lambda g: g["score"])
+
+    # Group-level connection availability — true when ANY member of the IP
+    # group has an active integration connection. Room-scan execution piggy-
+    # backs off that connection, so this is the right gate for the panel
+    # checkboxes: peers in a group with at least one connected member can be
+    # ticked even if they have no connection of their own.
+    connection_available = any(g.get("is_connected") for g in group)
+
+    return {
+        "asset_id": asset_id,
+        "ip_address": ip,
+        "group": group,
+        "connection_available": connection_available,
+        "composite": {
+            "host_id": host_entry["id"] if host_entry else None,
+            "host_score": host_score,
+            "app_contributions": app_contributions,
+            "effective_score": effective,
+            "weakest": weakest,
+            "penalties": penalties,
+        },
+        "formula": {
+            "description": (
+                f"{int(_COMPOSITE_W_SELF * 100)}% host OS score "
+                f"plus {int(_COMPOSITE_W_CHILDREN * 100)}% criticality-weighted application average"
+            ),
+            "weights": {"host": _COMPOSITE_W_SELF, "applications": _COMPOSITE_W_CHILDREN},
+            "criticality_weights": crit_weights,
+            "penalties": {
+                "broken_app": f"minus {_BROKEN_CHAIR_PENALTY} pts when any app scores below 50%",
+            },
+        },
+    }

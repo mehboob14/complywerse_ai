@@ -1,0 +1,17 @@
+# GRC Embeddings System Dependencies
+
+# Database
+psycopg2-binary>=2.9.9
+
+# OpenAI Embeddings
+openai>=1.12.0
+
+# Vector Database
+chromadb>=0.4.22
+
+# Environment Configuration
+python-dotenv>=1.0.0
+
+# Web Server
+fastapi>=0.104.0
+uvicorn>=0.24.0

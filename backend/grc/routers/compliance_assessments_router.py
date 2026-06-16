@@ -3270,7 +3270,7 @@ def update_assessment_item(
         db.commit()
     
     db.refresh(item)
-    
+
     return {
         "id": item.id,
         "item_number": item.item_number,
@@ -3286,6 +3286,151 @@ def update_assessment_item(
         "remarks": item.remarks,
         "updated_at": item.updated_at.isoformat()
     }
+
+
+# ── Item add / delete ────────────────────────────────────────────────────────
+# Bring add/delete CRUD to parity with criticality assessments. Works for every
+# compliance assessment type since they all share ComplianceAssessmentDocumentItem
+# (DCC items use the same table with control_source='dcc' marker).
+
+class _CreateAssessmentItemRequest(BaseModel):
+    item_number: Optional[str] = None
+    area_domain: Optional[str] = None
+    control_description: str
+    compliance_status: Optional[str] = "in_progress"
+    gaps_identified: Optional[str] = None
+    proposed_solution: Optional[str] = None
+    responsible_party: Optional[str] = None
+    timeline: Optional[str] = None
+    priority: Optional[str] = "medium"
+    evidence_reference: Optional[str] = None
+    remarks: Optional[str] = None
+
+
+@router.post("/{assessment_id}/items", status_code=status.HTTP_201_CREATED)
+def create_assessment_item(
+    assessment_id: int,
+    payload: _CreateAssessmentItemRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    assessment = db.query(ComplianceAssessmentDocument).filter(
+        ComplianceAssessmentDocument.id == assessment_id,
+        ComplianceAssessmentDocument.tenant_id.in_(user_tenants),
+    ).first()
+    if not assessment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assessment not found",
+        )
+
+    # Item number autoincrement when blank.
+    item_number = (payload.item_number or "").strip()
+    if not item_number:
+        existing_count = db.query(ComplianceAssessmentDocumentItem).filter(
+            ComplianceAssessmentDocumentItem.assessment_id == assessment_id,
+        ).count()
+        item_number = str(existing_count + 1)
+
+    item = ComplianceAssessmentDocumentItem(
+        tenant_id=assessment.tenant_id,
+        assessment_id=assessment_id,
+        item_number=item_number,
+        area_domain=(payload.area_domain or "").strip() or None,
+        control_description=(payload.control_description or "").strip(),
+        compliance_status=normalize_status(payload.compliance_status or "in_progress"),
+        gaps_identified=(payload.gaps_identified or "").strip() or None,
+        proposed_solution=(payload.proposed_solution or "").strip() or None,
+        responsible_party=(payload.responsible_party or "").strip() or None,
+        timeline=(payload.timeline or "").strip() or None,
+        priority=(payload.priority or "medium").strip().lower(),
+        evidence_reference=(payload.evidence_reference or "").strip() or None,
+        remarks=(payload.remarks or "").strip() or None,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(item)
+    db.flush()
+
+    # Recompute aggregate stats on the parent assessment.
+    items = db.query(ComplianceAssessmentDocumentItem).filter(
+        ComplianceAssessmentDocumentItem.assessment_id == assessment.id
+    ).all()
+    stats = calculate_assessment_stats(items)
+    assessment.total_items = len(items)
+    assessment.complied_count = stats["complied"]
+    assessment.partially_complied_count = stats["partially_complied"]
+    assessment.not_complied_count = stats["not_complied"]
+    assessment.in_progress_count = stats["in_progress"]
+    assessment.na_count = stats["na"]
+    assessment.overall_score = stats["overall_score"]
+    assessment.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(item)
+
+    return {
+        "id": item.id,
+        "assessment_id": item.assessment_id,
+        "item_number": item.item_number,
+        "area_domain": item.area_domain,
+        "control_description": item.control_description,
+        "compliance_status": item.compliance_status,
+        "gaps_identified": item.gaps_identified,
+        "proposed_solution": item.proposed_solution,
+        "responsible_party": item.responsible_party,
+        "timeline": item.timeline,
+        "priority": item.priority,
+        "evidence_reference": item.evidence_reference,
+        "remarks": item.remarks,
+        "created_at": item.created_at.isoformat() if item.created_at else None,
+        "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+    }
+
+
+@router.delete("/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_assessment_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    item = db.query(ComplianceAssessmentDocumentItem).filter(
+        ComplianceAssessmentDocumentItem.id == item_id,
+        ComplianceAssessmentDocumentItem.tenant_id.in_(user_tenants),
+    ).first()
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Assessment item not found",
+        )
+
+    parent_id = item.assessment_id
+    db.delete(item)
+    db.flush()
+
+    # Recompute aggregate stats on the parent assessment.
+    parent = db.query(ComplianceAssessmentDocument).filter(
+        ComplianceAssessmentDocument.id == parent_id
+    ).first()
+    if parent:
+        items = db.query(ComplianceAssessmentDocumentItem).filter(
+            ComplianceAssessmentDocumentItem.assessment_id == parent.id
+        ).all()
+        stats = calculate_assessment_stats(items)
+        parent.total_items = len(items)
+        parent.complied_count = stats["complied"]
+        parent.partially_complied_count = stats["partially_complied"]
+        parent.not_complied_count = stats["not_complied"]
+        parent.in_progress_count = stats["in_progress"]
+        parent.na_count = stats["na"]
+        parent.overall_score = stats["overall_score"]
+        parent.updated_at = datetime.utcnow()
+
+    db.commit()
+    return None
 
 
 @router.delete("/{assessment_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -15,7 +15,7 @@
 //
 // Cross-screen consistency invariant (verified against live data):
 //   /my-runs Your Pass Rate == /admin/overview pass_rate for your user
-//   /my-runs total_rules    == /compliance/plugins/library TOTAL RULES
+//   /my-runs total_rules    == /compliance-plugins/library TOTAL RULES
 //   /my-runs recent runs    == /compliance-overview per-asset scan history
 
 import { useMemo, useState } from "react";

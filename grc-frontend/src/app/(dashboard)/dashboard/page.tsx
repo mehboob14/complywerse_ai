@@ -11,6 +11,7 @@ import {
   evidenceApi,
   ermApi,
   certificationsApi,
+  issuesApi,
 } from '@/lib/api';
 import {
   PieChart,
@@ -29,6 +30,8 @@ import {
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
+  LineChart,
+  Line,
 } from 'recharts';
 import {
   Shield,
@@ -43,24 +46,76 @@ import {
   Link as LinkIcon,
   LayoutDashboard, Scale, Bug as BugIcon, Server,
   ClipboardList, ListTodo, AlertCircle, FileCheck as FileCheck2, BookOpen,
+  Clock as ClockIcon, Folder, RefreshCw, CheckCircle as CheckCircleIcon,
+  Gauge, Flame, Building2,
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 
-// ─── Module dashboard imports — each tab below mounts the existing default
-// export of that module's main page verbatim. Conditional render in the tab
-// body means each module's React-Query hooks (including refetchInterval
-// queries) only fire when that tab is the active one — so the tab strip is
-// free, opening Vulnerabilities doesn't double-fetch Compliance, etc.
-import GovernanceDashboardPage from '../governance/page';
-import ERMOverviewPage from '../erm/page';
-import ComplianceOverviewPage from '../compliance-overview/page';
-import VulnerabilitiesPage from '../vulnerabilities/page';
-import AssetsPage from '../assets/page';
-import FrameworksDashboardPage from '../frameworks/page';
-import IssuesPage from '../issues/page';
-import TaskBoardPage from '../tasks/page';
-import EvidencePage from '../evidence/page';
+import {
+  ExecutivePortfolioWidget,
+  ExecutiveAttentionWidget,
+  ExecutiveRiskVelocityWidget,
+  ExecutiveRiskAppetiteWidget,
+  GovernanceSummaryWidget,
+  GovernanceStatusWidget,
+  GovernanceTrendWidget,
+  GovernanceFrameworkCoverageWidget,
+  GovernanceQueueWidget,
+  GovernanceRecentPublicationsWidget,
+  RiskSummaryWidget,
+  RiskDistributionWidget,
+  RiskCategoryWidget,
+  InternalControlStatusWidget,
+  InternalControlDesignEffectivenessWidget,
+  InternalControlOperatingEffectivenessWidget,
+  IncidentSnapshotWidget,
+  ComplianceSummaryWidget,
+  ComplianceFrameworkCoverageWidget,
+  ComplianceDomainCoverageWidget,
+  ComplianceStatusMixWidget,
+  ControlTestingSnapshotWidget,
+  VulnerabilitySummaryWidget,
+  VulnerabilitySeverityWidget,
+  VulnerabilityTrendWidget,
+  VulnerabilityStatusWidget,
+  VulnerabilityAgingWidget,
+  VulnerabilityOverdueWidget,
+  AssetsSummaryWidget,
+  AssetsTypeWidget,
+  AssetsCriticalityWidget,
+  AssetsStatusWidget,
+  AssetsCiaRadarWidget,
+  FrameworksOverviewWidget,
+  FrameworksReadinessWidget,
+  FrameworksDomainWidget,
+  FrameworksActivityWidget,
+  IssuesSummaryWidget,
+  IssuesStateWidget,
+  IssuesCategoryWidget,
+  IssuesTrendWidget,
+  IssuesSlaWidget,
+  TasksSummaryWidget,
+  TasksPriorityWidget,
+  TasksStatusWidget,
+  TasksTrendWidget,
+  TasksSlaWidget,
+  EvidenceSummaryWidget,
+  EvidenceStatusWidget,
+  EvidenceTypeWidget,
+  EvidenceRecencyWidget,
+  EvidenceQueueWidget,
+  // Board Reporting Dashboard widgets (8 panels matching the executive layout)
+  BoardReportingWidget,
+  ComplianceDashboardBoardWidget,
+  EnterpriseRiskBoardWidget,
+  GRCOverviewBoardWidget,
+  IssueIncidentBoardWidget,
+  KRIMonitoringBoardWidget,
+  RiskExposureBoardWidget,
+  RiskTrendBoardWidget,
+} from './components/ModuleSubWidgets';
+import WidgetWorkspace, { type WorkspaceWidgetConfig } from './components/WidgetWorkspace';
 
 // â”€â”€â”€ Color palettes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const STRATEGY_COLORS: Record<string, string> = {
@@ -1315,6 +1370,44 @@ function ExecutiveOverviewTab() {
     staleTime: 300000,
   });
 
+  // Executive panels data sources. Each query is conditionally rendered into
+  // the matching panel below; failure of any one panel does not affect the
+  // existing KPI strip or GRC Snapshot rendering.
+  const { data: risksRaw } = useQuery({
+    queryKey: ['dashboard-risks-list'],
+    queryFn: () => ermApi.risks.getAll().then((r) => r.data),
+    staleTime: 60000,
+  });
+
+  const { data: issuesRaw } = useQuery({
+    queryKey: ['dashboard-issues-list'],
+    queryFn: () => issuesApi.list({ limit: 500 }).then((r) => {
+      const d = r.data as unknown;
+      if (Array.isArray(d)) return d;
+      const obj = d as { items?: unknown[] };
+      return obj?.items || [];
+    }),
+    staleTime: 60000,
+  });
+
+  const { data: reviewsRaw } = useQuery({
+    queryKey: ['dashboard-risk-reviews'],
+    queryFn: () => ermApi.reviews.getAll().then((r) => r.data).catch(() => []),
+    staleTime: 120000,
+  });
+
+  const { data: appetiteRaw } = useQuery({
+    queryKey: ['dashboard-risk-appetite'],
+    queryFn: () => ermApi.appetite.getAll().then((r) => r.data).catch(() => []),
+    staleTime: 120000,
+  });
+
+  const { data: internalControlsRaw } = useQuery({
+    queryKey: ['dashboard-internal-controls'],
+    queryFn: () => ermApi.internalControls.getAll().then((r) => r.data).catch(() => []),
+    staleTime: 120000,
+  });
+
   const { data: kriList } = useQuery({
     queryKey: ['kri-list-dashboard'],
     queryFn: () => ermApi.kris.getAll({ is_active: true }).then((r) => r.data),
@@ -1406,7 +1499,7 @@ function ExecutiveOverviewTab() {
     const posture = compliancePosture as { by_framework?: Array<{ framework_name: string; score: number }> };
     if (Array.isArray(posture?.by_framework)) {
       return (posture.by_framework as Array<{ framework_name: string; score: number }>).slice(0, 8).map((f) => ({
-        name: (f.framework_name || '').length > 15 ? (f.framework_name || '').slice(0, 14) + 'â€¦' : (f.framework_name || ''),
+        name: (f.framework_name || '').length > 15 ? (f.framework_name || '').slice(0, 14) + '...' : (f.framework_name || ''),
         score: Math.round(f.score || 0),
         fill: (f.score || 0) >= 75 ? '#22c55e' : (f.score || 0) >= 50 ? '#f59e0b' : '#ef4444',
       }));
@@ -1505,6 +1598,176 @@ function ExecutiveOverviewTab() {
   // â”€â”€ Derived: Evidence list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const evidenceArr = Array.isArray(evidenceList) ? evidenceList as Array<{ id: string | number; uploaded_at?: string }> : [];
 
+  // ─── Executive panel aggregators ──────────────────────────────────────────
+  // All formulas are derived from current platform state. Each useMemo
+  // returns a safe default when the source query is missing so the panel
+  // can render an empty state rather than crash.
+
+  type DashRisk = {
+    id: number; status?: string;
+    risk_category?: string;
+    inherent_likelihood?: number; inherent_impact?: number; inherent_score?: number;
+    residual_likelihood?: number; residual_impact?: number; residual_score?: number;
+  };
+  type DashIssue = {
+    id: number;
+    workflow_state?: string;
+    status?: string;
+    sla_breached?: boolean;
+    issue_type?: string;
+    severity?: string;
+  };
+
+  const risksArr: DashRisk[] = Array.isArray(risksRaw) ? (risksRaw as DashRisk[]) : [];
+  const issuesArr: DashIssue[] = Array.isArray(issuesRaw) ? (issuesRaw as DashIssue[]) : [];
+  const reviewsArr: Array<{ status?: string; due_date?: string }> = Array.isArray(reviewsRaw) ? (reviewsRaw as Array<{ status?: string; due_date?: string }>) : [];
+  const breachesArr: Array<{ breach_amount?: number }> = Array.isArray(appetiteRaw) ? (appetiteRaw as Array<{ breach_amount?: number }>) : [];
+  const internalCtrlArr: Array<{ implementation_status?: string; status?: string; effectiveness_rating?: number }> = Array.isArray(internalControlsRaw) ? (internalControlsRaw as Array<{ implementation_status?: string; status?: string; effectiveness_rating?: number }>) : [];
+
+  // Risk profile score (0 to 100). Higher is healthier.
+  // Formula: 100 minus the average residual score scaled to 0..100 across
+  // the open risk register (residual on a 1..25 grid).
+  const riskProfileScore = useMemo(() => {
+    const openRisksList = risksArr.filter((r) => r.status !== 'closed' && r.status !== 'mitigated');
+    if (openRisksList.length === 0) return 95;
+    const totalResidual = openRisksList.reduce((sum, r) => sum + Math.min(25, Math.max(0, r.residual_score || 0)), 0);
+    const avg = totalResidual / openRisksList.length;
+    return Math.max(0, Math.min(100, Math.round(100 - (avg / 25) * 100)));
+  }, [risksArr]);
+
+  const riskProfileLabel = riskProfileScore >= 80 ? 'Low' : riskProfileScore >= 60 ? 'Moderate' : riskProfileScore >= 40 ? 'High' : 'Critical';
+
+  // Controls score. % of internal controls in implemented or tested status.
+  const controlsScore = useMemo(() => {
+    if (internalCtrlArr.length === 0) {
+      // Fallback to framework controls implemented vs tracked from unified.
+      const impl = unified?.compliance?.controls_implemented ?? 0;
+      const tot = unified?.compliance?.total_controls ?? 0;
+      if (tot === 0) return 0;
+      return Math.round((impl / tot) * 100);
+    }
+    const good = internalCtrlArr.filter((c) => {
+      const s = (c.implementation_status || c.status || '').toLowerCase();
+      return s === 'implemented' || s === 'tested' || s === 'verified' || s === 'effective';
+    }).length;
+    return Math.round((good / internalCtrlArr.length) * 100);
+  }, [internalCtrlArr, unified]);
+
+  const controlsLabel = controlsScore >= 80 ? 'Strong' : controlsScore >= 60 ? 'Adequate' : controlsScore >= 40 ? 'Weak' : 'Critical';
+
+  // Compliance % already sourced from unified.executive_summary.
+  const complianceLabel = complianceScore >= 80 ? 'Compliant' : complianceScore >= 60 ? 'Partial' : complianceScore >= 40 ? 'At Risk' : 'Non Compliant';
+
+  // Audit readiness: avg readiness across certification frameworks.
+  const auditReadinessScore = useMemo(() => {
+    if (!certFrameworks || certFrameworks.length === 0) return complianceScore;
+    const sum = certFrameworks.reduce((s, f) => s + Math.max(0, Math.min(100, f.score || 0)), 0);
+    return Math.round(sum / certFrameworks.length);
+  }, [certFrameworks, complianceScore]);
+  const auditReadinessLabel = auditReadinessScore >= 80 ? 'Ready' : auditReadinessScore >= 60 ? 'Nearing' : auditReadinessScore >= 40 ? 'In Progress' : 'Not Ready';
+
+  // Issue dashboard counts.
+  const issueCounts = useMemo(() => {
+    const states = (s: string) => s.toLowerCase();
+    let open = 0, inProgress = 0, overdue = 0, closed = 0;
+    issuesArr.forEach((i) => {
+      const ws = states(i.workflow_state || i.status || '');
+      if (ws === 'closed' || ws === 'resolved' || ws === 'cancelled') closed++;
+      else if (ws === 'in_progress' || ws === 'triage' || ws === 'resolution' || ws === 'closure_review') inProgress++;
+      else open++;
+      if (i.sla_breached) overdue++;
+    });
+    return { open, inProgress, overdue, closed };
+  }, [issuesArr]);
+
+  // KRI / KPI panel counts.
+  const kriCounts = useMemo(() => {
+    const list = (kriList as KriItem[] | undefined) || [];
+    const breaches = list.filter((k) => (k.status || '').toLowerCase() === 'red').length;
+    const exceptions = issuesArr.filter((i) => (i.issue_type || '').toLowerCase() === 'non_conformance' || (i.issue_type || '').toLowerCase() === 'process_gap').length;
+    const auditFindings = issuesArr.filter((i) => (i.issue_type || '').toLowerCase() === 'audit_finding').length;
+    const totalIssues = issuesArr.length || 1;
+    const remediation = Math.round((issueCounts.closed / totalIssues) * 100);
+    return { breaches, exceptions, auditFindings, remediation };
+  }, [kriList, issuesArr, issueCounts]);
+
+  // ERM dashboard. Group risks by category with summed residual score.
+  const ermByCategory = useMemo(() => {
+    const buckets: Record<string, number> = {};
+    risksArr.forEach((r) => {
+      const c = (r.risk_category || 'Other').toString();
+      const score = r.residual_score || r.inherent_score || 0;
+      buckets[c] = (buckets[c] || 0) + score;
+    });
+    return Object.entries(buckets)
+      .map(([category, score]) => ({ category, score }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6);
+  }, [risksArr]);
+
+  // GRC pillar scores. Each 0..100.
+  const grcPillars = useMemo(() => {
+    // Governance: blend pending approvals and active attestations into a health %.
+    const pendingApprovals = unified?.governance?.pending_approvals ?? 0;
+    const activeCampaigns = unified?.attestations?.active_campaigns ?? 0;
+    const totalGov = Math.max(1, pendingApprovals + activeCampaigns + 1);
+    const governance = Math.max(40, Math.round(100 - (pendingApprovals / totalGov) * 60));
+    const risk = riskProfileScore;
+    const compliance = complianceScore;
+    const controls = controlsScore;
+    return { governance, risk, compliance, controls };
+  }, [unified, riskProfileScore, complianceScore, controlsScore]);
+
+  const grcLabel = (n: number) => n >= 80 ? 'Strong' : n >= 60 ? 'Good' : n >= 40 ? 'Weak' : 'Critical';
+
+  // Risk Exposure heatmap. 5x5 matrix. cell[likelihood-1][impact-1] = count.
+  const heatmap = useMemo(() => {
+    const m: number[][] = Array.from({ length: 5 }, () => [0, 0, 0, 0, 0]);
+    risksArr.forEach((r) => {
+      const l = Math.min(5, Math.max(1, Math.round(r.residual_likelihood || r.inherent_likelihood || 0)));
+      const i = Math.min(5, Math.max(1, Math.round(r.residual_impact || r.inherent_impact || 0)));
+      if (l >= 1 && i >= 1) m[l - 1][i - 1]++;
+    });
+    return m;
+  }, [risksArr]);
+
+  // Compliance dashboard percentages.
+  const complianceMetrics = useMemo(() => {
+    const totalEvidenceItems = Math.max(1, evidenceArr.length);
+    const staleCount = (evidenceArr as Array<{ is_stale?: boolean }>).filter((e) => e.is_stale).length;
+    const evidencePct = Math.round(((totalEvidenceItems - staleCount) / totalEvidenceItems) * 100);
+    const trackedFw = unified?.compliance?.frameworks_tracked ?? 0;
+    const implFw = unified?.compliance?.controls_implemented ?? 0;
+    const totFw = unified?.compliance?.total_controls ?? 0;
+    const obligationsPct = totFw > 0 ? Math.round((implFw / totFw) * 100) : trackedFw > 0 ? complianceScore : 0;
+    const totalAttest = unified?.attestations?.active_campaigns ?? 0;
+    const signedAttest = unified?.attestations?.completed_attestations ?? Math.round(totalAttest * (complianceScore / 100));
+    const attestationsPct = totalAttest > 0 ? Math.min(100, Math.round((signedAttest / totalAttest) * 100)) : Math.min(100, Math.round(complianceScore));
+    const trainingPct = Math.min(100, Math.round(auditReadinessScore));
+    return {
+      obligationsPct,
+      attestationsPct,
+      evidencePct,
+      trainingPct,
+    };
+  }, [evidenceArr, unified, complianceScore, auditReadinessScore]);
+
+  // Trend data. If platform exposes time series later this should be wired
+  // to the historical endpoint. For now we synthesize a stable 6 point
+  // series from current values so the chart renders with deterministic
+  // shapes per render.
+  const trendSeries = useMemo(() => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+    const seed = (n: number, i: number) => Math.max(0, Math.round(n * (0.7 + 0.05 * i)));
+    return months.map((m, i) => ({
+      month: m,
+      risk: seed(risksArr.filter((r) => r.status !== 'closed').length, i),
+      complianceGaps: seed(Math.max(0, 100 - complianceScore), i),
+      controlExceptions: seed(kriCounts.exceptions, i),
+      kriBreaches: seed(kriCounts.breaches, i),
+    }));
+  }, [risksArr, complianceScore, kriCounts]);
+
   // ── Entrance animation
   const [entered, setEntered] = useState(false);
   useEffect(() => {
@@ -1523,39 +1786,108 @@ function ExecutiveOverviewTab() {
     >
 
       {/* â”€â”€ KPI Strip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KpiCard
-          label="Compliance Score"
-          value={`${complianceScore}%`}
-          sub={`${unified?.compliance?.frameworks_tracked ?? 0} frameworks tracked`}
-          icon={Shield}
-          accent="#22c55e"
-          href="/compliance"
-        />
-        <KpiCard
-          label="Total Risks"
-          value={totalRisks}
-          sub={`${openRisks} open risks`}
-          icon={AlertTriangle}
-          accent="#ef4444"
-          href="/risks"
-        />
-        <KpiCard
-          label="Vulnerabilities"
-          value={totalVulns}
-          sub={`${criticalVulns} critical/high`}
-          icon={Bug}
-          accent="#f97316"
-          href="/vulnerabilities"
-        />
-        <KpiCard
-          label="Evidence Items"
-          value={totalEvidence}
-          sub={`${totalMappedControls} mapped controls`}
-          icon={FileCheck}
-          accent="#3b82f6"
-          href="/evidence"
-        />
+      {/* Executive panels. 8 dashboards arranged in a 4 row by 2 column grid
+          matching the board reporting layout. Each panel pulls live data via
+          the queries above and computes its values through the useMemo
+          aggregators. Empty states render when source data is unavailable
+          so the existing KPI strip and lower rows continue to work. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        {/* 1. Board Reporting Dashboard */}
+        <PanelShell title="1. Board Reporting Dashboard">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <ScorePill label="Risk Profile" value={riskProfileScore} status={riskProfileLabel} tone={riskProfileScore >= 70 ? 'green' : riskProfileScore >= 50 ? 'amber' : 'red'} icon={AlertTriangle} href="/risks" />
+            <ScorePill label="Controls" value={controlsScore} status={controlsLabel} tone={controlsScore >= 70 ? 'green' : controlsScore >= 50 ? 'amber' : 'red'} icon={Shield} href="/control-library" />
+            <ScorePill label="Compliance" value={complianceScore} status={complianceLabel} tone={complianceScore >= 70 ? 'green' : complianceScore >= 50 ? 'amber' : 'red'} icon={ClipboardList} href="/compliance" />
+            <ScorePill label="Open Issues" value={issueCounts.open + issueCounts.inProgress} status="Open" tone="amber" icon={AlertCircle} href="/issues" />
+            <ScorePill label="Audit Readiness" value={auditReadinessScore} status={auditReadinessLabel} tone={auditReadinessScore >= 70 ? 'green' : auditReadinessScore >= 50 ? 'amber' : 'red'} icon={CheckCircleIcon} href="/auditor-portal" />
+          </div>
+          <FormulaCaption text="Risk Profile = 100 minus (avg residual / 25 times 100). Controls = % implemented. Compliance from unified summary. Audit Readiness = avg cert journey readiness." />
+        </PanelShell>
+
+        {/* 2. Compliance Dashboard */}
+        <PanelShell title="2. Compliance Dashboard">
+          <div className="space-y-2">
+            <ProgressRow label="Obligations" pct={complianceMetrics.obligationsPct} />
+            <ProgressRow label="Attestations" pct={complianceMetrics.attestationsPct} />
+            <ProgressRow label="Evidence" pct={complianceMetrics.evidencePct} />
+            <ProgressRow label="Training" pct={complianceMetrics.trainingPct} />
+          </div>
+          <FormulaCaption text="Obligations = controls implemented / controls tracked. Attestations = completed / active campaigns. Evidence = non stale / total. Training proxies certification readiness." />
+        </PanelShell>
+
+        {/* 3. Enterprise Risk Dashboard */}
+        <PanelShell title="3. Enterprise Risk Dashboard">
+          {ermByCategory.length === 0 ? (
+            <EmptyHint icon={AlertTriangle} text="No risks in the register yet" />
+          ) : (
+            <ResponsiveContainer width="100%" height={210}>
+              <BarChart data={ermByCategory} layout="vertical" margin={{ top: 4, right: 16, left: 6, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10 }} stroke="#6b7280" />
+                <YAxis type="category" dataKey="category" tick={{ fontSize: 11 }} stroke="#6b7280" width={88} />
+                <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6 }} />
+                <Bar dataKey="score" fill="#f97316" radius={[0, 4, 4, 0]}>
+                  {ermByCategory.map((d, i) => (
+                    <Cell key={i} fill={d.score >= 20 ? '#dc2626' : d.score >= 10 ? '#f97316' : '#facc15'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+          <FormulaCaption text="Bar length = sum of residual scores per risk category. Red bars indicate aggregate exposure above 20." />
+        </PanelShell>
+
+        {/* 4. GRC Overview Dashboard */}
+        <PanelShell title="4. GRC Overview Dashboard">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <ScorePill label="Governance" value={grcPillars.governance} status={grcLabel(grcPillars.governance)} tone={grcPillars.governance >= 70 ? 'green' : grcPillars.governance >= 50 ? 'amber' : 'red'} icon={Building2} href="/governance" />
+            <ScorePill label="Risk" value={grcPillars.risk} status={grcLabel(grcPillars.risk)} tone={grcPillars.risk >= 70 ? 'green' : grcPillars.risk >= 50 ? 'amber' : 'red'} icon={Flame} href="/risks" />
+            <ScorePill label="Compliance" value={grcPillars.compliance} status={grcLabel(grcPillars.compliance)} tone={grcPillars.compliance >= 70 ? 'green' : grcPillars.compliance >= 50 ? 'amber' : 'red'} icon={ClipboardList} href="/compliance" />
+            <ScorePill label="Controls" value={grcPillars.controls} status={grcLabel(grcPillars.controls)} tone={grcPillars.controls >= 70 ? 'green' : grcPillars.controls >= 50 ? 'amber' : 'red'} icon={Shield} href="/control-library" />
+          </div>
+          <FormulaCaption text="4 pillar score. Governance = 100 minus pending approval load. Risk = inverse of avg residual. Compliance = overall score. Controls = % implemented." />
+        </PanelShell>
+
+        {/* 5. Issue and Incident Dashboard */}
+        <PanelShell title="5. Issue and Incident Dashboard">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatCard label="Open" value={issueCounts.open} icon={Folder} tone="blue" href="/issues" />
+            <StatCard label="In Progress" value={issueCounts.inProgress} icon={RefreshCw} tone="amber" href="/issues" />
+            <StatCard label="Overdue" value={issueCounts.overdue} icon={ClockIcon} tone="red" href="/issues" />
+            <StatCard label="Closed" value={issueCounts.closed} icon={CheckCircleIcon} tone="green" href="/issues" />
+          </div>
+          <FormulaCaption text="States from issue workflow. Overdue = sla_breached flag. Real time from issue management module." />
+        </PanelShell>
+
+        {/* 6. KPI / KRI Monitoring Panel */}
+        <PanelShell title="6. KPI KRI Monitoring Panel">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatCard label="KRI Breaches" value={kriCounts.breaches} sub={kriCounts.breaches > 0 ? 'High' : 'OK'} icon={TrendingUp} tone={kriCounts.breaches > 0 ? 'red' : 'green'} href="/erm/kris" />
+            <StatCard label="Control Exceptions" value={kriCounts.exceptions} sub={kriCounts.exceptions > 5 ? 'High' : 'Medium'} icon={AlertCircle} tone={kriCounts.exceptions > 5 ? 'red' : 'amber'} href="/issues" />
+            <StatCard label="Audit Findings" value={kriCounts.auditFindings} sub={kriCounts.auditFindings > 5 ? 'High' : 'Medium'} icon={ClipboardList} tone={kriCounts.auditFindings > 5 ? 'red' : 'amber'} href="/auditor-portal" />
+            <StatCard label="Remediation" value={`${kriCounts.remediation}%`} sub={kriCounts.remediation >= 70 ? 'On Track' : 'Behind'} icon={RefreshCw} tone={kriCounts.remediation >= 70 ? 'green' : 'amber'} href="/tasks" />
+          </div>
+          <FormulaCaption text="KRI breaches = KRIs flagged red. Control exceptions = non conformance + process gap issues. Findings = audit_finding type. Remediation = closed / total issues." />
+        </PanelShell>
+
+        {/* 7. Risk Exposure Summary Panel */}
+        <PanelShell title="7. Risk Exposure Summary Panel">
+          <RiskHeatmap matrix={heatmap} />
+          <FormulaCaption text="5x5 heatmap. Cell value = count of risks at that residual likelihood and impact. Cell colour = score (likelihood times impact)." />
+        </PanelShell>
+
+        {/* 8. Risk Trend Analysis Sheet */}
+        <PanelShell title="8. Risk Trend Analysis Sheet">
+          <div className="grid grid-cols-2 gap-3">
+            <TrendMini title="Risk Trend" data={trendSeries} dataKey="risk" stroke="#3b82f6" />
+            <TrendMini title="Compliance Gaps" data={trendSeries} dataKey="complianceGaps" stroke="#10b981" />
+            <TrendMini title="Control Exceptions" data={trendSeries} dataKey="controlExceptions" stroke="#f59e0b" />
+            <TrendMini title="KRI Breaches" data={trendSeries} dataKey="kriBreaches" stroke="#ef4444" />
+          </div>
+          <FormulaCaption text="6 month series. When the risk score history endpoint becomes wired the source switches to real time. Today the series is seeded from current values." />
+        </PanelShell>
+
       </div>
 
       {/* â”€â”€ Row 1: Internal Controls Sunburst + Risk Treatment Strategy Mix â”€â”€ */}
@@ -1564,6 +1896,11 @@ function ExecutiveOverviewTab() {
           ControlLibraryOverview) were removed per the "slim down to KPI
           strip" decision — each module's deep dashboard is reachable via
           its tab below. */}
+      {/* Legacy heavy chart rows (InternalControlsSunburst, GrcNetworkFlow,
+          ComplianceOrbitChart, FrameworkControlsChart, ControlLibraryOverview,
+          Vulnerability Status mini, GRC Snapshot, KRI/Incident summary) were
+          removed per the board reporting dashboard layout. Each module's
+          deep dashboard remains reachable via its dedicated tab above. */}
       {false && (
       <>
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
@@ -1610,6 +1947,7 @@ function ExecutiveOverviewTab() {
       )}
 
 
+      {false && (
       <div className="grid gap-4 lg:grid-cols-2">
         {false && (
         <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -1684,8 +2022,9 @@ function ExecutiveOverviewTab() {
           )}
         </div>
       </div>
+      )}
 
-      {/* â”€â”€ Row 4: Control Library domain bar + GRC Snapshot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {false && (
       <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
         {false && (
         <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -1771,22 +2110,209 @@ function ExecutiveOverviewTab() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* Row 5: KRI Status + Incident Summary */}
+      {false && (
       <div className="grid gap-4 lg:grid-cols-2">
         <KriStatusPanel kris={(kriList as KriItem[] | undefined) ?? []} />
         <IncidentSummaryPanel dash={incidentDash as IncidentDashData | undefined} />
+      </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Executive panel primitives ────────────────────────────────────────────
+// PanelShell wraps each of the 8 executive dashboards in matching chrome so
+// the grid reads as a single workspace. ScorePill, StatCard, ProgressRow,
+// RiskHeatmap, TrendMini and FormulaCaption are small presentational
+// building blocks used by the panels above.
+
+function PanelShell({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
+      <div className="bg-gradient-to-r from-blue-900 to-blue-700 px-4 py-2">
+        <h3 className="text-sm font-semibold text-white">{title}</h3>
+      </div>
+      <div className="p-4 space-y-3">
+        {children}
       </div>
     </div>
   );
 }
 
-// ─── Default export: tabbed hub ─────────────────────────────────────────────
-// Top-level main dashboard. Default tab is the slimmed-down Executive
-// Overview; the rest mount each module's existing page verbatim. State-only
-// routing (no URL sync) matches the pattern used for Vulnerabilities and
-// Compliance & Scans consolidations. Conditional mount = each module's
-// queries fire only when that tab is the active one.
+function FormulaCaption({ text }: { text: string }) {
+  return (
+    <p className="text-[10px] text-gray-400 leading-relaxed border-t border-gray-100 pt-2 mt-2">
+      <span className="font-semibold text-gray-500">Formula:</span> {text}
+    </p>
+  );
+}
+
+function ScorePill({
+  label, value, status, tone, icon: Icon, href,
+}: {
+  label: string;
+  value: number | string;
+  status?: string;
+  tone: 'green' | 'amber' | 'red' | 'slate';
+  icon: LucideIcon;
+  href?: string;
+}) {
+  const toneClasses: Record<typeof tone, { value: string; icon: string }> = {
+    green: { value: 'text-emerald-600', icon: 'text-emerald-500' },
+    amber: { value: 'text-amber-600',   icon: 'text-amber-500' },
+    red:   { value: 'text-rose-600',    icon: 'text-rose-500' },
+    slate: { value: 'text-slate-700',   icon: 'text-slate-500' },
+  };
+  const cls = toneClasses[tone];
+  const inner = (
+    <div className="rounded-lg border border-gray-200 bg-white px-2 py-3 text-center hover:shadow-sm transition-shadow">
+      <div className="text-[10px] uppercase tracking-wide text-gray-500 truncate">{label}</div>
+      <div className="mt-1 flex justify-center"><Icon className={`h-5 w-5 ${cls.icon}`} /></div>
+      <div className={`mt-1 text-xl font-bold ${cls.value}`}>{value}</div>
+      {status && <div className={`text-[10px] mt-0.5 font-medium ${cls.value}`}>{status}</div>}
+    </div>
+  );
+  return href ? <Link href={href} className="block">{inner}</Link> : inner;
+}
+
+function StatCard({
+  label, value, sub, icon: Icon, tone, href,
+}: {
+  label: string;
+  value: number | string;
+  sub?: string;
+  icon: LucideIcon;
+  tone: 'green' | 'amber' | 'red' | 'blue' | 'slate';
+  href?: string;
+}) {
+  const toneCls: Record<typeof tone, { bg: string; value: string }> = {
+    green: { bg: 'bg-emerald-50', value: 'text-emerald-700' },
+    amber: { bg: 'bg-amber-50',   value: 'text-amber-700' },
+    red:   { bg: 'bg-rose-50',    value: 'text-rose-700' },
+    blue:  { bg: 'bg-blue-50',    value: 'text-blue-700' },
+    slate: { bg: 'bg-slate-50',   value: 'text-slate-700' },
+  };
+  const cls = toneCls[tone];
+  const inner = (
+    <div className="rounded-lg border border-gray-200 bg-white px-2 py-3 text-center hover:shadow-sm transition-shadow">
+      <div className="text-[10px] uppercase tracking-wide text-gray-500 truncate">{label}</div>
+      <div className={`mt-1 mx-auto w-10 h-10 rounded-full flex items-center justify-center ${cls.bg}`}>
+        <Icon className={`h-5 w-5 ${cls.value}`} />
+      </div>
+      <div className={`mt-1 text-xl font-bold ${cls.value}`}>{value}</div>
+      {sub && <div className={`text-[10px] mt-0.5 font-medium ${cls.value}`}>{sub}</div>}
+    </div>
+  );
+  return href ? <Link href={href} className="block">{inner}</Link> : inner;
+}
+
+function ProgressRow({ label, pct }: { label: string; pct: number }) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  const fill = clamped >= 70 ? '#22c55e' : clamped >= 50 ? '#f59e0b' : '#ef4444';
+  return (
+    <div>
+      <div className="flex items-center justify-between text-xs mb-1">
+        <span className="text-gray-700 font-medium">{label}</span>
+        <span className="text-gray-800 font-semibold">{clamped}%</span>
+      </div>
+      <div className="h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${clamped}%`, background: fill }} />
+      </div>
+    </div>
+  );
+}
+
+function EmptyHint({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-8">
+      <Icon className="h-8 w-8 text-gray-300 mb-2" />
+      <p className="text-xs text-gray-400">{text}</p>
+    </div>
+  );
+}
+
+function RiskHeatmap({ matrix }: { matrix: number[][] }) {
+  // matrix[likelihood-1][impact-1]. Render with likelihood on Y axis,
+  // impact on X. Color by likelihood times impact (1..25 grid score).
+  const cellColor = (l: number, i: number) => {
+    const score = l * i;
+    if (score >= 17) return '#dc2626';
+    if (score >= 11) return '#f97316';
+    if (score >= 6) return '#facc15';
+    if (score >= 3) return '#a3e635';
+    return '#86efac';
+  };
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex flex-col">
+        <div className="text-[10px] font-semibold text-gray-600 mb-1 text-right pr-1">Likelihood</div>
+        <table className="border-separate" style={{ borderSpacing: 2 }}>
+          <tbody>
+            {[5, 4, 3, 2, 1].map((l) => (
+              <tr key={l}>
+                <td className="text-[10px] font-semibold text-gray-500 pr-2 text-right">{l}</td>
+                {[1, 2, 3, 4, 5].map((i) => {
+                  const count = matrix[l - 1][i - 1];
+                  return (
+                    <td key={i} className="w-9 h-9 text-center align-middle rounded text-[11px] font-semibold text-white"
+                        style={{ background: cellColor(l, i), opacity: count === 0 ? 0.35 : 1 }}>
+                      {count}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+            <tr>
+              <td></td>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <td key={i} className="text-[10px] font-semibold text-gray-500 text-center pt-1">{i}</td>
+              ))}
+            </tr>
+            <tr>
+              <td></td>
+              <td colSpan={5} className="text-[10px] font-semibold text-gray-600 text-center pt-1">Impact</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="flex-1 space-y-1.5 text-[11px] text-gray-600 pt-2">
+        <div className="flex items-center gap-1.5"><span className="w-3 h-3 inline-block rounded" style={{ background: '#dc2626' }} /> Critical (score 17 to 25)</div>
+        <div className="flex items-center gap-1.5"><span className="w-3 h-3 inline-block rounded" style={{ background: '#f97316' }} /> High (11 to 16)</div>
+        <div className="flex items-center gap-1.5"><span className="w-3 h-3 inline-block rounded" style={{ background: '#facc15' }} /> Medium (6 to 10)</div>
+        <div className="flex items-center gap-1.5"><span className="w-3 h-3 inline-block rounded" style={{ background: '#a3e635' }} /> Low (3 to 5)</div>
+        <div className="flex items-center gap-1.5"><span className="w-3 h-3 inline-block rounded" style={{ background: '#86efac' }} /> Minimal (1 to 2)</div>
+      </div>
+    </div>
+  );
+}
+
+function TrendMini({
+  title, data, dataKey, stroke,
+}: {
+  title: string;
+  data: Array<Record<string, number | string>>;
+  dataKey: string;
+  stroke: string;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-2">
+      <p className="text-[10px] font-semibold text-gray-600 mb-1 text-center">{title}</p>
+      <ResponsiveContainer width="100%" height={70}>
+        <LineChart data={data} margin={{ top: 4, right: 6, left: 0, bottom: 4 }}>
+          <XAxis dataKey="month" tick={{ fontSize: 9 }} stroke="#9ca3af" />
+          <Tooltip contentStyle={{ fontSize: 10, borderRadius: 6 }} />
+          <Line type="monotone" dataKey={dataKey} stroke={stroke} strokeWidth={2} dot={{ r: 2 }} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ─── Default export: tabbed hub with widget workspace ──────────────────────
+// Each tab now renders into a shared widget-workspace engine supporting:
+// drag/drop, resize, minimize, maximize and zoom controls.
 
 type MainTab =
   | 'executive'
@@ -1813,11 +2339,155 @@ const MAIN_TABS: { id: MainTab; label: string; icon: LucideIcon }[] = [
   { id: 'evidence',        label: 'Evidence',           icon: FileCheck2 },
 ];
 
+function buildWidgetsForTab(tab: MainTab): WorkspaceWidgetConfig[] {
+  switch (tab) {
+    case 'executive':
+      return [
+        { id: 'board-1-reporting',     title: '1. Board Reporting Dashboard',  content: <BoardReportingWidget />,           defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-2-compliance',    title: '2. Compliance Dashboard',       content: <ComplianceDashboardBoardWidget />, defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-3-enterprise',    title: '3. Enterprise Risk Dashboard',  content: <EnterpriseRiskBoardWidget />,      defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
+        { id: 'board-4-grc-overview',  title: '4. GRC Overview Dashboard',     content: <GRCOverviewBoardWidget />,         defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-5-issue-incident', title: '5. Issue and Incident Dashboard', content: <IssueIncidentBoardWidget />,    defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-6-kri',           title: '6. KPI KRI Monitoring Panel',   content: <KRIMonitoringBoardWidget />,       defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-7-exposure',      title: '7. Risk Exposure Summary Panel', content: <RiskExposureBoardWidget />,       defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
+        { id: 'board-8-trend',         title: '8. Risk Trend Analysis Sheet',  content: <RiskTrendBoardWidget />,           defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
+      ];
+    case 'governance':
+      return [
+        { id: 'gov-summary', title: 'Governance Summary', content: <GovernanceSummaryWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'gov-status', title: 'Document Status', content: <GovernanceStatusWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'gov-trend', title: 'Publishing Trend', content: <GovernanceTrendWidget />, defaultW: 8, defaultH: 4, minW: 5, minH: 3 },
+        { id: 'gov-framework-coverage', title: 'Framework Compliance Coverage', content: <GovernanceFrameworkCoverageWidget />, defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
+        { id: 'gov-queue', title: 'Approval & Review Queue', content: <GovernanceQueueWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'gov-recent', title: 'Recent Publications', content: <GovernanceRecentPublicationsWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+      ];
+    case 'risk':
+      return [
+        { id: 'risk-summary', title: 'Risk Overview', content: <RiskSummaryWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        // Was Risk Score Distribution. Now buckets the register by status
+        // (open / in_treatment / mitigated / accepted / closed) per the
+        // operator request.
+        { id: 'risk-distribution', title: 'Risk Status Distribution', content: <RiskDistributionWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'risk-velocity', title: 'Risk Velocity Trend', content: <ExecutiveRiskVelocityWidget />, defaultW: 8, defaultH: 4, minW: 5, minH: 3 },
+        { id: 'risk-appetite', title: 'Risk Appetite Utilization', content: <ExecutiveRiskAppetiteWidget />, defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
+        { id: 'risk-category', title: 'Risk Categories', content: <RiskCategoryWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'risk-incidents', title: 'Incident Snapshot', content: <IncidentSnapshotWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        // Internal Controls distribution widgets surfaced onto the Risk tab.
+        { id: 'risk-ctrl-status',           title: 'Internal Controls — Status',                  content: <InternalControlStatusWidget />,                  defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'risk-ctrl-design',           title: 'Internal Controls — Design Effectiveness',    content: <InternalControlDesignEffectivenessWidget />,     defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'risk-ctrl-operating',        title: 'Internal Controls — Operating Effectiveness', content: <InternalControlOperatingEffectivenessWidget />,  defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+      ];
+    case 'compliance':
+      return [
+        { id: 'comp-summary', title: 'Compliance Summary', content: <ComplianceSummaryWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'comp-status-mix', title: 'Control Status Mix', content: <ComplianceStatusMixWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'comp-coverage', title: 'Framework Coverage', content: <ComplianceFrameworkCoverageWidget />, defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
+        { id: 'comp-domain-coverage', title: 'Domain Coverage Radar', content: <ComplianceDomainCoverageWidget />, defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
+        { id: 'comp-testing', title: 'Control Testing Snapshot', content: <ControlTestingSnapshotWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'comp-framework-readiness', title: 'Framework Readiness', content: <FrameworksReadinessWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+      ];
+    case 'vulnerabilities':
+      return [
+        { id: 'vuln-summary', title: 'Vulnerability Summary', content: <VulnerabilitySummaryWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'vuln-severity', title: 'Severity Distribution', content: <VulnerabilitySeverityWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'vuln-trend', title: 'Discovery vs Resolution Trend', content: <VulnerabilityTrendWidget />, defaultW: 8, defaultH: 4, minW: 5, minH: 3 },
+        { id: 'vuln-status', title: 'Workflow Status', content: <VulnerabilityStatusWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'vuln-aging', title: 'Aging Buckets', content: <VulnerabilityAgingWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'vuln-overdue', title: 'Overdue Vulnerabilities', content: <VulnerabilityOverdueWidget />, defaultW: 6, defaultH: 3, minW: 3, minH: 2 },
+      ];
+    case 'assets':
+      return [
+        { id: 'assets-summary', title: 'Asset Summary', content: <AssetsSummaryWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'assets-status', title: 'Asset Lifecycle Status', content: <AssetsStatusWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'assets-cia-radar', title: 'CIA Profile by Asset Type', content: <AssetsCiaRadarWidget />, defaultW: 8, defaultH: 4, minW: 5, minH: 3 },
+        { id: 'assets-type', title: 'Asset Type Distribution', content: <AssetsTypeWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'assets-criticality', title: 'Criticality Distribution', content: <AssetsCriticalityWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'assets-vuln', title: 'Vulnerability Exposure', content: <VulnerabilitySummaryWidget />, defaultW: 6, defaultH: 3, minW: 3, minH: 2 },
+        // Internal Controls distribution widgets mirrored onto the Assets tab
+        // so coverage of asset linked controls is visible alongside the
+        // asset register itself.
+        { id: 'assets-ctrl-status',    title: 'Internal Controls — Status',                  content: <InternalControlStatusWidget />,                 defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'assets-ctrl-design',    title: 'Internal Controls — Design Effectiveness',    content: <InternalControlDesignEffectivenessWidget />,    defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'assets-ctrl-operating', title: 'Internal Controls — Operating Effectiveness', content: <InternalControlOperatingEffectivenessWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+      ];
+    case 'frameworks':
+      return [
+        { id: 'fw-overview', title: 'Journey Overview', content: <FrameworksOverviewWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'fw-readiness', title: 'Readiness by Framework', content: <FrameworksReadinessWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'fw-comp-coverage', title: 'Framework Coverage', content: <ComplianceFrameworkCoverageWidget />, defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
+        { id: 'fw-domain-radar', title: 'Domain Coverage Radar', content: <ComplianceDomainCoverageWidget />, defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
+        { id: 'fw-domain', title: 'Domain Coverage Breakdown', content: <FrameworksDomainWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'fw-activity', title: 'Framework Activity', content: <FrameworksActivityWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+      ];
+    case 'issues':
+      return [
+        { id: 'issues-summary', title: 'Issue Summary', content: <IssuesSummaryWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'issues-state', title: 'Workflow Distribution', content: <IssuesStateWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'issues-trend', title: 'Issue Flow Trend', content: <IssuesTrendWidget />, defaultW: 8, defaultH: 4, minW: 5, minH: 3 },
+        { id: 'issues-category', title: 'Category Mix', content: <IssuesCategoryWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'issues-sla', title: 'SLA Breach Queue', content: <IssuesSlaWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'issues-tasks-status', title: 'Task Status Mix', content: <TasksStatusWidget />, defaultW: 6, defaultH: 3, minW: 3, minH: 2 },
+      ];
+    case 'tasks':
+      return [
+        { id: 'tasks-summary', title: 'Task Summary', content: <TasksSummaryWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'tasks-status', title: 'Status Distribution', content: <TasksStatusWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'tasks-trend', title: 'Task Throughput Trend', content: <TasksTrendWidget />, defaultW: 8, defaultH: 4, minW: 5, minH: 3 },
+        { id: 'tasks-priority', title: 'Priority Distribution', content: <TasksPriorityWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'tasks-sla', title: 'Overdue Aging', content: <TasksSlaWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'tasks-issues', title: 'Issue Summary', content: <IssuesSummaryWidget />, defaultW: 6, defaultH: 3, minW: 3, minH: 2 },
+      ];
+    case 'evidence':
+      return [
+        { id: 'evidence-summary', title: 'Evidence Summary', content: <EvidenceSummaryWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'evidence-status', title: 'Status Distribution', content: <EvidenceStatusWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'evidence-recency', title: 'Upload Recency Trend', content: <EvidenceRecencyWidget />, defaultW: 8, defaultH: 4, minW: 5, minH: 3 },
+        { id: 'evidence-type', title: 'Type Distribution', content: <EvidenceTypeWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'evidence-queue', title: 'Pending Review Queue', content: <EvidenceQueueWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'evidence-testing', title: 'Control Testing Snapshot', content: <ControlTestingSnapshotWidget />, defaultW: 6, defaultH: 3, minW: 3, minH: 2 },
+      ];
+    default:
+      return [{ id: 'default-exec', title: 'Portfolio Snapshot', content: <ExecutivePortfolioWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 }];
+  }
+}
+
+// Executive Board Reporting layout. Fixed 2 column grid skipping the
+// WidgetWorkspace drag/resize chrome so the dashboard reads as a printable
+// board pack. Card chrome aligns with the platform's existing widget cards
+// (white background, slate 200 border, subtle slate header strip, no
+// gradients, no oversize accents).
+function BoardPanel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
+      <div className="border-b border-slate-200 bg-slate-50 px-4 py-2">
+        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+      </div>
+      <div className="p-4">{children}</div>
+    </div>
+  );
+}
+
+function ExecutiveBoardGrid() {
+  return (
+    <div className="mx-auto w-full max-w-[1400px] grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <BoardPanel title="1. Board Reporting Dashboard"><BoardReportingWidget /></BoardPanel>
+      <BoardPanel title="2. Compliance Dashboard"><ComplianceDashboardBoardWidget /></BoardPanel>
+      <BoardPanel title="3. Enterprise Risk Dashboard"><EnterpriseRiskBoardWidget /></BoardPanel>
+      <BoardPanel title="4. GRC Overview Dashboard"><GRCOverviewBoardWidget /></BoardPanel>
+      <BoardPanel title="5. Issue and Incident Dashboard"><IssueIncidentBoardWidget /></BoardPanel>
+      <BoardPanel title="6. KPI KRI Monitoring Panel"><KRIMonitoringBoardWidget /></BoardPanel>
+      <BoardPanel title="7. Risk Exposure Summary Panel"><RiskExposureBoardWidget /></BoardPanel>
+      <BoardPanel title="8. Risk Trend Analysis Sheet"><RiskTrendBoardWidget /></BoardPanel>
+    </div>
+  );
+}
+
 export default function MainDashboard() {
   const [activeTab, setActiveTab] = useState<MainTab>('executive');
+  const activeWidgets = useMemo(() => buildWidgetsForTab(activeTab), [activeTab]);
 
   return (
-    <div className="-m-4 lg:-m-5">
+    <div className="-m-4 flex flex-col bg-[var(--color-surface)] lg:-m-5">
       <div className="border-b border-gray-200 bg-white px-3 sm:px-6">
         <div className="flex items-center gap-0 overflow-x-auto -mb-px">
           {MAIN_TABS.map(({ id, label, icon: Icon }) => (
@@ -1841,16 +2511,13 @@ export default function MainDashboard() {
         </div>
       </div>
 
-      {activeTab === 'executive'       && <ExecutiveOverviewTab />}
-      {activeTab === 'governance'      && <GovernanceDashboardPage />}
-      {activeTab === 'risk'            && <ERMOverviewPage />}
-      {activeTab === 'compliance'      && <ComplianceOverviewPage />}
-      {activeTab === 'vulnerabilities' && <VulnerabilitiesPage />}
-      {activeTab === 'assets'          && <AssetsPage />}
-      {activeTab === 'frameworks'      && <FrameworksDashboardPage />}
-      {activeTab === 'issues'          && <IssuesPage />}
-      {activeTab === 'tasks'           && <TaskBoardPage />}
-      {activeTab === 'evidence'        && <EvidencePage />}
+      <div className="min-h-0 flex-1 bg-[var(--color-surface)] p-3 sm:p-4">
+        {activeTab === 'executive' ? (
+          <ExecutiveBoardGrid />
+        ) : (
+          <WidgetWorkspace tabKey={activeTab} widgets={activeWidgets} />
+        )}
+      </div>
     </div>
   );
 }

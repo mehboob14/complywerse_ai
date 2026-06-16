@@ -960,15 +960,24 @@ export default function AssessmentsPage() {
 
       {activeView === 'assessment' && (
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px]">
+        <div>
+          <table className="w-full table-fixed">
+            <colgroup>
+              <col style={{ width: '34%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '10%' }} />
+              <col style={{ width: '11%' }} />
+              <col style={{ width: '8%' }} />
+            </colgroup>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Assessment</th>
                 <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Type</th>
                 <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
                 <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Progress</th>
-                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Due Date</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Due</th>
                 <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Assessor</th>
                 <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Actions</th>
               </tr>
@@ -1002,9 +1011,9 @@ export default function AssessmentsPage() {
                           {assessment.name}
                         </Link>
                         {assessment.file_name && (
-                          <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-slate-600">
-                            <FileText className="h-3 w-3 text-slate-400" />
-                            <span className="truncate max-w-[260px]" title={assessment.file_name}>{assessment.file_name}</span>
+                          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-600">
+                            <FileText className="h-3 w-3 text-slate-400 shrink-0" />
+                            <span className="truncate" title={assessment.file_name}>{assessment.file_name}</span>
                           </p>
                         )}
                       </td>
@@ -1018,7 +1027,7 @@ export default function AssessmentsPage() {
                         </span>
                       </td>
                       <td className="px-3 py-2 align-top">
-                        <div className="flex min-w-[120px] items-center gap-2">
+                        <div className="flex items-center gap-2">
                           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
                             <div
                               className={`h-full ${getScoreBarColor(assessment.overall_score)} transition-all`}

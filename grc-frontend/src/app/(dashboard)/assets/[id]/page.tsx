@@ -18,13 +18,17 @@ import {
   Lock, ShieldCheck, MapPin, User, Bug, Network,
   Gauge, PackageSearch, Sparkles, Layers, Filter,
   // CIS Module Updated drop — ComplianceTab + NoMappingCallout + ScanSessions
-  Cpu, Play, ChevronDown, ChevronRight,
+  Cpu, Play, ChevronDown, ChevronRight, Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 
 import nextDynamic from 'next/dynamic';
 import { CreateIssueButton } from '@/components/issue-management/CreateIssueButton';
 import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesPanel';
+// Updated_CIS_Assests migration: host applications "room-and-chair" panel
+// rendered above the existing ComplianceTab content.
+import HostApplicationsPanel from './_host-applications-panel';
+import { RoomScanProvider, useRoomScan } from './_room-scan-context';
 
 const TrajectoryMap = nextDynamic(
   () => import('./_components/TrajectoryMap').then((m) => m.TrajectoryMap),
@@ -233,6 +237,31 @@ export default function AssetDetailPage() {
       const response = await assetsApi.getCoverageAnalysis(assetId);
       return response.data;
     },
+  });
+
+  // Updated_CIS_Assests migration: IP-group composite scoring feed for the
+  // CIS Compliance header tile. Returns the group, composite, and weakest
+  // link from /assets/{id}/ip-peers.
+  const { data: ipPeers } = useQuery<{
+    composite?: {
+      effective_score?: number | null;
+      host_score?: number | null;
+      weakest?: { id: number; name: string; score: number } | null;
+    };
+    group?: Array<{ id: number; is_self: boolean; score?: number | null }>;
+  }>({
+    queryKey: ['asset-ip-peers', assetId],
+    queryFn: async () => {
+      try {
+        const response = await assetsApi.getIPPeers(assetId);
+        return response.data as Record<string, unknown> as never;
+      } catch {
+        // Endpoint is new in this migration; if it 404s for any reason the
+        // tile falls back to "Not yet scanned" rather than crashing.
+        return {};
+      }
+    },
+    staleTime: 60000,
   });
 
   const { data: allControls, isLoading: controlsLoading } = useQuery({
@@ -629,6 +658,55 @@ export default function AssetDetailPage() {
           </p>
         </div>
 
+        {/* CIS Compliance tile (Updated_CIS_Assests migration). Shows the
+            IP-group effective score when the asset is part of a host group,
+            falls back to its own score otherwise, and surfaces the weakest
+            link in the group. Links through to the per-asset risk posture
+            page where the breakdown is fully expanded. */}
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="mb-3 flex items-center gap-2 text-slate-600">
+            <TrendingUp className="h-4 w-4" />
+            <span className="text-sm font-medium">CIS Compliance</span>
+          </div>
+          {(() => {
+            const composite = ipPeers?.composite;
+            const ownScore = ipPeers?.group?.find((g) => g.is_self)?.score;
+            const effective = composite?.effective_score;
+            const hostScore = composite?.host_score;
+            const displayScore = effective ?? ownScore;
+            if (displayScore == null) {
+              return (
+                <>
+                  <div className="text-3xl font-bold text-slate-500">—</div>
+                  <p className="mt-1 text-xs text-slate-500">Not yet scanned</p>
+                  <Link href={`/risk-posture/asset/${assetId}`} className="mt-2 block text-xs text-blue-600 hover:underline">
+                    Open risk posture →
+                  </Link>
+                </>
+              );
+            }
+            const color = displayScore >= 80 ? 'text-green-600' : displayScore >= 60 ? 'text-yellow-600' : 'text-red-600';
+            return (
+              <>
+                <div className={`text-3xl font-bold ${color}`}>{displayScore.toFixed(1)}%</div>
+                {effective != null && hostScore != null && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Group effective · host {hostScore}%
+                  </p>
+                )}
+                {composite?.weakest && composite.weakest.id !== assetId && (
+                  <p className="mt-0.5 text-xs text-amber-600">
+                    Weakest: {composite.weakest.name.split(' ')[0]} {composite.weakest.score}%
+                  </p>
+                )}
+                <Link href={`/risk-posture/asset/${assetId}`} className="mt-2 block text-xs text-blue-600 hover:underline">
+                  Full risk posture →
+                </Link>
+              </>
+            );
+          })()}
+        </div>
+
         <div className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="mb-3 flex items-center gap-2 text-slate-600">
             <TrendingUp className="h-4 w-4" />
@@ -682,7 +760,12 @@ export default function AssetDetailPage() {
           <DetailsTab asset={asset} />
         )}
         {activeTab === 'compliance' && (
-          <ComplianceTab asset={asset} />
+          <RoomScanProvider>
+            <div className="space-y-4">
+              <HostApplicationsPanel assetId={assetId} />
+              <ComplianceTab asset={asset} />
+            </div>
+          </RoomScanProvider>
         )}
         {activeTab === 'controls' && (
           <ControlsTab
@@ -2854,6 +2937,93 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
   const queryClient = useQueryClient();
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
 
+  // Room-scan selection from the shared context (filled by
+  // HostApplicationsPanel as the user ticks peer checkboxes). The existing
+  // "Scan now" button below folds these peers into its scan call, and the
+  // "X apply to this asset" count adds their rule counts in real time.
+  const roomScan = useRoomScan();
+
+  // ip-peers — already cached by HostApplicationsPanel (same key), so this is
+  // a free read used only to know whether THIS asset has an integration yet.
+  // Drives the "Connect this asset" CTA below for manually-added assets that
+  // haven't been onboarded via the Connect Wizard yet.
+  const selfIpPeersQ = useQuery({
+    queryKey: ['assets', asset.id, 'ip-peers'],
+    queryFn: () => assetsApi.getIPPeers(asset.id).then((r: any) => r.data),
+  });
+  const selfPeerEntry = (selfIpPeersQ.data?.group ?? []).find((g: any) => g.is_self);
+  const selfIsConnected: boolean = selfPeerEntry?.is_connected ?? false;
+  // Compute the wizard URL: pre-fill hostname + asset_id, and platform when
+  // the asset's os_normalized maps cleanly to one of the supported wizard
+  // platforms. The wizard auto-advances into the right credential form when
+  // platform is set; otherwise it shows the platform-picker first.
+  // Browser assets are scanned through the parent host's WinRM/SSH
+  // connection (registry-read GPO settings on Windows, preferences-file
+  // read on Linux/macOS). They don't have a wizard form of their own —
+  // the operator must connect the HOST first and then room-scan from
+  // there. The CTA banner adapts when this returns true.
+  const isBrowserAsset = (() => {
+    const k = (asset.os_normalized || '').toLowerCase();
+    if (k.startsWith('firefox') || k.startsWith('edge') || k.startsWith('chrome')) return true;
+    const v = ((asset as any).vendor as string | undefined || '').toLowerCase();
+    return v === 'mozilla' || v === 'google' || v === 'microsoft edge';
+  })();
+
+  const wizPlatformForSelf = (() => {
+    if (isBrowserAsset) return null;  // no wizard for browsers — scanned via host
+    // Try os_normalized first — that's the canonical signal.
+    const k = (asset.os_normalized || '').toLowerCase();
+    if (k) {
+      if (k.startsWith('windows')) return 'windows';
+      if (['ubuntu','linux','debian','centos','rhel','amazon-linux','rocky','almalinux','oraclelinux'].some(p => k.startsWith(p))) return 'linux';
+      if (k.startsWith('postgresql') || k.startsWith('postgres')) return 'postgres';
+      if (k.startsWith('mysql') || k.startsWith('mariadb')) return 'mysql';
+      if (k.startsWith('mssql') || k.startsWith('sql-server')) return 'mssql';
+      if (k.startsWith('oracle-db') || k.startsWith('oracle')) return 'oracle';
+      if (k.startsWith('iis')) return 'windows';
+      if (k.startsWith('tomcat') || k.startsWith('apache') || k.startsWith('nginx')) return 'linux';
+    }
+    // Fallback to vendor — set when the operator categorised the asset on
+    // manual create (e.g. picked PostgreSQL from the vendor dropdown) but
+    // didn't fill the OS Profile dropdown. The Add-Asset form's vendor list
+    // uses these canonical values so the mapping is direct.
+    const v = ((asset as any).vendor as string | undefined || '').toLowerCase();
+    if (v) {
+      if (v === 'postgresql') return 'postgres';
+      if (v === 'mysql') return 'mysql';
+      if (v === 'oracle') return 'oracle';
+      if (v === 'microsoft' && (asset.asset_type === 'application')) return 'mssql';  // Microsoft + application asset → likely MSSQL
+      if (v === 'iis') return 'windows';
+      if (v === 'apache' || v === 'nginx' || v === 'tomcat') return 'linux';
+      if (v === 'red hat') return 'linux';
+      if (v === 'aws') return 'aws';
+    }
+    return null;
+  })();
+  const connectWizardHref = (() => {
+    const params = new URLSearchParams();
+    params.set('asset_id', String(asset.id));
+    // Prefer host_name (FQDN) over ip_address — wizard's pre-flight prefers
+    // hostnames. Fall back to ip_address so manually-added assets that only
+    // have an IP still pre-fill the wizard's Host field instead of starting
+    // blank. (`asset` may not carry ip_address on the typed payload, so cast
+    // through any.)
+    const hostCandidate = (
+      asset.host_name
+      || ((asset as any).ip_address as string | undefined)
+      || ''
+    ).trim();
+    if (hostCandidate) params.set('hostname', hostCandidate);
+    // Pre-fill the wizard's "Friendly label" with the asset's name so the
+    // operator doesn't have to retype "postgress" or whatever they called
+    // it during manual create. Falls back to the host if name is blank.
+    const labelCandidate = (asset.name || hostCandidate || '').trim();
+    if (labelCandidate) params.set('label', labelCandidate);
+    if (wizPlatformForSelf) params.set('platform', wizPlatformForSelf);
+    return `/admin/integrations/connect?${params.toString()}`;
+  })();
+
+
   const previewQuery = useQuery({
     queryKey: ['compliance-plugins', 'match-preview', asset.id],
     queryFn: () => compliancePluginsApi.matchPreview(asset.id).then((r: any) => r.data),
@@ -2899,9 +3069,12 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
       const startedAt = Date.now();
       // Capture the max run-id BEFORE we kick off the scan so we can
       // count "runs created since scan start" by simple subtraction.
+      // For room-scans we baseline the GLOBAL max — runs land on peer asset
+      // ids too, and a per-this-asset baseline would miss them, stalling
+      // the progress bar at the opened asset's slice of the union.
       let baselineMaxId = 0;
       try {
-        const pre = await compliancePluginsApi.listRuns({ asset_id: asset.id, limit: 1 });
+        const pre = await compliancePluginsApi.listRuns({ limit: 1 });
         const preList = Array.isArray(pre.data) ? pre.data : (pre.data?.runs || []);
         baselineMaxId = preList[0]?.id ?? 0;
       } catch { /* first-ever scan — baseline stays 0 */ }
@@ -2912,9 +3085,36 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
       // Kick off scan-all. New backend behaviour: returns IMMEDIATELY
       // with {queued: true, total: N}. Previously it blocked for
       // minutes which timed out the proxy + browser → spurious 500.
-      const resp = await compliancePluginsApi.scanAll({ asset_id: asset.id });
+      //
+      // Room-scan composition:
+      //   - asset_id = the asset the user is currently viewing (the "opened
+      //     asset"). Its benchmark is automatically the scan's anchor.
+      //   - include_peer_asset_ids = peers the user has ticked. Their
+      //     benchmarks are unioned in, and their runs are attributed to
+      //     them (so each peer's compliance history reflects the scan).
+      // The backend finds the actual connection by walking the IP group
+      // from `asset_id` — if the opened asset doesn't have its own
+      // integration (e.g. Oracle DB on the demo cluster), the host on the
+      // same IP supplies the connection automatically.
+      const ticked = roomScan.selectedPeerIds;
+      // Capture the post-scan breakdown BEFORE the scan completes, while
+      // selection state and peer info are still in scope. This is what the
+      // toast renders so the user sees "Oracle 296 + SQL 74 + IIS 51"
+      // landed in their respective pages.
+      const breakdown: Array<{ id: number; name: string; ruleCount: number }> = [
+        { id: asset.id, name: asset.name, ruleCount: applicable.count ?? 0 },
+        ...ticked.map(id => ({
+          id,
+          name: roomScan.peerName(id) ?? `Asset ${id}`,
+          ruleCount: roomScan.peerRuleCount(id),
+        })),
+      ].filter(item => item.ruleCount > 0);
+      const resp = await compliancePluginsApi.scanAll({
+        asset_id: asset.id,
+        include_peer_asset_ids: ticked,
+      });
       const scanData = resp.data || {};
-      const projectedTotal = scanData.total ?? scanData.executed ?? applicable.count ?? 0;
+      const projectedTotal = scanData.total ?? scanData.executed ?? ((applicable.count ?? 0) + roomScan.selectedPeerRuleSum);
       setScanProgress({ running: true, startedAt, done: 0, total: projectedTotal });
 
       // Now poll /runs every 2s until either:
@@ -2931,14 +3131,20 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
       let lastChangeAt = Date.now();
       const startTime = Date.now();
 
+      // Count runs across the scan's full attribution set (opened asset +
+      // each ticked peer), not just the opened one, so room-scans don't
+      // stall at the opened asset's slice of the union.
+      const attribIds = new Set<number>([asset.id, ...ticked]);
       // eslint-disable-next-line no-constant-condition
       while (true) {
         await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
         let done = 0;
         try {
-          const r = await compliancePluginsApi.listRuns({ asset_id: asset.id, limit: 5000 });
+          const r = await compliancePluginsApi.listRuns({ limit: 5000 });
           const list = Array.isArray(r.data) ? r.data : (r.data?.runs || []);
-          done = list.filter((run: any) => (run.id ?? 0) > baselineMaxId).length;
+          done = list.filter((run: any) =>
+            (run.id ?? 0) > baselineMaxId && attribIds.has(run.asset_id)
+          ).length;
         } catch { /* transient — keep polling */ }
 
         setScanProgress((prev) => prev.running ? { ...prev, done } : prev);
@@ -2954,19 +3160,39 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
 
       setScanProgress((prev) => ({ ...prev, running: false }));
       // Return a synthetic summary so onSuccess can show a clean toast.
-      return { executed: lastDone, projectedTotal };
+      return { executed: lastDone, projectedTotal, breakdown };
     },
     onSuccess: (data: any) => {
       const executed = data?.executed ?? 0;
       const projected = data?.projectedTotal ?? 0;
+      const bd: Array<{ id: number; name: string; ruleCount: number }> = data?.breakdown ?? [];
+      // When the scan fanned to multiple assets, lead the toast with the
+      // per-asset breakdown so the user can see "Oracle 296 + SQL 74 +
+      // IIS 51" — and remember that each peer's runs are also visible on
+      // its own asset page. When it was just the opened asset, fall back
+      // to the original "X of Y" line.
+      const isRoomScan = bd.length > 1;
+      const breakdownLine = isRoomScan
+        ? bd.map(b => `${b.name} (${b.ruleCount})`).join(' + ')
+        : '';
+      const headline = projected && executed >= projected
+        ? `Scan complete. ${executed} of ${projected} rule(s) finished.`
+        : `Scan finished. ${executed} run(s) created${projected ? ` (${projected} projected)` : ''}.`;
       setToast({
         kind: 'success',
-        message: projected && executed >= projected
-          ? `Scan complete. ${executed} of ${projected} rule(s) finished.`
-          : `Scan finished. ${executed} run(s) created${projected ? ` (${projected} projected)` : ''}.`,
+        message: isRoomScan
+          ? `${headline} Fanned to ${bd.length} assets: ${breakdownLine}. Each asset's runs are visible on its own page.`
+          : headline,
       });
       queryClient.invalidateQueries({ queryKey: ['compliance-plugins', 'runs', asset.id] });
       queryClient.invalidateQueries({ queryKey: ['compliance-plugins', 'match-preview', asset.id] });
+      // ip-peers feeds the room-scan panel; invalidate so peer rows refresh
+      // their scores (transitioning from "Not scanned" to a fresh number)
+      // immediately after a room-scan completes.
+      queryClient.invalidateQueries({ queryKey: ['assets', asset.id, 'ip-peers'] });
+      // Clear the room-scan selection so a fresh tick set is required for
+      // the next scan — otherwise stale selections would be silently reused.
+      roomScan.clearSelection();
     },
     onError: (e: any) => {
       setScanProgress((prev) => ({ ...prev, running: false }));
@@ -3061,6 +3287,114 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
 
   return (
     <div className="space-y-4">
+      {/* "Connect this asset" CTA — top of tab, only when self has no
+          integration connection yet. Covers the manual-add case where the
+          operator created the asset in IT Assets but never ran the Connect
+          Wizard, so nothing can actually scan it. The button opens the
+          wizard with platform / hostname / asset_id pre-filled so the
+          handshake binds back to THIS asset, not a duplicate row. */}
+      {selfIpPeersQ.data && !selfIsConnected && isBrowserAsset && (() => {
+        // Find the host (asset_type='infrastructure') that shares the same IP
+        // as this browser. ip-peers already returned the group, so just pick
+        // it from there. When present, surface a one-click "Open host" link
+        // so the operator doesn't have to navigate the inventory manually.
+        const peers: any[] = selfIpPeersQ.data?.group ?? [];
+        const hostInGroup = peers.find((g: any) => g.is_host_os && !g.is_self);
+        return (
+          <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50 p-4">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-100 text-purple-700">
+                <Network className="h-4.5 w-4.5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Browser asset — scans run through the host (no separate wizard form)
+                </h3>
+                <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                  A browser has no credentials to enter, so it doesn&apos;t get its own Connect Wizard form.
+                  CIS browser benchmarks (Edge / Firefox / Chrome) read browser settings via the parent host&apos;s
+                  connection — WinRM-reads registry / GPO on Windows, SSH-reads preferences files on Linux.
+                </p>
+                <div className="mt-3 rounded-md border border-purple-100 bg-white px-3 py-2.5 text-xs">
+                  <p className="font-semibold text-slate-800 mb-1.5">How to scan this browser (3 steps):</p>
+                  <ol className="space-y-1 text-slate-600 list-decimal pl-4">
+                    <li>Open the <strong>host asset</strong> at IP <code className="font-mono text-slate-700">{asset.ip_address || '—'}</code> (the Windows / Linux machine where this browser is installed).</li>
+                    <li>If the host isn&apos;t connected yet, run the <strong>wizard from there</strong> (Windows or Linux platform).</li>
+                    <li>On the host&apos;s Compliance tab, this browser will appear in the <strong>Co-located assets</strong> list. Tick it, click <strong>Scan now</strong> — the {(asset as any).os_normalized?.startsWith?.('firefox') ? '90 Firefox' : (asset as any).os_normalized?.startsWith?.('edge') ? '60 Edge' : (asset as any).os_normalized?.startsWith?.('chrome') ? '80 Chrome' : 'browser'} rules fold in and the score writes back to this asset page.</li>
+                  </ol>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {hostInGroup ? (
+                    <Link
+                      href={`/assets/${hostInGroup.id}?tab=compliance`}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-700"
+                    >
+                      <Network className="h-3.5 w-3.5" />
+                      Go to host: {hostInGroup.name}
+                    </Link>
+                  ) : asset.ip_address ? (
+                    <Link
+                      href={`/assets?ip_address=${encodeURIComponent(asset.ip_address)}`}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-purple-300 bg-white px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-50"
+                      title="Find the host asset that shares this IP"
+                    >
+                      Find host at IP {asset.ip_address}
+                    </Link>
+                  ) : (
+                    <span className="text-[11px] text-amber-700">
+                      Set this browser&apos;s <strong>IP address</strong> (via Edit) to the host&apos;s IP so the room-scan can group them.
+                    </span>
+                  )}
+                  <Link
+                    href="/admin/integrations/connect"
+                    className="text-[11px] text-slate-500 hover:text-slate-700 underline"
+                    title="Open the Connect Wizard fresh — you'll connect the HOST, not this browser"
+                  >
+                    Open wizard (to connect the host)
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {selfIpPeersQ.data && !selfIsConnected && !isBrowserAsset && (
+        <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+              <Network className="h-4.5 w-4.5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm font-semibold text-slate-900">
+                This asset isn&apos;t connected yet
+              </h3>
+              <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                Manually-added assets need an integration before they can be scanned.
+                Connect via the wizard to pick <strong>Agent</strong> (script the host runs once, then scans itself) or
+                {' '}<strong>Agentless</strong> (your backend reaches out over WinRM / SSH / DB protocol with stored credentials).
+                {' '}{wizPlatformForSelf
+                  ? <>Detected platform: <code className="font-mono text-slate-700">{wizPlatformForSelf}</code> — wizard will jump straight to its credential form.</>
+                  : <>OS isn&apos;t set on this asset, so the wizard will start at the platform picker.</>}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Link
+                  href={connectWizardHref}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
+                >
+                  <Zap className="h-3.5 w-3.5" />
+                  Connect this asset
+                </Link>
+                {asset.host_name && (
+                  <span className="text-[11px] text-slate-500">
+                    will pre-fill hostname <code className="font-mono text-slate-700">{asset.host_name}</code>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AI Classification panel — OS data from the asset API. */}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -3127,8 +3461,14 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
           </h3>
           <p className="mt-1 text-xs text-slate-500">Of {total.toLocaleString()} CIS rules in the library</p>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-4xl font-bold text-slate-900">{applicable.count ?? 0}</span>
-            <span className="text-xs text-slate-600">apply to this asset</span>
+            <span className="text-4xl font-bold text-slate-900">
+              {(applicable.count ?? 0) + roomScan.selectedPeerRuleSum}
+            </span>
+            <span className="text-xs text-slate-600">
+              {roomScan.selectedPeerIds.length > 0
+                ? <>apply to this scan <span className="font-medium text-teal-700">({applicable.count ?? 0} this asset + {roomScan.selectedPeerRuleSum} from {roomScan.selectedPeerIds.length} ticked peer{roomScan.selectedPeerIds.length === 1 ? '' : 's'})</span></>
+                : 'apply to this asset'}
+            </span>
           </div>
           {stage2.primary_benchmark ? (
             <div className="mt-2 rounded-md border border-indigo-200 bg-white px-2 py-1.5 text-xs">
@@ -3163,9 +3503,21 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
         const pattern = mm.os_pattern || null;
         const scope = mm.scope || null;
         const mappingId = mm.mapping_id || null;
-        const candidates = stage1.kept ?? 0;
+        // source is 'strict' when an operator-owned BenchmarkOsMapping row
+        // resolved this asset, 'soft' when the family-walk fallback picked
+        // a benchmark from CompliancePlugin.os_keys, null when neither.
+        const mappingSource = mm.source || null;
+        const isSoftMatch = mappingSource === 'soft';
+        // Room-scan: when peers are ticked, fold their rule counts into the
+        // "From matched benchmark" and "Applicable to scan" tiles so the
+        // numbers strip agrees with the big "X apply to this scan" header.
+        const peerExtra = roomScan.selectedPeerRuleSum;
+        const peerCount = roomScan.selectedPeerIds.length;
+        const baseCandidates = stage1.kept ?? 0;
+        const candidates = baseCandidates + peerExtra;
         const skipped = stage1.skipped ?? 0;
-        const applicableN = applicable.count ?? 0;
+        const baseApplicableN = applicable.count ?? 0;
+        const applicableN = baseApplicableN + peerExtra;
 
         return (
           <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -3180,9 +3532,17 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
                     : 'Mode: ' + (mode || 'unknown')}
                 </p>
               </div>
-              {isStrict && (
+              {isStrict && !isSoftMatch && (
                 <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700">
                   Strict
+                </span>
+              )}
+              {isSoftMatch && (
+                <span
+                  className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700"
+                  title="No operator-owned OS→benchmark mapping exists for this OS. The library family-walk picked the closest benchmark so scans can still run. Add a mapping in admin → mappings to make this explicit."
+                >
+                  Soft match
                 </span>
               )}
             </div>
@@ -3194,7 +3554,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
                   <span className="rounded border border-slate-300 bg-white px-2 py-1 font-mono text-slate-800">
                     {osNormalized || '—'}
                   </span>
-                  <span className="text-slate-400">matches pattern</span>
+                  <span className="text-slate-400">{isSoftMatch ? 'family-walk to' : 'matches pattern'}</span>
                   <span className="rounded border border-slate-300 bg-white px-2 py-1 font-mono text-slate-800">
                     {pattern || '—'}
                   </span>
@@ -3248,13 +3608,18 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
               <div className="rounded border border-indigo-200 bg-indigo-50/40 p-2.5">
                 <div className="text-[10px] font-medium uppercase tracking-wide text-indigo-700">From matched benchmark</div>
                 <div className="mt-0.5 text-xl font-semibold text-indigo-900">{candidates.toLocaleString()}</div>
-                <p className="text-[11px] text-slate-500">{skipped.toLocaleString()} from other benchmarks skipped</p>
+                <p className="text-[11px] text-slate-500">
+                  {peerCount > 0
+                    ? <>{baseCandidates.toLocaleString()} this asset + <span className="font-medium text-teal-700">{peerExtra.toLocaleString()} from {peerCount} ticked peer{peerCount === 1 ? '' : 's'}</span></>
+                    : <>{skipped.toLocaleString()} from other benchmarks skipped</>}
+                </p>
               </div>
               <div className="rounded border border-emerald-200 bg-emerald-50/40 p-2.5">
                 <div className="text-[10px] font-medium uppercase tracking-wide text-emerald-700">Applicable to scan</div>
                 <div className="mt-0.5 text-xl font-semibold text-emerald-900">{applicableN.toLocaleString()}</div>
                 <p className="text-[11px] text-slate-500">
                   {total > 0 ? `${Math.round((applicableN / total) * 100)}% of library` : '—'}
+                  {peerCount > 0 && <span className="ml-1 text-teal-700">(incl. {peerExtra.toLocaleString()} peer rule{peerExtra === 1 ? '' : 's'})</span>}
                 </p>
               </div>
             </div>
@@ -3262,8 +3627,13 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
             {/* Sample rules from the matched benchmark */}
             {Array.isArray(stage1.examples_kept) && stage1.examples_kept.length > 0 && (
               <div className="mt-3 border-t border-slate-200 pt-3">
-                <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                <div className="mb-1 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-slate-500">
                   Sample rules from this benchmark
+                  {peerCount > 0 && (
+                    <span className="rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-medium normal-case text-teal-700 ring-1 ring-teal-200">
+                      + {peerExtra.toLocaleString()} more rules from {peerCount} ticked peer{peerCount === 1 ? '' : 's'} (not shown)
+                    </span>
+                  )}
                 </div>
                 <ExampleList items={stage1.examples_kept} emptyText="—" />
               </div>
@@ -3301,7 +3671,13 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
               <Play className="h-4 w-4 text-emerald-600" /> Compliance scan
             </h3>
             <p className="mt-0.5 text-xs text-slate-500">
-              {applicable.count ?? 0} applicable rules. Last scan: {formatTime(lastRun?.started_at || lastRun?.created_at)}.
+              {(applicable.count ?? 0) + roomScan.selectedPeerRuleSum} applicable rules
+              {roomScan.selectedPeerIds.length > 0 && (
+                <span className="ml-1 text-teal-700">
+                  ({applicable.count ?? 0} this asset + {roomScan.selectedPeerRuleSum} from {roomScan.selectedPeerIds.length} peer{roomScan.selectedPeerIds.length === 1 ? '' : 's'})
+                </span>
+              )}
+              {'. '}Last scan: {formatTime(lastRun?.started_at || lastRun?.created_at)}.
               {' '}Scans also run automatically — agent every 30s when installed, or via your scheduled cron.
             </p>
           </div>
@@ -3315,22 +3691,28 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
             type="button"
             onClick={() => scanMutation.mutate()}
             disabled={
-              !applicable.count ||
+              ((applicable.count ?? 0) + roomScan.selectedPeerRuleSum) === 0 ||
               scanMutation.isPending ||
               scanProgress.running
             }
             className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
             title={
-              !applicable.count
+              ((applicable.count ?? 0) + roomScan.selectedPeerRuleSum) === 0
                 ? 'No applicable rules. Classify the OS first (Re-detect OS or Edit the asset).'
                 : scanProgress.running || scanMutation.isPending
                 ? 'A scan is already running.'
-                : `Scan ${applicable.count} rules now`
+                : roomScan.selectedPeerIds.length > 0
+                  ? `Scan ${applicable.count ?? 0} rules for this asset + ${roomScan.selectedPeerRuleSum} from ${roomScan.selectedPeerIds.length} ticked peer(s). Results fan out to each.`
+                  : `Scan ${applicable.count ?? 0} rules now`
             }
           >
             {scanMutation.isPending || scanProgress.running ? (
               <>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Scanning…
+              </>
+            ) : roomScan.selectedPeerIds.length > 0 ? (
+              <>
+                <Play className="h-3.5 w-3.5" /> Scan now (+{roomScan.selectedPeerIds.length} peer{roomScan.selectedPeerIds.length === 1 ? '' : 's'})
               </>
             ) : (
               <>
@@ -3461,7 +3843,7 @@ function NoMappingCallout({
             {loading ? 'Asking AI…' : 'Suggest mapping (AI)'}
           </button>
           <Link
-            href="/compliance/plugins/library?tab=mappings"
+            href="/compliance-plugins/os-registry"
             className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
           >
             Add manually
@@ -3502,7 +3884,7 @@ function NoMappingCallout({
               <p className="mt-2 text-[11px] text-slate-500">
                 Review and accept this mapping in{' '}
                 <Link
-                  href="/compliance/plugins/library?tab=mappings"
+                  href="/compliance-plugins/os-registry"
                   className="text-indigo-600 underline"
                 >
                   admin → mappings
@@ -3517,7 +3899,7 @@ function NoMappingCallout({
               required benchmark PDF hasn't been ingested yet — upload it
               via{' '}
               <Link
-                href="/compliance/plugins/library?tab=ingest"
+                href="/compliance-plugins/ingest"
                 className="text-indigo-600 underline"
               >
                 Rules library → Ingest

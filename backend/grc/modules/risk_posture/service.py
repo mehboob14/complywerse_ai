@@ -132,8 +132,11 @@ def _band_for(score: float) -> Dict[str, str]:
 # ─── Sub-score computations ─────────────────────────────────────────────────
 # Each returns a dict with at minimum {score: float 0-1, known: bool}.
 
-def _cis_gap(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
-    """0-1 (1 = worst).
+def _cis_gap_self(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
+    """Self-only CIS gap (0-1, 1 = worst) for one asset, ignoring peers.
+
+    Internal helper. Use `_cis_gap()` for the room-aware wrapper that blends
+    in co-located peer scores weighted by criticality.
 
     Bug fix: total used to be the WHOLE library count (e.g. 4855), which
     made a Windows host's pass-rate be 63/4855=1.3% instead of the real
@@ -259,6 +262,128 @@ def _cis_gap(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
         "score": round(score, 4), "known": True,
         "passed": passed, "failed": failed, "never_scanned": never_scanned,
         "total": total, "pass_rate": pass_rate,
+    }
+
+
+# Hard-coded defaults — mirror assets_router._CRIT_WEIGHT / _COMPOSITE_W_*.
+# Kept inline to avoid a cross-module import dependency from risk_posture to
+# assets_router (which would create a circular-import risk through the models).
+_RP_CRIT_WEIGHT = {"low": 1.0, "medium": 2.0, "high": 3.0, "critical": 4.0}
+_RP_COMPOSITE_W_SELF = 0.6
+_RP_COMPOSITE_W_PEERS = 0.4
+
+
+def _resolve_crit_weights(db: Session, tenant_id: int) -> Dict[str, float]:
+    """Resolve the per-tenant criticality weights for the room-scan blend.
+
+    Mirrors assets_router._get_tenant_crit_weights so the risk-posture blend
+    tracks whatever weights the operator set via the Configure-Weights
+    editor in the Host-Applications panel.
+    """
+    from grc.models import Tenant
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    settings = (tenant.settings or {}) if tenant else {}
+    return settings.get("composite_weights", _RP_CRIT_WEIGHT)
+
+
+def _cis_gap(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
+    """Room-aware CIS gap (0-1, 1 = worst) for one asset.
+
+    "The room and the chairs" mental model:
+      - Compute the opened asset's own CIS gap via `_cis_gap_self()`.
+      - Find every co-located peer (same ip_address) with its own CIS gap.
+      - Blend self (60%) with the criticality-weighted average of peer gaps
+        (40%) — the same formula `/assets/{id}/ip-peers` returns as
+        `composite.effective_score`, in gap space (1 - pass_rate fraction).
+      - If the opened asset is standalone (no IP or no scanned peers) the
+        legacy self-only behaviour is preserved exactly.
+
+    Why the blend belongs in risk posture (and not in a separate "room
+    score" endpoint): a peer with 0% compliance on the same physical host
+    is a real risk to this asset — its presence raises the host's effective
+    risk. Room-scan results are the data the operator already has; risk
+    posture should consume them automatically without requiring another
+    explicit action. Criticality weights make sure a Critical SQL Server
+    drags the dimension harder than a Low-criticality Tomcat — matching
+    the per-tenant Configure-Weights setting.
+
+    Symmetric for any asset in the group — host or peer — so opening any
+    member of the room reports the same combined CIS posture.
+    """
+    self_gap = _cis_gap_self(db, tenant_id, asset_id)
+
+    asset = db.query(ITAsset).filter(ITAsset.id == asset_id).first()
+    if asset is None or not asset.ip_address:
+        return self_gap  # standalone (no IP) — legacy behaviour
+
+    peers = (
+        db.query(ITAsset)
+        .filter(
+            ITAsset.tenant_id == tenant_id,
+            ITAsset.ip_address == asset.ip_address,
+            ITAsset.id != asset.id,
+        )
+        .all()
+    )
+    if not peers:
+        return self_gap  # no co-located peers — legacy behaviour
+
+    # Collect peers whose CIS dimension is `known` (have runs). Peers that
+    # were never scanned don't contribute (they're neither penalising nor
+    # helping). The chip the panel renders as "Not scanned" is exactly the
+    # case we skip here.
+    peer_contributions: list = []
+    crit_weights = _resolve_crit_weights(db, tenant_id)
+    sum_weight = 0.0
+    sum_weighted_gap = 0.0
+    for p in peers:
+        pg = _cis_gap_self(db, tenant_id, p.id)
+        if not pg.get("known"):
+            continue
+        w = float(crit_weights.get((p.criticality or "medium").lower(), 2.0))
+        peer_contributions.append({
+            "peer_id": p.id,
+            "name": p.name,
+            "criticality": p.criticality or "medium",
+            "weight": w,
+            "gap": pg["score"],
+            "pass_rate": pg.get("pass_rate"),
+        })
+        sum_weight += w
+        sum_weighted_gap += pg["score"] * w
+
+    if sum_weight == 0:
+        # Peers exist but none has been scanned — no signal to blend in.
+        return self_gap
+
+    weighted_peer_gap = sum_weighted_gap / sum_weight
+
+    if self_gap.get("known"):
+        own_gap = self_gap["score"]
+        augmented = (
+            _RP_COMPOSITE_W_SELF * own_gap
+            + _RP_COMPOSITE_W_PEERS * weighted_peer_gap
+        )
+    else:
+        # This asset itself never scanned but peers were — treat peers as
+        # the sole signal. The asset is in a connected room and the room's
+        # CIS posture is a defensible signal for THIS asset's risk too.
+        own_gap = None
+        augmented = weighted_peer_gap
+
+    return {
+        **self_gap,
+        "score": round(augmented, 4),
+        "known": True,  # peers' data is enough to make this dimension known
+        "ip_group_augmented": True,
+        "self_gap": own_gap,
+        "weighted_peer_gap": round(weighted_peer_gap, 4),
+        "peer_contributions": peer_contributions,
+        "blend_weights": {
+            "self": _RP_COMPOSITE_W_SELF,
+            "peers": _RP_COMPOSITE_W_PEERS,
+        },
+        "criticality_weights": crit_weights,
     }
 
 

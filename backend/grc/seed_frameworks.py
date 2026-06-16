@@ -2050,19 +2050,36 @@ def seed_framework_from_json(db, data: Dict[str, Any], tenant_id: int = None,
     # Create ParsedFrameworkControl records for each control
     evidence_req_count = 0
     for control_data in controls:
+        # Defensive truncation for ParsedFrameworkControl VARCHAR columns.
+        # This keeps seeding resilient when source JSON contains long labels.
+        def _cap_control(field_name: str, max_len: int) -> Optional[str]:
+            raw = control_data.get(field_name)
+            if raw is None:
+                return None
+            if not isinstance(raw, str):
+                raw = str(raw)
+            if len(raw) <= max_len:
+                return raw
+            control_ref = control_data.get("control_id") or control_data.get("original_reference") or "unknown"
+            print(
+                f"  ! Control '{control_ref}': '{field_name}' is {len(raw)} chars, "
+                f"truncating to {max_len}"
+            )
+            return raw[:max_len]
+
         control = ParsedFrameworkControl(
             uploaded_framework_id=framework.id,
-            control_id=control_data.get("control_id", ""),
-            original_reference=control_data.get("original_reference"),
-            title=control_data.get("title", ""),
+            control_id=_cap_control("control_id", 100) or "",
+            original_reference=_cap_control("original_reference", 255),
+            title=_cap_control("title", 500) or "",
             description=control_data.get("description"),
             full_text=control_data.get("full_text"),
-            domain=control_data.get("domain"),
-            category=control_data.get("category"),
+            domain=_cap_control("domain", 100),
+            category=_cap_control("category", 100),
             is_mandatory=control_data.get("is_mandatory", True),
-            priority=control_data.get("priority", "medium"),
-            section_number=control_data.get("section_number"),
-            parent_section=control_data.get("parent_section"),
+            priority=_cap_control("priority", 20) or "medium",
+            section_number=_cap_control("section_number", 50),
+            parent_section=_cap_control("parent_section", 255),
             ai_confidence=control_data.get("ai_confidence"),
             ai_notes=control_data.get("ai_notes"),
             evidence_requirements=control_data.get("evidence_requirements", []),

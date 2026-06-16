@@ -989,6 +989,10 @@ class CompliancePluginRun(Base):
     duration_ms = Column(Integer, nullable=True)
     triggered_by = Column(String(30), default="manual")
     triggered_by_user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    # Updated_CIS_Assests migration: when a connection is collector routed
+    # this is the agent that owns the run. Backend skips local execution and
+    # the agent picks the row up via /agents/jobs.
+    executed_by_agent_id = Column(Integer, ForeignKey("grc_compliance_agents.id"), nullable=True, index=True)
     started_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)

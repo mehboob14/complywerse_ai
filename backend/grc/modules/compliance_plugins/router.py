@@ -7,7 +7,7 @@ from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from grc.models import (
@@ -659,18 +659,16 @@ def assets_overview(
     # KPI / pass-rate denominator, benchmark label so each asset card can
     # show "what benchmark is this scanning against" without a second
     # match-preview round-trip per asset.
-    from .services.strict_matcher import (
-        applicable_plugins_for_asset,
-        pick_benchmark_for_os,
-    )
+    from .services.strict_matcher import applicable_plugins_for_asset
     applicable_count_by_asset: dict[int, int] = {}
     matched_benchmark_by_asset: dict[int, Optional[str]] = {}
     for a in assets:
         if a.os_normalized:
-            plugins_for_a, _ = applicable_plugins_for_asset(db, tenant_id, a.os_normalized)
+            plugins_for_a, bench_for_a = applicable_plugins_for_asset(
+                db, tenant_id, a.os_normalized,
+            )
             applicable_count_by_asset[a.id] = len(plugins_for_a)
-            mapping = pick_benchmark_for_os(db, tenant_id, a.os_normalized)
-            matched_benchmark_by_asset[a.id] = mapping.benchmark_name if mapping else None
+            matched_benchmark_by_asset[a.id] = bench_for_a
         else:
             applicable_count_by_asset[a.id] = 0
             matched_benchmark_by_asset[a.id] = None
@@ -956,13 +954,22 @@ def match_preview(
     from .services.strict_matcher import applicable_plugins_for_asset, pick_benchmark_for_os
 
     mapping = pick_benchmark_for_os(db, tenant_id, os_normalized or "")
-    if mapping:
-        stage2_kept, picked_bench = applicable_plugins_for_asset(db, tenant_id, os_normalized or "")
-    else:
-        stage2_kept, picked_bench = [], None
+    # Always call applicable_plugins_for_asset — it already encapsulates the
+    # strict→soft fallback. Gating it on `if mapping:` here would silently
+    # disable the soft fallback for this endpoint and keep the UI showing
+    # "0 applicable rules" while the /ip-peers panel shows the same benchmark
+    # has 438 rules. Same resolution order, single source of truth.
+    stage2_kept, picked_bench = applicable_plugins_for_asset(db, tenant_id, os_normalized or "")
     primary_benchmark = picked_bench
     ai_picks = [picked_bench] if picked_bench else None
-    ai_status = "strict_map" if mapping else "no_mapping"
+    # strict_map = operator-owned mapping resolved this; soft_map = picked
+    # from CompliancePlugin.os_keys family walk; no_mapping = neither.
+    if mapping:
+        ai_status = "strict_map"
+    elif picked_bench:
+        ai_status = "soft_map"
+    else:
+        ai_status = "no_mapping"
     stage2_skipped: list = []
     stage1_kept = stage2_kept
     stage1_skipped = [p for p in plugins if p not in stage2_kept]
@@ -1001,10 +1008,16 @@ def match_preview(
         "total_plugins": total,
         "matcher_mode": "strict_single_stage",
         "matcher_mapping": {
-            "os_pattern": mapping.os_pattern if mapping else None,
-            "benchmark_name": mapping.benchmark_name if mapping else None,
-            "scope": "tenant" if (mapping and mapping.tenant_id is not None) else ("global" if mapping else None),
+            "os_pattern": mapping.os_pattern if mapping else (os_normalized if picked_bench else None),
+            "benchmark_name": mapping.benchmark_name if mapping else picked_bench,
+            "scope": (
+                "tenant" if (mapping and mapping.tenant_id is not None)
+                else "global" if mapping
+                else "soft" if picked_bench
+                else None
+            ),
             "mapping_id": mapping.id if mapping else None,
+            "source": "strict" if mapping else ("soft" if picked_bench else None),
         },
         "stage1_regex": {
             "name": "Strict OS→Benchmark mapping",
@@ -1062,18 +1075,54 @@ def re_detect_asset_os(
     if not asset.host_name:
         raise HTTPException(400, "Asset has no host_name to probe")
 
-    # Find the connection that targets this asset's host
-    conn = db.query(IntegrationConnection).filter(
+    # Find the connection that targets this asset's host. Multiple
+    # connections can share a console_url (e.g. localhost hosts a Windows
+    # service AND a Postgres instance) — naive .first() would pick by
+    # arbitrary insertion order and probe the wrong service (Windows for a
+    # Postgres asset, etc.). Prefer the connection whose integration_type
+    # matches the asset's vendor / os_normalized profile, then fall back
+    # to most recent.
+    candidates = db.query(IntegrationConnection).filter(
         IntegrationConnection.tenant_id == tenant_id,
         IntegrationConnection.is_active.is_(True),
         func.lower(IntegrationConnection.console_url) == asset.host_name.lower().strip(),
-    ).first()
-    if not conn:
+    ).order_by(IntegrationConnection.id.desc()).all()
+    if not candidates:
         raise HTTPException(
             400,
             f"No integration connection found for host '{asset.host_name}'. "
             f"Add credentials via Connect Wizard first.",
         )
+
+    def _preferred_runner_for_asset(a: ITAsset) -> Optional[str]:
+        """Derive the integration_type the operator likely wants to probe
+        for this asset. Reads vendor first (operator-curated, more reliable
+        than os_normalized which may be missing on manual rows), then os."""
+        v = (a.vendor or "").lower().strip()
+        if v == "postgresql": return "postgres_sql"
+        if v == "mysql": return "mysql_sql"
+        if v == "oracle": return "oracle_sql"
+        # vendor='Microsoft' can mean Windows OR MSSQL — disambiguate by
+        # asset_type. Application + Microsoft → SQL Server.
+        if v == "microsoft" and (a.asset_type or "") == "application":
+            return "mssql_sql"
+        if v == "iis": return "windows_winrm"
+        if v in ("apache", "nginx", "tomcat", "red hat"): return "linux_ssh"
+        # OS-normalized signal is the secondary source.
+        k = (a.os_normalized or "").lower()
+        if k.startswith("postgresql") or k.startswith("postgres"): return "postgres_sql"
+        if k.startswith("mysql") or k.startswith("mariadb"): return "mysql_sql"
+        if k.startswith("mssql") or k.startswith("sql-server"): return "mssql_sql"
+        if k.startswith("oracle-db") or k.startswith("oracle"): return "oracle_sql"
+        if k.startswith("windows") or k.startswith("iis"): return "windows_winrm"
+        if any(k.startswith(p) for p in ("ubuntu","linux","debian","centos","rhel","amazon-linux","rocky","almalinux","oraclelinux","tomcat","apache","nginx")):
+            return "linux_ssh"
+        return None
+
+    preferred = _preferred_runner_for_asset(asset)
+    conn = next((c for c in candidates if c.integration_type == preferred), None) if preferred else None
+    if conn is None:
+        conn = candidates[0]  # most recent by id desc
 
     try:
         creds = resolve_credentials_for_connection(conn) or {}
@@ -3024,6 +3073,7 @@ def scan_all(
     runner_type: Optional[str] = Query(None),
     asset_id: Optional[int] = Query(None),
     connection_id: Optional[int] = Query(None),
+    include_peer_asset_ids: Optional[List[int]] = Query(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
     _perm: bool = Depends(_require_scan_perm),
@@ -3035,6 +3085,13 @@ def scan_all(
     the "Scan All" button work for the common case of "one Windows host
     connected, scan everything" — without it, every run would fail with
     'WinRM credentials missing'.
+
+    `include_peer_asset_ids` implements the room-scan model: when scanning a
+    host (asset_id is set), the caller can include co-located peer assets
+    (same ip_address) whose benchmark rules are then UNIONED into the scan.
+    The scan still executes through the HOST's connection but writes each
+    peer's plugin runs against THAT peer's asset_id so the peer's compliance
+    history reflects the scan. Peers must share the host's ip_address.
 
     A process-level lock prevents two scans against the same target from
     interleaving. A 409 with the start time is returned if a scan is
@@ -3070,6 +3127,13 @@ def scan_all(
                     f"Asset '{_preflight_asset.name}' has no OS classified. "
                     f"Click 'Re-detect OS' or set the OS via Edit before scanning.",
                 )
+            # Preflight: confirm SOME usable connection exists — either the
+            # opened asset's own (matched by host_name → console_url), or in
+            # room-scan mode, any active connection pinned to a co-located
+            # peer at the same IP. The detailed lookup happens again in
+            # _do_scan_all; this preflight just gives the operator a fast
+            # 400 before we spawn the background thread.
+            _has_own_connection = False
             if _preflight_asset.host_name:
                 _host_lc = _preflight_asset.host_name.lower().strip()
                 _conn = (
@@ -3079,12 +3143,76 @@ def scan_all(
                             func.lower(IntegrationConnection.console_url) == _host_lc)
                     .first()
                 )
-                if _conn is None and connection_id is None:
+                _has_own_connection = _conn is not None
+            _has_ip_group_connection = False
+            if not _has_own_connection and _preflight_asset.ip_address:
+                _peer_with_conn = db.execute(text("""
+                    SELECT 1 FROM grc_it_assets a
+                    JOIN grc_integration_connections c
+                      ON lower(c.console_url) = lower(a.host_name)
+                     AND c.tenant_id = a.tenant_id
+                     AND c.is_active = true
+                    WHERE a.tenant_id = :tid
+                      AND a.ip_address = :ip
+                      AND a.id <> :aid
+                      AND a.host_name IS NOT NULL
+                    LIMIT 1
+                """), {
+                    "tid": tenant_id,
+                    "ip": _preflight_asset.ip_address,
+                    "aid": _preflight_asset.id,
+                }).first()
+                _has_ip_group_connection = _peer_with_conn is not None
+            if (
+                not _has_own_connection
+                and not _has_ip_group_connection
+                and connection_id is None
+            ):
+                raise HTTPException(
+                    400,
+                    f"Asset '{_preflight_asset.name}' has no integration "
+                    f"connection"
+                    + (
+                        f", and no co-located asset at IP {_preflight_asset.ip_address} has one either"
+                        if _preflight_asset.ip_address else ""
+                    )
+                    + ". Add credentials via Connect Wizard first.",
+                )
+        # ── Validate include_peer_asset_ids: must be same tenant + same IP. ──
+        # The room-scan model only makes sense for assets co-located on the same
+        # host (same ip_address). Without this check, the caller could smuggle
+        # arbitrary tenant assets into a scan and have their benchmark rules
+        # executed against the wrong connection.
+        validated_peer_ids: list[int] = []
+        if include_peer_asset_ids:
+            if _preflight_asset is None:
+                raise HTTPException(
+                    400,
+                    "include_peer_asset_ids requires asset_id (room-scan is anchored on a host).",
+                )
+            if not _preflight_asset.ip_address:
+                raise HTTPException(
+                    400,
+                    f"Asset '{_preflight_asset.name}' has no IP — peers can't be resolved.",
+                )
+            peers = db.query(ITAsset).filter(
+                ITAsset.id.in_(include_peer_asset_ids),
+                ITAsset.tenant_id == tenant_id,
+            ).all()
+            peer_by_id = {p.id: p for p in peers}
+            for pid in include_peer_asset_ids:
+                peer = peer_by_id.get(pid)
+                if peer is None:
+                    raise HTTPException(404, f"Peer asset {pid} not found in this tenant.")
+                if peer.id == _preflight_asset.id:
+                    continue  # silently drop self-reference
+                if peer.ip_address != _preflight_asset.ip_address:
                     raise HTTPException(
                         400,
-                        f"Asset '{_preflight_asset.name}' has no integration "
-                        f"connection. Add credentials via Connect Wizard first.",
+                        f"Peer asset {pid} ('{peer.name}') is not co-located: "
+                        f"its IP {peer.ip_address!r} != host IP {_preflight_asset.ip_address!r}.",
                     )
+                validated_peer_ids.append(peer.id)
     except HTTPException:
         _scan_lock_release(tenant_id, asset_id)
         raise
@@ -3113,6 +3241,7 @@ def scan_all(
                 worker_db, tenant_id, asset_id, actor,
                 benchmark=benchmark, runner_type=runner_type,
                 connection_id=connection_id,
+                include_peer_asset_ids=validated_peer_ids,
             )
         except Exception:
             logger.exception("scan-all background worker failed")
@@ -3126,7 +3255,8 @@ def scan_all(
     ).start()
 
     # Compute the projected total so the frontend's progress bar has a
-    # target (otherwise it just spins indefinitely).
+    # target (otherwise it just spins indefinitely). For room-scans we sum
+    # the applicable plugin count of the host PLUS each included peer.
     projected_total = 0
     try:
         if asset_id is not None and _preflight_asset and _preflight_asset.os_normalized:
@@ -3135,16 +3265,26 @@ def scan_all(
                 db, tenant_id, _preflight_asset.os_normalized,
             )
             projected_total = len(plugins)
+            for pid in validated_peer_ids:
+                peer = db.query(ITAsset).get(pid)
+                if peer and peer.os_normalized:
+                    peer_plugins, _ = applicable_plugins_for_asset(
+                        db, tenant_id, peer.os_normalized,
+                    )
+                    projected_total += len(peer_plugins)
     except Exception:  # noqa: BLE001
         logger.exception("projected_total computation failed (non-fatal)")
 
     return {
         "queued": True,
         "asset_id": asset_id,
+        "included_peer_asset_ids": validated_peer_ids,
         "total": projected_total,
         "message": (
-            f"Scan queued for {projected_total} rule(s). "
-            f"Watch progress in the Scan sessions table below — "
+            f"Scan queued for {projected_total} rule(s)"
+            + (f" across host + {len(validated_peer_ids)} co-located peer(s)"
+               if validated_peer_ids else "")
+            + ". Watch progress in the Scan sessions table below — "
             f"each completed rule shows up as a new run."
         ),
     }
@@ -3153,9 +3293,17 @@ def scan_all(
 def _do_scan_all(
     db, tenant_id, asset_id, current_user,
     *, benchmark, runner_type, connection_id,
+    include_peer_asset_ids: Optional[List[int]] = None,
 ):
     """Body of scan_all — extracted so the lock-release lives in a single
-    try/finally in the caller, not 200 lines below the acquire."""
+    try/finally in the caller, not 200 lines below the acquire.
+
+    Room-scan model: when `include_peer_asset_ids` is provided, the scan
+    executes plugins from the host's benchmark PLUS each peer's benchmark,
+    all through the host's connection. Each plugin run is attributed to the
+    asset whose benchmark it came from (so peer pages show "scanned" too).
+    """
+    include_peer_asset_ids = include_peer_asset_ids or []
     q = db.query(CompliancePlugin).filter(
         (CompliancePlugin.tenant_id.is_(None)) | (CompliancePlugin.tenant_id == tenant_id),
         CompliancePlugin.enabled.is_(True),
@@ -3205,11 +3353,61 @@ def _do_scan_all(
              if (c.console_url or "").lower().strip() == host_lc),
             None,
         )
+    # Room-scan IP-group fallback: when the opened asset has no integration
+    # of its own (typical for application peers like Oracle DB / SQL Server
+    # which aren't directly connectable), look for an active connection
+    # pinned to ANY co-located asset at the same IP. This is what makes the
+    # "scan the room from a chair's perspective" UX work — Oracle's page
+    # gets a Scan now button because the host on its IP supplies the
+    # WinRM/SSH/etc. connection.
+    if (
+        asset is not None
+        and asset_pinned_connection is None
+        and explicit_connection is None
+        and asset.ip_address
+    ):
+        peers_in_group = (
+            db.query(ITAsset)
+            .filter(
+                ITAsset.tenant_id == tenant_id,
+                ITAsset.ip_address == asset.ip_address,
+                ITAsset.id != asset.id,
+                ITAsset.host_name.isnot(None),
+            )
+            .all()
+        )
+        active_conns = (
+            db.query(IntegrationConnection)
+            .filter(IntegrationConnection.tenant_id == tenant_id,
+                    IntegrationConnection.is_active.is_(True))
+            .all()
+        )
+        for peer in peers_in_group:
+            host_lc = (peer.host_name or "").lower().strip()
+            if not host_lc:
+                continue
+            match = next(
+                (c for c in active_conns
+                 if (c.console_url or "").lower().strip() == host_lc),
+                None,
+            )
+            if match is not None:
+                asset_pinned_connection = match
+                logger.info(
+                    "scan_all: connection fallback via IP group — opened asset id=%s "
+                    "(%s) uses connection from peer id=%s (%s)",
+                    asset.id, asset.name, peer.id, peer.name,
+                )
+                break
     if asset is not None and explicit_connection is None and asset_pinned_connection is None:
         raise HTTPException(
             400,
             f"Asset '{asset.name}' has no connection. Add credentials via "
-            f"Administration → Integrations before scanning this asset.",
+            f"Administration → Integrations before scanning this asset"
+            + (
+                f" (no co-located asset at IP {asset.ip_address} has one either)."
+                if asset.ip_address else "."
+            ),
         )
 
     # ─── Block A: credential scope enforcement ──────────────────────────
@@ -3254,15 +3452,28 @@ def _do_scan_all(
     skipped_ai_refinement = 0
     skipped_no_connection = 0
     _work_queue: list[tuple] = []   # (plugin, effective_asset, connection) tuples for the parallel pool
-    # ── STRICT SINGLE-STAGE MATCHER ──
+    # ── STRICT-FIRST, SOFT-FALLBACK BENCHMARK RESOLUTION ──
     # Pre-resolve the picked benchmark for each asset OS that this scan-all
-    # may touch. The mapping table is the ONLY source of truth — no AI
-    # fallback, no family-walk. Archived benchmarks have no mapping row so
-    # they never enter scope.
+    # may touch. Strict mapping table is the primary source; when no
+    # operator-owned row covers the OS we fall back to the same family-walk
+    # the /ip-peers panel and the agent /jobs endpoint use. Without this
+    # fallback, a fresh Windows version (e.g. windows-11-25H2 when the
+    # library shipped windows-11-23H2 plugins) would silently skip every
+    # plugin at the picked-vs-benchmark filter below — the user sees
+    # "Scanning 0 of 438" forever.
     from .services.strict_matcher import pick_benchmark_for_os
+    from .services.software_normaliser import benchmark_for_software_key
     picked_bench_by_os: dict[str, Optional[str]] = {}
+    # Room-scan mode: when peer ids are included, also load those peer assets
+    # and resolve their benchmarks so the union scan picks them up.
+    peer_assets: list[ITAsset] = []
+    if asset is not None and include_peer_asset_ids:
+        peer_assets = db.query(ITAsset).filter(
+            ITAsset.id.in_(include_peer_asset_ids),
+            ITAsset.tenant_id == tenant_id,
+        ).all()
     assets_to_consider: list[ITAsset] = (
-        [asset] if asset is not None
+        ([asset] + peer_assets) if asset is not None
         else db.query(ITAsset).filter(ITAsset.tenant_id == tenant_id).all()
     )
     for a in assets_to_consider:
@@ -3271,7 +3482,42 @@ def _do_scan_all(
         if a.os_normalized in picked_bench_by_os:
             continue
         m = pick_benchmark_for_os(db, tenant_id, a.os_normalized)
-        picked_bench_by_os[a.os_normalized] = m.benchmark_name if m else None
+        if m:
+            picked_bench_by_os[a.os_normalized] = m.benchmark_name
+        else:
+            soft = benchmark_for_software_key(db, a.os_normalized)
+            picked_bench_by_os[a.os_normalized] = soft
+            if soft:
+                logger.info(
+                    "scan_all: soft fallback resolved tenant_id=%s os=%s → %s",
+                    tenant_id, a.os_normalized, soft,
+                )
+
+    # Room-scan attribution map: which asset should each benchmark's runs be
+    # ATTRIBUTED to? Host's benchmark → host. Each peer's benchmark → that
+    # peer. This is what makes the per-asset compliance history page show
+    # "scanned, X%" for every selected peer after a single room-scan.
+    benchmark_to_attributed_asset: dict[str, ITAsset] = {}
+    allowed_benchmarks: set[str] = set()
+    if asset is not None:
+        host_bench = picked_bench_by_os.get(asset.os_normalized)
+        if host_bench:
+            benchmark_to_attributed_asset[host_bench] = asset
+            allowed_benchmarks.add(host_bench)
+        for peer in peer_assets:
+            pb = picked_bench_by_os.get(peer.os_normalized)
+            if pb:
+                # First peer wins if two peers happen to share an OS (which
+                # would mean the same benchmark — attributing to whichever
+                # came first is fine; both peers would end up scanned).
+                benchmark_to_attributed_asset.setdefault(pb, peer)
+                allowed_benchmarks.add(pb)
+        if include_peer_asset_ids and not allowed_benchmarks:
+            logger.warning(
+                "scan_all room-scan: no benchmarks resolved for host or any peer "
+                "(tenant_id=%s host_os=%s peer_ids=%s)",
+                tenant_id, asset.os_normalized, include_peer_asset_ids,
+            )
     for plugin in plugins:
         if asset is not None:
             # Pinned asset → ONLY the asset's own connection (or explicit
@@ -3306,9 +3552,12 @@ def _do_scan_all(
         asset_os = getattr(effective_asset, "os_normalized", None) if effective_asset is not None else None
         asset_os_v = getattr(effective_asset, "os_version", None) if effective_asset is not None else None
 
-        # ── STRICT SINGLE-STAGE FILTER ──
-        # The picked benchmark for this asset OS is the ONLY benchmark whose
-        # rules will run. No family-walk, no AI fallback.
+        # ── STRICT SINGLE-STAGE FILTER + ROOM-SCAN UNION ──
+        # In single-asset mode (no peers), the picked benchmark for this asset
+        # OS is the ONLY benchmark whose rules will run.
+        # In room-scan mode (peers included), the allowed benchmark set is
+        # the union of {host's benchmark, each peer's benchmark}, and each
+        # plugin gets attributed to the asset whose benchmark it came from.
         picked = picked_bench_by_os.get(asset_os) if asset_os else None
         # Pinned-asset NO-OS guard. Without this, an asset whose
         # os_normalized is NULL silently fell through every os-check
@@ -3321,21 +3570,35 @@ def _do_scan_all(
         if asset is not None and not asset_os:
             skipped_wrong_os_version += 1
             continue
-        if asset_os and not picked:
-            # No mapping for this OS → skip every plugin (operator must
-            # configure the mapping). Count under the same bucket so the
-            # response is comparable to legacy.
-            skipped_wrong_os_version += 1
-            continue
-        if picked and plugin.benchmark != picked:
-            skipped_ai_refinement += 1
-            continue
+        # Default attribution = effective_asset (host in pinned mode).
+        attributed_to = effective_asset
+        if asset is not None and include_peer_asset_ids:
+            # Room-scan: plugin is in-scope if it belongs to ANY benchmark in
+            # the union, and it's attributed to that benchmark's owning asset.
+            if plugin.benchmark not in allowed_benchmarks:
+                skipped_ai_refinement += 1
+                continue
+            attributed_to = benchmark_to_attributed_asset.get(plugin.benchmark, effective_asset)
+        else:
+            # Single-asset mode: keep the original strict semantics.
+            if asset_os and not picked:
+                # No mapping for this OS → skip every plugin (operator must
+                # configure the mapping). Count under the same bucket so the
+                # response is comparable to legacy.
+                skipped_wrong_os_version += 1
+                continue
+            if picked and plugin.benchmark != picked:
+                skipped_ai_refinement += 1
+                continue
         # Queue the work item rather than running it inline. The actual
         # network round-trip (WinRM/SSH/Oracle/etc.) happens in parallel
         # below via a ThreadPoolExecutor — without this, scanning a
         # 50-host fleet against 538 rules each ran them serially and
         # took ~hours instead of ~minutes.
-        _work_queue.append((plugin, effective_asset, connection))
+        # Tuple shape: (plugin, executing_asset, attributed_asset, connection).
+        # executing_asset = the host whose connection is used; attributed_asset
+        # = whose asset_id gets stamped on the run (= the peer in room-scan).
+        _work_queue.append((plugin, effective_asset, attributed_to, connection))
 
     # ─── Parallel execution of queued work items ─────────────────────────
     # SQLAlchemy Session is NOT thread-safe, so each worker opens its own
@@ -3360,7 +3623,7 @@ def _do_scan_all(
     _tenant_engine = db.get_bind()
     _WorkerSession = sessionmaker(bind=_tenant_engine, expire_on_commit=False)
 
-    def _one(plugin, eff_asset, conn):
+    def _one(plugin, eff_asset, attributed_asset, conn):
         worker_db = _WorkerSession()
         try:
             run = execute_plugin(
@@ -3371,17 +3634,18 @@ def _do_scan_all(
                 asset=eff_asset,
                 connection=conn,
                 triggered_by="scan_all",
+                attributed_to_asset=attributed_asset,
             )
             # Build the response-dict view inside the worker session so
             # all lazy attrs are resolved before we close the session.
-            return _run_to_dict(run, plugin, eff_asset, conn, triggered_by_user=current_user)
+            return _run_to_dict(run, plugin, attributed_asset or eff_asset, conn, triggered_by_user=current_user)
         finally:
             worker_db.close()
 
     max_workers = int(os.environ.get("COMPLYVERSE_SCAN_CONCURRENCY", "10"))
     if _work_queue:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = [pool.submit(_one, p, a, c) for (p, a, c) in _work_queue]
+            futures = [pool.submit(_one, p, ea, aa, c) for (p, ea, aa, c) in _work_queue]
             for fut in as_completed(futures):
                 try:
                     runs.append(fut.result())

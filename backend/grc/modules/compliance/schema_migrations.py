@@ -153,6 +153,19 @@ _COLUMN_ADDS = [
      "ix_grc_critical_tasks_linked_framework_id"),
     ("grc_critical_tasks", "linked_requirement_id", "INTEGER",
      "ix_grc_critical_tasks_linked_requirement_id"),
+    # IT assets host-applications model (Updated_CIS_Assests migration).
+    # detected_software_json holds the enriched inventory the agent / agentless
+    # scanner writes. asset_role + parent_asset_id support promoting an
+    # application detected on a host into its own child asset.
+    ("grc_it_assets", "detected_software_json", "JSON DEFAULT '[]'::json", None),
+    ("grc_it_assets", "asset_role", "VARCHAR(50)", None),
+    ("grc_it_assets", "parent_asset_id", "INTEGER",
+     "ix_grc_it_assets_parent_asset_id"),
+    # Collector routing for plugin runs (Updated_CIS_Assests migration).
+    ("grc_integration_connections", "assigned_collector_agent_id", "INTEGER",
+     "ix_grc_integration_connections_assigned_collector_agent_id"),
+    ("grc_compliance_plugin_runs", "executed_by_agent_id", "INTEGER",
+     "ix_grc_compliance_plugin_runs_executed_by_agent_id"),
     # RCSA custom rows: per-row ownership + cached AI explanation (new feature).
     ("grc_rcsa_custom_rows", "assigned_user_id", "INTEGER",
      "ix_grc_rcsa_custom_rows_assigned_user_id"),

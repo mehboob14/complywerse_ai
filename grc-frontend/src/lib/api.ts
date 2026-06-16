@@ -621,6 +621,19 @@ export const assetsApi = {
   unlinkEvidence: (id: number, linkId: number) => 
     apiClient.delete(`/assets/${id}/link-evidence/${linkId}`),
   getCoverageAnalysis: (id: number) => apiClient.get(`/assets/${id}/coverage-analysis`),
+  // IP-group composite scoring (room-and-chair). One endpoint returns every
+  // asset at the same IP plus the composite breakdown the host applications
+  // panel renders.
+  getIPPeers: (id: number) => apiClient.get(`/assets/${id}/ip-peers`),
+  getCompositeWeights: () => apiClient.get<{ weights: Record<string, number>; is_custom: boolean; defaults: Record<string, number> }>(`/assets/composite-weights`),
+  updateCompositeWeights: (weights: { low: number; medium: number; high: number; critical: number }) =>
+    apiClient.put<{ weights: Record<string, number>; is_custom: boolean; defaults: Record<string, number> }>(`/assets/composite-weights`, weights),
+  resetCompositeWeights: () =>
+    apiClient.delete<{ weights: Record<string, number>; is_custom: boolean; defaults: Record<string, number> }>(`/assets/composite-weights`),
+  // Detected software inventory and promote-to-child-asset flow.
+  getDetectedSoftware: (id: number) => apiClient.get(`/assets/${id}/detected-software`),
+  promoteSoftware: (id: number, software_keys: string[], criticality?: string) =>
+    apiClient.post(`/assets/${id}/promote-software`, { software_keys, criticality }),
   getMappingRecommendations: (
     id: number,
     params?: { framework_id?: number; min_score?: number; limit?: number; include_linked?: boolean }
@@ -1370,6 +1383,66 @@ export const ermApi = {
 
 // Alias for backward compatibility
 export const riskAssessmentApi = ermApi.riskAssessments;
+
+// AI Risk Assessment template ingestion + CRUD + AI suggest. Mirrors the
+// 13 column template workbook supplied by the user.
+export interface AIRiskEntry {
+  id: number;
+  risk_id_external: string | null;
+  ai_system_use_case: string | null;
+  risk_description: string | null;
+  risk_category: string | null;
+  likelihood: number | null;
+  impact: number | null;
+  risk_score: number | null;
+  existing_controls: string | null;
+  residual_risk_level: string | null;
+  mitigation_plan: string | null;
+  risk_owner: string | null;
+  risk_owner_user_id: number | null;
+  target_review_date: string | null;
+  status: string | null;
+  bridged_risk_id: number | null;
+  ai_suggested_mitigation: string | null;
+  ai_suggested_controls: string | null;
+  ai_suggested_likelihood: number | null;
+  ai_suggested_impact: number | null;
+  ai_suggested_residual_level: string | null;
+  ai_rationale: string | null;
+  ai_generated_at: string | null;
+  ai_model: string | null;
+  ai_suggestion_accepted: boolean;
+  source: string | null;
+  source_file_name: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export const aiRiskAssessmentApi = {
+  list: () => apiClient.get<AIRiskEntry[]>('/erm/ai-risk-assessment'),
+  get: (id: number) => apiClient.get<AIRiskEntry>(`/erm/ai-risk-assessment/${id}`),
+  create: (body: Partial<AIRiskEntry>) =>
+    apiClient.post<AIRiskEntry>('/erm/ai-risk-assessment', body),
+  update: (id: number, body: Partial<AIRiskEntry>) =>
+    apiClient.put<AIRiskEntry>(`/erm/ai-risk-assessment/${id}`, body),
+  delete: (id: number) => apiClient.delete(`/erm/ai-risk-assessment/${id}`),
+  upload: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post<{ imported: Array<{ id: number; row: number; ai_system_use_case: string | null }>; errors: Array<{ row: number; error: string }>; summary: { imported_count: number; error_count: number; file_name: string } }>(
+      '/erm/ai-risk-assessment/upload',
+      fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+  },
+  templateUrl: () => '/api/erm/ai-risk-assessment/template',
+  aiSuggest: (id: number, focus?: string) =>
+    apiClient.post<{ source: string; entry: AIRiskEntry }>(`/erm/ai-risk-assessment/${id}/ai-suggest`, focus ? { focus } : {}),
+  acceptAi: (id: number) =>
+    apiClient.post<AIRiskEntry>(`/erm/ai-risk-assessment/${id}/accept-ai`, {}),
+  bridgeToRisk: (id: number) =>
+    apiClient.post<{ risk_id: number; created: boolean }>(`/erm/ai-risk-assessment/${id}/bridge-to-risk`, {}),
+};
 
 export const tenantApi = {
   getTenantUsers: async (tenantId?: number) => {

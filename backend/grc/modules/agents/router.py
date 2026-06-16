@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -129,6 +129,12 @@ class HeartbeatPayload(BaseModel):
     os_build: Optional[str] = None         # "23H2" / "22H2" / "1909" / "22.04.4"
     os_edition: Optional[str] = None       # "Enterprise" / "Pro" / "LTSC"
     os_normalized: Optional[str] = None    # client-computed; backend will recompute too
+    # Software inventory ("room and chair") added in the Updated_CIS_Assests
+    # migration. Raw 3 layer inventory: Windows roles + registry apps +
+    # listening processes. Backend normalises each entry to a software_key
+    # and stores the enriched list on the asset's detected_software_json so
+    # the host applications panel can offer "promote to child asset".
+    installed_software: Optional[List[Dict[str, Any]]] = None
 
 
 class ResultsPayload(BaseModel):
@@ -1118,20 +1124,33 @@ def agent_jobs(
     asset_os = getattr(asset, "os_normalized", None) if asset else None
     asset_os_v = getattr(asset, "os_version", None) if asset else None
 
-    # ── STRICT SINGLE-STAGE MATCHER ──
-    # Look up the operator-owned benchmark mapping for this agent's asset OS.
-    # The agent receives ONLY rules from the mapped benchmark. If no mapping
-    # exists, the agent gets zero jobs (and the admin UI surfaces the
-    # missing mapping so the operator can add it).
+    # ── STRICT-FIRST, SOFT-FALLBACK BENCHMARK RESOLUTION ──
+    # Look up the operator-owned mapping for this agent's asset OS first.
+    # When no explicit mapping covers this OS, fall back to the same soft
+    # matcher the /ip-peers Asset Benchmarks panel uses (walks
+    # CompliancePlugin.os_keys with progressive version-suffix stripping —
+    # e.g. windows-11-25H2 → windows-11 → windows). Without this fallback
+    # an agent for a fresh OS version (one the library hasn't shipped an
+    # exact CIS PDF for yet, e.g. Win 11 25H2 vs library 23H2) gets zero
+    # jobs even though 438 applicable rules already exist under the family
+    # benchmark.
     picked_bench: Optional[str] = None
     try:
         from grc.modules.compliance_plugins.services.strict_matcher import pick_benchmark_for_os
+        from grc.modules.compliance_plugins.services.software_normaliser import benchmark_for_software_key
         if asset and asset_os:
             m = pick_benchmark_for_os(db, tenant_id, asset_os)
             if m:
                 picked_bench = m.benchmark_name
+            else:
+                picked_bench = benchmark_for_software_key(db, asset_os)
+                if picked_bench:
+                    logger.info(
+                        "agent /jobs: soft fallback resolved tenant_id=%s os=%s → %s",
+                        tenant_id, asset_os, picked_bench,
+                    )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("agent /jobs strict matcher failed: %s", exc)
+        logger.warning("agent /jobs benchmark resolution failed: %s", exc)
 
     # ─── Build a runner_type → credentials map (collector mode only) ────
     # Collector agents reach OUT to remote targets, so each job needs the

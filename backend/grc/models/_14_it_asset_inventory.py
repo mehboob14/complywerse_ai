@@ -95,6 +95,17 @@ class ITAsset(Base):
     os_build = Column(String(40), nullable=True)       # '23H2' / '22H2' / '22.04.4'
     os_edition = Column(String(80), nullable=True)     # 'Enterprise' / 'Pro' / 'LTSC'
 
+    # Host-applications model (Updated_CIS_Assests migration).
+    # detected_software_json holds the enriched software inventory the agent or
+    # agentless scanner wrote, each entry like:
+    #   {software_key, name, version, source, benchmark_available, promoted_asset_id}
+    # asset_role distinguishes a host OS from an application asset.
+    # parent_asset_id links a promoted application asset back to the host that
+    # detected it.
+    detected_software_json = Column(JSON, default=list, nullable=True)
+    asset_role = Column(String(50), nullable=True)     # 'host' | 'application' | None
+    parent_asset_id = Column(Integer, ForeignKey("grc_it_assets.id"), nullable=True, index=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     tenant = relationship("Tenant", back_populates="it_assets")
