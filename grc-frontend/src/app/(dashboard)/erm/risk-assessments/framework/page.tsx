@@ -1,0 +1,426 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ermApi } from '@/lib/api';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { ClipboardCheck, Loader2, Plus, Sparkles, ListTodo, ChevronRight, Trash2, ArrowLeft, BookOpen, ShieldCheck } from 'lucide-react';
+import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
+import type { FrameworkMethodology } from '@/types';
+
+interface FrameworkOption {
+  id: number;
+  name: string;
+  short_code: string;
+  version?: string | null;
+}
+
+interface FrameworkRiskAssessment {
+  id: number;
+  name: string;
+  description?: string | null;
+  status: string;
+  framework_id: number;
+  framework_name?: string | null;
+  created_at?: string | null;
+  questions_count?: number;
+}
+
+interface AssignedQuestion {
+  id: number;
+  assessment_id: number;
+  assessment_name?: string | null;
+  framework_name?: string | null;
+  question_text: string;
+  status: string;
+  order_index?: number;
+  evidence_count?: number;
+}
+
+const QUESTION_COUNT_OPTIONS = [10, 15, 20, 25, 30, 40, 50];
+
+const STATUS_BADGES: Record<string, string> = {
+  in_progress: 'bg-blue-600 text-white border-blue-700',
+  completed: 'bg-emerald-600 text-white border-emerald-700',
+  archived: 'bg-slate-700 text-white border-slate-800',
+  not_started: 'bg-slate-500 text-white border-slate-600',
+  blocked: 'bg-rose-600 text-white border-rose-700',
+};
+
+export default function FrameworkRiskAssessmentsPage() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreatePermission = hasPermission('erm:risk_assessments:create');
+  const canDelete = hasPermission('erm:risk_assessments:delete');
+  const [activeTab, setActiveTab] = useState<'assessments' | 'assigned'>('assessments');
+  const [frameworkId, setFrameworkId] = useState('');
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [questionCount, setQuestionCount] = useState('20');
+  const [scope, setScope] = useState<'full' | 'sample'>('full');
+
+  const { data: frameworks, isLoading: frameworksLoading } = useQuery({
+    queryKey: ['erm-available-frameworks'],
+    queryFn: async () => {
+      const res = await ermApi.frameworkRiskAssessments.getAvailableFrameworks();
+      return res.data as FrameworkOption[];
+    },
+  });
+
+  const { data: assessments, isLoading: assessmentsLoading } = useQuery({
+    queryKey: ['framework-risk-assessments'],
+    queryFn: async () => {
+      const res = await ermApi.frameworkRiskAssessments.getAll();
+      return res.data as FrameworkRiskAssessment[];
+    },
+  });
+
+  const { data: assignedQuestions, isLoading: assignedLoading } = useQuery({
+    queryKey: ['framework-risk-assessment-assigned-questions'],
+    queryFn: async () => {
+      const res = await ermApi.frameworkRiskAssessments.getMyAssignedQuestions();
+      return res.data as AssignedQuestion[];
+    },
+  });
+
+  // Auto-detect which methodology will apply for the picked framework so we
+  // can preview "ISO 27005 will be used" before the user hits Create.
+  // The backend re-runs the same detection on generate, so there's no
+  // need to pass the code explicitly.
+  const { data: methodologyDetection } = useQuery({
+    queryKey: ['framework-methodology-detect', frameworkId],
+    queryFn: async () => {
+      if (!frameworkId) return null;
+      const res = await ermApi.frameworkRiskAssessments.detectMethodology(Number(frameworkId));
+      return res.data;
+    },
+    enabled: !!frameworkId,
+  });
+
+  const detectedMethodology: FrameworkMethodology | null = methodologyDetection?.methodology ?? null;
+  const effectiveMethodology = detectedMethodology;
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      return ermApi.frameworkRiskAssessments.create({
+        uploaded_framework_id: Number(frameworkId),
+        name: name || undefined,
+        description: description || undefined,
+      });
+    },
+    onSuccess: async (res) => {
+      const assessmentId = res.data.id as number;
+      await ermApi.frameworkRiskAssessments.generateQuestions(assessmentId, {
+        count: Number(questionCount) || 20,
+        replace_existing: true,
+        scope: effectiveMethodology ? scope : undefined,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['framework-risk-assessments'] });
+      await queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment-assigned-questions'] });
+      await queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment', assessmentId] });
+      await queryClient.refetchQueries({ queryKey: ['framework-risk-assessment', assessmentId] });
+      router.push(`/erm/risk-assessments/framework/${assessmentId}`);
+    },
+  });
+
+  const deleteAssessmentMutation = useMutation({
+    mutationFn: (assessmentId: number) => ermApi.frameworkRiskAssessments.delete(assessmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['framework-risk-assessments'] });
+      queryClient.invalidateQueries({ queryKey: ['framework-risk-assessment-assigned-questions'] });
+    },
+  });
+
+  const canCreate = !!frameworkId && !createMutation.isPending;
+
+  const sortedAssessments = useMemo(() => {
+    return (assessments || []).slice().sort((a, b) => {
+      const aDate = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bDate = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bDate - aDate;
+    });
+  }, [assessments]);
+
+  return (
+    <div className="space-y-4 sm:space-y-6 px-3 sm:px-6 text-[var(--color-text)]">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex items-start gap-3">
+          <Link
+            href="/erm/risk-assessments"
+            className="mt-0.5 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+            title="Back to Risk Assessments"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div>
+            <h1 className="text-lg sm:text-xl font-semibold text-[var(--color-text)]">Framework Risk Assessments</h1>
+            <p className="text-sm text-[var(--color-muted)]">Generate framework-specific assessment questions, assign reviewers, and track completion with tenant-scoped ownership.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="cw-card p-6 space-y-5">
+        <div className="flex items-center gap-2 text-sm font-medium text-[var(--color-text)]">
+          <Sparkles size={16} /> New Framework Assessment
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Framework</label>
+            <MultiSelectDropdown
+              title="Framework"
+              triggerVariant="input"
+              multiSelect={false}
+              forceSearch
+              selectedValues={frameworkId ? [frameworkId] : []}
+              onApply={(vals) => setFrameworkId(vals[0] || '')}
+              items={(frameworks || []).map((fw) => ({
+                value: String(fw.id),
+                label: `${fw.name}${fw.version ? ` (${fw.version})` : ''}`,
+              }))}
+              placeholder={frameworksLoading ? 'Loading...' : 'Select a framework'}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Assessment Name</label>
+            <input
+              className="cw-field w-full rounded-lg px-3 py-2"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Optional name"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Coverage</label>
+            <MultiSelectDropdown
+              title="Coverage"
+              triggerVariant="input"
+              multiSelect={false}
+              selectedValues={[scope]}
+              onApply={(vals) => setScope((vals[0] as 'full' | 'sample') || 'full')}
+              items={[
+                { value: 'full', label: 'Full coverage (one per control)' },
+                { value: 'sample', label: 'Sample subset' },
+              ]}
+            />
+            {scope === 'sample' && (
+              <div className="mt-2">
+                <label className="mb-1 block text-xs font-medium text-[var(--color-muted)]">Sample size</label>
+                <MultiSelectDropdown
+                  title="Sample size"
+                  triggerVariant="input"
+                  multiSelect={false}
+                  selectedValues={[questionCount]}
+                  onApply={(vals) => setQuestionCount(vals[0] || '20')}
+                  items={QUESTION_COUNT_OPTIONS.map((count) => ({
+                    value: String(count),
+                    label: `${count} controls (evenly sampled)`,
+                  }))}
+                />
+              </div>
+            )}
+          </div>
+          <MethodologyPreview methodology={effectiveMethodology} hasFramework={!!frameworkId} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Description</label>
+          <textarea
+            className="cw-field w-full rounded-lg px-3 py-2"
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Optional notes — scope, business unit, environment, or anything else helpful for assessors."
+          />
+        </div>
+        <div className="flex flex-col gap-3 border-t border-[var(--color-border)] pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs text-[var(--color-muted)]">
+            {effectiveMethodology
+              ? `Questions follow the ${effectiveMethodology.display_name} methodology — one per parsed control, with phase-aware fields the assessor completes during review.`
+              : 'No methodology selected — questions will be generated by AI using the framework\'s parsed control text as context.'}
+          </div>
+          <button
+            className="cw-btn-primary inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium"
+            onClick={() => createMutation.mutate()}
+            disabled={!canCreate || !canCreatePermission}
+          >
+            {createMutation.isPending ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
+            {scope === 'full'
+              ? `Create & generate (full coverage)`
+              : `Create & generate (${Number(questionCount) || 20} sampled)`}
+          </button>
+        </div>
+      </div>
+
+      <div className="cw-card overflow-hidden">
+        <div className="flex gap-1 border-b border-slate-200 bg-white px-2">
+          <button
+            onClick={() => setActiveTab('assessments')}
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${
+              activeTab === 'assessments'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <ClipboardCheck size={15} /> Saved Assessments
+          </button>
+          <button
+            onClick={() => setActiveTab('assigned')}
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${
+              activeTab === 'assigned'
+                ? 'border-blue-600 text-blue-600'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <ListTodo size={15} /> Assigned To Me
+          </button>
+        </div>
+
+        <div className="p-6">
+          {activeTab === 'assessments' && (
+            <>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-[var(--color-text)]">Saved Assessments</h2>
+                {(assessmentsLoading || frameworksLoading) && <Loader2 className="animate-spin" size={16} />}
+              </div>
+              {sortedAssessments.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-subtle)] p-8 text-sm text-[var(--color-muted)]">No framework assessments yet.</div>
+              ) : (
+                <div className="grid gap-3">
+                  {sortedAssessments.map((assessment) => (
+                    <button
+                      key={assessment.id}
+                      onClick={() => router.push(`/erm/risk-assessments/framework/${assessment.id}`)}
+                      className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition-colors hover:bg-[var(--color-subtle)]"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="text-sm font-semibold text-[var(--color-text)]">{assessment.name}</div>
+                          <div className="mt-1 text-xs text-[var(--color-muted)]">
+                            {assessment.framework_name || 'Framework'}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {canDelete && <button
+                            type="button"
+                            className="cw-btn-danger inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs"
+                            disabled={deleteAssessmentMutation.isPending}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (confirm(`Delete assessment "${assessment.name}"? This will remove all generated questions and uploaded evidence.`)) {
+                                deleteAssessmentMutation.mutate(assessment.id);
+                              }
+                            }}
+                          >
+                            <Trash2 size={13} /> Delete
+                          </button>}
+                          <span className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_BADGES[assessment.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                            {assessment.status.replace(/_/g, ' ')}
+                          </span>
+                          <div className="text-right text-xs text-[var(--color-muted)]">
+                            <div>{assessment.questions_count || 0} questions</div>
+                          </div>
+                          <ChevronRight size={16} className="text-[var(--color-muted)]" />
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* methodology preview component is defined below the page export */}
+          {activeTab === 'assigned' && (
+            <>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-[var(--color-text)]">Questions Assigned To You</h2>
+                {assignedLoading && <Loader2 className="animate-spin" size={16} />}
+              </div>
+              {(assignedQuestions || []).length === 0 ? (
+                <div className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-subtle)] p-8 text-sm text-[var(--color-muted)]">No framework assessment questions are currently assigned to you.</div>
+              ) : (
+                <div className="space-y-3">
+                  {(assignedQuestions || []).map((question) => (
+                    <button
+                      key={question.id}
+                      onClick={() => router.push(`/erm/risk-assessments/framework/${question.assessment_id}`)}
+                      className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition-colors hover:bg-[var(--color-subtle)]"
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <div className="text-xs text-[var(--color-muted)]">
+                          {question.framework_name || 'Framework'} · {question.assessment_name || 'Assessment'}
+                        </div>
+                        <span className={`rounded-full border px-2 py-0.5 text-xs ${STATUS_BADGES[question.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                          {question.status.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                      <div className="text-sm font-medium text-[var(--color-text)]">Q{question.order_index || 0}. {question.question_text}</div>
+                      <div className="mt-2 flex items-center justify-between text-xs text-[var(--color-muted)]">
+                        <span>{question.evidence_count || 0} evidence file(s)</span>
+                        <span className="inline-flex items-center gap-1">Open assessment <ChevronRight size={14} /></span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MethodologyPreview({
+  methodology,
+  hasFramework,
+}: {
+  methodology: FrameworkMethodology | null;
+  hasFramework: boolean;
+}) {
+  if (!hasFramework) {
+    return (
+      <div className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-subtle)] px-4 py-3 text-xs text-[var(--color-muted)]">
+        Pick a framework to see which assessment methodology will apply.
+      </div>
+    );
+  }
+  if (!methodology) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+        <div className="flex items-center gap-1.5 font-semibold">
+          <Sparkles size={13} /> AI-generated questions
+        </div>
+        <div className="mt-1 text-amber-700">
+          No mapped methodology for this framework — questions will be AI-generated using the framework&apos;s parsed controls as context.
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+      <div className="flex items-center gap-1.5 font-semibold">
+        <ShieldCheck size={13} /> {methodology.display_name}
+      </div>
+      <div className="mt-1 text-blue-800">{methodology.short_description}</div>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {methodology.phases.map((p) => (
+          <span
+            key={p.code}
+            className="inline-flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-medium text-blue-700"
+            title={p.description}
+          >
+            <BookOpen size={9} />
+            {p.order}. {p.name}
+          </span>
+        ))}
+      </div>
+      <div className="mt-2 text-[11px] text-blue-700">
+        Reference: {methodology.reference_standard}
+      </div>
+    </div>
+  );
+}

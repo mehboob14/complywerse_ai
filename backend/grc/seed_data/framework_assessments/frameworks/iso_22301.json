@@ -1,0 +1,1736 @@
+{
+  "id": "iso_22301",
+  "name": "ISO 22301:2019 Business Continuity Management Systems",
+  "version": "2019",
+  "official_sources": [
+    {
+      "title": "ISO 22301:2019",
+      "url": "https://www.iso.org/standard/75106.html"
+    }
+  ],
+  "assessment_shapes": [
+    "bia",
+    "asset_threat_vulnerability",
+    "control_maturity"
+  ],
+  "methodology": "Clause 8.2 mandates BIA and Risk Assessment. Drives strategy (8.3), procedures (8.4), exercises (8.5).",
+  "scoping_inputs": [
+    {
+      "id": "in_scope_processes",
+      "type": "list",
+      "label": "Processes in BCMS scope"
+    },
+    {
+      "id": "disruption_scenarios",
+      "type": "list",
+      "label": "Disruption scenarios to assess"
+    }
+  ],
+  "risk_model": {
+    "factors": [
+      "asset",
+      "threat",
+      "vulnerability",
+      "likelihood",
+      "impact_c",
+      "impact_i",
+      "impact_a"
+    ],
+    "scales": {
+      "likelihood": [
+        {
+          "value": 1,
+          "label": "Rare",
+          "definition": "May occur only in exceptional circumstances (<5% per year)."
+        },
+        {
+          "value": 2,
+          "label": "Unlikely",
+          "definition": "Could occur but not expected (5-25% per year)."
+        },
+        {
+          "value": 3,
+          "label": "Possible",
+          "definition": "Might occur at some time (25-50% per year)."
+        },
+        {
+          "value": 4,
+          "label": "Likely",
+          "definition": "Will probably occur in most circumstances (50-75% per year)."
+        },
+        {
+          "value": 5,
+          "label": "Almost Certain",
+          "definition": "Expected to occur in most circumstances (>75% per year)."
+        }
+      ],
+      "impact": [
+        {
+          "value": 1,
+          "label": "Insignificant",
+          "definition": "Negligible operational, financial, regulatory or reputational impact."
+        },
+        {
+          "value": 2,
+          "label": "Minor",
+          "definition": "Limited impact contained within a single team or system; recoverable in <1 day."
+        },
+        {
+          "value": 3,
+          "label": "Moderate",
+          "definition": "Notable impact on a business unit; recoverable in 1-7 days; minor regulatory attention."
+        },
+        {
+          "value": 4,
+          "label": "Major",
+          "definition": "Significant impact across multiple business units; >1 week to recover; regulatory action probable."
+        },
+        {
+          "value": 5,
+          "label": "Severe",
+          "definition": "Existential or systemic impact; loss of license, major fines, sustained customer loss."
+        }
+      ],
+      "maturity": [
+        {
+          "value": 0,
+          "label": "Non-Existent",
+          "definition": "No process or control in place."
+        },
+        {
+          "value": 1,
+          "label": "Initial / Ad Hoc",
+          "definition": "Process exists but is informal and inconsistent."
+        },
+        {
+          "value": 2,
+          "label": "Repeatable",
+          "definition": "Process is documented and repeated, but not standardized across the organization."
+        },
+        {
+          "value": 3,
+          "label": "Defined",
+          "definition": "Process is documented, standardized, and integrated across the organization."
+        },
+        {
+          "value": 4,
+          "label": "Managed",
+          "definition": "Process is measured, monitored with KPIs, and controlled."
+        },
+        {
+          "value": 5,
+          "label": "Optimized",
+          "definition": "Process is continuously improved through monitoring, metrics, and lessons learned."
+        }
+      ],
+      "implementation_status": [
+        {
+          "value": "NI",
+          "label": "Not Implemented"
+        },
+        {
+          "value": "PI",
+          "label": "Partially Implemented"
+        },
+        {
+          "value": "LI",
+          "label": "Largely Implemented"
+        },
+        {
+          "value": "FI",
+          "label": "Fully Implemented"
+        }
+      ]
+    },
+    "matrix": "5x5",
+    "calculation": "max(impact_c, impact_i, impact_a) * likelihood",
+    "acceptance_threshold": 6,
+    "thresholds": {
+      "low": [
+        1,
+        4
+      ],
+      "medium": [
+        5,
+        9
+      ],
+      "high": [
+        10,
+        16
+      ],
+      "critical": [
+        17,
+        25
+      ]
+    }
+  },
+  "domains": [
+    {
+      "id": "4",
+      "name": "Clause 4 — Context of the organization",
+      "controls": [
+        {
+          "id": "4.1",
+          "title": "Understanding the organization and its context",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "4.2",
+          "title": "Understanding needs and expectations of interested parties",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "4.3",
+          "title": "Determining the scope of the BCMS",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "4.4",
+          "title": "BCMS",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "5",
+      "name": "Clause 5 — Leadership",
+      "controls": [
+        {
+          "id": "5.1",
+          "title": "Leadership and commitment",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "5.2",
+          "title": "Policy",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "5.3",
+          "title": "Roles, responsibilities and authorities",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "6",
+      "name": "Clause 6 — Planning",
+      "controls": [
+        {
+          "id": "6.1",
+          "title": "Actions to address risks and opportunities",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "6.2",
+          "title": "Business continuity objectives and planning to achieve them",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "6.3",
+          "title": "Planning of changes",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "7",
+      "name": "Clause 7 — Support",
+      "controls": [
+        {
+          "id": "7.1",
+          "title": "Resources",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "7.2",
+          "title": "Competence",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "7.3",
+          "title": "Awareness",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "7.4",
+          "title": "Communication",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "7.5",
+          "title": "Documented information",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "8",
+      "name": "Clause 8 — Operation",
+      "controls": [
+        {
+          "id": "8.1",
+          "title": "Operational planning and control",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "8.2",
+          "title": "Business Impact Analysis and Risk Assessment",
+          "question_block": {
+            "type": "bia",
+            "questions": [
+              {
+                "field": "activity",
+                "type": "text",
+                "prompt": "Critical business activity / process?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Activity owner?"
+              },
+              {
+                "field": "criticality",
+                "type": "select",
+                "options": [
+                  "Critical",
+                  "High",
+                  "Medium",
+                  "Low"
+                ],
+                "prompt": "Criticality?"
+              },
+              {
+                "field": "dependencies_people",
+                "type": "text",
+                "prompt": "Key people and skills required?"
+              },
+              {
+                "field": "dependencies_premises",
+                "type": "text",
+                "prompt": "Premises required?"
+              },
+              {
+                "field": "dependencies_it",
+                "type": "text",
+                "prompt": "IT systems / data required?"
+              },
+              {
+                "field": "dependencies_suppliers",
+                "type": "text",
+                "prompt": "Critical suppliers?"
+              },
+              {
+                "field": "rto",
+                "type": "text",
+                "prompt": "Recovery Time Objective (RTO)?"
+              },
+              {
+                "field": "rpo",
+                "type": "text",
+                "prompt": "Recovery Point Objective (RPO)?"
+              },
+              {
+                "field": "mtpd",
+                "type": "text",
+                "prompt": "Maximum Tolerable Period of Disruption (MTPD)?"
+              },
+              {
+                "field": "mbco",
+                "type": "text",
+                "prompt": "Minimum Business Continuity Objective (MBCO)?"
+              },
+              {
+                "field": "impact_1h",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Impact at 1 hour?"
+              },
+              {
+                "field": "impact_4h",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Impact at 4 hours?"
+              },
+              {
+                "field": "impact_1d",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Impact at 1 day?"
+              },
+              {
+                "field": "impact_3d",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Impact at 3 days?"
+              },
+              {
+                "field": "impact_1w",
+                "type": "scale",
+                "scale": "impact",
+                "prompt": "Impact at 1 week?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "8.3",
+          "title": "Business continuity strategies and solutions",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "8.4",
+          "title": "Business continuity plans and procedures",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "8.5",
+          "title": "Exercise programme",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "8.6",
+          "title": "Evaluation of business continuity documentation and capabilities",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "9",
+      "name": "Clause 9 — Performance evaluation",
+      "controls": [
+        {
+          "id": "9.1",
+          "title": "Monitoring, measurement, analysis and evaluation",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "9.2",
+          "title": "Internal audit",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "9.3",
+          "title": "Management review",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "10",
+      "name": "Clause 10 — Improvement",
+      "controls": [
+        {
+          "id": "10.1",
+          "title": "Nonconformity and corrective action",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        },
+        {
+          "id": "10.2",
+          "title": "Continual improvement",
+          "question_block": {
+            "type": "control_maturity",
+            "questions": [
+              {
+                "field": "implementation_status",
+                "type": "select",
+                "scale": "implementation_status",
+                "prompt": "Current implementation status?"
+              },
+              {
+                "field": "maturity_level",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Current maturity level (0-5)?"
+              },
+              {
+                "field": "evidence",
+                "type": "text",
+                "prompt": "What evidence supports this rating? (policies, screenshots, logs, audit reports)"
+              },
+              {
+                "field": "target_maturity",
+                "type": "scale",
+                "scale": "maturity",
+                "prompt": "Target maturity level?"
+              },
+              {
+                "field": "gap",
+                "type": "text",
+                "prompt": "Describe the gap between current and target."
+              },
+              {
+                "field": "risk_if_not_implemented",
+                "type": "text",
+                "prompt": "What is the risk if this control is not implemented?"
+              },
+              {
+                "field": "owner",
+                "type": "text",
+                "prompt": "Control owner?"
+              },
+              {
+                "field": "remediation_plan",
+                "type": "text",
+                "prompt": "Remediation plan?"
+              },
+              {
+                "field": "target_date",
+                "type": "date",
+                "prompt": "Target completion date?"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

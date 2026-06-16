@@ -1,0 +1,2768 @@
+{
+  "metadata": {
+    "name": "NIST SP 800-53 Rev 5",
+    "description": "Security and Privacy Controls for Information Systems and Organizations. NIST SP 800-53 provides a catalog of security and privacy controls for federal information systems and organizations to protect organizational operations, assets, individuals, and the Nation.",
+    "version": "Rev 5",
+    "source_organization": "National Institute of Standards and Technology (NIST)",
+    "effective_date": "2020-09-23",
+    "classification": "compliance",
+    "framework_type": "regulatory",
+    "classification_confidence": 0.95,
+    "classification_reasoning": "NIST 800-53 is a compliance framework providing a catalog of security controls. While not requiring formal certification, it is mandated for federal systems under FISMA and serves as the basis for FedRAMP authorization.",
+    "framework_purpose": "To provide a comprehensive catalog of security and privacy controls for information systems and organizations, supporting risk management processes across the federal government and private sector.",
+    "framework_scope": "All federal information systems and organizations, as well as private sector organizations seeking robust security and privacy controls.",
+    "framework_objectives": [
+      "Protect organizational operations and assets",
+      "Protect individuals and the Nation from cyber threats",
+      "Provide a structured approach to selecting security controls",
+      "Support compliance with FISMA, FedRAMP, and other regulations"
+    ],
+    "target_audience": "Federal agencies, government contractors, cloud service providers, security architects, CISOs, and compliance officers",
+    "regulatory_authority": "National Institute of Standards and Technology (NIST), U.S. Department of Commerce",
+    "penalty_for_non_compliance": "Federal agencies face audit findings and loss of authority to operate (ATO). Contractors may lose government contracts.",
+    "adoption_approach": [
+      "Categorize information systems using FIPS 199",
+      "Select baseline controls from Low/Moderate/High baselines",
+      "Tailor controls based on organizational risk assessment",
+      "Implement selected controls",
+      "Assess control effectiveness",
+      "Authorize information system operation",
+      "Monitor controls on an ongoing basis"
+    ],
+    "hierarchy_structure": {
+      "levels": [
+        "Control Family",
+        "Control",
+        "Control Enhancement"
+      ],
+      "numbering_pattern": "XX-N (e.g., AC-1, AC-2(1))"
+    },
+    "document_structure": {
+      "sections": [
+        "Access Control (AC)",
+        "Awareness and Training (AT)",
+        "Audit and Accountability (AU)",
+        "Assessment, Authorization, and Monitoring (CA)",
+        "Configuration Management (CM)",
+        "Contingency Planning (CP)",
+        "Identification and Authentication (IA)",
+        "Incident Response (IR)",
+        "Maintenance (MA)",
+        "Media Protection (MP)",
+        "Physical and Environmental Protection (PE)",
+        "Planning (PL)",
+        "Program Management (PM)",
+        "Personnel Security (PS)",
+        "PII Processing and Transparency (PT)",
+        "Risk Assessment (RA)",
+        "System and Services Acquisition (SA)",
+        "System and Communications Protection (SC)",
+        "System and Information Integrity (SI)",
+        "Supply Chain Risk Management (SR)"
+      ]
+    },
+    "total_controls": 148
+  },
+  "controls": [
+    {
+      "control_id": "AC-1",
+      "original_reference": "AC-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate access control policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates an access control policy that addresses purpose, scope, roles, responsibilities, management commitment, coordination among organizational entities, and compliance. The organization also develops procedures to facilitate the implementation of the access control policy and associated controls. The policy and procedures are reviewed and updated at organization-defined frequencies.",
+      "domain": "Access Control",
+      "category": "Policy and Governance",
+      "section_number": "AC-1",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Access control policy document",
+        "Access control procedures documentation",
+        "Policy review and approval records"
+      ]
+    },
+    {
+      "control_id": "AC-2",
+      "original_reference": "AC-2",
+      "title": "Account Management",
+      "description": "Define and manage information system accounts including identifying account types, establishing conditions for group membership, assigning account managers, and managing the account lifecycle.",
+      "full_text": "The organization manages information system accounts by identifying and selecting account types, assigning account managers, establishing conditions for group and role membership, specifying authorized users and access privileges, requiring approvals for account creation, creating/enabling/modifying/disabling/removing accounts, monitoring account usage, and reviewing accounts for compliance.",
+      "domain": "Access Control",
+      "category": "Account Management",
+      "section_number": "AC-2",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Account management procedures",
+        "User access authorization records",
+        "Account review documentation",
+        "Terminated user account records"
+      ]
+    },
+    {
+      "control_id": "AC-3",
+      "original_reference": "AC-3",
+      "title": "Access Enforcement",
+      "description": "Enforce approved authorizations for logical access to information and system resources.",
+      "full_text": "The information system enforces approved authorizations for logical access to information and system resources in accordance with applicable access control policies. Access enforcement mechanisms include access control lists, access control matrices, and cryptographic mechanisms.",
+      "domain": "Access Control",
+      "category": "Access Enforcement",
+      "section_number": "AC-3",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Access control list configurations",
+        "Role-based access control documentation",
+        "Access enforcement testing results"
+      ]
+    },
+    {
+      "control_id": "AC-4",
+      "original_reference": "AC-4",
+      "title": "Information Flow Enforcement",
+      "description": "Enforce approved authorizations for controlling the flow of information within the system and between connected systems.",
+      "full_text": "The information system enforces approved authorizations for controlling the flow of information within the system and between interconnected systems based on information flow control policies. Information flow control regulates where information can travel versus who can access the information.",
+      "domain": "Access Control",
+      "category": "Access Enforcement",
+      "section_number": "AC-4",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Information flow control policies",
+        "Network segmentation documentation",
+        "Firewall and boundary protection configurations",
+        "Data flow diagrams"
+      ]
+    },
+    {
+      "control_id": "AC-5",
+      "original_reference": "AC-5",
+      "title": "Separation of Duties",
+      "description": "Identify and document duties of individuals requiring separation and define system access authorizations to support separation of duties.",
+      "full_text": "The organization separates duties of individuals as necessary to prevent malicious activity without collusion, identifies duties requiring separation, defines information system access authorizations to support separation of duties, and ensures that no single individual has the ability to perform all critical functions.",
+      "domain": "Access Control",
+      "category": "Account Management",
+      "section_number": "AC-5",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Separation of duties matrix",
+        "Role definitions with incompatible duties identified",
+        "System access authorization records"
+      ]
+    },
+    {
+      "control_id": "AC-6",
+      "original_reference": "AC-6",
+      "title": "Least Privilege",
+      "description": "Employ the principle of least privilege, allowing only authorized accesses for users necessary to accomplish assigned tasks.",
+      "full_text": "The organization employs the principle of least privilege, allowing only authorized accesses for users (or processes acting on behalf of users) which are necessary to accomplish assigned organizational tasks. Organizations employ least privilege for specific duties and information systems, including limiting administrative access to privileged functions.",
+      "domain": "Access Control",
+      "category": "Access Enforcement",
+      "section_number": "AC-6",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Least privilege access policy",
+        "Privileged account inventory",
+        "Periodic privilege reviews",
+        "Just-in-time access records"
+      ]
+    },
+    {
+      "control_id": "AC-7",
+      "original_reference": "AC-7",
+      "title": "Unsuccessful Logon Attempts",
+      "description": "Enforce a limit of consecutive invalid logon attempts by a user and take defined actions when the maximum is exceeded.",
+      "full_text": "The information system enforces a limit of organization-defined consecutive invalid logon attempts by a user during an organization-defined time period, and automatically locks the account or delays next logon prompt when the maximum number of unsuccessful attempts is exceeded.",
+      "domain": "Access Control",
+      "category": "Authentication",
+      "section_number": "AC-7",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Account lockout policy configuration",
+        "Failed logon attempt logs",
+        "Account lockout event records"
+      ]
+    },
+    {
+      "control_id": "AC-8",
+      "original_reference": "AC-8",
+      "title": "System Use Notification",
+      "description": "Display an approved system use notification message before granting access.",
+      "full_text": "The information system displays an approved system use notification message or banner before granting access, providing privacy and security notices consistent with applicable policies, standards, and guidelines. The notification includes conditions of use, monitoring statements, and authorized access descriptions.",
+      "domain": "Access Control",
+      "category": "Authentication",
+      "section_number": "AC-8",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Login banner configuration screenshots",
+        "System use notification policy",
+        "Banner text approval records"
+      ]
+    },
+    {
+      "control_id": "AC-11",
+      "original_reference": "AC-11",
+      "title": "Device Lock",
+      "description": "Prevent further access to the system by initiating a device lock after a defined period of inactivity.",
+      "full_text": "The information system prevents further access to the system by initiating a session lock after an organization-defined time period of inactivity or upon receiving a request from a user. The session lock is retained until the user re-establishes access using established identification and authentication procedures.",
+      "domain": "Access Control",
+      "category": "Session Management",
+      "section_number": "AC-11",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Session timeout configuration",
+        "Screen lock policy settings",
+        "GPO or MDM policy documentation"
+      ]
+    },
+    {
+      "control_id": "AC-14",
+      "original_reference": "AC-14",
+      "title": "Permitted Actions Without Identification or Authentication",
+      "description": "Identify user actions that can be performed without identification and authentication.",
+      "full_text": "The organization identifies and documents specific user actions that can be performed on the information system without identification or authentication consistent with organizational missions and business functions.",
+      "domain": "Access Control",
+      "category": "Authentication",
+      "section_number": "AC-14",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "List of permitted unauthenticated actions",
+        "Public access documentation",
+        "Risk acceptance for unauthenticated access"
+      ]
+    },
+    {
+      "control_id": "AC-17",
+      "original_reference": "AC-17",
+      "title": "Remote Access",
+      "description": "Establish and document usage restrictions, configuration requirements, and connection requirements for each type of remote access allowed.",
+      "full_text": "The organization establishes and documents usage restrictions, configuration/connection requirements, and implementation guidance for each type of remote access allowed. The organization authorizes remote access to the information system prior to allowing such connections, enforces requirements, and monitors for unauthorized remote connections.",
+      "domain": "Access Control",
+      "category": "Remote Access",
+      "section_number": "AC-17",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Remote access policy",
+        "VPN configuration documentation",
+        "Remote access authorization records",
+        "Remote session monitoring logs"
+      ]
+    },
+    {
+      "control_id": "AC-18",
+      "original_reference": "AC-18",
+      "title": "Wireless Access",
+      "description": "Establish configuration requirements, connection requirements, and implementation guidance for wireless access.",
+      "full_text": "The organization establishes usage restrictions, configuration/connection requirements, and implementation guidance for wireless access. Authorizes wireless access prior to allowing such connections and monitors for unauthorized wireless access.",
+      "domain": "Access Control",
+      "category": "Remote Access",
+      "section_number": "AC-18",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Wireless access policy",
+        "Wireless network configuration standards",
+        "Wireless access point inventory",
+        "Wireless security assessment results"
+      ]
+    },
+    {
+      "control_id": "AC-19",
+      "original_reference": "AC-19",
+      "title": "Access Control for Mobile Devices",
+      "description": "Establish usage restrictions and implementation guidance for organization-controlled mobile devices.",
+      "full_text": "The organization establishes usage restrictions, configuration requirements, connection requirements, and implementation guidance for organization-controlled mobile devices. Authorizes the connection of mobile devices to organizational information systems.",
+      "domain": "Access Control",
+      "category": "Remote Access",
+      "section_number": "AC-19",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Mobile device management policy",
+        "MDM solution configuration",
+        "Mobile device inventory",
+        "BYOD policy if applicable"
+      ]
+    },
+    {
+      "control_id": "AC-20",
+      "original_reference": "AC-20",
+      "title": "Use of External Systems",
+      "description": "Establish terms and conditions for authorized individuals to access the system from external systems.",
+      "full_text": "The organization establishes terms and conditions, consistent with any trust relationships established with other organizations owning, operating, and/or maintaining external information systems, allowing authorized individuals to access the information system from external systems and process, store, or transmit organization-controlled information using external systems.",
+      "domain": "Access Control",
+      "category": "External Access",
+      "section_number": "AC-20",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "External system access agreements",
+        "Terms and conditions documentation",
+        "Risk assessment for external system use"
+      ]
+    },
+    {
+      "control_id": "AC-22",
+      "original_reference": "AC-22",
+      "title": "Publicly Accessible Content",
+      "description": "Designate individuals authorized to post information onto publicly accessible systems and review content before posting.",
+      "full_text": "The organization designates individuals authorized to post information onto publicly accessible information systems, trains authorized individuals, reviews proposed content before posting, reviews posted content for non-public information at organization-defined frequency, and removes non-public information if discovered.",
+      "domain": "Access Control",
+      "category": "External Access",
+      "section_number": "AC-22",
+      "parent_section": "AC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Public content authorization procedures",
+        "Content review records",
+        "Periodic content audit results"
+      ]
+    },
+    {
+      "control_id": "AT-1",
+      "original_reference": "AT-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate security awareness and training policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates a security awareness and training policy that addresses purpose, scope, roles, responsibilities, management commitment, coordination, and compliance. Procedures facilitate implementation of the policy and associated controls.",
+      "domain": "Awareness and Training",
+      "category": "Policy and Governance",
+      "section_number": "AT-1",
+      "parent_section": "AT",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security awareness and training policy",
+        "Training procedures documentation",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "AT-2",
+      "original_reference": "AT-2",
+      "title": "Literacy Training and Awareness",
+      "description": "Provide security and privacy literacy training to system users as part of initial training and at defined frequency.",
+      "full_text": "The organization provides basic security and privacy literacy training to information system users (including managers, senior executives, and contractors) as part of initial training for new users, when required by information system changes, and at an organization-defined frequency thereafter. Training includes recognizing and reporting potential indicators of insider threat, social engineering, and phishing.",
+      "domain": "Awareness and Training",
+      "category": "Training",
+      "section_number": "AT-2",
+      "parent_section": "AT",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security awareness training materials",
+        "Training completion records",
+        "Phishing simulation results",
+        "Annual training schedule"
+      ]
+    },
+    {
+      "control_id": "AT-3",
+      "original_reference": "AT-3",
+      "title": "Role-Based Training",
+      "description": "Provide role-based security and privacy training to personnel with assigned security roles before authorizing access.",
+      "full_text": "The organization provides role-based security-related training to personnel with assigned security roles and responsibilities before authorizing access to the information system or performing assigned duties, when required by information system changes, and at organization-defined frequency thereafter.",
+      "domain": "Awareness and Training",
+      "category": "Training",
+      "section_number": "AT-3",
+      "parent_section": "AT",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Role-based training curriculum",
+        "Specialized training completion records",
+        "Training needs assessment",
+        "Certification/qualification records"
+      ]
+    },
+    {
+      "control_id": "AT-4",
+      "original_reference": "AT-4",
+      "title": "Training Records",
+      "description": "Document and monitor information system security training activities.",
+      "full_text": "The organization documents and monitors individual information system security training activities including basic security awareness training and specific information system security training. Training records are retained for an organization-defined time period.",
+      "domain": "Awareness and Training",
+      "category": "Training",
+      "section_number": "AT-4",
+      "parent_section": "AT",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Training tracking system records",
+        "Individual training transcripts",
+        "Training record retention policy"
+      ]
+    },
+    {
+      "control_id": "AU-1",
+      "original_reference": "AU-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate audit and accountability policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates an audit and accountability policy and associated procedures.",
+      "domain": "Audit and Accountability",
+      "category": "Policy and Governance",
+      "section_number": "AU-1",
+      "parent_section": "AU",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Audit and accountability policy",
+        "Audit procedures documentation",
+        "Policy approval records"
+      ]
+    },
+    {
+      "control_id": "AU-2",
+      "original_reference": "AU-2",
+      "title": "Event Logging",
+      "description": "Identify events that the system is capable of logging in support of the audit function.",
+      "full_text": "The organization determines that the information system is capable of auditing organization-defined events, coordinates the audit function with other entities, provides a rationale for why the auditable events are deemed adequate, and reviews and updates the auditable events on an organization-defined frequency.",
+      "domain": "Audit and Accountability",
+      "category": "Audit Logging",
+      "section_number": "AU-2",
+      "parent_section": "AU",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Auditable events list",
+        "Audit logging configuration",
+        "Event logging rationale documentation"
+      ]
+    },
+    {
+      "control_id": "AU-3",
+      "original_reference": "AU-3",
+      "title": "Content of Audit Records",
+      "description": "Ensure audit records contain sufficient information to establish what occurred, when, where, the source, and outcome.",
+      "full_text": "The information system generates audit records containing information that establishes what type of event occurred, when the event occurred, where the event occurred, the source of the event, the outcome of the event, and the identity of any individuals, subjects, or objects/entities associated with the event.",
+      "domain": "Audit and Accountability",
+      "category": "Audit Logging",
+      "section_number": "AU-3",
+      "parent_section": "AU",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Sample audit log entries",
+        "Audit record format specification",
+        "Log content verification results"
+      ]
+    },
+    {
+      "control_id": "AU-4",
+      "original_reference": "AU-4",
+      "title": "Audit Log Storage Capacity",
+      "description": "Allocate audit log storage capacity and configure auditing to reduce the likelihood of storage exhaustion.",
+      "full_text": "The organization allocates audit record storage capacity in accordance with organization-defined audit record storage requirements and configures auditing to reduce the likelihood of such capacity being exceeded.",
+      "domain": "Audit and Accountability",
+      "category": "Audit Storage",
+      "section_number": "AU-4",
+      "parent_section": "AU",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Audit storage capacity planning",
+        "Storage utilization monitoring",
+        "Log rotation and archival procedures"
+      ]
+    },
+    {
+      "control_id": "AU-5",
+      "original_reference": "AU-5",
+      "title": "Response to Audit Logging Process Failures",
+      "description": "Alert personnel in the event of an audit logging process failure and take defined additional actions.",
+      "full_text": "The information system alerts designated organizational officials in the event of an audit processing failure and takes organization-defined additional actions (e.g., shutdown, overwrite oldest records, stop generating records).",
+      "domain": "Audit and Accountability",
+      "category": "Audit Logging",
+      "section_number": "AU-5",
+      "parent_section": "AU",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Audit failure alerting configuration",
+        "Incident response for audit failures",
+        "Alert notification records"
+      ]
+    },
+    {
+      "control_id": "AU-6",
+      "original_reference": "AU-6",
+      "title": "Audit Record Review, Analysis, and Reporting",
+      "description": "Review and analyze system audit records for indications of inappropriate or unusual activity.",
+      "full_text": "The organization reviews and analyzes information system audit records at an organization-defined frequency for indications of inappropriate or unusual activity, reports findings to designated organizational officials, and adjusts the level of audit review, analysis, and reporting when there is a change in risk.",
+      "domain": "Audit and Accountability",
+      "category": "Audit Review",
+      "section_number": "AU-6",
+      "parent_section": "AU",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Audit review procedures",
+        "Audit analysis reports",
+        "Anomaly investigation records",
+        "SIEM dashboard screenshots"
+      ]
+    },
+    {
+      "control_id": "AU-7",
+      "original_reference": "AU-7",
+      "title": "Audit Record Reduction and Report Generation",
+      "description": "Provide an audit record reduction and report generation capability.",
+      "full_text": "The information system provides an audit record reduction and report generation capability that supports on-demand audit review, analysis, and reporting requirements and after-the-fact investigations of security incidents.",
+      "domain": "Audit and Accountability",
+      "category": "Audit Review",
+      "section_number": "AU-7",
+      "parent_section": "AU",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "SIEM or log analysis tool documentation",
+        "Report generation capability demonstration",
+        "Sample audit reports"
+      ]
+    },
+    {
+      "control_id": "AU-8",
+      "original_reference": "AU-8",
+      "title": "Time Stamps",
+      "description": "Use internal system clocks to generate time stamps for audit records.",
+      "full_text": "The information system uses internal system clocks to generate time stamps for audit records and records time stamps that can be mapped to Coordinated Universal Time (UTC) or Greenwich Mean Time (GMT).",
+      "domain": "Audit and Accountability",
+      "category": "Audit Logging",
+      "section_number": "AU-8",
+      "parent_section": "AU",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "NTP configuration documentation",
+        "Time synchronization monitoring",
+        "Sample time-stamped audit records"
+      ]
+    },
+    {
+      "control_id": "AU-9",
+      "original_reference": "AU-9",
+      "title": "Protection of Audit Information",
+      "description": "Protect audit information and audit logging tools from unauthorized access, modification, and deletion.",
+      "full_text": "The information system protects audit information and audit logging tools from unauthorized access, modification, and deletion. The organization authorizes access to management of audit logging functionality to only a subset of privileged users.",
+      "domain": "Audit and Accountability",
+      "category": "Audit Protection",
+      "section_number": "AU-9",
+      "parent_section": "AU",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Audit log access controls",
+        "Log integrity verification mechanisms",
+        "Privileged access to audit tools documentation"
+      ]
+    },
+    {
+      "control_id": "AU-11",
+      "original_reference": "AU-11",
+      "title": "Audit Record Retention",
+      "description": "Retain audit records for a defined period to provide support for after-the-fact investigations.",
+      "full_text": "The organization retains audit records for an organization-defined time period to provide support for after-the-fact investigations of security incidents and to meet regulatory and organizational information retention requirements.",
+      "domain": "Audit and Accountability",
+      "category": "Audit Storage",
+      "section_number": "AU-11",
+      "parent_section": "AU",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Audit record retention policy",
+        "Log archival procedures",
+        "Retention compliance verification"
+      ]
+    },
+    {
+      "control_id": "AU-12",
+      "original_reference": "AU-12",
+      "title": "Audit Record Generation",
+      "description": "Provide audit record generation capability for auditable events at all system components.",
+      "full_text": "The information system provides audit record generation capability for the auditable events defined in AU-2 at all information system and network components where audit capability is deployed, allows designated organizational personnel to select which auditable events are to be audited by specific components, and generates audit records.",
+      "domain": "Audit and Accountability",
+      "category": "Audit Logging",
+      "section_number": "AU-12",
+      "parent_section": "AU",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Audit configuration across system components",
+        "Centralized logging architecture documentation",
+        "Audit generation verification results"
+      ]
+    },
+    {
+      "control_id": "CA-1",
+      "original_reference": "CA-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate assessment, authorization, and monitoring policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates security assessment and authorization policy and procedures.",
+      "domain": "Assessment, Authorization, and Monitoring",
+      "category": "Policy and Governance",
+      "section_number": "CA-1",
+      "parent_section": "CA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security assessment policy",
+        "Authorization procedures",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "CA-2",
+      "original_reference": "CA-2",
+      "title": "Control Assessments",
+      "description": "Develop a security and privacy assessment plan, assess controls, produce assessment report, and provide results.",
+      "full_text": "The organization develops a security assessment plan, assesses security controls in the information system and its environment of operation at an organization-defined frequency to determine the extent to which the controls are implemented correctly, operating as intended, and producing the desired outcome. Assessment results are documented in a security assessment report.",
+      "domain": "Assessment, Authorization, and Monitoring",
+      "category": "Assessment",
+      "section_number": "CA-2",
+      "parent_section": "CA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security assessment plan",
+        "Assessment results report",
+        "Plan of action and milestones (POA&M)"
+      ]
+    },
+    {
+      "control_id": "CA-3",
+      "original_reference": "CA-3",
+      "title": "Information Exchange",
+      "description": "Approve and manage information exchange between the system and other systems using interconnection security agreements.",
+      "full_text": "The organization approves and manages the exchange of information between the information system and other information systems using interconnection security agreements, documents interface characteristics, security requirements, and the nature of information communicated.",
+      "domain": "Assessment, Authorization, and Monitoring",
+      "category": "System Interconnections",
+      "section_number": "CA-3",
+      "parent_section": "CA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Interconnection security agreements (ISAs)",
+        "Memoranda of understanding (MOUs)",
+        "System interconnection documentation"
+      ]
+    },
+    {
+      "control_id": "CA-5",
+      "original_reference": "CA-5",
+      "title": "Plan of Action and Milestones",
+      "description": "Develop and update a plan of action and milestones for the system to document planned remedial actions.",
+      "full_text": "The organization develops a plan of action and milestones for the information system to document the organization's planned remedial actions to correct weaknesses or deficiencies noted during security control assessments and to reduce or eliminate known vulnerabilities.",
+      "domain": "Assessment, Authorization, and Monitoring",
+      "category": "Assessment",
+      "section_number": "CA-5",
+      "parent_section": "CA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "POA&M documentation",
+        "Remediation tracking records",
+        "POA&M review and update records"
+      ]
+    },
+    {
+      "control_id": "CA-6",
+      "original_reference": "CA-6",
+      "title": "Authorization",
+      "description": "Assign a senior official as the authorizing official for the system and ensure authorization before operation.",
+      "full_text": "The organization assigns a senior-level executive or manager as the authorizing official for the information system, ensures the authorizing official authorizes the information system for processing before commencing operations, and updates the authorization on an organization-defined frequency.",
+      "domain": "Assessment, Authorization, and Monitoring",
+      "category": "Authorization",
+      "section_number": "CA-6",
+      "parent_section": "CA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Authorization to Operate (ATO) letter",
+        "Authorizing official designation",
+        "Authorization decision documentation"
+      ]
+    },
+    {
+      "control_id": "CA-7",
+      "original_reference": "CA-7",
+      "title": "Continuous Monitoring",
+      "description": "Develop a continuous monitoring strategy and program including metrics, monitoring frequency, and ongoing assessments.",
+      "full_text": "The organization develops a continuous monitoring strategy and implements a continuous monitoring program that includes establishing organization-defined metrics, monitoring security control effectiveness, ongoing assessments, and reporting the security state of the system.",
+      "domain": "Assessment, Authorization, and Monitoring",
+      "category": "Monitoring",
+      "section_number": "CA-7",
+      "parent_section": "CA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Continuous monitoring strategy",
+        "Monitoring metrics and dashboards",
+        "Ongoing assessment reports",
+        "Security status reports"
+      ]
+    },
+    {
+      "control_id": "CA-9",
+      "original_reference": "CA-9",
+      "title": "Internal System Connections",
+      "description": "Authorize internal connections of system components and document connection characteristics.",
+      "full_text": "The organization authorizes internal connections of information system components or classes of components to the information system and documents, for each internal connection, the interface characteristics, security requirements, and the nature of the information communicated.",
+      "domain": "Assessment, Authorization, and Monitoring",
+      "category": "System Interconnections",
+      "section_number": "CA-9",
+      "parent_section": "CA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Internal connection authorization records",
+        "Network architecture documentation",
+        "Internal system interface documentation"
+      ]
+    },
+    {
+      "control_id": "CM-1",
+      "original_reference": "CM-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate configuration management policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates a configuration management policy and procedures.",
+      "domain": "Configuration Management",
+      "category": "Policy and Governance",
+      "section_number": "CM-1",
+      "parent_section": "CM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Configuration management policy",
+        "CM procedures documentation",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "CM-2",
+      "original_reference": "CM-2",
+      "title": "Baseline Configuration",
+      "description": "Develop, document, and maintain a current baseline configuration of the information system.",
+      "full_text": "The organization develops, documents, and maintains under configuration control a current baseline configuration of the information system, reviews and updates the baseline at an organization-defined frequency and as an integral part of system component installations and upgrades.",
+      "domain": "Configuration Management",
+      "category": "Configuration Baseline",
+      "section_number": "CM-2",
+      "parent_section": "CM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "System baseline configuration documentation",
+        "Baseline review and update records",
+        "Configuration management database (CMDB)"
+      ]
+    },
+    {
+      "control_id": "CM-3",
+      "original_reference": "CM-3",
+      "title": "Configuration Change Control",
+      "description": "Determine and document types of changes under configuration control, review and approve changes, and track implementation.",
+      "full_text": "The organization determines the types of changes to the information system that are configuration-controlled, reviews proposed configuration-controlled changes to the information system, approves or disapproves changes with explicit consideration for security impact analyses, documents configuration change decisions, implements approved changes, and retains records.",
+      "domain": "Configuration Management",
+      "category": "Change Control",
+      "section_number": "CM-3",
+      "parent_section": "CM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Change management policy and procedures",
+        "Change request and approval records",
+        "Change advisory board (CAB) meeting minutes",
+        "Security impact analysis documentation"
+      ]
+    },
+    {
+      "control_id": "CM-4",
+      "original_reference": "CM-4",
+      "title": "Impact Analyses",
+      "description": "Analyze changes to the information system to determine potential security and privacy impacts prior to change implementation.",
+      "full_text": "The organization analyzes changes to the information system to determine potential security impacts prior to change implementation. Security impact analyses are conducted by individuals with the required skills and technical expertise.",
+      "domain": "Configuration Management",
+      "category": "Change Control",
+      "section_number": "CM-4",
+      "parent_section": "CM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security impact analysis reports",
+        "Change risk assessment documentation",
+        "Pre-implementation testing results"
+      ]
+    },
+    {
+      "control_id": "CM-5",
+      "original_reference": "CM-5",
+      "title": "Access Restrictions for Change",
+      "description": "Define, document, approve, and enforce physical and logical access restrictions associated with changes.",
+      "full_text": "The organization defines, documents, approves, and enforces physical and logical access restrictions associated with changes to the information system. Only qualified and authorized individuals obtain access to system components for purposes of initiating changes.",
+      "domain": "Configuration Management",
+      "category": "Change Control",
+      "section_number": "CM-5",
+      "parent_section": "CM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Change access control procedures",
+        "Authorized change personnel list",
+        "Change access audit logs"
+      ]
+    },
+    {
+      "control_id": "CM-6",
+      "original_reference": "CM-6",
+      "title": "Configuration Settings",
+      "description": "Establish and document mandatory configuration settings for IT products using security configuration checklists.",
+      "full_text": "The organization establishes and documents configuration settings for information technology products employed within the information system using organization-defined security configuration checklists, implements the configuration settings, and identifies, documents, and approves any deviations from established configuration settings.",
+      "domain": "Configuration Management",
+      "category": "Configuration Baseline",
+      "section_number": "CM-6",
+      "parent_section": "CM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security configuration baselines/benchmarks",
+        "Configuration compliance scan results",
+        "Deviation approval records",
+        "Hardening guides"
+      ]
+    },
+    {
+      "control_id": "CM-7",
+      "original_reference": "CM-7",
+      "title": "Least Functionality",
+      "description": "Configure the system to provide only mission-essential capabilities and restrict use of prohibited functions, ports, and services.",
+      "full_text": "The organization configures the information system to provide only essential capabilities and prohibits or restricts the use of functions, ports, protocols, and/or services as defined by the organization.",
+      "domain": "Configuration Management",
+      "category": "System Hardening",
+      "section_number": "CM-7",
+      "parent_section": "CM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Approved software/service list",
+        "Port and protocol restrictions",
+        "System hardening documentation",
+        "Unnecessary service removal records"
+      ]
+    },
+    {
+      "control_id": "CM-8",
+      "original_reference": "CM-8",
+      "title": "System Component Inventory",
+      "description": "Develop and document an inventory of system components that accurately reflects the system and is at the required granularity.",
+      "full_text": "The organization develops and documents an inventory of information system components that accurately reflects the current information system, includes all components within the authorization boundary, is at the level of granularity deemed necessary for tracking and reporting, and reviews/updates the inventory at an organization-defined frequency.",
+      "domain": "Configuration Management",
+      "category": "Asset Management",
+      "section_number": "CM-8",
+      "parent_section": "CM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "System component inventory",
+        "CMDB records",
+        "Inventory review and update records",
+        "Hardware/software asset registers"
+      ]
+    },
+    {
+      "control_id": "CM-10",
+      "original_reference": "CM-10",
+      "title": "Software Usage Restrictions",
+      "description": "Use software and associated documentation in accordance with contract agreements and copyright laws.",
+      "full_text": "The organization uses software and associated documentation in accordance with contract agreements and copyright laws, tracks the use of software and associated documentation, and controls and documents the use of peer-to-peer file sharing technology.",
+      "domain": "Configuration Management",
+      "category": "Software Management",
+      "section_number": "CM-10",
+      "parent_section": "CM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Software license inventory",
+        "License compliance audit results",
+        "Software usage policy"
+      ]
+    },
+    {
+      "control_id": "CM-11",
+      "original_reference": "CM-11",
+      "title": "User-Installed Software",
+      "description": "Establish and enforce policies governing the installation of software by users.",
+      "full_text": "The organization establishes and enforces policies governing the installation of software by users, and monitors policy compliance at an organization-defined frequency.",
+      "domain": "Configuration Management",
+      "category": "Software Management",
+      "section_number": "CM-11",
+      "parent_section": "CM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "User software installation policy",
+        "Application whitelisting configuration",
+        "Software installation monitoring reports"
+      ]
+    },
+    {
+      "control_id": "CP-1",
+      "original_reference": "CP-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate contingency planning policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates a contingency planning policy and procedures.",
+      "domain": "Contingency Planning",
+      "category": "Policy and Governance",
+      "section_number": "CP-1",
+      "parent_section": "CP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Contingency planning policy",
+        "CP procedures documentation",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "CP-2",
+      "original_reference": "CP-2",
+      "title": "Contingency Plan",
+      "description": "Develop, distribute, and maintain a contingency plan for the information system.",
+      "full_text": "The organization develops a contingency plan for the information system that identifies essential missions and business functions, provides recovery objectives, restoration priorities, and metrics, addresses contingency roles and responsibilities, is reviewed and approved, and distributed to key personnel.",
+      "domain": "Contingency Planning",
+      "category": "Planning",
+      "section_number": "CP-2",
+      "parent_section": "CP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Contingency plan document",
+        "Recovery time/point objectives (RTO/RPO)",
+        "Plan distribution records",
+        "Plan review and approval records"
+      ]
+    },
+    {
+      "control_id": "CP-3",
+      "original_reference": "CP-3",
+      "title": "Contingency Training",
+      "description": "Provide contingency training to system users consistent with assigned roles and responsibilities.",
+      "full_text": "The organization provides contingency training to information system users consistent with assigned roles and responsibilities within a defined time period of assuming a contingency role, when required by system changes, and at an organization-defined frequency thereafter.",
+      "domain": "Contingency Planning",
+      "category": "Training",
+      "section_number": "CP-3",
+      "parent_section": "CP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Contingency training materials",
+        "Training completion records",
+        "Training schedule"
+      ]
+    },
+    {
+      "control_id": "CP-4",
+      "original_reference": "CP-4",
+      "title": "Contingency Plan Testing",
+      "description": "Test the contingency plan at a defined frequency using defined tests to determine effectiveness.",
+      "full_text": "The organization tests the contingency plan for the information system at an organization-defined frequency using organization-defined tests to determine the effectiveness of the plan and the organizational readiness to execute the plan. Test results are reviewed and the plan is updated based on findings.",
+      "domain": "Contingency Planning",
+      "category": "Testing",
+      "section_number": "CP-4",
+      "parent_section": "CP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Contingency plan test results",
+        "After-action reports",
+        "Plan updates based on test findings",
+        "Test schedule and scenarios"
+      ]
+    },
+    {
+      "control_id": "CP-6",
+      "original_reference": "CP-6",
+      "title": "Alternate Storage Site",
+      "description": "Establish an alternate storage site and initiate agreements to permit storage and retrieval of backup information.",
+      "full_text": "The organization establishes an alternate storage site, including necessary agreements, to permit the storage and retrieval of information system backup information. The alternate storage site is separated from the primary storage site to reduce susceptibility to the same threats.",
+      "domain": "Contingency Planning",
+      "category": "Recovery",
+      "section_number": "CP-6",
+      "parent_section": "CP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Alternate storage site agreements",
+        "Geographic separation documentation",
+        "Storage site security assessment"
+      ]
+    },
+    {
+      "control_id": "CP-7",
+      "original_reference": "CP-7",
+      "title": "Alternate Processing Site",
+      "description": "Establish an alternate processing site and initiate agreements for essential mission operations.",
+      "full_text": "The organization establishes an alternate processing site, including necessary agreements, to permit the transfer and resumption of information system operations for essential missions/business functions within an organization-defined time period.",
+      "domain": "Contingency Planning",
+      "category": "Recovery",
+      "section_number": "CP-7",
+      "parent_section": "CP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Alternate processing site agreements",
+        "Site readiness assessment",
+        "Failover test results",
+        "Recovery time documentation"
+      ]
+    },
+    {
+      "control_id": "CP-9",
+      "original_reference": "CP-9",
+      "title": "System Backup",
+      "description": "Conduct backups of user-level, system-level, and system documentation at defined frequency.",
+      "full_text": "The organization conducts backups of user-level information, system-level information, and information system documentation (including security-related documentation) at an organization-defined frequency consistent with recovery time and recovery point objectives.",
+      "domain": "Contingency Planning",
+      "category": "Backup",
+      "section_number": "CP-9",
+      "parent_section": "CP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Backup policy and schedule",
+        "Backup completion logs",
+        "Backup integrity verification records",
+        "Offsite backup storage documentation"
+      ]
+    },
+    {
+      "control_id": "CP-10",
+      "original_reference": "CP-10",
+      "title": "System Recovery and Reconstitution",
+      "description": "Provide for the recovery and reconstitution of the system to a known state after a disruption or failure.",
+      "full_text": "The organization provides for the recovery and reconstitution of the information system to a known state after a disruption, compromise, or failure. Recovery procedures include restoring systems to operational status and reconstituting system components.",
+      "domain": "Contingency Planning",
+      "category": "Recovery",
+      "section_number": "CP-10",
+      "parent_section": "CP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Recovery procedures documentation",
+        "System recovery test results",
+        "Reconstitution process documentation"
+      ]
+    },
+    {
+      "control_id": "IA-1",
+      "original_reference": "IA-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate identification and authentication policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates an identification and authentication policy and procedures.",
+      "domain": "Identification and Authentication",
+      "category": "Policy and Governance",
+      "section_number": "IA-1",
+      "parent_section": "IA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "I&A policy document",
+        "Authentication procedures",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "IA-2",
+      "original_reference": "IA-2",
+      "title": "Identification and Authentication (Organizational Users)",
+      "description": "Uniquely identify and authenticate organizational users, or processes acting on behalf of organizational users.",
+      "full_text": "The information system uniquely identifies and authenticates organizational users (or processes acting on behalf of organizational users). Implementation includes multi-factor authentication for privileged and non-privileged accounts accessing the system.",
+      "domain": "Identification and Authentication",
+      "category": "User Authentication",
+      "section_number": "IA-2",
+      "parent_section": "IA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "User identification procedures",
+        "Multi-factor authentication configuration",
+        "Authentication mechanism documentation"
+      ]
+    },
+    {
+      "control_id": "IA-3",
+      "original_reference": "IA-3",
+      "title": "Device Identification and Authentication",
+      "description": "Uniquely identify and authenticate devices before establishing a connection.",
+      "full_text": "The information system uniquely identifies and authenticates specific and/or types of devices before establishing a local, remote, or network connection using bidirectional authentication between devices.",
+      "domain": "Identification and Authentication",
+      "category": "Device Authentication",
+      "section_number": "IA-3",
+      "parent_section": "IA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Device authentication configuration",
+        "Certificate-based authentication documentation",
+        "Device identity management procedures"
+      ]
+    },
+    {
+      "control_id": "IA-4",
+      "original_reference": "IA-4",
+      "title": "Identifier Management",
+      "description": "Manage information system identifiers by receiving authorization, selecting and assigning identifiers, and preventing reuse.",
+      "full_text": "The organization manages information system identifiers by receiving authorization from designated organizational officials to assign identifiers, selecting identifiers that identify individuals/groups/roles/devices, assigning identifiers to intended parties, preventing reuse for a defined period, and disabling identifiers after a defined period of inactivity.",
+      "domain": "Identification and Authentication",
+      "category": "Identity Management",
+      "section_number": "IA-4",
+      "parent_section": "IA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Identifier management procedures",
+        "User ID assignment records",
+        "Inactive identifier review records"
+      ]
+    },
+    {
+      "control_id": "IA-5",
+      "original_reference": "IA-5",
+      "title": "Authenticator Management",
+      "description": "Manage information system authenticators by verifying user identity, establishing initial content, and ensuring sufficient strength.",
+      "full_text": "The organization manages information system authenticators by verifying the identity of the individual/group/role/device as part of the initial authenticator distribution, establishing initial authenticator content, ensuring authenticators have sufficient strength, establishing and implementing administrative procedures for initial distribution/lost/compromised/damaged authenticators, changing default content, and protecting authenticator content from unauthorized disclosure and modification.",
+      "domain": "Identification and Authentication",
+      "category": "Credential Management",
+      "section_number": "IA-5",
+      "parent_section": "IA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Password/authenticator policy",
+        "Authenticator distribution procedures",
+        "Password complexity configuration",
+        "Credential management system documentation"
+      ]
+    },
+    {
+      "control_id": "IA-6",
+      "original_reference": "IA-6",
+      "title": "Authentication Feedback",
+      "description": "Obscure feedback of authentication information during the authentication process.",
+      "full_text": "The information system obscures feedback of authentication information during the authentication process to protect the information from possible exploitation/use by unauthorized individuals.",
+      "domain": "Identification and Authentication",
+      "category": "User Authentication",
+      "section_number": "IA-6",
+      "parent_section": "IA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Authentication feedback configuration",
+        "Password masking verification"
+      ]
+    },
+    {
+      "control_id": "IA-8",
+      "original_reference": "IA-8",
+      "title": "Identification and Authentication (Non-Organizational Users)",
+      "description": "Uniquely identify and authenticate non-organizational users or processes acting on their behalf.",
+      "full_text": "The information system uniquely identifies and authenticates non-organizational users (or processes acting on behalf of non-organizational users). This includes contractors, guests, and external system users.",
+      "domain": "Identification and Authentication",
+      "category": "User Authentication",
+      "section_number": "IA-8",
+      "parent_section": "IA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Non-organizational user authentication procedures",
+        "External user account management records",
+        "Third-party authentication documentation"
+      ]
+    },
+    {
+      "control_id": "IR-1",
+      "original_reference": "IR-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate incident response policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates an incident response policy and procedures.",
+      "domain": "Incident Response",
+      "category": "Policy and Governance",
+      "section_number": "IR-1",
+      "parent_section": "IR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Incident response policy",
+        "IR procedures documentation",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "IR-2",
+      "original_reference": "IR-2",
+      "title": "Incident Response Training",
+      "description": "Provide incident response training to system users consistent with assigned roles and responsibilities.",
+      "full_text": "The organization provides incident response training to information system users consistent with assigned roles and responsibilities within a defined time period and at an organization-defined frequency thereafter.",
+      "domain": "Incident Response",
+      "category": "Training",
+      "section_number": "IR-2",
+      "parent_section": "IR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "IR training materials",
+        "Training completion records",
+        "Tabletop exercise documentation"
+      ]
+    },
+    {
+      "control_id": "IR-3",
+      "original_reference": "IR-3",
+      "title": "Incident Response Testing",
+      "description": "Test the incident response capability using defined tests at defined frequency.",
+      "full_text": "The organization tests the incident response capability for the information system at an organization-defined frequency using organization-defined tests to determine incident response effectiveness and documents results.",
+      "domain": "Incident Response",
+      "category": "Testing",
+      "section_number": "IR-3",
+      "parent_section": "IR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "IR test plans and results",
+        "Tabletop exercise reports",
+        "Lessons learned documentation"
+      ]
+    },
+    {
+      "control_id": "IR-4",
+      "original_reference": "IR-4",
+      "title": "Incident Handling",
+      "description": "Implement an incident handling capability including preparation, detection, analysis, containment, eradication, and recovery.",
+      "full_text": "The organization implements an incident handling capability for security incidents that includes preparation, detection and analysis, containment, eradication, and recovery. The organization coordinates incident handling activities with contingency planning activities and incorporates lessons learned.",
+      "domain": "Incident Response",
+      "category": "Incident Management",
+      "section_number": "IR-4",
+      "parent_section": "IR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Incident handling procedures",
+        "Incident response records",
+        "Post-incident review reports",
+        "Incident tracking system records"
+      ]
+    },
+    {
+      "control_id": "IR-5",
+      "original_reference": "IR-5",
+      "title": "Incident Monitoring",
+      "description": "Track and document information system security incidents.",
+      "full_text": "The organization tracks and documents information system security incidents on an ongoing basis.",
+      "domain": "Incident Response",
+      "category": "Incident Management",
+      "section_number": "IR-5",
+      "parent_section": "IR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Incident tracking system",
+        "Incident log reports",
+        "Incident trend analysis reports"
+      ]
+    },
+    {
+      "control_id": "IR-6",
+      "original_reference": "IR-6",
+      "title": "Incident Reporting",
+      "description": "Require personnel to report suspected security incidents and report incidents to defined authorities.",
+      "full_text": "The organization requires personnel to report suspected security and privacy incidents to the organizational incident response capability within an organization-defined time period and reports security incident information to designated authorities.",
+      "domain": "Incident Response",
+      "category": "Incident Management",
+      "section_number": "IR-6",
+      "parent_section": "IR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Incident reporting procedures",
+        "Incident report examples",
+        "External reporting documentation (e.g., US-CERT)"
+      ]
+    },
+    {
+      "control_id": "IR-7",
+      "original_reference": "IR-7",
+      "title": "Incident Response Assistance",
+      "description": "Provide an incident response support resource that offers advice and assistance to users.",
+      "full_text": "The organization provides an incident response support resource, integral to the organizational incident response capability, that offers advice and assistance to users for the handling and reporting of security incidents.",
+      "domain": "Incident Response",
+      "category": "Incident Management",
+      "section_number": "IR-7",
+      "parent_section": "IR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Incident response help desk/hotline documentation",
+        "Support resource availability records",
+        "User communication templates"
+      ]
+    },
+    {
+      "control_id": "IR-8",
+      "original_reference": "IR-8",
+      "title": "Incident Response Plan",
+      "description": "Develop an incident response plan that provides a roadmap for implementing the incident response capability.",
+      "full_text": "The organization develops an incident response plan that provides the organization with a roadmap for implementing its incident response capability, describes the structure and organization of the incident response capability, provides a high-level approach for how the incident response capability fits into the overall organization, and is reviewed and approved.",
+      "domain": "Incident Response",
+      "category": "Planning",
+      "section_number": "IR-8",
+      "parent_section": "IR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Incident response plan document",
+        "Plan review and approval records",
+        "Distribution list for IR plan"
+      ]
+    },
+    {
+      "control_id": "MA-1",
+      "original_reference": "MA-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate system maintenance policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates an information system maintenance policy and procedures.",
+      "domain": "Maintenance",
+      "category": "Policy and Governance",
+      "section_number": "MA-1",
+      "parent_section": "MA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Maintenance policy",
+        "Maintenance procedures documentation",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "MA-2",
+      "original_reference": "MA-2",
+      "title": "Controlled Maintenance",
+      "description": "Schedule, perform, document, and review records of maintenance and repairs on system components.",
+      "full_text": "The organization schedules, performs, documents, and reviews records of maintenance and repairs on information system components in accordance with manufacturer or vendor specifications and/or organizational requirements.",
+      "domain": "Maintenance",
+      "category": "Maintenance Operations",
+      "section_number": "MA-2",
+      "parent_section": "MA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Maintenance schedule and records",
+        "Maintenance work orders",
+        "Maintenance review documentation"
+      ]
+    },
+    {
+      "control_id": "MA-3",
+      "original_reference": "MA-3",
+      "title": "Maintenance Tools",
+      "description": "Approve, control, and monitor information system maintenance tools.",
+      "full_text": "The organization approves, controls, and monitors the use of information system maintenance tools and maintains maintenance tools on an ongoing basis.",
+      "domain": "Maintenance",
+      "category": "Maintenance Operations",
+      "section_number": "MA-3",
+      "parent_section": "MA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Approved maintenance tools list",
+        "Tool inspection records",
+        "Maintenance tool control procedures"
+      ]
+    },
+    {
+      "control_id": "MA-4",
+      "original_reference": "MA-4",
+      "title": "Nonlocal Maintenance",
+      "description": "Approve and monitor nonlocal maintenance and diagnostic activities.",
+      "full_text": "The organization authorizes, monitors, and controls nonlocal maintenance and diagnostic activities, and ensures equipment used for remote maintenance is sanitized or inspected before and after use.",
+      "domain": "Maintenance",
+      "category": "Remote Maintenance",
+      "section_number": "MA-4",
+      "parent_section": "MA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Remote maintenance authorization records",
+        "Remote maintenance session logs",
+        "Equipment sanitization records"
+      ]
+    },
+    {
+      "control_id": "MA-5",
+      "original_reference": "MA-5",
+      "title": "Maintenance Personnel",
+      "description": "Establish a process for maintenance personnel authorization and maintain a list of authorized maintenance organizations.",
+      "full_text": "The organization establishes a process for maintenance personnel authorization and maintains a list of authorized maintenance organizations or personnel. Personnel without required access authorizations, clearances, or formal access approvals are supervised during maintenance activities.",
+      "domain": "Maintenance",
+      "category": "Personnel",
+      "section_number": "MA-5",
+      "parent_section": "MA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Authorized maintenance personnel list",
+        "Personnel authorization procedures",
+        "Escort/supervision records"
+      ]
+    },
+    {
+      "control_id": "MP-1",
+      "original_reference": "MP-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate media protection policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates a media protection policy and procedures.",
+      "domain": "Media Protection",
+      "category": "Policy and Governance",
+      "section_number": "MP-1",
+      "parent_section": "MP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Media protection policy",
+        "Media handling procedures",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "MP-2",
+      "original_reference": "MP-2",
+      "title": "Media Access",
+      "description": "Restrict access to digital and non-digital media to defined personnel or roles.",
+      "full_text": "The organization restricts access to organization-defined types of digital and/or non-digital media to organization-defined personnel or roles.",
+      "domain": "Media Protection",
+      "category": "Media Access",
+      "section_number": "MP-2",
+      "parent_section": "MP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Media access control procedures",
+        "Authorized media access list",
+        "Media storage access logs"
+      ]
+    },
+    {
+      "control_id": "MP-3",
+      "original_reference": "MP-3",
+      "title": "Media Marking",
+      "description": "Mark information system media indicating the distribution limitations and handling caveats.",
+      "full_text": "The organization marks information system media indicating the distribution limitations, handling caveats, and applicable security markings of the information.",
+      "domain": "Media Protection",
+      "category": "Media Handling",
+      "section_number": "MP-3",
+      "parent_section": "MP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Media marking procedures",
+        "Media labeling examples",
+        "Classification marking guidelines"
+      ]
+    },
+    {
+      "control_id": "MP-4",
+      "original_reference": "MP-4",
+      "title": "Media Storage",
+      "description": "Physically control and securely store digital and non-digital media within controlled areas.",
+      "full_text": "The organization physically controls and securely stores organization-defined types of digital and/or non-digital media within organization-defined controlled areas using organization-defined security safeguards.",
+      "domain": "Media Protection",
+      "category": "Media Storage",
+      "section_number": "MP-4",
+      "parent_section": "MP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Media storage procedures",
+        "Secure storage area documentation",
+        "Media inventory records"
+      ]
+    },
+    {
+      "control_id": "MP-5",
+      "original_reference": "MP-5",
+      "title": "Media Transport",
+      "description": "Protect and control digital and non-digital media during transport outside of controlled areas.",
+      "full_text": "The organization protects and controls organization-defined types of media during transport outside of controlled areas using organization-defined security safeguards. Activities associated with transport include the physical movement of media.",
+      "domain": "Media Protection",
+      "category": "Media Handling",
+      "section_number": "MP-5",
+      "parent_section": "MP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Media transport procedures",
+        "Transport protection mechanisms",
+        "Chain of custody documentation"
+      ]
+    },
+    {
+      "control_id": "MP-6",
+      "original_reference": "MP-6",
+      "title": "Media Sanitization",
+      "description": "Sanitize information system media prior to disposal, release out of organizational control, or release for reuse.",
+      "full_text": "The organization sanitizes information system media, both digital and non-digital, prior to disposal, release out of organizational control, or release for reuse using organization-defined sanitization techniques and procedures in accordance with applicable standards.",
+      "domain": "Media Protection",
+      "category": "Media Disposal",
+      "section_number": "MP-6",
+      "parent_section": "MP",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Media sanitization procedures",
+        "Sanitization records/certificates",
+        "NIST 800-88 compliance documentation"
+      ]
+    },
+    {
+      "control_id": "PE-1",
+      "original_reference": "PE-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate physical and environmental protection policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates a physical and environmental protection policy and procedures.",
+      "domain": "Physical and Environmental Protection",
+      "category": "Policy and Governance",
+      "section_number": "PE-1",
+      "parent_section": "PE",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Physical security policy",
+        "Environmental protection procedures",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "PE-2",
+      "original_reference": "PE-2",
+      "title": "Physical Access Authorizations",
+      "description": "Develop, approve, and maintain a list of individuals with authorized access to facilities.",
+      "full_text": "The organization develops, approves, and maintains a list of individuals with authorized access to the facility where the information system resides, issues authorization credentials, reviews the access list and authorization credentials at an organization-defined frequency, and removes individuals from the access list when access is no longer required.",
+      "domain": "Physical and Environmental Protection",
+      "category": "Physical Access",
+      "section_number": "PE-2",
+      "parent_section": "PE",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Physical access authorization list",
+        "Access badge/credential records",
+        "Access list review documentation"
+      ]
+    },
+    {
+      "control_id": "PE-3",
+      "original_reference": "PE-3",
+      "title": "Physical Access Control",
+      "description": "Enforce physical access authorizations at entry/exit points by verifying individual access and controlling ingress/egress.",
+      "full_text": "The organization enforces physical access authorizations at defined entry/exit points to the facility by verifying individual access authorizations before granting access and controlling ingress/egress using physical access control systems, guards, or both.",
+      "domain": "Physical and Environmental Protection",
+      "category": "Physical Access",
+      "section_number": "PE-3",
+      "parent_section": "PE",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Physical access control system documentation",
+        "Entry/exit logs",
+        "Guard procedures",
+        "Access control system audit logs"
+      ]
+    },
+    {
+      "control_id": "PE-6",
+      "original_reference": "PE-6",
+      "title": "Monitoring Physical Access",
+      "description": "Monitor physical access to the facility where the information system resides to detect and respond to incidents.",
+      "full_text": "The organization monitors physical access to the facility where the information system resides to detect and respond to physical security incidents. Monitoring includes intrusion alarms, surveillance equipment, and guards.",
+      "domain": "Physical and Environmental Protection",
+      "category": "Physical Monitoring",
+      "section_number": "PE-6",
+      "parent_section": "PE",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Physical access monitoring procedures",
+        "CCTV/surveillance system documentation",
+        "Physical access incident reports",
+        "Monitoring review records"
+      ]
+    },
+    {
+      "control_id": "PE-8",
+      "original_reference": "PE-8",
+      "title": "Visitor Access Records",
+      "description": "Maintain visitor access records to the facility and review visitor access records at defined frequency.",
+      "full_text": "The organization maintains visitor access records to the facility where the information system resides that include name, organization, signature, form of identification, date/time of access, purpose of visit, and name/organization of person visited. Reviews visitor access records at an organization-defined frequency.",
+      "domain": "Physical and Environmental Protection",
+      "category": "Physical Access",
+      "section_number": "PE-8",
+      "parent_section": "PE",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Visitor log records",
+        "Visitor badge procedures",
+        "Visitor record review documentation"
+      ]
+    },
+    {
+      "control_id": "PE-10",
+      "original_reference": "PE-10",
+      "title": "Emergency Shutoff",
+      "description": "Provide the capability of shutting off power to the system in emergency situations.",
+      "full_text": "The organization provides the capability of shutting off power to the information system or individual system components in emergency situations, places emergency shutoff switches or devices in a defined location, and protects the capability from unauthorized activation.",
+      "domain": "Physical and Environmental Protection",
+      "category": "Environmental Protection",
+      "section_number": "PE-10",
+      "parent_section": "PE",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Emergency power shutoff procedures",
+        "Shutoff switch location documentation",
+        "Emergency procedure training records"
+      ]
+    },
+    {
+      "control_id": "PE-13",
+      "original_reference": "PE-13",
+      "title": "Fire Protection",
+      "description": "Employ and maintain fire suppression and detection devices/systems.",
+      "full_text": "The organization employs and maintains fire suppression and detection devices/systems for the information system that are supported by an independent energy source. The organization ensures that the facility undergoes fire marshal inspections at required intervals.",
+      "domain": "Physical and Environmental Protection",
+      "category": "Environmental Protection",
+      "section_number": "PE-13",
+      "parent_section": "PE",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Fire suppression system documentation",
+        "Fire detection system records",
+        "Fire marshal inspection reports",
+        "Fire drill records"
+      ]
+    },
+    {
+      "control_id": "PE-14",
+      "original_reference": "PE-14",
+      "title": "Environmental Controls",
+      "description": "Maintain temperature and humidity levels within the facility and monitor environmental conditions.",
+      "full_text": "The organization maintains temperature and humidity levels within the facility where the information system resides at organization-defined acceptable levels and monitors environmental conditions at an organization-defined frequency.",
+      "domain": "Physical and Environmental Protection",
+      "category": "Environmental Protection",
+      "section_number": "PE-14",
+      "parent_section": "PE",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Environmental monitoring system documentation",
+        "Temperature/humidity logs",
+        "Environmental alerting configuration"
+      ]
+    },
+    {
+      "control_id": "PL-1",
+      "original_reference": "PL-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate security planning policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates a security planning policy and procedures.",
+      "domain": "Planning",
+      "category": "Policy and Governance",
+      "section_number": "PL-1",
+      "parent_section": "PL",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security planning policy",
+        "Planning procedures",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "PL-2",
+      "original_reference": "PL-2",
+      "title": "System Security and Privacy Plans",
+      "description": "Develop, review, update, and protect security plans that describe the system and operational environment.",
+      "full_text": "The organization develops, reviews, and updates security plans for the information system that describe the security categorization, the operational environment, relationships with other systems, the security requirements, and relevant overlays.",
+      "domain": "Planning",
+      "category": "Security Planning",
+      "section_number": "PL-2",
+      "parent_section": "PL",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "System Security Plan (SSP)",
+        "SSP review and update records",
+        "SSP approval documentation"
+      ]
+    },
+    {
+      "control_id": "PL-4",
+      "original_reference": "PL-4",
+      "title": "Rules of Behavior",
+      "description": "Establish and make available rules describing responsibilities and expected behavior for system use.",
+      "full_text": "The organization establishes and makes readily available to individuals requiring access to the information system, the rules that describe their responsibilities and expected behavior with regard to information and information system usage.",
+      "domain": "Planning",
+      "category": "User Agreements",
+      "section_number": "PL-4",
+      "parent_section": "PL",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Rules of behavior document",
+        "User acknowledgment records",
+        "Acceptable use policy"
+      ]
+    },
+    {
+      "control_id": "PM-1",
+      "original_reference": "PM-1",
+      "title": "Information Security Program Plan",
+      "description": "Develop and disseminate an organization-wide information security program plan.",
+      "full_text": "The organization develops and disseminates an organization-wide information security program plan that provides an overview of the requirements for the security program and a description of the security program management controls and common controls in place or planned.",
+      "domain": "Program Management",
+      "category": "Program Planning",
+      "section_number": "PM-1",
+      "parent_section": "PM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Information security program plan",
+        "Program governance documentation",
+        "Program review records"
+      ]
+    },
+    {
+      "control_id": "PM-2",
+      "original_reference": "PM-2",
+      "title": "Information Security Program Leadership Role",
+      "description": "Appoint a senior information security officer with the authority and responsibility for the program.",
+      "full_text": "The organization appoints a senior information security officer with the mission and resources to coordinate, develop, implement, and maintain an organization-wide information security program.",
+      "domain": "Program Management",
+      "category": "Governance",
+      "section_number": "PM-2",
+      "parent_section": "PM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "CISO/senior security officer appointment",
+        "Role and responsibility documentation",
+        "Organizational chart"
+      ]
+    },
+    {
+      "control_id": "PM-9",
+      "original_reference": "PM-9",
+      "title": "Risk Management Strategy",
+      "description": "Develop a comprehensive strategy to manage risk to organizational operations and assets.",
+      "full_text": "The organization develops a comprehensive strategy to manage risk to organizational operations and assets, individuals, other organizations, and the Nation associated with the operation and use of information systems. The risk management strategy includes risk tolerance definitions.",
+      "domain": "Program Management",
+      "category": "Risk Management",
+      "section_number": "PM-9",
+      "parent_section": "PM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Risk management strategy document",
+        "Risk tolerance/appetite statement",
+        "Strategy review records"
+      ]
+    },
+    {
+      "control_id": "PM-10",
+      "original_reference": "PM-10",
+      "title": "Authorization Process",
+      "description": "Manage the security and privacy state of systems through authorization processes.",
+      "full_text": "The organization manages the security state of organizational information systems and the environments in which those systems operate through authorization processes. Uses a risk-based approach integrated into the SDLC.",
+      "domain": "Program Management",
+      "category": "Authorization",
+      "section_number": "PM-10",
+      "parent_section": "PM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Authorization process documentation",
+        "ATO tracking records",
+        "Risk-based decision documentation"
+      ]
+    },
+    {
+      "control_id": "PM-11",
+      "original_reference": "PM-11",
+      "title": "Mission and Business Process Definition",
+      "description": "Define organizational mission and business processes with consideration for information security.",
+      "full_text": "The organization defines mission/business processes with consideration for information security and the resulting risk to organizational operations, organizational assets, individuals, other organizations, and the Nation.",
+      "domain": "Program Management",
+      "category": "Program Planning",
+      "section_number": "PM-11",
+      "parent_section": "PM",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Mission/business process documentation",
+        "Security considerations in business processes",
+        "Risk impact analysis"
+      ]
+    },
+    {
+      "control_id": "PS-1",
+      "original_reference": "PS-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate personnel security policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates a personnel security policy and procedures.",
+      "domain": "Personnel Security",
+      "category": "Policy and Governance",
+      "section_number": "PS-1",
+      "parent_section": "PS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Personnel security policy",
+        "PS procedures documentation",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "PS-2",
+      "original_reference": "PS-2",
+      "title": "Position Risk Designation",
+      "description": "Assign a risk designation to all organizational positions and establish screening criteria.",
+      "full_text": "The organization assigns a risk designation to all organizational positions, establishes screening criteria for individuals filling those positions, and reviews and updates position risk designations at an organization-defined frequency.",
+      "domain": "Personnel Security",
+      "category": "Position Categorization",
+      "section_number": "PS-2",
+      "parent_section": "PS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Position risk designation records",
+        "Screening criteria documentation",
+        "Position designation review records"
+      ]
+    },
+    {
+      "control_id": "PS-3",
+      "original_reference": "PS-3",
+      "title": "Personnel Screening",
+      "description": "Screen individuals prior to authorizing access to the information system.",
+      "full_text": "The organization screens individuals prior to authorizing access to the information system and rescreens individuals according to organization-defined conditions and at an organization-defined frequency.",
+      "domain": "Personnel Security",
+      "category": "Screening",
+      "section_number": "PS-3",
+      "parent_section": "PS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Background check records",
+        "Screening procedures",
+        "Rescreening schedule and records"
+      ]
+    },
+    {
+      "control_id": "PS-4",
+      "original_reference": "PS-4",
+      "title": "Personnel Termination",
+      "description": "Upon termination, disable system access, terminate authenticators, and retrieve security-related property.",
+      "full_text": "The organization, upon termination of individual employment, disables information system access within an organization-defined time period, terminates/revokes any authenticators/credentials associated with the individual, conducts exit interviews, retrieves all security-related organizational property, and retains access to organizational information.",
+      "domain": "Personnel Security",
+      "category": "Termination",
+      "section_number": "PS-4",
+      "parent_section": "PS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Termination procedures",
+        "Access revocation records",
+        "Property return records",
+        "Exit interview documentation"
+      ]
+    },
+    {
+      "control_id": "PS-5",
+      "original_reference": "PS-5",
+      "title": "Personnel Transfer",
+      "description": "Review and confirm ongoing operational need for access when personnel are reassigned or transferred.",
+      "full_text": "The organization reviews and confirms ongoing operational need for current logical and physical access authorizations to information systems and facilities when individuals are reassigned or transferred to other positions within the organization.",
+      "domain": "Personnel Security",
+      "category": "Transfer",
+      "section_number": "PS-5",
+      "parent_section": "PS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Transfer access review procedures",
+        "Access modification records",
+        "Transfer authorization documentation"
+      ]
+    },
+    {
+      "control_id": "PS-6",
+      "original_reference": "PS-6",
+      "title": "Access Agreements",
+      "description": "Develop and document access agreements for organizational information systems.",
+      "full_text": "The organization develops and documents access agreements for organizational information systems, reviews and updates the access agreements at an organization-defined frequency, and ensures individuals sign access agreements before being granted access.",
+      "domain": "Personnel Security",
+      "category": "Agreements",
+      "section_number": "PS-6",
+      "parent_section": "PS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Access agreement templates",
+        "Signed access agreements",
+        "NDA documentation",
+        "Agreement review records"
+      ]
+    },
+    {
+      "control_id": "PS-7",
+      "original_reference": "PS-7",
+      "title": "External Personnel Security",
+      "description": "Establish personnel security requirements for third-party providers and monitor compliance.",
+      "full_text": "The organization establishes personnel security requirements including security roles and responsibilities for third-party providers, requires third-party providers to comply with personnel security policies and procedures, documents personnel security requirements, and monitors third-party provider compliance.",
+      "domain": "Personnel Security",
+      "category": "Third-Party",
+      "section_number": "PS-7",
+      "parent_section": "PS",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Third-party personnel security requirements",
+        "Contractor screening documentation",
+        "Compliance monitoring records"
+      ]
+    },
+    {
+      "control_id": "PT-1",
+      "original_reference": "PT-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate PII processing and transparency policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates PII processing and transparency policy and procedures.",
+      "domain": "PII Processing and Transparency",
+      "category": "Policy and Governance",
+      "section_number": "PT-1",
+      "parent_section": "PT",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Privacy policy",
+        "PII handling procedures",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "PT-2",
+      "original_reference": "PT-2",
+      "title": "Authority to Process PII",
+      "description": "Determine and document the legal authority that permits the processing of PII.",
+      "full_text": "The organization determines and documents the legal authority that permits the collection, use, maintenance, and sharing of PII, specified in the applicable privacy act, and ensures that PII processing is consistent with that authority.",
+      "domain": "PII Processing and Transparency",
+      "category": "Legal Basis",
+      "section_number": "PT-2",
+      "parent_section": "PT",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Legal authority documentation",
+        "Privacy act compliance records",
+        "PII processing justification"
+      ]
+    },
+    {
+      "control_id": "PT-3",
+      "original_reference": "PT-3",
+      "title": "PII Processing Purposes",
+      "description": "Identify and document the purposes for processing PII.",
+      "full_text": "The organization identifies and documents the purpose(s) for which PII is collected, used, maintained, and shared. The organization describes those purposes in the relevant privacy documentation and ensures that processing is compatible with the identified purpose(s).",
+      "domain": "PII Processing and Transparency",
+      "category": "Purpose Limitation",
+      "section_number": "PT-3",
+      "parent_section": "PT",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Purpose documentation",
+        "Privacy impact assessment",
+        "Data processing records"
+      ]
+    },
+    {
+      "control_id": "PT-4",
+      "original_reference": "PT-4",
+      "title": "Consent",
+      "description": "Implement mechanisms to obtain consent for PII processing.",
+      "full_text": "The organization implements mechanisms to obtain individual consent for the processing of their PII prior to collection or within an organization-defined time period. Provides mechanisms for individuals to revoke consent.",
+      "domain": "PII Processing and Transparency",
+      "category": "Consent Management",
+      "section_number": "PT-4",
+      "parent_section": "PT",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Consent mechanisms documentation",
+        "Consent records",
+        "Consent revocation procedures"
+      ]
+    },
+    {
+      "control_id": "PT-5",
+      "original_reference": "PT-5",
+      "title": "Privacy Notice",
+      "description": "Provide effective notice to the public and individuals about PII processing activities.",
+      "full_text": "The organization provides effective notice to the public and to individuals regarding its PII processing activities, including information about the authority for collecting PII, the purposes for processing, and the choices and rights available to individuals.",
+      "domain": "PII Processing and Transparency",
+      "category": "Transparency",
+      "section_number": "PT-5",
+      "parent_section": "PT",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Privacy notice/policy",
+        "Notice delivery mechanisms",
+        "Privacy notice update records"
+      ]
+    },
+    {
+      "control_id": "RA-1",
+      "original_reference": "RA-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate risk assessment policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates a risk assessment policy and procedures.",
+      "domain": "Risk Assessment",
+      "category": "Policy and Governance",
+      "section_number": "RA-1",
+      "parent_section": "RA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Risk assessment policy",
+        "RA procedures documentation",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "RA-2",
+      "original_reference": "RA-2",
+      "title": "Security Categorization",
+      "description": "Categorize the information system and information processed based on impact analysis.",
+      "full_text": "The organization categorizes information and the information system in accordance with applicable laws, regulations, and standards. Documents the security categorization results in the security plan.",
+      "domain": "Risk Assessment",
+      "category": "Categorization",
+      "section_number": "RA-2",
+      "parent_section": "RA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security categorization documentation",
+        "FIPS 199 analysis",
+        "System categorization approval"
+      ]
+    },
+    {
+      "control_id": "RA-3",
+      "original_reference": "RA-3",
+      "title": "Risk Assessment",
+      "description": "Conduct risk assessments to identify threats, vulnerabilities, impact, and likelihood.",
+      "full_text": "The organization conducts an assessment of risk, including the likelihood and magnitude of harm, from the unauthorized access, use, disclosure, disruption, modification, or destruction of the information system and the information it processes, stores, or transmits. The organization updates risk assessments at an organization-defined frequency.",
+      "domain": "Risk Assessment",
+      "category": "Assessment",
+      "section_number": "RA-3",
+      "parent_section": "RA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Risk assessment report",
+        "Threat and vulnerability analysis",
+        "Risk assessment methodology",
+        "Risk assessment update records"
+      ]
+    },
+    {
+      "control_id": "RA-5",
+      "original_reference": "RA-5",
+      "title": "Vulnerability Monitoring and Scanning",
+      "description": "Monitor and scan for vulnerabilities in the information system and hosted applications.",
+      "full_text": "The organization scans for vulnerabilities in the information system and hosted applications at an organization-defined frequency and when new vulnerabilities are identified, employs vulnerability scanning tools and techniques that facilitate interoperability, analyzes vulnerability scan reports and results, remediates legitimate vulnerabilities, and shares information from the vulnerability scanning process.",
+      "domain": "Risk Assessment",
+      "category": "Vulnerability Management",
+      "section_number": "RA-5",
+      "parent_section": "RA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Vulnerability scan reports",
+        "Scanning tool configuration",
+        "Remediation tracking records",
+        "Scan schedule documentation"
+      ]
+    },
+    {
+      "control_id": "RA-7",
+      "original_reference": "RA-7",
+      "title": "Risk Response",
+      "description": "Respond to findings from security assessments, monitoring, and audits.",
+      "full_text": "The organization responds to findings from security and privacy assessments, monitoring, and audits in accordance with organizational risk tolerance.",
+      "domain": "Risk Assessment",
+      "category": "Risk Response",
+      "section_number": "RA-7",
+      "parent_section": "RA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Risk response procedures",
+        "POA&M entries",
+        "Risk acceptance documentation"
+      ]
+    },
+    {
+      "control_id": "SA-1",
+      "original_reference": "SA-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate system and services acquisition policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates a system and services acquisition policy and procedures.",
+      "domain": "System and Services Acquisition",
+      "category": "Policy and Governance",
+      "section_number": "SA-1",
+      "parent_section": "SA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Acquisition policy",
+        "SA procedures documentation",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "SA-2",
+      "original_reference": "SA-2",
+      "title": "Allocation of Resources",
+      "description": "Determine, document, and allocate resources required to protect the information system.",
+      "full_text": "The organization determines information security and privacy requirements for the information system or information system service in mission/business process planning, determines, documents, and allocates the resources required to protect the information system, and establishes a discrete line item for information security and privacy in organizational programming and budgeting.",
+      "domain": "System and Services Acquisition",
+      "category": "Resource Planning",
+      "section_number": "SA-2",
+      "parent_section": "SA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security resource allocation documentation",
+        "Budget line items for security",
+        "Resource planning records"
+      ]
+    },
+    {
+      "control_id": "SA-3",
+      "original_reference": "SA-3",
+      "title": "System Development Life Cycle",
+      "description": "Manage the information system using a system development life cycle that incorporates security.",
+      "full_text": "The organization manages the information system using an organization-defined system development life cycle that incorporates information security considerations, defines and documents information security roles and responsibilities throughout the SDLC, identifies individuals having information security roles and responsibilities, and integrates the security risk management process into SDLC activities.",
+      "domain": "System and Services Acquisition",
+      "category": "SDLC",
+      "section_number": "SA-3",
+      "parent_section": "SA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "SDLC documentation with security gates",
+        "Security requirements in SDLC phases",
+        "Security role assignments in projects"
+      ]
+    },
+    {
+      "control_id": "SA-4",
+      "original_reference": "SA-4",
+      "title": "Acquisition Process",
+      "description": "Include security and privacy requirements in the acquisition contract for the information system.",
+      "full_text": "The organization includes security functional requirements, security strength requirements, security assurance requirements, security-related documentation requirements, and requirements for protecting security-related documentation in acquisition contracts.",
+      "domain": "System and Services Acquisition",
+      "category": "Acquisition",
+      "section_number": "SA-4",
+      "parent_section": "SA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security requirements in contracts",
+        "Acquisition documentation",
+        "Vendor security assessment results"
+      ]
+    },
+    {
+      "control_id": "SA-8",
+      "original_reference": "SA-8",
+      "title": "Security and Privacy Engineering Principles",
+      "description": "Apply information system security and privacy engineering principles in system specification, design, and development.",
+      "full_text": "The organization applies information system security engineering principles in the specification, design, development, implementation, and modification of the information system.",
+      "domain": "System and Services Acquisition",
+      "category": "Security Engineering",
+      "section_number": "SA-8",
+      "parent_section": "SA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security architecture documentation",
+        "Secure design principles documentation",
+        "Security engineering review records"
+      ]
+    },
+    {
+      "control_id": "SA-9",
+      "original_reference": "SA-9",
+      "title": "External System Services",
+      "description": "Require external providers to comply with security requirements and employ defined oversight processes.",
+      "full_text": "The organization requires that providers of external information system services comply with organizational information security requirements and employ organization-defined security controls in accordance with applicable laws, regulations, and agreements.",
+      "domain": "System and Services Acquisition",
+      "category": "Third-Party Services",
+      "section_number": "SA-9",
+      "parent_section": "SA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "External service provider agreements",
+        "Third-party security assessments",
+        "Service level agreements with security requirements",
+        "Continuous monitoring of external services"
+      ]
+    },
+    {
+      "control_id": "SA-11",
+      "original_reference": "SA-11",
+      "title": "Developer Testing and Evaluation",
+      "description": "Require the developer to create and implement a security assessment plan.",
+      "full_text": "The organization requires the developer of the information system, system component, or information system service to create and implement a security assessment plan, perform unit/integration/system/regression testing, produce evidence of execution, and correct flaws identified during testing.",
+      "domain": "System and Services Acquisition",
+      "category": "Testing",
+      "section_number": "SA-11",
+      "parent_section": "SA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Developer security testing plan",
+        "Testing results and reports",
+        "Flaw remediation documentation"
+      ]
+    },
+    {
+      "control_id": "SA-22",
+      "original_reference": "SA-22",
+      "title": "Unsupported System Components",
+      "description": "Replace system components when support for components is no longer available from the developer.",
+      "full_text": "The organization replaces information system components when support for the components is no longer available from the developer, vendor, or manufacturer, and provides alternative sources for continued support for unsupported components.",
+      "domain": "System and Services Acquisition",
+      "category": "System Maintenance",
+      "section_number": "SA-22",
+      "parent_section": "SA",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "End-of-life component inventory",
+        "Replacement/migration plans",
+        "Risk acceptance for unsupported components"
+      ]
+    },
+    {
+      "control_id": "SC-1",
+      "original_reference": "SC-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate system and communications protection policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates a system and communications protection policy and procedures.",
+      "domain": "System and Communications Protection",
+      "category": "Policy and Governance",
+      "section_number": "SC-1",
+      "parent_section": "SC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "SC policy document",
+        "Communications protection procedures",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "SC-5",
+      "original_reference": "SC-5",
+      "title": "Denial-of-Service Protection",
+      "description": "Protect against or limit the effects of denial-of-service attacks.",
+      "full_text": "The information system protects against or limits the effects of denial-of-service attacks by employing organization-defined security safeguards.",
+      "domain": "System and Communications Protection",
+      "category": "Network Protection",
+      "section_number": "SC-5",
+      "parent_section": "SC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "DDoS protection configuration",
+        "Network monitoring for DoS indicators",
+        "DDoS mitigation service documentation"
+      ]
+    },
+    {
+      "control_id": "SC-7",
+      "original_reference": "SC-7",
+      "title": "Boundary Protection",
+      "description": "Monitor and control communications at external managed interfaces including key internal boundaries.",
+      "full_text": "The information system monitors and controls communications at the external boundary of the system and at key internal boundaries within the system. The system implements subnetworks for publicly accessible system components that are logically separated from internal organizational networks.",
+      "domain": "System and Communications Protection",
+      "category": "Network Protection",
+      "section_number": "SC-7",
+      "parent_section": "SC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Network boundary protection documentation",
+        "Firewall/proxy configurations",
+        "DMZ architecture documentation",
+        "Boundary protection monitoring logs"
+      ]
+    },
+    {
+      "control_id": "SC-8",
+      "original_reference": "SC-8",
+      "title": "Transmission Confidentiality and Integrity",
+      "description": "Protect the confidentiality and integrity of transmitted information.",
+      "full_text": "The information system protects the confidentiality and integrity of transmitted information using cryptographic mechanisms to prevent unauthorized disclosure and detect changes to information during transmission.",
+      "domain": "System and Communications Protection",
+      "category": "Data Protection",
+      "section_number": "SC-8",
+      "parent_section": "SC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Encryption configuration for data in transit",
+        "TLS/SSL certificate documentation",
+        "VPN encryption standards",
+        "Transmission integrity verification"
+      ]
+    },
+    {
+      "control_id": "SC-12",
+      "original_reference": "SC-12",
+      "title": "Cryptographic Key Establishment and Management",
+      "description": "Establish and manage cryptographic keys using organization-defined requirements.",
+      "full_text": "The organization establishes and manages cryptographic keys for required cryptography employed within the information system in accordance with organization-defined requirements for key generation, distribution, storage, access, and destruction.",
+      "domain": "System and Communications Protection",
+      "category": "Cryptography",
+      "section_number": "SC-12",
+      "parent_section": "SC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Key management policy and procedures",
+        "Key lifecycle management documentation",
+        "Key escrow/recovery procedures",
+        "Certificate management records"
+      ]
+    },
+    {
+      "control_id": "SC-13",
+      "original_reference": "SC-13",
+      "title": "Cryptographic Protection",
+      "description": "Determine the cryptographic uses required and implement cryptography.",
+      "full_text": "The information system implements organization-defined cryptographic uses and types of cryptography required for each use in accordance with applicable federal laws, directives, policies, regulations, and standards.",
+      "domain": "System and Communications Protection",
+      "category": "Cryptography",
+      "section_number": "SC-13",
+      "parent_section": "SC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Cryptographic standards documentation",
+        "FIPS 140-validated module inventory",
+        "Encryption implementation documentation"
+      ]
+    },
+    {
+      "control_id": "SC-17",
+      "original_reference": "SC-17",
+      "title": "Public Key Infrastructure Certificates",
+      "description": "Issue public key certificates under an organization-defined certificate policy or obtain certificates from an approved provider.",
+      "full_text": "The organization issues public key certificates under an organization-defined certificate policy or obtains public key certificates from an approved service provider.",
+      "domain": "System and Communications Protection",
+      "category": "Cryptography",
+      "section_number": "SC-17",
+      "parent_section": "SC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "PKI certificate policy",
+        "Certificate authority documentation",
+        "Certificate inventory"
+      ]
+    },
+    {
+      "control_id": "SC-20",
+      "original_reference": "SC-20",
+      "title": "Secure Name/Address Resolution Service (Authoritative Source)",
+      "description": "Provide additional data origin authentication and integrity verification artifacts for authoritative DNS.",
+      "full_text": "The information system provides additional data origin authentication and integrity verification artifacts along with the authoritative name resolution data the system returns in response to external name/address resolution queries.",
+      "domain": "System and Communications Protection",
+      "category": "Network Protection",
+      "section_number": "SC-20",
+      "parent_section": "SC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "DNSSEC configuration",
+        "DNS security documentation",
+        "DNS audit records"
+      ]
+    },
+    {
+      "control_id": "SC-23",
+      "original_reference": "SC-23",
+      "title": "Session Authenticity",
+      "description": "Protect the authenticity of communications sessions.",
+      "full_text": "The information system protects the authenticity of communications sessions, including protection against session hijacking, man-in-the-middle attacks, and session replay.",
+      "domain": "System and Communications Protection",
+      "category": "Session Management",
+      "section_number": "SC-23",
+      "parent_section": "SC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Session management configuration",
+        "Anti-CSRF token implementation",
+        "Secure cookie configuration documentation"
+      ]
+    },
+    {
+      "control_id": "SC-28",
+      "original_reference": "SC-28",
+      "title": "Protection of Information at Rest",
+      "description": "Protect the confidentiality and integrity of information at rest.",
+      "full_text": "The information system protects the confidentiality and/or integrity of organization-defined information at rest using cryptographic mechanisms.",
+      "domain": "System and Communications Protection",
+      "category": "Data Protection",
+      "section_number": "SC-28",
+      "parent_section": "SC",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Data-at-rest encryption configuration",
+        "Full disk encryption documentation",
+        "Database encryption records",
+        "Encryption key management for data at rest"
+      ]
+    },
+    {
+      "control_id": "SI-1",
+      "original_reference": "SI-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate system and information integrity policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates a system and information integrity policy and procedures.",
+      "domain": "System and Information Integrity",
+      "category": "Policy and Governance",
+      "section_number": "SI-1",
+      "parent_section": "SI",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "SI policy document",
+        "Integrity procedures documentation",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "SI-2",
+      "original_reference": "SI-2",
+      "title": "Flaw Remediation",
+      "description": "Identify, report, and correct information system flaws and install security-relevant updates.",
+      "full_text": "The organization identifies, reports, and corrects information system flaws, tests software and firmware updates related to flaw remediation for effectiveness and potential side effects, installs security-relevant software and firmware updates within organization-defined time periods, and incorporates flaw remediation into the configuration management process.",
+      "domain": "System and Information Integrity",
+      "category": "Patch Management",
+      "section_number": "SI-2",
+      "parent_section": "SI",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Patch management policy and procedures",
+        "Patch deployment records",
+        "Patch testing documentation",
+        "Vulnerability remediation tracking"
+      ]
+    },
+    {
+      "control_id": "SI-3",
+      "original_reference": "SI-3",
+      "title": "Malicious Code Protection",
+      "description": "Implement malicious code protection mechanisms at system entry and exit points.",
+      "full_text": "The organization employs malicious code protection mechanisms at information system entry and exit points to detect and eradicate malicious code, updates malicious code protection mechanisms when new releases are available, and configures mechanisms to perform periodic scans and real-time scans.",
+      "domain": "System and Information Integrity",
+      "category": "Malware Protection",
+      "section_number": "SI-3",
+      "parent_section": "SI",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Anti-malware solution documentation",
+        "Malware definition update records",
+        "Malware scan reports",
+        "Malware incident records"
+      ]
+    },
+    {
+      "control_id": "SI-4",
+      "original_reference": "SI-4",
+      "title": "System Monitoring",
+      "description": "Monitor the information system to detect attacks, unauthorized connections, and indicators of compromise.",
+      "full_text": "The organization monitors the information system to detect attacks and indicators of potential attacks, unauthorized local/network/remote connections, and identifies unauthorized use. The organization deploys monitoring devices strategically and heightens monitoring activity when there is an indication of increased risk.",
+      "domain": "System and Information Integrity",
+      "category": "Monitoring",
+      "section_number": "SI-4",
+      "parent_section": "SI",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "System monitoring strategy",
+        "IDS/IPS configuration",
+        "SIEM deployment documentation",
+        "Monitoring alert review records"
+      ]
+    },
+    {
+      "control_id": "SI-5",
+      "original_reference": "SI-5",
+      "title": "Security Alerts, Advisories, and Directives",
+      "description": "Receive security alerts and advisories and take appropriate actions.",
+      "full_text": "The organization receives information system security alerts, advisories, and directives from organization-defined external organizations on an ongoing basis, generates internal security alerts, advisories, and directives, and disseminates them to appropriate personnel.",
+      "domain": "System and Information Integrity",
+      "category": "Threat Intelligence",
+      "section_number": "SI-5",
+      "parent_section": "SI",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Security alert subscription records",
+        "Advisory review and response records",
+        "Internal security advisory procedures"
+      ]
+    },
+    {
+      "control_id": "SI-7",
+      "original_reference": "SI-7",
+      "title": "Software, Firmware, and Information Integrity",
+      "description": "Employ integrity verification tools to detect unauthorized changes to software, firmware, and information.",
+      "full_text": "The organization employs integrity verification tools to detect unauthorized changes to software, firmware, and information. The organization takes organization-defined actions when unauthorized changes are detected.",
+      "domain": "System and Information Integrity",
+      "category": "Integrity Verification",
+      "section_number": "SI-7",
+      "parent_section": "SI",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "File integrity monitoring (FIM) configuration",
+        "Integrity verification tool reports",
+        "Unauthorized change detection records"
+      ]
+    },
+    {
+      "control_id": "SI-10",
+      "original_reference": "SI-10",
+      "title": "Information Input Validation",
+      "description": "Check the validity of information inputs to the information system.",
+      "full_text": "The information system checks the validity of organization-defined information inputs. Input validation checks include syntax checks, format checks, and content checks.",
+      "domain": "System and Information Integrity",
+      "category": "Input Validation",
+      "section_number": "SI-10",
+      "parent_section": "SI",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Input validation procedures",
+        "Application input validation testing",
+        "Input validation configuration documentation"
+      ]
+    },
+    {
+      "control_id": "SI-11",
+      "original_reference": "SI-11",
+      "title": "Error Handling",
+      "description": "Generate error messages that provide information necessary for corrective actions without revealing exploitation information.",
+      "full_text": "The information system generates error messages that provide information necessary for corrective actions without revealing information that could be exploited by adversaries. The system reveals error messages only to authorized personnel.",
+      "domain": "System and Information Integrity",
+      "category": "Error Handling",
+      "section_number": "SI-11",
+      "parent_section": "SI",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Error handling procedures",
+        "Custom error page configuration",
+        "Error message review documentation"
+      ]
+    },
+    {
+      "control_id": "SI-12",
+      "original_reference": "SI-12",
+      "title": "Information Management and Retention",
+      "description": "Manage and retain information within the information system in accordance with applicable laws.",
+      "full_text": "The organization manages and retains information within the information system and information output from the system in accordance with applicable laws, executive orders, directives, regulations, policies, standards, guidelines, and operational requirements.",
+      "domain": "System and Information Integrity",
+      "category": "Data Management",
+      "section_number": "SI-12",
+      "parent_section": "SI",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Data retention policy",
+        "Record retention schedule",
+        "Data disposal procedures",
+        "Retention compliance verification"
+      ]
+    },
+    {
+      "control_id": "SI-16",
+      "original_reference": "SI-16",
+      "title": "Memory Protection",
+      "description": "Implement organization-defined security safeguards to protect memory from unauthorized code execution.",
+      "full_text": "The information system implements organization-defined security safeguards to protect its memory from unauthorized code execution. Examples include data execution prevention, address space layout randomization, and bounds checking.",
+      "domain": "System and Information Integrity",
+      "category": "System Hardening",
+      "section_number": "SI-16",
+      "parent_section": "SI",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Memory protection configuration (DEP, ASLR)",
+        "System hardening documentation",
+        "Memory protection testing results"
+      ]
+    },
+    {
+      "control_id": "SR-1",
+      "original_reference": "SR-1",
+      "title": "Policy and Procedures",
+      "description": "Develop, document, and disseminate supply chain risk management policy and procedures.",
+      "full_text": "The organization develops, documents, and disseminates a supply chain risk management policy and procedures that address supply chain risks throughout the SDLC.",
+      "domain": "Supply Chain Risk Management",
+      "category": "Policy and Governance",
+      "section_number": "SR-1",
+      "parent_section": "SR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "SCRM policy",
+        "Supply chain procedures documentation",
+        "Policy review records"
+      ]
+    },
+    {
+      "control_id": "SR-2",
+      "original_reference": "SR-2",
+      "title": "Supply Chain Risk Management Plan",
+      "description": "Develop a supply chain risk management plan for the system.",
+      "full_text": "The organization develops a plan for managing supply chain risks associated with the research and development, design, manufacturing, acquisition, delivery, integration, operations and maintenance, and disposal of the information system, system component, or information system service.",
+      "domain": "Supply Chain Risk Management",
+      "category": "Planning",
+      "section_number": "SR-2",
+      "parent_section": "SR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "SCRM plan document",
+        "Supply chain risk assessment",
+        "Plan review and update records"
+      ]
+    },
+    {
+      "control_id": "SR-3",
+      "original_reference": "SR-3",
+      "title": "Supply Chain Controls and Processes",
+      "description": "Establish processes to identify and address weaknesses or deficiencies in the supply chain.",
+      "full_text": "The organization establishes a process or processes to identify and address weaknesses or deficiencies in the supply chain elements and processes in a timely manner.",
+      "domain": "Supply Chain Risk Management",
+      "category": "Supply Chain Assessment",
+      "section_number": "SR-3",
+      "parent_section": "SR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Supply chain assessment procedures",
+        "Weakness identification records",
+        "Remediation tracking documentation"
+      ]
+    },
+    {
+      "control_id": "SR-5",
+      "original_reference": "SR-5",
+      "title": "Acquisition Strategies, Tools, and Methods",
+      "description": "Employ acquisition strategies, contract tools, and procurement methods to protect against supply chain risks.",
+      "full_text": "The organization employs organization-defined acquisition strategies, contract tools, and procurement methods to protect against, identify, and mitigate supply chain risks.",
+      "domain": "Supply Chain Risk Management",
+      "category": "Acquisition",
+      "section_number": "SR-5",
+      "parent_section": "SR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Acquisition strategy documentation",
+        "Contract security requirements",
+        "Procurement security procedures"
+      ]
+    },
+    {
+      "control_id": "SR-6",
+      "original_reference": "SR-6",
+      "title": "Supplier Assessments and Reviews",
+      "description": "Assess and review the supply chain-related risks associated with suppliers or contractors.",
+      "full_text": "The organization assesses and reviews the supply chain-related risks associated with suppliers or contractors and the information system, system component, or information system service they provide at an organization-defined frequency.",
+      "domain": "Supply Chain Risk Management",
+      "category": "Supplier Management",
+      "section_number": "SR-6",
+      "parent_section": "SR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Supplier risk assessment reports",
+        "Vendor review documentation",
+        "Third-party audit reports",
+        "Supplier compliance monitoring records"
+      ]
+    },
+    {
+      "control_id": "SR-8",
+      "original_reference": "SR-8",
+      "title": "Notification Agreements",
+      "description": "Establish agreements with suppliers for notification of supply chain compromises.",
+      "full_text": "The organization establishes agreements and procedures with entities involved in the supply chain for the information system, system component, or information system service for the notification of supply chain compromises and results of assessments or audits.",
+      "domain": "Supply Chain Risk Management",
+      "category": "Supplier Management",
+      "section_number": "SR-8",
+      "parent_section": "SR",
+      "is_mandatory": true,
+      "priority": "high",
+      "evidence_requirements": [
+        "Supply chain notification agreements",
+        "Incident notification procedures",
+        "Supplier communication protocols"
+      ]
+    }
+  ]
+}
