@@ -74,3 +74,40 @@ class AIRiskAssessmentEntry(Base):
     updated_at                      = Column(DateTime,    default=datetime.utcnow, onupdate=datetime.utcnow)
 
     tenant = relationship("Tenant")
+    evidence_links = relationship(
+        "AIRiskAssessmentEvidenceLink",
+        back_populates="entry",
+        cascade="all, delete-orphan",
+    )
+
+
+class AIRiskAssessmentEvidenceLink(Base):
+    """Many-to-many between AI Risk Assessment entries and Evidence files.
+
+    Mirrors RiskEvidenceLink and AssetEvidenceLink so all evidence
+    associations follow the same shape across the platform — drop the
+    evidence row, the link cascade-deletes; drop the entry, links go too.
+    """
+    __tablename__ = "grc_ai_risk_assessment_evidence_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    entry_id = Column(
+        Integer,
+        ForeignKey("grc_ai_risk_assessment_entries.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    evidence_id = Column(
+        Integer,
+        ForeignKey("grc_evidence.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    relationship_type = Column(String(50), default="supports")  # supports | refutes | mitigates
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    entry = relationship("AIRiskAssessmentEntry", back_populates="evidence_links")
+    evidence = relationship("Evidence")
+
+    __table_args__ = (
+        UniqueConstraint("entry_id", "evidence_id", name="uq_ai_risk_entry_evidence"),
+        Index("ix_ai_risk_entry_evidence", "entry_id", "evidence_id"),
+    )

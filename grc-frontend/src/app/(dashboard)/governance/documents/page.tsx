@@ -43,6 +43,7 @@ import {
   Users,
   ShieldCheck,
   BookMarked,
+  Scale,
 } from 'lucide-react';
 import Link from 'next/link';
 import NcaTemplateSelect, { NcaTemplateMeta } from '@/components/governance/NcaTemplateSelect';
@@ -254,6 +255,13 @@ export default function GovernanceDocumentsPage() {
      * the generate call routes to /governance/nca-templates/{id}/ai-draft.
      */
     nca_template_id?: string | null;
+    /**
+     * Set when the user picked a reference law from the Document Templates
+     * modal — the AI Draft form seeds its reference-law id from this so the
+     * generate call routes to /governance/reference-laws/{id}/ai-draft and
+     * the draft is grounded in the law's articles.
+     */
+    reference_law_id?: string | null;
     /**
      * UploadedFramework ids to pre-select in the AI Draft multi-select.
      * Set when the user picked an artifact from the Artifact Templates
@@ -537,9 +545,27 @@ export default function GovernanceDocumentsPage() {
   } | null>(null);
 
   const aiDraftMutation = useMutation({
-    mutationFn: async (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; parent_document_id?: number; nca_template_id?: string }) => {
+    mutationFn: async (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; parent_document_id?: number; nca_template_id?: string; reference_law_id?: string }) => {
       let response;
-      if (data.nca_template_id) {
+      if (data.reference_law_id) {
+        // Reference-law path — generate a fresh document grounded in the
+        // law's articles. Mirrors the NCA route: title + doc_type + any
+        // extra requirements; the backend injects the full law text.
+        const requirements: string[] = [];
+        if (data.description) requirements.push(data.description);
+        if (data.framework_ids && data.framework_ids.length > 0) {
+          requirements.push(`Also align with framework IDs: ${data.framework_ids.join(', ')}`);
+        }
+        response = await apiClient.post(
+          `/governance/reference-laws/${data.reference_law_id}/ai-draft`,
+          {
+            title: data.title,
+            doc_type: data.doc_type,
+            additional_requirements: requirements.length > 0 ? requirements.join('\n') : undefined,
+            save_as_document: false,
+          }
+        );
+      } else if (data.nca_template_id) {
         const requirements: string[] = [];
         if (data.description) requirements.push(`Document description: ${data.description}`);
         if (data.framework_ids && data.framework_ids.length > 0) {
@@ -976,7 +1002,7 @@ export default function GovernanceDocumentsPage() {
           {canCreate && (
             <button
               onClick={() => setIsRecommendedOpen(true)}
-              title="Browse standard, NCA, and per-framework artifact templates"
+              title="Browse standard, NCA, reference-law, and per-framework artifact templates"
               className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-gradient-to-r from-indigo-50 to-violet-50 px-3 sm:px-4 py-2 text-sm font-medium text-indigo-700 hover:from-indigo-100 hover:to-violet-100 transition-colors whitespace-nowrap"
             >
               <BookMarked size={16} />
@@ -1624,6 +1650,25 @@ export default function GovernanceDocumentsPage() {
                 description: `Seeded from NCA template "${pick.template.title}" (${pick.template.category}).`,
                 doc_type: docType,
                 nca_template_id: pick.template.id,
+              };
+            } else if (pick.kind === 'reference-law') {
+              // The law isn't a single document — it's a source of
+              // obligations. Seed a sensible title + doc type the user can
+              // change in the AI Draft modal, and carry the law id so the
+              // generate call routes to the reference-law endpoint.
+              const docTypeHint = (pick.law.doc_type_hint || 'policy') as
+                | 'policy' | 'standard' | 'procedure' | 'guideline';
+              const allowed = ['policy', 'standard', 'procedure', 'guideline'] as const;
+              const docType = (allowed as readonly string[]).includes(docTypeHint) ? docTypeHint : 'policy';
+              prefill = {
+                title: `${pick.law.short_name || pick.law.name} Compliance Policy`,
+                description:
+                  `Draft a document that fully complies with and operationalises ${pick.law.name}` +
+                  `${pick.law.jurisdiction ? ` (${pick.law.jurisdiction})` : ''}. ` +
+                  `Cite the relevant articles and cover data-subject rights, controller/processor ` +
+                  `obligations, lawful basis, transfer, breach notification, retention, and penalties as applicable.`,
+                doc_type: docType,
+                reference_law_id: pick.law.id,
               };
             } else if (pick.kind === 'artifact') {
               const docType = ARTIFACT_DOC_TYPE_MAP(pick.item.artifact_type);
@@ -2919,10 +2964,11 @@ interface AIDraftPolicyModalProps {
     doc_type: 'policy' | 'standard' | 'procedure' | 'guideline';
     parent_document_id?: number | null;
     nca_template_id?: string | null;
+    reference_law_id?: string | null;
     framework_ids?: number[] | null;
   } | null;
   onClose: () => void;
-  onGenerate: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; parent_document_id?: number; nca_template_id?: string }) => void;
+  onGenerate: (data: { doc_type: string; title: string; framework_ids?: number[]; regulatory_scope?: string[]; description?: string; parent_document_id?: number; nca_template_id?: string; reference_law_id?: string }) => void;
   onUseContent: (
     content: string,
     title: string,
@@ -2965,6 +3011,9 @@ function AIDraftPolicyModal({ parentDocuments, prefill, onClose, onGenerate, onU
   );
   const [selectedNcaTemplateId, setSelectedNcaTemplateId] = useState<string | null>(
     prefill?.nca_template_id ?? null,
+  );
+  const [selectedReferenceLawId] = useState<string | null>(
+    prefill?.reference_law_id ?? null,
   );
   const [suggestions, setSuggestions] = useState<any[] | null>(null);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
@@ -3080,6 +3129,7 @@ function AIDraftPolicyModal({ parentDocuments, prefill, onClose, onGenerate, onU
       description: formData.description || undefined,
       parent_document_id: selectedParentDocumentId || undefined,
       nca_template_id: selectedNcaTemplateId || undefined,
+      reference_law_id: selectedReferenceLawId || undefined,
     });
   };
 
@@ -3185,6 +3235,16 @@ function AIDraftPolicyModal({ parentDocuments, prefill, onClose, onGenerate, onU
           <form id="ai-draft-form" onSubmit={handleSubmit} className="space-y-5">
               {isLoading && <DraftingStageProgress jobState={jobState} />}
 
+              {selectedReferenceLawId && (
+                <div className="flex items-start gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
+                  <Scale className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    Grounded in the selected reference law — the generated document will comply with and cite the
+                    law&apos;s articles. Choose the document type (policy, charter, procedure…) and a title, then generate.
+                  </span>
+                </div>
+              )}
+
               {/* ─── Step 1 · What are you drafting? ─────────────────── */}
               <section className={isLoading ? 'opacity-50 pointer-events-none' : ''}>
                 <div className="mb-2 flex items-center gap-2">
@@ -3219,6 +3279,7 @@ function AIDraftPolicyModal({ parentDocuments, prefill, onClose, onGenerate, onU
                         { value: 'standard', label: 'Standard' },
                         { value: 'procedure', label: 'Procedure' },
                         { value: 'guideline', label: 'Guideline' },
+                        { value: 'charter', label: 'Charter' },
                       ]}
                       selectedValues={formData.doc_type ? [formData.doc_type] : []}
                       onApply={(vals) => {

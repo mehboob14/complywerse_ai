@@ -114,6 +114,69 @@ ASSESSMENT_TYPE_MAP: dict[str, str] = {
     "abu dhabi healthcare": "adhics",
     "abu dhabi healthcare information and cyber security standard": "adhics",
     "abu dhabi healthcare information and cyber security": "adhics",
+    # ISO 42001 (AI Management) — distinct from ISO 41001 (Facility Mgmt)
+    "iso_42001": "iso_42001_2023",
+    "iso42001": "iso_42001_2023",
+    "iso 42001": "iso_42001_2023",
+    "iso 42001:2023": "iso_42001_2023",
+    "iso/iec 42001": "iso_42001_2023",
+    "iso/iec 42001:2023": "iso_42001_2023",
+    "iso/iec 42001:2023 ai management system": "iso_42001_2023",
+    # NIST AI RMF
+    "nist ai rmf": "nist_ai_rmf",
+    "nist ai rmf 1.0": "nist_ai_rmf",
+    "ai rmf": "nist_ai_rmf",
+    "nist artificial intelligence risk management framework": "nist_ai_rmf",
+    "nist artificial intelligence risk management framework (ai rmf 1.0)": "nist_ai_rmf",
+    # NIST SP 800-53 Rev 5
+    "nist sp 800-53": "nist_sp_800_53_r5",
+    "nist 800-53": "nist_sp_800_53_r5",
+    "sp 800-53": "nist_sp_800_53_r5",
+    "nist sp 800-53 rev 5": "nist_sp_800_53_r5",
+    # HITRUST CSF
+    "hitrust": "hitrust_csf",
+    "hitrust csf": "hitrust_csf",
+    "hitrust common security framework": "hitrust_csf",
+    "hitrust common security framework (csf)": "hitrust_csf",
+    # ARAMCO
+    "aramco": "aramco_csc",
+    "aramco csc": "aramco_csc",
+    "aramco cybersecurity compliance certification": "aramco_csc",
+    # ADHIE
+    "adhie": "adhie",
+    "abu dhabi health information exchange": "adhie",
+    "doh policy on the abu dhabi health information exchange (adhie)": "adhie",
+    # KSA NDMO
+    "ndmo": "ksa_ndmo",
+    "ksa ndmo": "ksa_ndmo",
+    "ksa national data management": "ksa_ndmo",
+    "ksa national data management and personal data protection standards": "ksa_ndmo",
+    # MAS TRM
+    "mas trm": "mas_trm",
+    "mas technology risk management": "mas_trm",
+    "mas technology risk management guidelines": "mas_trm",
+    # Qatar Central Bank
+    "qcb": "qatar_cb",
+    "qatar central bank": "qatar_cb",
+    "qatar central bank technology risks circular": "qatar_cb",
+    # SABIC CyberTrust
+    "sabic": "sabic_cybertrust",
+    "sabic cybertrust": "sabic_cybertrust",
+    "sabic cybertrust guidelines": "sabic_cybertrust",
+    # SAMA
+    "sama": "sama_csf",
+    "sama csf": "sama_csf",
+    "sama cyber security framework": "sama_csf",
+    # SBP variants
+    "sbp cloud outsourcing": "sbp_cloud_outsourcing",
+    "sbp cloud outsourcing framework": "sbp_cloud_outsourcing",
+    "sbp etgrmf": "sbp_etgrmf",
+    "sbp internet banking": "sbp_internet_banking",
+    "sbp internet banking framework": "sbp_internet_banking",
+    # Sri Lanka BSS
+    "sri lanka bss": "sri_lanka_bss",
+    "sri lanka baseline security standard": "sri_lanka_bss",
+    "sri lanka baseline security standard (bss)": "sri_lanka_bss",
 }
 
 # Artifact names that map to real platform data
@@ -280,7 +343,29 @@ class TenantArtifactUpdate(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _slugify_framework(raw: str) -> str:
+    """Last-resort slug for an unmapped framework. Stable, deterministic,
+    safe to use as a `framework_key` for storing/retrieving tenant artifacts.
+
+    Example: "ISO/IEC 42001:2023 AI Management System"
+          -> "iso_iec_42001_2023_ai_management_system"
+    """
+    s = (raw or "").lower().strip()
+    s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")
+    return s[:64] or "framework"
+
+
 def _resolve_framework_key(raw: str) -> Optional[str]:
+    """Resolve a free-form framework label to a stable `framework_key`.
+
+    Always returns a non-empty key when `raw` is non-empty — falls back to
+    a slugified form of the input when no map entry hits. That guarantee
+    matters because the frontend gates its Create-Artifact modal on
+    `data.framework_key` being truthy; if we returned None for unmapped
+    frameworks, the Create button silently no-opped.
+    """
+    if not raw:
+        return None
     normalized = raw.lower().strip()
     # Exact match first
     hit = ASSESSMENT_TYPE_MAP.get(normalized)
@@ -293,7 +378,11 @@ def _resolve_framework_key(raw: str) -> Optional[str]:
         if key in normalized and len(key) > best_len:
             best = val
             best_len = len(key)
-    return best
+    if best:
+        return best
+    # No curated mapping — derive a deterministic slug so the framework
+    # still has a usable key for storing tenant artifacts.
+    return _slugify_framework(raw)
 
 
 # ---------------------------------------------------------------------------

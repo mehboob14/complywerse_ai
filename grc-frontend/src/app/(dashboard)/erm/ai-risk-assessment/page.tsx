@@ -5,12 +5,12 @@ export const dynamic = 'force-dynamic';
 import { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { aiRiskAssessmentApi, type AIRiskEntry } from '@/lib/api';
+import { aiRiskAssessmentApi, type AIRiskEntry, type AIRiskEvidence } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
 import {
   Bot, Plus, Upload, Download, Search, Sparkles, ChevronRight,
   Edit2, Trash2, X, AlertTriangle, CheckCircle2, Loader2, Link2,
-  FileSpreadsheet,
+  FileSpreadsheet, Paperclip, FileText, User,
 } from 'lucide-react';
 
 const CATEGORIES = [
@@ -57,6 +57,7 @@ const emptyForm: EditableEntry = {
   residual_risk_level: '',
   mitigation_plan: '',
   risk_owner: '',
+  risk_owner_user_id: undefined,
   target_review_date: '',
   status: 'Open',
 };
@@ -78,6 +79,35 @@ export default function AIRiskAssessmentPage() {
   const { data: entries = [], isLoading } = useQuery({
     queryKey: ['ai-risk-assessment-entries'],
     queryFn: () => aiRiskAssessmentApi.list().then(r => r.data),
+  });
+
+  // Tenant users — Risk Owner picker source. Long staleTime so we don't
+  // re-fetch on every drawer open. Falls back gracefully (returns []) if
+  // the endpoint isn't available yet on a stale tenant.
+  const { data: tenantUsers = [] } = useQuery({
+    queryKey: ['ai-risk-assessment-tenant-users'],
+    queryFn: () => aiRiskAssessmentApi.getTenantUsers().then(r => r.data).catch(() => []),
+    staleTime: 5 * 60_000,
+  });
+
+  // Evidence linked to the currently-edited entry. Disabled when no entry
+  // is open or this is a brand-new entry being created (no id yet).
+  const { data: evidence = [], refetch: refetchEvidence } = useQuery<AIRiskEvidence[]>({
+    queryKey: ['ai-risk-assessment-evidence', editingId],
+    queryFn: () => aiRiskAssessmentApi.listEvidence(editingId!).then(r => r.data),
+    enabled: !!editingId,
+  });
+
+  const uploadEvidenceMutation = useMutation({
+    mutationFn: ({ id, file }: { id: number; file: File }) =>
+      aiRiskAssessmentApi.uploadEvidence(id, file).then(r => r.data),
+    onSuccess: () => refetchEvidence(),
+  });
+
+  const unlinkEvidenceMutation = useMutation({
+    mutationFn: ({ id, linkId }: { id: number; linkId: number }) =>
+      aiRiskAssessmentApi.unlinkEvidence(id, linkId),
+    onSuccess: () => refetchEvidence(),
   });
 
   const filtered = useMemo(() => {
@@ -166,6 +196,7 @@ export default function AIRiskAssessmentPage() {
       residual_risk_level: entry.residual_risk_level || '',
       mitigation_plan: entry.mitigation_plan || '',
       risk_owner: entry.risk_owner || '',
+      risk_owner_user_id: entry.risk_owner_user_id ?? undefined,
       target_review_date: entry.target_review_date || '',
       status: entry.status || 'Open',
     });
@@ -560,12 +591,46 @@ export default function AIRiskAssessmentPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Risk Owner">
-                  <input
-                    value={form.risk_owner || ''}
-                    onChange={(e) => setForm((s) => ({ ...s, risk_owner: e.target.value }))}
-                    placeholder="e.g. Compliance Team"
-                    className="form-input"
-                  />
+                  {/* Two-line picker: tenant-user dropdown (sets both
+                      risk_owner_user_id and the display name as risk_owner
+                      text), plus a free-text override for "Compliance Team",
+                      external owners, etc. Either or both can be set. */}
+                  <div className="space-y-1">
+                    <select
+                      value={form.risk_owner_user_id ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) {
+                          setForm((s) => ({ ...s, risk_owner_user_id: undefined }));
+                        } else {
+                          const id = Number(v);
+                          const u = tenantUsers.find((tu) => tu.id === id);
+                          setForm((s) => ({
+                            ...s,
+                            risk_owner_user_id: id,
+                            // Pre-fill display text from the user — operator
+                            // can still override with a team/department label.
+                            risk_owner: (s.risk_owner && s.risk_owner.trim())
+                              ? s.risk_owner : (u?.display_name || s.risk_owner || ''),
+                          }));
+                        }
+                      }}
+                      className="form-input"
+                    >
+                      <option value="">— assign a user —</option>
+                      {tenantUsers.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.display_name}{u.email ? ` (${u.email})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      value={form.risk_owner || ''}
+                      onChange={(e) => setForm((s) => ({ ...s, risk_owner: e.target.value }))}
+                      placeholder="…or type a team / department"
+                      className="form-input"
+                    />
+                  </div>
                 </Field>
                 <Field label="Target Review Date">
                   <input
@@ -587,6 +652,19 @@ export default function AIRiskAssessmentPage() {
                   }}
                   generating={generatingFor === editingId}
                   accepting={acceptMutation.isPending}
+                />
+              )}
+
+              {/* Evidence — only meaningful for saved entries (need an id
+                  to attach files against). Empty/disabled for brand-new. */}
+              {editingId && (
+                <EvidenceSection
+                  entryId={editingId}
+                  items={evidence}
+                  uploading={uploadEvidenceMutation.isPending}
+                  unlinking={unlinkEvidenceMutation.isPending}
+                  onUpload={(file) => uploadEvidenceMutation.mutate({ id: editingId, file })}
+                  onUnlink={(linkId) => unlinkEvidenceMutation.mutate({ id: editingId, linkId })}
                 />
               )}
             </div>
@@ -777,6 +855,99 @@ function SuggestionRow({ label, value }: { label: string; value?: string | null 
     <div className="rounded-md bg-white border border-violet-200 p-2">
       <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-600">{label}</div>
       <div className="mt-0.5 text-xs text-violet-900">{value || '-'}</div>
+    </div>
+  );
+}
+
+function EvidenceSection({
+  entryId,
+  items,
+  uploading,
+  unlinking,
+  onUpload,
+  onUnlink,
+}: {
+  entryId: number;
+  items: AIRiskEvidence[];
+  uploading: boolean;
+  unlinking: boolean;
+  onUpload: (file: File) => void;
+  onUnlink: (linkId: number) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
+          <Paperclip className="h-4 w-4 text-blue-700" />
+          Supporting Evidence ({items.length})
+        </div>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+        >
+          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          {uploading ? 'Uploading…' : 'Upload File'}
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onUpload(f);
+            if (inputRef.current) inputRef.current.value = '';
+          }}
+        />
+      </div>
+
+      {items.length === 0 ? (
+        <p className="text-xs text-slate-500 italic">
+          No evidence attached yet. Upload audit reports, model cards, fairness scorecards, DPIAs, or any supporting document.
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {items.map((it) => (
+            <li key={it.link_id ?? it.evidence_id} className="flex items-center gap-2 rounded-md border border-blue-100 bg-white px-2.5 py-1.5 text-xs">
+              <FileText className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium text-slate-900">
+                  {it.file_name || it.name || `Evidence #${it.evidence_id}`}
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                  {it.evidence_type && <span>{it.evidence_type}</span>}
+                  {it.uploaded_at && <span>uploaded {new Date(it.uploaded_at).toLocaleDateString()}</span>}
+                  <span className="rounded-full bg-emerald-50 px-1.5 py-px text-emerald-700">{it.relationship_type}</span>
+                </div>
+              </div>
+              {it.link_id && (
+                <>
+                  <a
+                    href={aiRiskAssessmentApi.evidenceDownloadUrl(entryId, it.link_id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Download"
+                    className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-blue-600"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </a>
+                  <button
+                    type="button"
+                    title="Remove from this entry (keeps the Evidence row)"
+                    disabled={unlinking}
+                    onClick={() => onUnlink(it.link_id!)}
+                    className="rounded p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -24,6 +24,7 @@ from .nca_risk_router import router as nca_risk_router
 from .nca_vuln_router import router as nca_vuln_router
 from .nca_container_router import router as nca_container_router
 from .nca_templates_router import router as nca_templates_router
+from .reference_laws_router import router as reference_laws_router
 from .nca_kpi_router import router as nca_kpi_router
 # Phase 9 — cross-domain power search + exception-aging analytics.
 from .search_router import router as search_router

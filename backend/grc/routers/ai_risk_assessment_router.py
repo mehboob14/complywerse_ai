@@ -36,6 +36,8 @@ from sqlalchemy.orm import Session
 
 from ..models import (
     AIRiskAssessmentEntry,
+    AIRiskAssessmentEvidenceLink,
+    Evidence,
     GRCUser,
     Risk,
     get_db,
@@ -790,3 +792,274 @@ def bridge_to_risk(
     row.updated_at = datetime.utcnow()
     db.commit()
     return {"risk_id": risk.id, "created": True}
+
+
+# ── Tenant users (Risk Owner picker) ─────────────────────────────────────────
+
+@router.get("/meta/tenant-users")
+def list_tenant_users(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Tenant user list for the Risk Owner picker. Same shape the assets
+    page uses (`/assets/tenant-users`) so the frontend can reuse the same
+    rendering. Filters to users actually mapped to this tenant via the
+    grc_tenant_users join.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return []
+    from ..models import TenantUser
+    rows = (
+        db.query(GRCUser)
+        .join(TenantUser, TenantUser.user_id == GRCUser.id)
+        .filter(TenantUser.tenant_id.in_(user_tenants))
+        .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())
+        .all()
+    )
+    return [
+        {
+            "id": u.id,
+            "display_name": (u.display_name or u.username or u.email or f"User {u.id}"),
+            "email": u.email,
+            "username": u.username,
+        }
+        for u in rows
+    ]
+
+
+# ── Evidence link + upload ───────────────────────────────────────────────────
+
+def _ensure_evidence_link_table(db: Session) -> None:
+    """Create the AI-risk evidence link table on legacy tenant DBs that
+    pre-date the model. Self-heal so we don't need an alembic step."""
+    engine = db.get_bind()
+    eid = id(engine)
+    # Re-use the table-ensure cache for the link table too; key off the
+    # table name so it stays per-engine.
+    flag_attr = f"ai_risk_link_ensured_{eid}"
+    if globals().get(flag_attr):
+        return
+    try:
+        AIRiskAssessmentEvidenceLink.__table__.create(bind=engine, checkfirst=True)
+        globals()[flag_attr] = True
+    except Exception as e:  # pragma: no cover
+        logger.warning("ai_risk_evidence_link table self heal failed: %s", e)
+
+
+def _serialize_evidence(e: Evidence, link: Optional[AIRiskAssessmentEvidenceLink] = None) -> Dict[str, Any]:
+    return {
+        "evidence_id": e.id,
+        "link_id": link.id if link else None,
+        "name": e.name,
+        "description": e.description,
+        "file_name": e.file_name,
+        "file_type": e.file_type,
+        "file_path": e.file_path,
+        "evidence_type": e.evidence_type,
+        "uploaded_at": e.uploaded_at.isoformat() if e.uploaded_at else None,
+        "uploaded_by": e.uploaded_by,
+        "status": e.status,
+        "relationship_type": link.relationship_type if link else "supports",
+    }
+
+
+def _ai_entry_or_404(db: Session, entry_id: int, user_tenants: List[int]) -> AIRiskAssessmentEntry:
+    row = (
+        db.query(AIRiskAssessmentEntry)
+        .filter(
+            AIRiskAssessmentEntry.id == entry_id,
+            AIRiskAssessmentEntry.tenant_id.in_(user_tenants),
+        )
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI risk entry not found")
+    return row
+
+
+@router.get("/{entry_id}/evidence")
+def list_evidence(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """List every Evidence row linked to this AI risk entry."""
+    _ensure_table(db)
+    _ensure_evidence_link_table(db)
+    user_tenants = get_user_tenants(current_user, db)
+    _ai_entry_or_404(db, entry_id, user_tenants)
+    links = (
+        db.query(AIRiskAssessmentEvidenceLink, Evidence)
+        .join(Evidence, Evidence.id == AIRiskAssessmentEvidenceLink.evidence_id)
+        .filter(AIRiskAssessmentEvidenceLink.entry_id == entry_id)
+        .order_by(Evidence.uploaded_at.desc().nullslast(), Evidence.id.desc())
+        .all()
+    )
+    return [_serialize_evidence(ev, link) for link, ev in links]
+
+
+class _LinkEvidenceIn(BaseModel):
+    evidence_id: int
+    relationship_type: Optional[str] = "supports"
+
+
+@router.post("/{entry_id}/evidence/link", status_code=status.HTTP_201_CREATED)
+def link_existing_evidence(
+    entry_id: int,
+    payload: _LinkEvidenceIn,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Link an existing Evidence row to this AI risk entry. Idempotent —
+    second call with the same evidence_id returns the existing link."""
+    _ensure_table(db)
+    _ensure_evidence_link_table(db)
+    user_tenants = get_user_tenants(current_user, db)
+    entry = _ai_entry_or_404(db, entry_id, user_tenants)
+    ev = db.query(Evidence).filter(
+        Evidence.id == payload.evidence_id,
+        Evidence.tenant_id == entry.tenant_id,
+    ).first()
+    if not ev:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found in this tenant")
+    existing = db.query(AIRiskAssessmentEvidenceLink).filter(
+        AIRiskAssessmentEvidenceLink.entry_id == entry_id,
+        AIRiskAssessmentEvidenceLink.evidence_id == payload.evidence_id,
+    ).first()
+    if existing:
+        return _serialize_evidence(ev, existing)
+    link = AIRiskAssessmentEvidenceLink(
+        entry_id=entry_id,
+        evidence_id=payload.evidence_id,
+        relationship_type=(payload.relationship_type or "supports"),
+        created_at=datetime.utcnow(),
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+    return _serialize_evidence(ev, link)
+
+
+@router.post("/{entry_id}/evidence/upload", status_code=status.HTTP_201_CREATED)
+async def upload_and_link_evidence(
+    entry_id: int,
+    file: UploadFile = File(...),
+    evidence_type: Optional[str] = None,
+    relationship_type: Optional[str] = "supports",
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Upload a new file as Evidence and link it to the entry in one call.
+
+    File is stored in the platform's evidence directory (same layout the
+    generic Evidence uploader uses) so download / OCR / approval workflow
+    can re-use it without any special-case handling.
+    """
+    _ensure_table(db)
+    _ensure_evidence_link_table(db)
+    user_tenants = get_user_tenants(current_user, db)
+    entry = _ai_entry_or_404(db, entry_id, user_tenants)
+
+    if not file.filename:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file provided")
+    raw = await file.read()
+    # Persist under EVIDENCE_DIR — fall back to ./evidence/ai-risk/<entry>/.
+    base_dir = os.environ.get("EVIDENCE_DIR") or os.path.join(os.getcwd(), "evidence")
+    target_dir = os.path.join(base_dir, "ai-risk", str(entry_id))
+    os.makedirs(target_dir, exist_ok=True)
+    # Defensive filename — strip path components, prefix with timestamp so
+    # repeated uploads of the same name don't clobber.
+    safe_name = os.path.basename(file.filename).replace("/", "_").replace("\\", "_")
+    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    on_disk = f"{ts}__{safe_name}"
+    full_path = os.path.join(target_dir, on_disk)
+    with open(full_path, "wb") as f:
+        f.write(raw)
+
+    ev = Evidence(
+        tenant_id=entry.tenant_id,
+        name=safe_name,
+        description=f"Uploaded for AI Risk entry #{entry_id} ({entry.ai_system_use_case or entry.risk_description or 'untitled'})",
+        file_path=full_path,
+        file_name=safe_name,
+        file_type=file.content_type or os.path.splitext(safe_name)[1].lstrip("."),
+        evidence_type=evidence_type or "ai_risk_supporting",
+        status="approved",  # auto-approve for AI risk assessment use
+        uploaded_by=current_user.id,
+        uploaded_at=datetime.utcnow(),
+    )
+    db.add(ev)
+    db.flush()
+
+    link = AIRiskAssessmentEvidenceLink(
+        entry_id=entry_id,
+        evidence_id=ev.id,
+        relationship_type=relationship_type or "supports",
+        created_at=datetime.utcnow(),
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(ev)
+    db.refresh(link)
+    return _serialize_evidence(ev, link)
+
+
+@router.delete("/{entry_id}/evidence/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_evidence(
+    entry_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Remove the link between an entry and an evidence row. Does NOT
+    delete the underlying Evidence — it stays in the library so other
+    risks / controls that reference it keep working."""
+    _ensure_table(db)
+    _ensure_evidence_link_table(db)
+    user_tenants = get_user_tenants(current_user, db)
+    _ai_entry_or_404(db, entry_id, user_tenants)
+    link = db.query(AIRiskAssessmentEvidenceLink).filter(
+        AIRiskAssessmentEvidenceLink.id == link_id,
+        AIRiskAssessmentEvidenceLink.entry_id == entry_id,
+    ).first()
+    if not link:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence link not found")
+    db.delete(link)
+    db.commit()
+    return None
+
+
+@router.get("/{entry_id}/evidence/{link_id}/download")
+def download_evidence(
+    entry_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Stream the underlying file for an entry's evidence link."""
+    _ensure_table(db)
+    _ensure_evidence_link_table(db)
+    user_tenants = get_user_tenants(current_user, db)
+    _ai_entry_or_404(db, entry_id, user_tenants)
+    row = db.query(AIRiskAssessmentEvidenceLink, Evidence).join(
+        Evidence, Evidence.id == AIRiskAssessmentEvidenceLink.evidence_id,
+    ).filter(
+        AIRiskAssessmentEvidenceLink.id == link_id,
+        AIRiskAssessmentEvidenceLink.entry_id == entry_id,
+    ).first()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence link not found")
+    _, ev = row
+    if not ev.file_path or not os.path.exists(ev.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File missing on disk")
+    with open(ev.file_path, "rb") as f:
+        data = f.read()
+    headers = {
+        "Content-Disposition": f'attachment; filename="{ev.file_name or "evidence.bin"}"'
+    }
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type=ev.file_type or "application/octet-stream",
+        headers=headers,
+    )

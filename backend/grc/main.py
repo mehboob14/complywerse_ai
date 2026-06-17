@@ -29,7 +29,7 @@ from .routers import (
     entra_router,
     artifacts_router,
 )
-from .routers import dcc_router, audit_plan_router, nca_risk_router, nca_vuln_router, nca_container_router, nca_templates_router, nca_kpi_router
+from .routers import dcc_router, audit_plan_router, nca_risk_router, nca_vuln_router, nca_container_router, nca_templates_router, reference_laws_router, nca_kpi_router
 # Criticality Assessments — Information System (ISCA) + Infrastructure Asset (IACA) per bank-provided templates.
 from .routers import criticality_assessments_router
 # Phase 9 — cross-domain power search + exception-aging analytics.
@@ -180,6 +180,7 @@ app.include_router(nca_risk_router)
 app.include_router(nca_vuln_router)
 app.include_router(nca_container_router)
 app.include_router(nca_templates_router)
+app.include_router(reference_laws_router)
 app.include_router(nca_kpi_router)
 app.include_router(criticality_assessments_router.router)
 

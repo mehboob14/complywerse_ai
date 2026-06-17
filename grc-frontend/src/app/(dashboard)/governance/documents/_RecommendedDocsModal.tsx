@@ -16,7 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   X, Search, Sparkles, BookMarked, FileText, Layers,
   ChevronRight, Eye, AlertCircle, Loader2, Download, ListChecks,
-  Tag, Hash, Info,
+  Tag, Hash, Info, Scale, Globe, Building2,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/ToastProvider';
 import apiClient, { certificationsApi } from '@/lib/api';
@@ -33,6 +33,7 @@ import type { CertificationJourney } from '@/types';
 export type DocumentTemplatePick =
   | { kind: 'recommended'; doc: RecommendedDoc }
   | { kind: 'nca'; template: NcaTemplate }
+  | { kind: 'reference-law'; law: ReferenceLaw }
   | {
       kind: 'artifact';
       item: ArtifactItem;
@@ -63,11 +64,12 @@ interface LegacyProps {
 }
 
 // ─── Tab definitions ────────────────────────────────────────────────────
-type TabKey = 'standard' | 'nca' | 'artifacts';
+type TabKey = 'standard' | 'nca' | 'laws' | 'artifacts';
 
 const TABS: Array<{ key: TabKey; label: string; icon: typeof BookMarked; hint: string }> = [
   { key: 'standard', label: 'Standard Templates', icon: BookMarked, hint: 'Pre-curated GRC artefacts.' },
   { key: 'nca', label: 'NCA Templates', icon: FileText, hint: 'NCA Saudi reference documents.' },
+  { key: 'laws', label: 'Reference Laws', icon: Scale, hint: 'Laws & regulations to draft from.' },
   { key: 'artifacts', label: 'Artifact Templates', icon: Layers, hint: 'Compliance framework artifacts.' },
 ];
 
@@ -78,6 +80,21 @@ interface NcaTemplate {
   category: string;
   filename: string;
   size_bytes?: number;
+}
+
+interface ReferenceLaw {
+  id: string;
+  name: string;
+  short_name?: string | null;
+  jurisdiction?: string | null;
+  authority?: string | null;
+  category: string;
+  description?: string | null;
+  version?: string | null;
+  doc_type_hint?: string | null;
+  tags?: string[];
+  article_count?: number | null;
+  word_count?: number;
 }
 
 interface ArtifactItem {
@@ -218,6 +235,9 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
           )}
           {activeTab === 'nca' && (
             <NcaTab search={search} onPick={(template) => emit({ kind: 'nca', template })} />
+          )}
+          {activeTab === 'laws' && (
+            <ReferenceLawsTab search={search} onPick={(law) => emit({ kind: 'reference-law', law })} />
           )}
           {activeTab === 'artifacts' && (
             <ArtifactsTab
@@ -587,6 +607,255 @@ function NcaPreviewPopup({
         {/* Footer */}
         <div className="border-t border-gray-200 bg-gray-50 px-5 py-2.5 flex items-center justify-between text-[11px] text-gray-500">
           <span>Source: NCA Saudi reference catalogue.</span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-100"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Reference Laws tab ────────────────────────────────────────────────
+function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: ReferenceLaw) => void }) {
+  const { toast } = useToast();
+  const [previewLaw, setPreviewLaw] = useState<ReferenceLaw | null>(null);
+
+  const { data, isLoading, error } = useQuery<{ total: number; laws: ReferenceLaw[] }>({
+    queryKey: ['reference-laws-list'],
+    queryFn: async () => {
+      const r = await apiClient.get('/governance/reference-laws');
+      return r.data;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const filtered = useMemo(() => {
+    const list = data?.laws || [];
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((l) =>
+      l.name.toLowerCase().includes(q) ||
+      (l.short_name || '').toLowerCase().includes(q) ||
+      (l.jurisdiction || '').toLowerCase().includes(q) ||
+      (l.authority || '').toLowerCase().includes(q) ||
+      (l.description || '').toLowerCase().includes(q) ||
+      (l.tags || []).some((t) => t.toLowerCase().includes(q)),
+    );
+  }, [data?.laws, search]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+      </div>
+    );
+  }
+  if (error || !data) {
+    return (
+      <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">
+        <AlertCircle className="h-4 w-4" />
+        Failed to load reference laws.
+      </div>
+    );
+  }
+  if (filtered.length === 0) {
+    return <EmptyState message={search ? 'No reference laws match your search.' : 'No reference laws available yet.'} />;
+  }
+
+  return (
+    <>
+      <div className="space-y-3">
+        <p className="text-[11px] text-gray-500">
+          {data.total} authoritative law{data.total === 1 ? '' : 's'} / regulation{data.total === 1 ? '' : 's'}. Drafting generates a
+          new tenant-specific document (policy, charter, procedure…) that complies with — and cites — the law&apos;s articles.
+        </p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {filtered.map((law) => (
+            <div
+              key={law.id}
+              className="relative flex flex-col rounded-xl border border-gray-200 bg-white p-4 transition-all hover:border-indigo-400 hover:shadow-md"
+            >
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 rounded-lg p-2 bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  <Scale className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold text-gray-900 leading-snug">{law.name}</h3>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
+                    {law.jurisdiction && (
+                      <span className="inline-flex items-center gap-1">
+                        <Globe className="h-3 w-3" /> {law.jurisdiction}
+                      </span>
+                    )}
+                    {law.authority && (
+                      <>
+                        <span className="text-gray-300">·</span>
+                        <span className="inline-flex items-center gap-1">
+                          <Building2 className="h-3 w-3" /> {law.authority}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  {law.description && (
+                    <p className="mt-1.5 text-[12px] leading-relaxed text-gray-700 line-clamp-3">{law.description}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                {typeof law.article_count === 'number' && law.article_count > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium bg-slate-50 text-slate-700 border-slate-200">
+                    <Hash className="h-2.5 w-2.5" /> {law.article_count} articles
+                  </span>
+                )}
+                {law.version && (
+                  <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 border-amber-200">
+                    <Info className="h-2.5 w-2.5" /> {law.version}
+                  </span>
+                )}
+                {(law.tags || []).slice(0, 3).map((t) => (
+                  <span key={t} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium bg-indigo-50 text-indigo-700 border-indigo-200">
+                    <Tag className="h-2.5 w-2.5" /> {t}
+                  </span>
+                ))}
+              </div>
+
+              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-end gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setPreviewLaw(law)}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <Eye className="h-3 w-3" />
+                  Preview
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    toast({
+                      type: 'info',
+                      title: 'Opening AI Draft',
+                      message: `Drafting from "${law.short_name || law.name}". Pick the document type and generate.`,
+                    });
+                    onPick(law);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  Draft from law
+                  <ChevronRight className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {previewLaw && (
+        <ReferenceLawPreviewPopup
+          law={previewLaw}
+          onClose={() => setPreviewLaw(null)}
+          onDraft={(l) => {
+            setPreviewLaw(null);
+            toast({
+              type: 'info',
+              title: 'Opening AI Draft',
+              message: `Drafting from "${l.short_name || l.name}". Pick the document type and generate.`,
+            });
+            onPick(l);
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+// ─── Reference law full-text preview popup ─────────────────────────────
+function ReferenceLawPreviewPopup({
+  law,
+  onClose,
+  onDraft,
+}: {
+  law: ReferenceLaw;
+  onClose: () => void;
+  onDraft: (l: ReferenceLaw) => void;
+}) {
+  const { data, isLoading, error } = useQuery<{ content: string; name: string; word_count: number }>({
+    queryKey: ['reference-law-content', law.id],
+    queryFn: async () => {
+      const r = await apiClient.get(`/governance/reference-laws/${law.id}/content`);
+      return r.data;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-6">
+      <div className="w-full max-w-5xl max-h-[94vh] overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col">
+        <div className="border-b border-gray-200 bg-gradient-to-r from-indigo-50 to-violet-50 px-5 py-3 flex items-start gap-3">
+          <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm shrink-0">
+            <Scale className="h-5 w-5 text-indigo-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-sm sm:text-base font-semibold text-gray-900 truncate" title={law.name}>
+              {law.name}
+            </h2>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
+              {law.jurisdiction && <span>{law.jurisdiction}</span>}
+              {law.authority && (
+                <>
+                  <span className="text-gray-400">·</span>
+                  <span className="truncate">{law.authority}</span>
+                </>
+              )}
+              {data && (
+                <>
+                  <span className="text-gray-400">·</span>
+                  <span>{data.word_count.toLocaleString()} words</span>
+                </>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onDraft(law)}
+            className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100 shrink-0"
+          >
+            <Sparkles className="h-3 w-3" />
+            Draft from law
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-gray-500 hover:bg-white/60 hover:text-gray-900 shrink-0"
+            aria-label="Close preview"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-5 sm:px-8 py-5 flex-1 bg-white">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+            </div>
+          ) : error || !data ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              Failed to load law text.
+            </div>
+          ) : !data.content?.trim() ? (
+            <p className="text-sm text-gray-500">This reference law has no text.</p>
+          ) : (
+            <GovernanceDocumentMarkdown content={data.content} />
+          )}
+        </div>
+
+        <div className="border-t border-gray-200 bg-gray-50 px-5 py-2.5 flex items-center justify-between text-[11px] text-gray-500">
+          <span>Authoritative reference — the AI draft must comply with and cite these articles.</span>
           <button
             type="button"
             onClick={onClose}
@@ -1053,4 +1322,4 @@ function EmptyState({ message }: { message: string }) {
 // Re-export the picker payload + handy mapper so the page can build the
 // AI-draft prefill without re-deriving doc_type rules.
 export { NCA_DOC_TYPE_MAP, ARTIFACT_DOC_TYPE_MAP };
-export type { NcaTemplate, ArtifactItem };
+export type { NcaTemplate, ArtifactItem, ReferenceLaw };

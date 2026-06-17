@@ -1442,7 +1442,52 @@ export const aiRiskAssessmentApi = {
     apiClient.post<AIRiskEntry>(`/erm/ai-risk-assessment/${id}/accept-ai`, {}),
   bridgeToRisk: (id: number) =>
     apiClient.post<{ risk_id: number; created: boolean }>(`/erm/ai-risk-assessment/${id}/bridge-to-risk`, {}),
+  // ── Tenant users (for the Risk Owner picker) ────────────────────────────
+  getTenantUsers: () =>
+    apiClient.get<Array<{ id: number; display_name: string; email: string | null; username: string | null }>>(
+      '/erm/ai-risk-assessment/meta/tenant-users'
+    ),
+  // ── Evidence: list, upload+link, link existing, unlink, download ────────
+  listEvidence: (entryId: number) =>
+    apiClient.get<Array<AIRiskEvidence>>(`/erm/ai-risk-assessment/${entryId}/evidence`),
+  uploadEvidence: (entryId: number, file: File, evidenceType?: string, relationshipType?: string) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const params = new URLSearchParams();
+    if (evidenceType) params.set('evidence_type', evidenceType);
+    if (relationshipType) params.set('relationship_type', relationshipType);
+    const qs = params.toString();
+    return apiClient.post<AIRiskEvidence>(
+      `/erm/ai-risk-assessment/${entryId}/evidence/upload${qs ? '?' + qs : ''}`,
+      fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+  },
+  linkEvidence: (entryId: number, evidenceId: number, relationshipType?: string) =>
+    apiClient.post<AIRiskEvidence>(`/erm/ai-risk-assessment/${entryId}/evidence/link`, {
+      evidence_id: evidenceId,
+      relationship_type: relationshipType || 'supports',
+    }),
+  unlinkEvidence: (entryId: number, linkId: number) =>
+    apiClient.delete(`/erm/ai-risk-assessment/${entryId}/evidence/${linkId}`),
+  evidenceDownloadUrl: (entryId: number, linkId: number) =>
+    `/api/erm/ai-risk-assessment/${entryId}/evidence/${linkId}/download`,
 };
+
+export interface AIRiskEvidence {
+  evidence_id: number;
+  link_id: number | null;
+  name: string;
+  description: string | null;
+  file_name: string | null;
+  file_type: string | null;
+  file_path: string | null;
+  evidence_type: string | null;
+  uploaded_at: string | null;
+  uploaded_by: number | null;
+  status: string | null;
+  relationship_type: string;
+}
 
 export const tenantApi = {
   getTenantUsers: async (tenantId?: number) => {
