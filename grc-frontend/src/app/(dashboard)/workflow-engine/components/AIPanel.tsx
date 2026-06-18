@@ -142,13 +142,16 @@ export function AIPanel({
                 'Quarterly risk review with CISO approval and board reporting',
                 'New employee access provisioning with manager and IT approval',
                 'Policy review cycle with legal review and distribution',
+                'When evidence expires, notify the compliance team and escalate if not uploaded within 7 days',
+                'Vendor risk assessment with security review, legal sign-off, and onboarding approval',
+                'Incident response workflow with triage, containment, root cause analysis, and post-mortem',
               ].map((example) => (
                 <button
                   key={example}
                   onClick={() => onPromptChange(example)}
                   className="block w-full text-left text-[10px] text-purple-600 hover:text-purple-800 py-1.5 px-2 rounded hover:bg-purple-50 transition-colors"
                 >
-                  "{example}"
+                  &quot;{example}&quot;
                 </button>
               ))}
             </div>

@@ -24,7 +24,7 @@ Weights (default — tunable later via tenant settings):
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from grc.models import (
@@ -804,7 +804,15 @@ def compute_tenant_posture(
     weights = resolve_weights_for_tenant(db, tenant_id)
     asset_q = db.query(ITAsset).filter(ITAsset.tenant_id == tenant_id)
     if owner_id is not None:
-        asset_q = asset_q.filter(ITAsset.owner_id == owner_id)
+        # Owner-scoped callers (e.g. Banking User) see assets they own PLUS
+        # any UNOWNED asset. An asset with no owner_id isn't assigned to
+        # anyone, so excluding it would hide it from every user — which is
+        # exactly what made the risk-posture dashboard come up empty: assets
+        # are commonly created without an owner_id, so `owner_id == <uid>`
+        # matched nothing and no CIS/vuln/etc. data ever surfaced.
+        asset_q = asset_q.filter(
+            or_(ITAsset.owner_id == owner_id, ITAsset.owner_id.is_(None))
+        )
     assets = asset_q.all()
     rows: List[Dict[str, Any]] = []
     for a in assets:

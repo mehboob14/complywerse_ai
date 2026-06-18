@@ -3658,6 +3658,8 @@ export const workflowEngineApi = {
   catalog: {
     nodeTypes: () => apiClient.get('/workflow-engine/catalog/node-types'),
     nodeConfigOptions: () => apiClient.get('/workflow-engine/catalog/node-config-options'),
+    nodeParamSchemas: () => apiClient.get('/workflow-engine/catalog/node-param-schemas'),
+    lookup: (entity: string, q?: string) => apiClient.get(`/workflow-engine/catalog/lookup/${encodeURIComponent(entity)}`, { params: q ? { q } : {} }),
     templatesLibrary: () => apiClient.get('/workflow-engine/catalog/templates/library'),
     integrationPoints: () => apiClient.get('/workflow-engine/catalog/integrations'),
     users: (params?: Record<string, unknown>) => apiClient.get('/workflow-engine/catalog/actors/users', { params }),

@@ -102,9 +102,48 @@ function getIconComponent(nodeType: string, config: Record<string, unknown>): Lu
   return NODE_ICONS[category] || NODE_ICONS[nodeType] || Circle;
 }
 
+export function humanizeTriggerEvent(raw: string): string {
+  const parts = raw.replace(/_/g, ' ').split('.');
+  const verb = parts[parts.length - 1] || '';
+  const entity = parts.slice(0, -1).join(' › ');
+  const verbMap: Record<string, string> = {
+    create: 'Created',
+    update: 'Updated',
+    delete: 'Deleted',
+    trigger: 'AI / System Action',
+    upload: 'Uploaded',
+    approve: 'Approved',
+    reject: 'Rejected',
+  };
+  const friendlyVerb = verbMap[verb.trim()] || verb;
+  if (!entity) return friendlyVerb;
+  const titleEntity = entity.split(' › ').map(p =>
+    p.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+  ).join(' › ');
+  return `${titleEntity} › ${friendlyVerb}`;
+}
+
+function humanizeActionName(raw: string): string {
+  if (raw.startsWith('platform_action.')) {
+    const parts = raw.split('.');
+    const tail = parts[parts.length - 1] || '';
+    return tail.replace(/_/g, ' ');
+  }
+  return raw.replace(/_/g, ' ');
+}
+
 export function WorkflowNodeCard({ data }: { data: FlowNodeData }) {
-  const { nodeType, label, config, isTerminal, isStart, executionStatus } = data;
+  const {
+    nodeKey, nodeType, label, config, isTerminal, isStart, executionStatus,
+    isFirstAfterStart, triggerStatus, inferredTriggerEvent, module, submodule,
+  } = data;
+  // Module › Sub-module breadcrumb so a placed functionality node reads
+  // self-descriptively on the canvas (e.g. "Create Risk" under
+  // "Risk Management › Risk Register") without bloating the label itself.
+  const contextCrumb = [module, submodule].filter(Boolean).join(' › ');
+  const isStartPlaceholder = nodeKey === 'start';
   const isCondition = nodeType === 'condition';
+  const isApproval = nodeType === 'approval';
   const isEnd = isTerminal || nodeType === 'end';
 
   const colorClass = getNodeColorClass(nodeType);
@@ -119,10 +158,38 @@ export function WorkflowNodeCard({ data }: { data: FlowNodeData }) {
     </span>
   ) : null;
 
+  // Highlight the node that acts as the implicit trigger (first node after Start).
+  // Only applies to non-start, non-end nodes — Start and dedicated trigger cards already self-render.
+  const showTriggerOverlay = isFirstAfterStart && !isStartPlaceholder && nodeType !== 'start' && !isEnd;
+  const triggerRingClass = showTriggerOverlay
+    ? (triggerStatus === 'invalid'
+        ? 'ring-2 ring-red-400 ring-offset-1'
+        : 'ring-2 ring-amber-400 ring-offset-1')
+    : '';
+
   return (
     <div
-      className={`relative border-2 rounded-lg bg-white shadow-sm min-w-[140px] max-w-[180px] ${colorClass} transition-all duration-150 hover:shadow-md`}
+      className={`relative border-2 rounded-lg bg-white shadow-sm min-w-[140px] max-w-[180px] ${colorClass} ${triggerRingClass} transition-all duration-150 hover:shadow-md`}
     >
+      {showTriggerOverlay && (
+        triggerStatus === 'invalid' ? (
+          <span
+            data-testid="node-trigger-invalid"
+            title="This node runs first after Start, but it cannot be used as a trigger. Replace it with a Create / Update / Delete platform function, or insert a dedicated trigger node."
+            className="absolute -top-2 -left-2 text-[9px] px-1.5 py-0.5 rounded-full border border-red-400 bg-red-50 text-red-700 font-bold flex items-center gap-0.5"
+          >
+            <TriangleAlert size={9} /> Not a trigger
+          </span>
+        ) : (
+          <span
+            data-testid="node-trigger-valid"
+            title={`This node fires the workflow on event: ${inferredTriggerEvent || ''}`}
+            className="absolute -top-2 -left-2 text-[9px] px-1.5 py-0.5 rounded-full border border-amber-400 bg-amber-50 text-amber-800 font-bold flex items-center gap-0.5"
+          >
+            <Zap size={9} /> Trigger
+          </span>
+        )
+      )}
       {statusBadge}
 
       {/* Input handle */}
@@ -139,7 +206,11 @@ export function WorkflowNodeCard({ data }: { data: FlowNodeData }) {
         <div className="flex items-center gap-1.5 mb-1">
           <IconComponent size={13} className={iconColorClass} />
           <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
-            {nodeType === 'start' ? 'Trigger' : nodeType}
+            {nodeType === 'start'
+              ? 'Trigger'
+              : nodeType === 'action' && typeof config?.action_name === 'string' && (config.action_name as string).startsWith('platform_action.')
+                ? '⚡ Platform Function'
+                : nodeType}
           </span>
         </div>
 
@@ -147,9 +218,25 @@ export function WorkflowNodeCard({ data }: { data: FlowNodeData }) {
         <div className="text-xs font-semibold text-gray-800 leading-tight truncate">{String(label)}</div>
 
         {/* Config summary */}
-        {nodeType === 'action' && typeof config?.action_name === 'string' && (
-          <div className="text-[9px] text-gray-400 mt-0.5 truncate">{config.action_name.replace(/_/g, ' ')}</div>
+        {nodeType === 'start' && !isStartPlaceholder && (
+          typeof config?.trigger_type === 'string' && config.trigger_type ? (
+            <div className="text-[9px] text-emerald-600 font-semibold mt-0.5 truncate">
+              ⚡ {humanizeTriggerEvent(config.trigger_type as string)}
+            </div>
+          ) : (
+            <div className="text-[9px] text-amber-500 font-semibold mt-0.5">
+              ⚠ Select event type
+            </div>
+          )
         )}
+        {isStartPlaceholder && (
+          <div className="text-[9px] text-gray-400 mt-0.5">Connect any ⚡ node ↓</div>
+        )}
+        {nodeType === 'action' && contextCrumb ? (
+          <div className="text-[9px] text-gray-400 mt-0.5 truncate" title={contextCrumb}>{contextCrumb}</div>
+        ) : nodeType === 'action' && typeof config?.action_name === 'string' ? (
+          <div className="text-[9px] text-gray-400 mt-0.5 truncate">{humanizeActionName(config.action_name as string)}</div>
+        ) : null}
         {nodeType === 'approval' && typeof config?.approval_type === 'string' && (
           <div className="text-[9px] text-gray-400 mt-0.5 truncate">{config.approval_type.replace(/_/g, ' ')}</div>
         )}
@@ -173,8 +260,9 @@ export function WorkflowNodeCard({ data }: { data: FlowNodeData }) {
             <>
               <Handle
                 type="source"
-                position={Position.Right}
+                position={Position.Bottom}
                 id="out_true"
+                style={{ left: '30%' }}
                 className="!w-3 !h-3 !border-2 !border-emerald-500 !bg-emerald-100"
                 title="True branch"
               />
@@ -182,8 +270,44 @@ export function WorkflowNodeCard({ data }: { data: FlowNodeData }) {
                 type="source"
                 position={Position.Bottom}
                 id="out_false"
+                style={{ left: '70%' }}
                 className="!w-3 !h-3 !border-2 !border-red-500 !bg-red-100"
                 title="False branch"
+              />
+              {/* Hidden fallback handle for legacy edges that reference sourceHandle="out".
+                  Moved to Top (off the routing path) so it doesn't conflict with the
+                  visible Bottom True/False handles. */}
+              <Handle
+                type="source"
+                position={Position.Top}
+                id="out"
+                style={{ display: 'none' }}
+              />
+            </>
+          ) : isApproval ? (
+            <>
+              <Handle
+                type="source"
+                position={Position.Bottom}
+                id="approved"
+                style={{ left: '30%' }}
+                className="!w-3 !h-3 !border-2 !border-emerald-500 !bg-emerald-100"
+                title="Approved branch"
+              />
+              <Handle
+                type="source"
+                position={Position.Bottom}
+                id="rejected"
+                style={{ left: '70%' }}
+                className="!w-3 !h-3 !border-2 !border-red-500 !bg-red-100"
+                title="Rejected branch"
+              />
+              {/* Legacy fallback hidden off-route, same pattern as condition. */}
+              <Handle
+                type="source"
+                position={Position.Top}
+                id="out"
+                style={{ display: 'none' }}
               />
             </>
           ) : (

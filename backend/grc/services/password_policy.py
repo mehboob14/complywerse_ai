@@ -17,6 +17,7 @@ defaults so authentication never breaks because of policy plumbing.
 """
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -25,6 +26,16 @@ from typing import Optional, Tuple
 from sqlalchemy.orm import Session
 
 from ..models import GRCUser, PasswordPolicy
+
+
+def _lockout_enabled() -> bool:
+    """Account lockout is OFF by default — a wrong password returns a clear
+    "invalid credentials" error and never locks the account. Set
+    ``AUTH_ACCOUNT_LOCKOUT_ENABLED=true`` to re-enable the policy-driven
+    failed-attempt lockout (e.g. for production hardening)."""
+    return os.environ.get("AUTH_ACCOUNT_LOCKOUT_ENABLED", "false").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
 
 
 # Effective policy used when no row exists yet. Mirrors NIST SP 800-63B
@@ -105,8 +116,12 @@ def validate_password(plain_password: str, policy: PasswordPolicy) -> Tuple[bool
 # ---------------------------------------------------------------------------
 
 def is_account_locked(user: GRCUser, now: Optional[datetime] = None) -> bool:
-    """True if `locked_until` is set and still in the future."""
-    if user is None:
+    """True if `locked_until` is set and still in the future.
+
+    Always False when lockout is disabled (the default) so a previously-set
+    `locked_until` can never block login — the next successful login clears it.
+    """
+    if user is None or not _lockout_enabled():
         return False
     locked_until = getattr(user, "locked_until", None)
     if locked_until is None:
@@ -123,7 +138,9 @@ def register_failed_login(user: GRCUser, policy: PasswordPolicy, db: Session) ->
         return
     current = getattr(user, "failed_login_attempts", 0) or 0
     user.failed_login_attempts = current + 1
-    if user.failed_login_attempts >= (policy.lockout_threshold or 5):
+    # Only ever lock when lockout is explicitly enabled; otherwise we just keep
+    # the counter for visibility and never set `locked_until`.
+    if _lockout_enabled() and user.failed_login_attempts >= (policy.lockout_threshold or 5):
         user.locked_until = datetime.utcnow() + timedelta(minutes=policy.lockout_minutes or 30)
 
 

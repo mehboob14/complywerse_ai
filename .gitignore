@@ -98,3 +98,6 @@ grc-frontend/uploads/
 
 # Local tool/session state
 .local/
+# Large CIS benchmark reference data — too big for GitHub (Operating_Systems.json is 113MB,
+# over the 100MB hard limit). Kept on disk locally, excluded from version control.
+CIS_Benchmarks/

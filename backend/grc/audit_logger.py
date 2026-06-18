@@ -409,6 +409,31 @@ async def parse_request_payload(request: Request, body: bytes) -> Optional[Dict[
     return None
 
 
+def _resolve_tenant_slug(request: Request, tenant_id: Optional[int]) -> Optional[str]:
+    """Slug of the tenant whose DB this request belongs to. Prefers the value
+    TenantMiddleware put on ``request.state``; falls back to a master lookup by
+    tenant id."""
+    slug = getattr(getattr(request, "state", None), "tenant_slug", None)
+    if slug:
+        return slug
+    tenant = getattr(getattr(request, "state", None), "tenant", None)
+    slug = getattr(tenant, "slug", None) or getattr(tenant, "schema_name", None)
+    if slug:
+        return slug
+    if tenant_id is not None:
+        try:
+            from .models import Tenant
+            m = SessionLocal()
+            try:
+                t = m.query(Tenant).filter(Tenant.id == tenant_id).first()
+                return (getattr(t, "slug", None) or getattr(t, "schema_name", None)) if t else None
+            finally:
+                m.close()
+        except Exception:
+            return None
+    return None
+
+
 def write_audit_log(
     request: Request,
     response: Response,
@@ -418,74 +443,103 @@ def write_audit_log(
 ) -> None:
     try:
         path = request.url.path or ""
-        tenant = getattr(request.state, "tenant", None)
-        tenant_id = getattr(tenant, "id", None)
+        # TenantMiddleware stashes a lightweight DICT on request.state.tenant
+        # ({"id":..,"slug":..}) and ALSO sets request.state.tenant_id directly.
+        # Read tenant_id first — doing getattr(dict, "id") always returns None,
+        # which previously made every real CRUD request hit the `if not
+        # tenant_id: return` guard and silently skip the audit write (so the
+        # workflow dispatcher never saw any platform events to auto-trigger on).
+        tenant_id = getattr(request.state, "tenant_id", None)
+        if tenant_id is None:
+            tenant = getattr(request.state, "tenant", None)
+            if isinstance(tenant, dict):
+                tenant_id = tenant.get("id")
+            else:
+                tenant_id = getattr(tenant, "id", None)
 
+        # Auth identity comes from the JWT — frontend sends it either as the
+        # grc_auth_token cookie OR an "Authorization: Bearer <token>" header.
         token = request.cookies.get("grc_auth_token")
-        user_id = None
+        if not token:
+            auth = request.headers.get("authorization") or ""
+            if auth.lower().startswith("bearer "):
+                token = auth[7:].strip() or None
+        username: Optional[str] = None
         if token:
             payload = decode_token(token)
             username = payload.get("sub") if payload else None
-            if username:
-                db_lookup = SessionLocal()
-                try:
-                    user = db_lookup.query(GRCUser).filter(GRCUser.username == username).first()
-                    if user:
-                        user_id = user.id
-                        if tenant_id is None and payload:
-                            tenant_id = payload.get("tenant_id")
-                finally:
-                    db_lookup.close()
+            if tenant_id is None and payload:
+                tenant_id = payload.get("tenant_id")
 
         if not tenant_id:
             return
 
-        resource_type, resource_id = _extract_resource(path)
-        status_code = getattr(response, "status_code", 200)
-        duration_ms = int((time.time() - started_at) * 1000)
-        method = request.method.upper()
-        action = _action_from_method(method, status_code, path)
-
-        # Promote fields out of the request body into the audit row when the
-        # URL didn't already give us a numeric ID — e.g. POST /executions/trigger
-        # → workflow_definition_id from body becomes resource_id.
-        if resource_id is None:
-            resource_id = _extract_resource_id_from_payload(resource_type, request_payload)
-
-        summary = _build_summary(action, resource_type, resource_id, request_payload, status_code)
-
-        # Pull a human-readable resource name from the request body so the UI
-        # can render it without re-fetching the row's referenced object.
-        resource_name: Optional[str] = None
-        if isinstance(request_payload, dict):
-            for k in ("name", "title", "username", "email", "label", "subject"):
-                v = request_payload.get(k)
-                if isinstance(v, str) and v.strip():
-                    resource_name = v.strip()
-                    break
-
-        details = {
-            "method": method,
-            "path": path,
-            "query": dict(request.query_params),
-            "status_code": status_code,
-            "duration_ms": duration_ms,
-            "user_agent": request.headers.get("user-agent"),
-            "request": request_payload,
-            # Natural-language fields the admin UI (and downstream consumers)
-            # render directly. Keeping them inside `changes` preserves the
-            # existing schema (no migration needed).
-            "summary": summary,
-            "resource_name": resource_name,
-        }
-        # Capture response error body (e.g. FastAPI's {"detail": "..."}) so the
-        # AI summary can surface the real failure reason instead of just the
-        # HTTP status code. Only populated when middleware passed it in.
-        if response_error is not None:
-            details["response_error"] = _sanitize_value(response_error)
-
-        db = SessionLocal()
+        # Audit logs (and users) live in the PER-TENANT database, not the master
+        # catalog. Writing here is also what lets the workflow dispatcher — which
+        # polls each tenant's grc_audit_logs — see platform CRUD events and
+        # auto-trigger active workflows. (Previously this used the master
+        # SessionLocal, whose grc_audit_logs table doesn't exist, so every
+        # generic-CRUD audit failed silently and nothing auto-triggered.)
+        from .db import open_tenant_session
+        slug = _resolve_tenant_slug(request, tenant_id)
+        if not slug:
+            return
         try:
+            db = open_tenant_session(slug)
+        except Exception:
+            return
+
+        try:
+            user_id = None
+            if username:
+                user = db.query(GRCUser).filter(GRCUser.username == username).first()
+                if user:
+                    user_id = user.id
+
+            resource_type, resource_id = _extract_resource(path)
+            status_code = getattr(response, "status_code", 200)
+            duration_ms = int((time.time() - started_at) * 1000)
+            method = request.method.upper()
+            action = _action_from_method(method, status_code, path)
+
+            # Promote fields out of the request body into the audit row when the
+            # URL didn't already give us a numeric ID — e.g. POST /executions/trigger
+            # → workflow_definition_id from body becomes resource_id.
+            if resource_id is None:
+                resource_id = _extract_resource_id_from_payload(resource_type, request_payload)
+
+            summary = _build_summary(action, resource_type, resource_id, request_payload, status_code)
+
+            # Pull a human-readable resource name from the request body so the UI
+            # can render it without re-fetching the row's referenced object.
+            resource_name: Optional[str] = None
+            if isinstance(request_payload, dict):
+                for k in ("name", "title", "username", "email", "label", "subject"):
+                    v = request_payload.get(k)
+                    if isinstance(v, str) and v.strip():
+                        resource_name = v.strip()
+                        break
+
+            details = {
+                "method": method,
+                "path": path,
+                "query": dict(request.query_params),
+                "status_code": status_code,
+                "duration_ms": duration_ms,
+                "user_agent": request.headers.get("user-agent"),
+                "request": request_payload,
+                # Natural-language fields the admin UI (and downstream consumers)
+                # render directly. Keeping them inside `changes` preserves the
+                # existing schema (no migration needed).
+                "summary": summary,
+                "resource_name": resource_name,
+            }
+            # Capture response error body (e.g. FastAPI's {"detail": "..."}) so the
+            # AI summary can surface the real failure reason instead of just the
+            # HTTP status code. Only populated when middleware passed it in.
+            if response_error is not None:
+                details["response_error"] = _sanitize_value(response_error)
+
             log = AuditLog(
                 tenant_id=tenant_id,
                 user_id=user_id,

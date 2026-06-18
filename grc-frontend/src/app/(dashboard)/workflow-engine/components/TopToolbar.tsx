@@ -29,6 +29,10 @@ type Props = {
   isActive: boolean;
   saving: boolean;
   locked?: boolean;
+  // When set, Save is disabled and this message is shown as the button
+  // tooltip (e.g. the first node isn't a valid trigger). Optional so
+  // existing callers that don't pass it keep working.
+  saveError?: string | null;
   onSelectDefinition: (id: number | null) => void;
   onNameChange: (name: string) => void;
   onToggleActive: () => void;
@@ -55,6 +59,7 @@ export function TopToolbar({
   isActive,
   saving,
   locked = false,
+  saveError = null,
   onSelectDefinition,
   onNameChange,
   onToggleActive,
@@ -244,7 +249,8 @@ export function TopToolbar({
           }
           onSave();
         }}
-        disabled={saving || locked}
+        disabled={saving || locked || !!saveError}
+        title={saveError || (selectedId ? 'Update workflow' : 'Create workflow')}
         className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {saving ? <Loader2 size={13} className="animate-spin" /> : locked ? <Lock size={13} /> : <Save size={13} />}

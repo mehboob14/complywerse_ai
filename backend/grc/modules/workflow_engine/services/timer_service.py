@@ -25,7 +25,23 @@ class TimerService:
     def __init__(self, event_queue):
         self.event_queue = event_queue
 
-    def schedule_due_steps(self, db) -> int:
+    def schedule_due_steps(self, db=None) -> int:
+        """Iterating wrapper — runs the per-tenant timer pass across every
+        active tenant DB. Workflow steps / schedules / approvals live in the
+        per-tenant database, so the master ``db`` (if passed) is ignored.
+        """
+        from .trigger_dispatcher import iter_tenant_sessions
+        total = 0
+        for tenant_id, _slug, sess in iter_tenant_sessions():
+            try:
+                total += self.schedule_due_steps_for_tenant(sess, tenant_id)
+                sess.commit()
+            except Exception:  # noqa: BLE001 — one tenant must not kill the cycle
+                sess.rollback()
+                logger.exception("workflow.timer.tenant_failed tenant_id=%s", tenant_id)
+        return total
+
+    def schedule_due_steps_for_tenant(self, db, tenant_id) -> int:
         fired = 0
 
         # 1. Resume waiting timer steps that are due
@@ -46,7 +62,7 @@ class TimerService:
 
         for step in due_steps:
             logger.debug("workflow.timer.step_resume_queued step_id=%s", step.id)
-            self.event_queue.publish({"kind": "resume_step", "step_id": step.id})
+            self.event_queue.publish({"kind": "resume_step", "step_id": step.id, "tenant_id": tenant_id})
         fired += len(due_steps)
 
         # 2. Fire due schedules (interval, once, and cron)
@@ -77,7 +93,7 @@ class TimerService:
                 {
                     "kind": "start_instance",
                     "workflow_definition_id": schedule.workflow_definition_id,
-                    "tenant_id": schedule.tenant_id,
+                    "tenant_id": schedule.tenant_id or tenant_id,
                     "trigger_event": f"scheduler.{schedule.id}",
                     "trigger_payload": schedule.payload or {},
                     "correlation_id": f"schedule:{schedule.id}:{int(datetime.utcnow().timestamp())}",
@@ -109,7 +125,7 @@ class TimerService:
         fired += len(schedules)
 
         # 3. SLA reminders and timeout evaluation for pending approvals
-        fired += self._process_approval_sla(db)
+        fired += self._process_approval_sla(db, tenant_id)
 
         if fired:
             logger.info("workflow.timer.cycle_fired total=%s", fired)
@@ -128,7 +144,7 @@ class TimerService:
         except Exception:
             return None
 
-    def _process_approval_sla(self, db) -> int:
+    def _process_approval_sla(self, db, tenant_id=None) -> int:
         """Send pre-deadline escalation reminders and queue runtime timeout handling."""
         now = datetime.utcnow()
         pending = (
@@ -204,7 +220,7 @@ class TimerService:
             if due_at <= now:
                 queued_at = self._parse_iso_datetime(metadata.get("timeout_resume_queued_at"))
                 if queued_at is None or (now - queued_at) >= timedelta(minutes=5):
-                    self.event_queue.publish({"kind": "resume_step", "step_id": approval.workflow_step_id})
+                    self.event_queue.publish({"kind": "resume_step", "step_id": approval.workflow_step_id, "tenant_id": approval.tenant_id or tenant_id})
                     metadata["timeout_resume_queued_at"] = now.isoformat()
                     approval.request_metadata = metadata
                     touched += 1

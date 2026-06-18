@@ -32,23 +32,19 @@ import { TemplatesModal } from './components/TemplatesModal';
 import { TopToolbar } from './components/TopToolbar';
 import { VersionDrawer } from './components/VersionDrawer';
 import {
-  ACTION_KEYS,
-  APPROVAL_KEYS,
   AISuggestion,
   AnalyticsOverview,
   BackendEdge,
   BackendNode,
-  CONDITION_KEYS,
   EMPTY_NODE_CONFIG_OPTIONS,
   enrichWorkflowNodeConfig,
   formatWorkflowContextLabel,
   FlowNodeData,
-  getCatalogContextForKey,
+  getTriggerEventForFirstNode,
   NodeConfigOptions,
   NodeOptionItem,
+  NodeParamSchemas,
   PaletteItem,
-  TIMER_KEYS,
-  TRIGGER_EVENT_MAP,
   TRIGGER_KEYS,
   WorkflowDefinition,
   WorkflowTemplate,
@@ -83,6 +79,18 @@ function normalizeBackendNode(node: BackendNode): FlowNodeData {
   };
 }
 
+// ── Workflow-builder trace logging ───────────────────────────────────────────
+// Lightweight, prefixed console tracing for the builder so you can follow what
+// happens as you pick/drop/configure/save/run nodes. Toggle off by setting
+// localStorage.WF_TRACE = '0' (defaults on).
+const wfLog = (label: string, data?: unknown) => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage?.getItem('WF_TRACE') === '0') return;
+  } catch { /* ignore */ }
+  // eslint-disable-next-line no-console
+  console.log('%c[WF]%c ' + label, 'color:#fff;background:#6366f1;padding:1px 4px;border-radius:3px;font-weight:bold', 'color:#6366f1', data ?? '');
+};
+
 function defaultConfigForGroup(group: string): Record<string, unknown> {
   if (group === 'triggers') return { trigger_type: '' };
   if (group === 'actions' || group === 'platform_functions') return { action_name: '', payload: {} };
@@ -92,9 +100,23 @@ function defaultConfigForGroup(group: string): Record<string, unknown> {
   return {};
 }
 
-function triggerEventForNodeConfig(config: Record<string, unknown>): string {
-  const t = config?.trigger_type as string;
-  return TRIGGER_EVENT_MAP[t] || 'manual.trigger';
+// Seed a sensible, NON-EMPTY default subject + message on notification nodes
+// when they're added, so a freshly-dropped Email / In-App node always sends
+// real content. Uses template variables that resolve at runtime
+// (workflow_name, action, resource_type, resource_id) so the body reflects the
+// actual functionality that triggered the workflow.
+function withNotificationDefaults(config: Record<string, unknown>): Record<string, unknown> {
+  const action = config.action_name;
+  if (action !== 'send_notification_email' && action !== 'send_in_app_alert') return config;
+  if (!config.subject) {
+    config.subject = 'Workflow alert: {{workflow_name}}';
+  }
+  if (!config.message && !config.body) {
+    config.message =
+      'The "{{workflow_name}}" workflow was triggered by a {{action}} on {{resource_type}} #{{resource_id}}. ' +
+      'Please review this item in the platform.';
+  }
+  return config;
 }
 
 function getEdgeLabel(edge: Edge): string {
@@ -195,86 +217,68 @@ function normalizePlatformFunctionLabel(item: CatalogItem, moduleNameFallback?: 
 }
 
 function buildPalette(catalog: CatalogResponse): PaletteItem[] {
-  const defaults: PaletteItem[] = [
-    ...Array.from(TRIGGER_KEYS).map((k) => {
-      const context = getCatalogContextForKey(k);
-      return {
-        key: k,
-        label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        description: '',
-        group: 'triggers' as const,
-        module: context.module,
-        submodule: context.submodule,
-      };
-    }),
-    ...Array.from(ACTION_KEYS).map((k) => {
-      const context = getCatalogContextForKey(k);
-      return {
-        key: k,
-        label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        description: '',
-        group: 'actions' as const,
-        module: context.module,
-        submodule: context.submodule,
-      };
-    }),
-    ...Array.from(CONDITION_KEYS).map((k) => {
-      const context = getCatalogContextForKey(k);
-      return {
-        key: k,
-        label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        description: '',
-        group: 'conditions' as const,
-        module: context.module,
-        submodule: context.submodule,
-      };
-    }),
-    ...Array.from(APPROVAL_KEYS).map((k) => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), description: '', group: 'approvals' as const })),
-    ...Array.from(TIMER_KEYS).map((k) => ({ key: k, label: k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), description: '', group: 'timers' as const })),
-    { key: 'subworkflow', label: 'Sub-Workflow', description: '', group: 'control' },
-    { key: 'end', label: 'End', description: '', group: 'control' },
+  // Per product direction, the palette exposes ONLY:
+  //   • Platform-functionality nodes — every module / sub-module operation
+  //     across the whole platform (create / update / delete / assign / …),
+  //     rendered hierarchically by module → sub-module.
+  //   • Four always-on basics: Start, End, Email notification, In-app
+  //     notification (the notifications already work end-to-end).
+  // Event triggers (status change, score change, …) are NOT separate palette
+  // nodes anymore — they're configured ON the Start node (see the "Triggers
+  // When" section in the right-hand config panel). Conditions, approvals,
+  // timers, sub-workflows and the other named actions are intentionally
+  // omitted for now and will be re-introduced step by step.
+  //
+  // NOTE: this only changes what the palette OFFERS. The execution engine
+  // still understands every node type, so existing saved workflows that use
+  // conditions/approvals/timers/etc. continue to load and run unchanged.
+  const core: PaletteItem[] = [
+    {
+      key: 'manual_trigger',
+      label: 'Start',
+      description:
+        'Workflow entry point. Configure what starts the workflow (e.g. on status change, score change, created) in the node settings on the right.',
+      group: 'triggers',
+    },
+    {
+      key: 'end',
+      label: 'End',
+      description: 'Marks the workflow as complete.',
+      group: 'control',
+    },
+    {
+      key: 'send_notification_email',
+      label: 'Email Notification',
+      description: 'Send an email notification to selected users or roles.',
+      group: 'actions',
+    },
+    {
+      key: 'send_in_app_alert',
+      label: 'In-App Notification',
+      description: 'Send an in-app notification to selected users or roles.',
+      group: 'actions',
+    },
   ];
 
-  const seen = new Set(defaults.map((d) => d.key));
-  const extras: PaletteItem[] = [];
-
-  const flatGroups: Array<{ group: PaletteItem['group']; items: CatalogItem[] }> = [
-    { group: 'triggers', items: catalog.triggers || [] },
-    { group: 'actions', items: catalog.actions || [] },
-    { group: 'conditions', items: catalog.conditions || [] },
-    { group: 'approvals', items: catalog.approvals || [] },
-    { group: 'timers', items: catalog.timers || [] },
-  ];
-
-  for (const grp of flatGroups) {
-    for (const item of grp.items) {
-      if (grp.group === 'actions' && item.key.startsWith('platform_action.')) {
-        continue;
-      }
-      if (!seen.has(item.key)) {
-        extras.push({ key: item.key, label: item.label, description: '', group: grp.group, module: item.module, submodule: item.submodule });
-        seen.add(item.key);
-      }
-    }
-  }
+  const seen = new Set(core.map((d) => d.key));
+  const platform: PaletteItem[] = [];
 
   for (const [moduleName, items] of Object.entries(catalog.platform_functions || {})) {
     for (const item of items) {
-      if (!seen.has(item.key)) {
-        extras.push({
-          key: item.key,
-          label: normalizePlatformFunctionLabel(item, moduleName),
-          description: '',
-          group: 'platform_functions',
-          module: item.module || moduleName,
-          submodule: item.submodule,
-        });
-        seen.add(item.key);
-      }
+      if (seen.has(item.key)) continue;
+      platform.push({
+        key: item.key,
+        label: normalizePlatformFunctionLabel(item, moduleName),
+        description: '',
+        group: 'platform_functions',
+        module: item.module || moduleName,
+        submodule: item.submodule,
+      });
+      seen.add(item.key);
     }
   }
 
-  return [...defaults, ...extras];
+  return [...core, ...platform];
 }
 
 function normalizeActorUsers(payload: unknown): Array<{ id: number; username?: string; email: string; display_name: string }> {
@@ -380,6 +384,7 @@ function WorkflowEngineContent() {
   const [actorUsers, setActorUsers] = useState<Array<{ id: number; username?: string; email: string; display_name: string }>>([]);
   const [actorRoles, setActorRoles] = useState<Array<{ id: number; name: string; description?: string }>>([]); 
   const [nodeConfigOptions, setNodeConfigOptions] = useState<NodeConfigOptions>(EMPTY_NODE_CONFIG_OPTIONS);
+  const [nodeParamSchemas, setNodeParamSchemas] = useState<NodeParamSchemas>({});
   const [emailConfigCount, setEmailConfigCount] = useState(0);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -494,6 +499,14 @@ function WorkflowEngineContent() {
         if (data && data.frameworks) setNodeConfigOptions(data);
       } catch {
         // silently ignore; config panel will use empty defaults
+      }
+
+      try {
+        const schemasRes = await workflowEngineApi.catalog.nodeParamSchemas();
+        const payload = (schemasRes.data as { schemas?: NodeParamSchemas })?.schemas;
+        if (payload && typeof payload === 'object') setNodeParamSchemas(payload);
+      } catch {
+        // silently ignore; platform-function nodes will show no auto-fields
       }
 
       try {
@@ -629,8 +642,24 @@ function WorkflowEngineContent() {
     try { teConds = JSON.parse(triggerConditionsText); } catch { /* ignore */ }
     let defJson: Record<string, unknown> = {};
     try { defJson = JSON.parse(definitionJsonText); } catch { /* ignore */ }
+    // The Start node is a pure entry marker — the trigger is the FIRST node
+    // connected after it (e.g. a "Delete Evidence" platform function ⇒ "fire
+    // when evidence is deleted"). Only a real (non-default) event explicitly
+    // set on Start overrides this. Mirrors the backend's _derive_trigger_event.
     const startNode = nodes.find((n) => n.data.isStart || n.data.nodeType === 'start');
-    const computedTriggerEvent = startNode ? triggerEventForNodeConfig(startNode.data.config) : triggerEvent;
+    let computedTriggerEvent = triggerEvent;
+    if (startNode) {
+      const startTt = typeof startNode.data.config?.trigger_type === 'string' ? startNode.data.config.trigger_type : '';
+      if (startTt && startTt !== 'manual_trigger') {
+        computedTriggerEvent = getTriggerEventForFirstNode({ nodeType: 'start', config: startNode.data.config }) || startTt;
+      } else {
+        const firstEdge = edges.find((e) => e.source === startNode.id);
+        const firstNode = firstEdge ? nodes.find((n) => n.id === firstEdge.target) : undefined;
+        computedTriggerEvent =
+          (firstNode ? getTriggerEventForFirstNode({ nodeType: firstNode.data.nodeType, config: firstNode.data.config }) : null)
+          || 'manual.trigger';
+      }
+    }
     return {
       name: name || 'Untitled Workflow',
       description,
@@ -652,15 +681,23 @@ function WorkflowEngineContent() {
     setSaving(true);
     try {
       const payload = buildPayload();
+      wfLog(`SAVE workflow (${selectedId ? 'update #' + selectedId : 'create'})`, {
+        name: payload.name, trigger_event: payload.trigger_event, is_active: payload.is_active,
+        nodes: payload.nodes?.map((n: BackendNode) => ({ key: n.node_key, type: n.node_type, action: (n.config as Record<string, unknown>)?.action_name, is_start: n.is_start, is_terminal: n.is_terminal })),
+        edges: payload.edges?.length, fullPayload: payload,
+      });
       if (selectedId) {
-        await workflowEngineApi.definitions.update(selectedId, payload);
+        const res = await workflowEngineApi.definitions.update(selectedId, payload);
+        wfLog('SAVE ok (updated)', res.data);
       } else {
         const res = await workflowEngineApi.definitions.create(payload);
         const newId = res.data?.id as number | undefined;
+        wfLog('SAVE ok (created)', { id: newId, trigger_event: (res.data as Record<string, unknown>)?.trigger_event });
         if (newId) setSelectedId(newId);
       }
       await loadAll();
     } catch (e) {
+      wfLog('SAVE FAILED', extractApiErrorMessage(e));
       alert('Save failed: ' + extractApiErrorMessage(e));
     } finally {
       setSaving(false);
@@ -689,8 +726,14 @@ function WorkflowEngineContent() {
       return;
     }
     setSmtpSaving(true);
+    wfLog('DIRECT MAIL save SMTP config', {
+      config_name: smtpForm.config_name || 'default', smtp_host: smtpForm.smtp_host,
+      smtp_port: Number(smtpForm.smtp_port) || 587, smtp_username: smtpForm.smtp_username,
+      from_email: smtpForm.from_email || smtpForm.smtp_username, use_tls: smtpForm.use_tls,
+      password_set: !!smtpForm.smtp_password,
+    });
     try {
-      await workflowEngineApi.notifications.createEmailConfig({
+      const res = await workflowEngineApi.notifications.createEmailConfig({
         config_name: smtpForm.config_name || 'default',
         smtp_host: smtpForm.smtp_host,
         smtp_port: Number(smtpForm.smtp_port) || 587,
@@ -700,9 +743,11 @@ function WorkflowEngineContent() {
         from_name: smtpForm.from_name || 'ComplyVerse',
         use_tls: smtpForm.use_tls,
       });
+      wfLog('DIRECT MAIL saved', res.data);
       await loadAll();
       setShowSmtpModal(false);
     } catch (e) {
+      wfLog('DIRECT MAIL save FAILED', extractApiErrorMessage(e));
       alert('Email setup failed: ' + extractApiErrorMessage(e));
     } finally {
       setSmtpSaving(false);
@@ -740,10 +785,13 @@ function WorkflowEngineContent() {
       alert('Invalid simulation payload JSON');
       return;
     }
+    wfLog('TEST RUN / trigger', { workflow_definition_id: targetId, trigger_event: triggerEvent || 'manual.trigger', payload: payloadJson });
     try {
-      await workflowEngineApi.executions.trigger({ workflow_definition_id: targetId, trigger_event: triggerEvent || 'manual.trigger', payload: payloadJson });
+      const res = await workflowEngineApi.executions.trigger({ workflow_definition_id: targetId, trigger_event: triggerEvent || 'manual.trigger', payload: payloadJson });
+      wfLog('TEST RUN queued', res.data);
       alert('Workflow triggered successfully');
     } catch (e) {
+      wfLog('TEST RUN FAILED', extractApiErrorMessage(e));
       alert('Trigger failed: ' + extractApiErrorMessage(e));
     }
   }, [selectedId]);
@@ -1042,6 +1090,7 @@ function WorkflowEngineContent() {
       if (nodeType === 'approval') config.approval_type = item.key;
       if (nodeType === 'timer') config.timer_kind = item.key;
       config = configWithPaletteContext(item, nodeType, config);
+      config = withNotificationDefaults(config);
       const newNode: Node<FlowNodeData> = {
         id: nodeKey,
         type: 'workflowNode',
@@ -1058,6 +1107,10 @@ function WorkflowEngineContent() {
           isTerminal: isEnd,
         },
       };
+      wfLog(`DROP node "${item.label}"`, {
+        paletteKey: item.key, group: item.group, module: item.module, submodule: item.submodule,
+        resolvedNodeType: nodeType, nodeKey, action_name: config.action_name, config,
+      });
       setNodes((nds) => [...nds, newNode]);
     },
     [reactFlowInstance, setNodes]
@@ -1071,6 +1124,7 @@ function WorkflowEngineContent() {
   const updateSelectedNode = useCallback(
     (field: string, value: unknown) => {
       if (WORKFLOW_CREATION_LOCKED) return;
+      wfLog(`CONFIG ${field} =`, { nodeId: selectedNodeId, field, value });
       setNodes((nds) =>
         nds.map((n) => {
           if (n.id !== selectedNodeId) return n;
@@ -1158,9 +1212,9 @@ function WorkflowEngineContent() {
   const TABS = [
     { key: 'builder' as const, label: 'Builder', locked: false },
     { key: 'workflows' as const, label: 'Workflows', locked: false },
-    { key: 'analytics' as const, label: 'Analytics', locked: true },
-    { key: 'approvals' as const, label: 'Approvals', locked: true },
-    { key: 'schedules' as const, label: 'Schedules & Webhooks', locked: true },
+    { key: 'analytics' as const, label: 'Analytics', locked: false },
+    { key: 'approvals' as const, label: 'Approvals', locked: false },
+    { key: 'schedules' as const, label: 'Schedules & Webhooks', locked: false },
   ];
 
   const sortedDefinitions = [...definitions].sort((a, b) =>
@@ -1384,6 +1438,11 @@ function WorkflowEngineContent() {
               if (nodeType === 'action') config.action_name = item.key;
               if (nodeType === 'condition') config.condition_kind = item.key;
               config = configWithPaletteContext(item, nodeType, config);
+              config = withNotificationDefaults(config);
+              wfLog(`PICK node "${item.label}"`, {
+                paletteKey: item.key, group: item.group, module: item.module, submodule: item.submodule,
+                resolvedNodeType: nodeType, nodeKey, action_name: config.action_name, config,
+              });
               setNodes((nds) => [...nds, {
                 id: nodeKey,
                 type: 'workflowNode',
@@ -1493,6 +1552,7 @@ function WorkflowEngineContent() {
             actionOptions={actionOptions}
             conditionPathOptions={conditionPathOptions}
             nodeConfigOptions={nodeConfigOptions}
+            nodeParamSchemas={nodeParamSchemas}
             selectedNode={selectedNode}
             selectedEdge={selectedEdge}
             nodeConfigText={nodeConfigText}

@@ -156,6 +156,15 @@ _CANONICAL_RESOURCE_MAP: Dict[tuple, tuple] = {
     ("frameworks", "*"):                       ("compliance", "frameworks"),
     ("controls", "*"):                         ("compliance", "controls"),
     ("evidence", "*"):                         ("compliance", "evidence"),
+    # Evidence Management module — the actual UI where users upload/delete
+    # evidence (DELETE /grc/evidence-mgmt/items/{id}). Canonicalise it to the
+    # same (compliance, evidence) event the "Delete/Upload Evidence" palette
+    # nodes infer, so a workflow built on those nodes fires on real evidence
+    # operations regardless of which evidence surface they came from.
+    ("evidence-mgmt", "items"):                ("compliance", "evidence"),
+    ("evidence-mgmt", "*"):                    ("compliance", "evidence"),
+    ("evidence_mgmt", "items"):                ("compliance", "evidence"),
+    ("evidence_mgmt", "*"):                    ("compliance", "evidence"),
     ("evidence-requirements", "*"):            ("compliance", "evidence_requirements"),
     ("evidence_requirements", "*"):            ("compliance", "evidence_requirements"),
     ("control-library", "*"):                  ("compliance", "control_library"),
@@ -211,6 +220,67 @@ def _resolve_canonical_resource(module: str, entity: str) -> tuple:
     return (None, None)
 
 
+# ── Tenant session helpers (per-tenant DB architecture) ──────────────────────
+# Workflow tables (definitions, instances, steps, schedules, approvals) AND the
+# audit log all live in each tenant's own ``grc_<slug>`` database, not the
+# master catalog. The embedded runtime therefore has to open a session against
+# the right tenant DB for every poll / timer / queued-item it processes.
+
+def iter_tenant_sessions():
+    """Yield ``(tenant_id, slug, session)`` for every active tenant.
+
+    One short-lived session is opened per tenant and closed automatically
+    after the consumer's iteration step. Quiet on errors (e.g. a tenant DB
+    being unreachable must not kill the whole pass).
+    """
+    from grc.models import Tenant, SessionLocal as _MasterSession
+    from grc.db import open_tenant_session
+    master = _MasterSession()
+    try:
+        tenants = master.query(Tenant).filter(Tenant.is_active.is_(True)).all() \
+            if hasattr(Tenant, "is_active") else master.query(Tenant).all()
+    finally:
+        master.close()
+    for t in tenants:
+        slug = getattr(t, "slug", None) or getattr(t, "schema_name", None)
+        if not slug:
+            continue
+        try:
+            sess = open_tenant_session(slug)
+        except Exception:  # noqa: BLE001
+            logger.warning("workflow.tenant_session: could not open for tenant=%s", slug)
+            continue
+        try:
+            yield t.id, slug, sess
+        finally:
+            try:
+                sess.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def open_tenant_session_for_id(tenant_id):
+    """Open a session for a single tenant by id. Caller MUST close it.
+    Returns None if the tenant / slug can't be resolved or the DB is down."""
+    if tenant_id is None:
+        return None
+    from grc.models import Tenant, SessionLocal as _MasterSession
+    from grc.db import open_tenant_session
+    master = _MasterSession()
+    try:
+        t = master.query(Tenant).filter(Tenant.id == tenant_id).first()
+        slug = (getattr(t, "slug", None) or getattr(t, "schema_name", None)) if t else None
+    finally:
+        master.close()
+    if not slug:
+        return None
+    try:
+        return open_tenant_session(slug)
+    except Exception:  # noqa: BLE001
+        logger.warning("workflow.tenant_session: could not open for tenant_id=%s", tenant_id)
+        return None
+
+
 class TriggerDispatcher:
     def __init__(self, event_queue):
         self.event_queue = event_queue
@@ -238,19 +308,50 @@ class TriggerDispatcher:
         self._alerted_pass_rate_drop_tenants: set = set()
 
     def poll_platform_events(self, db: Session) -> int:
-        if not self._bootstrap_complete:
-            self._bootstrap_complete = True
-            if not self.replay_historical_audits:
-                latest_id = db.query(func.max(AuditLog.id)).scalar() or 0
-                self.last_audit_log_id = int(latest_id)
-                logger.info(
-                    "workflow.dispatcher.bootstrap mode=tail latest_audit_log_id=%s",
-                    self.last_audit_log_id,
+        """Poll every active tenant's audit log for new platform events.
+
+        Audit rows (``grc_audit_logs``) live in the per-tenant ``grc_<slug>``
+        databases, NOT in the master catalog — so we iterate one session per
+        tenant (same pattern as the threshold checks). The ``db`` argument
+        (the master session passed by the runtime loop) is intentionally not
+        used for the audit query; querying it would raise UndefinedTable.
+
+        A per-tenant high-water mark ensures each tenant only processes rows
+        newer than the last one it saw.
+        """
+        total = 0
+        for tenant_id, _slug, sess in self._iter_tenant_sessions():
+            try:
+                total += self.poll_tenant_audit_events(tenant_id, sess)
+            except Exception:  # noqa: BLE001 — one tenant must not kill the cycle
+                logger.exception(
+                    "workflow.dispatcher.tenant_poll_failed tenant_id=%s", tenant_id
                 )
+        return total
+
+    def poll_tenant_audit_events(self, tenant_id: int, sess: Session) -> int:
+        """Process new audit rows for a single tenant DB session."""
+        if not hasattr(self, "_last_audit_id_by_tenant"):
+            self._last_audit_id_by_tenant: Dict[int, int] = {}
+
+        # Per-tenant tail bootstrap: on first sight of a tenant, skip the
+        # historical backlog unless replay_historical_audits is set.
+        watermark = self._last_audit_id_by_tenant.get(tenant_id)
+        if watermark is None:
+            if self.replay_historical_audits:
+                watermark = 0
+            else:
+                latest_id = sess.query(func.max(AuditLog.id)).scalar() or 0
+                watermark = int(latest_id)
+                logger.info(
+                    "workflow.dispatcher.bootstrap tenant_id=%s mode=tail latest_audit_log_id=%s",
+                    tenant_id, watermark,
+                )
+            self._last_audit_id_by_tenant[tenant_id] = watermark
 
         logs = (
-            db.query(AuditLog)
-            .filter(AuditLog.id > self.last_audit_log_id)
+            sess.query(AuditLog)
+            .filter(AuditLog.id > watermark)
             .order_by(AuditLog.id.asc())
             .limit(200)
             .all()
@@ -259,7 +360,17 @@ class TriggerDispatcher:
         processed = 0
         skipped_read_logs = 0
         for log in logs:
-            self.last_audit_log_id = max(self.last_audit_log_id, log.id)
+            watermark = max(watermark, log.id)
+            self._last_audit_id_by_tenant[tenant_id] = watermark
+
+            # Loop-prevention guard: skip audit rows the workflow engine itself
+            # wrote (tagged actor_source="workflow" inside changes by
+            # rich_audit) so a workflow's own audit emissions can never trigger
+            # another workflow run. NULL / non-"workflow" sources (user,
+            # integration, cron, system) all still fire workflows as before.
+            _chg = log.changes if isinstance(log.changes, dict) else {}
+            if (_chg.get("actor_source") or "") == "workflow":
+                continue
 
             if (log.action or "").strip().lower() == "read" and not self.include_read_events:
                 skipped_read_logs += 1
@@ -267,28 +378,25 @@ class TriggerDispatcher:
 
             event_names = self._derive_event_names(log)
             enriched_payload = self._build_payload(log)
+            # In a per-tenant DB the row's own tenant_id may be unset; fall
+            # back to the tenant we're iterating so events route correctly.
+            ev_tenant = getattr(log, "tenant_id", None) or tenant_id
 
             for event_name in event_names:
                 self.publish_event(
                     event_name=event_name,
-                    tenant_id=log.tenant_id,
+                    tenant_id=ev_tenant,
                     payload=enriched_payload,
-                    correlation_id=f"audit:{log.id}",
+                    # Audit ids are per-tenant sequences — namespace by tenant
+                    # so correlation ids never collide across tenants.
+                    correlation_id=f"audit:{tenant_id}:{log.id}",
                 )
             processed += 1
 
-            logger.debug(
-                "workflow.dispatcher.audit_log_processed audit_log_id=%s tenant_id=%s mapped_events=%s",
-                log.id,
-                log.tenant_id,
-                len(event_names),
-            )
-
         if processed or skipped_read_logs:
             logger.info(
-                "workflow.dispatcher.poll_cycle processed_logs=%s skipped_read_logs=%s",
-                processed,
-                skipped_read_logs,
+                "workflow.dispatcher.poll_cycle tenant_id=%s processed_logs=%s skipped_read_logs=%s",
+                tenant_id, processed, skipped_read_logs,
             )
 
         return processed
@@ -326,36 +434,10 @@ class TriggerDispatcher:
     def _iter_tenant_sessions(self):
         """Yield (tenant_id, slug, session) for every active tenant.
 
-        Per-tenant DB pattern (see docs/ARCHITECTURE.md §1) — Issue,
-        ComplianceAgent, and CompliancePluginRun live in the tenant's own
-        ``grc_<slug>`` database, NOT in the master catalog. We open one
-        short-lived session per tenant and close it after the per-tenant
-        check returns. Quiet on errors (e.g. tenant DB unreachable).
+        Thin instance wrapper around the module-level :func:`iter_tenant_sessions`
+        so existing call-sites keep working.
         """
-        from grc.models import Tenant, SessionLocal as _MasterSession
-        from grc.db import open_tenant_session
-        master = _MasterSession()
-        try:
-            tenants = master.query(Tenant).filter(Tenant.is_active.is_(True)).all() \
-                if hasattr(Tenant, "is_active") else master.query(Tenant).all()
-        finally:
-            master.close()
-        for t in tenants:
-            slug = getattr(t, "slug", None) or getattr(t, "schema_name", None)
-            if not slug:
-                continue
-            try:
-                sess = open_tenant_session(slug)
-            except Exception:  # noqa: BLE001
-                logger.warning("threshold-check: could not open session for tenant=%s", slug)
-                continue
-            try:
-                yield t.id, slug, sess
-            finally:
-                try:
-                    sess.close()
-                except Exception:  # noqa: BLE001
-                    pass
+        yield from iter_tenant_sessions()
 
     def _check_issue_sla_breached(self) -> int:
         """Fire ``issue_sla_breached`` for any Issue whose

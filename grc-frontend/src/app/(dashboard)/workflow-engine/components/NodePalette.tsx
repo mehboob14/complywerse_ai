@@ -1,8 +1,9 @@
 'use client';
 
-import { ChevronDown, ChevronRight, Grip, Lock } from 'lucide-react';
-import { useState } from 'react';
-import { NODE_GROUP_COLORS, PALETTE_DESCRIPTIONS, PaletteItem } from './types';
+import { ChevronDown, ChevronRight, Plus, X, Search, Zap } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Tooltip } from './Tooltip';
+import { NODE_GROUP_COLORS, PALETTE_DESCRIPTIONS, PaletteItem, isTriggerEligibleAction } from './types';
 
 type PaletteGroup = {
   key: string;
@@ -39,20 +40,36 @@ const GROUP_HEADER_COLORS: Record<string, string> = {
 };
 
 const GROUP_NODE_PILL: Record<string, string> = {
-  triggers: 'border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-800',
-  actions: 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800',
-  platform_functions: 'border-indigo-300 bg-indigo-50 hover:bg-indigo-100 text-indigo-800',
-  conditions: 'border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800',
-  approvals: 'border-violet-300 bg-violet-50 hover:bg-violet-100 text-violet-800',
-  timers: 'border-cyan-300 bg-cyan-50 hover:bg-cyan-100 text-cyan-800',
-  control: 'border-gray-300 bg-gray-50 hover:bg-gray-100 text-gray-700',
+  triggers: 'border-blue-200 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 text-blue-800',
+  actions: 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-400 text-emerald-800',
+  platform_functions: 'border-indigo-200 bg-indigo-50 hover:bg-indigo-100 hover:border-indigo-400 text-indigo-800',
+  conditions: 'border-amber-200 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 text-amber-800',
+  approvals: 'border-violet-200 bg-violet-50 hover:bg-violet-100 hover:border-violet-400 text-violet-800',
+  timers: 'border-cyan-200 bg-cyan-50 hover:bg-cyan-100 hover:border-cyan-400 text-cyan-800',
+  control: 'border-gray-200 bg-gray-50 hover:bg-gray-100 hover:border-gray-400 text-gray-700',
 };
+
+function highlightMatch(text: string, query: string): React.ReactNode {
+  if (!query) return text;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-yellow-200 text-yellow-900 rounded px-0.5">{text.slice(idx, idx + query.length)}</mark>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
 
 export function NodePalette({ palette, onDragStart, onAddNode, locked = false }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [moduleCollapsed, setModuleCollapsed] = useState<Record<string, boolean>>({});
   const [subgroupCollapsed, setSubgroupCollapsed] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState('');
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+
+  const q = search.toLowerCase().trim();
 
   const groups: PaletteGroup[] = GROUP_ORDER.map((groupKey) => ({
     key: groupKey,
@@ -60,20 +77,75 @@ export function NodePalette({ palette, onDragStart, onAddNode, locked = false }:
     items: palette.filter(
       (item) =>
         item.group === groupKey &&
-        (search === '' || item.label.toLowerCase().includes(search.toLowerCase()))
+        (q === '' ||
+          item.label.toLowerCase().includes(q) ||
+          (item.submodule || '').toLowerCase().includes(q) ||
+          (item.module || '').toLowerCase().includes(q) ||
+          (item.description || '').toLowerCase().includes(q))
     ),
   })).filter((g) => g.items.length > 0);
 
-  const toggleGroup = (key: string) => {
-    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
+  const totalResults = groups.reduce((sum, g) => sum + g.items.length, 0);
 
-  const toggleModule = (module: string) => {
-    setModuleCollapsed((prev) => ({ ...prev, [module]: !prev[module] }));
-  };
+  const toggleGroup = (key: string) => setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggleModule = (module: string) => setModuleCollapsed((prev) => ({ ...prev, [module]: !prev[module] }));
+  const toggleSubgroup = (key: string) => setSubgroupCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
-  const toggleSubgroup = (key: string) => {
-    setSubgroupCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+  const handleAddNode = useCallback((item: PaletteItem) => {
+    if (locked) return;
+    onAddNode(item);
+    setJustAdded(item.key);
+    setTimeout(() => setJustAdded(null), 700);
+  }, [locked, onAddNode]);
+
+  const renderNodeItem = (item: PaletteItem, pillColor: string) => {
+    const isFlashing = justAdded === item.key;
+    // Platform Function CRUD nodes (and dedicated trigger nodes) can act as the
+    // workflow trigger when placed first after Start. Surface this with a ⚡.
+    const triggerEligible = item.group === 'triggers' || isTriggerEligibleAction(item.key);
+    const baseTooltip = locked
+      ? 'Workflow creation is locked. Contact support.'
+      : (PALETTE_DESCRIPTIONS[item.key] || item.description || `Click to add "${item.label}" to canvas`);
+    // Universal eligibility tooltip — both dedicated trigger nodes and
+    // platform-function CRUD nodes can be the first node after Start.
+    const triggerTooltipSuffix = item.group === 'triggers'
+      ? '\n\n⚡ Dedicated workflow trigger — place directly after Start.'
+      : '\n\n⚡ Can be used as a workflow trigger when placed directly after Start.';
+    const tooltip = !locked && triggerEligible
+      ? `${baseTooltip}${triggerTooltipSuffix}`
+      : baseTooltip;
+    return (
+      <Tooltip
+        key={item.key}
+        content={tooltip}
+      >
+        <div
+          draggable={!locked}
+          onDragStart={locked ? undefined : (e) => onDragStart(e, item)}
+          onClick={() => handleAddNode(item)}
+          className={`
+            flex items-center gap-2 px-2 py-1.5 rounded-md border text-xs select-none transition-all duration-150
+            ${locked
+              ? 'cursor-not-allowed opacity-60 ' + pillColor
+              : isFlashing
+                ? 'scale-95 bg-green-100 border-green-400 text-green-800 cursor-pointer'
+                : 'cursor-pointer active:scale-95 ' + pillColor
+            }
+          `}
+        >
+          <Plus
+            size={10}
+            className={`shrink-0 ${isFlashing ? 'text-green-600' : 'opacity-50'}`}
+          />
+          <span className="truncate font-medium flex-1">
+            {highlightMatch(item.label, q)}
+          </span>
+          {triggerEligible && (
+            <Zap size={10} className="shrink-0 text-amber-500" aria-label="Trigger-eligible" />
+          )}
+        </div>
+      </Tooltip>
+    );
   };
 
   return (
@@ -83,19 +155,41 @@ export function NodePalette({ palette, onDragStart, onAddNode, locked = false }:
         <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
           Node Palette
         </h3>
-        <input
-          type="text"
-          placeholder="Search nodes..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full text-xs border border-gray-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-gray-50"
-        />
+
+        {/* Search input with clear button */}
+        <div className="relative">
+          <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search nodes..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full text-xs border border-gray-200 rounded-md pl-6 pr-6 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 bg-gray-50 transition-shadow"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-0.5 rounded"
+            >
+              <X size={11} />
+            </button>
+          )}
+        </div>
+
+        {/* Result count when searching */}
+        {q && (
+          <p className="mt-1.5 text-[10px] text-gray-500">
+            {totalResults === 0
+              ? 'No results found'
+              : `${totalResults} node${totalResults !== 1 ? 's' : ''} match`}
+          </p>
+        )}
       </div>
 
       {/* Groups */}
       <div className="flex-1 overflow-y-auto">
         {groups.map((group) => {
-          const isOpen = !collapsed[group.key];
+          const isOpen = q !== '' || !collapsed[group.key];
           const headerColor = GROUP_HEADER_COLORS[group.key] || '';
           const pillColor = GROUP_NODE_PILL[group.key] || '';
 
@@ -110,98 +204,111 @@ export function NodePalette({ palette, onDragStart, onAddNode, locked = false }:
                   {group.label}
                   <span className="text-[9px] font-normal opacity-60">({group.items.length})</span>
                 </span>
-                {isOpen ? (
-                  <ChevronDown size={12} />
-                ) : (
-                  <ChevronRight size={12} />
-                )}
+                {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
               </button>
 
               {/* Group items */}
               {isOpen && (
                 <div className="p-2 space-y-1">
-                  {group.key !== 'platform_functions' && group.items.map((item) => (
-                    <div
-                      key={item.key}
-                      draggable={!locked}
-                      onDragStart={locked ? undefined : (e) => onDragStart(e, item)}
-                      onClick={locked ? undefined : () => onAddNode(item)}
-                      title={locked ? 'Workflow creation is locked. Contact support.' : (PALETTE_DESCRIPTIONS[item.key] || item.description || item.label)}
-                      className={`flex items-center pointer-events-none gap-2 px-2 py-1.5 rounded-md border text-xs select-none transition-colors ${locked ? 'cursor-not-allowed opacity-60 ' + pillColor : 'cursor-grab active:cursor-grabbing ' + pillColor}`}
-                    >
-                      <Lock size={10} className="shrink-0" color='red'/>
+                  {group.key !== 'platform_functions' && group.key !== 'actions' && group.items.map((item) =>
+                    renderNodeItem(item, pillColor)
+                  )}
 
-                      {/* <Grip size={10} className="opacity-40 shrink-0" /> */}
-                      <span className="truncate font-medium">{item.label}</span>
-                      {locked && <span className="ml-auto text-[10px] opacity-50">🔒</span>}
-                    </div>
-                  ))}
+                  {group.key === 'actions' && group.items.map((item) =>
+                    renderNodeItem(item, pillColor)
+                  )}
 
                   {group.key === 'platform_functions' && (() => {
+                    const PF_MODULE_ORDER = ['Compliance', 'Control Library', 'Evidence', 'Framework Upload', 'Governance', 'Risk Management', 'Vulnerability Management', 'Chatbot', 'General'];
+                    const GOVERNANCE_SUBMODULE_ORDER = [
+                      'Documents', 'Attestations', 'Regulatory Changes', 'Regulatory Feeds', 'Committees',
+                    ];
+                    const RISK_MANAGEMENT_SUBMODULE_ORDER = ['Risk Framework', 'Risk Assessments', 'Risk Register', 'Appetite', 'Mitigation Actions', 'Internal Controls', 'KRIs', 'Incidents', 'Reviews', 'Dependencies', 'RCSA', 'Vendor Risk', 'Advanced Analytics'];
+                    const COMPLIANCE_SUBMODULE_ORDER = ['Frameworks', 'Controls', 'Evidence Requirements', 'Statements', 'Assessments', 'Evidence', 'Control Library'];
+                    const VULNERABILITY_MANAGEMENT_SUBMODULE_ORDER = ['Vulnerabilities', 'Departments', 'Reports', 'SLA Config'];
+                    const SUBMODULE_ORDER: Record<string, string[]> = {
+                      'Governance': GOVERNANCE_SUBMODULE_ORDER,
+                      'Risk Management': RISK_MANAGEMENT_SUBMODULE_ORDER,
+                      'Compliance': COMPLIANCE_SUBMODULE_ORDER,
+                      'Vulnerability Management': VULNERABILITY_MANAGEMENT_SUBMODULE_ORDER,
+                    };
+
+                    const sortSubgroups = (moduleName: string, pairs: [string, PaletteItem[]][]) => {
+                      const order = SUBMODULE_ORDER[moduleName];
+                      if (!order) return pairs;
+                      return [...pairs].sort(([a], [b]) => {
+                        const ai = order.indexOf(a);
+                        const bi = order.indexOf(b);
+                        if (ai !== -1 && bi !== -1) return ai - bi;
+                        if (ai !== -1) return -1;
+                        if (bi !== -1) return 1;
+                        return a.localeCompare(b);
+                      });
+                    };
+
                     const modules = Array.from(
                       group.items.reduce((acc, item) => {
                         const mod = item.module || 'General';
+                        if (mod === 'Internal') return acc;
                         if (!acc.has(mod)) acc.set(mod, [] as PaletteItem[]);
                         acc.get(mod)!.push(item);
                         return acc;
                       }, new Map<string, PaletteItem[]>())
-                    );
+                    ).sort(([a], [b]) => {
+                      const ai = PF_MODULE_ORDER.indexOf(a);
+                      const bi = PF_MODULE_ORDER.indexOf(b);
+                      if (ai !== -1 && bi !== -1) return ai - bi;
+                      if (ai !== -1) return -1;
+                      if (bi !== -1) return 1;
+                      return a.localeCompare(b);
+                    });
 
                     return modules.map(([moduleName, moduleItems]) => {
-                      const isModuleOpen = !moduleCollapsed[moduleName];
-                      const subgroups = Array.from(
+                      const isModuleOpen = q !== '' || !moduleCollapsed[moduleName];
+                      const subgroups = sortSubgroups(moduleName, Array.from(
                         moduleItems.reduce((acc, item) => {
                           const subgroup = item.submodule || 'General';
                           if (!acc.has(subgroup)) acc.set(subgroup, [] as PaletteItem[]);
                           acc.get(subgroup)!.push(item);
                           return acc;
                         }, new Map<string, PaletteItem[]>())
-                      );
+                      ));
 
                       return (
                         <div key={moduleName} className="border border-indigo-100 rounded-md overflow-hidden">
                           <button
                             onClick={() => toggleModule(moduleName)}
-                            className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold text-indigo-700 bg-indigo-50"
+                            className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors"
                           >
                             <span className="truncate">{moduleName}</span>
-                            {isModuleOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                            <span className="flex items-center gap-1">
+                              <span className="text-[9px] font-normal opacity-60">({moduleItems.length})</span>
+                              {isModuleOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                            </span>
                           </button>
 
                           {isModuleOpen && (
                             <div className="p-1.5 space-y-1 bg-white">
                               {subgroups.map(([subgroupName, subgroupItems]) => {
                                 const subgroupKey = `${moduleName}::${subgroupName}`;
-                                const isSubgroupOpen = !subgroupCollapsed[subgroupKey];
+                                const isSubgroupOpen = q !== '' || !subgroupCollapsed[subgroupKey];
 
                                 return (
                                   <div key={subgroupKey} className="border border-indigo-50 rounded-md overflow-hidden">
                                     <button
                                       onClick={() => toggleSubgroup(subgroupKey)}
-                                      className="w-full flex items-center justify-between px-2 py-1 text-[10px] font-medium text-indigo-600 bg-indigo-50"
+                                      className="w-full flex items-center justify-between px-2 py-1 text-[10px] font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors"
                                     >
                                       <span className="truncate">{subgroupName}</span>
-                                      {isSubgroupOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                                      <span className="flex items-center gap-1">
+                                        <span className="text-[9px] font-normal opacity-50">({subgroupItems.length})</span>
+                                        {isSubgroupOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                                      </span>
                                     </button>
 
                                     {isSubgroupOpen && (
                                       <div className="p-1 space-y-1 bg-white">
-                                        {subgroupItems.map((item) => (
-                                          <div
-                                            key={item.key}
-                                            draggable={!locked}
-                                            onDragStart={locked ? undefined : (e) => onDragStart(e, item)}
-                                            onClick={locked ? undefined : () => onAddNode(item)}
-                                            title={locked ? 'Workflow creation is locked. Contact support.' : item.label}
-                                            className={`flex items-center pointer-events-none gap-2 px-2 py-1.5 rounded-md border text-xs select-none transition-colors ${locked ? 'cursor-not-allowed opacity-60 ' + pillColor : 'cursor-grab active:cursor-grabbing ' + pillColor}`}
-                                          >
-                      <Lock size={10} className="shrink-0" color='red'/>
-
-                                            {/* <Grip size={10} className="opacity-40 shrink-0" /> */}
-                                            <span className="truncate font-medium">{item.label}</span>
-                                            {locked && <span className="ml-auto text-[10px] opacity-50">🔒</span>}
-                                          </div>
-                                        ))}
+                                        {subgroupItems.map((item) => renderNodeItem(item, pillColor))}
                                       </div>
                                     )}
                                   </div>
@@ -220,13 +327,17 @@ export function NodePalette({ palette, onDragStart, onAddNode, locked = false }:
         })}
 
         {groups.length === 0 && (
-          <div className="p-4 text-center text-xs text-gray-400">No nodes match your search</div>
+          <div className="p-6 text-center">
+            <Search size={20} className="mx-auto mb-2 text-gray-300" />
+            <p className="text-xs text-gray-400">No nodes match</p>
+            <p className="text-[10px] text-gray-300 mt-0.5">&quot;{search}&quot;</p>
+          </div>
         )}
       </div>
 
       {/* Footer tip */}
       <div className="px-3 py-2 border-t border-gray-100 text-[9px] text-gray-400 text-center">
-        Drag nodes onto the canvas
+        Click to add · Drag to position
       </div>
     </div>
   );

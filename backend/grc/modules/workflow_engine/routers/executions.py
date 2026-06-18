@@ -3,8 +3,9 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from ....models import ApprovalRequest, WorkflowAuditLog, WorkflowInstance, WorkflowEngineStep, GRCUser, get_db
+from ....models import ApprovalRequest, WorkflowAuditLog, WorkflowInstance, WorkflowEngineStep, GRCUser, get_db, WorkflowDefinition
 from ....routers.auth_router import require_auth, get_user_primary_tenant, get_user_tenants, require_tenant_permission
+from ....rich_audit import write_rich_audit_log, model_to_dict
 from ..schemas import (
     ApprovalDecisionRequest,
     TriggerExecutionRequest,
@@ -37,6 +38,27 @@ def trigger_workflow_execution(
             "correlation_id": payload.correlation_id,
         }
     )
+
+    _defn = db.query(WorkflowDefinition).filter(WorkflowDefinition.id == payload.workflow_definition_id).first()
+    _defn_name = _defn.name if _defn else f"Definition #{payload.workflow_definition_id}"
+    write_rich_audit_log(
+        db=db,
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+        action="create",
+        resource_type="workflow_engine",
+        resource_id=payload.workflow_definition_id,
+        resource_name=_defn_name,
+        summary=f"Manually triggered workflow '{_defn_name}' (event: {payload.trigger_event or 'manual.trigger'})",
+        snapshot={"workflow_definition_id": payload.workflow_definition_id,
+                  "trigger_event": payload.trigger_event or "manual.trigger",
+                  "correlation_id": payload.correlation_id,
+                  "payload": payload.payload},
+        actor_type="user",
+        actor_workflow_id=payload.workflow_definition_id,
+        resource_url=f"/workflow-engine/{payload.workflow_definition_id}",
+    )
+    db.commit()
 
     return {
         "status": "queued",
@@ -156,7 +178,25 @@ def resume_workflow_instance(
         raise HTTPException(status_code=404, detail="Workflow instance not found")
 
     runtime = get_runtime()
-    runtime.event_queue.publish({"kind": "resume_instance", "instance_id": instance.id})
+    runtime.event_queue.publish({"kind": "resume_instance", "instance_id": instance.id, "tenant_id": instance.tenant_id})
+
+    write_rich_audit_log(
+        db=db,
+        tenant_id=instance.tenant_id,
+        user_id=current_user.id,
+        action="update",
+        resource_type="workflow_engine",
+        resource_id=instance.id,
+        resource_name=f"Instance #{instance.id} (def:{instance.workflow_definition_id})",
+        summary=f"Manually resumed workflow instance #{instance.id} (status: {instance.status}, node: {instance.current_node_key})",
+        snapshot={"instance_id": instance.id, "workflow_definition_id": instance.workflow_definition_id,
+                  "status": instance.status, "current_node_key": instance.current_node_key},
+        actor_type="user",
+        actor_workflow_id=instance.workflow_definition_id,
+        resource_url=f"/workflow-engine/{instance.workflow_definition_id}",
+    )
+    db.commit()
+
     return {"status": "queued", "instance_id": instance.id}
 
 
@@ -216,8 +256,28 @@ def decide_approval_request(
 
     db.commit()
 
+    _appr_instance = db.query(WorkflowInstance).filter(WorkflowInstance.id == approval.workflow_instance_id).first()
+    _appr_defn_id = _appr_instance.workflow_definition_id if _appr_instance else None
+    write_rich_audit_log(
+        db=db,
+        tenant_id=approval.tenant_id,
+        user_id=current_user.id,
+        action="update",
+        resource_type="workflow_engine",
+        resource_id=approval.id,
+        resource_name=f"Approval #{approval.id} (instance:{approval.workflow_instance_id})",
+        summary=f"Approval decision '{approval.status}' for request #{approval.id} on instance #{approval.workflow_instance_id}",
+        snapshot={"approval_request_id": approval.id, "decision": approval.status,
+                  "comment": payload.comment, "workflow_instance_id": approval.workflow_instance_id,
+                  "workflow_step_id": approval.workflow_step_id, "decided_by": current_user.id},
+        actor_type="user",
+        actor_workflow_id=_appr_defn_id,
+        resource_url=f"/workflow-engine/{_appr_defn_id or approval.workflow_instance_id}",
+    )
+    db.commit()
+
     runtime = get_runtime()
-    runtime.event_queue.publish({"kind": "resume_instance", "instance_id": approval.workflow_instance_id})
+    runtime.event_queue.publish({"kind": "resume_instance", "instance_id": approval.workflow_instance_id, "tenant_id": approval.tenant_id})
 
     return {
         "status": approval.status,

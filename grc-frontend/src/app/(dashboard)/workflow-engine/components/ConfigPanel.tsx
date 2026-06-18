@@ -16,9 +16,11 @@ import {
   NODE_TYPE_LABELS,
   NodeConfigOptions,
   NodeOptionItem,
+  NodeParamField,
+  NodeParamSchemas,
   TIMER_KEYS,
-  TRIGGER_KEYS,
 } from './types';
+import { workflowEngineApi } from '@/lib/api';
 
 type Props = {
   actorUsers: Array<{ id: number; display_name: string; email: string; username?: string }>;
@@ -26,6 +28,7 @@ type Props = {
   actionOptions: NodeOptionItem[];
   conditionPathOptions: Array<{ value: string; label: string }>;
   nodeConfigOptions: NodeConfigOptions;
+  nodeParamSchemas: NodeParamSchemas;
   selectedNode: Node<FlowNodeData> | undefined;
   selectedEdge: Edge | undefined;
   nodeConfigText: string;
@@ -178,6 +181,7 @@ export function ConfigPanel({
   actionOptions,
   conditionPathOptions,
   nodeConfigOptions,
+  nodeParamSchemas,
   selectedNode,
   selectedEdge,
   nodeConfigText,
@@ -244,6 +248,7 @@ export function ConfigPanel({
             actionOptions={actionOptions}
             conditionPathOptions={conditionPathOptions}
             nodeConfigOptions={nodeConfigOptions}
+            nodeParamSchemas={nodeParamSchemas}
             onUpdateNodeConfig={onUpdateNodeConfig}
             onSetNodeConfigText={onSetNodeConfigText}
           />
@@ -2245,6 +2250,982 @@ function ActionSubConfig({
     );
   }
 
+  // ── KRI management ─────────────────────────────────────────────────────────
+  if (actionName === 'create_kri') {
+    return (
+      <>
+        <SectionLabel label="KRI Details" />
+        <Field label="Linked risk ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.risk_id as number) || ''}
+            onChange={(e) => onUpdate('risk_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 42"
+          />
+        </Field>
+        <Field label="KRI name">
+          <input
+            className={inputCls}
+            value={(config?.name as string) || ''}
+            onChange={(e) => onUpdate('name', e.target.value)}
+            placeholder="Operational loss frequency"
+          />
+        </Field>
+        <Field label="Metric type">
+          <select
+            className={selectCls}
+            value={(config?.metric_type as string) || 'numeric'}
+            onChange={(e) => onUpdate('metric_type', e.target.value)}
+          >
+            {['numeric', 'percentage', 'boolean', 'rating'].map((t) => (
+              <option key={t} value={t}>{toLabel(t)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Unit (optional)">
+          <input
+            className={inputCls}
+            value={(config?.unit as string) || ''}
+            onChange={(e) => onUpdate('unit', e.target.value)}
+            placeholder="incidents, %, USD"
+          />
+        </Field>
+        <SectionLabel label="Thresholds" />
+        <Field label="Green threshold (≤)">
+          <input
+            type="number"
+            className={inputCls}
+            value={(config?.green_threshold as number) ?? ''}
+            onChange={(e) => onUpdate('green_threshold', e.target.value ? Number(e.target.value) : null)}
+            placeholder="5"
+          />
+        </Field>
+        <Field label="Amber threshold (≤)">
+          <input
+            type="number"
+            className={inputCls}
+            value={(config?.amber_threshold as number) ?? ''}
+            onChange={(e) => onUpdate('amber_threshold', e.target.value ? Number(e.target.value) : null)}
+            placeholder="10"
+          />
+        </Field>
+        <Field label="Threshold direction">
+          <select
+            className={selectCls}
+            value={(config?.threshold_direction as string) || 'lower_is_better'}
+            onChange={(e) => onUpdate('threshold_direction', e.target.value)}
+          >
+            <option value="lower_is_better">Lower is better</option>
+            <option value="higher_is_better">Higher is better</option>
+          </select>
+        </Field>
+        <Field label="Measurement frequency">
+          <select
+            className={selectCls}
+            value={(config?.frequency as string) || 'monthly'}
+            onChange={(e) => onUpdate('frequency', e.target.value)}
+          >
+            {['daily', 'weekly', 'monthly', 'quarterly', 'annual'].map((f) => (
+              <option key={f} value={f}>{toLabel(f)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="KRI owner ID (optional)">
+          <input
+            type="number"
+            className={inputCls}
+            value={(config?.owner_id as number) || ''}
+            onChange={(e) => onUpdate('owner_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="User ID"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'update_kri_value') {
+    return (
+      <>
+        <Field label="KRI ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.kri_id as number) || ''}
+            onChange={(e) => onUpdate('kri_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 7"
+          />
+        </Field>
+        <Field label="Measured value">
+          <input
+            type="number"
+            className={inputCls}
+            value={(config?.value as number) ?? ''}
+            onChange={(e) => onUpdate('value', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 8.5"
+          />
+        </Field>
+        <Field label="Notes (optional)">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.notes as string) || ''}
+            onChange={(e) => onUpdate('notes', e.target.value)}
+            placeholder="Source of measurement..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'resolve_kri_breach') {
+    return (
+      <>
+        <Field label="KRI ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.kri_id as number) || ''}
+            onChange={(e) => onUpdate('kri_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 7"
+          />
+        </Field>
+        <Field label="Resolution notes">
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.notes as string) || ''}
+            onChange={(e) => onUpdate('notes', e.target.value)}
+            placeholder="Root cause addressed and KRI returned to green..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  // ── Incident management ────────────────────────────────────────────────────
+  if (actionName === 'create_incident') {
+    return (
+      <>
+        <SectionLabel label="Incident Details" />
+        <Field label="Title">
+          <input
+            className={inputCls}
+            value={(config?.title as string) || ''}
+            onChange={(e) => onUpdate('title', e.target.value)}
+            placeholder="System outage caused by process failure"
+          />
+        </Field>
+        <Field label="Severity">
+          <select
+            className={selectCls}
+            value={(config?.severity as string) || 'medium'}
+            onChange={(e) => onUpdate('severity', e.target.value)}
+          >
+            {['critical', 'high', 'medium', 'low'].map((s) => (
+              <option key={s} value={s}>{toLabel(s)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Linked risk ID (optional)">
+          <input
+            type="number"
+            className={inputCls}
+            value={(config?.risk_id as number) || ''}
+            onChange={(e) => onUpdate('risk_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="Risk ID"
+          />
+        </Field>
+        <Field label="Description (optional)">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.description as string) || ''}
+            onChange={(e) => onUpdate('description', e.target.value)}
+            placeholder="Initial incident description..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'update_incident_status') {
+    return (
+      <>
+        <Field label="Incident ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.incident_id as number) || ''}
+            onChange={(e) => onUpdate('incident_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 15"
+          />
+        </Field>
+        <Field label="New status">
+          <select
+            className={selectCls}
+            value={(config?.status as string) || 'investigating'}
+            onChange={(e) => onUpdate('status', e.target.value)}
+          >
+            {['open', 'investigating', 'contained', 'resolved', 'closed'].map((s) => (
+              <option key={s} value={s}>{toLabel(s)}</option>
+            ))}
+          </select>
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'assign_incident_owner') {
+    return (
+      <>
+        <Field label="Incident ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.incident_id as number) || ''}
+            onChange={(e) => onUpdate('incident_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 15"
+          />
+        </Field>
+        <Field label="Assignee user ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.assignee_user_id as number) || ''}
+            onChange={(e) => onUpdate('assignee_user_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="User ID"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'close_incident') {
+    return (
+      <>
+        <Field label="Incident ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.incident_id as number) || ''}
+            onChange={(e) => onUpdate('incident_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 15"
+          />
+        </Field>
+        <Field label="Lessons learned">
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.lessons_learned as string) || ''}
+            onChange={(e) => onUpdate('lessons_learned', e.target.value)}
+            placeholder="What went wrong, what worked well..."
+          />
+        </Field>
+        <Field label="Corrective actions">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.corrective_actions as string) || ''}
+            onChange={(e) => onUpdate('corrective_actions', e.target.value)}
+            placeholder="Steps taken to prevent recurrence..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  // ── Mitigation plans ───────────────────────────────────────────────────────
+  if (actionName === 'create_mitigation_plan') {
+    return (
+      <>
+        <SectionLabel label="Mitigation Plan Details" />
+        <Field label="Linked risk ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.risk_id as number) || ''}
+            onChange={(e) => onUpdate('risk_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 42"
+          />
+        </Field>
+        <Field label="Plan title">
+          <input
+            className={inputCls}
+            value={(config?.title as string) || ''}
+            onChange={(e) => onUpdate('title', e.target.value)}
+            placeholder="Implement access control improvements"
+          />
+        </Field>
+        <Field label="Action type">
+          <select
+            className={selectCls}
+            value={(config?.action_type as string) || 'mitigate'}
+            onChange={(e) => onUpdate('action_type', e.target.value)}
+          >
+            {['mitigate', 'accept', 'transfer', 'avoid'].map((t) => (
+              <option key={t} value={t}>{toLabel(t)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Priority">
+          <select
+            className={selectCls}
+            value={(config?.priority as string) || 'medium'}
+            onChange={(e) => onUpdate('priority', e.target.value)}
+          >
+            {['critical', 'high', 'medium', 'low'].map((p) => (
+              <option key={p} value={p}>{toLabel(p)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Owner user ID (optional)">
+          <input
+            type="number"
+            className={inputCls}
+            value={(config?.owner_id as number) || ''}
+            onChange={(e) => onUpdate('owner_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="User ID"
+          />
+        </Field>
+        <Field label="Description (optional)">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.description as string) || ''}
+            onChange={(e) => onUpdate('description', e.target.value)}
+            placeholder="Detailed plan steps..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'update_mitigation_status') {
+    return (
+      <>
+        <Field label="Mitigation ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.mitigation_id as number) || ''}
+            onChange={(e) => onUpdate('mitigation_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 8"
+          />
+        </Field>
+        <Field label="New status">
+          <select
+            className={selectCls}
+            value={(config?.status as string) || 'in_progress'}
+            onChange={(e) => onUpdate('status', e.target.value)}
+          >
+            {['open', 'in_progress', 'completed', 'cancelled', 'on_hold'].map((s) => (
+              <option key={s} value={s}>{toLabel(s)}</option>
+            ))}
+          </select>
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'link_risk_to_mitigation') {
+    return (
+      <>
+        <Field label="Risk ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.risk_id as number) || ''}
+            onChange={(e) => onUpdate('risk_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 42"
+          />
+        </Field>
+        <Field label="Mitigation ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.mitigation_id as number) || ''}
+            onChange={(e) => onUpdate('mitigation_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 8"
+          />
+        </Field>
+        <Field label="Notes (optional)">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.notes as string) || ''}
+            onChange={(e) => onUpdate('notes', e.target.value)}
+            placeholder="Reason for linking..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  // ── RCSA ───────────────────────────────────────────────────────────────────
+  if (actionName === 'initiate_rcsa') {
+    return (
+      <>
+        <SectionLabel label="RCSA Campaign" />
+        <Field label="Campaign name">
+          <input
+            className={inputCls}
+            value={(config?.campaign_name as string) || ''}
+            onChange={(e) => onUpdate('campaign_name', e.target.value)}
+            placeholder="Q1 2026 RCSA"
+          />
+        </Field>
+        <Field label="Period type">
+          <select
+            className={selectCls}
+            value={(config?.period_type as string) || 'quarterly'}
+            onChange={(e) => onUpdate('period_type', e.target.value)}
+          >
+            {['quarterly', 'semi_annual', 'annual', 'adhoc'].map((p) => (
+              <option key={p} value={p}>{toLabel(p)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Period label (optional)">
+          <input
+            className={inputCls}
+            value={(config?.period_label as string) || ''}
+            onChange={(e) => onUpdate('period_label', e.target.value)}
+            placeholder="Q1 2026"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'submit_rcsa_results') {
+    return (
+      <>
+        <Field label="Assessment ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.assessment_id as number) || ''}
+            onChange={(e) => onUpdate('assessment_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 5"
+          />
+        </Field>
+        <Field label="Notes (optional)">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.notes as string) || ''}
+            onChange={(e) => onUpdate('notes', e.target.value)}
+            placeholder="Submission notes..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'review_rcsa') {
+    return (
+      <>
+        <Field label="Assessment ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.assessment_id as number) || ''}
+            onChange={(e) => onUpdate('assessment_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 5"
+          />
+        </Field>
+        <Field label="Reviewer user ID (optional)">
+          <input
+            type="number"
+            className={inputCls}
+            value={(config?.reviewer_id as number) || ''}
+            onChange={(e) => onUpdate('reviewer_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="User ID"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  // ── Risk reviews ───────────────────────────────────────────────────────────
+  if (actionName === 'schedule_risk_review') {
+    return (
+      <>
+        <Field label="Risk ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.risk_id as number) || ''}
+            onChange={(e) => onUpdate('risk_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 42"
+          />
+        </Field>
+        <Field label="Review cycle">
+          <select
+            className={selectCls}
+            value={(config?.review_cycle as string) || 'quarterly'}
+            onChange={(e) => onUpdate('review_cycle', e.target.value)}
+          >
+            {['monthly', 'quarterly', 'semi_annual', 'annual', 'adhoc'].map((c) => (
+              <option key={c} value={c}>{toLabel(c)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Due in (days from trigger)">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.due_days as number) || 90}
+            onChange={(e) => onUpdate('due_days', e.target.value ? Number(e.target.value) : null)}
+            placeholder="90"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'complete_risk_review') {
+    return (
+      <>
+        <Field label="Review ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.review_id as number) || ''}
+            onChange={(e) => onUpdate('review_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 3"
+          />
+        </Field>
+        <Field label="Findings">
+          <textarea
+            className={`${inputCls} h-14 resize-none`}
+            value={(config?.findings as string) || ''}
+            onChange={(e) => onUpdate('findings', e.target.value)}
+            placeholder="Key findings from this review cycle..."
+          />
+        </Field>
+        <Field label="Recommendations (optional)">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.recommendations as string) || ''}
+            onChange={(e) => onUpdate('recommendations', e.target.value)}
+            placeholder="Suggested next steps..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  // ── Risk assessments ───────────────────────────────────────────────────────
+  if (actionName === 'create_risk_assessment') {
+    return (
+      <>
+        <SectionLabel label="Assessment Details" />
+        <Field label="Assessment name">
+          <input
+            className={inputCls}
+            value={(config?.name as string) || ''}
+            onChange={(e) => onUpdate('name', e.target.value)}
+            placeholder="Annual IT Risk Assessment 2026"
+          />
+        </Field>
+        <Field label="Assessment type">
+          <select
+            className={selectCls}
+            value={(config?.assessment_type as string) || 'periodic'}
+            onChange={(e) => onUpdate('assessment_type', e.target.value)}
+          >
+            {['periodic', 'event_driven', 'continuous', 'pre_project', 'regulatory'].map((t) => (
+              <option key={t} value={t}>{toLabel(t)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Methodology (optional)">
+          <select
+            className={selectCls}
+            value={(config?.methodology as string) || ''}
+            onChange={(e) => onUpdate('methodology', e.target.value)}
+          >
+            <option value="">-- Select --</option>
+            {['qualitative', 'quantitative', 'hybrid', 'iso31000', 'nist_rmf', 'fair'].map((m) => (
+              <option key={m} value={m}>{toLabel(m)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Description (optional)">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.description as string) || ''}
+            onChange={(e) => onUpdate('description', e.target.value)}
+            placeholder="Scope and objectives..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'update_risk_assessment_status') {
+    return (
+      <>
+        <Field label="Assessment ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.assessment_id as number) || ''}
+            onChange={(e) => onUpdate('assessment_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 12"
+          />
+        </Field>
+        <Field label="New status">
+          <select
+            className={selectCls}
+            value={(config?.status as string) || 'in_progress'}
+            onChange={(e) => onUpdate('status', e.target.value)}
+          >
+            {['draft', 'in_progress', 'review', 'approved', 'closed'].map((s) => (
+              <option key={s} value={s}>{toLabel(s)}</option>
+            ))}
+          </select>
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'assign_risk_assessor') {
+    return (
+      <>
+        <Field label="Assessment ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.assessment_id as number) || ''}
+            onChange={(e) => onUpdate('assessment_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 12"
+          />
+        </Field>
+        <Field label="Assessor user ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.assessor_id as number) || ''}
+            onChange={(e) => onUpdate('assessor_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="User ID"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  // ── Internal controls ──────────────────────────────────────────────────────
+  if (actionName === 'create_internal_control') {
+    return (
+      <>
+        <SectionLabel label="Control Details" />
+        <Field label="Control name">
+          <input
+            className={inputCls}
+            value={(config?.name as string) || ''}
+            onChange={(e) => onUpdate('name', e.target.value)}
+            placeholder="Privileged access review"
+          />
+        </Field>
+        <Field label="Control ID / code">
+          <input
+            className={inputCls}
+            value={(config?.control_id as string) || ''}
+            onChange={(e) => onUpdate('control_id', e.target.value)}
+            placeholder="IC-IT-001"
+          />
+        </Field>
+        <Field label="Control type">
+          <select
+            className={selectCls}
+            value={(config?.control_type as string) || 'preventive'}
+            onChange={(e) => onUpdate('control_type', e.target.value)}
+          >
+            {['preventive', 'detective', 'corrective', 'directive', 'compensating'].map((t) => (
+              <option key={t} value={t}>{toLabel(t)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Control nature">
+          <select
+            className={selectCls}
+            value={(config?.control_nature as string) || 'manual'}
+            onChange={(e) => onUpdate('control_nature', e.target.value)}
+          >
+            {['manual', 'automated', 'hybrid'].map((n) => (
+              <option key={n} value={n}>{toLabel(n)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Category (optional)">
+          <input
+            className={inputCls}
+            value={(config?.category as string) || ''}
+            onChange={(e) => onUpdate('category', e.target.value)}
+            placeholder="Access Management"
+          />
+        </Field>
+        <Field label="Priority">
+          <select
+            className={selectCls}
+            value={(config?.priority as string) || 'medium'}
+            onChange={(e) => onUpdate('priority', e.target.value)}
+          >
+            {['critical', 'high', 'medium', 'low'].map((p) => (
+              <option key={p} value={p}>{toLabel(p)}</option>
+            ))}
+          </select>
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'test_internal_control') {
+    return (
+      <>
+        <Field label="Control ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.control_id as number) || ''}
+            onChange={(e) => onUpdate('control_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 3"
+          />
+        </Field>
+        <Field label="Test type">
+          <select
+            className={selectCls}
+            value={(config?.test_type as string) || 'operating'}
+            onChange={(e) => onUpdate('test_type', e.target.value)}
+          >
+            {['design', 'operating', 'walkthrough', 'inquiry', 'observation', 'reperformance'].map((t) => (
+              <option key={t} value={t}>{toLabel(t)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Result">
+          <select
+            className={selectCls}
+            value={(config?.result as string) || 'effective'}
+            onChange={(e) => onUpdate('result', e.target.value)}
+          >
+            {['effective', 'partially_effective', 'ineffective', 'not_tested'].map((r) => (
+              <option key={r} value={r}>{toLabel(r)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Findings (optional)">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.findings as string) || ''}
+            onChange={(e) => onUpdate('findings', e.target.value)}
+            placeholder="Observations from testing..."
+          />
+        </Field>
+        <Field label="Recommendations (optional)">
+          <textarea
+            className={`${inputCls} h-10 resize-none`}
+            value={(config?.recommendations as string) || ''}
+            onChange={(e) => onUpdate('recommendations', e.target.value)}
+            placeholder="Suggested improvements..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'update_control_test_result') {
+    return (
+      <>
+        <Field label="Test ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.test_id as number) || ''}
+            onChange={(e) => onUpdate('test_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 21"
+          />
+        </Field>
+        <Field label="Result">
+          <select
+            className={selectCls}
+            value={(config?.result as string) || 'effective'}
+            onChange={(e) => onUpdate('result', e.target.value)}
+          >
+            {['effective', 'partially_effective', 'ineffective', 'not_tested'].map((r) => (
+              <option key={r} value={r}>{toLabel(r)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Management response (optional)">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.management_response as string) || ''}
+            onChange={(e) => onUpdate('management_response', e.target.value)}
+            placeholder="Management's response to findings..."
+          />
+        </Field>
+      </>
+    );
+  }
+
+  // ── Risk appetite ──────────────────────────────────────────────────────────
+  if (actionName === 'set_risk_appetite') {
+    return (
+      <>
+        <SectionLabel label="Risk Appetite" />
+        <Field label="Risk category">
+          <select
+            className={selectCls}
+            value={(config?.category as string) || 'operational'}
+            onChange={(e) => onUpdate('category', e.target.value)}
+          >
+            {['operational', 'financial', 'compliance', 'reputational', 'strategic', 'technology', 'third_party'].map((c) => (
+              <option key={c} value={c}>{toLabel(c)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Appetite level">
+          <select
+            className={selectCls}
+            value={(config?.appetite_level as string) || 'moderate'}
+            onChange={(e) => onUpdate('appetite_level', e.target.value)}
+          >
+            {['averse', 'minimal', 'cautious', 'open', 'moderate', 'aggressive'].map((l) => (
+              <option key={l} value={l}>{toLabel(l)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Max acceptable score (optional)">
+          <input
+            type="number"
+            className={inputCls}
+            min={0}
+            max={25}
+            value={(config?.max_acceptable_score as number) ?? ''}
+            onChange={(e) => onUpdate('max_acceptable_score', e.target.value ? Number(e.target.value) : null)}
+            placeholder="12"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  if (actionName === 'update_risk_tolerance') {
+    return (
+      <>
+        <Field label="Risk category">
+          <select
+            className={selectCls}
+            value={(config?.category as string) || 'operational'}
+            onChange={(e) => onUpdate('category', e.target.value)}
+          >
+            {['operational', 'financial', 'compliance', 'reputational', 'strategic', 'technology', 'third_party'].map((c) => (
+              <option key={c} value={c}>{toLabel(c)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Tolerance threshold (numeric)">
+          <input
+            type="number"
+            className={inputCls}
+            min={0}
+            value={(config?.tolerance_threshold as number) ?? ''}
+            onChange={(e) => onUpdate('tolerance_threshold', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 8"
+          />
+        </Field>
+        <Field label="Max acceptable score (optional)">
+          <input
+            type="number"
+            className={inputCls}
+            min={0}
+            max={25}
+            value={(config?.max_acceptable_score as number) ?? ''}
+            onChange={(e) => onUpdate('max_acceptable_score', e.target.value ? Number(e.target.value) : null)}
+            placeholder="12"
+          />
+        </Field>
+      </>
+    );
+  }
+
+  // ── Risk dependencies ──────────────────────────────────────────────────────
+  if (actionName === 'add_risk_dependency') {
+    return (
+      <>
+        <SectionLabel label="Risk Dependency" />
+        <Field label="Source risk ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.source_risk_id as number) || ''}
+            onChange={(e) => onUpdate('source_risk_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 42"
+          />
+        </Field>
+        <Field label="Target risk ID">
+          <input
+            type="number"
+            className={inputCls}
+            min={1}
+            value={(config?.target_risk_id as number) || ''}
+            onChange={(e) => onUpdate('target_risk_id', e.target.value ? Number(e.target.value) : null)}
+            placeholder="e.g. 56"
+          />
+        </Field>
+        <Field label="Dependency type">
+          <select
+            className={selectCls}
+            value={(config?.dependency_type as string) || 'causes'}
+            onChange={(e) => onUpdate('dependency_type', e.target.value)}
+          >
+            {['causes', 'exacerbates', 'mitigates', 'correlated', 'triggers'].map((t) => (
+              <option key={t} value={t}>{toLabel(t)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Impact factor (0.0 – 2.0)">
+          <input
+            type="number"
+            className={inputCls}
+            min={0}
+            max={2}
+            step={0.1}
+            value={(config?.impact_factor as number) ?? 1.0}
+            onChange={(e) => onUpdate('impact_factor', e.target.value ? Number(e.target.value) : 1.0)}
+            placeholder="1.0"
+          />
+        </Field>
+        <Field label="Description (optional)">
+          <textarea
+            className={`${inputCls} h-12 resize-none`}
+            value={(config?.description as string) || ''}
+            onChange={(e) => onUpdate('description', e.target.value)}
+            placeholder="Nature of this dependency..."
+          />
+        </Field>
+      </>
+    );
+  }
+
   return null;
 }
 
@@ -2588,6 +3569,156 @@ function ConditionSubConfig({
   );
 }
 
+// ─── Dynamic platform-function param fields ──────────────────────────────────
+// Searchable picker that loads real records (documents, controls, risks, …)
+// for an object-reference config field. Also accepts a raw id or a
+// {{trigger.id}} expression typed directly.
+function RecordPicker({
+  entity, value, onChange, inputCls,
+}: {
+  entity: string;
+  value: unknown;
+  onChange: (v: unknown) => void;
+  inputCls: string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [q, setQ] = React.useState('');
+  const [results, setResults] = React.useState<Array<{ id: number; label: string }>>([]);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open) return;
+    let active = true;
+    setLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await workflowEngineApi.catalog.lookup(entity, q);
+        const list = (res.data as { results?: Array<{ id: number; label: string }> })?.results || [];
+        if (active) setResults(list);
+      } catch {
+        if (active) setResults([]);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }, 250);
+    return () => { active = false; clearTimeout(t); };
+  }, [entity, q, open]);
+
+  return (
+    <div className="relative">
+      <input
+        className={inputCls}
+        value={value === undefined || value === null ? '' : String(value)}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setOpen(true)}
+        placeholder={`Pick a ${entity}… or {{trigger.id}}`}
+      />
+      {open && (
+        <div className="absolute z-30 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg max-h-52 overflow-auto">
+          <input
+            autoFocus
+            className="w-full text-xs border-b border-gray-100 px-2 py-1.5 focus:outline-none"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={`Search ${entity}…`}
+          />
+          {loading ? (
+            <div className="px-2 py-1.5 text-[10px] text-gray-400">Searching…</div>
+          ) : results.length === 0 ? (
+            <div className="px-2 py-1.5 text-[10px] text-gray-400">No matches</div>
+          ) : (
+            results.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => { onChange(r.id); setOpen(false); setQ(''); }}
+                className="block w-full text-left px-2 py-1.5 text-xs hover:bg-indigo-50"
+              >
+                <span className="text-gray-800">{r.label}</span>{' '}
+                <span className="text-gray-400">#{r.id}</span>
+              </button>
+            ))
+          )}
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="block w-full text-center px-2 py-1 text-[10px] text-gray-400 border-t border-gray-100 hover:bg-gray-50"
+          >
+            Close
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Renders one node parameter as the right control: enum → dropdown,
+// entity → record picker, boolean → checkbox, array → CSV, else text.
+function DynamicParamField({
+  field, value, onChange, inputCls, selectCls,
+}: {
+  field: NodeParamField;
+  value: unknown;
+  onChange: (v: unknown) => void;
+  inputCls: string;
+  selectCls: string;
+}) {
+  const labelText = `${field.label}${field.required ? ' *' : ''}`;
+  const strVal = value === undefined || value === null ? '' : String(value);
+
+  let control: React.ReactNode;
+  if (field.enum && field.enum.length > 0) {
+    control = (
+      <select className={selectCls} value={strVal} onChange={(e) => onChange(e.target.value)}>
+        <option value="">— select —</option>
+        {field.enum.map((opt) => (
+          <option key={opt} value={opt}>{opt.replace(/_/g, ' ')}</option>
+        ))}
+      </select>
+    );
+  } else if (field.entity) {
+    control = <RecordPicker entity={field.entity} value={value} onChange={onChange} inputCls={inputCls} />;
+  } else if (field.type === 'boolean') {
+    control = (
+      <label className="inline-flex items-center gap-1.5 text-xs text-gray-700">
+        <input
+          type="checkbox"
+          checked={value === true || value === 'true'}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        Enabled
+      </label>
+    );
+  } else if (field.type === 'array') {
+    const arrText = Array.isArray(value) ? (value as unknown[]).join(', ') : strVal;
+    control = (
+      <input
+        className={inputCls}
+        value={arrText}
+        onChange={(e) => onChange(e.target.value.split(',').map((s) => s.trim()).filter(Boolean))}
+        placeholder="comma-separated values"
+      />
+    );
+  } else {
+    control = (
+      <input
+        className={inputCls}
+        value={strVal}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={
+          field.format === 'date'
+            ? 'YYYY-MM-DD'
+            : field.location === 'path'
+              ? '{{trigger.id}} or a specific id'
+              : ''
+        }
+      />
+    );
+  }
+
+  return <Field label={labelText}>{control}</Field>;
+}
+
 // ─── Node Config Body ─────────────────────────────────────────────────────────
 
 function NodeConfigBody({
@@ -2598,6 +3729,7 @@ function NodeConfigBody({
   actionOptions,
   conditionPathOptions,
   nodeConfigOptions,
+  nodeParamSchemas,
   onUpdateNodeConfig,
   onSetNodeConfigText,
 }: {
@@ -2608,15 +3740,21 @@ function NodeConfigBody({
   actionOptions: NodeOptionItem[];
   conditionPathOptions: Array<{ value: string; label: string }>;
   nodeConfigOptions: NodeConfigOptions;
+  nodeParamSchemas: NodeParamSchemas;
   onUpdateNodeConfig: (field: string, value: unknown) => void;
   onSetNodeConfigText: (v: string) => void;
 }) {
-  const { nodeKey, nodeType, label, config } = node.data;
+  const { nodeKey, nodeType, label, config, isFirstAfterStart, triggerStatus, inferredTriggerEvent } = node.data;
   const nodeContext = getNodeCatalogContext(nodeType, config, nodeKey);
   const contextLabel = formatWorkflowContextLabel(nodeContext);
   const relevantTriggerKeys = getRelevantTriggerKeys(nodeContext);
   const relevantConditionKeys = getRelevantConditionKeys(nodeContext);
   const relevantActionOptions = getRelevantActionOptions(actionOptions, nodeContext);
+  // Platform-function nodes get input fields derived from their real API
+  // endpoint (path/query/body params) instead of the generic action picker.
+  const _actionName = (config?.action_name as string) || '';
+  const isPlatformAction = _actionName.startsWith('platform_action.');
+  const platformParamFields: NodeParamField[] = isPlatformAction ? (nodeParamSchemas[_actionName] || []) : [];
   const selectedUserIds = Array.isArray(config?.approver_user_ids)
     ? (config.approver_user_ids as Array<string | number>).map(String)
     : [];
@@ -2652,30 +3790,107 @@ function NodeConfigBody({
       <Field label="Business Context">
         <div className="text-xs text-gray-600">{contextLabel}</div>
       </Field>
-      <Field label="Label">
-        <input
-          className={inputCls}
-          value={label}
-          onChange={(e) => onUpdateNodeConfig('label', e.target.value)}
-        />
-      </Field>
+      {/* Label is editable for functional nodes only. Start/End are fixed
+          markers, so renaming them adds no value and just clutters the panel. */}
+      {nodeType !== 'start' && nodeType !== 'end' && (
+        <Field label="Label">
+          <input
+            className={inputCls}
+            value={label}
+            onChange={(e) => onUpdateNodeConfig('label', e.target.value)}
+          />
+        </Field>
+      )}
 
-      {/* Trigger-specific fields */}
-      {nodeType === 'start' && (
+      {/* First-after-Start trigger banner — shows the inferred event when the node
+          is trigger-eligible, or a clear warning otherwise. Suppressed for explicit
+          trigger nodes (handled by the dedicated "Triggers When" block below). */}
+      {isFirstAfterStart && nodeType !== 'start' && nodeType !== 'end' && (
+        triggerStatus === 'valid' ? (
+          <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2 leading-snug flex items-start gap-1.5">
+            <span className="text-amber-600 mt-px">⚡</span>
+            <span>
+              <strong className="font-semibold">This node is the workflow trigger.</strong>{' '}
+              When the system performs this action, the workflow will run automatically.
+              {inferredTriggerEvent && (
+                <> Trigger event: <code className="font-mono text-[10px] bg-amber-100 px-1 rounded">{inferredTriggerEvent}</code>.</>
+              )}
+            </span>
+          </div>
+        ) : (
+          <div className="text-[10px] text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1.5 mb-2 leading-snug flex items-start gap-1.5">
+            <span className="text-red-600 mt-px">⚠</span>
+            <span>
+              <strong className="font-semibold">Not a valid trigger.</strong>{' '}
+              The first node after Start must be a Trigger or a Platform Function CRUD action
+              that maps to a system event. Replace this node, or insert a Trigger before it.
+            </span>
+          </div>
+        )
+      )}
+
+      {/* Trigger-specific fields. The default Start node (nodeKey === 'start')
+          is a plain entry marker with no event picker — keeping it clean.
+          (Legacy workflows that stored a dedicated trigger node still expose
+          the picker so their event remains editable.) */}
+      {nodeType === 'start' && nodeKey !== 'start' && (
         <>
-          <SectionLabel label="Trigger Settings" />
-          <Field label="Trigger Type">
+          <SectionLabel label="Triggers When" />
+          <p className="text-[10px] text-blue-600 bg-blue-50 border border-blue-100 rounded px-2 py-1.5 mb-2 leading-snug">
+            When someone performs this action in the platform, the entire workflow runs automatically.
+          </p>
+          <Field label="Event">
             <select
               className={selectCls}
               value={(config?.trigger_type as string) || ''}
               onChange={(e) => onUpdateNodeConfig('trigger_type', e.target.value)}
             >
-              <option value="">-- Select Trigger --</option>
-              {relevantTriggerKeys.map((k) => (
-                <option key={k} value={k}>
-                  {NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}
-                </option>
-              ))}
+              <option value="">— Choose an event —</option>
+              <optgroup label="Evidence &amp; Compliance">
+                {['evidence_uploaded','evidence_approved','evidence_expires','framework_deadline_approaching','framework_evidence_complete','assessment_status_change','compliance_gap_detected','certification_expiry_approaching']
+                  .filter(k => relevantTriggerKeys.includes(k))
+                  .map(k => <option key={k} value={k}>{NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}</option>)}
+              </optgroup>
+              <optgroup label="Risk">
+                {['risk_created','risk_updated','risk_deleted','risk_status_changed','risk_score_exceeds_threshold','kri_breach','incident_reported']
+                  .filter(k => relevantTriggerKeys.includes(k))
+                  .map(k => <option key={k} value={k}>{NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}</option>)}
+              </optgroup>
+              <optgroup label="Vulnerability">
+                {['vulnerability_created','vulnerability_updated','vulnerability_deleted','new_vulnerability_detected','vulnerability_sla_breach','vulnerability_sla_warning']
+                  .filter(k => relevantTriggerKeys.includes(k))
+                  .map(k => <option key={k} value={k}>{NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}</option>)}
+              </optgroup>
+              <optgroup label="Governance &amp; Policy">
+                {['policy_submitted_for_review','policy_review_due','policy_approved','control_review_due','attestation_overdue']
+                  .filter(k => relevantTriggerKeys.includes(k))
+                  .map(k => <option key={k} value={k}>{NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}</option>)}
+              </optgroup>
+              <optgroup label="Governance Documents">
+                {['governance_document_created','governance_document_expires','governance_document_published']
+                  .filter(k => relevantTriggerKeys.includes(k))
+                  .map(k => <option key={k} value={k}>{NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}</option>)}
+              </optgroup>
+              <optgroup label="Audit">
+                {['audit_finding_created','audit_finding_updated','audit_finding_closed']
+                  .filter(k => relevantTriggerKeys.includes(k))
+                  .map(k => <option key={k} value={k}>{NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}</option>)}
+              </optgroup>
+              <optgroup label="IT Assets">
+                {['asset_created','asset_updated','asset_deleted']
+                  .filter(k => relevantTriggerKeys.includes(k))
+                  .map(k => <option key={k} value={k}>{NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}</option>)}
+              </optgroup>
+              <optgroup label="Control Library">
+                {['control_group_created','control_group_updated','control_group_deleted']
+                  .filter(k => relevantTriggerKeys.includes(k))
+                  .map(k => <option key={k} value={k}>{NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}</option>)}
+              </optgroup>
+              <optgroup label="Scheduled">
+                {['schedule_recurring','webhook']
+                  .filter(k => relevantTriggerKeys.includes(k))
+                  .map(k => <option key={k} value={k}>{NODE_TYPE_LABELS[k] || k.replace(/_/g, ' ')}</option>)}
+              </optgroup>
             </select>
           </Field>
           {/* ─── Dynamic trigger sub-config ─────────────────────────────── */}
@@ -2696,6 +3911,36 @@ function NodeConfigBody({
       {nodeType === 'action' && (
         <>
           <SectionLabel label="Action Settings" />
+
+          {isPlatformAction ? (
+            <>
+              <Field label="Function">
+                <div className="text-xs font-medium text-gray-700 leading-snug">{label}</div>
+              </Field>
+              {platformParamFields.length === 0 ? (
+                <p className="text-[10px] text-gray-400 leading-snug">
+                  This action runs on the triggering record and needs no extra inputs.
+                </p>
+              ) : (
+                <div className="space-y-0.5">
+                  <p className="text-[10px] text-gray-400 leading-snug mb-1">
+                    Set this action&apos;s inputs. Leave blank to inherit from the trigger, or use an expression like {'{{trigger.id}}'}.
+                  </p>
+                  {platformParamFields.map((f) => (
+                    <DynamicParamField
+                      key={`${f.location}:${f.name}`}
+                      field={f}
+                      value={config?.[f.name]}
+                      onChange={(v) => onUpdateNodeConfig(f.name, v)}
+                      inputCls={inputCls}
+                      selectCls={selectCls}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+          <>
           <Field label="Action Type">
             <select
               className={selectCls}
@@ -2774,6 +4019,8 @@ function NodeConfigBody({
             inputCls,
             selectCls,
           })}
+          </>
+          )}
         </>
       )}
 

@@ -21,13 +21,14 @@ from ....models import (
     WorkflowInstance,
     WorkflowNode,
 )
+from ....rich_audit import write_rich_audit_log
 from .condition_evaluator import ConditionEvaluator
 from .event_queue import WorkflowEventQueue
 from .notification_service import send_workflow_notification
 from .state_machine import WorkflowStateMachine
 from .step_executor import StepExecutor
 from .timer_service import TimerService
-from .trigger_dispatcher import TriggerDispatcher
+from .trigger_dispatcher import TriggerDispatcher, iter_tenant_sessions, open_tenant_session_for_id
 
 logger = logging.getLogger(__name__)
 
@@ -89,18 +90,27 @@ class WorkflowRuntime:
 
     def _run_loop(self) -> None:
         while not self._stop_event.is_set():
-            db = SessionLocal()
+            polled = 0
+            scheduled = 0
             try:
-                polled = self.dispatcher.poll_platform_events(db)
-                scheduled = self.timer_service.schedule_due_steps(db)
+                # Workflow tables + the audit log live in each tenant's own
+                # database (per-tenant DB architecture), so we iterate one
+                # session per active tenant and run BOTH the audit-event poll
+                # and the timer pass on it — a single tenant iteration per
+                # cycle keeps connection churn down. Each tenant is committed
+                # independently; one tenant's failure can't kill the cycle.
+                for tenant_id, _slug, sess in iter_tenant_sessions():
+                    try:
+                        polled += self.dispatcher.poll_tenant_audit_events(tenant_id, sess)
+                        scheduled += self.timer_service.schedule_due_steps_for_tenant(sess, tenant_id)
+                        sess.commit()
+                    except Exception:  # noqa: BLE001
+                        sess.rollback()
+                        logger.exception("workflow.runtime.tenant_cycle_failed tenant_id=%s", tenant_id)
                 # Threshold events (issue SLA breach, agent offline, CIS
-                # pass-rate drop) — self-throttled to once per 60 s by
-                # the dispatcher; cheap to call every loop tick because
-                # the dispatcher returns immediately when not due. The
-                # method opens its own per-tenant sessions, so we don't
-                # pass the master `db` in.
+                # pass-rate drop) — self-throttled to once per 60 s and opens
+                # its own per-tenant sessions internally.
                 threshold_fired = self.dispatcher.poll_threshold_events()
-                db.commit()
                 if polled or scheduled or threshold_fired:
                     logger.info(
                         "workflow.runtime.cycle polled_events=%s scheduled_items=%s threshold_events=%s queue_size=%s",
@@ -110,10 +120,7 @@ class WorkflowRuntime:
                         self.event_queue.size(),
                     )
             except Exception as exc:
-                db.rollback()
                 logger.exception("Workflow poll cycle error: %s", exc)
-            finally:
-                db.close()
 
             self._consume_batch(max_items=50)
             time.sleep(0.5)
@@ -123,7 +130,17 @@ class WorkflowRuntime:
             item = self.event_queue.consume(timeout=0.01)
             if not item:
                 break
-            db = SessionLocal()
+            # Every queued item carries the tenant it belongs to; its workflow
+            # rows live in that tenant's DB, so we must process it on a session
+            # opened against that tenant (not the master catalog).
+            tenant_id = item.get("tenant_id")
+            db = open_tenant_session_for_id(tenant_id)
+            if db is None:
+                logger.warning(
+                    "workflow.runtime.item_skipped reason=no_tenant_session kind=%s tenant_id=%s",
+                    item.get("kind"), tenant_id,
+                )
+                continue
             try:
                 self._handle_item(db, item)
                 db.commit()
@@ -217,6 +234,33 @@ class WorkflowRuntime:
             )
         )
 
+        # Write a main AuditLog entry so the Admin Audit Logs page shows this
+        # lifecycle event with actor_type="workflow_engine".  actor_source is
+        # set to "workflow" so the trigger dispatcher skips this row and does
+        # not re-fire another workflow on it.
+        try:
+            write_rich_audit_log(
+                db=db,
+                tenant_id=instance.tenant_id,
+                user_id=None,
+                action="execute",
+                resource_type="workflow_engine",
+                resource_id=definition.id,
+                resource_name=definition.name,
+                summary=f"Workflow Engine started execution of '{definition.name}'",
+                actor_type="workflow_engine",
+                actor_workflow_id=definition.id,
+                after={
+                    "workflow_instance_id": instance.id,
+                    "trigger_event": item.get("trigger_event"),
+                    "status": "running",
+                },
+                resource_url=f"/workflow-engine/{definition.id}",
+                actor_source="workflow",
+            )
+        except Exception as _e:
+            logger.warning("workflow.runtime.start_instance.audit_log_failed: %s", _e)
+
         logger.info(
             "workflow.runtime.instance_started instance_id=%s workflow_definition_id=%s tenant_id=%s start_node=%s trigger_event=%s correlation_id=%s",
             instance.id,
@@ -227,7 +271,7 @@ class WorkflowRuntime:
             item.get("correlation_id"),
         )
 
-        self.event_queue.publish({"kind": "resume_instance", "instance_id": instance.id})
+        self.event_queue.publish({"kind": "resume_instance", "instance_id": instance.id, "tenant_id": instance.tenant_id})
 
     def _resume_step(self, db: Session, step_id: Optional[int]) -> None:
         if not step_id:
@@ -246,7 +290,7 @@ class WorkflowRuntime:
             return
         if WorkflowStateMachine.can_transition_step(step.status, "running"):
             step.status = "running"
-        self.event_queue.publish({"kind": "resume_instance", "instance_id": instance.id})
+        self.event_queue.publish({"kind": "resume_instance", "instance_id": instance.id, "tenant_id": instance.tenant_id})
         logger.info("workflow.runtime.resume_step.queued step_id=%s instance_id=%s", step_id, instance.id)
 
     def _run_instance(self, db: Session, instance_id: Optional[int]) -> None:
@@ -280,6 +324,7 @@ class WorkflowRuntime:
             if not instance.current_node_key:
                 self._mark_instance_completed(db, instance)
                 self._notify_webhooks(instance, "workflow.instance.completed")
+                self._write_instance_lifecycle_log(db, instance, definition, "completed")
                 logger.info("workflow.runtime.instance_completed instance_id=%s", instance.id)
                 break
 
@@ -292,8 +337,10 @@ class WorkflowRuntime:
                 .first()
             )
             if not node:
-                self._mark_instance_failed(db, instance, f"Node not found: {instance.current_node_key}")
+                _node_err = f"Node not found: {instance.current_node_key}"
+                self._mark_instance_failed(db, instance, _node_err)
                 self._notify_webhooks(instance, "workflow.instance.failed")
+                self._write_instance_lifecycle_log(db, instance, definition, "failed", error=_node_err)
                 logger.error(
                     "workflow.runtime.instance_failed instance_id=%s reason=node_not_found node_key=%s",
                     instance.id,
@@ -301,12 +348,19 @@ class WorkflowRuntime:
                 )
                 break
 
+            # Look for an existing step on this node in any non-terminal status.
+            # IMPORTANT: include "running" so that steps already transitioned by
+            # _resume_step() (waiting_timer → running) are REUSED rather than
+            # causing a new step to be created on every cycle (the runaway bug).
             waiting_step = (
                 db.query(WorkflowEngineStep)
                 .filter(
                     WorkflowEngineStep.workflow_instance_id == instance.id,
                     WorkflowEngineStep.node_key == node.node_key,
-                    WorkflowEngineStep.status.in_(["waiting_timer", "waiting_approval"]),
+                    WorkflowEngineStep.status.in_([
+                        "waiting_timer", "waiting_approval",
+                        "waiting_subworkflow", "running",
+                    ]),
                 )
                 .order_by(WorkflowEngineStep.id.desc())
                 .first()
@@ -328,6 +382,8 @@ class WorkflowRuntime:
                         waiting_step.status = "running"
                     step = waiting_step
                 else:
+                    # "running" — step was already transitioned by _resume_step();
+                    # reuse it directly so we don't create a duplicate.
                     step = waiting_step
             else:
                 step = WorkflowEngineStep(
@@ -409,13 +465,26 @@ class WorkflowRuntime:
             if next_status == "failed":
                 step.status = "failed"
                 step.completed_at = datetime.utcnow()
-                self._mark_instance_failed(db, instance, result.get("error", "Step execution failed"))
+                error_msg = result.get("error", "Step execution failed")
+                db.add(
+                    WorkflowAuditLog(
+                        tenant_id=instance.tenant_id,
+                        workflow_definition_id=definition.id,
+                        workflow_instance_id=instance.id,
+                        workflow_step_id=step.id,
+                        event_type="step.failed",
+                        message=f"Step failed at node {node.node_key}: {error_msg}",
+                        payload={"node_key": node.node_key, "error": error_msg},
+                    )
+                )
+                self._mark_instance_failed(db, instance, error_msg)
                 self._notify_webhooks(instance, "workflow.instance.failed")
+                self._write_instance_lifecycle_log(db, instance, definition, "failed", error=error_msg)
                 logger.error(
                     "workflow.runtime.instance_failed instance_id=%s step_id=%s error=%s",
                     instance.id,
                     step.id,
-                    result.get("error", "Step execution failed"),
+                    error_msg,
                 )
                 break
 
@@ -444,6 +513,7 @@ class WorkflowRuntime:
             if not next_node_key or _is_terminal(node):
                 self._mark_instance_completed(db, instance)
                 self._notify_webhooks(instance, "workflow.instance.completed")
+                self._write_instance_lifecycle_log(db, instance, definition, "completed")
                 logger.info("workflow.runtime.instance_completed instance_id=%s", instance.id)
                 break
 
@@ -457,6 +527,9 @@ class WorkflowRuntime:
         if visited >= 200:
             self._mark_instance_failed(db, instance, "Execution limit exceeded (possible cycle)")
             self._notify_webhooks(instance, "workflow.instance.failed")
+            self._write_instance_lifecycle_log(
+                db, instance, definition, "failed", error="Execution limit exceeded (possible cycle)"
+            )
             logger.error("workflow.runtime.instance_failed instance_id=%s reason=execution_limit", instance.id)
 
     def _resolve_next_node_key(self, db: Session, definition_id: int, source_node_key: str, data: Dict) -> Optional[str]:
@@ -533,6 +606,87 @@ class WorkflowRuntime:
             instance.status = "failed"
         instance.failed_at = datetime.utcnow()
         instance.error_message = error
+
+    @staticmethod
+    def _write_instance_lifecycle_log(
+        db: Session,
+        instance: WorkflowInstance,
+        definition: WorkflowDefinition,
+        status: str,
+        error: Optional[str] = None,
+    ) -> None:
+        """Write a main AuditLog entry for a workflow instance lifecycle change.
+
+        Tagged with actor_type='workflow_engine' and actor_source='workflow' so:
+        - The Admin Audit Logs "Workflow Engine" filter returns these rows.
+        - The trigger dispatcher skips them and does not re-fire workflows.
+        """
+        summary_map = {
+            "completed": f"Workflow Engine completed execution of '{definition.name}'",
+            "failed": f"Workflow Engine execution of '{definition.name}' failed",
+        }
+        after_payload: Dict = {
+            "workflow_instance_id": instance.id,
+            "status": status,
+        }
+        if error:
+            after_payload["error"] = error
+
+        # Attach each step's node_meta (and a short result tag) so the AI
+        # summary can render a #### Steps section explaining what each node
+        # did, which module it inherited from, and the endpoint it called.
+        try:
+            steps = (
+                db.query(WorkflowEngineStep)
+                .filter(WorkflowEngineStep.workflow_instance_id == instance.id)
+                .order_by(WorkflowEngineStep.id.asc())
+                .all()
+            )
+            step_snapshots = []
+            for s in steps:
+                out = s.output_payload if isinstance(s.output_payload, dict) else {}
+                meta = out.get("node_meta") or {}
+                snapshot = {
+                    "node_key": s.node_key,
+                    "node_type": s.node_type,
+                    "status": s.status,
+                }
+                # surface the descriptive fields auditors care about
+                for k in ("label", "description", "action_name", "endpoint",
+                          "verb", "module", "submodule", "inherited_from"):
+                    if meta.get(k):
+                        snapshot[k] = meta[k]
+                # short result hint without dragging the full payload
+                if "result" in out:
+                    snapshot["result"] = out.get("result")
+                if "approved" in out:
+                    snapshot["approved"] = out.get("approved")
+                if "rejected" in out:
+                    snapshot["rejected"] = out.get("rejected")
+                step_snapshots.append(snapshot)
+            if step_snapshots:
+                after_payload["steps"] = step_snapshots
+        except Exception as _se:
+            logger.warning("workflow.runtime.step_snapshot_failed: %s", _se)
+
+        try:
+            write_rich_audit_log(
+                db=db,
+                tenant_id=instance.tenant_id,
+                user_id=None,
+                action="execute",
+                resource_type="workflow_engine",
+                resource_id=definition.id,
+                resource_name=definition.name,
+                summary=summary_map.get(status, f"Workflow Engine instance {status}"),
+                actor_type="workflow_engine",
+                actor_workflow_id=definition.id,
+                after=after_payload,
+                resource_url=f"/workflow-engine/{definition.id}",
+                actor_source="workflow",
+            )
+        except Exception as _e:
+            logger.warning("workflow.runtime.lifecycle_audit_log_failed status=%s: %s", status, _e)
 
     def _handle_approval_timeouts(self, db: Session, instance: WorkflowInstance, definition: WorkflowDefinition, step: WorkflowEngineStep) -> bool:
         timed_out = db.query(ApprovalRequest).filter(
@@ -768,14 +922,27 @@ class WorkflowRuntime:
         return state_changed
 
     def _notify_webhooks(self, instance: WorkflowInstance, event_name: str) -> None:
-        db = SessionLocal()
+        # Webhook endpoints live in the per-tenant DB, and this is a best-effort
+        # side-effect: a missing table, an unreachable tenant DB, or a delivery
+        # failure must NEVER propagate — otherwise it would roll back the
+        # instance-completion the caller just committed.
+        db = open_tenant_session_for_id(instance.tenant_id)
+        if db is None:
+            return
         try:
-            hooks = db.query(WorkflowEngineWebhookEndpoint).filter(
-                WorkflowEngineWebhookEndpoint.tenant_id == instance.tenant_id,
-                WorkflowEngineWebhookEndpoint.event_name == event_name,
-                WorkflowEngineWebhookEndpoint.is_active == True,
-                WorkflowEngineWebhookEndpoint.callback_url.isnot(None),
-            ).all()
+            try:
+                hooks = db.query(WorkflowEngineWebhookEndpoint).filter(
+                    WorkflowEngineWebhookEndpoint.tenant_id == instance.tenant_id,
+                    WorkflowEngineWebhookEndpoint.event_name == event_name,
+                    WorkflowEngineWebhookEndpoint.is_active == True,
+                    WorkflowEngineWebhookEndpoint.callback_url.isnot(None),
+                ).all()
+            except Exception as exc:  # noqa: BLE001 — e.g. table not provisioned on this tenant DB
+                logger.debug(
+                    "workflow.webhooks.skip tenant_id=%s event=%s reason=%s",
+                    instance.tenant_id, event_name, exc,
+                )
+                return
 
             payload = {
                 "event_name": event_name,

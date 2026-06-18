@@ -3,7 +3,14 @@ import logging
 from typing import Any, Dict, Optional
 
 from ....models import ApprovalRequest, Role, UserRole, WorkflowAuditLog, WorkflowEngineStep, WorkflowInstance
-from .action_handlers import WorkflowActionHandlers, _build_template_context, _resolve_template
+from ....rich_audit import workflow_actor_context
+from .action_handlers import (
+    WorkflowActionHandlers,
+    _build_template_context,
+    _resolve_template,
+    _default_notification_subject,
+    _default_notification_message,
+)
 from .condition_evaluator import ConditionEvaluator
 from .notification_service import send_workflow_notification
 
@@ -26,7 +33,82 @@ _ALLOWED_NODE_TYPES = {
     "end",
 }
 # Only these action_names are permitted inside legacy "action" nodes.
-_SAFE_ACTIONS = {"send_notification_email", "escalate_to_management", "send_in_app_alert"}
+_SAFE_ACTIONS = {
+    # Notifications & communication
+    "send_notification_email",
+    "send_in_app_alert",
+    "escalate_to_management",
+    # NOTE: call_webhook_api excluded — outbound HTTP to user-supplied URLs is
+    # an SSRF risk; use a dedicated integration node if webhooks are needed.
+    "generate_report",
+    # Evidence & compliance
+    "request_evidence_upload",
+    "request_evidence_review",
+    "approve_evidence",
+    "reject_evidence",
+    "update_compliance_status",
+    "start_compliance_assessment",
+    "close_compliance_gap",
+    "link_evidence_to_control",
+    "assign_control_owner",
+    # Risk
+    "create_risk_entry",
+    "update_risk_status",
+    "assign_risk_owner",
+    "trigger_risk_review",
+    "create_remediation_task",
+    # Vulnerability
+    "assign_vulnerability_owner",
+    "update_vulnerability_status",
+    "create_vulnerability_entry",
+    # Governance
+    "create_policy_review_task",
+    "publish_policy",
+    "submit_policy_exception",
+    "approve_policy_exception",
+    "request_attestation",
+    # Audit
+    "create_audit_finding",
+    "create_audit_plan",
+    "close_audit_finding",
+    "assign_auditor",
+    # Control library
+    "update_control_effectiveness",
+    "set_control_not_applicable",
+    # KRI management
+    "create_kri",
+    "update_kri_value",
+    "resolve_kri_breach",
+    # Incident management
+    "create_incident",
+    "update_incident_status",
+    "assign_incident_owner",
+    "close_incident",
+    # Mitigation plans
+    "create_mitigation_plan",
+    "update_mitigation_status",
+    "link_risk_to_mitigation",
+    # RCSA
+    "initiate_rcsa",
+    "submit_rcsa_results",
+    "review_rcsa",
+    # Risk reviews
+    "schedule_risk_review",
+    "complete_risk_review",
+    # Risk assessments
+    "create_risk_assessment",
+    "update_risk_assessment_status",
+    "assign_risk_assessor",
+    # Internal controls
+    "create_internal_control",
+    "test_internal_control",
+    "update_control_test_result",
+    # Risk appetite
+    "set_risk_appetite",
+    "update_risk_tolerance",
+    # Risk dependencies
+    "add_risk_dependency",
+}
 
 
 class StepExecutor:
@@ -36,11 +118,13 @@ class StepExecutor:
         # 1. Direct match against whitelist
         if node_type in _ALLOWED_NODE_TYPES:
             return node_type
-        # 2. Legacy "action" type — allow only safe action names
+        # 2. Legacy "action" type — allow safe action names and all platform_action.* nodes
         if node_type == "action":
             cfg = getattr(node, "config", {}) or {}
             action_name = (cfg.get("action_name") or "").strip().lower()
-            return "action" if action_name in _SAFE_ACTIONS else "blocked"
+            if action_name in _SAFE_ACTIONS or action_name.startswith("platform_action."):
+                return "action"
+            return "blocked"
         # 3. Config-based type inference for nodes without explicit node_type
         cfg = getattr(node, "config", {}) or {}
         if cfg.get("trigger_type"):
@@ -55,7 +139,9 @@ class StepExecutor:
             return "escalation"
         if cfg.get("action_name"):
             action_name = (cfg.get("action_name") or "").strip().lower()
-            return "action" if action_name in _SAFE_ACTIONS else "blocked"
+            if action_name in _SAFE_ACTIONS or action_name.startswith("platform_action."):
+                return "action"
+            return "blocked"
         return "blocked"
 
     @staticmethod
@@ -83,6 +169,16 @@ class StepExecutor:
         return normalized
 
     @staticmethod
+    def _default_recipient_user_ids(definition) -> list[int]:
+        """Fallback recipient for a notification node that has none configured —
+        the workflow's creator — so alerts / emails are never silently dropped."""
+        owner_id = getattr(definition, "created_by_id", None)
+        try:
+            return [int(owner_id)] if owner_id else []
+        except Exception:  # noqa: BLE001
+            return []
+
+    @staticmethod
     def _resolve_role_user_ids(db, tenant_id: int, role_ids: list[int]) -> list[int]:
         if not role_ids:
             return []
@@ -98,20 +194,173 @@ class StepExecutor:
         )
         return [u[0] for u in users]
 
+    @staticmethod
+    def _build_node_meta(node, node_type: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Compact node self-description appended to every step's output_payload.
+
+        Auditors reading a step row should be able to tell:
+        - what the node does (description + label)
+        - where it dispatches to (endpoint / action_name)
+        - which module + submodule + verb it inherited from
+
+        Sources (in order of preference):
+        1. node.config — values the seeder already wrote
+        2. node_type — fallback for built-in nodes (timer, condition, ...)
+        """
+        cfg = config or {}
+        action_name = cfg.get("action_name") or cfg.get("action") or ""
+        endpoint = cfg.get("endpoint") or cfg.get("path") or ""
+        module = cfg.get("module") or ""
+        submodule = cfg.get("submodule") or ""
+        verb = cfg.get("verb") or cfg.get("verb_action") or ""
+        description = cfg.get("description") or cfg.get("node_description") or ""
+
+        # Parse from action_name when richer fields are missing:
+        # platform_action.<verb>.<module>.<submodule>.<functionality>
+        if action_name and not (module and submodule and verb):
+            parts = (action_name or "").split(".")
+            if len(parts) >= 5 and parts[0] == "platform_action":
+                verb = verb or parts[1]
+                module = module or parts[2]
+                submodule = submodule or parts[3]
+
+        # Derive a human inherited_from string
+        if module and submodule:
+            inherited_from = f"{module}/{submodule}"
+        elif module:
+            inherited_from = module
+        else:
+            inherited_from = node_type or "workflow_engine"
+
+        # Smart description for platform_action.* nodes — turn
+        # "platform_action.create.risk_management.vendor_risk.assessment"
+        # into "Creates an assessment in vendor_risk." so the audit reader
+        # never sees a raw node name without context.
+        if not description and action_name.startswith("platform_action."):
+            parts = action_name.split(".")
+            if len(parts) >= 5:
+                _verb = parts[1]
+                _entity = parts[4].replace("_", " ")
+                _mod = parts[3].replace("_", " ")
+                verb_phrase = {
+                    "create": "Creates a",
+                    "update": "Updates a",
+                    "delete": "Deletes a",
+                    "approve": "Approves a",
+                    "reject": "Rejects a",
+                    "trigger": "Triggers a",
+                    "submit": "Submits a",
+                    "publish": "Publishes a",
+                    "upload": "Uploads a",
+                    "assign": "Assigns a",
+                    "export": "Exports a",
+                }.get(_verb, _verb.capitalize() + " a")
+                description = f"{verb_phrase} {_entity} in {_mod}."
+
+        # Recipient-aware descriptions for notification / email / alert nodes
+        if not description and node_type in ("notification", "email") or action_name in ("send_notification_email", "send_in_app_alert"):
+            _payload = cfg.get("payload") or {}
+            _ch = (
+                cfg.get("channels")
+                or cfg.get("notification_channels")
+                or (["in_app"] if action_name == "send_in_app_alert" else ["email"])
+            )
+            _subject = cfg.get("subject") or _payload.get("subject")
+            channel_str = " + ".join(_ch) if isinstance(_ch, list) else str(_ch)
+            if _subject:
+                description = f"Sends a {channel_str} notification with subject: {_subject}."
+            else:
+                description = f"Sends a {channel_str} notification."
+
+        # Fallback description for built-in node types
+        if not description:
+            DEFAULT_DESCRIPTIONS = {
+                "start": "Entry point where the workflow begins.",
+                "end": "Terminates the workflow.",
+                "noop": "No-op placeholder.",
+                "timer": "Waits for a duration before advancing.",
+                "condition": "Evaluates a boolean expression and branches.",
+                "notification": "Sends an in-app or email notification to designated recipients.",
+                "email": "Sends an SMTP email.",
+                "approval": "Human approval gate that waits for an approve or reject decision.",
+                "escalation": "Notifies escalation targets when triggered.",
+                "subworkflow": "Invokes another workflow as a sub-process.",
+                "action": "Invokes a platform action handler.",
+            }
+            description = DEFAULT_DESCRIPTIONS.get(node_type, f"{node_type} node")
+
+        meta = {
+            "node_key": getattr(node, "node_key", None),
+            "node_type": node_type,
+            "label": cfg.get("label") or getattr(node, "label", None) or action_name or node_type,
+            "description": description,
+            "action_name": action_name or None,
+            "endpoint": endpoint or None,
+            "verb": verb or None,
+            "module": module or None,
+            "submodule": submodule or None,
+            "inherited_from": inherited_from,
+        }
+        # Drop empty values to keep payloads compact
+        return {k: v for k, v in meta.items() if v not in (None, "", [], {})}
+
     def execute(self, db, instance, definition, node, step: WorkflowEngineStep) -> Dict[str, Any]:
+        # Outer wrapper — call the original logic and stamp node_meta onto the
+        # result's output dict so every step's output_payload carries node
+        # self-description (description, endpoint, module, inherited_from).
         node_type = self._resolve_node_type(node)
         config = node.config or {}
+        node_meta = self._build_node_meta(node, node_type, config)
 
+        result = self._execute_inner(db, instance, definition, node, step)
+        if isinstance(result, dict) and isinstance(result.get("output"), dict):
+            result["output"] = {**result["output"], "node_meta": node_meta}
+        return result
+
+    def _execute_inner(self, db, instance, definition, node, step: WorkflowEngineStep) -> Dict[str, Any]:
+        node_type = self._resolve_node_type(node)
+        raw_node_type = (getattr(node, "node_type", None) or "").lower()
+        config = node.config or {}
+
+        # Compact summary of WHAT this node is configured to do, so the log
+        # makes it obvious which node ran and with what settings (and, when a
+        # node does nothing, why). Only non-empty, non-sensitive keys.
+        _cfg_keys = (
+            "action_name", "trigger_type", "subject", "to", "message", "body",
+            "recipient_user_ids", "user_ids", "recipient_role_ids", "role_ids",
+            "notification_channels", "condition_kind", "approval_type",
+            "timer_kind", "wait_seconds", "module", "submodule",
+        )
+        _cfg_summary = {
+            k: config.get(k) for k in _cfg_keys
+            if isinstance(config, dict) and config.get(k) not in (None, "", [], {})
+        }
         logger.info(
-            "workflow.step.execute.start instance_id=%s step_id=%s node_key=%s node_type=%s",
+            "workflow.step.execute.start instance_id=%s step_id=%s node_key=%s node_type=%s "
+            "(raw_type=%s) action=%s config=%s",
             instance.id,
             step.id,
             step.node_key,
             node_type,
+            raw_node_type,
+            _cfg_summary.get("action_name", "-"),
+            _cfg_summary,
         )
 
         if node_type in {"start", "noop"}:
             return {"status": "completed", "output": {"started": True}}
+
+        # ── Trigger node (first node after Start used as the trigger) ────────
+        # This node represents the triggering EVENT (e.g. "evidence deleted"),
+        # not an action to perform — so we pass straight through without
+        # executing it. It is tagged at save time by the definitions router.
+        if isinstance(config, dict) and config.get("_is_trigger_node"):
+            logger.info(
+                "workflow.step.trigger_node_skipped instance_id=%s step_id=%s node_key=%s action=%s "
+                "(this node is the workflow trigger — not executed)",
+                instance.id, step.id, step.node_key, config.get("action_name"),
+            )
+            return {"status": "completed", "output": {"trigger_node": True, "skipped": True}}
 
         # ── Blocked / unsupported node type ─────────────────────────────────
         if node_type == "blocked":
@@ -141,31 +390,44 @@ class StepExecutor:
 
         # ── Notification node (in-app + optional email) ──────────────────────
         if node_type == "notification":
-            # v6 catalog workflows write recipients into config.payload.recipients
-            # rather than config.recipient_user_ids — check both shapes so the
-            # legacy nodes keep working AND the catalog nodes get delivery.
-            _payload_recipients = (config.get("payload") or {}).get("recipients") or []
+            # v6 / Pattern-B catalog workflows nest recipients under
+            # config.payload.* rather than at the config root — check both
+            # shapes (matching the send_in_app_alert branch) so those
+            # notification nodes keep delivering.
+            _payload = config.get("payload") or {}
             user_ids = self._normalize_user_ids(
                 config.get("user_ids")
                 or config.get("recipient_user_ids")
-                or _payload_recipients
+                or _payload.get("recipients")
+                or _payload.get("recipient_user_ids")
                 or []
             )
             role_ids = self._normalize_role_ids(
                 config.get("role_ids")
                 or config.get("recipient_role_ids")
-                or (config.get("payload") or {}).get("recipient_role_ids")
+                or _payload.get("recipient_role_ids")
+                or _payload.get("role_ids")
                 or []
             )
+            # Owner fallback so a notification with no configured recipient still
+            # reaches someone (the workflow creator) instead of nobody.
+            if not user_ids and not role_ids:
+                user_ids = self._default_recipient_user_ids(definition)
             channels = self._notification_channels(config)
-            subject = config.get("subject") or f"Workflow Notification: {definition.name}"
+            template_context = _build_template_context(db, instance, definition)
+            subject = config.get("subject") or _default_notification_subject(instance, definition, template_context)
             message = (
                 config.get("message") or config.get("body")
-                or "A workflow notification has been triggered."
+                or _default_notification_message(instance, definition, template_context)
             )
-            template_context = _build_template_context(db, instance, definition)
             subject = _resolve_template(subject, template_context)
             message = _resolve_template(message, template_context)
+            logger.info(
+                "workflow.notification.resolve instance_id=%s node_key=%s channels=%s "
+                "user_ids=%s role_ids=%s subject=%r%s",
+                instance.id, step.node_key, channels, user_ids, role_ids, subject,
+                "" if (user_ids or role_ids) else "  ⚠ NO RECIPIENTS — nothing will be delivered",
+            )
             send_workflow_notification(
                 db,
                 tenant_id=instance.tenant_id,
@@ -213,6 +475,22 @@ class StepExecutor:
         if node_type == "timer":
             wait_seconds = config.get("wait_seconds")
             wait_until = config.get("wait_until")
+            # Support human-readable duration strings like "48h", "7d", "30m", "3600s".
+            # This handles node configs that use `duration` instead of `wait_seconds`.
+            if wait_seconds is None and not wait_until:
+                duration_str = (config.get("duration") or "").strip().lower()
+                if duration_str:
+                    try:
+                        if duration_str.endswith("d"):
+                            wait_seconds = int(float(duration_str[:-1]) * 86400)
+                        elif duration_str.endswith("h"):
+                            wait_seconds = int(float(duration_str[:-1]) * 3600)
+                        elif duration_str.endswith("m"):
+                            wait_seconds = int(float(duration_str[:-1]) * 60)
+                        elif duration_str.endswith("s"):
+                            wait_seconds = int(float(duration_str[:-1]))
+                    except (ValueError, TypeError):
+                        pass
 
             if wait_until:
                 try:
@@ -258,40 +536,77 @@ class StepExecutor:
         if node_type == "action":
             # ── In-app alert (no email, in-system only) ──────────────────────
             if config.get("action_name") == "send_in_app_alert":
-                # Same dual-shape lookup as the notification node above —
-                # catalog workflows put recipients in payload.recipients.
-                _payload_recipients = (config.get("payload") or {}).get("recipients") or []
+                # Pattern-B seeded workflows nest the recipient/subject/message
+                # under a `payload` object; legacy workflows put them at the
+                # config root. Read from both.
+                _payload = config.get("payload") or {}
                 user_ids = self._normalize_user_ids(
-                    config.get("recipient_user_ids") or _payload_recipients or []
+                    config.get("recipient_user_ids")
+                    or _payload.get("recipient_user_ids")
+                    or _payload.get("recipients")
+                    or []
                 )
                 role_ids = self._normalize_role_ids(
                     config.get("recipient_role_ids")
-                    or (config.get("payload") or {}).get("recipient_role_ids")
+                    or _payload.get("recipient_role_ids")
+                    or _payload.get("role_ids")
                     or []
                 )
-                subject = config.get("subject") or f"Alert: {definition.name}"
-                message = config.get("message") or "You have a new workflow alert."
+                # Owner fallback: an in-app alert with no configured recipient
+                # would be delivered to nobody. Default to the workflow's
+                # creator so the alert is never silently dropped.
+                if not user_ids and not role_ids:
+                    user_ids = self._default_recipient_user_ids(definition)
+                    if user_ids:
+                        logger.info(
+                            "workflow.in_app_alert.recipient_fallback instance_id=%s node_key=%s owner_user_id=%s",
+                            instance.id, step.node_key, user_ids,
+                        )
                 template_context = _build_template_context(db, instance, definition)
+                subject = config.get("subject") or _payload.get("subject") or _default_notification_subject(instance, definition, template_context)
+                message = (
+                    config.get("message") or _payload.get("message") or _payload.get("message_template")
+                    or _default_notification_message(instance, definition, template_context)
+                )
                 subject = _resolve_template(subject, template_context)
                 message = _resolve_template(message, template_context)
-                send_workflow_notification(
-                    db,
-                    tenant_id=instance.tenant_id,
-                    user_ids=user_ids,
-                    role_ids=role_ids,
-                    channels=["in_app"],
-                    workflow_instance_id=instance.id,
-                    notification_type=config.get("alert_type") or "info",
-                    subject=subject,
-                    message=message,
-                )
+                # Wrap in workflow context so that any audit rows emitted by
+                # downstream callees (now or in future) are tagged correctly.
+                with workflow_actor_context(
+                    "workflow",
+                    actor_type="workflow_engine",
+                    actor_workflow_id=definition.id,
+                ):
+                    send_workflow_notification(
+                        db,
+                        tenant_id=instance.tenant_id,
+                        user_ids=user_ids,
+                        role_ids=role_ids,
+                        channels=["in_app"],
+                        workflow_instance_id=instance.id,
+                        notification_type=config.get("alert_type") or "info",
+                        subject=subject,
+                        message=message,
+                    )
                 logger.info(
                     "workflow.step.execute.in_app_alert instance_id=%s step_id=%s node_key=%s users=%s roles=%s",
                     instance.id, step.id, step.node_key, user_ids, role_ids,
                 )
                 return {"status": "completed", "output": {"notified": True, "user_count": len(user_ids)}}
 
-            action_output = WorkflowActionHandlers.execute(db, instance, definition, node, config)
+            # Tag every audit row written downstream by the action handler (and
+            # any platform CRUD endpoint it calls into) with
+            # ``actor_source="workflow"`` and ``actor_type="workflow_engine"``.
+            # The actor_source tag prevents the trigger dispatcher from
+            # re-firing workflows on these rows (loop prevention). The
+            # actor_type tag ensures the Admin Audit Logs "Workflow Engine"
+            # filter returns these rows correctly.
+            with workflow_actor_context(
+                "workflow",
+                actor_type="workflow_engine",
+                actor_workflow_id=definition.id,
+            ):
+                action_output = WorkflowActionHandlers.execute(db, instance, definition, node, config)
             updated_context = dict(instance.context or {})
             updated_context.setdefault("actions", []).append(
                 {

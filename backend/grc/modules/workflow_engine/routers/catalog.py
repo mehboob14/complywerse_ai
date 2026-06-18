@@ -1,10 +1,14 @@
-from fastapi import APIRouter, Depends
+import logging
+
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Optional
 
 from ....models import get_db, Framework, VulnerabilitySLAConfig, GRCUser, TenantUser, Role
 from ....routers.auth_router import require_tenant_permission, require_auth, get_user_primary_tenant, get_user_tenants
+
+logger = logging.getLogger(__name__)
 
 from ..services.catalog import (
     ACTION_NODE_TYPES,
@@ -33,6 +37,92 @@ def list_node_types(
         "approvals": APPROVAL_NODE_TYPES,
         "timers": TIMER_NODE_TYPES,
     }
+
+
+@router.get("/node-param-schemas")
+def get_node_param_schemas_endpoint(
+    request: Request,
+    _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
+):
+    """Per-node input-field schemas (path / query / body params, with enum
+    choices and entity references) so the builder config panel renders fields
+    specific to the selected platform-function node instead of a generic
+    action picker. Returns ``{schemas: {node_key: [field, ...]}}``."""
+    from ..services.param_schema import build_node_param_schemas
+    return {"schemas": build_node_param_schemas(request.app)}
+
+
+# Entity -> (model class name on the models package, candidate label columns).
+# Powers the record pickers ("which document / control / risk") for config
+# fields whose name resolves to a platform entity.
+_LOOKUP_SPECS = {
+    "document": ("GovernanceDocument", ["title", "name"]),
+    "evidence": ("Evidence", ["name", "title"]),
+    "framework": ("UploadedFramework", ["name"]),
+    "control": ("ParsedFrameworkControl", ["title", "name", "control_id"]),
+    "risk": ("Risk", ["title", "name"]),
+    "vulnerability": ("Vulnerability", ["title", "name"]),
+}
+
+
+@router.get("/lookup/{entity}")
+def lookup_records(
+    entity: str,
+    q: Optional[str] = None,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
+):
+    """Search real platform records for a config field's record picker.
+
+    Returns ``{entity, results: [{id, label}]}``. Unknown or unavailable
+    entities return an empty list so the UI falls back to a plain id input.
+    """
+    limit = max(1, min(int(limit or 20), 50))
+    tenant_id = get_user_primary_tenant(current_user, db)
+
+    if entity == "user":
+        query = db.query(GRCUser).filter(GRCUser.is_active.is_(True))
+        if q:
+            query = query.filter(
+                GRCUser.username.ilike(f"%{q}%")
+                | GRCUser.email.ilike(f"%{q}%")
+                | GRCUser.display_name.ilike(f"%{q}%")
+            )
+        rows = query.order_by(GRCUser.display_name.asc()).limit(limit).all()
+        return {"entity": entity, "results": [
+            {"id": u.id, "label": u.display_name or u.username or u.email} for u in rows
+        ]}
+
+    spec = _LOOKUP_SPECS.get(entity)
+    if not spec:
+        return {"entity": entity, "results": []}
+    try:
+        from .... import models as _models
+        model = getattr(_models, spec[0], None)
+        if model is None:
+            return {"entity": entity, "results": []}
+        label_cols = [c for c in spec[1] if hasattr(model, c)]
+        query = db.query(model)
+        if hasattr(model, "tenant_id") and tenant_id is not None:
+            query = query.filter(model.tenant_id == tenant_id)
+        if q and label_cols:
+            query = query.filter(or_(*[getattr(model, c).ilike(f"%{q}%") for c in label_cols]))
+        rows = query.limit(limit).all()
+        results = []
+        for r in rows:
+            label = None
+            for c in label_cols:
+                v = getattr(r, c, None)
+                if v:
+                    label = str(v)
+                    break
+            results.append({"id": getattr(r, "id", None), "label": label or f"#{getattr(r, 'id', '')}"})
+        return {"entity": entity, "results": results}
+    except Exception:  # noqa: BLE001
+        logger.exception("workflow lookup failed for entity=%s", entity)
+        return {"entity": entity, "results": []}
 
 
 @router.get("/node-config-options")

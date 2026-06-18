@@ -1,5 +1,57 @@
 // Shared types for Workflow Engine components
 
+// Display label overrides for node keys. Use these when the naive
+// title-case from `snake_case` would mangle acronyms (KRI, SLA, API, RCSA)
+// or compound words ("in-app").
+export const NODE_LABEL_OVERRIDES: Record<string, string> = {
+  // Triggers
+  kri_breach: 'KRI Breach',
+  vulnerability_sla_breach: 'Vulnerability SLA Breach',
+  vulnerability_sla_warning: 'Vulnerability SLA Warning',
+  // Actions
+  send_in_app_alert: 'Send In-App Alert',
+  call_webhook_api: 'Call Webhook API',
+  // Approvals
+  multi_level: 'Multi-Level',
+  // Timers
+  sla_countdown: 'SLA Countdown',
+};
+
+// Acronyms / token replacements applied AFTER the basic title-case pass.
+// Word-boundary substitutions only — won't touch substrings inside larger words.
+const NODE_LABEL_ACRONYMS: Array<[RegExp, string]> = [
+  [/\bKri\b/g, 'KRI'],
+  [/\bKris\b/g, 'KRIs'],
+  [/\bSla\b/g, 'SLA'],
+  [/\bApi\b/g, 'API'],
+  [/\bRcsa\b/g, 'RCSA'],
+  [/\bKpi\b/g, 'KPI'],
+  [/\bIt\b/g, 'IT'],
+  [/\bAi\b/g, 'AI'],
+  [/\bUrl\b/g, 'URL'],
+  [/\bId\b/g, 'ID'],
+  [/\bCcm\b/g, 'CCM'],
+  [/\bCis\b/g, 'CIS'],
+  [/\bIso\b/g, 'ISO'],
+  [/\bNist\b/g, 'NIST'],
+  [/\bPci\b/g, 'PCI'],
+  [/\bSoc\b/g, 'SOC'],
+  [/\bGdpr\b/g, 'GDPR'],
+  [/\bHipaa\b/g, 'HIPAA'],
+  [/\bCsf\b/g, 'CSF'],
+];
+
+export function formatNodeLabel(key: string): string {
+  if (NODE_LABEL_OVERRIDES[key]) return NODE_LABEL_OVERRIDES[key];
+  let label = key
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+  for (const [re, rep] of NODE_LABEL_ACRONYMS) {
+    label = label.replace(re, rep);
+  }
+  return label;
+}
+
 export type WorkflowDefinition = {
   id: number;
   name: string;
@@ -50,6 +102,14 @@ export type FlowNodeData = {
   isStart?: boolean;
   isTerminal?: boolean;
   executionStatus?: 'running' | 'completed' | 'failed' | 'waiting' | null;
+  // Set by page.tsx during render: true when this node is the single node
+  // directly connected after the Start placeholder.
+  isFirstAfterStart?: boolean;
+  // Set by page.tsx: 'valid' when isFirstAfterStart and trigger event can be
+  // inferred, 'invalid' when it cannot. Drives the ⚡ / ⚠ canvas indicator.
+  triggerStatus?: 'valid' | 'invalid';
+  // The inferred trigger event string when triggerStatus === 'valid'.
+  inferredTriggerEvent?: string;
 };
 
 export type WorkflowDomain =
@@ -171,6 +231,22 @@ export type NodeConfigOptions = {
   asset_criticality_levels: string[];
 };
 
+// A single input field for a platform-function node, derived on the backend
+// from the node's real API endpoint (path / query / body parameter).
+export type NodeParamField = {
+  name: string;
+  label: string;
+  location: 'path' | 'query' | 'body';
+  type: string;            // string | integer | number | boolean | array | object
+  required: boolean;
+  enum?: string[];         // when present → render a dropdown
+  entity?: string;         // when present → render a record picker (risk, control, document, …)
+  format?: string;         // e.g. 'date', 'date-time'
+};
+
+// Map of platform-function node key → its input fields.
+export type NodeParamSchemas = Record<string, NodeParamField[]>;
+
 export const EMPTY_NODE_CONFIG_OPTIONS: NodeConfigOptions = {
   frameworks: [],
   risk_categories: [],
@@ -273,14 +349,27 @@ export const TRIGGER_KEYS = new Set([
   'policy_approved',
   'control_review_due',
   'attestation_overdue',
+  // Governance documents
+  'governance_document_created',
+  'governance_document_expires',
+  'governance_document_published',
   // Audit
   'audit_finding_created',
+  'audit_finding_updated',
+  'audit_finding_closed',
   // IT Assets
   'asset_created',
   'asset_updated',
   'asset_deleted',
+  // Control Library
+  'control_group_created',
+  'control_group_updated',
+  'control_group_deleted',
 ]);
 
+// Actions = generic workflow-engine steps only.
+// GRC domain operations (risk, compliance, governance, etc.) live exclusively
+// in Platform Functions, which are auto-generated from backend API endpoints.
 export const ACTION_KEYS = new Set([
   // Notifications
   'send_notification_email',
@@ -376,9 +465,13 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   policy_approved: { domains: ['governance'], module: 'Governance' },
   control_review_due: { domains: ['governance', 'control'], module: 'Governance' },
   attestation_overdue: { domains: ['governance'], module: 'Governance' },
+  audit_finding_created: { domains: ['audit'], module: 'Audit Management' },
   asset_created: { domains: ['assets'], module: 'IT Asset Management' },
   asset_updated: { domains: ['assets'], module: 'IT Asset Management' },
   asset_deleted: { domains: ['assets'], module: 'IT Asset Management' },
+  control_group_created: { domains: ['compliance', 'control'], module: 'Control Library' },
+  control_group_updated: { domains: ['compliance', 'control'], module: 'Control Library' },
+  control_group_deleted: { domains: ['compliance', 'control'], module: 'Control Library' },
   send_notification_email: { domains: ['shared'], module: 'Workflow Engine' },
   send_in_app_alert: { domains: ['shared'], module: 'Workflow Engine' },
   escalate_to_management: { domains: ['shared'], module: 'Workflow Engine' },
@@ -397,7 +490,7 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   update_risk_status: { domains: ['risk'], module: 'Risk Management' },
   assign_risk_owner: { domains: ['risk'], module: 'Risk Management' },
   trigger_risk_review: { domains: ['risk'], module: 'Risk Management' },
-  create_remediation_task: { domains: ['risk', 'vulnerability', 'compliance'], module: 'Workflow Engine' },
+  create_remediation_task: { domains: ['risk', 'vulnerability', 'compliance'], module: 'Risk Management' },
   assign_vulnerability_owner: { domains: ['vulnerability'], module: 'Vulnerability Management' },
   update_vulnerability_status: { domains: ['vulnerability'], module: 'Vulnerability Management' },
   create_vulnerability_entry: { domains: ['vulnerability'], module: 'Vulnerability Management' },
@@ -406,8 +499,45 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   submit_policy_exception: { domains: ['governance'], module: 'Governance' },
   approve_policy_exception: { domains: ['governance'], module: 'Governance' },
   request_attestation: { domains: ['governance'], module: 'Governance' },
+  create_audit_finding: { domains: ['audit'], module: 'Audit Management' },
+  create_audit_plan: { domains: ['audit'], module: 'Audit Management' },
+  close_audit_finding: { domains: ['audit'], module: 'Audit Management' },
+  assign_auditor: { domains: ['audit'], module: 'Audit Management' },
   update_control_effectiveness: { domains: ['control', 'governance'], module: 'Control Library' },
   set_control_not_applicable: { domains: ['control', 'governance'], module: 'Control Library' },
+  // KRI management
+  create_kri: { domains: ['risk'], module: 'Risk Management' },
+  update_kri_value: { domains: ['risk'], module: 'Risk Management' },
+  resolve_kri_breach: { domains: ['risk'], module: 'Risk Management' },
+  // Incident management
+  create_incident: { domains: ['risk'], module: 'Risk Management' },
+  update_incident_status: { domains: ['risk'], module: 'Risk Management' },
+  assign_incident_owner: { domains: ['risk'], module: 'Risk Management' },
+  close_incident: { domains: ['risk'], module: 'Risk Management' },
+  // Mitigation plans
+  create_mitigation_plan: { domains: ['risk'], module: 'Risk Management' },
+  update_mitigation_status: { domains: ['risk'], module: 'Risk Management' },
+  link_risk_to_mitigation: { domains: ['risk'], module: 'Risk Management' },
+  // RCSA
+  initiate_rcsa: { domains: ['risk', 'compliance'], module: 'Risk Management' },
+  submit_rcsa_results: { domains: ['risk', 'compliance'], module: 'Risk Management' },
+  review_rcsa: { domains: ['risk', 'compliance'], module: 'Risk Management' },
+  // Risk reviews
+  schedule_risk_review: { domains: ['risk'], module: 'Risk Management' },
+  complete_risk_review: { domains: ['risk'], module: 'Risk Management' },
+  // Risk assessments
+  create_risk_assessment: { domains: ['risk'], module: 'Risk Management' },
+  update_risk_assessment_status: { domains: ['risk'], module: 'Risk Management' },
+  assign_risk_assessor: { domains: ['risk'], module: 'Risk Management' },
+  // Internal controls
+  create_internal_control: { domains: ['risk'], module: 'Risk Management' },
+  test_internal_control: { domains: ['risk'], module: 'Risk Management' },
+  update_control_test_result: { domains: ['risk'], module: 'Risk Management' },
+  // Risk appetite
+  set_risk_appetite: { domains: ['risk'], module: 'Risk Management' },
+  update_risk_tolerance: { domains: ['risk'], module: 'Risk Management' },
+  // Risk dependencies
+  add_risk_dependency: { domains: ['risk'], module: 'Risk Management' },
   check_risk_level: { domains: ['risk'], module: 'Risk Management' },
   check_compliance_status: { domains: ['compliance'], module: 'Compliance' },
   check_evidence_age: { domains: ['evidence', 'compliance'], module: 'Evidence' },
@@ -507,22 +637,22 @@ export function getCatalogContextForKey(
 
   if (key.startsWith('platform_action.')) {
     const parsed = parsePlatformActionContext(key);
-    const module = configuredModule || parsed.module;
+    const moduleName = configuredModule || parsed.module;
     const submodule = configuredSubmodule || parsed.submodule;
     return {
       key,
-      domains: inferWorkflowDomainsFromModuleName(module),
-      module,
+      domains: inferWorkflowDomainsFromModuleName(moduleName),
+      module: moduleName,
       submodule,
       isPlatformFunction: true,
     };
   }
 
-  const module = configuredModule || meta?.module;
+  const moduleName = configuredModule || meta?.module;
   return {
     key,
-    domains: meta?.domains || inferWorkflowDomainsFromModuleName(module),
-    module,
+    domains: meta?.domains || inferWorkflowDomainsFromModuleName(moduleName),
+    module: moduleName,
     submodule: configuredSubmodule,
     isPlatformFunction: false,
   };
@@ -628,6 +758,328 @@ export function formatWorkflowContextLabel(context: NodeCatalogContext): string 
   return context.domains.map((domain) => titleizeSlug(domain)).join(' / ');
 }
 
+// ─── Auto-trigger inference (mirrors backend definitions.py) ─────────────────
+// When a Platform Function CRUD node is placed first after Start, the workflow
+// auto-fires on the corresponding platform event. Frontend computes the same
+// trigger_event the backend will derive, so it can be shown in the UI and
+// submitted in the payload.
+//
+// Action key format: platform_action.{verb}.{module_path...}
+// e.g. platform_action.create.erm.risk.create_risk → resource=risks verb=create
+const PATH_TO_RESOURCE_FRONTEND: Array<[string, string]> = [
+  // ── Compliance submodules (most-specific first) ──
+  ['compliance.control_library',       'compliance.control_library'],
+  ['compliance.statements',            'compliance.statements'],
+  ['compliance.evidence',              'compliance.evidence'],
+  ['compliance.evidence_requirements', 'compliance.evidence_requirements'],
+  ['compliance.assessments',           'compliance.assessments'],
+  ['compliance.controls',              'compliance.controls'],
+  ['compliance.frameworks',            'compliance.frameworks'],
+  ['compliance.plugin_runs',           'compliance.plugin_runs'],
+  ['compliance',                       'compliance'],
+
+  // ── Vulnerability Management submodules ──
+  ['vulnerability_management.vulnerabilities', 'vulnmgmt.vulnerabilities'],
+  ['vulnerability_management.departments',     'vulnmgmt.departments'],
+  ['vulnerability_management.reports',         'vulnmgmt.reports'],
+  ['vulnerability_management.sla_config',      'vulnmgmt.sla_config'],
+  ['vulnerability_management',                 'vulnerabilities'],
+  ['vuln_management',                          'vulnerabilities'],
+
+  // ── Governance submodules ──
+  ['governance.documents',             'governance.documents'],
+  ['governance.committees',            'governance.committees'],
+  ['governance.attestations',          'governance.attestations'],
+  ['governance.clause_coverage',       'governance.clause_coverage'],
+  ['governance.regulatory_changes',    'governance.regulatory_changes'],
+  ['governance.regulatory_feeds',      'governance.regulatory_feeds'],
+  ['governance.regulatory',            'governance.regulatory'],
+  ['governance.critical_rules',        'governance.critical_rules'],
+  ['governance.patch_proposals',       'governance.patch_proposals'],
+  ['governance',                       'governance'],
+
+  // ── Risk Management submodules ──
+  ['risk_management.incidents',         'risk.incidents'],
+  ['risk_management.kris',              'risk.kris'],
+  ['risk_management.risk_register',     'risk.risk_register'],
+  ['risk_management.risk_assessments',  'risk.risk_assessments'],
+  ['risk_management.risk_framework',    'risk.risk_framework'],
+  ['risk_management.internal_controls', 'risk.internal_controls'],
+  ['risk_management.mitigation_actions','risk.mitigation_actions'],
+  ['risk_management.vendor_risk',       'risk.vendor_risk'],
+  ['risk_management.rcsa',              'risk.rcsa'],
+  ['risk_management.appetite',          'risk.appetite'],
+  ['risk_management.dependencies',      'risk.dependencies'],
+  ['risk_management.reviews',           'risk.reviews'],
+  ['risk_management.advanced_analytics','risk.advanced_analytics'],
+  ['risk_management',                   'risks'],
+  ['erm.incident',                      'risk.incidents'],
+  ['erm.risk',                          'risks'],
+  ['erm',                               'risks'],
+
+  // ── Other modules ──
+  ['audit_management',                  'audits'],
+  ['evidence_mgmt',                     'compliance.evidence'],
+  ['evidence',                          'compliance.evidence'],
+  ['assets',                            'assets'],
+  ['kri',                               'risk.kris'],
+  ['audits',                            'audits'],
+];
+
+const PRIMARY_TRIGGER_FRONTEND: Record<string, string> = {
+  // ── Compliance submodules ──
+  'compliance.control_library:create':  'compliance.control_library.create',
+  'compliance.control_library:update':  'compliance.control_library.update',
+  'compliance.control_library:delete':  'compliance.control_library.delete',
+  'compliance.statements:create':       'compliance.statements.create',
+  'compliance.statements:update':       'compliance.statements.update',
+  'compliance.statements:delete':       'compliance.statements.delete',
+  'compliance.evidence:create':         'compliance.evidence.create',
+  'compliance.evidence:update':         'compliance.evidence.update',
+  'compliance.evidence:delete':         'compliance.evidence.delete',
+  'compliance.evidence:upload':         'compliance.evidence.upload',
+  'compliance.evidence_requirements:create': 'compliance.evidence_requirements.create',
+  'compliance.evidence_requirements:update': 'compliance.evidence_requirements.update',
+  'compliance.evidence_requirements:delete': 'compliance.evidence_requirements.delete',
+  'compliance.assessments:create':      'compliance.assessments.create',
+  'compliance.assessments:update':      'compliance.assessments.update',
+  'compliance.assessments:delete':      'compliance.assessments.delete',
+  'compliance.assessments:trigger':     'compliance.assessments.trigger',
+  'compliance.controls:create':         'compliance.controls.create',
+  'compliance.controls:update':         'compliance.controls.update',
+  'compliance.controls:delete':         'compliance.controls.delete',
+  'compliance.frameworks:create':       'compliance.frameworks.create',
+  'compliance.frameworks:update':       'compliance.frameworks.update',
+  'compliance.frameworks:delete':       'compliance.frameworks.delete',
+  'compliance.frameworks:upload':       'compliance.frameworks.upload',
+  'compliance.plugin_runs:create':      'compliance.plugin_runs.create',
+  'compliance.plugin_runs:update':      'compliance.plugin_runs.update',
+  'compliance.plugin_runs:trigger':     'compliance.plugin_runs.trigger',
+  'compliance.plugin_runs:execute':     'compliance.plugin_runs.execute',
+  'compliance.plugin_runs:failed':      'compliance.plugin_runs.failed',
+
+  // ── Vulnerability Management submodules ──
+  'vulnmgmt.vulnerabilities:create':   'vulnmgmt.vulnerabilities.create',
+  'vulnmgmt.vulnerabilities:update':   'vulnmgmt.vulnerabilities.update',
+  'vulnmgmt.vulnerabilities:delete':   'vulnmgmt.vulnerabilities.delete',
+  'vulnmgmt.departments:create':       'vulnmgmt.departments.create',
+  'vulnmgmt.departments:update':       'vulnmgmt.departments.update',
+  'vulnmgmt.departments:delete':       'vulnmgmt.departments.delete',
+  'vulnmgmt.reports:create':           'vulnmgmt.reports.create',
+  'vulnmgmt.sla_config:create':        'vulnmgmt.sla_config.create',
+  'vulnmgmt.sla_config:update':        'vulnmgmt.sla_config.update',
+  'vulnmgmt.sla_config:delete':        'vulnmgmt.sla_config.delete',
+
+  // ── Governance submodules ──
+  'governance.documents:create':       'governance.documents.create',
+  'governance.documents:update':       'governance.documents.update',
+  'governance.documents:delete':       'governance.documents.delete',
+  'governance.documents:trigger':      'governance.documents.trigger',
+  'governance.documents:upload':       'governance.documents.upload',
+  'governance.documents:approve':      'governance.documents.approve',
+  'governance.documents:reject':       'governance.documents.reject',
+  'governance.committees:create':      'governance.committees.create',
+  'governance.committees:update':      'governance.committees.update',
+  'governance.committees:delete':      'governance.committees.delete',
+  'governance.committees:trigger':     'governance.committees.trigger',
+  'governance.committees:upload':      'governance.committees.upload',
+  'governance.attestations:create':    'governance.attestations.create',
+  'governance.attestations:update':    'governance.attestations.update',
+  'governance.attestations:delete':    'governance.attestations.delete',
+  'governance.attestations:trigger':   'governance.attestations.trigger',
+  'governance.clause_coverage:create': 'governance.clause_coverage.create',
+  'governance.regulatory_changes:create': 'governance.regulatory_changes.create',
+  'governance.regulatory_changes:update': 'governance.regulatory_changes.update',
+  'governance.regulatory_changes:delete': 'governance.regulatory_changes.delete',
+  'governance.regulatory_feeds:create':   'governance.regulatory_feeds.create',
+  'governance.regulatory_feeds:update':   'governance.regulatory_feeds.update',
+  'governance.critical_rules:create':     'governance.critical_rules.create',
+  'governance.critical_rules:update':     'governance.critical_rules.update',
+  'governance.patch_proposals:create':    'governance.patch_proposals.create',
+  'governance.patch_proposals:update':    'governance.patch_proposals.update',
+
+  // ── Risk Management submodules ──
+  'risk.incidents:create':             'risk.incidents.create',
+  'risk.incidents:update':             'risk.incidents.update',
+  'risk.incidents:delete':             'risk.incidents.delete',
+  'risk.kris:create':                  'risk.kris.create',
+  'risk.kris:update':                  'risk.kris.update',
+  'risk.kris:delete':                  'risk.kris.delete',
+  'risk.risk_register:create':         'risk.risk_register.create',
+  'risk.risk_register:update':         'risk.risk_register.update',
+  'risk.risk_register:delete':         'risk.risk_register.delete',
+  'risk.risk_assessments:create':      'risk.risk_assessments.create',
+  'risk.risk_assessments:update':      'risk.risk_assessments.update',
+  'risk.risk_assessments:delete':      'risk.risk_assessments.delete',
+  'risk.risk_framework:create':        'risk.risk_framework.create',
+  'risk.risk_framework:update':        'risk.risk_framework.update',
+  'risk.risk_framework:delete':        'risk.risk_framework.delete',
+  'risk.internal_controls:create':     'risk.internal_controls.create',
+  'risk.internal_controls:update':     'risk.internal_controls.update',
+  'risk.internal_controls:delete':     'risk.internal_controls.delete',
+  'risk.mitigation_actions:create':    'risk.mitigation_actions.create',
+  'risk.mitigation_actions:update':    'risk.mitigation_actions.update',
+  'risk.mitigation_actions:delete':    'risk.mitigation_actions.delete',
+  'risk.vendor_risk:create':           'risk.vendor_risk.create',
+  'risk.vendor_risk:update':           'risk.vendor_risk.update',
+  'risk.vendor_risk:delete':           'risk.vendor_risk.delete',
+  'risk.rcsa:create':                  'risk.rcsa.create',
+  'risk.rcsa:update':                  'risk.rcsa.update',
+  'risk.rcsa:delete':                  'risk.rcsa.delete',
+  'risk.appetite:create':              'risk.appetite.create',
+  'risk.appetite:update':              'risk.appetite.update',
+  'risk.dependencies:create':          'risk.dependencies.create',
+  'risk.dependencies:update':          'risk.dependencies.update',
+  'risk.reviews:create':               'risk.reviews.create',
+  'risk.reviews:update':               'risk.reviews.update',
+
+  // ── Module-level fallbacks (legacy broad triggers) ──
+  'risks:create':            'risk_created',
+  'risks:update':            'risk_updated',
+  'risks:delete':            'risk_deleted',
+  'vulnerabilities:create':  'vulnerability_created',
+  'vulnerabilities:update':  'vulnerability_updated',
+  'vulnerabilities:delete':  'vulnerability_deleted',
+  'assets:create':           'asset_created',
+  'assets:update':           'asset_updated',
+  'assets:delete':           'asset_deleted',
+  'governance:create':       'governance.create',
+  'governance:update':       'assessment_status_change',
+  'governance:delete':       'governance.delete',
+  'governance:upload':       'governance.upload',
+  'governance:approve':      'governance.approve',
+  'governance:reject':       'governance.reject',
+  'governance:trigger':      'policy_submitted_for_review',
+  'compliance:create':       'compliance_gap_detected',
+  'compliance:update':       'assessment_status_change',
+  'compliance:delete':       'compliance.delete',
+  'compliance:trigger':      'compliance_gap_detected',
+  'audits:create':           'audit_finding_created',
+  'audits:update':           'audits.update',
+  'audits:delete':           'audits.delete',
+};
+
+/**
+ * Given an action_name like "platform_action.create.erm.risk.create_risk",
+ * return the canonical trigger event the backend would infer, or null when
+ * the action is not eligible to be a trigger.
+ */
+export function inferTriggerEventFromActionName(actionName?: string): string | null {
+  if (!actionName || !actionName.startsWith('platform_action.')) return null;
+  const parts = actionName.split('.');
+  if (parts.length < 3) return null;
+  const verb = parts[1];
+  const modulePath = parts.slice(2).join('.');
+  let resource: string | null = null;
+  for (const [prefix, res] of PATH_TO_RESOURCE_FRONTEND) {
+    if (modulePath.startsWith(prefix)) { resource = res; break; }
+  }
+  if (!resource) return null;
+  const verbKey = ['create', 'update', 'delete', 'trigger'].includes(verb) ? verb : 'update';
+  return PRIMARY_TRIGGER_FRONTEND[`${resource}:${verbKey}`] || null;
+}
+
+/**
+ * Returns true when an action key is eligible to act as the workflow trigger
+ * (i.e. when used as the first node after Start, the backend will derive a
+ * concrete trigger_event for it). Used to render the ⚡ badge in the palette.
+ */
+export function isTriggerEligibleAction(actionKey: string): boolean {
+  return inferTriggerEventFromActionName(actionKey) !== null;
+}
+
+/**
+ * Compute the workflow's trigger_event from the first node connected after the
+ * Start placeholder. Mirrors backend `_infer_trigger_event` plus the existing
+ * dedicated-trigger-node behaviour. Returns null when nothing can be inferred.
+ */
+export function getTriggerEventForFirstNode(
+  firstNode: { nodeType?: string; config?: Record<string, unknown> } | null | undefined,
+): string | null {
+  if (!firstNode) return null;
+  const cfg = firstNode.config || {};
+  if (firstNode.nodeType === 'start') {
+    const tt = typeof cfg.trigger_type === 'string' ? cfg.trigger_type : '';
+    if (!tt) return null;
+    return TRIGGER_EVENT_MAP[tt] || tt;
+  }
+  if (firstNode.nodeType === 'action') {
+    const action = typeof cfg.action_name === 'string' ? cfg.action_name : '';
+    return inferTriggerEventFromActionName(action);
+  }
+  return null;
+}
+
+export type WorkflowGraphValidation =
+  | { ok: true; firstNodeKey: string; computedTrigger: string }
+  | { ok: false; error: string; firstNodeKey?: string };
+
+/**
+ * Validate the workflow graph for save-time enforcement. Returns ok=true with
+ * computed trigger event when valid, or ok=false with a human-readable error.
+ *
+ * Rules enforced:
+ *   1. Exactly one Start placeholder must exist.
+ *   2. Start must have exactly one outgoing edge.
+ *   3. The first node after Start must yield a valid trigger_event (either a
+ *      dedicated trigger node, or a Platform Function CRUD action eligible
+ *      for trigger inference).
+ *   4. The graph must contain at least one real node beyond the Start
+ *      placeholder and optional End terminal — true empty drafts (Start only
+ *      or Start→End only) are rejected because they produce no derivable
+ *      trigger and would create noise rows that can never run. Dedicated
+ *      trigger nodes (palette-added Manual / Schedule / Webhook) DO count as
+ *      real nodes for this check.
+ */
+export function validateWorkflowGraph(
+  nodes: Array<{ id: string; data: { nodeType: string; config?: Record<string, unknown>; isStart?: boolean } }>,
+  edges: Array<{ source: string; target: string }>,
+): WorkflowGraphValidation {
+  // Reject true empty drafts here — Start placeholder only, or Start→End only,
+  // produces no derivable trigger and would create a noise definition row that
+  // can never run. Dedicated trigger nodes (palette Manual / Schedule / Webhook)
+  // serialize as nodeType==='start' with a generated id and DO count as work.
+  const hasWorkNodes = nodes.some(
+    (n) => n.id !== 'start' && n.data.nodeType !== 'end',
+  );
+  if (!hasWorkNodes) {
+    return {
+      ok: false,
+      error: 'Add at least one node after Start so the workflow has something to do.',
+    };
+  }
+  const startNodes = nodes.filter((n) => n.id === 'start' || n.data.isStart || n.data.nodeType === 'start');
+  if (startNodes.length === 0) {
+    return { ok: false, error: 'Add a Start node to begin the workflow.' };
+  }
+  // The Start placeholder uses id "start"; trigger nodes from the palette have
+  // nodeType="start" but a generated id. Prefer the placeholder when present.
+  const startNode = startNodes.find((n) => n.id === 'start') || startNodes[0];
+  const startEdges = edges.filter((e) => e.source === startNode.id);
+  if (startEdges.length === 0) {
+    return { ok: false, error: 'Connect the Start node to the first action of your workflow.' };
+  }
+  if (startEdges.length > 1) {
+    return { ok: false, error: 'Start can only connect to one node. Remove the extra connections.' };
+  }
+  const firstNode = nodes.find((n) => n.id === startEdges[0].target);
+  if (!firstNode) {
+    return { ok: false, error: 'The Start connection points to a node that no longer exists.' };
+  }
+  const computed = getTriggerEventForFirstNode({
+    nodeType: firstNode.data.nodeType,
+    config: firstNode.data.config,
+  });
+  if (!computed) {
+    const isAction = firstNode.data.nodeType === 'action';
+    const reason = isAction
+      ? 'This action cannot be used as a trigger. Choose a Create / Update / Delete platform function (marked with ⚡), or insert a dedicated trigger node first.'
+      : 'Configure the trigger event on the first node so the workflow knows when to run.';
+    return { ok: false, error: reason, firstNodeKey: firstNode.id };
+  }
+  return { ok: true, firstNodeKey: firstNode.id, computedTrigger: computed };
+}
+
 export const TRIGGER_EVENT_MAP: Record<string, string> = {
   // Core
   manual_trigger: 'manual.trigger',
@@ -663,12 +1115,22 @@ export const TRIGGER_EVENT_MAP: Record<string, string> = {
   policy_approved: 'policy_approved',
   control_review_due: 'control_review_due',
   attestation_overdue: 'attestation_overdue',
+  // Governance documents
+  governance_document_created: 'governance_document_created',
+  governance_document_expires: 'governance_document_expires',
+  governance_document_published: 'governance_document_published',
   // Audit
   audit_finding_created: 'audit_finding_created',
+  audit_finding_updated: 'audit_finding_updated',
+  audit_finding_closed: 'audit_finding_closed',
   // IT Assets
   asset_created: 'asset_created',
   asset_updated: 'asset_updated',
   asset_deleted: 'asset_deleted',
+  // Control Library
+  control_group_created: 'control_group_created',
+  control_group_updated: 'control_group_updated',
+  control_group_deleted: 'control_group_deleted',
 };
 
 export const NODE_TYPE_LABELS: Record<string, string> = {
@@ -697,7 +1159,7 @@ export const NODE_TYPE_LABELS: Record<string, string> = {
   vulnerability_created: 'Vulnerability Created',
   vulnerability_updated: 'Vulnerability Updated',
   vulnerability_deleted: 'Vulnerability Deleted',
-  new_vulnerability_detected: 'New Vulnerability',
+  new_vulnerability_detected: 'Auto-Detected Vuln',
   vulnerability_sla_breach: 'SLA Breached',
   vulnerability_sla_warning: 'SLA Warning',
   // Governance triggers
@@ -706,12 +1168,22 @@ export const NODE_TYPE_LABELS: Record<string, string> = {
   policy_approved: 'Policy Approved',
   control_review_due: 'Control Review Due',
   attestation_overdue: 'Attestation Overdue',
+  // Governance document triggers
+  governance_document_created: 'Document Created',
+  governance_document_expires: 'Document Expires',
+  governance_document_published: 'Document Published',
   // Audit triggers
   audit_finding_created: 'Audit Finding Created',
+  audit_finding_updated: 'Audit Finding Updated',
+  audit_finding_closed: 'Audit Finding Closed',
   // IT Asset triggers
   asset_created: 'Asset Created',
   asset_updated: 'Asset Updated',
   asset_deleted: 'Asset Deleted',
+  // Control Library triggers
+  control_group_created: 'Control Group Created',
+  control_group_updated: 'Control Group Updated',
+  control_group_deleted: 'Control Group Deleted',
   // Actions - notifications
   send_notification_email: 'Send Email',
   send_in_app_alert: 'In-System Alert',
@@ -752,6 +1224,39 @@ export const NODE_TYPE_LABELS: Record<string, string> = {
   // Actions - control library
   update_control_effectiveness: 'Update Control Rating',
   set_control_not_applicable: 'Set Not Applicable',
+  // Actions - KRI management
+  create_kri: 'Create KRI',
+  update_kri_value: 'Log KRI Value',
+  resolve_kri_breach: 'Resolve KRI Breach',
+  // Actions - incident management
+  create_incident: 'Create Incident',
+  update_incident_status: 'Update Incident Status',
+  assign_incident_owner: 'Assign Incident Owner',
+  close_incident: 'Close Incident',
+  // Actions - mitigation plans
+  create_mitigation_plan: 'Create Mitigation Plan',
+  update_mitigation_status: 'Update Mitigation Status',
+  link_risk_to_mitigation: 'Link Risk to Mitigation',
+  // Actions - RCSA
+  initiate_rcsa: 'Initiate RCSA',
+  submit_rcsa_results: 'Submit RCSA Results',
+  review_rcsa: 'Review RCSA',
+  // Actions - risk reviews
+  schedule_risk_review: 'Schedule Risk Review',
+  complete_risk_review: 'Complete Risk Review',
+  // Actions - risk assessments
+  create_risk_assessment: 'Create Risk Assessment',
+  update_risk_assessment_status: 'Update Assessment Status',
+  assign_risk_assessor: 'Assign Risk Assessor',
+  // Actions - internal controls
+  create_internal_control: 'Create Internal Control',
+  test_internal_control: 'Test Control',
+  update_control_test_result: 'Update Test Result',
+  // Actions - risk appetite
+  set_risk_appetite: 'Set Risk Appetite',
+  update_risk_tolerance: 'Update Risk Tolerance',
+  // Actions - risk dependencies
+  add_risk_dependency: 'Add Risk Dependency',
   // Conditions
   check_risk_level: 'Check Risk Level',
   check_compliance_status: 'Check Compliance',
@@ -819,6 +1324,10 @@ export const PALETTE_DESCRIPTIONS: Record<string, string> = {
   asset_created: 'Fires when a new IT asset is added to the inventory',
   asset_updated: 'Fires when an IT asset record is updated',
   asset_deleted: 'Fires when an IT asset is removed from the inventory',
+  // Control Library triggers
+  control_group_created: 'Fires when a new control group is created in the Control Library',
+  control_group_updated: 'Fires when a control group is updated in the Control Library',
+  control_group_deleted: 'Fires when a control group is deleted from the Control Library',
   // Actions - notifications
   send_notification_email: 'Sends a notification email to specified recipients',
   send_in_app_alert: 'Sends an in-system alert to selected users or roles — appears in their navbar notification bell',
@@ -859,6 +1368,39 @@ export const PALETTE_DESCRIPTIONS: Record<string, string> = {
   // Actions - control library
   update_control_effectiveness: 'Updates the effectiveness rating for matching controls',
   set_control_not_applicable: 'Marks controls as not applicable with justification and approval routing',
+  // Actions - KRI management
+  create_kri: 'Creates a new Key Risk Indicator linked to a risk, with thresholds and frequency',
+  update_kri_value: 'Logs a new KRI measurement value and updates the current status (green/amber/red)',
+  resolve_kri_breach: 'Acknowledges and resolves a KRI threshold breach, restoring green status',
+  // Actions - incident management
+  create_incident: 'Creates a new risk incident record with severity and optional risk linkage',
+  update_incident_status: 'Updates the lifecycle status of an incident (investigating, contained, etc.)',
+  assign_incident_owner: 'Assigns an incident response owner to an incident record',
+  close_incident: 'Closes and resolves an incident with lessons learned and corrective actions',
+  // Actions - mitigation plans
+  create_mitigation_plan: 'Creates a mitigation action plan for a risk with owner and priority',
+  update_mitigation_status: 'Updates the progress status of a risk mitigation plan',
+  link_risk_to_mitigation: 'Associates a risk with an existing mitigation action plan',
+  // Actions - RCSA
+  initiate_rcsa: 'Initiates a new Risk Control Self-Assessment campaign cycle',
+  submit_rcsa_results: 'Marks an RCSA assessment as submitted for review',
+  review_rcsa: 'Moves an RCSA assessment into under-review status for approver action',
+  // Actions - risk reviews
+  schedule_risk_review: 'Schedules a periodic risk review with a due date and review cycle',
+  complete_risk_review: 'Records completion of a risk review with findings and recommendations',
+  // Actions - risk assessments
+  create_risk_assessment: 'Initiates a formal risk assessment campaign with type and methodology',
+  update_risk_assessment_status: 'Updates the progress status of a risk assessment',
+  assign_risk_assessor: 'Assigns a lead assessor to a risk assessment',
+  // Actions - internal controls
+  create_internal_control: 'Creates a new internal control record with type and category',
+  test_internal_control: 'Logs a design or operating effectiveness test for an internal control',
+  update_control_test_result: 'Records or updates the outcome of a control test with management response',
+  // Actions - risk appetite
+  set_risk_appetite: 'Defines or updates the risk appetite level for a risk category',
+  update_risk_tolerance: 'Updates quantitative risk tolerance thresholds for a risk category',
+  // Actions - risk dependencies
+  add_risk_dependency: 'Creates a dependency link between two risks with type and impact factor',
   // Conditions
   check_risk_level: 'Branches based on risk level (Critical/High/Medium/Low)',
   check_compliance_status: 'Branches based on compliance assessment status',

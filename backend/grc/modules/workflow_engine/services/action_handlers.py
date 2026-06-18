@@ -63,6 +63,61 @@ def _resolve_template(text: str, context: Dict[str, Any]) -> str:
     return _re.sub(r'\{\{([^}]+)\}\}', _sub, text)
 
 
+def _humanize_event(ev: str) -> str:
+    """'compliance.evidence.delete' -> 'Compliance Evidence Delete'."""
+    s = (ev or "").replace("_", " ").replace(".", " ").strip()
+    return s.title() if s else ""
+
+
+def _default_notification_subject(instance, definition, ctx: Dict[str, Any]) -> str:
+    """Informative default subject so recipients can tell what it's about."""
+    name = (getattr(definition, "name", None) or "Workflow").strip()
+    ev = _humanize_event(getattr(instance, "trigger_event", "") or "")
+    if not ev:
+        return f"Workflow notification: {name}"
+    # Avoid "[Compliance Evidence Delete] On Compliance Evidence Delete" when the
+    # workflow name already conveys the event.
+    if ev.lower() in name.lower():
+        return name
+    return f"[{ev}] {name}"
+
+
+def _default_notification_message(instance, definition, ctx: Dict[str, Any]) -> str:
+    """Build an informative default body so recipients can tell WHAT happened
+    and FROM WHERE, even when the node carries no configured message."""
+    name = (getattr(definition, "name", None) or "this workflow").strip()
+    action = str(ctx.get("action") or "").strip()
+    rtype = str(ctx.get("resource_type") or "").strip()
+    rid = str(ctx.get("resource_id") or "").strip()
+    who = str(ctx.get("created_by_name") or "").strip()
+    when = str(ctx.get("event_timestamp") or "").strip()
+    ev = getattr(instance, "trigger_event", "") or ""
+    title = str(ctx.get("title") or ctx.get("name") or "").strip()
+
+    happened = ""
+    if action and rtype:
+        happened = f"{action.title()} on {rtype.replace('_', ' ')}"
+        if rid:
+            happened += f" #{rid}"
+    elif ev:
+        happened = _humanize_event(ev)
+    if happened and title:
+        happened += f' ("{title}")'
+    if happened and who:
+        happened += f" by {who}"
+
+    lines = [f'The "{name}" workflow has run.', ""]
+    if happened:
+        lines.append(f"What happened: {happened}.")
+    if ev:
+        lines.append(f"Trigger event: {ev}")
+    if when:
+        lines.append(f"When: {when}")
+    lines.append("")
+    lines.append("Please review this item in the platform.")
+    return "\n".join(lines)
+
+
 def _build_template_context(db, instance, definition) -> Dict[str, Any]:
     """Build a flat template-variable context from the workflow trigger payload."""
     payload: Dict[str, Any] = instance.trigger_payload or {}
@@ -758,16 +813,18 @@ class WorkflowActionHandlers:
         to = payload.get("to") or payload.get("email")
         user_ids = _normalize_ids(payload.get("recipient_user_ids") or payload.get("user_ids") or [])
         role_ids = _normalize_ids(payload.get("recipient_role_ids") or payload.get("role_ids") or [])
-        subject = payload.get("subject") or f"Workflow Notification: {definition.name}"
-        body = payload.get("body") or payload.get("message") or "A workflow action has been triggered."
-
         logger.info(
             "workflow.email.prepare instance_id=%s definition_id=%s to=%r user_ids=%s role_ids=%s",
             instance.id, definition.id, to, user_ids, role_ids,
         )
 
-        # Resolve {{variable}} placeholders using the trigger event context
+        # Resolve {{variable}} placeholders using the trigger event context.
+        # When no subject/body was configured, fall back to an informative
+        # default built from the trigger (what action, on what resource, etc.)
+        # so the recipient can tell what the notification is about.
         ctx = _build_template_context(db, instance, definition)
+        subject = payload.get("subject") or _default_notification_subject(instance, definition, ctx)
+        body = payload.get("body") or payload.get("message") or _default_notification_message(instance, definition, ctx)
         subject = _resolve_template(subject, ctx)
         body = _resolve_template(body, ctx)
 
@@ -776,6 +833,18 @@ class WorkflowActionHandlers:
             recipients.extend([to] if isinstance(to, str) else to)
         recipients.extend(_emails_for_user_ids(db, user_ids))
         recipients.extend(_emails_for_role_ids(db, instance.tenant_id, role_ids))
+        if not recipients:
+            # Owner fallback: send to the workflow's creator so an email node
+            # with no configured recipient still reaches someone.
+            owner_id = getattr(definition, "created_by_id", None)
+            if owner_id:
+                owner_emails = _emails_for_user_ids(db, [owner_id])
+                if owner_emails:
+                    logger.info(
+                        "workflow.email.recipient_fallback instance_id=%s owner_user_id=%s",
+                        instance.id, owner_id,
+                    )
+                    recipients.extend(owner_emails)
         if not recipients:
             logger.info(
                 "workflow.email.no_direct_recipients — falling back to manager emails instance_id=%s",
