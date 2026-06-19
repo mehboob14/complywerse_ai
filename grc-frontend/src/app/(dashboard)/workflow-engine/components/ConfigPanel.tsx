@@ -289,8 +289,13 @@ type EscalationLevel = {
   message: string;
   user_ids: number[];
   role_ids: number[];
-  timeout_value: number;
-  timeout_unit: 'hours' | 'days';
+  // Wait before escalating to the next level — days AND hours can both be set
+  // (e.g. 2 days + 6 hours). Kept alongside the legacy timeout_value/unit so
+  // older saved workflows still load.
+  wait_days: number;
+  wait_hours: number;
+  timeout_value?: number;
+  timeout_unit?: 'hours' | 'days';
   escalation_mode?: 'always' | 'if_unresolved_timeout' | 'on_condition';
   escalation_condition?: Record<string, unknown>;
 };
@@ -325,8 +330,8 @@ function EscalationLevelsConfig({
         message: '',
         user_ids: [],
         role_ids: [],
-        timeout_value: 24,
-        timeout_unit: 'hours',
+        wait_days: 1,
+        wait_hours: 0,
         escalation_mode: 'always',
         escalation_condition: {},
       },
@@ -463,38 +468,46 @@ function EscalationLevelsConfig({
               </>
             )}
 
-            {/* Escalation timeout (shown for all but last level) */}
+            {/* Wait before escalating to the next level — days AND hours both
+                (shown for all but the last level). */}
             {!isLast && (
-              <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-2">
-                  <Field label="Escalate after">
+              <>
+                <div className="text-[9px] text-gray-500 mt-1 mb-0.5">
+                  Wait before escalating to Level {lv.level + 1}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="Days">
                     <input
                       type="number"
-                      min={1}
+                      min={0}
                       className={inputCls}
-                      value={lv.timeout_value || 24}
+                      value={lv.wait_days ?? 0}
                       onChange={(e) =>
-                        updateLevel(idx, { timeout_value: Number(e.target.value) || 24 })
+                        updateLevel(idx, { wait_days: Math.max(0, Number(e.target.value) || 0) })
                       }
-                      placeholder="24"
+                      placeholder="0"
+                    />
+                  </Field>
+                  <Field label="Hours">
+                    <input
+                      type="number"
+                      min={0}
+                      max={23}
+                      className={inputCls}
+                      value={lv.wait_hours ?? 0}
+                      onChange={(e) =>
+                        updateLevel(idx, { wait_hours: Math.max(0, Number(e.target.value) || 0) })
+                      }
+                      placeholder="0"
                     />
                   </Field>
                 </div>
-                <div className="col-span-1">
-                  <Field label="Unit">
-                    <select
-                      className={selectCls}
-                      value={lv.timeout_unit || 'hours'}
-                      onChange={(e) =>
-                        updateLevel(idx, { timeout_unit: e.target.value as 'hours' | 'days' })
-                      }
-                    >
-                      <option value="hours">Hours</option>
-                      <option value="days">Days</option>
-                    </select>
-                  </Field>
-                </div>
-              </div>
+                {(Number(lv.wait_days) || 0) === 0 && (Number(lv.wait_hours) || 0) === 0 && (
+                  <div className="text-[9px] text-amber-600 mt-0.5">
+                    0 days + 0 hours — Level {lv.level + 1} will fire immediately.
+                  </div>
+                )}
+              </>
             )}
             {isLast && (
               <div className="text-[9px] text-gray-400 mt-1 italic">
@@ -3768,17 +3781,30 @@ function NodeConfigBody({
     ? (config.recipient_role_ids as Array<string | number>).map(String)
     : [];
   const selectedEscalateLevels: EscalationLevel[] = Array.isArray(config?.escalation_levels)
-    ? (config.escalation_levels as Array<Record<string, unknown>>).map((lv, idx) => ({
-        level: Number(lv.level || idx + 1),
-        subject: String(lv.subject || ''),
-        message: String(lv.message || ''),
-        user_ids: Array.isArray(lv.user_ids) ? (lv.user_ids as Array<string | number>).map(Number).filter(Boolean) : [],
-        role_ids: Array.isArray(lv.role_ids) ? (lv.role_ids as Array<string | number>).map(Number).filter(Boolean) : [],
-        timeout_value: Number(lv.timeout_value || lv.timeout_hours || 24),
-        timeout_unit: ((lv.timeout_unit as string) || 'hours') === 'days' ? 'days' : 'hours',
-        escalation_mode: (lv.escalation_mode as EscalationLevel['escalation_mode']) || 'always',
-        escalation_condition: (lv.escalation_condition as Record<string, unknown>) || {},
-      }))
+    ? (config.escalation_levels as Array<Record<string, unknown>>).map((lv, idx) => {
+        // Back-compat: derive days/hours from a legacy timeout_value + unit when
+        // the new wait_days/wait_hours fields aren't present on an older config.
+        const hasNewWait = lv.wait_days !== undefined || lv.wait_hours !== undefined;
+        const legacyVal = Number(lv.timeout_value || lv.timeout_hours || 0);
+        const legacyUnit = ((lv.timeout_unit as string) || 'hours') === 'days' ? 'days' : 'hours';
+        const waitDays = hasNewWait
+          ? Math.max(0, Number(lv.wait_days) || 0)
+          : (legacyUnit === 'days' ? legacyVal : 0);
+        const waitHours = hasNewWait
+          ? Math.max(0, Number(lv.wait_hours) || 0)
+          : (legacyUnit === 'hours' ? legacyVal : 0);
+        return {
+          level: Number(lv.level || idx + 1),
+          subject: String(lv.subject || ''),
+          message: String(lv.message || ''),
+          user_ids: Array.isArray(lv.user_ids) ? (lv.user_ids as Array<string | number>).map(Number).filter(Boolean) : [],
+          role_ids: Array.isArray(lv.role_ids) ? (lv.role_ids as Array<string | number>).map(Number).filter(Boolean) : [],
+          wait_days: waitDays,
+          wait_hours: waitHours,
+          escalation_mode: (lv.escalation_mode as EscalationLevel['escalation_mode']) || 'always',
+          escalation_condition: (lv.escalation_condition as Record<string, unknown>) || {},
+        };
+      })
     : [];
 
   return (

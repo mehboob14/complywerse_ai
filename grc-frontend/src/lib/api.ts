@@ -3933,7 +3933,7 @@ export const compliancePluginsApi = {
   get: (id: number) => apiClient.get(`/compliance-plugins/${id}`),
   benchmarks: () => apiClient.get('/compliance-plugins/benchmarks'),
   seed: () => apiClient.post('/compliance-plugins/seed'),
-  execute: (pluginId: number, data: { asset_id?: number; connection_id?: number }) =>
+  execute: (pluginId: number, data: { asset_id?: number; connection_id?: number; manual_result?: string; manual_note?: string }) =>
     apiClient.post(`/compliance-plugins/${pluginId}/runs`, data),
   listRuns: (params?: Record<string, unknown>) => apiClient.get('/compliance-plugins/runs', { params }),
   getRun: (runId: number) => apiClient.get(`/compliance-plugins/runs/${runId}`),
