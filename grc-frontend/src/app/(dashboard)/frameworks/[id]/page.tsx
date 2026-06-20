@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { Fragment, useState, useEffect, useRef, useMemo } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
@@ -635,6 +635,31 @@ export default function CertificationJourneyPage() {
   }, [selectedSpineControl]);
   const [expandedSubControlKeys, setExpandedSubControlKeys] = useState<string[]>([]);
   const [expandedRequirementTextIds, setExpandedRequirementTextIds] = useState<number[]>([]);
+  // Local override of per-control assessment-criteria check state (control.id -> {idx: met}).
+  // Seeded from the API's criteria_status; toggling persists via PATCH.
+  const [criteriaState, setCriteriaState] = useState<Record<number, Record<string, boolean>>>({});
+  // Which dashboard tier+category dropdown is open, e.g. "P1:inprog". null = none.
+  const [openTierCat, setOpenTierCat] = useState<string | null>(null);
+  const toggleCriterion = (control: CertificationControl, idx: number) => {
+    const current = criteriaState[control.id] ?? control.criteria_status ?? {};
+    const next = { ...current, [String(idx)]: !current[String(idx)] };
+    setCriteriaState((prev) => ({ ...prev, [control.id]: next }));
+    apiClient
+      .patch(`/certifications/${journeyId}/controls/${control.id}/criteria`, { criteria_status: next })
+      .then(() => {
+        // Refresh BOTH the controls list (checklist + dashboard) and the
+        // progress payload that drives the top "your assessment" header
+        // (compliant / in review / to start counts). Ticking criteria now
+        // moves the control's status server-side, so the header must refetch
+        // too — otherwise its numbers only update on a hard reload.
+        queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+        queryClient.invalidateQueries({ queryKey: ['certification-progress', journeyId] });
+      })
+      .catch(() => {
+        // revert on failure
+        setCriteriaState((prev) => ({ ...prev, [control.id]: current }));
+      });
+  };
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortOrder, setSortOrder] = useState<SortOrder>('default');
@@ -675,6 +700,36 @@ export default function CertificationJourneyPage() {
     },
     enabled: !!journeyId,
   });
+
+  // Compliance history (annual snapshots).
+  const { data: snapshots } = useQuery({
+    queryKey: ['compliance-snapshots', journeyId],
+    queryFn: async () => {
+      const r = await apiClient.get(`/certifications/${journeyId}/snapshots`);
+      return r.data as Array<{
+        id: number; year: number | null; label: string | null; captured_at: string | null;
+        overall_pct: number; compliant_count: number; total_count: number;
+        breakdown: { tiers?: Record<string, { total: number; compliant: number; avg: number }>; domains?: Array<{ domain: string; total: number; compliant: number; avg: number }> };
+        notes: string | null;
+      }>;
+    },
+    enabled: !!journeyId,
+  });
+  const [capturingSnapshot, setCapturingSnapshot] = useState(false);
+  const [openSnapshotId, setOpenSnapshotId] = useState<number | null>(null);
+  const captureSnapshot = async () => {
+    setCapturingSnapshot(true);
+    try {
+      const year = new Date().getFullYear();
+      await apiClient.post(`/certifications/${journeyId}/snapshots`, {
+        year,
+        label: `${year} Assessment`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['compliance-snapshots', journeyId] });
+    } finally {
+      setCapturingSnapshot(false);
+    }
+  };
 
   // Auto-open the spine modal when arriving with `?req=<id>` in the URL.
   // This is what makes the back-button from /evidence/[id] land the
@@ -1038,25 +1093,30 @@ export default function CertificationJourneyPage() {
     enabled: activeTab === 'cde-scope',
   });
 
+  // Applicability is keyed by the UPLOADED framework id. For flat/uploaded
+  // frameworks (NDMO) journey.framework_id is null and uploaded_framework_id
+  // carries the real id — fall back to it so applicability works there too.
+  const appFwId = (journey as any)?.uploaded_framework_id ?? (journey as any)?.framework_id ?? null;
+
   const { data: applicabilityData, isLoading: applicabilityLoading } = useQuery({
-    queryKey: ['applicability', journey?.framework_id, applicabilityStatusFilter],
+    queryKey: ['applicability', appFwId, applicabilityStatusFilter],
     queryFn: async () => {
-      if (!journey?.framework_id) return null;
+      if (!appFwId) return null;
       const params = applicabilityStatusFilter !== 'all' ? `?status_filter=${applicabilityStatusFilter}` : '';
-      const response = await governanceApi.getFrameworkApplicability(journey.framework_id);
+      const response = await governanceApi.getFrameworkApplicability(appFwId);
       return response.data;
     },
-    enabled: !!journey?.framework_id && activeTab === 'applicability',
+    enabled: !!appFwId && activeTab === 'applicability',
   });
 
   const { data: applicabilityAuditLog } = useQuery({
-    queryKey: ['applicability-audit-log', journey?.framework_id],
+    queryKey: ['applicability-audit-log', appFwId],
     queryFn: async () => {
-      if (!journey?.framework_id) return [];
-      const response = await governanceApi.getApplicabilityAuditLog(journey.framework_id);
+      if (!appFwId) return [];
+      const response = await governanceApi.getApplicabilityAuditLog(appFwId);
       return response.data;
     },
-    enabled: !!journey?.framework_id && activeTab === 'applicability',
+    enabled: !!appFwId && activeTab === 'applicability',
   });
 
   const setApplicabilityMutation = useMutation({
@@ -1213,6 +1273,20 @@ export default function CertificationJourneyPage() {
     return 0;
   };
 
+  // Domain → document-order rank, derived from the API response order. The
+  // backend returns controls in the framework's published/document sequence,
+  // so each domain's first-appearance index gives its document position. Used
+  // to order the requirement list by domain as in the source document
+  // (e.g. NDMO: Data Governance first), not alphabetically by control code.
+  const domainOrderRank = (() => {
+    const m = new Map<string, number>();
+    (controls || []).forEach((c: CertificationControl) => {
+      const d = (c.domain_name || '').toLowerCase().trim();
+      if (!m.has(d)) m.set(d, m.size);
+    });
+    return m;
+  })();
+
   const filteredControls = controls?.filter((control: CertificationControl) => {
     // Hide controls that have been approved as Not Applicable.
     // They remain accessible (and reversible) from the Applicability tab.
@@ -1238,6 +1312,12 @@ export default function CertificationJourneyPage() {
     }
     return true;
   }).sort((a: CertificationControl, b: CertificationControl) => {
+    // Order by domain document-sequence first, then natural code within the
+    // domain (DG.1.1 < DG.1.2 < DG.2.1). This keeps domains in the source
+    // document order instead of sorting them alphabetically by code prefix.
+    const da = domainOrderRank.get((a.domain_name || '').toLowerCase().trim()) ?? 9999;
+    const db = domainOrderRank.get((b.domain_name || '').toLowerCase().trim()) ?? 9999;
+    if (da !== db) return sortOrder === 'desc' ? db - da : da - db;
     const codeA = a.original_control_code || a.system_control_code || a.control_code || '';
     const codeB = b.original_control_code || b.system_control_code || b.control_code || '';
     const result = naturalSortCompare(codeA, codeB);
@@ -1315,7 +1395,11 @@ export default function CertificationJourneyPage() {
       if (a.sectionNumber !== null && b.sectionNumber !== null) return a.sectionNumber - b.sectionNumber;
       if (a.sectionNumber !== null) return -1;
       if (b.sectionNumber !== null) return 1;
-      return a.label.localeCompare(b.label);
+      // Letter-coded frameworks (e.g. NDMO: DG, MCM, DQ…) carry no numeric
+      // section prefix — preserve the API order, which the backend already
+      // returns in the framework's published/document sequence, instead of
+      // sorting domains alphabetically by name.
+      return 0;
     });
     return result;
   };
@@ -1344,7 +1428,11 @@ export default function CertificationJourneyPage() {
       if (a.sectionNumber !== null && b.sectionNumber !== null) return a.sectionNumber - b.sectionNumber;
       if (a.sectionNumber !== null) return -1;
       if (b.sectionNumber !== null) return 1;
-      return a.label.localeCompare(b.label);
+      // Letter-coded frameworks (e.g. NDMO: DG, MCM, DQ…) carry no numeric
+      // section prefix — preserve the API order, which the backend already
+      // returns in the framework's published/document sequence, instead of
+      // sorting domains alphabetically by name.
+      return 0;
     });
     return list;
   })();
@@ -1370,6 +1458,12 @@ export default function CertificationJourneyPage() {
     ''
   ).toLowerCase().includes('pci');
 
+  // "Phased" frameworks (NDMO) carry P1/P2/P3 priorities — show the 3-year
+  // roadmap compliance dashboard in the header instead of the generic KPI cards.
+  const isPhasedFramework = (controls || []).some(
+    (c: CertificationControl) => ['P1', 'P2', 'P3'].includes(c.priority_level || ''),
+  );
+
   const toggleRequirementText = (controlId: number) => {
     setExpandedRequirementTextIds((prev) =>
       prev.includes(controlId) ? prev.filter((id) => id !== controlId) : [...prev, controlId]
@@ -1384,6 +1478,7 @@ export default function CertificationJourneyPage() {
     { id: 'assigned-to-me' as TabType, label: 'Assigned to Me' },
     { id: 'applicability', label: 'Applicability' },
     { id: 'artifacts' as TabType, label: 'Artifacts' },
+    { id: 'history' as TabType, label: 'History' },
   ];
 
   useEffect(() => {
@@ -1567,6 +1662,157 @@ export default function CertificationJourneyPage() {
             )}
           </>
         )}
+      </div>
+    );
+  };
+
+  // NDMO compliance dashboard — per-spec score from the assessment-criteria
+  // calculator, rolled up by P1/P2/P3 (Year 1/2/3). Computed client-side from
+  // the already-fetched controls + live criteria check state.
+  const specScorePct = (c: CertificationControl): number => {
+    const crits = c.assessment_criteria || [];
+    const st = criteriaState[c.id] ?? c.criteria_status ?? {};
+    if (crits.length > 0) {
+      const met = crits.filter((_, i) => st[String(i)]).length;
+      return Math.round((met / crits.length) * 100);
+    }
+    if (['implemented', 'verified'].includes(c.status)) return 100;
+    if (c.status === 'in_progress') return 50;
+    return 0;
+  };
+
+  const renderComplianceDashboard = () => {
+    const all = (controls || []).filter(
+      (c) => ['P1', 'P2', 'P3'].includes(c.priority_level || '') && c.is_applicable !== false,
+    );
+    if (all.length === 0) return null;
+    const META: Record<string, { year: string; ring: string; bar: string }> = {
+      P1: { year: 'Year 1', ring: 'text-rose-600', bar: 'bg-rose-500' },
+      P2: { year: 'Year 2', ring: 'text-amber-600', bar: 'bg-amber-500' },
+      P3: { year: 'Year 3', ring: 'text-emerald-600', bar: 'bg-emerald-500' },
+    };
+    const CATS = [
+      { key: 'compliant', label: 'Compliant', dot: 'bg-emerald-500' },
+      { key: 'inprog', label: 'In Progress', dot: 'bg-amber-500' },
+      { key: 'notstarted', label: 'Not Started', dot: 'bg-gray-300' },
+    ] as const;
+    const tiers = (['P1', 'P2', 'P3'] as const).map((pl) => {
+      const specs = all.filter((c) => c.priority_level === pl);
+      const scored = specs.map((c) => ({ c, p: specScorePct(c) }));
+      const byCat: Record<string, CertificationControl[]> = {
+        compliant: scored.filter((s) => s.p === 100).map((s) => s.c),
+        inprog: scored.filter((s) => s.p > 0 && s.p < 100).map((s) => s.c),
+        notstarted: scored.filter((s) => s.p === 0).map((s) => s.c),
+      };
+      const total = specs.length;
+      const avg = total ? Math.round(scored.reduce((a, s) => a + s.p, 0) / total) : 0;
+      return { pl, total, avg, byCat, ...META[pl] };
+    });
+    const allPcts = all.map(specScorePct);
+    const overall = allPcts.length ? Math.round(allPcts.reduce((a, b) => a + b, 0) / allPcts.length) : 0;
+    const overallCompliant = allPcts.filter((p) => p === 100).length;
+
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-base font-semibold cw-text">
+            <Target className="h-5 w-5 text-blue-600" />
+            Compliance Dashboard · 3-Year Roadmap
+          </h3>
+          <div className="text-right">
+            <div className="text-xl font-bold text-gray-900">{overall}%</div>
+            <div className="text-[11px] text-gray-500">{overallCompliant}/{all.length} specs compliant</div>
+          </div>
+        </div>
+        <div className="mb-4 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${overall}%` }} />
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {tiers.map((t) => (
+            <div key={t.pl} className="rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-800">{t.pl} · {t.year}</span>
+                <span className={`text-lg font-bold ${t.ring}`}>{t.avg}%</span>
+              </div>
+              <div className="mt-2 mb-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                <div className={`h-full rounded-full ${t.bar}`} style={{ width: `${t.avg}%` }} />
+              </div>
+              <ul className="space-y-1">
+                {CATS.map((cat) => {
+                  const list = t.byCat[cat.key];
+                  const key = `${t.pl}:${cat.key}`;
+                  const open = openTierCat === key;
+                  return (
+                    <li key={cat.key}>
+                      <button
+                        type="button"
+                        disabled={list.length === 0}
+                        onClick={() => setOpenTierCat(open ? null : key)}
+                        className={`flex w-full items-center justify-between rounded-md px-2 py-1 text-xs transition-colors ${list.length ? 'hover:bg-gray-50' : 'cursor-default opacity-60'}`}
+                      >
+                        <span className="flex items-center gap-1.5 text-gray-600">
+                          <span className={`h-2 w-2 rounded-full ${cat.dot}`} />{cat.label}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="font-semibold text-gray-700">{list.length}</span>
+                          {list.length > 0 && (
+                            <ChevronDown className={`h-3 w-3 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+                          )}
+                        </span>
+                      </button>
+                      {open && (() => {
+                        // Group this category's specs by their domain so the
+                        // drill-down shows which domain each belongs to.
+                        const groups: { domain: string; items: CertificationControl[] }[] = [];
+                        const gi = new Map<string, number>();
+                        list.forEach((c) => {
+                          const d = c.domain_name || 'Other';
+                          if (!gi.has(d)) { gi.set(d, groups.length); groups.push({ domain: d, items: [] }); }
+                          groups[gi.get(d)!].items.push(c);
+                        });
+                        return (
+                          <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-sm">
+                            {groups.map((g, gi) => (
+                              <div key={g.domain} className={gi > 0 ? 'border-t border-gray-100' : ''}>
+                                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-gray-50/95 px-3 py-1.5 backdrop-blur">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{g.domain}</span>
+                                  <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[9px] font-semibold text-gray-600">{g.items.length}</span>
+                                </div>
+                                <ul className="divide-y divide-gray-50">
+                                  {g.items.map((c) => {
+                                    const p = specScorePct(c);
+                                    const dot = p === 100 ? 'bg-emerald-500' : p > 0 ? 'bg-amber-500' : 'bg-gray-300';
+                                    const ptxt = p === 100 ? 'text-emerald-600' : p > 0 ? 'text-amber-600' : 'text-gray-400';
+                                    return (
+                                      <li key={c.id}>
+                                        <button
+                                          type="button"
+                                          onClick={() => openSpineControl(c)}
+                                          className="group flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-blue-50/40"
+                                        >
+                                          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
+                                          <span className="w-16 shrink-0 font-mono text-[11px] font-semibold text-blue-700">{c.control_code}</span>
+                                          <span className="flex-1 truncate text-xs text-gray-700">{c.control_name}</span>
+                                          <span className={`shrink-0 text-[11px] font-bold ${ptxt}`}>{p}%</span>
+                                          <ChevronRight className="h-3 w-3 shrink-0 text-gray-300 transition-colors group-hover:text-gray-500" />
+                                        </button>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-2 border-t border-gray-100 pt-2 text-[11px] text-gray-400">{t.total} specifications</div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   };
@@ -2293,11 +2539,11 @@ export default function CertificationJourneyPage() {
                 onClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  if (control.is_applicable || !journey?.framework_id) return;
+                  if (control.is_applicable || !appFwId) return;
                   const parsedId = control.parsed_control_id ?? control.id;
                   setApplicabilityMutation.mutate({
                     control_id: parsedId,
-                    uploaded_framework_id: journey.framework_id,
+                    uploaded_framework_id: appFwId,
                     is_applicable: true,
                     justification: '',
                   });
@@ -2315,7 +2561,7 @@ export default function CertificationJourneyPage() {
                 onClick={(e) => {
                   e.stopPropagation();
                   e.preventDefault();
-                  if (!control.is_applicable || !journey?.framework_id) return;
+                  if (!control.is_applicable || !appFwId) return;
                   // Always prompt for justification when marking Not Applicable —
                   // the audit trail needs a documented reason regardless of
                   // whether the clause was AI-flagged as critical. (Critical
@@ -2347,13 +2593,127 @@ export default function CertificationJourneyPage() {
         )}
         {isExpanded && (
           <div className={forceExpanded ? '' : 'border-t border-gray-200 p-4'}>
-            {control.control_statement && (
-              <p className={`text-sm whitespace-pre-wrap break-words ${forceExpanded
-                ? 'mb-4 rounded-lg border border-gray-200 bg-gray-50 p-4 leading-relaxed text-gray-700'
-                : 'mb-4 text-gray-600'}`}>
-                {control.control_statement}
-              </p>
+            {/* Figure-2 identity fields — labelled (bold heading + value), one
+                per field, so every value is clearly named (Domain Name, Domain
+                ID, Control Name, Control ID, Priority, Version, Dependencies). */}
+            {control.priority_level && (() => {
+              const pl = control.priority_level || '';
+              const domainId = (control.control_code || '').split('.')[0] || '—';
+              const catRaw = control.objective_name || control.objective_code || '';
+              const controlId = catRaw.includes(':')
+                ? catRaw.split(':')[0].trim()
+                : (control.control_code || '').split('.').slice(0, 2).join('.');
+              const controlName = catRaw.includes(':')
+                ? catRaw.split(':').slice(1).join(':').trim()
+                : (catRaw || '—');
+              const plMeta: Record<string, { yr: string; cls: string }> = {
+                P1: { yr: 'Year 1', cls: 'bg-rose-50 text-rose-700' },
+                P2: { yr: 'Year 2', cls: 'bg-amber-50 text-amber-700' },
+                P3: { yr: 'Year 3', cls: 'bg-emerald-50 text-emerald-700' },
+              };
+              const m = plMeta[pl];
+              const ver = (control.version_history && control.version_history[0]) || null;
+              const L = 'text-[11px] font-bold uppercase tracking-wide text-gray-500';
+              const V = 'mt-0.5 text-sm font-medium text-gray-800';
+              const MONO = 'mt-0.5 font-mono text-sm font-semibold text-blue-700';
+              return (
+                <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50/40 px-4 py-3.5">
+                  <div className="grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2">
+                    <div><p className={L}>Domain Name</p><p className={V}>{control.domain_name}</p></div>
+                    <div><p className={L}>Domain ID</p><p className={MONO}>{domainId}</p></div>
+                    <div><p className={L}>Control Name</p><p className={V}>{controlName}</p></div>
+                    <div><p className={L}>Control ID</p><p className={MONO}>{controlId}</p></div>
+                    <div>
+                      <p className={L}>Priority</p>
+                      <p className="mt-0.5"><span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${m ? m.cls : 'bg-gray-100 text-gray-600'}`}>{pl}{m ? ` · ${m.yr}` : ''}</span></p>
+                    </div>
+                    <div><p className={L}>Version</p><p className="mt-0.5 text-sm text-gray-700">{ver ? `${ver.version || '—'}${ver.date ? ' · ' + ver.date : ''}` : '—'}</p></div>
+                    {control.control_description && (
+                      <div className="sm:col-span-2 border-t border-gray-200 pt-3">
+                        <p className={L}>Control Description</p>
+                        <p className="mt-0.5 text-sm leading-relaxed text-gray-700">{control.control_description}</p>
+                      </div>
+                    )}
+                    <div className="sm:col-span-2">
+                      <p className={L}>Dependencies</p>
+                      <p className="mt-0.5 text-sm text-gray-700">{control.dependencies && control.dependencies.length ? control.dependencies.join(', ') : 'None'}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Specification requirement text (Figure-2 "Control Specification").
+                Hidden for single-statement specs (exactly 1 criterion) since that
+                criterion already shows the full requirement as the tickable item. */}
+            {control.control_statement && control.assessment_criteria?.length !== 1 && (
+              <div className="mb-3">
+                {control.priority_level && (
+                  <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-gray-500">Control Specification</p>
+                )}
+                <p className={`text-sm whitespace-pre-wrap break-words ${forceExpanded
+                  ? 'rounded-lg border border-gray-200 bg-gray-50 p-4 leading-relaxed text-gray-700'
+                  : 'text-gray-600'}`}>
+                  {control.control_statement}
+                </p>
+              </div>
             )}
+
+            {/* Assessment Criteria — weighted score calculator. Each criterion
+                carries equal weight (100 / N); the spec score is the sum of met
+                weights. Compliant only at 100% (all met) — NDMO-consistent. */}
+            {control.assessment_criteria && control.assessment_criteria.length > 0 && (() => {
+              const crits = control.assessment_criteria;
+              const st = criteriaState[control.id] ?? control.criteria_status ?? {};
+              const met = crits.filter((_, i) => st[String(i)]).length;
+              const weight = Math.round(100 / crits.length);
+              const pct = Math.round((met / crits.length) * 100);
+              const status = pct === 100
+                ? { label: 'Compliant', cls: 'bg-emerald-50 text-emerald-700', bar: 'bg-emerald-500' }
+                : pct > 0
+                  ? { label: 'In Progress', cls: 'bg-amber-50 text-amber-700', bar: 'bg-amber-500' }
+                  : { label: 'Not Started', cls: 'bg-gray-100 text-gray-500', bar: 'bg-gray-300' };
+              return (
+                <div className="mb-4 overflow-hidden rounded-lg border border-gray-200 bg-white">
+                  <div className="border-b border-gray-100 bg-gray-50/60 px-4 py-2.5">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Assessment Criteria</p>
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${status.cls}`}>{status.label}</span>
+                        <span className="text-sm font-bold text-gray-800">{pct}%</span>
+                        <span className="text-xs text-gray-400">· {met}/{crits.length}</span>
+                      </div>
+                    </div>
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                      <div className={`h-full rounded-full transition-all ${status.bar}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                  <ul className="divide-y divide-gray-50">
+                    {crits.map((c, i) => {
+                      const checked = !!st[String(i)];
+                      return (
+                        <li key={i}>
+                          <button
+                            type="button"
+                            onClick={() => toggleCriterion(control, i)}
+                            className="flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-gray-50"
+                          >
+                            <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] leading-none ${checked ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-gray-300 bg-white text-transparent'}`}>✓</span>
+                            <span className={`flex-1 text-[13px] leading-relaxed ${checked ? 'text-gray-700' : 'text-gray-600'}`}>
+                              <span className="mr-1 font-mono text-xs text-gray-400">{i + 1}.</span>{c}
+                            </span>
+                            <span className="mt-0.5 shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">{weight}%</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <div className="border-t border-gray-100 px-4 py-2 text-[11px] text-gray-400">
+                    Each criterion = {weight}%. All must be met (with evidence) for this requirement to score 100%.
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Compliance Artifacts — inline per-requirement view of catalog
                 items + tenant-created artifacts that match this clause's
@@ -3173,6 +3533,17 @@ export default function CertificationJourneyPage() {
                       const evidenceApproved = control.approved_evidence_count
                         ?? (control.evidence?.filter((e) => e.review_status === 'approved').length || 0);
                       const isLastCard = ctrlIdx === section.controls.length - 1;
+                      // Control grouping (NDMO Domain → Control → Specification).
+                      // The control id/name come from `objective_*` (e.g.
+                      // "DG.1: Strategy and Plan"). Render a control sub-header
+                      // before the first specification of each control.
+                      const _cat = control.objective_code || control.objective_name || '';
+                      const ctrlGroupId = _cat.includes(':') ? _cat.split(':')[0].trim() : '';
+                      const ctrlGroupName = _cat.includes(':') ? _cat.split(':').slice(1).join(':').trim() : '';
+                      const _prev = section.controls[ctrlIdx - 1];
+                      const _prevCat = _prev ? (_prev.objective_code || _prev.objective_name || '') : '';
+                      const _prevId = _prevCat.includes(':') ? _prevCat.split(':')[0].trim() : '';
+                      const isNewControl = !!ctrlGroupId && ctrlGroupId !== _prevId;
                       // Each requirement's branch reads as a true tree:
                       // a vertical leg dropping from the parent trunk
                       // turns into a horizontal arm that meets the card.
@@ -3183,7 +3554,16 @@ export default function CertificationJourneyPage() {
                       // cleanly under the final requirement of the
                       // section.
                       return (
-                        <div key={control.id} className="relative">
+                        <Fragment key={control.id}>
+                        {/* Control sub-header (NDMO control level) — appears
+                            once above the first specification of each control. */}
+                        {isNewControl && (
+                          <div className={`flex items-center gap-2 ${ctrlIdx === 0 ? '' : 'pt-3'} pb-0.5`}>
+                            <span className="font-mono text-xs font-semibold text-slate-500">{ctrlGroupId}</span>
+                            <span className="text-sm font-semibold text-slate-700">{ctrlGroupName}</span>
+                          </div>
+                        )}
+                        <div className="relative">
                           {/* Vertical leg dropping from the parent
                               section spine down to this card's row.
                               For sibling cards it continues to the next;
@@ -3244,6 +3624,7 @@ export default function CertificationJourneyPage() {
                             </div>
                           </button>
                         </div>
+                        </Fragment>
                       );
                     })}
                   </div>
@@ -3252,6 +3633,95 @@ export default function CertificationJourneyPage() {
             })}
           </div>
         )}
+      </div>
+    );
+  };
+
+  const renderHistoryTab = () => {
+    const list = snapshots || [];
+    return (
+      <div className="space-y-4">
+        <div className="cw-card p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="flex items-center gap-2 text-lg font-semibold cw-text">
+                <Clock className="h-5 w-5 text-blue-600" />
+                Compliance History
+              </h3>
+              <p className="mt-0.5 text-sm text-gray-500">Year-by-year record of compliance. NDMO requires an annual assessment — capture a snapshot to keep a permanent, immutable record.</p>
+            </div>
+            <button
+              type="button"
+              onClick={captureSnapshot}
+              disabled={capturingSnapshot}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+            >
+              {capturingSnapshot ? 'Capturing…' : '+ Capture Snapshot'}
+            </button>
+          </div>
+
+          {list.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-gray-300 py-12 text-center text-sm text-gray-400">
+              No snapshots yet. Click <span className="font-semibold text-gray-500">Capture Snapshot</span> to record this year&apos;s compliance state.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {list.map((s) => {
+                const open = openSnapshotId === s.id;
+                const tiers = s.breakdown?.tiers || {};
+                const domains = s.breakdown?.domains || [];
+                return (
+                  <div key={s.id} className="overflow-hidden rounded-lg border border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => setOpenSnapshotId(open ? null : s.id)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-gray-50"
+                    >
+                      <ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-gray-800">{s.label || (s.year ? String(s.year) : 'Snapshot')}</p>
+                        <p className="text-xs text-gray-400">{s.captured_at ? new Date(s.captured_at).toLocaleString() : ''}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span className="text-lg font-bold text-gray-900">{s.overall_pct}%</span>
+                        <p className="text-[11px] text-gray-400">{s.compliant_count}/{s.total_count} compliant</p>
+                      </div>
+                    </button>
+                    {open && (
+                      <div className="border-t border-gray-100 bg-gray-50/40 p-4">
+                        <div className="mb-3 grid grid-cols-3 gap-3">
+                          {(['P1', 'P2', 'P3'] as const).map((pl) => {
+                            const t = tiers[pl] || { total: 0, compliant: 0, avg: 0 };
+                            return (
+                              <div key={pl} className="rounded-lg border border-gray-200 bg-white p-2 text-center">
+                                <div className="text-xs font-semibold text-gray-600">{pl} · Year {pl === 'P1' ? '1' : pl === 'P2' ? '2' : '3'}</div>
+                                <div className="text-base font-bold text-gray-800">{t.avg}%</div>
+                                <div className="text-[10px] text-gray-400">{t.compliant}/{t.total} compliant</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-gray-500">By Domain</p>
+                        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                          {domains.map((d) => (
+                            <div key={d.domain} className="flex items-center gap-3 text-xs">
+                              <span className="w-44 shrink-0 truncate text-gray-700" title={d.domain}>{d.domain}</span>
+                              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                                <div className="h-full rounded-full bg-blue-500" style={{ width: `${d.avg}%` }} />
+                              </div>
+                              <span className="w-12 shrink-0 text-right text-gray-400">{d.compliant}/{d.total}</span>
+                              <span className="w-9 shrink-0 text-right font-semibold text-gray-700">{d.avg}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -3518,14 +3988,14 @@ export default function CertificationJourneyPage() {
   };
 
   const handleSetApplicability = () => {
-    if (!applicabilityModalControl || !journey?.framework_id) return;
+    if (!applicabilityModalControl || !appFwId) return;
     // Backend stores applicability against ParsedFrameworkControl.id, not the
     // per-journey ControlImplementation.id. Prefer parsed_control_id when
     // present (controls coming from the journey controls endpoint).
     const parsedControlId = applicabilityModalControl.parsed_control_id ?? applicabilityModalControl.id;
     setApplicabilityMutation.mutate({
       control_id: parsedControlId,
-      uploaded_framework_id: journey.framework_id,
+      uploaded_framework_id: appFwId,
       is_applicable: applicabilityIsApplicable,
       justification: applicabilityJustification,
     });
@@ -3808,6 +4278,8 @@ export default function CertificationJourneyPage() {
         return renderCDEScopeTab();
       case 'applicability':
         return renderApplicabilityTab();
+      case 'history':
+        return renderHistoryTab();
       case 'artifacts':
         return (
           <ArtifactsTab
@@ -3938,9 +4410,10 @@ export default function CertificationJourneyPage() {
 
         <div
           className={`overflow-hidden transition-all duration-300 ease-in-out ${
-            cardsCollapsed ? 'max-h-0 opacity-0 pointer-events-none mt-0' : 'max-h-[20rem] opacity-100 mt-6'
+            cardsCollapsed ? 'max-h-0 opacity-0 pointer-events-none mt-0' : 'max-h-[60rem] opacity-100 mt-6'
           }`}
         >
+        {isPhasedFramework ? renderComplianceDashboard() : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex items-center justify-center p-3 sm:p-4">
             <CircularProgress percentage={readinessPercentage} />
@@ -3993,6 +4466,7 @@ export default function CertificationJourneyPage() {
             </div>
           </div>
         </div>
+        )}
         </div>{/* end collapsible wrapper */}
       </div>
 
@@ -4277,10 +4751,10 @@ export default function CertificationJourneyPage() {
                     type="button"
                     disabled={setApplicabilityMutation.isPending}
                     onClick={() => {
-                      if (sc.is_applicable || !journey?.framework_id) return;
+                      if (sc.is_applicable || !appFwId) return;
                       setApplicabilityMutation.mutate({
                         control_id: parsedId,
-                        uploaded_framework_id: journey.framework_id,
+                        uploaded_framework_id: appFwId,
                         is_applicable: true,
                         justification: '',
                       });
@@ -4296,7 +4770,7 @@ export default function CertificationJourneyPage() {
                     type="button"
                     disabled={setApplicabilityMutation.isPending}
                     onClick={() => {
-                      if (!sc.is_applicable || !journey?.framework_id) return;
+                      if (!sc.is_applicable || !appFwId) return;
                       setApplicabilityModalControl(sc);
                       setApplicabilityIsApplicable(false);
                       setApplicabilityJustification('');

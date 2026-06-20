@@ -1079,6 +1079,7 @@ export default function EvidenceDetailPage() {
         {activeTab === 'cross-links' && (
           <CrossLinksTab
             links={allLinks}
+            evidenceId={evidenceId}
             onUnlinkRisk={(linkId) => unlinkRiskMutation.mutate(linkId)}
             onUnlinkAsset={(linkId) => unlinkAssetMutation.mutate(linkId)}
             onUnlinkIncident={(linkId) => unlinkIncidentMutation.mutate(linkId)}
@@ -2139,6 +2140,7 @@ function CrossLinksTab({
   isLinkingAsset,
   isLinkingIncident,
   isLinkingPolicy,
+  evidenceId,
 }: {
   links?: AllLinksResponse;
   onUnlinkRisk: (linkId: number) => void;
@@ -2162,7 +2164,13 @@ function CrossLinksTab({
   isLinkingAsset: boolean;
   isLinkingIncident: boolean;
   isLinkingPolicy: boolean;
+  evidenceId: number;
 }) {
+  // Auto reverse-lookup: assessment controls this evidence is linked to.
+  const { data: linkedAssessments } = useQuery<{ total: number; controls: any[] }>({
+    queryKey: ['evidence-linked-assessments', evidenceId],
+    queryFn: async () => (await apiClient.get(`/compliance/assessments/evidence/${evidenceId}/controls`)).data,
+  });
   const linkedRiskIds = new Set((links?.risks?.links || []).map((l) => l.risk_id));
   const linkedAssetIds = new Set((links?.assets?.links || []).map((l: any) => l.asset_id));
   const linkedIncidentIds = new Set((links?.incidents?.links || []).map((l: any) => l.incident_id));
@@ -2236,6 +2244,34 @@ function CrossLinksTab({
       </div>
 
       <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
+        <LinkSection
+          title="Linked Assessments"
+          icon={ClipboardList}
+          iconColor="text-emerald-500"
+          count={linkedAssessments?.total ?? 0}
+        >
+          {(linkedAssessments?.controls?.length ?? 0) > 0 ? (
+            <div className="space-y-2">
+              {linkedAssessments!.controls.map((c: any) => (
+                <div key={c.link_id} className="flex items-start justify-between gap-2 rounded bg-white p-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="font-mono font-semibold text-gray-700">{c.control_id}</span>
+                      <span className="truncate text-gray-500">· {c.domain}</span>
+                    </div>
+                    <p className="truncate text-xs text-gray-500">{c.assessment_name}</p>
+                  </div>
+                  <Link href="/compliance/assessments" className="shrink-0 text-gray-500 hover:text-black" title="Open PDPL Assessment">
+                    <ExternalLink className="h-4 w-4" />
+                  </Link>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">No linked assessment controls — this updates automatically when evidence is attached to a control.</p>
+          )}
+        </LinkSection>
+
         <LinkSection
           title="Linked Risks"
           icon={AlertTriangle}

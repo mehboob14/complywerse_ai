@@ -9,6 +9,7 @@ import Link from 'next/link';
 import apiClient, { tenantApi } from '@/lib/api';
 import XlsxMaturityViewer from './XlsxMaturityViewer';
 import ArtifactsTab from '@/components/compliance/ArtifactsTab';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
 import DCCAssessmentTab from '@/components/compliance/DCCAssessmentTab';
 import AuditPlanTab from '@/components/compliance/AuditPlanTab';
@@ -286,6 +287,10 @@ export default function AssessmentDetailPage() {
   const [editingAreaDomain, setEditingAreaDomain] = useState<string>('');
   const [editingPriority, setEditingPriority] = useState<string>('');
   const [expandedEvidence, setExpandedEvidence] = useState<Set<number>>(new Set());
+  // Side-panel (system RightSlidePanel) for Evidence/AI per control — opened
+  // from the paperclip / sparkles buttons. panelTab picks the active tab.
+  const [panelItemId, setPanelItemId] = useState<number | null>(null);
+  const [panelTab, setPanelTab] = useState<'ai' | 'evidence'>('evidence');
   const [uploadingItemId, setUploadingItemId] = useState<number | null>(null);
   const [generatingAIForItem, setGeneratingAIForItem] = useState<number | null>(null);
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
@@ -619,22 +624,6 @@ export default function AssessmentDetailPage() {
     });
   };
 
-  const toggleEvidencePanel = (itemId: number) => {
-    const newExpanded = new Set(expandedEvidence);
-    if (newExpanded.has(itemId)) {
-      newExpanded.delete(itemId);
-    } else {
-      newExpanded.add(itemId);
-    }
-    setExpandedEvidence(newExpanded);
-    if (isAuditMasterAssessment) {
-      setExpandedAuditItems((prev) => {
-        const next = new Set(prev);
-        next.add(itemId);
-        return next;
-      });
-    }
-  };
 
   const expandAll = () => {
     if (!assessment?.items_by_domain) return;
@@ -708,7 +697,17 @@ export default function AssessmentDetailPage() {
     }
   };
 
+  // Open the per-control side panel on a given tab, loading its evidence.
+  const openItemPanel = (itemId: number, tab: 'ai' | 'evidence') => {
+    setPanelItemId(itemId);
+    setPanelTab(tab);
+    setExpandedEvidence((prev) => new Set(prev).add(itemId)); // enable evidence query
+  };
+
   const handleGenerateAIRecommendation = (itemId: number) => {
+    // Open the side panel on the AI tab so the generated recommendation is
+    // visible — otherwise the request succeeds but the result stays hidden.
+    openItemPanel(itemId, 'ai');
     setGeneratingAIForItem(itemId);
     generateAIRecommendationMutation.mutate(itemId);
   };
@@ -1260,7 +1259,6 @@ export default function AssessmentDetailPage() {
                           COMPLIANCE_STATUS_STYLES.in_progress;
                         const StatusIcon = itemStatusStyle.icon;
                         const isEditing = editingItemId === item.id;
-                        const isEvidenceExpanded = expandedEvidence.has(item.id);
                         const currentItemEvidence = itemEvidence?.[item.id] || [];
                         const aiRecommendation = parseAIRecommendation(item.ai_evidence_recommendation);
                         const linkedEvidenceIds = new Set(
@@ -1513,8 +1511,8 @@ export default function AssessmentDetailPage() {
                                       </button>
                                       )}
                                       <button
-                                        onClick={() => toggleEvidencePanel(item.id)}
-                                        className={`p-2 rounded-lg transition-colors relative ${isEvidenceExpanded ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}
+                                        onClick={() => openItemPanel(item.id, 'evidence')}
+                                        className={`p-2 rounded-lg transition-colors relative ${panelItemId === item.id ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}
                                         title="Evidence"
                                       >
                                         <Paperclip className="h-4 w-4" />
@@ -1553,8 +1551,29 @@ export default function AssessmentDetailPage() {
                               </div>
                             </div>
 
-                            {isEvidenceExpanded && isAuditItemExpanded && (
-                              <div className="mx-4 mb-4 bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+                            <RightSlidePanel
+                              isOpen={panelItemId === item.id}
+                              onClose={() => setPanelItemId(null)}
+                              title={`${item.item_number ?? ''} · Evidence & AI`}
+                              subtitle={item.control_description || undefined}
+                              width="w-full max-w-2xl"
+                            >
+                              {/* Step tabs */}
+                              <div className="mb-4 flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+                                {([
+                                  { id: 'ai', label: 'AI Suggestions', icon: Sparkles },
+                                  { id: 'evidence', label: 'Evidence', icon: Paperclip },
+                                ] as { id: 'ai' | 'evidence'; label: string; icon: typeof Sparkles }[]).map(({ id, label, icon: Icon }) => (
+                                  <button key={id} onClick={() => setPanelTab(id)}
+                                    className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold transition ${panelTab === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                                    <Icon className="h-3.5 w-3.5" /> {label}
+                                    {id === 'evidence' && currentItemEvidence.length > 0 && <span className="ml-0.5 rounded-full bg-blue-100 px-1.5 text-[10px] font-bold text-blue-700">{currentItemEvidence.length}</span>}
+                                  </button>
+                                ))}
+                              </div>
+
+                              {panelTab === 'ai' && (
+                              <div className="space-y-4">
                                 {aiRecommendation && (
                                   <div className="space-y-3">
                                     <div className="flex items-center gap-2">
@@ -1610,7 +1629,11 @@ export default function AssessmentDetailPage() {
                                     </span>
                                   </div>
                                 )}
+                              </div>
+                              )}
 
+                              {panelTab === 'evidence' && (
+                              <div className="space-y-4">
                                 {currentItemEvidence.length > 0 && (
                                   <div className="space-y-3">
                                     <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
@@ -1858,7 +1881,8 @@ export default function AssessmentDetailPage() {
                                   </button>
                                 </div>
                               </div>
-                            )}
+                              )}
+                            </RightSlidePanel>
                           </div>
                         );
                       })}

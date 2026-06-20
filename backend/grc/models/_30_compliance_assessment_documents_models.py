@@ -69,6 +69,16 @@ class ComplianceAssessmentDocumentItem(Base):
     control_source = Column(String(50), nullable=True)   # 'dcc' for DCC-1:2022 controls
     control_type = Column(String(20), nullable=True)     # 'basic' or 'sub'
     subdomain_name = Column(Text, nullable=True)         # DCC subdomain label
+    # PDPL maturity score (0-5). Drives compliance_status (3-5 => compliant).
+    # NULL = not assessed yet. Editable per-control on the PDPL Assessment page.
+    maturity_score = Column(Integer, nullable=True)
+    # PDPL risk rating (free text: Low / Medium / High / Critical). Editable.
+    risk_rating = Column(String(50), nullable=True)
+    # Remediation Plan tracking — for gap items (e.g. PDPL controls scored < 3)
+    # surfaced on the Remediation Plan tab. NULL until the item becomes a gap;
+    # then tracked open -> in_progress -> closed independently of the
+    # control's assessed compliance_status.
+    remediation_status = Column(String(30), nullable=True)  # open, in_progress, closed
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

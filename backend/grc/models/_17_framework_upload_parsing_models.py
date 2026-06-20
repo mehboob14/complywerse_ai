@@ -94,7 +94,29 @@ class ParsedFrameworkControl(Base):
     
     is_mandatory = Column(Boolean, default=True)
     priority = Column(String(20), default="medium")  # high, medium, low
-    
+    # Native implementation-order priority preserved verbatim from frameworks
+    # that phase rollout by priority tier rather than severity (e.g. NDMO
+    # P1/P2/P3 → Year 1/2/3 of the 3-year compliance roadmap). NULL for
+    # frameworks that have no such tier. Distinct from `priority`, which is the
+    # generic high/medium/low severity bucket used across the platform.
+    priority_level = Column(String(10), nullable=True)  # e.g. P1, P2, P3
+    # Prerequisite controls this control depends on (e.g. NDMO control-level
+    # "Dependencies" — DG.2 depends on DG.1). List of original reference codes.
+    dependencies = Column(JSON, default=list)
+    # Per-control version history rows from frameworks that carry it (NDMO's
+    # "Version History" table — Date + Version). List of {date, version}.
+    version_history = Column(JSON, default=list)
+    # Control-level description (NDMO Figure-2 "Control Description"), distinct
+    # from each specification's own description. Denormalised onto every spec
+    # under the control so the flat model can render the boxed control card.
+    control_description = Column(Text, nullable=True)
+    # Assessment criteria — the numbered "…shall include, at minimum: 1… 2…"
+    # items parsed out of the specification's Control Specification text. These
+    # are the testable checklist a consultant verifies (NDMO binary per-spec
+    # scoring: all must be met for 100%). Empty list = single-statement spec
+    # (the requirement itself is the one binary check). List of strings.
+    assessment_criteria = Column(JSON, default=list)
+
     section_number = Column(String(50), nullable=True)
     parent_section = Column(String(255), nullable=True)
     

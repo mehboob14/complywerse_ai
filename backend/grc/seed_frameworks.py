@@ -2078,6 +2078,18 @@ def seed_framework_from_json(db, data: Dict[str, Any], tenant_id: int = None,
             category=_cap_control("category", 100),
             is_mandatory=control_data.get("is_mandatory", True),
             priority=_cap_control("priority", 20) or "medium",
+            # Native implementation-order tier (P1/P2/P3 for NDMO). Preserved
+            # verbatim — do NOT collapse into `priority`, which is severity.
+            priority_level=_cap_control("priority_level", 10),
+            # Control-level prerequisites (list of reference codes). Empty list
+            # when the source JSON declares none.
+            dependencies=control_data.get("dependencies", []),
+            # Per-control version-history rows (NDMO "Version History" table).
+            version_history=control_data.get("version_history", []),
+            # Control-level description (NDMO Figure-2 "Control Description").
+            control_description=control_data.get("control_description"),
+            # Assessment criteria (numbered sub-points of the spec).
+            assessment_criteria=control_data.get("assessment_criteria", []),
             section_number=_cap_control("section_number", 50),
             parent_section=_cap_control("parent_section", 255),
             ai_confidence=control_data.get("ai_confidence"),

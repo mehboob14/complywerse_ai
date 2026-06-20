@@ -21,8 +21,10 @@ import {
   LayoutDashboard,
   ClipboardCheck,
   Shield,
+  ShieldCheck,
 } from 'lucide-react';
 import NcaTab from '@/components/compliance/NcaTab';
+import PDPLAssessmentTab from '@/components/compliance/PDPLAssessmentTab';
 import { assetsApi } from '@/lib/api';
 import {
   ResponsiveContainer,
@@ -223,7 +225,7 @@ export default function AssessmentsPage() {
   const [assessmentToDelete, setAssessmentToDelete] = useState<Assessment | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [chartsReady, setChartsReady] = useState(false);
-  const [activeView, setActiveView] = useState<'overview' | 'assessment' | 'nca'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'assessment' | 'nca' | 'pdpl'>('overview');
 
   // NCA singleton container fetch — created lazily on first NCA tab visit
   const { data: ncaContainer } = useQuery<{ id: number; tenant_id: number }>({
@@ -323,8 +325,16 @@ export default function AssessmentsPage() {
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['compliance-assessments'] });
+      // PDPL uploads live only on the PDPL Assessment tab (hidden from the
+      // generic list). Refresh that tab's data and jump to it so the user
+      // sees their upload immediately instead of an apparently empty list.
+      const fmt = data?.assessment_format || data?.detected_format;
+      if (fmt === 'pdpl_assessment_toolkit') {
+        queryClient.invalidateQueries({ queryKey: ['pdpl-assessments'] });
+        setActiveView('pdpl');
+      }
       setIsUploadModalOpen(false);
       resetUploadForm();
     },
@@ -677,6 +687,7 @@ export default function AssessmentsPage() {
             { id: 'overview' as const, label: 'Overview', icon: LayoutDashboard },
             { id: 'assessment' as const, label: 'Assessment', icon: ClipboardCheck },
             { id: 'nca' as const, label: 'NCA', icon: Shield },
+            { id: 'pdpl' as const, label: 'PDPL Assessment', icon: ShieldCheck },
           ].map(({ id, label, icon: Icon }) => {
             const isActive = activeView === id;
             return (
@@ -763,6 +774,8 @@ export default function AssessmentsPage() {
           </div>
         )
       )}
+
+      {activeView === 'pdpl' && <PDPLAssessmentTab />}
 
       {activeView === 'overview' && (
         <>
@@ -995,7 +1008,7 @@ export default function AssessmentsPage() {
                     <FileText className="mx-auto mb-2 h-10 w-10 text-slate-300" />
                     <p className="text-sm text-slate-600">No assessments found.</p>
                     <p className="mt-1 text-xs text-slate-500">
-                      Upload Excel/CSV, CIS or Saudi NCA PDF, or UBL Audit Master Tracking workbook.
+                      Upload Excel/CSV, CIS or Saudi NCA PDF, UBL Audit Master Tracking, or Saudi PDPL Assessment Toolkit workbook.
                     </p>
                   </td>
                 </tr>
@@ -1121,7 +1134,7 @@ export default function AssessmentsPage() {
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Upload Assessment</h2>
-                <p className="text-xs text-slate-500">Excel/CSV/CIS or Saudi NCA PDF + UBL Audit Master Tracking supported</p>
+                <p className="text-xs text-slate-500">Excel/CSV/CIS or Saudi NCA PDF + UBL Audit Master Tracking + Saudi PDPL Toolkit supported</p>
               </div>
               <button
                 onClick={() => {
@@ -1265,7 +1278,7 @@ export default function AssessmentsPage() {
                       <>
                         <p className="text-sm text-slate-700">Click to upload file</p>
                         <p className="text-xs text-slate-500">
-                          Excel (.xlsx/.xls), CSV, CIS/Saudi NCA PDF, UBL Audit Master Tracking Sheet
+                          Excel (.xlsx/.xls), CSV, CIS/Saudi NCA PDF, UBL Audit Master Tracking Sheet, Saudi PDPL Assessment Toolkit
                         </p>
                       </>
                     )}
