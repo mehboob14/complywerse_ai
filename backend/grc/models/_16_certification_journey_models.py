@@ -72,6 +72,9 @@ class ControlImplementation(Base):
     assigned_to_user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     # Canonical multi-assignment: list of GRCUser ids.
     assigned_user_ids = Column(JSON, default=list)
+    # Per-criterion met/not-met state for this control's assessment criteria
+    # (the parsed spec sub-points). Keyed by criterion index: {"0": true, "1": false}.
+    criteria_status = Column(JSON, default=dict)
 
     journey = relationship("CertificationJourney", back_populates="control_implementations")
     framework_control = relationship("FrameworkControl")
@@ -79,6 +82,30 @@ class ControlImplementation(Base):
     verifier = relationship("GRCUser", foreign_keys=[verified_by])
     assignee = relationship("GRCUser", foreign_keys=[assigned_to_user_id])
     evidence_attachments = relationship("ImplementationEvidence", back_populates="implementation", cascade="all, delete-orphan")
+
+
+class ComplianceSnapshot(Base):
+    """Point-in-time compliance record for a journey (annual history).
+
+    Captures the computed compliance state (overall %, compliant/total, and the
+    per-tier + per-domain breakdown) so progress can be tracked year by year —
+    NDMO requires an annual compliance assessment, so each year's result is kept
+    as an immutable record.
+    """
+    __tablename__ = "grc_compliance_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    journey_id = Column(Integer, ForeignKey("grc_certification_journeys.id"), nullable=False, index=True)
+    tenant_id = Column(Integer, nullable=True, index=True)
+    year = Column(Integer, nullable=True)              # assessment year, e.g. 2026
+    label = Column(String(120), nullable=True)         # e.g. "2026 Annual Assessment"
+    captured_at = Column(DateTime, default=datetime.utcnow)
+    captured_by = Column(Integer, nullable=True)
+    overall_pct = Column(Integer, default=0)
+    compliant_count = Column(Integer, default=0)
+    total_count = Column(Integer, default=0)
+    breakdown = Column(JSON, default=dict)             # {tiers:{P1:{...}}, domains:[...]}
+    notes = Column(Text, nullable=True)
 
 
 class ImplementationEvidence(Base):

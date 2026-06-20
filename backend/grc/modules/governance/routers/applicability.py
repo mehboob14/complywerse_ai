@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -90,26 +91,37 @@ def set_clause_applicability(
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    
+
+    # Accept tenant-owned AND shared frameworks. NDMO is onboarded as a SHARED
+    # framework (tenant_id IS NULL), so a strict tenant filter would 404. For
+    # shared frameworks the applicability record + audit are written under the
+    # caller's own tenant (the framework's tenant_id is null).
     framework = db.query(UploadedFramework).filter(
         UploadedFramework.id == request.uploaded_framework_id,
-        UploadedFramework.tenant_id.in_(user_tenants)
+    ).filter(
+        or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.tenant_id.is_(None),
+            UploadedFramework.is_shared == True,
+        )
     ).first()
     if not framework:
         raise HTTPException(status_code=404, detail="Framework not found")
-    
+
+    record_tenant = framework.tenant_id if framework.tenant_id is not None else (user_tenants[0] if user_tenants else None)
+
     control = db.query(ParsedFrameworkControl).filter(
         ParsedFrameworkControl.id == request.control_id,
         ParsedFrameworkControl.uploaded_framework_id == request.uploaded_framework_id
     ).first()
     if not control:
         raise HTTPException(status_code=404, detail="Control not found in this framework")
-    
+
     justification = (request.justification or "").strip()
 
     existing = db.query(ClauseApplicability).filter(
         ClauseApplicability.control_id == request.control_id,
-        ClauseApplicability.tenant_id == framework.tenant_id
+        ClauseApplicability.tenant_id == record_tenant
     ).first()
 
     now = datetime.utcnow()
@@ -137,7 +149,7 @@ def set_clause_applicability(
         record = existing
     else:
         record = ClauseApplicability(
-            tenant_id=framework.tenant_id,
+            tenant_id=record_tenant,
             uploaded_framework_id=request.uploaded_framework_id,
             control_id=request.control_id,
             is_applicable=request.is_applicable,
@@ -154,7 +166,7 @@ def set_clause_applicability(
     # once a reviewer approves the decision via the /review endpoint.
 
     audit = AuditLog(
-        tenant_id=framework.tenant_id,
+        tenant_id=record_tenant,
         user_id=current_user.id,
         action="applicability_change",
         resource_type="clause_applicability",

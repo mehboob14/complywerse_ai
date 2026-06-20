@@ -21,7 +21,7 @@ from ..models import (
     Framework, FrameworkControl, FrameworkDomain, ControlObjective,
     FrameworkSubControl, Evidence, GRCUser, Tenant, CuratedEvidenceItem,
     CertificationPhase, UploadedFramework, ParsedFrameworkControl, get_db,
-    EvidenceAIAssessment, EvidenceControlMapping, ITAsset,
+    EvidenceAIAssessment, EvidenceControlMapping, ITAsset, ComplianceSnapshot,
     # v2 — Issue Management open-issues-per-control read-only signal.
     # Used to enrich /controls list with `open_issues_count`. Additive only.
     Issue, IssueControlLink,
@@ -850,7 +850,37 @@ def list_journey_controls(
                 key.append((1, 0, p.lower()))
         return key
     
-    implementations.sort(key=natural_sort_key)
+    # Order domains by the framework's published sequence (frameworks are
+    # seeded in document order, so the smallest control row-id within a domain
+    # reflects where that domain appears in the source document — e.g. NDMO:
+    # Data Governance, Data Catalog & Metadata, Data Quality, …). Within a
+    # domain the natural code sort still applies (DG.1.1 < DG.1.2 < DG.2.1).
+    def _impl_domain(impl):
+        p = impl.parsed_control
+        fc = impl.framework_control
+        if p:
+            return p.domain or ""
+        if fc and fc.objective and fc.objective.domain:
+            return fc.objective.domain.name or ""
+        return ""
+
+    def _impl_seed_id(impl):
+        p = impl.parsed_control
+        fc = impl.framework_control
+        if p:
+            return p.id
+        if fc:
+            return fc.id
+        return impl.id or 0
+
+    domain_rank: dict = {}
+    for impl in implementations:
+        dom = _impl_domain(impl)
+        sid = _impl_seed_id(impl)
+        if dom not in domain_rank or sid < domain_rank[dom]:
+            domain_rank[dom] = sid
+
+    implementations.sort(key=lambda impl: (domain_rank.get(_impl_domain(impl), 1_000_000_000), natural_sort_key(impl)))
     
     result = []
 
@@ -1124,6 +1154,14 @@ def list_journey_controls(
             "priority": impl.priority,
             "is_critical": bool(getattr(parsed_control, "is_critical", False)) if parsed_control else False,
             "criticality_reason": getattr(parsed_control, "criticality_reason", None) if parsed_control else None,
+            # NDMO native fields (Figure-2): surfaced in the control-detail modal.
+            "priority_level": getattr(parsed_control, "priority_level", None) if parsed_control else None,
+            "dependencies": (getattr(parsed_control, "dependencies", None) or []) if parsed_control else [],
+            "version_history": (getattr(parsed_control, "version_history", None) or []) if parsed_control else [],
+            "control_description": getattr(parsed_control, "control_description", None) if parsed_control else None,
+            # Assessment criteria (spec sub-points) + this control's per-criterion state.
+            "assessment_criteria": (getattr(parsed_control, "assessment_criteria", None) or []) if parsed_control else [],
+            "criteria_status": getattr(impl, "criteria_status", None) or {},
             "assigned_to_user_id": assigned_to_user_id,
             "assignee_name": assignee_name,
             "assignee_email": assignee_email,
@@ -1449,6 +1487,211 @@ def assign_control_implementation(
         "assignee_name": (resolved_users[0].display_name or resolved_users[0].username) if resolved_users else None,
         "assignee_email": resolved_users[0].email if resolved_users else None,
     }
+
+
+class _CriteriaStatusRequest(BaseModel):
+    # Map of criterion index (as string) -> met/not-met. Replaces stored state.
+    criteria_status: dict = {}
+
+
+@router.patch("/{journey_id}/controls/{control_id}/criteria")
+def update_control_criteria_status(
+    journey_id: int,
+    control_id: int,
+    payload: _CriteriaStatusRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Persist the per-criterion met/not-met checklist state for one control.
+
+    `criteria_status` is keyed by the assessment-criterion index ("0","1",…) of
+    the parsed specification sub-points, e.g. {"0": true, "2": true}.
+    """
+    journey = get_journey_or_404(journey_id, current_user, db)
+    implementation = db.query(ControlImplementation).filter(
+        ControlImplementation.id == control_id,
+        ControlImplementation.journey_id == journey_id,
+    ).first()
+    if not implementation:
+        raise HTTPException(status_code=404, detail="Control implementation not found")
+    cs = {str(k): bool(v) for k, v in (payload.criteria_status or {}).items()}
+    implementation.criteria_status = cs
+    flag_modified(implementation, "criteria_status")
+
+    # Keep the control's status in sync with its criteria score so every
+    # roll-up that counts by status (the "your assessment" header, the
+    # progress dots, the dashboard) agrees with the criteria checklist:
+    #   all criteria met  -> implemented (counts as Compliant)
+    #   some met          -> in_progress (counts as In Review)
+    #   none met          -> not_started (To Start)
+    # Only applied when the spec actually has a criteria checklist; specs
+    # without criteria keep their manually-set status untouched.
+    p = implementation.parsed_control
+    crits = (getattr(p, "assessment_criteria", None) or []) if p else []
+    if crits:
+        met = sum(1 for i in range(len(crits)) if cs.get(str(i)))
+        if met >= len(crits):
+            implementation.status = "implemented"
+            if implementation.implementation_date is None:
+                implementation.implementation_date = datetime.utcnow()
+        elif met > 0:
+            implementation.status = "in_progress"
+        else:
+            implementation.status = "not_started"
+
+    db.commit()
+    return {
+        "control_id": control_id,
+        "journey_id": journey_id,
+        "criteria_status": cs,
+        "status": implementation.status,
+    }
+
+
+# ── Compliance history (annual snapshots) ──────────────────────────────────
+
+def _ensure_snapshot_table(db: Session) -> None:
+    """Create the snapshots table on this tenant DB if it doesn't exist yet."""
+    try:
+        bind = db.get_bind()
+        engine = getattr(bind, "engine", bind)
+        ComplianceSnapshot.__table__.create(engine, checkfirst=True)
+    except Exception:
+        logger.exception("Failed to ensure grc_compliance_snapshots table")
+
+
+def _spec_pct(impl: ControlImplementation) -> int:
+    """Per-spec score: criteria met ÷ total; else derived from status (binary)."""
+    p = impl.parsed_control
+    crits = (getattr(p, "assessment_criteria", None) or []) if p else []
+    cs = impl.criteria_status or {}
+    if crits:
+        met = sum(1 for i in range(len(crits)) if cs.get(str(i)))
+        return round(met / len(crits) * 100)
+    if impl.status in ("implemented", "verified"):
+        return 100
+    if impl.status == "in_progress":
+        return 50
+    return 0
+
+
+def _compute_journey_snapshot(journey_id: int, db: Session) -> dict:
+    impls = db.query(ControlImplementation).options(
+        joinedload(ControlImplementation.parsed_control)
+    ).filter(ControlImplementation.journey_id == journey_id).all()
+    TK = ("P1", "P2", "P3")
+    rows = []  # (pl, domain, pct)
+    for impl in impls:
+        p = impl.parsed_control
+        pl = getattr(p, "priority_level", None) if p else None
+        if pl not in TK or impl.is_applicable is False:
+            continue
+        rows.append((pl, (p.domain if p else "Other"), _spec_pct(impl)))
+    total = len(rows)
+    pcts = [r[2] for r in rows]
+    overall = round(sum(pcts) / total) if total else 0
+    compliant = sum(1 for x in pcts if x == 100)
+    tiers = {}
+    for pl in TK:
+        tp = [r[2] for r in rows if r[0] == pl]
+        tiers[pl] = {
+            "total": len(tp),
+            "compliant": sum(1 for x in tp if x == 100),
+            "avg": round(sum(tp) / len(tp)) if tp else 0,
+        }
+    dmap: dict = {}
+    dorder: list = []
+    for pl, dom, sc in rows:
+        if dom not in dmap:
+            dmap[dom] = {"total": 0, "sum": 0, "compliant": 0}
+            dorder.append(dom)
+        e = dmap[dom]
+        e["total"] += 1; e["sum"] += sc
+        if sc == 100:
+            e["compliant"] += 1
+    domains = [{
+        "domain": d, "total": dmap[d]["total"], "compliant": dmap[d]["compliant"],
+        "avg": round(dmap[d]["sum"] / dmap[d]["total"]) if dmap[d]["total"] else 0,
+    } for d in dorder]
+    return {"overall": overall, "compliant": compliant, "total": total,
+            "tiers": tiers, "domains": domains}
+
+
+def _snapshot_out(s: ComplianceSnapshot) -> dict:
+    return {
+        "id": s.id, "journey_id": s.journey_id, "year": s.year, "label": s.label,
+        "captured_at": s.captured_at.isoformat() if s.captured_at else None,
+        "captured_by": s.captured_by, "overall_pct": s.overall_pct,
+        "compliant_count": s.compliant_count, "total_count": s.total_count,
+        "breakdown": s.breakdown or {}, "notes": s.notes,
+    }
+
+
+class _SnapshotRequest(BaseModel):
+    year: Optional[int] = None
+    label: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.post("/{journey_id}/snapshots")
+def create_snapshot(
+    journey_id: int,
+    payload: _SnapshotRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Capture the current compliance state as an immutable historical record."""
+    journey = get_journey_or_404(journey_id, current_user, db)
+    _ensure_snapshot_table(db)
+    data = _compute_journey_snapshot(journey_id, db)
+    from datetime import datetime as _dt
+    snap = ComplianceSnapshot(
+        journey_id=journey_id, tenant_id=journey.tenant_id,
+        year=payload.year, label=payload.label, captured_by=current_user.id,
+        overall_pct=data["overall"], compliant_count=data["compliant"],
+        total_count=data["total"],
+        breakdown={"tiers": data["tiers"], "domains": data["domains"]},
+        notes=payload.notes,
+    )
+    db.add(snap)
+    db.commit()
+    db.refresh(snap)
+    return _snapshot_out(snap)
+
+
+@router.get("/{journey_id}/snapshots")
+def list_snapshots(
+    journey_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """List the journey's compliance history (most recent first)."""
+    journey = get_journey_or_404(journey_id, current_user, db)
+    _ensure_snapshot_table(db)
+    snaps = db.query(ComplianceSnapshot).filter(
+        ComplianceSnapshot.journey_id == journey_id
+    ).order_by(ComplianceSnapshot.captured_at.desc()).all()
+    return [_snapshot_out(s) for s in snaps]
+
+
+@router.delete("/{journey_id}/snapshots/{snapshot_id}")
+def delete_snapshot(
+    journey_id: int,
+    snapshot_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    journey = get_journey_or_404(journey_id, current_user, db)
+    _ensure_snapshot_table(db)
+    snap = db.query(ComplianceSnapshot).filter(
+        ComplianceSnapshot.id == snapshot_id,
+        ComplianceSnapshot.journey_id == journey_id,
+    ).first()
+    if not snap:
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    db.delete(snap)
+    db.commit()
+    return {"deleted": snapshot_id}
 
 
 @router.get("/meta/tenant-users")
