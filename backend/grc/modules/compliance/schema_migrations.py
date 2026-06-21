@@ -224,6 +224,12 @@ _COLUMN_ADDS = [
     # Normalization sessions: each grouping/normalization run is isolated so the
     # owner's baseline and a user's custom run coexist. run_id tags each row.
     ("grc_normalized_controls", "run_id", "INTEGER", "ix_normalized_control_run"),
+    # Human-review of the AI-built unified control (Control Library review page):
+    # review_status = pending | approved | flagged, plus reviewer audit columns.
+    ("grc_normalized_controls", "review_status", "VARCHAR(20) DEFAULT 'pending'",
+     "ix_normalized_control_review_status"),
+    ("grc_normalized_controls", "reviewed_by", "INTEGER", None),
+    ("grc_normalized_controls", "reviewed_at", "TIMESTAMP", None),
     ("grc_common_control_groups", "run_id", "INTEGER", "ix_common_group_run"),
     # NCA risk register: platform-aware ownership + asset linking
     ("grc_nca_risk_entries", "risk_owner_user_id", "INTEGER", None),

@@ -32,6 +32,92 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-06-22 — PDPL/NDMO assessment + Control Library normalization merge (NEW TABLES + columns, auto-applied)
+
+### What
+
+Merge of `feat/pdpl-ndmo-assessment` (control library normalization pipeline,
+NDMO native control tree, PDPL/NDMO assessment toolkit). DB surface:
+
+**New tables** — auto-created on existing tenant DBs by
+`Base.metadata.create_all(checkfirst=True)` inside `ensure_compliance_columns()`:
+
+  * `grc_normalization_runs` — one grouping/normalization session (owner baseline
+    vs. per-user custom runs). Model `NormalizationRun`
+    ([`_08_normalized_control_model.py`](backend/grc/models/_08_normalized_control_model.py)).
+  * `grc_normalized_control_links` — NormalizedControl ↔ parsed/framework-control
+    membership ("comply once → comply everywhere"). Model `NormalizedControlLink`.
+  * `grc_compliance_snapshots` — point-in-time journey compliance snapshot
+    (year/label/overall_pct/breakdown). Model `ComplianceSnapshot`
+    ([`_16_certification_journey_models.py`](backend/grc/models/_16_certification_journey_models.py)).
+
+**New columns on existing tables** — added by `schema_migrations._COLUMN_ADDS`
+(idempotent `ALTER TABLE ... ADD COLUMN`):
+
+  * `grc_normalized_controls`: `run_id`, `domain`, `source`, `common_group_id`,
+    `recommended_evidence`, **`review_status`**, **`reviewed_by`**,
+    **`reviewed_at`**.
+  * `grc_common_control_groups`: `run_id`.
+  * `grc_parsed_framework_controls`: `priority_level`, `dependencies`,
+    `version_history`, `control_description`, `assessment_criteria`.
+  * `grc_control_implementations`: `criteria_status`.
+  * `grc_compliance_assessment_document_items`: `maturity_score`, `risk_rating`,
+    `remediation_status`.
+
+### Why
+
+Control Library normalization (per-domain unified controls, isolated runs,
+human review), the NDMO native control tree (priority tiers, dependencies,
+version history, assessment criteria), and the PDPL assessment workflow
+(maturity score, risk rating, remediation tracking) all read these
+columns/tables; without them the corresponding pages 500.
+
+**Gap closed in this session:** the merge added `review_status`,
+`reviewed_by`, `reviewed_at` to the `NormalizedControl` model but the branch
+only registered 5 of the 8 new `grc_normalized_controls` columns in
+`_COLUMN_ADDS`. On an existing tenant DB the Control Library **review** page
+would have crashed with `column ... does not exist`. The three missing entries
+are now added so the startup self-heal covers them.
+
+### How (Ubuntu)
+
+```
+git pull        # ships models + schema_migrations
+# restart the backend service — ensure_compliance_columns() runs on startup
+sudo systemctl restart <grc-backend-service>
+```
+
+Nothing manual: every column above is applied per-tenant by
+`ensure_compliance_columns()` on boot, and as a request-time backstop by
+`_ensure_for_engine()`. New tables are created the same pass.
+
+Optional data (only if you want NDMO/PDPL seed content populated; **not**
+required for schema):
+
+```
+cd backend
+python -m grc.seed_frameworks            # NDMO + PDPL framework defs (idempotent)
+python seed_normalization_baseline.py    # owner baseline normalization run
+python _reseed_ndmo.py                   # NDMO control tree re-seed
+python _seed_ndmo_artifact_catalog.py    # NDMO artifact catalog
+# _backfill_*.py — one-time backfills for pre-existing NDMO rows only
+```
+
+### Risk
+
+Low. All column adds are nullable (or have a safe default) and idempotent —
+re-running skips columns that already exist. New tables are `create_all`
+no-ops once present. Existing rows are untouched (defaults/NULL preserve
+current behavior until a writer populates them).
+
+### Auto-applied?
+
+**Yes** — schema (tables + columns) on next backend restart via
+`ensure_compliance_columns()`. Seed/backfill scripts above are optional and
+manual.
+
+---
+
 ## 2026-06-19 — Asset OS normalization on ingest + benchmark-OS mapping seed (DATA + code-only, manual script)
 
 ### What
