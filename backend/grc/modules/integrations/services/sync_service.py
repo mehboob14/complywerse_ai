@@ -58,6 +58,20 @@ class SyncService:
             f"Critical: {critical}, High: {severe}, Medium: {transformed.get('moderate_vulns', 0) or 0}",
         ]
 
+        # Normalise the scanner's raw OS string (e.g. "Microsoft Windows
+        # Server 2019") into the canonical os_normalized key the CIS rule
+        # matcher expects. Previously this string was captured by the
+        # transformer but dropped here, leaving scanner assets with
+        # os_normalized=NULL and invisible to every OS-specific benchmark.
+        raw_os = transformed.get("operating_system") or ""
+        os_family = os_normalized = os_build = os_edition = None
+        if raw_os:
+            try:
+                from grc.modules.compliance_plugins.services.os_detector import normalize_os_string
+                os_family, os_normalized, os_build, os_edition = normalize_os_string(raw_os)
+            except Exception:  # noqa: BLE001 — normalisation must never break a sync
+                logger.exception("normalize_os_string failed for %r", raw_os)
+
         return {
             "name": transformed.get("name") or transformed.get("host_name") or transformed.get("ip_address") or "Scanner Asset",
             "asset_type": "infrastructure",
@@ -68,6 +82,11 @@ class SyncService:
             "description": "\n".join(lines),
             "vendor": transformed.get("scanner_source") or None,
             "location": transformed.get("nexpose_site") or None,
+            "os_family": os_family,
+            "os_version": raw_os or None,
+            "os_normalized": os_normalized,
+            "os_build": os_build,
+            "os_edition": os_edition,
         }
 
     @staticmethod

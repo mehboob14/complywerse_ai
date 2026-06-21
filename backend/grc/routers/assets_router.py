@@ -385,6 +385,27 @@ def create_asset(
                 detail="criticality_override_reason is required when overriding the derived criticality",
             )
 
+    # Derive a canonical os_normalized key from whatever OS text the
+    # operator supplied (os_version / os_family), so a manually-added asset
+    # resolves to a CIS benchmark just like scanner/wizard assets — instead
+    # of landing with a vague family or NULL key. An explicit os_normalized
+    # from the caller always wins.
+    _os_family = getattr(asset, "os_family", None)
+    _os_version = getattr(asset, "os_version", None)
+    _os_normalized = getattr(asset, "os_normalized", None)
+    _os_build = getattr(asset, "os_build", None)
+    _os_edition = getattr(asset, "os_edition", None)
+    if not _os_normalized and (_os_version or _os_family):
+        try:
+            from ..modules.compliance_plugins.services.os_detector import normalize_os_string
+            _fam, _norm, _build, _edition = normalize_os_string(_os_version or _os_family)
+            _os_normalized = _norm or _os_family
+            _os_family = _os_family or _fam
+            _os_build = _os_build or _build
+            _os_edition = _os_edition or _edition
+        except Exception:  # noqa: BLE001 — never block asset creation
+            _os_normalized = _os_normalized or _os_family
+
     db_asset = ITAsset(
         tenant_id=tenant_id,
         name=asset.name,
@@ -428,11 +449,11 @@ def create_asset(
         # CIS Compliance tab — operator-supplied OS profile so the strict
         # matcher resolves a benchmark immediately without needing a
         # Connect Wizard handshake first.
-        os_family=getattr(asset, "os_family", None),
-        os_version=getattr(asset, "os_version", None),
-        os_normalized=getattr(asset, "os_normalized", None) or getattr(asset, "os_family", None),
-        os_build=getattr(asset, "os_build", None),
-        os_edition=getattr(asset, "os_edition", None),
+        os_family=_os_family,
+        os_version=_os_version,
+        os_normalized=_os_normalized,
+        os_build=_os_build,
+        os_edition=_os_edition,
     )
 
     # Auto-resolve owner_name from owner_id if not provided
@@ -611,6 +632,8 @@ ASSET_TEMPLATE_COLUMNS = [
     ("ip_address",             "IP Address", "10.20.30.40"),
     ("vendor",                 "Vendor", "SAP"),
     ("location",               "Location", "Primary Data Center"),
+    # ── OS (drives CIS rule matching) ───────────────────────────────
+    ("operating_system",       "Operating System (e.g. 'Microsoft Windows Server 2019', 'Ubuntu 22.04', 'VMware ESXi 7.0') — used to match CIS benchmark rules", "Microsoft Windows Server 2019"),
     # ── CIA ratings (drive criticality) ─────────────────────────────
     ("confidentiality_rating", "Confidentiality Rating (1-5)", "4"),
     ("integrity_rating",       "Integrity Rating (1-5)", "5"),
@@ -743,6 +766,10 @@ async def upload_assets_file(
     valid_lifecycle = ["planned", "active", "maintenance", "decommissioned", "retired"]
 
     from ..services.asset_criticality import recompute_for_asset, is_valid_bucket
+    try:
+        from ..modules.compliance_plugins.services.os_detector import normalize_os_string
+    except Exception:  # noqa: BLE001
+        normalize_os_string = None  # type: ignore
 
     imported = []
     errors = []
@@ -853,6 +880,16 @@ async def upload_assets_file(
             })
             continue
 
+        # Normalise the free-form OS string into a canonical key so imported
+        # assets match CIS benchmarks (instead of landing with NULL OS).
+        os_raw = parse_str(row.get("operating_system"))
+        os_family = os_normalized = os_build = os_edition = None
+        if os_raw and normalize_os_string is not None:
+            try:
+                os_family, os_normalized, os_build, os_edition = normalize_os_string(os_raw)
+            except Exception:  # noqa: BLE001
+                pass
+
         try:
             asset = ITAsset(
                 tenant_id=tenant_id,
@@ -863,6 +900,11 @@ async def upload_assets_file(
                 ip_address=parse_str(row.get("ip_address")),
                 vendor=parse_str(row.get("vendor")),
                 location=parse_str(row.get("location")),
+                os_family=os_family,
+                os_version=os_raw,
+                os_normalized=os_normalized,
+                os_build=os_build,
+                os_edition=os_edition,
                 owner_name=parse_str(row.get("owner_name")),
                 owning_team=parse_str(row.get("owning_team")),
                 # CIA — drive the derived criticality.

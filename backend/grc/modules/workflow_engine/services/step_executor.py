@@ -1294,50 +1294,73 @@ class StepExecutor:
     def _execute_escalation_node(self, db, instance, definition, step: WorkflowEngineStep, config: Dict[str, Any]) -> Dict[str, Any]:
         """Multi-level escalation node.
 
-        Walks an ordered list of ``escalation_levels``. Each level notifies its
-        users + roles (in-app + email), then — if a further level exists —
-        waits the level's configured duration (``wait_days`` + ``wait_hours``)
-        before escalating to the next level. Progress is persisted on
-        ``step.output_payload`` so the node resumes at the right level when the
-        timer fires (the same waiting_timer/next_run_at mechanism the timer
-        node uses).
-
-        Per-level escalation rule (``escalation_mode``):
-          • always                — escalate to the next level after the wait.
-          • if_unresolved_timeout — escalate next only if the item is still
-                                    unresolved when the wait elapses.
-          • on_condition          — escalate next only if ``escalation_condition``
+        Each level fires after its OWN configured delay — "Escalate after"
+        (``wait_days`` + ``wait_hours``), measured from when the previous level
+        fired (for Level 1, from when the workflow reaches this node; 0 =
+        immediately). When a level's delay elapses, its rule is evaluated and,
+        if it passes, the level notifies its users + roles (in-app + email):
+          • always                — fire after the delay.
+          • if_unresolved_timeout — fire only if the item is still unresolved
+                                    when the delay elapses (the SLA case).
+          • on_condition          — fire only if ``escalation_condition``
                                     ({path, operator, value}) evaluates true.
+
+        Progress (``escalation_sent_levels``) AND which level's pre-delay has
+        already elapsed (``escalation_awaited_level``) are persisted on
+        ``step.output_payload`` so the node resumes correctly via the
+        waiting_timer/next_run_at mechanism the timer node uses.
         """
         levels = self._parse_escalation_levels(config)
         total = len(levels)
 
         prev_output = step.output_payload if isinstance(step.output_payload, dict) else {}
         sent = int(prev_output.get("escalation_sent_levels") or 0)
+        awaited = int(prev_output.get("escalation_awaited_level", -1))
         history = list(prev_output.get("escalation_history") or [])
 
         ctx = _build_template_context(db, instance, definition)
 
         while sent < total:
-            # Gate the transition INTO this level using the PREVIOUS level's rule
-            # (the first level always fires immediately when the node is reached).
-            if sent > 0:
-                gate = levels[sent - 1]
-                mode = str(gate.get("escalation_mode") or "always").strip().lower()
-                if mode == "if_unresolved_timeout" and self._escalation_resolved(instance):
-                    return self._finish_escalation(
-                        db, instance, definition, step, sent, history,
-                        stopped_reason="resolved_before_next_level",
-                    )
-                if mode == "on_condition" and not self._escalation_condition_met(
-                    instance, step, gate.get("escalation_condition") or {}
-                ):
-                    return self._finish_escalation(
-                        db, instance, definition, step, sent, history,
-                        stopped_reason="condition_not_met",
-                    )
-
             level = levels[sent]
+
+            # 1) Wait this level's "Escalate after" delay before it fires. The
+            #    delay is measured from the previous level (node entry for L1).
+            delay = self._escalation_wait_seconds(level)
+            if delay > 0 and awaited != sent:
+                run_at = datetime.utcnow() + timedelta(seconds=delay)
+                logger.info(
+                    "workflow.step.escalation.waiting instance_id=%s step_id=%s "
+                    "level=%s fire_at=%s",
+                    instance.id, step.id, sent + 1, run_at.isoformat(),
+                )
+                return {
+                    "status": "waiting_timer",
+                    "next_run_at": run_at,
+                    "output": {
+                        "escalated": sent > 0,
+                        "escalation_sent_levels": sent,
+                        "escalation_awaited_level": sent,  # this level's wait is now in flight
+                        "escalation_history": history,
+                        "pending_level": sent + 1,
+                        "next_escalation_at": run_at.isoformat(),
+                    },
+                }
+
+            # 2) Delay elapsed (or zero) — evaluate this level's rule, then fire.
+            mode = str(level.get("escalation_mode") or "always").strip().lower()
+            if mode == "if_unresolved_timeout" and self._escalation_resolved(instance):
+                return self._finish_escalation(
+                    db, instance, definition, step, sent, history,
+                    stopped_reason="resolved",
+                )
+            if mode == "on_condition" and not self._escalation_condition_met(
+                instance, step, level.get("escalation_condition") or {}
+            ):
+                return self._finish_escalation(
+                    db, instance, definition, step, sent, history,
+                    stopped_reason="condition_not_met",
+                )
+
             recipients = self._send_escalation_level(
                 db, instance, definition, step, level, ctx, sent + 1, total,
             )
@@ -1347,29 +1370,8 @@ class StepExecutor:
                 "at": datetime.utcnow().isoformat(),
             })
             sent += 1
-
-            if sent < total:
-                wait_seconds = self._escalation_wait_seconds(levels[sent - 1])
-                if wait_seconds > 0:
-                    run_at = datetime.utcnow() + timedelta(seconds=wait_seconds)
-                    logger.info(
-                        "workflow.step.escalation.waiting instance_id=%s step_id=%s "
-                        "sent_levels=%s next_level=%s resume_at=%s",
-                        instance.id, step.id, sent, sent + 1, run_at.isoformat(),
-                    )
-                    return {
-                        "status": "waiting_timer",
-                        "next_run_at": run_at,
-                        "output": {
-                            "escalated": True,
-                            "escalation_sent_levels": sent,
-                            "escalation_history": history,
-                            "current_level": sent,
-                            "next_level": sent + 1,
-                            "next_escalation_at": run_at.isoformat(),
-                        },
-                    }
-                # wait_seconds <= 0 → escalate to the next level immediately.
+            # awaited stays at the just-fired index; the next loop iteration has
+            # sent > awaited, so the next level's delay is honoured.
 
         return self._finish_escalation(
             db, instance, definition, step, sent, history, all_levels=True,
