@@ -6,7 +6,7 @@ import logging
 import threading
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, func, distinct
 from pydantic import BaseModel
@@ -18,9 +18,11 @@ _jobs_logger = logging.getLogger(__name__)
 
 from ....models import (
     CommonControlGroup, CommonControlGroupMapping, NormalizedControl,
+    NormalizedControlLink, Evidence, EvidenceControlMapping, AIEvidenceRecommendation,
     FrameworkControl, FrameworkDomain, ControlObjective, Framework,
-    GRCUser, get_db, ParsedFrameworkControl, UploadedFramework
+    GRCUser, get_db, ParsedFrameworkControl, UploadedFramework, NormalizationRun
 )
+from ....config import get_openai_model
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/groups", tags=["Control Library - Groups"])
@@ -91,10 +93,19 @@ def get_openai_client() -> OpenAI:
     if not check_ai_available():
         raise_ai_unavailable(fallback_available=False)
     api_key = get_openai_api_key()
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    # Coerce an empty-string base URL to None so the SDK uses its default
+    # (https://api.openai.com/v1). A literal "" makes the client connect to an
+    # empty URL and fail with APIConnectionError.
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL") or None
+    # A per-request timeout is ESSENTIAL: without it a single stalled request
+    # blocks the (solo-pool) worker indefinitely, freezing auto-group /
+    # normalization mid-run (the classic "stuck at 85%"). max_retries lets the
+    # SDK transparently retry transient errors / rate limits with backoff.
     return OpenAI(
         api_key=api_key,
-        base_url=base_url
+        base_url=base_url,
+        timeout=90.0,
+        max_retries=2,
     )
 
 
@@ -354,7 +365,11 @@ def _merge_ai_groups(group_batches: List[List[dict]]) -> List[dict]:
     return list(merged.values())
 
 
-def ai_auto_group_controls(controls_list: List[dict]) -> List[dict]:
+class AutoGroupCancelled(Exception):
+    """Raised from a progress callback when the operator cancels the job mid-run."""
+
+
+def ai_auto_group_controls(controls_list: List[dict], progress_cb=None) -> List[dict]:
     """Group an arbitrarily large list of controls via OpenAI.
 
     Honors every control passed in (no silent truncation). Interleaves
@@ -362,6 +377,10 @@ def ai_auto_group_controls(controls_list: List[dict]) -> List[dict]:
     cross-framework variety; passes existing themes from earlier batches
     into later ones so the model reuses names verbatim; merges by canonical
     name so identical themes consolidate.
+
+    ``progress_cb(done_batches, total_batches)`` — optional. Called after each
+    batch so the caller can report granular progress AND abort: raising
+    ``AutoGroupCancelled`` from it stops the run cleanly between batches.
     """
     if not controls_list:
         return []
@@ -375,7 +394,10 @@ def ai_auto_group_controls(controls_list: List[dict]) -> List[dict]:
                 "(typically 4-15 groups; aim for ~8-15 controls per group). "
                 "Each group should mix controls from every framework that has matching content."
             )
-            return _ai_group_single_batch(client, controls_list, target_hint)
+            result = _ai_group_single_batch(client, controls_list, target_hint)
+            if progress_cb:
+                progress_cb(1, 1)
+            return result
 
         # Round-robin interleave by framework so each batch contains controls
         # from every selected framework (the original bug was sequential
@@ -395,7 +417,7 @@ def ai_auto_group_controls(controls_list: List[dict]) -> List[dict]:
         batch_results: List[List[dict]] = []
         existing_theme_names: List[str] = []
         seen_theme_keys: set = set()
-        for batch in batches:
+        for _bi, batch in enumerate(batches):
             # Pass canonical theme names from earlier batches so the model
             # reuses them verbatim instead of inventing near-duplicates that
             # the merger then has to chase down.
@@ -409,7 +431,13 @@ def ai_auto_group_controls(controls_list: List[dict]) -> List[dict]:
                 if nm and key and key not in seen_theme_keys:
                     existing_theme_names.append(nm)
                     seen_theme_keys.add(key)
+            # Report progress + honour a cancel request between batches. Raising
+            # AutoGroupCancelled from the callback breaks out cleanly here.
+            if progress_cb:
+                progress_cb(_bi + 1, len(batches))
         return _merge_ai_groups(batch_results)
+    except AutoGroupCancelled:
+        raise
     except HTTPException:
         raise
     except Exception as e:
@@ -507,8 +535,144 @@ def _coerce_int(val: Any) -> Optional[int]:
         return None
 
 
+@router.get("/sessions")
+def list_normalization_sessions(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """List normalization SESSIONS (runs) — the owner's baseline plus each custom
+    framework-selected run — newest first, so the UI can switch between them."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    runs = (db.query(NormalizationRun)
+            .filter(NormalizationRun.tenant_id == tenant_id)
+            .order_by(NormalizationRun.is_baseline.desc(), NormalizationRun.id.desc())
+            .all())
+    out = []
+    for r in runs:
+        nc = db.query(NormalizedControl).filter(
+            NormalizedControl.source == "ai_normalized", NormalizedControl.run_id == r.id).count()
+        gn = db.query(CommonControlGroup).filter(CommonControlGroup.run_id == r.id).count()
+        out.append({
+            "id": r.id, "label": r.label, "scope": r.scope,
+            "framework_ids": r.framework_ids, "status": r.status,
+            "is_baseline": r.is_baseline,
+            "started_at": r.started_at.isoformat() if r.started_at else None,
+            "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+            "domains": gn, "unified_controls": nc, "summary": r.summary,
+        })
+    return {"sessions": out}
+
+
+# ── Master-list human review — drive the unified library toward 100% correct ──
+class RemoveMemberRequest(BaseModel):
+    parsed_control_id: int
+
+
+@router.get("/review/queue")
+def review_queue(
+    review_status: Optional[str] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Unified controls of the master baseline with their framework members, so an
+    admin can APPROVE correct ones or REMOVE a wrong member. Pending first."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    from ..services.scoped_session import get_baseline_run
+    base = get_baseline_run(db, tenant_id)
+    if not base:
+        return {"items": [], "total": 0, "counts": {}}
+    q = db.query(NormalizedControl).filter(NormalizedControl.run_id == base.id)
+    if review_status:
+        q = q.filter(NormalizedControl.review_status == review_status)
+    total = q.count()
+    counts: Dict[str, int] = {}
+    for st, cnt in (db.query(NormalizedControl.review_status, func.count())
+                    .filter(NormalizedControl.run_id == base.id)
+                    .group_by(NormalizedControl.review_status).all()):
+        counts[st or "pending"] = cnt
+    ncs = (q.order_by(func.coalesce(NormalizedControl.review_status, "pending") == "approved",
+                      NormalizedControl.code)
+           .offset(skip).limit(limit).all())
+    fw_name = {f.id: f.name for f in db.query(UploadedFramework).all()}
+    items = []
+    for nc in ncs:
+        members = []
+        for ln in db.query(NormalizedControlLink).filter(
+                NormalizedControlLink.normalized_control_id == nc.id).all():
+            p = db.query(ParsedFrameworkControl).filter(
+                ParsedFrameworkControl.id == ln.parsed_control_id).first()
+            if p:
+                members.append({
+                    "parsed_control_id": p.id,
+                    "framework": fw_name.get(p.uploaded_framework_id, ""),
+                    "code": p.original_reference or p.control_id or "",
+                    "title": p.title or "",
+                    "text": (p.description or p.full_text or "")[:240],
+                })
+        items.append({
+            "id": nc.id, "code": nc.code, "name": nc.name,
+            "review_status": nc.review_status or "pending",
+            "framework_count": len({m["framework"] for m in members}),
+            "member_count": len(members), "members": members,
+        })
+    return {"items": items, "total": total, "counts": counts}
+
+
+def _set_review(db, current_user, nc_id, status_value):
+    nc = db.query(NormalizedControl).filter(NormalizedControl.id == nc_id).first()
+    if not nc:
+        raise HTTPException(status_code=404, detail="Unified control not found")
+    nc.review_status = status_value
+    nc.reviewed_by = current_user.id
+    nc.reviewed_at = datetime.utcnow()
+    db.commit()
+    return {"id": nc.id, "review_status": nc.review_status}
+
+
+@router.post("/review/{nc_id}/approve")
+def review_approve(nc_id: int, db: Session = Depends(get_db),
+                   current_user: GRCUser = Depends(require_auth)):
+    return _set_review(db, current_user, nc_id, "approved")
+
+
+@router.post("/review/{nc_id}/flag")
+def review_flag(nc_id: int, db: Session = Depends(get_db),
+                current_user: GRCUser = Depends(require_auth)):
+    return _set_review(db, current_user, nc_id, "flagged")
+
+
+@router.post("/review/{nc_id}/remove-member")
+def review_remove_member(nc_id: int, body: RemoveMemberRequest,
+                         db: Session = Depends(get_db),
+                         current_user: GRCUser = Depends(require_auth)):
+    """Remove a wrong framework control from a unified control — drops the link
+    AND the page's group mapping, keeping the master list correct by hand."""
+    nc = db.query(NormalizedControl).filter(NormalizedControl.id == nc_id).first()
+    if not nc:
+        raise HTTPException(status_code=404, detail="Unified control not found")
+    db.query(NormalizedControlLink).filter(
+        NormalizedControlLink.normalized_control_id == nc_id,
+        NormalizedControlLink.parsed_control_id == body.parsed_control_id,
+    ).delete(synchronize_session=False)
+    grp = db.query(CommonControlGroup).filter(
+        CommonControlGroup.run_id == nc.run_id,
+        CommonControlGroup.name == nc.name).first()
+    if grp:
+        db.query(CommonControlGroupMapping).filter(
+            CommonControlGroupMapping.group_id == grp.id,
+            CommonControlGroupMapping.parsed_control_id == body.parsed_control_id,
+        ).delete(synchronize_session=False)
+    db.commit()
+    remaining = db.query(NormalizedControlLink).filter(
+        NormalizedControlLink.normalized_control_id == nc_id).count()
+    return {"id": nc_id, "removed": body.parsed_control_id, "remaining_members": remaining}
+
+
 def persist_ai_groups(
-    db: Session, tenant_id: int, user_id: Optional[int], ai_groups: List[dict]
+    db: Session, tenant_id: int, user_id: Optional[int], ai_groups: List[dict],
+    run_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Take the raw AI-suggested groups and persist them as `CommonControlGroup`
     + `CommonControlGroupMapping` rows. Idempotent on (tenant, group name) and
@@ -518,6 +682,14 @@ def persist_ai_groups(
     created_groups: List[CommonControlGroup] = []
     merged_groups: List[CommonControlGroup] = []
     mapping_count = 0
+
+    # Track every code already taken (in the DB AND created earlier in THIS run)
+    # so generated codes are guaranteed unique — the AI often reuses the same
+    # short code (e.g. "CCG-008") for several groups, which used to collide.
+    used_codes: set = {
+        c for (c,) in db.query(CommonControlGroup.code).filter(
+            CommonControlGroup.tenant_id == tenant_id).all() if c
+    }
 
     for group_data in ai_groups:
         group_name = (group_data.get("name") or "").strip() or "Auto-generated Group"
@@ -531,16 +703,17 @@ def persist_ai_groups(
             group = existing_by_name
             merged_groups.append(group)
         else:
-            code = (group_data.get("code") or f"CCG-{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}").strip()
-            existing_code = db.query(CommonControlGroup).filter(
-                CommonControlGroup.tenant_id == tenant_id,
-                CommonControlGroup.code == code
-            ).first()
-            if existing_code:
-                code = f"{code}-{datetime.utcnow().strftime('%f')}"
+            base = (group_data.get("code") or "CCG").strip() or "CCG"
+            code = base
+            n = 0
+            while code in used_codes:        # unique vs DB + this run
+                n += 1
+                code = f"{base}-{n}"
+            used_codes.add(code)
 
             group = CommonControlGroup(
                 tenant_id=tenant_id,
+                run_id=run_id,
                 code=code,
                 name=group_name,
                 description=group_data.get("description"),
@@ -613,7 +786,15 @@ def serialize_group(group: CommonControlGroup, db: Session, include_controls: bo
         CommonControlGroupMapping.group_id == group.id,
         CommonControlGroupMapping.parsed_control_id.isnot(None)
     ).count()
-    
+
+    # Standalone = single-framework-unique controls placed under the domain but
+    # not consolidated into a unified control (mapping_source='standalone').
+    standalone_count = db.query(CommonControlGroupMapping).filter(
+        CommonControlGroupMapping.group_id == group.id,
+        CommonControlGroupMapping.parsed_control_id.isnot(None),
+        CommonControlGroupMapping.mapping_source == "standalone",
+    ).count()
+
     result = {
         "id": group.id,
         "tenant_id": group.tenant_id,
@@ -628,6 +809,7 @@ def serialize_group(group: CommonControlGroup, db: Session, include_controls: bo
         "normalized_control_count": normalized_count,
         "framework_control_count": framework_count,
         "parsed_control_count": parsed_count,
+        "standalone_control_count": standalone_count,
         "total_control_count": normalized_count + framework_count + parsed_count,
         "created_at": group.created_at.isoformat() if group.created_at else None,
         "updated_at": group.updated_at.isoformat() if group.updated_at else None,
@@ -700,10 +882,35 @@ def serialize_group(group: CommonControlGroup, db: Session, include_controls: bo
                         "mapping_source": mapping.mapping_source
                     })
         
+        # Annotate each normalized control with the distinct frameworks it
+        # consolidates, so the row shows "common across N frameworks" at a glance.
+        nc_ids = [c["control_id"] for c in normalized_controls]
+        if nc_ids:
+            links = db.query(NormalizedControlLink).filter(
+                NormalizedControlLink.normalized_control_id.in_(nc_ids)).all()
+            p_map, f_map = _framework_label_maps(
+                db,
+                [ln.parsed_control_id for ln in links if ln.parsed_control_id],
+                [ln.framework_control_id for ln in links if ln.framework_control_id],
+            )
+            nc_fw: Dict[int, set] = {}
+            nc_cnt: Dict[int, int] = {}
+            for ln in links:
+                nc_cnt[ln.normalized_control_id] = nc_cnt.get(ln.normalized_control_id, 0) + 1
+                if ln.parsed_control_id and ln.parsed_control_id in p_map:
+                    nc_fw.setdefault(ln.normalized_control_id, set()).add(p_map[ln.parsed_control_id]["framework"])
+                elif ln.framework_control_id and ln.framework_control_id in f_map:
+                    nc_fw.setdefault(ln.normalized_control_id, set()).add(f_map[ln.framework_control_id]["framework"])
+            for c in normalized_controls:
+                fws = sorted(nc_fw.get(c["control_id"], set()))
+                c["frameworks"] = fws
+                c["framework_count"] = len(fws)
+                c["linked_control_count"] = nc_cnt.get(c["control_id"], 0)
+
         result["normalized_controls"] = normalized_controls
         result["framework_controls"] = framework_controls
         result["parsed_controls"] = parsed_controls
-    
+
     return result
 
 
@@ -748,20 +955,33 @@ def list_groups(
     category: Optional[str] = None,
     domain: Optional[str] = None,
     search: Optional[str] = None,
+    run_id: Optional[int] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    
+
     query = db.query(CommonControlGroup).filter(
         or_(
             CommonControlGroup.tenant_id.in_(user_tenants),
             CommonControlGroup.tenant_id.is_(None)
         )
     )
-    
+
+    # Scope to a normalization session (run). Default: the owner's master
+    # baseline, so the page shows the canonical library; the session switcher
+    # passes ?run_id=… to view a custom framework-scoped session. Legacy groups
+    # (run_id NULL) still show when no baseline exists yet.
+    if run_id is None:
+        from ..services.scoped_session import get_baseline_run
+        _tid = get_user_primary_tenant(current_user, db)
+        _base = get_baseline_run(db, _tid) if _tid else None
+        run_id = _base.id if _base else None
+    if run_id is not None:
+        query = query.filter(CommonControlGroup.run_id == run_id)
+
     if category:
         query = query.filter(CommonControlGroup.category == category)
     if domain:
@@ -778,10 +998,19 @@ def list_groups(
     
     total = query.count()
     groups = query.order_by(CommonControlGroup.code).offset(skip).limit(limit).all()
-    
+
+    # True count of distinct mapped controls across ALL groups in scope (not just
+    # the current page) — the stat card was summing only the visible page.
+    group_ids_subq = query.with_entities(CommonControlGroup.id).subquery()
+    total_mapped = (db.query(CommonControlGroupMapping.parsed_control_id)
+                    .filter(CommonControlGroupMapping.group_id.in_(group_ids_subq),
+                            CommonControlGroupMapping.parsed_control_id.isnot(None))
+                    .distinct().count())
+
     return {
         "items": [serialize_group(g, db) for g in groups],
         "total": total,
+        "total_mapped_controls": total_mapped,
         "skip": skip,
         "limit": limit
     }
@@ -1108,6 +1337,52 @@ def _run_auto_grouping_threaded(
             "progress_percent": 5,
         })
 
+        if (get_job_status(tenant_slug, namespace, job_id) or {}).get("cancel_requested"):
+            set_job_status(tenant_slug, namespace, job_id, {
+                "status": "cancelled", "phase": "cancelled",
+                "message": "Cancelled before it started.", "progress_percent": 100,
+            })
+            return
+
+        # Preferred path (mirrors the Celery task): if a master baseline exists,
+        # build a framework-scoped session by FILTERING it — no full AI re-run.
+        from ..services.scoped_session import get_baseline_run, build_scoped_session
+        if get_baseline_run(db_session, tenant.id) is not None:
+            def _scoped_progress(done, total, msg):
+                cur = get_job_status(tenant_slug, namespace, job_id) or {}
+                if cur.get("cancel_requested"):
+                    raise AutoGroupCancelled()
+                cur.update({"status": "running", "phase": "scoping", "message": msg,
+                            "progress_percent": int(done * 100 / max(1, total))})
+                set_job_status(tenant_slug, namespace, job_id, cur)
+            try:
+                res = build_scoped_session(
+                    db_session, tenant.id, framework_ids or [], user_id=user_id,
+                    progress_cb=_scoped_progress,
+                    should_cancel=lambda: bool((get_job_status(tenant_slug, namespace, job_id) or {}).get("cancel_requested")),
+                )
+            except AutoGroupCancelled:
+                set_job_status(tenant_slug, namespace, job_id, {
+                    "status": "cancelled", "phase": "cancelled",
+                    "message": "Cancelled.", "progress_percent": 100})
+                return
+            except ValueError as ve:
+                set_job_status(tenant_slug, namespace, job_id, {
+                    "status": "failed", "error": str(ve), "progress_percent": 100})
+                return
+            set_job_status(tenant_slug, namespace, job_id, {
+                "status": "completed", "phase": "done",
+                "message": (
+                    f"Built a view of {res['unified_controls']} unified + "
+                    f"{res.get('standalone', 0)} standalone controls "
+                    + ("(new framework classified onto the master list)."
+                       if res["ai_used"] else "— reused the master baseline, no AI re-run.")),
+                "summary": res, "run_id": res["run_id"], "progress_percent": 100,
+            })
+            _jobs_logger.info("[auto_group] SCOPED tenant=%s job=%s run=%s ai_used=%s",
+                              tenant_slug, job_id, res["run_id"], res["ai_used"])
+            return
+
         controls = _fetch_controls_for_grouping(db_session, tenant.id, framework_ids)
         if len(controls) < 2:
             set_job_status(tenant_slug, namespace, job_id, {
@@ -1130,7 +1405,27 @@ def _run_auto_grouping_threaded(
             "progress_percent": 25,
         })
 
-        ai_groups = ai_auto_group_controls(controls)
+        def _progress(done, total_batches):
+            cur = get_job_status(tenant_slug, namespace, job_id) or {}
+            if cur.get("cancel_requested"):
+                raise AutoGroupCancelled()
+            pct = 25 + int((done / max(1, total_batches)) * 50)
+            cur.update({
+                "status": "running", "phase": "ai_grouping",
+                "message": f"Grouping… batch {done} of {total_batches}",
+                "progress_percent": pct,
+            })
+            set_job_status(tenant_slug, namespace, job_id, cur)
+
+        try:
+            ai_groups = ai_auto_group_controls(controls, progress_cb=_progress)
+        except AutoGroupCancelled:
+            _jobs_logger.info("[auto_group] tenant=%s job=%s — CANCELLED", tenant_slug, job_id)
+            set_job_status(tenant_slug, namespace, job_id, {
+                "status": "cancelled", "phase": "cancelled",
+                "message": "Auto-grouping cancelled by user.", "progress_percent": 100,
+            })
+            return
 
         _jobs_logger.info(
             "[auto_group] tenant=%s job=%s — persisting %d groups",
@@ -1152,17 +1447,43 @@ def _run_auto_grouping_threaded(
             tenant_slug, job_id,
             summary["created_count"], summary["merged_count"], summary["mapping_count"],
         )
+        # ── Second phase: normalize each new domain (same flow) ──
+        norm = {"normalized_controls_created": 0, "links_created": 0}
+        new_group_ids = summary.get("created_group_ids") or []
+        if new_group_ids:
+            from ..services.normalization import run_normalization
+            set_job_status(tenant_slug, namespace, job_id, {
+                "status": "running", "phase": "normalizing",
+                "message": f"Normalizing {len(new_group_ids)} domain(s)…", "progress_percent": 80})
+
+            def _norm_progress(done, total, msg):
+                cur = get_job_status(tenant_slug, namespace, job_id) or {}
+                if cur.get("cancel_requested"):
+                    raise AutoGroupCancelled()
+                pct = 80 + int((done / max(1, total)) * 18)
+                cur.update({"status": "running", "phase": "normalizing", "message": msg, "progress_percent": pct})
+                set_job_status(tenant_slug, namespace, job_id, cur)
+
+            try:
+                norm = run_normalization(
+                    db_session, tenant.id, new_group_ids, progress_cb=_norm_progress,
+                    should_cancel=lambda: bool((get_job_status(tenant_slug, namespace, job_id) or {}).get("cancel_requested")))
+            except AutoGroupCancelled:
+                set_job_status(tenant_slug, namespace, job_id, {
+                    "status": "cancelled", "phase": "cancelled",
+                    "message": "Cancelled during normalization.", "progress_percent": 100})
+                return
+
         set_job_status(tenant_slug, namespace, job_id, {
             "status": "completed",
             "phase": "done",
             "message": (
-                f"Created {summary['created_count']} group(s), "
-                f"merged {summary['merged_count']}, "
-                f"linked {summary['mapping_count']} control(s)."
+                f"Created {summary['created_count']} domain(s) and "
+                f"{norm['normalized_controls_created']} normalized control(s)."
             ),
             "control_count": len(controls),
             "group_count": len(ai_groups),
-            "summary": summary,
+            "summary": {**summary, **norm},
             "progress_percent": 100,
         })
     except Exception as exc:
@@ -1220,6 +1541,9 @@ def auto_group_dispatch(
         "progress_percent": 1,
         "framework_ids": framework_ids,
     })
+    # Pointer to the most-recent job so the UI can resurface an in-flight job
+    # after a page reload (persistent progress + stop button).
+    set_job_status(tenant_slug, "control_auto_group", "latest", {"job_id": job_id})
 
     # Preferred path: dispatch to Celery so the work runs on the dedicated
     # `parsing` queue worker. The worker carries its own DB session per the
@@ -1285,6 +1609,1010 @@ def auto_group_status(
     if not tenant_slug:
         raise HTTPException(status_code=400, detail="Could not resolve tenant slug")
     return get_job_status(tenant_slug, "control_auto_group", job_id)
+
+
+def _resolve_tenant_slug(http_request: Request, db: Session, current_user: GRCUser) -> str:
+    tenant_slug = getattr(http_request.state, "tenant_slug", None)
+    if not tenant_slug:
+        from ....models import Tenant
+        tenant_id = get_user_primary_tenant(current_user, db)
+        t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        tenant_slug = t.slug if t else None
+    if not tenant_slug:
+        raise HTTPException(status_code=400, detail="Could not resolve tenant slug")
+    return tenant_slug
+
+
+@router.post("/auto-group/cancel/{job_id}")
+def auto_group_cancel(
+    job_id: str,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Request cancellation of a running/queued auto-group job. Sets a flag the
+    worker checks between batches and stops cleanly (status -> cancelled)."""
+    tenant_slug = _resolve_tenant_slug(http_request, db, current_user)
+    st = get_job_status(tenant_slug, "control_auto_group", job_id) or {}
+    cur = st.get("status")
+    if cur in ("completed", "failed", "cancelled"):
+        return {"status": cur, "message": "Job already finished."}
+    st["cancel_requested"] = True
+    if cur == "queued":
+        # Not started yet — cancel immediately. If a worker later picks it up,
+        # the start-of-task cancel check aborts it before any AI work.
+        st.update({"status": "cancelled", "phase": "cancelled",
+                   "message": "Cancelled before it started.", "progress_percent": 100})
+        set_job_status(tenant_slug, "control_auto_group", job_id, st)
+        return {"status": "cancelled", "job_id": job_id}
+    st.update({"status": "cancelling", "message": "Cancelling — stopping after the current batch…"})
+    set_job_status(tenant_slug, "control_auto_group", job_id, st)
+    return {"status": "cancelling", "job_id": job_id}
+
+
+@router.get("/auto-group/active")
+def auto_group_active(
+    http_request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Return the tenant's most-recent auto-group job + whether it's still
+    in flight, so the UI can resurface progress (and a Stop button) after a
+    page reload or dialog close."""
+    tenant_slug = _resolve_tenant_slug(http_request, db, current_user)
+    latest = get_job_status(tenant_slug, "control_auto_group", "latest") or {}
+    job_id = latest.get("job_id")
+    if not job_id:
+        return {"active": False}
+    st = get_job_status(tenant_slug, "control_auto_group", job_id) or {}
+    active = st.get("status") in ("queued", "running", "cancelling")
+    return {"active": active, "job_id": job_id, **st}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AI Normalization — for each domain (CommonControlGroup), cluster its controls
+# into normalized controls + cross-framework links. Same dispatch/progress/stop
+# contract as auto-group, namespace "control_normalization".
+# ─────────────────────────────────────────────────────────────────────────────
+
+class NormalizeRequest(BaseModel):
+    group_ids: Optional[List[int]] = None
+
+
+def _run_normalization_threaded(tenant_slug, job_id, group_ids, user_id):
+    namespace = "control_normalization"
+    db_session = None
+    try:
+        from ....db import get_tenant_session_factory
+        from ....models import Tenant
+        SessionLocal = get_tenant_session_factory(tenant_slug)
+        db_session = SessionLocal()
+        tenant = db_session.query(Tenant).filter(Tenant.slug == tenant_slug).first()
+        if not tenant:
+            raise RuntimeError(f"Tenant slug '{tenant_slug}' not found")
+        from ..services.normalization import run_normalization
+
+        def _progress(done, total, msg):
+            cur = get_job_status(tenant_slug, namespace, job_id) or {}
+            if cur.get("cancel_requested"):
+                raise AutoGroupCancelled()
+            pct = 5 + int((done / max(1, total)) * 90)
+            cur.update({"status": "running", "phase": "normalizing",
+                        "message": msg, "progress_percent": pct})
+            set_job_status(tenant_slug, namespace, job_id, cur)
+
+        def _should_cancel():
+            return bool((get_job_status(tenant_slug, namespace, job_id) or {}).get("cancel_requested"))
+
+        try:
+            summary = run_normalization(db_session, tenant.id, group_ids,
+                                        progress_cb=_progress, should_cancel=_should_cancel)
+        except AutoGroupCancelled:
+            set_job_status(tenant_slug, namespace, job_id, {
+                "status": "cancelled", "phase": "cancelled",
+                "message": "Normalization cancelled by user.", "progress_percent": 100})
+            return
+        set_job_status(tenant_slug, namespace, job_id, {
+            "status": "completed", "phase": "done",
+            "message": (f"Created {summary['normalized_controls_created']} normalized "
+                        f"control(s) across {summary['domains_processed']} domain(s)."),
+            "summary": summary, "progress_percent": 100})
+    except Exception as exc:
+        _jobs_logger.exception("[normalize] tenant=%s job=%s FAILED", tenant_slug, job_id)
+        set_job_status(tenant_slug, namespace, job_id, {
+            "status": "failed", "phase": "error", "error": str(exc)[:500], "progress_percent": 100})
+    finally:
+        if db_session is not None:
+            try:
+                db_session.close()
+            except Exception:
+                pass
+
+
+@router.post("/normalize/dispatch")
+def normalize_dispatch(
+    request: NormalizeRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="User has no tenant assigned")
+    if not check_ai_available():
+        raise HTTPException(status_code=503, detail={
+            "error": "AI features unavailable",
+            "message": "OpenAI API key is not configured.", "fallback_available": False})
+    tenant_slug = _resolve_tenant_slug(http_request, db, current_user)
+    job_id = uuid.uuid4().hex
+    group_ids = list(request.group_ids or [])
+    user_id = current_user.id
+    set_job_status(tenant_slug, "control_normalization", job_id, {
+        "status": "queued", "phase": "queued", "message": "Starting…",
+        "progress_percent": 1, "group_ids": group_ids})
+    set_job_status(tenant_slug, "control_normalization", "latest", {"job_id": job_id})
+
+    use_thread_fallback = False
+    try:
+        from ....tasks.control_library import ai_normalize_controls as _task
+        _task.apply_async(args=[tenant_slug, job_id],
+                          kwargs={"group_ids": group_ids, "user_id": user_id}, queue="parsing")
+        _jobs_logger.info("[normalize] DISPATCH (celery) tenant=%s job=%s groups=%s", tenant_slug, job_id, group_ids)
+    except Exception as exc:
+        _jobs_logger.warning("[normalize] Celery dispatch failed (%s) — thread fallback", exc)
+        use_thread_fallback = True
+    if use_thread_fallback:
+        threading.Thread(target=_run_normalization_threaded,
+                         args=(tenant_slug, job_id, group_ids, user_id),
+                         name=f"normalize:{job_id}", daemon=True).start()
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.get("/normalize/status/{job_id}")
+def normalize_status(job_id: str, http_request: Request, db: Session = Depends(get_db),
+                     current_user: GRCUser = Depends(require_auth)):
+    tenant_slug = _resolve_tenant_slug(http_request, db, current_user)
+    return get_job_status(tenant_slug, "control_normalization", job_id)
+
+
+@router.post("/normalize/cancel/{job_id}")
+def normalize_cancel(job_id: str, http_request: Request, db: Session = Depends(get_db),
+                     current_user: GRCUser = Depends(require_auth)):
+    tenant_slug = _resolve_tenant_slug(http_request, db, current_user)
+    st = get_job_status(tenant_slug, "control_normalization", job_id) or {}
+    cur = st.get("status")
+    if cur in ("completed", "failed", "cancelled"):
+        return {"status": cur, "message": "Job already finished."}
+    st["cancel_requested"] = True
+    if cur == "queued":
+        st.update({"status": "cancelled", "phase": "cancelled",
+                   "message": "Cancelled before it started.", "progress_percent": 100})
+        set_job_status(tenant_slug, "control_normalization", job_id, st)
+        return {"status": "cancelled", "job_id": job_id}
+    st.update({"status": "cancelling", "message": "Cancelling — stopping after the current domain…"})
+    set_job_status(tenant_slug, "control_normalization", job_id, st)
+    return {"status": "cancelling", "job_id": job_id}
+
+
+@router.get("/normalize/active")
+def normalize_active(http_request: Request, db: Session = Depends(get_db),
+                     current_user: GRCUser = Depends(require_auth)):
+    tenant_slug = _resolve_tenant_slug(http_request, db, current_user)
+    latest = get_job_status(tenant_slug, "control_normalization", "latest") or {}
+    job_id = latest.get("job_id")
+    if not job_id:
+        return {"active": False}
+    st = get_job_status(tenant_slug, "control_normalization", job_id) or {}
+    active = st.get("status") in ("queued", "running", "cancelling")
+    return {"active": active, "job_id": job_id, **st}
+
+
+@router.get("/normalize/by-domain")
+def normalized_controls_by_domain(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Normalized controls grouped by domain, with how many framework/parsed
+    controls each consolidates — drives the per-domain Control Library view."""
+    ncs = db.query(NormalizedControl).filter(
+        NormalizedControl.source == "ai_normalized"
+    ).order_by(NormalizedControl.domain, NormalizedControl.code).all()
+
+    # Load every link once, then resolve each link's framework so we can show,
+    # per normalized control, the distinct frameworks it consolidates.
+    nc_ids = [nc.id for nc in ncs]
+    links = []
+    if nc_ids:
+        links = db.query(NormalizedControlLink).filter(
+            NormalizedControlLink.normalized_control_id.in_(nc_ids)).all()
+    p_map, f_map = _framework_label_maps(
+        db,
+        [ln.parsed_control_id for ln in links if ln.parsed_control_id],
+        [ln.framework_control_id for ln in links if ln.framework_control_id],
+    )
+    link_counts: Dict[int, int] = {}
+    nc_frameworks: Dict[int, set] = {}
+    for ln in links:
+        link_counts[ln.normalized_control_id] = link_counts.get(ln.normalized_control_id, 0) + 1
+        if ln.parsed_control_id and ln.parsed_control_id in p_map:
+            nc_frameworks.setdefault(ln.normalized_control_id, set()).add(p_map[ln.parsed_control_id]["framework"])
+        elif ln.framework_control_id and ln.framework_control_id in f_map:
+            nc_frameworks.setdefault(ln.normalized_control_id, set()).add(f_map[ln.framework_control_id]["framework"])
+
+    domains: Dict[str, dict] = {}
+    for nc in ncs:
+        dom = nc.domain or "Uncategorized"
+        domains.setdefault(dom, {"domain": dom, "controls": []})
+        domains[dom]["controls"].append({
+            "id": nc.id, "code": nc.code, "name": nc.name,
+            "statement": nc.statement, "objective": nc.objective,
+            "linked_control_count": link_counts.get(nc.id, 0),
+            "frameworks": sorted(nc_frameworks.get(nc.id, set())),
+            "framework_count": len(nc_frameworks.get(nc.id, set())),
+        })
+    result = []
+    for dom, payload in domains.items():
+        payload["normalized_count"] = len(payload["controls"])
+        payload["linked_total"] = sum(c["linked_control_count"] for c in payload["controls"])
+        result.append(payload)
+    result.sort(key=lambda d: d["domain"])
+    return {"domains": result, "total_normalized": len(ncs)}
+
+
+_CL_EVIDENCE_DIR = os.path.join("uploads", "evidence")
+
+
+@router.post("/{group_id}/upload-evidence")
+async def upload_evidence_to_group(
+    group_id: int,
+    name: str = Form(...),
+    description: Optional[str] = Form(None),
+    evidence_type: Optional[str] = Form(None),
+    collection_date: Optional[str] = Form(None),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Upload evidence ONCE from the Control Library and fan it out to every
+    control in the domain group — direct members plus the framework/parsed
+    controls behind the group's normalized controls. One upload, linked
+    everywhere, so the same evidence satisfies all those framework controls.
+    """
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="User has no tenant assigned")
+    group = db.query(CommonControlGroup).filter(CommonControlGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Control group not found")
+
+    # Resolve every control this evidence should cover.
+    mappings = db.query(CommonControlGroupMapping).filter(
+        CommonControlGroupMapping.group_id == group_id
+    ).all()
+    framework_ids = {m.framework_control_id for m in mappings if m.framework_control_id}
+    parsed_ids = {m.parsed_control_id for m in mappings if m.parsed_control_id}
+    normalized_ids = {m.normalized_control_id for m in mappings if m.normalized_control_id}
+    # Expand normalized controls -> their underlying framework/parsed controls,
+    # so evidence on a normalized control reaches the real framework controls.
+    if normalized_ids:
+        for ln in db.query(NormalizedControlLink).filter(
+            NormalizedControlLink.normalized_control_id.in_(normalized_ids)
+        ).all():
+            if ln.framework_control_id:
+                framework_ids.add(ln.framework_control_id)
+            if ln.parsed_control_id:
+                parsed_ids.add(ln.parsed_control_id)
+
+    # Persist the file (same layout as the Evidence Library upload).
+    os.makedirs(_CL_EVIDENCE_DIR, exist_ok=True)
+    ext = os.path.splitext(file.filename)[1] if file.filename else ""
+    fpath = os.path.join(_CL_EVIDENCE_DIR, f"{uuid.uuid4().hex}{ext}")
+    contents = await file.read()
+    with open(fpath, "wb") as fh:
+        fh.write(contents)
+
+    parsed_date = None
+    if collection_date:
+        try:
+            parsed_date = datetime.fromisoformat(collection_date.replace("Z", "+00:00"))
+        except ValueError:
+            parsed_date = None
+
+    ev = Evidence(
+        tenant_id=tenant_id,
+        name=name,
+        description=description or f"Uploaded from control group: {group.name}",
+        file_path=fpath,
+        file_name=file.filename,
+        file_type=file.content_type,
+        uploaded_by=current_user.id,
+        status="draft",
+        evidence_type=evidence_type or None,
+        collection_date=parsed_date,
+        source_system=f"Control Library · {group.name}",
+    )
+    db.add(ev)
+    db.flush()
+
+    created = 0
+
+    def _add_map(**kw):
+        nonlocal created
+        exists = db.query(EvidenceControlMapping).filter_by(evidence_id=ev.id, **kw).first()
+        if not exists:
+            db.add(EvidenceControlMapping(
+                evidence_id=ev.id, framework_name=group.name,
+                coverage_type="supporting", **kw,
+            ))
+            created += 1
+
+    for fcid in framework_ids:
+        _add_map(framework_control_id=fcid)
+    for pcid in parsed_ids:
+        _add_map(parsed_control_id=pcid)
+    for ncid in normalized_ids:
+        _add_map(normalized_control_id=ncid)
+
+    db.commit()
+    db.refresh(ev)
+    return {
+        "evidence_id": ev.id,
+        "name": ev.name,
+        "group_id": group_id,
+        "group_name": group.name,
+        "linked_controls": created,
+        "breakdown": {
+            "framework": len(framework_ids),
+            "parsed": len(parsed_ids),
+            "normalized": len(normalized_ids),
+        },
+        "message": (
+            f"Evidence uploaded and linked to {created} control(s) across the "
+            f"“{group.name}” domain."
+        ),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-control hub: description, recommended evidence, AI-drafted artifacts, and
+# pipeline-backed evidence upload — all fanning out across the frameworks the
+# control consolidates. Powers the expandable rows in the Mapped Controls table.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _resolve_control(db: Session, ctrl_type: str, ctrl_id: int):
+    """Return {name, code, text, fanout} for a control. `fanout` is the list of
+    (kind, id) tuples evidence should link to: the control itself plus — for a
+    normalized control — every framework/parsed control it consolidates."""
+    ctrl_type = (ctrl_type or "").lower()
+    fanout: List[tuple] = []
+    if ctrl_type == "normalized":
+        nc = db.query(NormalizedControl).filter(NormalizedControl.id == ctrl_id).first()
+        if not nc:
+            return None
+        fanout.append(("normalized", nc.id))
+        for ln in db.query(NormalizedControlLink).filter(
+            NormalizedControlLink.normalized_control_id == nc.id).all():
+            if ln.framework_control_id:
+                fanout.append(("framework", ln.framework_control_id))
+            if ln.parsed_control_id:
+                fanout.append(("parsed", ln.parsed_control_id))
+        return {"name": nc.name, "code": nc.code, "text": nc.statement or nc.objective or nc.name, "fanout": fanout}
+    if ctrl_type == "framework":
+        fc = db.query(FrameworkControl).filter(FrameworkControl.id == ctrl_id).first()
+        if not fc:
+            return None
+        return {"name": fc.name, "code": getattr(fc, "control_id", "") or "",
+                "text": fc.statement or getattr(fc, "control_objective", "") or fc.name,
+                "fanout": [("framework", fc.id)]}
+    if ctrl_type == "parsed":
+        pc = db.query(ParsedFrameworkControl).filter(ParsedFrameworkControl.id == ctrl_id).first()
+        if not pc:
+            return None
+        return {"name": pc.title or "", "code": pc.original_reference or pc.control_id or "",
+                "text": pc.description or pc.full_text or pc.title or "",
+                "fanout": [("parsed", pc.id)]}
+    return None
+
+
+def _fanout_evidence(db: Session, evidence_id: int, fanout: List[tuple], label: str) -> int:
+    created = 0
+    for kind, cid in fanout:
+        kw = ({"framework_control_id": cid} if kind == "framework"
+              else {"parsed_control_id": cid} if kind == "parsed"
+              else {"normalized_control_id": cid})
+        if not db.query(EvidenceControlMapping).filter_by(evidence_id=evidence_id, **kw).first():
+            db.add(EvidenceControlMapping(
+                evidence_id=evidence_id, framework_name=label, coverage_type="supporting", **kw))
+            created += 1
+    return created
+
+
+def _ai_unavailable():
+    raise HTTPException(status_code=503, detail={
+        "error": "AI features unavailable", "message": "OpenAI API key is not configured."})
+
+
+def _framework_label_maps(db: Session, parsed_ids: List[int], framework_ids: List[int]):
+    """Resolve parsed/framework control ids -> {framework, code, name} so we can
+    show, for a normalized control, exactly which framework each member control
+    comes from. Bulk-loaded to avoid N+1 queries."""
+    p_map: Dict[int, dict] = {}
+    f_map: Dict[int, dict] = {}
+    if parsed_ids:
+        parsed = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.id.in_(set(parsed_ids))).all()
+        ufids = list({p.uploaded_framework_id for p in parsed if p.uploaded_framework_id})
+        names: Dict[int, str] = {}
+        if ufids:
+            for fw in db.query(UploadedFramework).filter(UploadedFramework.id.in_(ufids)).all():
+                names[fw.id] = fw.name
+        for p in parsed:
+            p_map[p.id] = {
+                "framework": names.get(p.uploaded_framework_id, "Unknown framework"),
+                "code": p.original_reference or p.control_id or "",
+                "name": p.title or "",
+                "text": (p.description or p.full_text or "").strip(),
+            }
+    if framework_ids:
+        fcs = db.query(FrameworkControl).filter(
+            FrameworkControl.id.in_(set(framework_ids))).all()
+        obj_ids = list({fc.objective_id for fc in fcs if fc.objective_id})
+        obj_fw: Dict[int, str] = {}
+        if obj_ids:
+            objs = db.query(ControlObjective).filter(ControlObjective.id.in_(obj_ids)).all()
+            dom_ids = list({o.domain_id for o in objs if o.domain_id})
+            dom_fw: Dict[int, str] = {}
+            if dom_ids:
+                doms = db.query(FrameworkDomain).filter(FrameworkDomain.id.in_(dom_ids)).all()
+                fwids = list({d.framework_id for d in doms if d.framework_id})
+                fwname: Dict[int, str] = {}
+                if fwids:
+                    for fw in db.query(Framework).filter(Framework.id.in_(fwids)).all():
+                        fwname[fw.id] = fw.name
+                for d in doms:
+                    dom_fw[d.id] = fwname.get(d.framework_id, "Framework")
+            for o in objs:
+                obj_fw[o.id] = dom_fw.get(o.domain_id, "Framework")
+        for fc in fcs:
+            f_map[fc.id] = {
+                "framework": obj_fw.get(fc.objective_id, "Framework"),
+                "code": fc.code or "",
+                "name": fc.name or "",
+                "text": (fc.statement or getattr(fc, "control_objective", "") or "").strip(),
+            }
+    return p_map, f_map
+
+
+@router.get("/control/{ctrl_type}/{ctrl_id}/coverage")
+def control_coverage(
+    ctrl_type: str, ctrl_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Cross-framework coverage for a control: WHICH frameworks (and which exact
+    framework controls) this normalized control consolidates, plus any evidence
+    already linked to any of them. This is how a user verifies that one upload
+    here satisfies the control everywhere it exists."""
+    info = _resolve_control(db, ctrl_type, ctrl_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="Control not found")
+
+    parsed_ids = [cid for kind, cid in info["fanout"] if kind == "parsed"]
+    framework_ids = [cid for kind, cid in info["fanout"] if kind == "framework"]
+    p_map, f_map = _framework_label_maps(db, parsed_ids, framework_ids)
+
+    # Group the member controls under their framework. Each carries its own
+    # type+id so the UI can open the real control when its code tag is clicked.
+    fw_groups: Dict[str, List[dict]] = {}
+    for cid in parsed_ids:
+        d = p_map.get(cid)
+        if d:
+            fw_groups.setdefault(d["framework"], []).append(
+                {"code": d["code"], "name": d["name"], "type": "parsed",
+                 "control_id": cid, "statement": d.get("text", "")})
+    for cid in framework_ids:
+        d = f_map.get(cid)
+        if d:
+            fw_groups.setdefault(d["framework"], []).append(
+                {"code": d["code"], "name": d["name"], "type": "framework",
+                 "control_id": cid, "statement": d.get("text", "")})
+    frameworks = [
+        {"framework_name": k, "count": len(v),
+         "controls": sorted(v, key=lambda c: c["code"])}
+        for k, v in sorted(fw_groups.items())
+    ]
+
+    # Evidence already linked to ANY control in the fan-out (proof of linkage).
+    ev_filters = []
+    if parsed_ids:
+        ev_filters.append(EvidenceControlMapping.parsed_control_id.in_(parsed_ids))
+    if framework_ids:
+        ev_filters.append(EvidenceControlMapping.framework_control_id.in_(framework_ids))
+    if (ctrl_type or "").lower() == "normalized":
+        ev_filters.append(EvidenceControlMapping.normalized_control_id == ctrl_id)
+    evidence = []
+    if ev_filters:
+        ev_ids = {m.evidence_id for m in db.query(EvidenceControlMapping).filter(or_(*ev_filters)).all()}
+        if ev_ids:
+            for ev in db.query(Evidence).filter(Evidence.id.in_(ev_ids)).order_by(Evidence.id.desc()).all():
+                evidence.append({
+                    "id": ev.id, "name": ev.name, "status": ev.status,
+                    "file_name": ev.file_name,
+                })
+
+    return {
+        "control": {"code": info["code"], "name": info["name"], "type": (ctrl_type or "").lower()},
+        "framework_count": len(frameworks),
+        "linked_control_count": len(parsed_ids) + len(framework_ids),
+        "frameworks": frameworks,
+        "evidence": evidence,
+    }
+
+
+def _normalize_evidence_reqs(raw) -> List[dict]:
+    """evidence_requirements is stored as JSON — usually a list of
+    {name, description}, sometimes plain strings. Normalise to dicts."""
+    out: List[dict] = []
+    if not raw:
+        return out
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return [{"name": raw, "description": ""}]
+    if isinstance(raw, dict):
+        raw = [raw]
+    if not isinstance(raw, list):
+        return out
+    for item in raw:
+        if isinstance(item, dict):
+            nm = (item.get("name") or item.get("title") or "").strip()
+            ds = (item.get("description") or item.get("detail") or "").strip()
+            if nm or ds:
+                out.append({"name": nm or ds[:60], "description": ds})
+        elif isinstance(item, str) and item.strip():
+            out.append({"name": item.strip(), "description": ""})
+    return out
+
+
+# The artifact catalog keys on CANONICAL framework names + control refs, while
+# uploaded frameworks use verbose names + their own ref formats. Map verbose
+# uploaded names onto the catalog name by keyword so artifacts still resolve.
+_CATALOG_ALIASES = {
+    "CIS Controls v8": ["cis"], "COBIT 2019": ["cobit"],
+    "DORA": ["dora", "operational resilience"],
+    "GDPR": ["gdpr", "general data protection"], "HIPAA": ["hipaa"],
+    "ISO 22301:2019": ["22301"], "ISO 41001:2018": ["41001"],
+    "ISO/IEC 27001:2022": ["27001"], "NIS 2": ["nis2", "nis 2"],
+    "NIST CSF 2.0": ["cybersecurity framework"], "PCI DSS v4.0.1": ["pci"],
+    "Saudi PDPL": ["pdpl", "personal data protection law"],
+    "SOC 2": ["soc 2", "soc2"], "SOX ITGC": ["sox"], "SWIFT CSCF": ["swift"],
+}
+
+
+def _catalog_framework_for(name: str) -> Optional[str]:
+    n = (name or "").lower()
+    for cat, kws in _CATALOG_ALIASES.items():
+        if any(k in n for k in kws):
+            return cat
+    return None
+
+
+def _ref_variants(code: str) -> set:
+    """Normalised forms of a control ref so it matches the catalog's ref format
+    across frameworks (PCI 'Req ' prefix, CIS parent 'Control N', etc.)."""
+    c = (code or "").strip()
+    out = {c.lower()}
+    if not c:
+        return out
+    out.add(("req " + c).lower())                 # PCI: 1.2.3 -> Req 1.2.3
+    out.add(c.lower().replace("req ", "").strip())
+    m = _re_mod.search(r"control\s+(\d+)", c, _re_mod.I)  # CIS safeguard -> parent control
+    if m:
+        out.add(f"control {m.group(1)}")
+    return {v for v in out if v}
+
+
+_EV_FILLER = {
+    "document", "documents", "documented", "approved", "the", "a", "an", "of",
+    "for", "and", "to", "current", "version", "record", "records", "report",
+    "reports", "evidence", "copy", "latest", "signed", "formal", "written",
+    "process", "procedure", "procedures", "policy", "policies",
+}
+
+
+def _ev_key(name: str) -> str:
+    """Canonical key for an evidence item so the SAME evidence phrased differently
+    across frameworks collapses to one entry (word-order & filler insensitive)."""
+    words = [w for w in _re_mod.findall(r"[a-z0-9]+", (name or "").lower())
+             if w not in _EV_FILLER and len(w) > 1]
+    return " ".join(sorted(set(words)))
+
+
+def _consolidate_evidence(items: List[dict]) -> List[dict]:
+    """Merge evidence items that are the same requirement across frameworks into a
+    single recommended item that lists every framework it satisfies — so the user
+    uploads ONE thing, not the same thing once per framework."""
+    groups: Dict[str, dict] = {}
+    for it in items:
+        key = _ev_key(it.get("name", "")) or (it.get("name", "").lower().strip())
+        if not key:
+            continue
+        g = groups.get(key)
+        if not g:
+            g = {"name": it["name"], "description": it.get("description", ""),
+                 "frameworks": [], "_seen": set()}
+            groups[key] = g
+        # Prefer the shortest clean name as the representative label.
+        if len(it["name"]) < len(g["name"]):
+            g["name"] = it["name"]
+        if len(it.get("description", "")) > len(g["description"]):
+            g["description"] = it.get("description", "")
+        fwkey = (it.get("framework", ""), it.get("code", ""))
+        if fwkey not in g["_seen"]:
+            g["_seen"].add(fwkey)
+            g["frameworks"].append({"framework": it.get("framework", ""), "code": it.get("code", "")})
+    out = []
+    for g in groups.values():
+        g.pop("_seen", None)
+        g["framework_count"] = len(g["frameworks"])
+        out.append(g)
+    out.sort(key=lambda g: -g["framework_count"])
+    return out
+
+
+def _ai_consolidate_evidence(items: List[dict]) -> Optional[List[dict]]:
+    """Merge evidence items by MEANING using the AI: items that are the same
+    piece of evidence across frameworks (worded differently) become one item
+    listing every framework it satisfies. Returns None if AI is unavailable."""
+    if not items:
+        return []
+    if not check_ai_available():
+        return None
+    client = get_openai_client()
+    lines = [f"[{i}] ({it.get('framework','')} {it.get('code','')}) {it.get('name','')}"
+             + (f" — {it.get('description','')[:160]}" if it.get('description') else "")
+             for i, it in enumerate(items)]
+    prompt = (
+        "Below are recommended-evidence items drawn from several frameworks for the "
+        "SAME control. Merge items that are the SAME piece of evidence (even if "
+        "worded differently — e.g. 'Approved HR Policy document' and 'HR security "
+        "policy') into ONE. Keep genuinely different evidence separate. For each "
+        "merged item give a clear name, a one-line description, and the list of the "
+        "input indices [n] it covers.\n\n" + "\n".join(lines) +
+        '\n\nRespond ONLY JSON: {"evidence":[{"name":"...","description":"...","members":[0,3]}]}')
+    try:
+        resp = client.chat.completions.create(
+            model=get_openai_model(),
+            messages=[{"role": "system", "content": "You consolidate compliance evidence requirements."},
+                      {"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}, temperature=0.1)
+        data = json.loads(resp.choices[0].message.content or "{}")
+    except Exception:
+        logger.exception("AI evidence consolidation failed")
+        return None
+    out: List[dict] = []
+    for e in data.get("evidence", []) or []:
+        idxs = []
+        for x in e.get("members", []) or []:
+            try:
+                idxs.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        seen = set()
+        frameworks = []
+        for i in idxs:
+            if 0 <= i < len(items):
+                key = (items[i].get("framework", ""), items[i].get("code", ""))
+                if key not in seen:
+                    seen.add(key)
+                    frameworks.append({"framework": items[i].get("framework", ""), "code": items[i].get("code", "")})
+        name = (e.get("name") or "").strip()
+        if not name:
+            continue
+        out.append({"name": name[:255], "description": (e.get("description") or "").strip(),
+                    "frameworks": frameworks, "framework_count": len(frameworks)})
+    out.sort(key=lambda g: -g["framework_count"])
+    return out
+
+
+@router.get("/control/{ctrl_type}/{ctrl_id}/requirements")
+def control_requirements(
+    ctrl_type: str, ctrl_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Surface the framework's OWN built-in recommended evidence
+    (parsed_control.evidence_requirements) and pre-built artifacts
+    (grc_artifact_catalog_items, matched by framework name + control ref) for a
+    control — no AI generation. For a normalized control, aggregate across every
+    framework control it consolidates, grouped by framework so the user sees
+    exactly what each framework already prescribes."""
+    from sqlalchemy import text as _text
+    info = _resolve_control(db, ctrl_type, ctrl_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="Control not found")
+
+    parsed_ids = [cid for kind, cid in info["fanout"] if kind == "parsed"]
+    rows = (db.query(ParsedFrameworkControl, UploadedFramework.name)
+            .join(UploadedFramework, ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id)
+            .filter(ParsedFrameworkControl.id.in_(parsed_ids)).all()) if parsed_ids else []
+
+    evidence_groups: List[dict] = []
+    artifact_groups: List[dict] = []
+    all_evidence_items: List[dict] = []
+    all_artifact_items: List[dict] = []
+    total_evidence = 0
+    total_artifacts = 0
+    for pc, fw_name in rows:
+        code = pc.original_reference or pc.control_id or ""
+        ev = _normalize_evidence_reqs(pc.evidence_requirements)
+        for e in ev:
+            all_evidence_items.append({
+                "name": e.get("name", ""), "description": e.get("description", ""),
+                "framework": fw_name, "code": code})
+        # Pre-built artifacts: resolve the catalog framework by alias, then match
+        # the control ref against its normalised variants (case-insensitive).
+        arts = []
+        cat_fw = _catalog_framework_for(fw_name)
+        if cat_fw:
+            try:
+                variants = list(_ref_variants(code))
+                res = db.execute(_text(
+                    "SELECT name, artifact_type, mandatory, description, format, owner "
+                    "FROM grc_artifact_catalog_items "
+                    "WHERE framework_name = :fw AND lower(control_ref) = ANY(:refs)"),
+                    {"fw": cat_fw, "refs": variants})
+                seen_art = set()
+                for r in res:
+                    if r[0] in seen_art:
+                        continue
+                    seen_art.add(r[0])
+                    arts.append({
+                        "name": r[0], "artifact_type": r[1], "mandatory": bool(r[2]),
+                        "description": r[3], "format": r[4], "owner": r[5],
+                    })
+            except Exception:
+                logger.exception("artifact lookup failed for %s/%s", cat_fw, code)
+        if ev:
+            evidence_groups.append({"framework": fw_name, "code": code, "items": ev})
+            total_evidence += len(ev)
+        if arts:
+            artifact_groups.append({"framework": fw_name, "code": code, "items": arts})
+            total_artifacts += len(arts)
+            for a in arts:
+                all_artifact_items.append({
+                    "name": a.get("name", ""), "description": a.get("description", ""),
+                    "framework": fw_name, "code": code,
+                    "artifact_type": a.get("artifact_type"), "mandatory": a.get("mandatory"),
+                })
+
+    # Evidence normalization: for a unified control, merge the frameworks'
+    # evidence by MEANING using the AI (cached on the control so it's done once).
+    # Fall back to fast string-consolidation if AI is unavailable.
+    is_norm = (ctrl_type or "").lower() == "normalized"
+    consolidated: List[dict] = []
+    if all_evidence_items:
+        if is_norm:
+            nc = db.query(NormalizedControl).filter(NormalizedControl.id == ctrl_id).first()
+            cached = getattr(nc, "recommended_evidence", None) if nc else None
+            if cached:
+                consolidated = cached
+            else:
+                ai = _ai_consolidate_evidence(all_evidence_items)
+                consolidated = ai if ai is not None else _consolidate_evidence(all_evidence_items)
+                if ai is not None and nc is not None:
+                    try:
+                        nc.recommended_evidence = consolidated
+                        db.commit()
+                    except Exception:
+                        db.rollback()
+        else:
+            consolidated = _consolidate_evidence(all_evidence_items)
+
+    # Keep the recommended-evidence list focused: a control should surface a
+    # handful of high-value, broadly-applicable evidence items — not an
+    # overwhelming long tail. Rank by how many frameworks each item satisfies
+    # (the most "comply once, satisfy many" first) and cap the list.
+    MAX_RECOMMENDED_EVIDENCE = 6
+    if consolidated and len(consolidated) > MAX_RECOMMENDED_EVIDENCE:
+        def _fw_count(e):
+            return e.get("framework_count") or len(e.get("frameworks") or [])
+        consolidated = sorted(consolidated, key=lambda e: (-_fw_count(e), str(e.get("name") or "")))
+        consolidated = consolidated[:MAX_RECOMMENDED_EVIDENCE]
+
+    # Artifact normalization: merge the same pre-built artifact across frameworks
+    # into one (lists every framework it satisfies). Deterministic by name.
+    consolidated_artifacts = _consolidate_evidence(all_artifact_items) if all_artifact_items else []
+    if consolidated_artifacts and len(consolidated_artifacts) > MAX_RECOMMENDED_EVIDENCE:
+        consolidated_artifacts = sorted(
+            consolidated_artifacts,
+            key=lambda e: (-(e.get("framework_count") or len(e.get("frameworks") or [])), str(e.get("name") or "")),
+        )[:MAX_RECOMMENDED_EVIDENCE]
+
+    return {
+        "control": {"code": info["code"], "name": info["name"], "type": (ctrl_type or "").lower()},
+        "is_normalized": is_norm,
+        "evidence_total": total_evidence,            # raw count across frameworks
+        "unique_evidence_total": len(consolidated),   # after AI normalization
+        "artifact_total": total_artifacts,
+        "unique_artifact_total": len(consolidated_artifacts),
+        "consolidated_evidence": consolidated,        # ← upload once, satisfies many
+        "consolidated_artifacts": consolidated_artifacts,
+        "evidence_by_control": evidence_groups,       # per-framework breakdown (detail)
+        "artifacts_by_control": artifact_groups,
+    }
+
+
+@router.post("/control/{ctrl_type}/{ctrl_id}/upload-evidence")
+async def upload_evidence_to_control(
+    ctrl_type: str, ctrl_id: int,
+    name: str = Form(...),
+    description: Optional[str] = Form(None),
+    evidence_type: Optional[str] = Form(None),
+    collection_date: Optional[str] = Form(None),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Upload evidence for one control THROUGH the Evidence pipeline (file store,
+    OCR, AI assessment) and fan it out to every control it covers."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="User has no tenant assigned")
+    info = _resolve_control(db, ctrl_type, ctrl_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="Control not found")
+
+    from ...evidence.routers.evidence import (
+        EVIDENCE_UPLOAD_DIR, OCR_PROCESSABLE_TYPES, process_evidence_background)
+    import threading as _th
+
+    tdir = os.path.join(EVIDENCE_UPLOAD_DIR, str(tenant_id))
+    os.makedirs(tdir, exist_ok=True)
+    ext = os.path.splitext(file.filename)[1].lower() if file.filename else ""
+    fpath = os.path.join(tdir, f"{uuid.uuid4().hex}{ext}")
+    contents = await file.read()
+    with open(fpath, "wb") as fh:
+        fh.write(contents)
+    ocr = "pending" if ext and ext[1:] in OCR_PROCESSABLE_TYPES else "not_applicable"
+    parsed_date = None
+    if collection_date:
+        try:
+            parsed_date = datetime.fromisoformat(collection_date.replace("Z", "+00:00"))
+        except ValueError:
+            parsed_date = None
+
+    ev = Evidence(
+        tenant_id=tenant_id, name=name,
+        description=description or f"Uploaded for control {info['code']}",
+        file_path=fpath, file_name=file.filename, file_type=file.content_type,
+        evidence_type=evidence_type or None, collection_date=parsed_date,
+        uploaded_by=current_user.id, status="draft", ocr_status=ocr,
+        source_system=f"Control Library · {info['code']}",
+    )
+    db.add(ev)
+    db.flush()
+    created = _fanout_evidence(db, ev.id, info["fanout"], info["code"])
+    db.commit()
+    db.refresh(ev)
+    if ocr == "pending":
+        _th.Thread(target=process_evidence_background, args=(ev.id,), daemon=True).start()
+    return {
+        "evidence_id": ev.id, "linked_controls": created,
+        "ocr_processing": ocr == "pending",
+        "message": (f"Uploaded and linked to {created} control(s)."
+                    + (" Running OCR + AI assessment…" if ocr == "pending" else "")),
+    }
+
+
+@router.post("/control/{ctrl_type}/{ctrl_id}/recommend-evidence")
+def recommend_evidence_for_control(
+    ctrl_type: str, ctrl_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """AI-suggest the evidence an auditor would accept for this control."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    info = _resolve_control(db, ctrl_type, ctrl_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="Control not found")
+    if not check_ai_available():
+        _ai_unavailable()
+    client = get_openai_client()
+    prompt = (
+        f"Control: {info['name']}\n{(info['text'] or '')[:1500]}\n\n"
+        "Suggest 3-5 concrete pieces of EVIDENCE an auditor would accept to prove this "
+        "control is implemented. For each give: evidence_type (short label), description "
+        "(what the artefact is), priority (high|medium|low).\n"
+        'JSON only: {"recommendations":[{"evidence_type":"...","description":"...","priority":"..."}]}'
+    )
+    resp = client.chat.completions.create(
+        model=get_openai_model(),
+        messages=[{"role": "system", "content": "You are a meticulous compliance auditor."},
+                  {"role": "user", "content": prompt}],
+        response_format={"type": "json_object"}, temperature=0.3)
+    try:
+        recs = (json.loads(resp.choices[0].message.content or "{}").get("recommendations") or [])[:6]
+    except json.JSONDecodeError:
+        recs = []
+    kw = ({"normalized_control_id": ctrl_id} if ctrl_type == "normalized"
+          else {"framework_control_id": ctrl_id} if ctrl_type == "framework"
+          else {"parsed_control_id": ctrl_id})
+    db.query(AIEvidenceRecommendation).filter_by(tenant_id=tenant_id, **kw).delete()
+    out = []
+    for r in recs:
+        rec = AIEvidenceRecommendation(
+            tenant_id=tenant_id,
+            evidence_type=(r.get("evidence_type") or "document")[:100],
+            evidence_description=r.get("description"),
+            priority=(r.get("priority") or "medium")[:20], ai_confidence=0.8, **kw)
+        db.add(rec)
+        out.append({"evidence_type": rec.evidence_type, "description": rec.evidence_description, "priority": rec.priority})
+    db.commit()
+    return {"recommendations": out}
+
+
+@router.post("/control/{ctrl_type}/{ctrl_id}/draft-document")
+def draft_document_for_control(
+    ctrl_type: str, ctrl_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """AI-draft a policy/procedure document (artifact) for this control and
+    register it as evidence, fanned out across the frameworks it covers."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    info = _resolve_control(db, ctrl_type, ctrl_id)
+    if not info:
+        raise HTTPException(status_code=404, detail="Control not found")
+    if not check_ai_available():
+        _ai_unavailable()
+    client = get_openai_client()
+    prompt = (
+        f"Draft a concise, professional policy/procedure document that IMPLEMENTS this control.\n\n"
+        f"Control: {info['name']}\n{(info['text'] or '')[:1500]}\n\n"
+        "Include sections: Purpose, Scope, Policy Statements, Responsibilities, Review & "
+        "Monitoring. Keep it practical and audit-ready. Return Markdown only."
+    )
+    resp = client.chat.completions.create(
+        model=get_openai_model(),
+        messages=[{"role": "system", "content": "You are a senior GRC policy author."},
+                  {"role": "user", "content": prompt}],
+        temperature=0.4)
+    import re as _re
+    doc_text = (resp.choices[0].message.content or "").strip()
+    # The model often wraps the whole document in a ```markdown ... ``` fence —
+    # strip it so we store/return clean Markdown (no junk symbols).
+    if doc_text.startswith("```"):
+        doc_text = _re.sub(r"^```[a-zA-Z]*\s*\n", "", doc_text)
+        doc_text = _re.sub(r"\n```\s*$", "", doc_text).strip()
+
+    from ...evidence.routers.evidence import EVIDENCE_UPLOAD_DIR
+    tdir = os.path.join(EVIDENCE_UPLOAD_DIR, str(tenant_id))
+    os.makedirs(tdir, exist_ok=True)
+    fname = f"{(info['code'] or 'control').replace('/', '_')}-policy.md"
+    fpath = os.path.join(tdir, f"{uuid.uuid4().hex}.md")
+    with open(fpath, "w", encoding="utf-8") as fh:
+        fh.write(doc_text)
+
+    ev = Evidence(
+        tenant_id=tenant_id,
+        name=f"AI Draft: {(info['name'] or info['code'])[:110]} Policy",
+        description=f"AI-drafted document artifact for control {info['code']}.",
+        file_path=fpath, file_name=fname, file_type="text/markdown",
+        evidence_type="policy", uploaded_by=current_user.id, status="draft",
+        ocr_status="not_applicable", source_system=f"Control Library · AI Draft · {info['code']}",
+    )
+    db.add(ev)
+    db.flush()
+    created = _fanout_evidence(db, ev.id, info["fanout"], info["code"])
+    db.commit()
+    db.refresh(ev)
+    return {
+        "evidence_id": ev.id, "name": ev.name, "linked_controls": created,
+        "document": doc_text,
+        "message": f"Drafted a policy document and linked it as evidence to {created} control(s).",
+    }
 
 
 @router.post("/auto-group")

@@ -10,6 +10,8 @@ class CommonControlGroup(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=True, index=True)
+    # Session this domain belongs to (NULL = legacy/pre-sessions data).
+    run_id = Column(Integer, ForeignKey("grc_normalization_runs.id"), nullable=True, index=True)
     code = Column(String(50), nullable=False)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)

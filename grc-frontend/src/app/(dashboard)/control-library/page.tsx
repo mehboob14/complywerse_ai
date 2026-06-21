@@ -16,6 +16,7 @@ import {
   Layers,
   GitMerge,
   Shield,
+  ShieldCheck,
   Eye,
   Edit2,
   Trash2,
@@ -47,6 +48,8 @@ interface ControlGroup {
   evidence_types: string[];
   normalized_control_count: number;
   framework_control_count: number;
+  parsed_control_count: number;
+  standalone_control_count: number;
   total_control_count: number;
   created_at: string | null;
   updated_at: string | null;
@@ -100,7 +103,9 @@ export default function ControlLibraryPage() {
   const [domainFilter, setDomainFilter] = useState('');
   const [showEmptyGroups, setShowEmptyGroups] = useState(true);
   const [page, setPage] = useState(0);
-  const [pageSize] = useState(20);
+  // Load all groups so the Domain → Unified → Framework grouping shows each
+  // domain complete (otherwise domains split across paginated pages).
+  const [pageSize] = useState(200);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -117,9 +122,22 @@ export default function ControlLibraryPage() {
   });
 
   const [selectedFrameworks, setSelectedFrameworks] = useState<number[]>([]);
+  // Which normalization session (run) the library view is scoped to. null =
+  // the owner's master baseline (default). Custom framework-selected sessions
+  // are isolated runs the user can switch to.
+  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+
+  const { data: sessionsData } = useQuery({
+    queryKey: ['normalization-sessions'],
+    queryFn: async () =>
+      (await apiClient.get('/control-library/groups/sessions')).data.sessions as Array<{
+        id: number; label: string; scope: string; is_baseline: boolean;
+        unified_controls: number; framework_ids: number[] | null;
+      }>,
+  });
 
   const { data: groupsData, isLoading: groupsLoading, error: groupsError, refetch: refetchGroups } = useQuery({
-    queryKey: ['control-groups', searchTerm, categoryFilter, domainFilter, page, pageSize],
+    queryKey: ['control-groups', searchTerm, categoryFilter, domainFilter, page, pageSize, selectedRunId],
     queryFn: async () => {
       const params: Record<string, string | number> = {
         skip: page * pageSize,
@@ -128,6 +146,7 @@ export default function ControlLibraryPage() {
       if (searchTerm) params.search = searchTerm;
       if (categoryFilter) params.category = categoryFilter;
       if (domainFilter) params.domain = domainFilter;
+      if (selectedRunId) params.run_id = selectedRunId;
       const response = await apiClient.get('/control-library/groups', { params });
       return response.data as GroupsResponse;
     },
@@ -249,6 +268,8 @@ export default function ControlLibraryPage() {
       return jobId as string;
     },
     onSuccess: (jobId: string) => {
+      // Surface the job in the persistent background banner immediately.
+      queryClient.invalidateQueries({ queryKey: ['auto-group-active'] });
       // Poll status every 1.5s. The dialog auto-closes 1.2s after the job
       // finishes so the user sees the success/error state briefly.
       if (autoGroupPollRef.current) clearInterval(autoGroupPollRef.current);
@@ -272,10 +293,14 @@ export default function ControlLibraryPage() {
               const summary = data.summary || {};
               setAutoGroupResult({
                 message: data.message || 'Auto-grouping completed',
-                groups_created: summary.created_count || 0,
+                groups_created: summary.unified_controls ?? summary.created_count ?? 0,
                 groups_merged: summary.merged_count || 0,
                 groups: [],
               } as AutoGroupResult);
+              // A scoped session returns its own run id — switch the view to it
+              // (the master baseline stays intact and selectable).
+              if (typeof data.run_id === 'number') setSelectedRunId(data.run_id);
+              queryClient.invalidateQueries({ queryKey: ['normalization-sessions'] });
               queryClient.invalidateQueries({ queryKey: ['control-groups'] });
             } else {
               setAutoGroupError(data.error || data.message || 'Auto-grouping failed');
@@ -375,7 +400,9 @@ export default function ControlLibraryPage() {
   };
 
   const totalGroups = groupsData?.total || 0;
-  const totalControls = groupsData?.items?.reduce((sum, g) => sum + g.total_control_count, 0) || 0;
+  // True total across ALL groups (from the API), not just the current page.
+  const totalControls = (groupsData as { total_mapped_controls?: number } | undefined)?.total_mapped_controls
+    ?? groupsData?.items?.reduce((sum, g) => sum + g.total_control_count, 0) ?? 0;
 
   const filteredGroups = showEmptyGroups
     ? groupsData?.items
@@ -399,37 +426,128 @@ export default function ControlLibraryPage() {
     return Math.round(sum / groupsData.items.length);
   }, [groupsData]);
 
+  // ── Persistent auto-group job tracking — survives dialog close / page reload.
+  // Polls the tenant's latest job; shows a banner with progress + a Stop button
+  // for as long as a job is in flight, even if the user closed the dialog.
+  const { data: activeJob } = useQuery<any>({
+    queryKey: ['auto-group-active'],
+    queryFn: async () => (await apiClient.get('/control-library/groups/auto-group/active')).data,
+    refetchInterval: (q) => (((q.state.data as any)?.active) ? 2500 : false),
+  });
+  const stopAutoGroup = useMutation({
+    mutationFn: async (jobId: string) =>
+      (await apiClient.post(`/control-library/groups/auto-group/cancel/${jobId}`)).data,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['auto-group-active'] }),
+  });
+  // When an in-flight job finishes (active true -> false), refresh the groups.
+  const prevActiveRef = useRef(false);
+  useEffect(() => {
+    const isActive = !!activeJob?.active;
+    if (prevActiveRef.current && !isActive) {
+      queryClient.invalidateQueries({ queryKey: ['control-groups'] });
+    }
+    prevActiveRef.current = isActive;
+  }, [activeJob?.active, queryClient]);
+
   return (
     <div className="space-y-5">
+      {/* Persistent auto-group progress banner — visible even after closing the
+          dialog or reloading, with a Stop button. */}
+      {activeJob?.active && activeJob?.job_id && (
+        <div className="rounded-xl border border-primary-200 bg-gradient-to-r from-primary-50 to-white px-4 py-3 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100">
+                <Loader2 className="h-4 w-4 animate-spin text-primary-700" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-900">
+                  Building Unified View {activeJob.status === 'cancelling' ? '— stopping…' : '(filtering frameworks)'}
+                </p>
+                <p className="truncate text-xs text-slate-500">{activeJob.message || activeJob.phase || 'Working…'}</p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <span className="text-sm font-bold tabular-nums text-primary-700">
+                {Math.max(1, Math.min(100, activeJob.progress_percent ?? 1))}%
+              </span>
+              <button
+                onClick={() => stopAutoGroup.mutate(activeJob.job_id)}
+                disabled={stopAutoGroup.isPending || activeJob.status === 'cancelling'}
+                className="flex items-center gap-1 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                <X className="h-3.5 w-3.5" /> Stop
+              </button>
+            </div>
+          </div>
+          <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-primary-100">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-primary-500 to-primary-700 transition-all"
+              style={{ width: `${Math.max(1, Math.min(100, activeJob.progress_percent ?? 1))}%` }}
+            />
+          </div>
+          <p className="mt-1.5 text-[11px] text-slate-400">
+            Safe to leave this page — the job keeps running. You can Stop it anytime, or start a new view from “Build Unified View”.
+          </p>
+        </div>
+      )}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-black sm:text-2xl">Unified Control Library</h1>
-          <p className="text-sm text-gray-600">AI-powered control mapping across frameworks</p>
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-sm">
+            <Library className="h-6 w-6 text-white" />
+          </span>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Unified Control Library</h1>
+            <p className="text-sm text-slate-500">Unified, de-duplicated controls across all 30 frameworks — filter to any subset</p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {sessionsData && sessionsData.length > 1 && (
+            <select
+              value={selectedRunId ?? ''}
+              onChange={(e) => { setSelectedRunId(e.target.value ? Number(e.target.value) : null); setPage(0); }}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              title="Switch normalization session — the master baseline plus any framework-scoped sessions"
+            >
+              {sessionsData.map((s) => (
+                <option key={s.id} value={s.is_baseline ? '' : s.id}>
+                  {s.is_baseline
+                    ? `★ Master baseline (${s.unified_controls})`
+                    : `${s.label} (${s.unified_controls})`}
+                </option>
+              ))}
+            </select>
+          )}
+          <Link
+            href="/control-library/review"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <ShieldCheck size={18} />
+            Review Master List
+          </Link>
+          <button
+            onClick={() => {
+              setAutoGroupResult(null);
+              setShowAutoGroupModal(true);
+            }}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-700"
+          >
+            <Sparkles size={18} />
+            Build Unified View
+          </button>
           {canCreate && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700"
+              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               <Plus size={18} />
               Create Group
             </button>
           )}
           <button
-            onClick={() => {
-              setAutoGroupResult(null);
-              setShowAutoGroupModal(true);
-            }}
-            className="flex items-center gap-2 rounded-lg border border-primary-500 bg-primary-500/10 px-3.5 py-2 text-sm font-medium text-blue-600 hover:bg-primary-500/20"
-          >
-            <Sparkles size={18} />
-            Auto-Group with AI
-          </button>
-          <button
             onClick={() => populateFromFrameworksMutation.mutate()}
             disabled={populateFromFrameworksMutation.isPending}
-            className="flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-100 px-3.5 py-2 text-sm font-medium text-black hover:bg-gray-200 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             {populateFromFrameworksMutation.isPending ? (
               <Loader2 size={18} className="animate-spin" />
@@ -491,36 +609,36 @@ export default function ControlLibraryPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        <Link href="/control-library/coverage" className="card group hover:border-primary-500/50 transition-colors">
+        <Link href="/control-library/coverage" className="group rounded-xl border border-slate-200 bg-white p-4 transition-all hover:border-primary-300 hover:shadow-md">
           <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3">
-              <Grid3X3 className="h-6 w-6 text-blue-400" />
+            <div className="rounded-xl bg-primary-50 p-3 ring-1 ring-primary-100">
+              <Grid3X3 className="h-6 w-6 text-primary-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-black group-hover:text-blue-600 transition-colors">Coverage Matrix</h3>
-              <p className="text-sm text-gray-600">View evidence coverage heatmap</p>
+              <h3 className="font-semibold text-slate-900 transition-colors group-hover:text-primary-700">Coverage Matrix</h3>
+              <p className="text-sm text-slate-500">View evidence coverage heatmap</p>
             </div>
           </div>
         </Link>
-        <Link href="/control-library/gaps" className="card hover:border-primary-500/50 transition-colors group">
+        <Link href="/control-library/gaps" className="group rounded-xl border border-slate-200 bg-white p-4 transition-all hover:border-amber-300 hover:shadow-md">
           <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/10 p-3">
-              <AlertCircle className="h-6 w-6 text-orange-400" />
+            <div className="rounded-xl bg-amber-50 p-3 ring-1 ring-amber-100">
+              <AlertCircle className="h-6 w-6 text-amber-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-black group-hover:text-blue-600 transition-colors">Gap Analysis</h3>
-              <p className="text-sm text-gray-600">Identify and address control gaps</p>
+              <h3 className="font-semibold text-slate-900 transition-colors group-hover:text-amber-700">Gap Analysis</h3>
+              <p className="text-sm text-slate-500">Identify and address control gaps</p>
             </div>
           </div>
         </Link>
-        <Link href="/control-library/compare" className="card hover:border-primary-500/50 transition-colors group">
+        <Link href="/control-library/compare" className="group rounded-xl border border-slate-200 bg-white p-4 transition-all hover:border-indigo-300 hover:shadow-md">
           <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 p-3">
-              <BarChart3 className="h-6 w-6 text-purple-400" />
+            <div className="rounded-xl bg-indigo-50 p-3 ring-1 ring-indigo-100">
+              <BarChart3 className="h-6 w-6 text-indigo-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-black group-hover:text-blue-600 transition-colors">Compare Controls</h3>
-              <p className="text-sm text-gray-600">Side-by-side control comparison</p>
+              <h3 className="font-semibold text-slate-900 transition-colors group-hover:text-indigo-700">Compare Controls</h3>
+              <p className="text-sm text-slate-500">Side-by-side control comparison</p>
             </div>
           </div>
         </Link>
@@ -574,7 +692,7 @@ export default function ControlLibraryPage() {
                 onClick={() => setViewMode('cards')}
                 className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                   viewMode === 'cards' 
-                    ? 'bg-primary-600 text-black' 
+                    ? 'bg-primary-600 text-white'
                     : 'bg-white text-gray-600 hover:text-black'
                 }`}
               >
@@ -584,7 +702,7 @@ export default function ControlLibraryPage() {
                 onClick={() => setViewMode('table')}
                 className={`px-3 py-1.5 text-sm font-medium transition-colors ${
                   viewMode === 'table' 
-                    ? 'bg-primary-600 text-black' 
+                    ? 'bg-primary-600 text-white'
                     : 'bg-white text-gray-600 hover:text-black'
                 }`}
               >
@@ -603,7 +721,7 @@ export default function ControlLibraryPage() {
         <div className="flex h-64 flex-col items-center justify-center text-red-400">
           <AlertCircle className="mb-2 h-8 w-8" />
           <p>Failed to load control groups</p>
-          <button onClick={() => refetchGroups()} className="mt-2 text-sm text-blue-600 hover:underline">
+          <button onClick={() => refetchGroups()} className="mt-2 text-sm text-primary-700 hover:underline">
             Try again
           </button>
         </div>
@@ -616,7 +734,7 @@ export default function ControlLibraryPage() {
             {canCreate && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
               >
                 <Plus size={16} />
                 Create Group
@@ -624,7 +742,7 @@ export default function ControlLibraryPage() {
             )}
             <button
               onClick={() => setShowAutoGroupModal(true)}
-              className="flex items-center gap-2 rounded-lg border border-primary-500 px-4 py-2 font-medium text-blue-600 hover:bg-primary-500/10"
+              className="flex items-center gap-2 rounded-lg border border-primary-500 px-4 py-2 font-medium text-primary-700 hover:bg-primary-500/10"
             >
               <Sparkles size={16} />
               Auto-Group
@@ -632,21 +750,22 @@ export default function ControlLibraryPage() {
           </div>
         </div>
       ) : viewMode === 'cards' ? (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredGroups?.map((group) => {
-              const completion = getGroupCompletionPercent(group);
-              return (
-                <div
-                  key={group.id}
-                  className="card hover:border-gray-300 transition-all group"
-                >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredGroups?.map((group) => {
+            const completion = getGroupCompletionPercent(group);
+            return (
+              <div
+                key={group.id}
+                className="group rounded-xl border border-slate-200 bg-white p-5 transition-all hover:border-primary-300 hover:shadow-md"
+              >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <Shield className="h-5 w-5 text-blue-600 flex-shrink-0" />
-                      <div>
-                        <span className="font-mono text-xs text-blue-600">{group.code}</span>
-                        <h3 className="font-medium text-black line-clamp-1">{group.name}</h3>
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 ring-1 ring-primary-100">
+                        <Shield className="h-4.5 w-4.5 text-primary-600" />
+                      </span>
+                      <div className="min-w-0">
+                        <span className="font-mono text-[11px] font-semibold text-primary-700">{group.code}</span>
+                        <h3 className="font-semibold text-slate-900 line-clamp-1">{group.name}</h3>
                       </div>
                     </div>
                     <ProgressRing
@@ -659,34 +778,21 @@ export default function ControlLibraryPage() {
                   </div>
 
                   {group.description && (
-                    <p className="text-sm text-gray-600 line-clamp-2 mb-3">{group.description}</p>
+                    <p className="text-sm text-slate-500 line-clamp-2 mb-3">{group.description}</p>
                   )}
 
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {group.category && (
-                      <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
-                        {group.category}
-                      </span>
-                    )}
-                    {group.domain && (
-                      <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-xs text-purple-400">
-                        {group.domain}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between border-t border-gray-200 pt-3">
-                    <div className="flex items-center gap-4 text-sm">
-                      <div className="flex items-center gap-1">
-                        <Shield className="h-4 w-4 text-gray-600" />
-                        <span className="text-black font-medium">{group.total_control_count}</span>
-                        <span className="text-gray-500">controls</span>
+                  <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+                    <div className="flex items-center gap-3 text-sm">
+                      <div className="flex items-center gap-1.5">
+                        <Layers className="h-4 w-4 text-primary-500" />
+                        <span className="font-semibold text-slate-900">{group.normalized_control_count}</span>
+                        <span className="text-slate-500">unified</span>
                       </div>
-                      {group.normalized_control_count > 0 && (
-                        <span className="text-xs text-green-400">
-                          {group.normalized_control_count} normalized
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        <Shield className="h-4 w-4 text-slate-400" />
+                        <span className="font-semibold text-slate-900">{group.standalone_control_count ?? 0}</span>
+                        <span className="text-slate-500">standalone</span>
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Link
@@ -709,7 +815,7 @@ export default function ControlLibraryPage() {
                         title="Generate AI Summary"
                         onClick={() => generateSummaryMutation.mutate(group.id)}
                         disabled={generateSummaryMutation.isPending}
-                        className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-blue-600"
+                        className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-primary-700"
                       >
                         <Sparkles size={14} />
                       </button>
@@ -724,11 +830,10 @@ export default function ControlLibraryPage() {
                       )}
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-gray-200">
           <table className="w-full">
@@ -749,7 +854,7 @@ export default function ControlLibraryPage() {
                 return (
                   <tr key={group.id} className="hover:bg-gray-100">
                     <td className="px-4 py-3">
-                      <span className="font-mono text-sm font-medium text-blue-600">{group.code}</span>
+                      <span className="font-mono text-sm font-medium text-primary-700">{group.code}</span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="max-w-xs">
@@ -761,7 +866,7 @@ export default function ControlLibraryPage() {
                     </td>
                     <td className="px-4 py-3">
                       {group.category ? (
-                        <span className="rounded-full bg-blue-500/20 px-2 py-1 text-xs text-blue-400">
+                        <span className="rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 ring-1 ring-primary-100">
                           {group.category}
                         </span>
                       ) : (
@@ -770,7 +875,7 @@ export default function ControlLibraryPage() {
                     </td>
                     <td className="px-4 py-3">
                       {group.domain ? (
-                        <span className="rounded-full bg-purple-500/20 px-2 py-1 text-xs text-purple-400">
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
                           {group.domain}
                         </span>
                       ) : (
@@ -818,7 +923,7 @@ export default function ControlLibraryPage() {
                           title="Generate AI Summary"
                           onClick={() => generateSummaryMutation.mutate(group.id)}
                           disabled={generateSummaryMutation.isPending}
-                          className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-blue-600"
+                          className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-primary-700"
                         >
                           <Sparkles size={14} />
                         </button>
@@ -957,7 +1062,7 @@ export default function ControlLibraryPage() {
                 <button
                   type="submit"
                   disabled={createGroupMutation.isPending}
-                  className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 disabled:opacity-50"
                 >
                   {createGroupMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                   Create Group
@@ -1061,7 +1166,7 @@ export default function ControlLibraryPage() {
                 <button
                   type="submit"
                   disabled={updateGroupMutation.isPending}
-                  className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 disabled:opacity-50"
                 >
                   {updateGroupMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                   Save Changes
@@ -1077,8 +1182,8 @@ export default function ControlLibraryPage() {
           <div className="w-full max-w-lg rounded-lg border border-gray-200 bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Sparkles className="h-5 w-5 text-blue-600 flex-shrink-0" />
-                <h2 className="text-lg font-semibold text-black">AI Auto-Grouping</h2>
+                <Sparkles className="h-5 w-5 text-primary-700 flex-shrink-0" />
+                <h2 className="text-lg font-semibold text-black">Build Unified View</h2>
               </div>
               <button onClick={() => setShowAutoGroupModal(false)} className="text-gray-600 hover:text-black">
                 <X size={20} />
@@ -1109,7 +1214,7 @@ export default function ControlLibraryPage() {
                       setAutoGroupError(null);
                       autoGroupMutation.mutate(selectedFrameworks);
                     }}
-                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700"
+                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
                   >
                     <RefreshCw size={16} />
                     Retry
@@ -1119,7 +1224,8 @@ export default function ControlLibraryPage() {
             ) : !autoGroupResult && !autoGroupLoading ? (
               <div className="space-y-4">
                 <p className="text-gray-600">
-                  Use AI to automatically analyze and group related controls across your frameworks.
+                  Pick the frameworks you care about and we’ll filter the already-normalized
+                  baseline to a unified, de-duplicated view of just those frameworks — instant, no AI re-run.
                 </p>
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">Select Frameworks (optional)</label>
@@ -1157,16 +1263,16 @@ export default function ControlLibraryPage() {
                   </button>
                   <button
                     onClick={() => autoGroupMutation.mutate(selectedFrameworks)}
-                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700"
+                    className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
                   >
                     <Play size={16} />
-                    Start Auto-Grouping
+                    Build View
                   </button>
                 </div>
               </div>
             ) : autoGroupLoading ? (
               <div className="flex flex-col items-center justify-center py-8 px-6">
-                <Loader2 className="mb-4 h-10 w-10 animate-spin text-blue-600" />
+                <Loader2 className="mb-4 h-10 w-10 animate-spin text-primary-700" />
                 <p className="text-black font-medium">Analyzing controls with AI…</p>
                 <p className="mt-1 text-sm text-gray-600 text-center">
                   {autoGroupProgress || 'Running in the background'}
@@ -1174,7 +1280,7 @@ export default function ControlLibraryPage() {
                 <div className="w-full max-w-md mt-4">
                   <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-blue-600 transition-all duration-500 ease-out"
+                      className="h-full bg-gradient-to-r from-primary-500 to-primary-700 transition-all duration-500 ease-out"
                       style={{ width: `${autoGroupPercent}%` }}
                     />
                   </div>
@@ -1189,15 +1295,15 @@ export default function ControlLibraryPage() {
               </div>
             ) : autoGroupResult ? (
               <div className="space-y-4">
-                <div className="rounded-lg bg-green-500/10 border border-green-500/30 p-4">
-                  <div className="flex items-center gap-2 text-green-400">
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="flex items-center gap-2 text-emerald-700">
                     <CheckCircle size={20} />
-                    <span className="font-medium">Auto-grouping complete!</span>
+                    <span className="font-semibold">Auto-grouping complete!</span>
                   </div>
-                  <p className="mt-2 text-gray-700">{autoGroupResult.message}</p>
+                  <p className="mt-2 text-slate-600">{autoGroupResult.message}</p>
                 </div>
-                <div className="rounded-lg border border-gray-300 bg-gray-100 p-4">
-                  <h4 className="mb-2 font-medium text-black">Results</h4>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <h4 className="mb-2 font-semibold text-slate-900">Results</h4>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <p className="text-gray-600">Groups Created</p>
@@ -1217,7 +1323,7 @@ export default function ControlLibraryPage() {
                       setShowAutoGroupModal(false);
                       setAutoGroupResult(null);
                     }}
-                    className="rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700"
+                    className="rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
                   >
                     Done
                   </button>

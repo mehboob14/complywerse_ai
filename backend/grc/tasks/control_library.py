@@ -23,7 +23,7 @@ from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 
 from ..celery_app import celery_app
-from ..job_status import set_status
+from ..job_status import set_status, get_status
 from .base import TenantTask, tenant_lock, LockNotAcquired
 
 logger = logging.getLogger(__name__)
@@ -373,6 +373,7 @@ def ai_auto_group(
                 _fetch_controls_for_grouping,
                 ai_auto_group_controls,
                 persist_ai_groups,
+                AutoGroupCancelled,
             )
 
             # Resolve tenant id from slug
@@ -380,6 +381,57 @@ def ai_auto_group(
             tenant = db.query(Tenant).filter(Tenant.slug == tenant_slug).first()
             if not tenant:
                 raise RuntimeError(f"Tenant slug '{tenant_slug}' not found")
+
+            # Honour a cancel requested while the job sat in the queue.
+            if (get_status(tenant_slug, namespace, job_id) or {}).get("cancel_requested"):
+                set_status(tenant_slug, namespace, job_id, {
+                    "status": "cancelled", "phase": "cancelled",
+                    "message": "Cancelled before it started.", "progress_percent": 100,
+                })
+                return {"status": "cancelled"}
+
+            # ── Preferred path: a one-time master baseline already exists.
+            # Build a framework-scoped session by FILTERING the baseline — no
+            # full AI re-run (AI touches only a brand-new framework's controls,
+            # classified onto the existing master list). The legacy clustering
+            # flow below runs ONLY when no baseline exists yet (fresh tenant).
+            from ..modules.control_library.services.scoped_session import (
+                get_baseline_run, build_scoped_session,
+            )
+            if get_baseline_run(db, tenant.id) is not None:
+                def _scoped_progress(done, total, msg):
+                    cur = get_status(tenant_slug, namespace, job_id) or {}
+                    if cur.get("cancel_requested"):
+                        raise AutoGroupCancelled()
+                    cur.update({"status": "running", "phase": "scoping", "message": msg,
+                                "progress_percent": int(done * 100 / max(1, total))})
+                    set_status(tenant_slug, namespace, job_id, cur)
+                try:
+                    res = build_scoped_session(
+                        db, tenant.id, framework_ids or [], user_id=user_id,
+                        progress_cb=_scoped_progress,
+                        should_cancel=lambda: bool((get_status(tenant_slug, namespace, job_id) or {}).get("cancel_requested")),
+                    )
+                except AutoGroupCancelled:
+                    set_status(tenant_slug, namespace, job_id, {
+                        "status": "cancelled", "phase": "cancelled",
+                        "message": "Cancelled.", "progress_percent": 100})
+                    return {"status": "cancelled"}
+                except ValueError as ve:
+                    set_status(tenant_slug, namespace, job_id, {"status": "failed", "error": str(ve)})
+                    return {"status": "failed", "reason": str(ve)}
+                set_status(tenant_slug, namespace, job_id, {
+                    "status": "completed", "phase": "done",
+                    "message": (
+                        f"Built a view of {res['unified_controls']} unified + "
+                        f"{res.get('standalone', 0)} standalone controls "
+                        + ("(new framework classified onto the master list)."
+                           if res["ai_used"] else "— reused the master baseline, no AI re-run.")),
+                    "summary": res, "run_id": res["run_id"], "progress_percent": 100,
+                })
+                logger.info("ai_auto_group SCOPED tenant=%s job=%s run=%s ai_used=%s",
+                            tenant_slug, job_id, res["run_id"], res["ai_used"])
+                return {"status": "completed", "job_id": job_id, "summary": res, "run_id": res["run_id"]}
 
             controls = _fetch_controls_for_grouping(db, tenant.id, framework_ids)
             if len(controls) < 2:
@@ -396,7 +448,27 @@ def ai_auto_group(
                 "control_count": len(controls),
             })
 
-            ai_groups = ai_auto_group_controls(controls)
+            def _progress(done, total_batches):
+                cur = get_status(tenant_slug, namespace, job_id) or {}
+                if cur.get("cancel_requested"):
+                    raise AutoGroupCancelled()
+                pct = 25 + int((done / max(1, total_batches)) * 50)
+                cur.update({
+                    "status": "running", "phase": "ai_grouping",
+                    "message": f"Grouping… batch {done} of {total_batches}",
+                    "progress_percent": pct,
+                })
+                set_status(tenant_slug, namespace, job_id, cur)
+
+            try:
+                ai_groups = ai_auto_group_controls(controls, progress_cb=_progress)
+            except AutoGroupCancelled:
+                logger.info("ai_auto_group CANCELLED tenant=%s job=%s", tenant_slug, job_id)
+                set_status(tenant_slug, namespace, job_id, {
+                    "status": "cancelled", "phase": "cancelled",
+                    "message": "Auto-grouping cancelled by user.", "progress_percent": 100,
+                })
+                return {"status": "cancelled"}
 
             set_status(tenant_slug, namespace, job_id, {
                 "status": "running",
@@ -408,17 +480,52 @@ def ai_auto_group(
 
             summary = persist_ai_groups(db, tenant.id, user_id, ai_groups)
 
+            # ── Second phase of the SAME flow: normalize each new domain ──
+            # Auto-grouping builds the domains; normalization then consolidates
+            # each domain's controls into normalized controls linked across
+            # frameworks. One button, two phases.
+            norm = {"normalized_controls_created": 0, "links_created": 0}
+            new_group_ids = summary.get("created_group_ids") or []
+            if new_group_ids:
+                from ..modules.control_library.services.normalization import run_normalization
+                set_status(tenant_slug, namespace, job_id, {
+                    "status": "running", "phase": "normalizing",
+                    "message": f"Normalizing {len(new_group_ids)} domain(s)…",
+                    "progress_percent": 80,
+                })
+
+                def _norm_progress(done, total, msg):
+                    cur = get_status(tenant_slug, namespace, job_id) or {}
+                    if cur.get("cancel_requested"):
+                        raise AutoGroupCancelled()
+                    pct = 80 + int((done / max(1, total)) * 18)
+                    cur.update({"status": "running", "phase": "normalizing",
+                                "message": msg, "progress_percent": pct})
+                    set_status(tenant_slug, namespace, job_id, cur)
+
+                try:
+                    norm = run_normalization(
+                        db, tenant.id, new_group_ids,
+                        progress_cb=_norm_progress,
+                        should_cancel=lambda: bool((get_status(tenant_slug, namespace, job_id) or {}).get("cancel_requested")),
+                    )
+                except AutoGroupCancelled:
+                    set_status(tenant_slug, namespace, job_id, {
+                        "status": "cancelled", "phase": "cancelled",
+                        "message": "Cancelled during normalization.", "progress_percent": 100})
+                    return {"status": "cancelled"}
+
             set_status(tenant_slug, namespace, job_id, {
                 "status": "completed",
                 "phase": "done",
                 "message": (
-                    f"Created {summary['created_count']} group(s), "
-                    f"merged {summary['merged_count']}, "
-                    f"linked {summary['mapping_count']} control(s)."
+                    f"Created {summary['created_count']} domain(s) and "
+                    f"{norm['normalized_controls_created']} normalized control(s)."
                 ),
                 "control_count": len(controls),
                 "group_count": len(ai_groups),
-                "summary": summary,
+                "summary": {**summary, **norm},
+                "progress_percent": 100,
             })
             logger.info("ai_auto_group DONE tenant=%s job=%s summary=%s", tenant_slug, job_id, summary)
             return {"status": "completed", "job_id": job_id, "summary": summary}
@@ -437,4 +544,88 @@ def ai_auto_group(
         raise
 
 
-__all__ = ["ai_compare_frameworks", "ai_auto_group"]
+@celery_app.task(
+    base=TenantTask,
+    bind=True,
+    name="grc.tasks.control_library.ai_normalize_controls",
+    max_retries=1,
+)
+def ai_normalize_controls(
+    self,
+    tenant_slug: str,
+    job_id: str,
+    group_ids: List[int] = None,
+    user_id: int = None,
+    db: Session = None,
+) -> dict:
+    """Background AI normalization. For each AI domain (CommonControlGroup),
+    cluster its controls into normalized controls and link each cross-framework.
+    Status under namespace ``control_normalization``."""
+    namespace = "control_normalization"
+    logger.info("ai_normalize_controls START tenant=%s job=%s group_ids=%s", tenant_slug, job_id, group_ids)
+    set_status(tenant_slug, namespace, job_id, {
+        "status": "running", "phase": "starting",
+        "message": "Starting normalization…", "progress_percent": 2,
+    })
+    try:
+        with tenant_lock(
+            tenant_slug, f"control_normalize:{job_id}",
+            ttl_seconds=1800, owner=self.request.id,
+        ):
+            from ..models import Tenant
+            tenant = db.query(Tenant).filter(Tenant.slug == tenant_slug).first()
+            if not tenant:
+                raise RuntimeError(f"Tenant slug '{tenant_slug}' not found")
+            from ..modules.control_library.services.normalization import run_normalization
+            from ..modules.control_library.routers.groups import AutoGroupCancelled
+
+            def _progress(done, total, msg):
+                cur = get_status(tenant_slug, namespace, job_id) or {}
+                if cur.get("cancel_requested"):
+                    raise AutoGroupCancelled()
+                pct = 5 + int((done / max(1, total)) * 90)
+                cur.update({"status": "running", "phase": "normalizing",
+                            "message": msg, "progress_percent": pct})
+                set_status(tenant_slug, namespace, job_id, cur)
+
+            def _should_cancel():
+                return bool((get_status(tenant_slug, namespace, job_id) or {}).get("cancel_requested"))
+
+            try:
+                summary = run_normalization(
+                    db, tenant.id, group_ids,
+                    progress_cb=_progress, should_cancel=_should_cancel,
+                )
+            except AutoGroupCancelled:
+                logger.info("ai_normalize_controls CANCELLED tenant=%s job=%s", tenant_slug, job_id)
+                set_status(tenant_slug, namespace, job_id, {
+                    "status": "cancelled", "phase": "cancelled",
+                    "message": "Normalization cancelled by user.", "progress_percent": 100,
+                })
+                return {"status": "cancelled"}
+
+            set_status(tenant_slug, namespace, job_id, {
+                "status": "completed", "phase": "done",
+                "message": (
+                    f"Created {summary['normalized_controls_created']} normalized control(s) "
+                    f"across {summary['domains_processed']} domain(s)."
+                ),
+                "summary": summary, "progress_percent": 100,
+            })
+            logger.info("ai_normalize_controls DONE tenant=%s job=%s summary=%s", tenant_slug, job_id, summary)
+            return {"status": "completed", "job_id": job_id, "summary": summary}
+    except LockNotAcquired:
+        set_status(tenant_slug, namespace, job_id, {
+            "status": "skipped",
+            "message": "Another normalization job is already running for this tenant.",
+        })
+        return {"status": "skipped", "job_id": job_id}
+    except Exception as exc:
+        logger.exception("ai_normalize_controls failed: %s", exc)
+        set_status(tenant_slug, namespace, job_id, {
+            "status": "failed", "error": str(exc)[:500], "progress_percent": 100,
+        })
+        raise
+
+
+__all__ = ["ai_compare_frameworks", "ai_auto_group", "ai_normalize_controls"]
