@@ -1809,6 +1809,111 @@ def normalize_status(job_id: str, http_request: Request, db: Session = Depends(g
     return get_job_status(tenant_slug, "control_normalization", job_id)
 
 
+# ── Master-baseline creation: the first-time / rebuild normalization pipeline ──
+# Builds the unified library into a NEW run (is_baseline=False); the admin reviews
+# it via the session dropdown and PROMOTES it. The live baseline is never touched
+# by the build — only the explicit promote step swaps it.
+_BASELINE_NS = "control_baseline_build"
+
+
+def _run_baseline_build_threaded(tenant_slug, job_id, user_id, label):
+    db_session = None
+    try:
+        from ....db import get_tenant_session_factory
+        from ....models import Tenant
+        db_session = get_tenant_session_factory(tenant_slug)()
+        tenant = db_session.query(Tenant).filter(Tenant.slug == tenant_slug).first()
+        if not tenant:
+            raise RuntimeError(f"Tenant slug '{tenant_slug}' not found")
+        from ..services.baseline_builder import build_baseline_run
+
+        def _progress(done, total, msg):
+            cur = get_job_status(tenant_slug, _BASELINE_NS, job_id) or {}
+            if cur.get("cancel_requested"):
+                raise AutoGroupCancelled()
+            cur.update({"status": "running", "phase": "building", "message": msg,
+                        "progress_percent": int(done * 100 / max(1, total))})
+            set_job_status(tenant_slug, _BASELINE_NS, job_id, cur)
+
+        try:
+            res = build_baseline_run(
+                db_session, tenant.id, label=label, user_id=user_id, progress_cb=_progress,
+                should_cancel=lambda: bool((get_job_status(tenant_slug, _BASELINE_NS, job_id) or {}).get("cancel_requested")))
+        except AutoGroupCancelled:
+            set_job_status(tenant_slug, _BASELINE_NS, job_id, {
+                "status": "cancelled", "phase": "cancelled", "message": "Cancelled.", "progress_percent": 100})
+            return
+        set_job_status(tenant_slug, _BASELINE_NS, job_id, {
+            "status": "completed", "phase": "done",
+            "message": (f"Built {res['unified_controls']} unified + {res['standalone']} standalone "
+                        f"controls. Review it from the dropdown, then Promote to make it live."),
+            "summary": res, "run_id": res["run_id"], "progress_percent": 100})
+    except Exception as exc:
+        _jobs_logger.exception("[baseline_build] tenant=%s job=%s FAILED", tenant_slug, job_id)
+        set_job_status(tenant_slug, _BASELINE_NS, job_id, {
+            "status": "failed", "phase": "error", "error": str(exc)[:500], "progress_percent": 100})
+    finally:
+        if db_session is not None:
+            try:
+                db_session.close()
+            except Exception:
+                pass
+
+
+@router.post("/baseline/build-dispatch")
+def baseline_build_dispatch(http_request: Request, db: Session = Depends(get_db),
+                            current_user: GRCUser = Depends(require_auth)):
+    """Kick off a first-time/rebuild normalization into a NEW run (NOT promoted)."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="User has no tenant assigned")
+    if not check_ai_available():
+        raise HTTPException(status_code=503, detail={
+            "error": "AI features unavailable", "message": "OpenAI API key is not configured."})
+    tenant_slug = _resolve_tenant_slug(http_request, db, current_user)
+    job_id = uuid.uuid4().hex
+    set_job_status(tenant_slug, _BASELINE_NS, job_id, {
+        "status": "queued", "phase": "queued", "message": "Starting baseline build…", "progress_percent": 1})
+    set_job_status(tenant_slug, _BASELINE_NS, "latest", {"job_id": job_id})
+    # Run in-process (the API has the latest code); a long AI job survives here fine.
+    threading.Thread(target=_run_baseline_build_threaded,
+                     args=(tenant_slug, job_id, current_user.id, "Master baseline (candidate)"),
+                     name=f"baseline_build:{job_id}", daemon=True).start()
+    _jobs_logger.info("[baseline_build] DISPATCH tenant=%s job=%s", tenant_slug, job_id)
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.get("/baseline/build-status/{job_id}")
+def baseline_build_status(job_id: str, http_request: Request, db: Session = Depends(get_db),
+                          current_user: GRCUser = Depends(require_auth)):
+    tenant_slug = _resolve_tenant_slug(http_request, db, current_user)
+    return get_job_status(tenant_slug, _BASELINE_NS, job_id)
+
+
+@router.post("/baseline/promote/{run_id}")
+def promote_baseline(run_id: int, db: Session = Depends(get_db),
+                     current_user: GRCUser = Depends(require_auth)):
+    """Approve a candidate run: demote the current baseline and make this run live."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    run = db.query(NormalizationRun).filter(
+        NormalizationRun.id == run_id, NormalizationRun.tenant_id == tenant_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status != "completed":
+        raise HTTPException(status_code=400, detail="Only a completed run can be promoted.")
+    if run.is_baseline:
+        return {"ok": True, "baseline_run_id": run_id, "note": "already the baseline"}
+    db.query(NormalizationRun).filter(
+        NormalizationRun.tenant_id == tenant_id, NormalizationRun.is_baseline.is_(True)
+    ).update({NormalizationRun.is_baseline: False}, synchronize_session=False)
+    run.is_baseline = True
+    if run.scope == "custom":
+        run.scope = "full"
+    db.commit()
+    _jobs_logger.info("[baseline_build] PROMOTED run=%s tenant=%s", run_id, tenant_id)
+    return {"ok": True, "baseline_run_id": run_id}
+
+
 @router.post("/normalize/cancel/{job_id}")
 def normalize_cancel(job_id: str, http_request: Request, db: Session = Depends(get_db),
                      current_user: GRCUser = Depends(require_auth)):

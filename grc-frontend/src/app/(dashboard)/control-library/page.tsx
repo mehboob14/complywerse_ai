@@ -150,6 +150,48 @@ export default function ControlLibraryPage() {
     },
   });
 
+  // ── Create / rebuild the MASTER BASELINE (first-time normalization) ──
+  // Builds a CANDIDATE run (not live); the admin reviews it then Promotes it.
+  const [baselineBuild, setBaselineBuild] = useState<{ message: string; percent: number; status: string } | null>(null);
+  const baselinePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const createBaseline = useMutation({
+    mutationFn: async () => (await apiClient.post('/control-library/groups/baseline/build-dispatch')).data,
+    onSuccess: (data: any) => {
+      const jobId = data?.job_id;
+      if (!jobId) return;
+      setBaselineBuild({ message: 'Starting baseline build…', percent: 1, status: 'running' });
+      if (baselinePollRef.current) clearInterval(baselinePollRef.current);
+      baselinePollRef.current = setInterval(async () => {
+        try {
+          const st = (await apiClient.get(`/control-library/groups/baseline/build-status/${jobId}`)).data || {};
+          setBaselineBuild({ message: st.message || st.phase || 'Working…', percent: Math.max(1, Math.min(100, st.progress_percent ?? 1)), status: st.status });
+          if (st.status === 'completed' || st.status === 'failed') {
+            if (baselinePollRef.current) clearInterval(baselinePollRef.current);
+            baselinePollRef.current = null;
+            if (st.status === 'completed' && typeof st.run_id === 'number') {
+              setSelectedRunId(st.run_id);   // switch to the candidate so the admin can review it
+              setPage(0);
+              queryClient.invalidateQueries({ queryKey: ['normalization-sessions'] });
+              queryClient.invalidateQueries({ queryKey: ['control-groups'] });
+            }
+            setTimeout(() => setBaselineBuild(null), 6000);
+          }
+        } catch { /* transient */ }
+      }, 2500);
+    },
+    onError: () => setBaselineBuild({ message: 'Failed to start baseline build.', percent: 100, status: 'failed' }),
+  });
+  // Promote the selected candidate run to be the live master baseline.
+  const promoteBaseline = useMutation({
+    mutationFn: async (id: number) => (await apiClient.post(`/control-library/groups/baseline/promote/${id}`)).data,
+    onSuccess: () => {
+      setSelectedRunId(null);   // baseline view
+      setPage(0);
+      queryClient.invalidateQueries({ queryKey: ['normalization-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['control-groups'] });
+    },
+  });
+
   const { data: groupsData, isLoading: groupsLoading, error: groupsError, refetch: refetchGroups } = useQuery({
     queryKey: ['control-groups', searchTerm, categoryFilter, domainFilter, page, pageSize, selectedRunId],
     queryFn: async () => {
@@ -469,6 +511,23 @@ export default function ControlLibraryPage() {
 
   return (
     <div className="space-y-5">
+      {/* Master-baseline build progress (first-time / rebuild normalization). */}
+      {baselineBuild && (
+        <div className={`rounded-xl border px-4 py-3 shadow-sm ${baselineBuild.status === 'failed' ? 'border-red-200 bg-red-50' : 'border-primary-200 bg-gradient-to-r from-primary-50 to-white'}`}>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-900">
+              {baselineBuild.status === 'completed' ? 'Baseline candidate ready — review it, then “Promote to baseline”.'
+                : baselineBuild.status === 'failed' ? 'Baseline build failed.'
+                : 'Building master-baseline candidate…'}
+            </p>
+            <span className="text-sm font-bold tabular-nums text-primary-700">{baselineBuild.percent}%</span>
+          </div>
+          <p className="mt-1 truncate text-xs text-slate-500">{baselineBuild.message}</p>
+          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-primary-100">
+            <div className="h-full rounded-full bg-gradient-to-r from-primary-500 to-primary-700 transition-all" style={{ width: `${baselineBuild.percent}%` }} />
+          </div>
+        </div>
+      )}
       {/* Persistent auto-group progress banner — visible even after closing the
           dialog or reloading, with a Stop button. */}
       {activeJob?.active && activeJob?.job_id && (
@@ -554,6 +613,24 @@ export default function ControlLibraryPage() {
               {deleteSession.isPending ? 'Deleting…' : 'Delete session'}
             </button>
           )}
+          {/* Promote a full candidate run (built via 'Create Master Baseline') to be
+              the live baseline. Only for full-scope, non-baseline runs. */}
+          {selectedRunId && sessionsData?.find((x) => x.id === selectedRunId)?.scope === 'full'
+            && !sessionsData?.find((x) => x.id === selectedRunId)?.is_baseline && (
+            <button
+              onClick={() => {
+                if (window.confirm('Promote this candidate to be the live Master Baseline? The current baseline becomes a switchable session (not deleted).')) {
+                  promoteBaseline.mutate(selectedRunId);
+                }
+              }}
+              disabled={promoteBaseline.isPending}
+              title="Make this run the live master baseline"
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              <CheckCircle size={16} />
+              {promoteBaseline.isPending ? 'Promoting…' : 'Promote to baseline'}
+            </button>
+          )}
           <Link
             href="/control-library/review"
             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -571,6 +648,21 @@ export default function ControlLibraryPage() {
             <Sparkles size={18} />
             Build Unified View
           </button>
+          {canCreate && (
+            <button
+              onClick={() => {
+                if (window.confirm('Run the full normalization pipeline to build a NEW master-baseline candidate? This is the first-time/rebuild grouping (~15 min, AI). It builds a separate run you can review, then Promote — your current baseline stays live until you promote.')) {
+                  createBaseline.mutate();
+                }
+              }}
+              disabled={createBaseline.isPending || (baselineBuild?.status === 'running')}
+              title="Run the first-time / rebuild normalization to create a master-baseline candidate"
+              className="flex items-center gap-2 rounded-lg border border-primary-300 bg-primary-50 px-3.5 py-2 text-sm font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-50"
+            >
+              <RefreshCw size={18} className={baselineBuild?.status === 'running' ? 'animate-spin' : ''} />
+              {baselineBuild?.status === 'running' ? 'Building baseline…' : 'Create Master Baseline'}
+            </button>
+          )}
           {canCreate && (
             <button
               onClick={() => setShowCreateModal(true)}
