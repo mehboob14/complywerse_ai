@@ -206,6 +206,25 @@ _COLUMN_ADDS = [
     ("grc_compliance_assessment_document_items", "control_source", "VARCHAR(50)", None),
     ("grc_compliance_assessment_document_items", "control_type", "VARCHAR(20)", None),
     ("grc_compliance_assessment_document_items", "subdomain_name", "TEXT", None),
+    # Remediation Plan tracking — gap items (e.g. PDPL controls scored < 3)
+    # get an editable open/in_progress/closed status on the Remediation tab.
+    ("grc_compliance_assessment_document_items", "remediation_status",
+     "VARCHAR(30)", "ix_assessment_item_remediation_status"),
+    # PDPL maturity score (0-5) — assessed per-control on the PDPL page.
+    ("grc_compliance_assessment_document_items", "maturity_score", "INTEGER", None),
+    # PDPL risk rating (Low/Medium/High/Critical) — editable per-control.
+    ("grc_compliance_assessment_document_items", "risk_rating", "VARCHAR(50)", None),
+    # AI normalization — domain + provenance on NormalizedControl so the Control
+    # Library can show normalized controls per domain. The new
+    # grc_normalized_control_links table is auto-created via create_all.
+    ("grc_normalized_controls", "domain", "VARCHAR(255)", "ix_normalized_control_domain"),
+    ("grc_normalized_controls", "source", "VARCHAR(50)", None),
+    ("grc_normalized_controls", "common_group_id", "INTEGER", "ix_normalized_control_group"),
+    ("grc_normalized_controls", "recommended_evidence", "JSONB", None),
+    # Normalization sessions: each grouping/normalization run is isolated so the
+    # owner's baseline and a user's custom run coexist. run_id tags each row.
+    ("grc_normalized_controls", "run_id", "INTEGER", "ix_normalized_control_run"),
+    ("grc_common_control_groups", "run_id", "INTEGER", "ix_common_group_run"),
     # NCA risk register: platform-aware ownership + asset linking
     ("grc_nca_risk_entries", "risk_owner_user_id", "INTEGER", None),
     ("grc_nca_risk_entries", "treatment_owner_user_id", "INTEGER", None),
@@ -238,6 +257,20 @@ _COLUMN_ADDS = [
      "ix_parsed_control_critical"),
     ("grc_parsed_framework_controls", "criticality_reason", "TEXT", None),
     ("grc_parsed_framework_controls", "criticality_analyzed_at", "TIMESTAMP", None),
+    # Native implementation-order tier (NDMO P1/P2/P3 → Year 1/2/3 roadmap) and
+    # control-level prerequisite dependencies. Both preserved verbatim from the
+    # source JSON; NULL/[] for frameworks that declare neither.
+    ("grc_parsed_framework_controls", "priority_level", "VARCHAR(10)",
+     "ix_parsed_control_priority_level"),
+    ("grc_parsed_framework_controls", "dependencies", "JSON DEFAULT '[]'::json", None),
+    # Per-control version-history rows (NDMO "Version History" table).
+    ("grc_parsed_framework_controls", "version_history", "JSON DEFAULT '[]'::json", None),
+    # Control-level description (NDMO Figure-2 "Control Description").
+    ("grc_parsed_framework_controls", "control_description", "TEXT", None),
+    # Assessment criteria parsed from each spec's Control Specification text.
+    ("grc_parsed_framework_controls", "assessment_criteria", "JSON DEFAULT '[]'::json", None),
+    # Per-criterion met/not-met state on each journey control implementation.
+    ("grc_control_implementations", "criteria_status", "JSON DEFAULT '{}'::json", None),
     # Gap-analysis remediation: AI-drafted clause text + apply-to-document
     # audit columns. Populated via /gap-analysis/findings/{id}/generate-fix
     # and /apply-fix endpoints with human-in-the-loop edit/approve.

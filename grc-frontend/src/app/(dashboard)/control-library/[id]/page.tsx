@@ -11,9 +11,11 @@ import {
   ArrowLeft, Loader2, AlertCircle, Shield, Calendar, Tag,
   Edit2, Sparkles, Trash2, Plus, X, Search, Layers, GitMerge,
   FileCheck, Link2, Eye, RefreshCw, Brain, ChevronDown, ChevronRight,
-  CheckCircle, Clock, AlertTriangle, Filter, Lightbulb, Info
+  CheckCircle, Clock, AlertTriangle, Filter, Lightbulb, Info, Library, FileText
 } from 'lucide-react';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 type TabType = 'controls' | 'similarity' | 'evidence' | 'inheritance';
 
@@ -25,6 +27,9 @@ interface NormalizedControlItem {
   statement: string | null;
   mapping_confidence: number | null;
   mapping_source: string | null;
+  frameworks?: string[];
+  framework_count?: number;
+  linked_control_count?: number;
 }
 
 interface FrameworkControlItem {
@@ -149,9 +154,9 @@ const PRIORITY_STYLES: Record<string, { bg: string; text: string }> = {
 };
 
 const SOURCE_STYLES: Record<string, { bg: string; text: string }> = {
-  manual: { bg: 'bg-gray-100', text: 'text-gray-700' },
-  ai: { bg: 'bg-purple-100', text: 'text-purple-700' },
-  import: { bg: 'bg-blue-100', text: 'text-blue-700' },
+  manual: { bg: 'bg-slate-100', text: 'text-slate-600' },
+  ai: { bg: 'bg-primary-50', text: 'text-primary-700' },
+  import: { bg: 'bg-slate-100', text: 'text-slate-600' },
 };
 
 export default function ControlGroupDetailPage() {
@@ -179,7 +184,8 @@ export default function ControlGroupDetailPage() {
   }, [isValidGroupId, rawId, router]);
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabType>('controls');
-  const [frameworkFilter, setFrameworkFilter] = useState<number | null>(null);
+  // null = show all · 'normalized' = only normalized controls · number = one framework
+  const [frameworkFilter, setFrameworkFilter] = useState<number | 'normalized' | null>(null);
   const [groupByFramework, setGroupByFramework] = useState(false);
   const [showAddControlsModal, setShowAddControlsModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -296,7 +302,11 @@ export default function ControlGroupDetailPage() {
     let normalized = group.normalized_controls || [];
     let framework = group.framework_controls || [];
     let parsed = group.parsed_controls || [];
-    if (frameworkFilter !== null) {
+    if (frameworkFilter === 'normalized') {
+      // Only the normalized (consolidated, cross-framework) controls.
+      return { normalized, framework: [], parsed: [] };
+    }
+    if (typeof frameworkFilter === 'number') {
       framework = framework.filter(c => c.framework_id === frameworkFilter);
       parsed = parsed.filter(c => c.framework_id === frameworkFilter);
       normalized = [];
@@ -328,7 +338,7 @@ export default function ControlGroupDetailPage() {
       <div className="flex h-64 flex-col items-center justify-center gap-3 text-slate-600">
         <PageLoader size="sm" />
         <p className="text-sm">Redirecting…</p>
-        <Link href="/control-library" className="text-xs text-blue-600 hover:underline">
+        <Link href="/control-library" className="text-xs text-primary-700 hover:underline">
           Tap here if not redirected
         </Link>
       </div>
@@ -348,7 +358,7 @@ export default function ControlGroupDetailPage() {
       <div className="flex h-64 flex-col items-center justify-center text-red-400">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load control group details</p>
-        <Link href="/control-library" className="mt-4 text-blue-600 hover:underline">
+        <Link href="/control-library" className="mt-4 text-primary-700 hover:underline">
           Back to Control Library
         </Link>
       </div>
@@ -357,8 +367,6 @@ export default function ControlGroupDetailPage() {
 
   const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
     { id: 'controls', label: 'Mapped Controls', icon: Shield },
-    { id: 'similarity', label: 'Similarity Analysis', icon: GitMerge },
-    { id: 'evidence', label: 'Evidence Recommendations', icon: FileCheck },
     { id: 'inheritance', label: 'Inheritance', icon: Link2 },
   ];
 
@@ -376,24 +384,26 @@ export default function ControlGroupDetailPage() {
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <Layers className="h-7 w-7 text-blue-600 flex-shrink-0" />
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-sm">
+              <Layers className="h-6 w-6 text-white" />
+            </span>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-sm font-medium text-blue-600">{group.code}</span>
-                <h1 className="text-2xl font-bold text-black">{group.name}</h1>
+                <span className="font-mono text-sm font-semibold text-primary-700">{group.code}</span>
+                <h1 className="text-2xl font-bold text-slate-900">{group.name}</h1>
               </div>
-              <p className="text-gray-600">{group.description || 'No description'}</p>
+              <p className="text-slate-500">{group.description || 'No description'}</p>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {group.category && (
-            <span className="rounded-full bg-blue-100 px-3 py-1 text-sm text-blue-700">
+            <span className="rounded-full bg-primary-50 px-3 py-1 text-sm font-medium text-primary-700 ring-1 ring-primary-100">
               {group.category}
             </span>
           )}
           {group.domain && (
-            <span className="rounded-full bg-purple-100 px-3 py-1 text-sm text-purple-700">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600">
               {group.domain}
             </span>
           )}
@@ -438,12 +448,12 @@ export default function ControlGroupDetailPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
           {group.ai_summary && (
-            <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
-              <div className="mb-2 flex items-center gap-2 text-purple-700">
+            <div className="rounded-lg border border-primary-200 bg-gradient-to-r from-primary-50 to-white p-4">
+              <div className="mb-2 flex items-center gap-2 text-primary-700">
                 <Brain className="h-4 w-4" />
-                <span className="text-sm font-medium">AI Summary</span>
+                <span className="text-sm font-semibold">AI Summary</span>
               </div>
-              <p className="text-gray-700">{group.ai_summary}</p>
+              <p className="text-slate-600">{group.ai_summary}</p>
             </div>
           )}
 
@@ -496,13 +506,25 @@ export default function ControlGroupDetailPage() {
           onClick={() => setFrameworkFilter(null)}
           className={`rounded-lg border p-4 text-center transition-colors ${
             frameworkFilter === null
-              ? 'border-primary-500 bg-primary-500/10'
-              : 'border-gray-200 bg-white hover:bg-gray-100'
+              ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-200'
+              : 'border-gray-200 bg-white hover:bg-gray-50'
           }`}
         >
-          <Shield className="mx-auto mb-2 h-6 w-6 text-green-400" />
-          <div className="text-lg font-bold text-black">
-            {frameworksData?.normalized_control_count || 0}
+          <Library className="mx-auto mb-2 h-6 w-6 text-slate-400" />
+          <div className="text-lg font-bold text-slate-900">{group.total_control_count}</div>
+          <div className="text-xs text-gray-600">All</div>
+        </button>
+        <button
+          onClick={() => setFrameworkFilter(frameworkFilter === 'normalized' ? null : 'normalized')}
+          className={`rounded-lg border p-4 text-center transition-colors ${
+            frameworkFilter === 'normalized'
+              ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-200'
+              : 'border-gray-200 bg-white hover:bg-gray-50'
+          }`}
+        >
+          <Sparkles className="mx-auto mb-2 h-6 w-6 text-primary-600" />
+          <div className="text-lg font-bold text-slate-900">
+            {frameworksData?.normalized_control_count ?? (group.normalized_controls?.length || 0)}
           </div>
           <div className="text-xs text-gray-600">Normalized</div>
         </button>
@@ -512,12 +534,12 @@ export default function ControlGroupDetailPage() {
             onClick={() => setFrameworkFilter(fw.framework_id === frameworkFilter ? null : fw.framework_id)}
             className={`rounded-lg border p-4 text-center transition-colors ${
               frameworkFilter === fw.framework_id
-                ? 'border-primary-500 bg-primary-500/10'
-                : 'border-gray-200 bg-white hover:bg-gray-100'
+                ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-200'
+                : 'border-gray-200 bg-white hover:bg-gray-50'
             }`}
           >
-            <Layers className="mx-auto mb-2 h-6 w-6 text-orange-400" />
-            <div className="text-lg font-bold text-black">{fw.control_count}</div>
+            <Layers className="mx-auto mb-2 h-6 w-6 text-slate-400" />
+            <div className="text-lg font-bold text-slate-900">{fw.control_count}</div>
             <div className="truncate text-xs text-gray-600">{fw.framework_code || fw.framework_name}</div>
           </button>
         ))}
@@ -533,7 +555,7 @@ export default function ControlGroupDetailPage() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                   activeTab === tab.id
-                    ? 'border-primary-500 text-blue-600'
+                    ? 'border-primary-500 text-primary-700'
                     : 'border-transparent text-gray-600 hover:text-black'
                 }`}
               >
@@ -573,6 +595,8 @@ export default function ControlGroupDetailPage() {
             onGenerateRecs={() => generateEvidenceRecsMutation.mutate()}
             isGenerating={generateEvidenceRecsMutation.isPending}
             getPriorityStyle={getPriorityStyle}
+            groupId={groupId}
+            groupName={group?.name}
           />
         )}
 
@@ -633,12 +657,15 @@ function MappedControlsTab({
   isRemoving: boolean;
   getConfidenceBadge: (c: number | null) => React.ReactNode;
   getSourceStyle: (s: string | null) => { bg: string; text: string };
-  frameworkFilter: number | null;
+  frameworkFilter: number | 'normalized' | null;
 }) {
   const allControls = [...normalizedControls, ...frameworkControls, ...parsedControls];
+  const [selected, setSelected] = useState<any | null>(null);
+  const selectedKey = selected ? `${selected.type}-${selected.mapping_id}` : null;
 
   return (
     <div className="space-y-4">
+      <ControlDetailDrawer control={selected} onClose={() => setSelected(null)} />
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-black">
           Mapped Controls ({allControls.length})
@@ -692,6 +719,8 @@ function MappedControlsTab({
                 isRemoving={isRemoving}
                 getConfidenceBadge={getConfidenceBadge}
                 getSourceStyle={getSourceStyle}
+                onSelect={setSelected}
+                selectedKey={selectedKey}
               />
             </div>
           )}
@@ -707,6 +736,8 @@ function MappedControlsTab({
                 isRemoving={isRemoving}
                 getConfidenceBadge={getConfidenceBadge}
                 getSourceStyle={getSourceStyle}
+                onSelect={setSelected}
+                selectedKey={selectedKey}
               />
             </div>
           ))}
@@ -722,9 +753,327 @@ function MappedControlsTab({
           isRemoving={isRemoving}
           getConfidenceBadge={getConfidenceBadge}
           getSourceStyle={getSourceStyle}
+          onSelect={setSelected}
+          selectedKey={selectedKey}
         />
       )}
     </div>
+  );
+}
+
+function ControlRow({
+  control, onRemove, isRemoving, getConfidenceBadge, getSourceStyle, onSelect, isSelected,
+}: {
+  control: any;
+  onRemove: (mappingId: number) => void;
+  isRemoving: boolean;
+  getConfidenceBadge: (c: number | null) => React.ReactNode;
+  getSourceStyle: (s: string | null) => { bg: string; text: string };
+  onSelect: (c: any) => void;
+  isSelected: boolean;
+}) {
+  const sourceStyle = getSourceStyle(control.mapping_source);
+  return (
+    <tr
+      onClick={() => onSelect(control)}
+      className={`cursor-pointer transition-colors ${isSelected ? 'bg-teal-50' : 'hover:bg-teal-50/40'}`}
+    >
+      <td className="px-4 py-3 align-top">
+        <div className="flex items-center gap-1.5">
+          <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${isSelected ? 'rotate-90 text-teal-500' : 'text-gray-400'}`} />
+          <span className="whitespace-nowrap font-mono text-sm text-primary-700">{control.code}</span>
+        </div>
+      </td>
+      <td className="px-4 py-3">
+        <p className="max-w-xs truncate text-sm text-black">{control.name}</p>
+        {control.type === 'normalized' && (control.framework_count ?? 0) > 0 && (
+          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700 ring-1 ring-teal-100">
+            <Sparkles className="h-2.5 w-2.5" /> Same requirement in {control.framework_count} framework{control.framework_count === 1 ? '' : 's'}
+          </span>
+        )}
+      </td>
+      <td className="px-4 py-3 align-top">
+        {control.type === 'normalized' ? (<span className="inline-block whitespace-nowrap rounded bg-teal-100 px-2 py-1 text-xs text-teal-700">Normalized</span>)
+          : control.type === 'parsed' ? (<span title={control.framework_name || 'Parsed'} className="inline-block max-w-[14rem] truncate align-middle rounded bg-cyan-100 px-2 py-1 text-xs text-cyan-700">{control.framework_name || 'Parsed'}</span>)
+          : (<span title={control.framework_name || control.framework_code || 'Framework'} className="inline-block max-w-[14rem] truncate align-middle rounded bg-orange-100 px-2 py-1 text-xs text-orange-700">{control.framework_code || control.framework_name || 'Framework'}</span>)}
+      </td>
+      <td className="px-4 py-3">{getConfidenceBadge(control.mapping_confidence)}</td>
+      <td className="px-4 py-3"><span className={`rounded px-2 py-1 text-xs ${sourceStyle.bg} ${sourceStyle.text}`}>{control.mapping_source || 'manual'}</span></td>
+      <td className="px-4 py-3 text-right">
+        <button onClick={(e) => { e.stopPropagation(); onRemove(control.mapping_id); }} disabled={isRemoving}
+          className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-400 disabled:opacity-50">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function ControlDetailDrawer({ control, onClose }: { control: any | null; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [tab, setTab] = useState<'details' | 'evidence' | 'artifact' | 'upload'>('details');
+
+  // Reset all per-control state whenever a different control is opened.
+  useEffect(() => {
+    setTab('details'); setUploadMsg(null); setErr(null); setFile(null);
+  }, [control?.control_id, control?.type]);
+
+  const cid = control?.control_id ?? control?.id;
+  const base = `/control-library/groups/control/${control?.type}/${cid}`;
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['control-group-detail'] });
+    qc.invalidateQueries({ queryKey: ['control-coverage', control?.type, cid] });
+  };
+  const errMsg = (e: any) => e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || 'Action failed';
+
+  // Cross-framework coverage: which frameworks this control consolidates and
+  // what evidence is already linked anywhere in its fan-out.
+  const { data: coverage, isLoading: coverageLoading } = useQuery<any>({
+    queryKey: ['control-coverage', control?.type, cid],
+    queryFn: async () => (await apiClient.get(`${base}/coverage`)).data,
+    enabled: !!control,
+  });
+
+  // Built-in recommended evidence + pre-built artifacts the frameworks already
+  // prescribe (NOT AI-generated). Aggregated across frameworks for a normalized
+  // control.
+  const { data: reqs, isLoading: reqsLoading } = useQuery<any>({
+    queryKey: ['control-requirements', control?.type, cid],
+    queryFn: async () => (await apiClient.get(`${base}/requirements`)).data,
+    enabled: !!control,
+  });
+
+  const upload = useMutation({
+    mutationFn: async () => {
+      const fd = new FormData();
+      fd.append('name', file?.name || 'Evidence');
+      if (file) fd.append('file', file);
+      return (await apiClient.post(`${base}/upload-evidence`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
+    },
+    onMutate: () => setErr(null), onSuccess: (d: any) => { setUploadMsg(d.message); setFile(null); refresh(); setTab('details'); }, onError: (e: any) => setErr(errMsg(e)),
+  });
+
+  if (!control) return null;
+  const desc = control.statement || control.objective || control.description || '';
+  const TABS: Array<{ id: typeof tab; label: string; icon: any }> = [
+    { id: 'details', label: 'Details', icon: Info },
+    { id: 'evidence', label: 'Evidence', icon: FileCheck },
+    { id: 'artifact', label: 'Artifacts', icon: FileText },
+    { id: 'upload', label: 'Upload', icon: Plus },
+  ];
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+      <aside className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
+        {/* Header + tabs */}
+        <div className="border-b border-gray-100 bg-gradient-to-r from-teal-50 to-white px-5 pt-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-teal-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-teal-700">{control.code}</span>
+                <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium capitalize text-gray-500 ring-1 ring-gray-200">{control.type}</span>
+              </div>
+              <h3 className="mt-1.5 text-base font-semibold leading-snug text-gray-900">{control.name}</h3>
+            </div>
+            <button onClick={onClose} className="rounded-full p-1 text-gray-400 hover:bg-white hover:text-gray-700"><X className="h-5 w-5" /></button>
+          </div>
+          <div className="mt-3 flex gap-1">
+            {TABS.map((t) => {
+              const active = tab === t.id; const Icon = t.icon;
+              return (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-semibold transition-colors ${active ? 'border-teal-600 text-teal-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+                  <Icon className="h-3.5 w-3.5" /> {t.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          {err && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{err}</p>}
+
+          {tab === 'details' && (
+            <div className="space-y-5">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Description</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-gray-700">{desc || <span className="text-gray-400">No description recorded.</span>}</p>
+              </div>
+
+              {/* Cross-framework coverage — proves which frameworks share this control */}
+              <div>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Common across frameworks</p>
+                {coverageLoading ? (
+                  <div className="flex items-center gap-2 py-4 text-xs text-gray-400"><Loader2 className="h-4 w-4 animate-spin" /> Resolving coverage…</div>
+                ) : !coverage || (coverage.frameworks?.length ?? 0) === 0 ? (
+                  <p className="rounded-lg bg-gray-50 px-3 py-3 text-xs leading-relaxed text-gray-500">
+                    This control isn’t linked to other frameworks yet. Run AI Grouping &amp; Normalization so it consolidates the matching controls across your frameworks.
+                  </p>
+                ) : (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center gap-2 rounded-lg bg-teal-50 px-3 py-2 text-xs font-medium text-teal-800 ring-1 ring-teal-100">
+                      <CheckCircle className="h-4 w-4 shrink-0 text-teal-600" />
+                      Same requirement found in <b>{coverage.framework_count}</b> framework{coverage.framework_count === 1 ? '' : 's'} — comply once here to satisfy all of them.
+                    </div>
+                    {/* One row per framework: framework name + the exact control code(s)
+                        that carry this requirement there, shown as tags. */}
+                    <div className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200">
+                      {coverage.frameworks.map((fw: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                          <span className="min-w-0 flex-1 text-sm font-medium text-gray-700">{fw.framework_name}</span>
+                          <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                            {fw.controls.map((c: any, j: number) => (
+                              <span key={j} title={c.name} className="rounded bg-teal-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-teal-700 ring-1 ring-teal-100">{c.code || c.name}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Linked evidence — verification that an upload actually fanned out */}
+              <div>
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Evidence linked</p>
+                {coverage && (coverage.evidence?.length ?? 0) > 0 ? (
+                  <ul className="space-y-1.5">
+                    {coverage.evidence.map((ev: any) => (
+                      <li key={ev.id} className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2">
+                        <FileCheck className="h-4 w-4 shrink-0 text-teal-500" />
+                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-700">{ev.name || ev.file_name}</span>
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] capitalize text-gray-500">{ev.status || 'draft'}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="rounded-lg bg-gray-50 px-3 py-3 text-xs text-gray-500">No evidence linked yet. Use the <b>Upload</b> tab — it attaches to every framework control listed above in one step.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {tab === 'evidence' && (
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Recommended evidence</p>
+              <p className="mb-3 mt-0.5 text-xs leading-relaxed text-gray-500">
+                {reqs?.is_normalized
+                  ? 'Consolidated — each item, uploaded once, satisfies every framework listed on it.'
+                  : 'What this framework already prescribes to demonstrate the control.'}
+              </p>
+              {reqsLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400"><Loader2 className="mb-2 h-6 w-6 animate-spin" /></div>
+              ) : !reqs || (reqs.consolidated_evidence?.length ?? 0) === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 py-16 text-center"><FileCheck className="mb-2 h-7 w-7 text-gray-300" /><p className="text-sm text-gray-600">No recommended evidence on record</p><p className="mt-1 px-6 text-xs text-gray-400">No framework specified evidence for this control.</p></div>
+              ) : (
+                <div>
+                  {reqs.is_normalized && (
+                    <div className="mb-3 flex items-center gap-2 rounded-lg bg-teal-50 px-3 py-2 text-xs font-medium text-teal-800 ring-1 ring-teal-100">
+                      <CheckCircle className="h-4 w-4 shrink-0 text-teal-600" />
+                      <b>{reqs.unique_evidence_total}</b> unique evidence items cover all linked frameworks (instead of {reqs.evidence_total} separate ones).
+                    </div>
+                  )}
+                  <ul className="space-y-2">
+                    {reqs.consolidated_evidence.map((it: any, i: number) => (
+                      <li key={i} className="rounded-lg border border-gray-200 p-3">
+                        <div className="flex items-start gap-2">
+                          <FileCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-500" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-gray-800">{it.name}</p>
+                            {it.description && <p className="mt-0.5 text-xs leading-relaxed text-gray-600">{it.description}</p>}
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                              {reqs.is_normalized && (
+                                <span className="mr-1 text-[10px] font-medium text-teal-700">satisfies {it.framework_count}:</span>
+                              )}
+                              {it.frameworks.map((f: any, j: number) => (
+                                <span key={j} title={f.framework} className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] font-medium text-gray-600">{f.code}</span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'artifact' && (
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Required artifacts</p>
+              <p className="mb-3 mt-0.5 text-xs leading-relaxed text-gray-500">
+                {reqs?.is_normalized
+                  ? 'Consolidated — each pre-built deliverable, with the frameworks it satisfies.'
+                  : 'Pre-defined deliverables this control expects, from the framework’s artifact catalog.'}
+              </p>
+              {reqsLoading ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400"><Loader2 className="mb-2 h-6 w-6 animate-spin" /></div>
+              ) : !reqs || (reqs.consolidated_artifacts?.length ?? 0) === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 py-12 text-center">
+                  <FileText className="mb-2 h-7 w-7 text-gray-300" />
+                  <p className="text-sm text-gray-600">No pre-built artifacts</p>
+                  <p className="mt-1 px-6 text-xs text-gray-400">The artifact catalog only covers a set of standard frameworks (ISO, COBIT, PCI, NIST CSF, SOC 2…). The frameworks behind this control aren’t in it, so there’s nothing pre-defined to show — use the <b>Evidence</b> tab for what to collect.</p>
+                </div>
+              ) : (
+                <div>
+                  {reqs.is_normalized && (
+                    <div className="mb-3 flex items-center gap-2 rounded-lg bg-teal-50 px-3 py-2 text-xs font-medium text-teal-800 ring-1 ring-teal-100">
+                      <CheckCircle className="h-4 w-4 shrink-0 text-teal-600" />
+                      <b>{reqs.unique_artifact_total}</b> deliverable{reqs.unique_artifact_total === 1 ? '' : 's'} cover the linked frameworks.
+                    </div>
+                  )}
+                  <ul className="space-y-2">
+                    {reqs.consolidated_artifacts.map((it: any, i: number) => (
+                      <li key={i} className="rounded-lg border border-gray-200 p-3">
+                        <div className="flex items-start gap-2">
+                          <FileText className="mt-0.5 h-4 w-4 shrink-0 text-teal-500" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-gray-800">{it.name}</p>
+                            {it.description && <p className="mt-0.5 text-xs leading-relaxed text-gray-600">{it.description}</p>}
+                            <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                              {reqs.is_normalized && <span className="mr-1 text-[10px] font-medium text-teal-700">satisfies {it.framework_count}:</span>}
+                              {it.frameworks.map((f: any, j: number) => (
+                                <span key={j} title={f.framework} className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] font-medium text-gray-600">{f.code}</span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'upload' && (
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Upload evidence</p>
+              <p className="mb-3 mt-0.5 text-xs leading-relaxed text-gray-500">Runs OCR + AI assessment and auto-links the file to every framework control this consolidates.</p>
+              <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-12 text-center hover:border-teal-300 hover:bg-teal-50/30">
+                <FileCheck className="h-7 w-7 text-teal-400" />
+                <span className="text-sm font-medium text-gray-700">{file ? file.name : 'Click to choose a file'}</span>
+                <span className="text-[11px] text-gray-400">PDF, image, document…</span>
+                <input type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              </label>
+              {file && (
+                <button onClick={() => upload.mutate()} disabled={upload.isPending}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-teal-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
+                  {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck className="h-4 w-4" />} Upload &amp; link across frameworks
+                </button>
+              )}
+              {uploadMsg && <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-emerald-50 px-3 py-2.5 text-xs leading-relaxed text-emerald-700"><CheckCircle className="mt-px h-3.5 w-3.5 shrink-0" />{uploadMsg}</p>}
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
   );
 }
 
@@ -734,70 +1083,43 @@ function ControlsTable({
   isRemoving,
   getConfidenceBadge,
   getSourceStyle,
+  onSelect,
+  selectedKey,
 }: {
   controls: Array<(NormalizedControlItem | FrameworkControlItem | ParsedControlItem) & { type: 'normalized' | 'framework' | 'parsed'; framework_name?: string | null; framework_code?: string | null }>;
   onRemove: (mappingId: number) => void;
   isRemoving: boolean;
   getConfidenceBadge: (c: number | null) => React.ReactNode;
   getSourceStyle: (s: string | null) => { bg: string; text: string };
+  onSelect: (c: any) => void;
+  selectedKey: string | null;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-200">
-      <table className="w-full">
+    <div className="overflow-x-auto rounded-lg border border-gray-200">
+      <table className="w-full min-w-[820px]">
         <thead className="bg-gray-100">
           <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Code</th>
+            <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Code</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Name</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Framework</th>
+            <th className="min-w-[10rem] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Framework</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Confidence</th>
             <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Source</th>
             <th className="w-16 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-600">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
-          {controls.map((control) => {
-            const sourceStyle = getSourceStyle(control.mapping_source);
-            return (
-              <tr key={`${control.type}-${control.mapping_id}`} className="hover:bg-gray-50">
-                <td className="px-4 py-3">
-                  <span className="font-mono text-sm text-blue-600">{control.code}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <p className="max-w-xs truncate text-sm text-black">{control.name}</p>
-                </td>
-                <td className="px-4 py-3">
-                  {control.type === 'normalized' ? (
-                    <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-700">Normalized</span>
-                  ) : control.type === 'parsed' ? (
-                    <span className="rounded bg-cyan-100 px-2 py-1 text-xs text-cyan-700">
-                      {control.framework_name || 'Parsed'}
-                    </span>
-                  ) : (
-                    <span className="rounded bg-orange-100 px-2 py-1 text-xs text-orange-700">
-                      {control.framework_code || control.framework_name || 'Framework'}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  {getConfidenceBadge(control.mapping_confidence)}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`rounded px-2 py-1 text-xs ${sourceStyle.bg} ${sourceStyle.text}`}>
-                    {control.mapping_source || 'manual'}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => onRemove(control.mapping_id)}
-                    disabled={isRemoving}
-                    className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-400 disabled:opacity-50"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
+          {controls.map((control) => (
+            <ControlRow
+              key={`${control.type}-${control.mapping_id}`}
+              control={control}
+              onRemove={onRemove}
+              isRemoving={isRemoving}
+              getConfidenceBadge={getConfidenceBadge}
+              getSourceStyle={getSourceStyle}
+              onSelect={onSelect}
+              isSelected={selectedKey === `${control.type}-${control.mapping_id}`}
+            />
+          ))}
         </tbody>
       </table>
     </div>
@@ -881,14 +1203,14 @@ function SimilarityTab({ similarities }: { similarities: SimilarityItem[] }) {
 
   const FRAMEWORK_COLORS: Record<string, { bg: string; text: string }> = {};
   const COLOR_PALETTE = [
-    { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-    { bg: 'bg-teal-500/20', text: 'text-teal-400' },
-    { bg: 'bg-violet-500/20', text: 'text-violet-400' },
-    { bg: 'bg-rose-500/20', text: 'text-rose-400' },
-    { bg: 'bg-cyan-500/20', text: 'text-cyan-400' },
-    { bg: 'bg-orange-500/20', text: 'text-orange-400' },
-    { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-    { bg: 'bg-pink-500/20', text: 'text-pink-400' },
+    { bg: 'bg-teal-50 ring-1 ring-teal-100', text: 'text-teal-700' },
+    { bg: 'bg-indigo-50 ring-1 ring-indigo-100', text: 'text-indigo-700' },
+    { bg: 'bg-rose-50 ring-1 ring-rose-100', text: 'text-rose-700' },
+    { bg: 'bg-cyan-50 ring-1 ring-cyan-100', text: 'text-cyan-700' },
+    { bg: 'bg-amber-50 ring-1 ring-amber-100', text: 'text-amber-700' },
+    { bg: 'bg-emerald-50 ring-1 ring-emerald-100', text: 'text-emerald-700' },
+    { bg: 'bg-fuchsia-50 ring-1 ring-fuchsia-100', text: 'text-fuchsia-700' },
+    { bg: 'bg-sky-50 ring-1 ring-sky-100', text: 'text-sky-700' },
   ];
   let colorIdx = 0;
   const getFrameworkColor = (fw: string) => {
@@ -995,7 +1317,7 @@ function SimilarityTab({ similarities }: { similarities: SimilarityItem[] }) {
               onClick={() => setStrengthFilter(btn.key)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 strengthFilter === btn.key
-                  ? 'bg-primary-600 text-black'
+                  ? 'bg-primary-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -1023,7 +1345,7 @@ function SimilarityTab({ similarities }: { similarities: SimilarityItem[] }) {
           {Object.entries(groupedByPair).sort(([a], [b]) => a.localeCompare(b)).map(([pairKey, items]) => (
             <div key={pairKey}>
               <div className="mb-3 flex items-center gap-2">
-                <GitMerge className="h-4 w-4 text-blue-600" />
+                <GitMerge className="h-4 w-4 text-primary-700" />
                 <h4 className="text-sm font-semibold text-black">{pairKey}</h4>
                 <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
                   {items.length} {items.length === 1 ? 'pair' : 'pairs'}
@@ -1044,16 +1366,104 @@ function SimilarityTab({ similarities }: { similarities: SimilarityItem[] }) {
   );
 }
 
+function GroupEvidenceUpload({ groupId, groupName }: { groupId: number; groupName?: string }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [name, setName] = useState('');
+  const [evType, setEvType] = useState('document');
+  const [result, setResult] = useState<any>(null);
+
+  const upload = useMutation({
+    mutationFn: async () => {
+      const fd = new FormData();
+      fd.append('name', name || file?.name || 'Evidence');
+      fd.append('evidence_type', evType);
+      if (file) fd.append('file', file);
+      const res = await apiClient.post(`/control-library/groups/${groupId}/upload-evidence`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data;
+    },
+    onSuccess: (data) => {
+      setResult(data);
+      setFile(null); setName('');
+      qc.invalidateQueries({ queryKey: ['control-group-detail', groupId] });
+    },
+  });
+
+  return (
+    <>
+      <button
+        onClick={() => { setOpen(true); setResult(null); }}
+        className="flex items-center gap-2 rounded-lg border border-emerald-500 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-500/20"
+      >
+        <FileCheck className="h-4 w-4" /> Upload Evidence
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-900">Upload evidence — {groupName}</h3>
+              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700">✕</button>
+            </div>
+            {result ? (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                  {result.message}
+                  <div className="mt-1 text-xs text-emerald-600">
+                    Linked to {result.linked_controls} control(s): {result.breakdown?.framework ?? 0} framework + {result.breakdown?.parsed ?? 0} parsed + {result.breakdown?.normalized ?? 0} normalized.
+                  </div>
+                </div>
+                <button onClick={() => setOpen(false)} className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Done</button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm" />
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Evidence name (optional)"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
+                <select value={evType} onChange={(e) => setEvType(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700">
+                  {['document', 'policy', 'procedure', 'screenshot', 'certificate', 'audit_report', 'log', 'record'].map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <p className="rounded-md bg-primary-50 px-2 py-1.5 text-[11px] text-primary-700">
+                  This evidence will be linked to <strong>all controls</strong> in the “{groupName}” domain across every framework — upload once, satisfy everywhere.
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => upload.mutate()} disabled={!file || upload.isPending}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                    {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck className="h-4 w-4" />}
+                    {upload.isPending ? 'Uploading…' : 'Upload & link to all'}
+                  </button>
+                  <button onClick={() => setOpen(false)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+                </div>
+                {upload.isError && <p className="text-xs text-red-600">Upload failed. Please try again.</p>}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function EvidenceRecommendationsTab({
   recommendations,
   onGenerateRecs,
   isGenerating,
   getPriorityStyle,
+  groupId,
+  groupName,
 }: {
   recommendations: EvidenceRecommendation[];
   onGenerateRecs: () => void;
   isGenerating: boolean;
   getPriorityStyle: (p: string) => { bg: string; text: string };
+  groupId: number;
+  groupName?: string;
 }) {
   return (
     <div className="space-y-4">
@@ -1061,18 +1471,21 @@ function EvidenceRecommendationsTab({
         <h3 className="text-lg font-semibold text-black">
           Evidence Recommendations ({recommendations.length})
         </h3>
-        <button
-          onClick={onGenerateRecs}
-          disabled={isGenerating}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-black hover:bg-primary-700 disabled:opacity-50"
-        >
-          {isGenerating ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Sparkles className="h-4 w-4" />
-          )}
-          Generate Recommendations
-        </button>
+        <div className="flex items-center gap-2">
+          <GroupEvidenceUpload groupId={groupId} groupName={groupName} />
+          <button
+            onClick={onGenerateRecs}
+            disabled={isGenerating}
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {isGenerating ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            Generate Recommendations
+          </button>
+        </div>
       </div>
 
       {recommendations.length === 0 ? (
@@ -1083,7 +1496,7 @@ function EvidenceRecommendationsTab({
           <button
             onClick={onGenerateRecs}
             disabled={isGenerating}
-            className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-black hover:bg-primary-700 disabled:opacity-50"
+            className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
           >
             {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             Generate Recommendations
@@ -1128,7 +1541,7 @@ function EvidenceRecommendationsTab({
                 )}
                 {rec.control_code && (
                   <div className="mt-2 text-xs text-gray-500">
-                    From: <span className="font-mono text-blue-600">{rec.control_code}</span>
+                    From: <span className="font-mono text-primary-700">{rec.control_code}</span>
                     {rec.framework_name && <span> ({rec.framework_name})</span>}
                   </div>
                 )}
@@ -1185,7 +1598,7 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
                     : 'hover:bg-gray-100'
                 }`}
               >
-                <span className="font-mono text-sm text-blue-600">{control.code}</span>
+                <span className="font-mono text-sm text-primary-700">{control.code}</span>
                 <p className="truncate text-sm text-gray-700">{control.name}</p>
               </button>
             ))}
@@ -1210,12 +1623,12 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
                     {inheritedData.inherited_controls.map((item: InheritanceItem) => (
                       <div key={item.inheritance_id} className="flex items-center justify-between rounded bg-white p-2">
                         <div>
-                          <span className="font-mono text-xs text-blue-600">{item.control.code}</span>
+                          <span className="font-mono text-xs text-primary-700">{item.control.code}</span>
                           <p className="text-sm text-gray-700">{item.control.name}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-500">{item.coverage_percentage}%</span>
-                          <span className="rounded bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+                          <span className="rounded bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700 ring-1 ring-primary-100">
                             {item.inheritance_type}
                           </span>
                         </div>
@@ -1239,12 +1652,12 @@ function InheritanceTab({ groupId, controls }: { groupId: number; controls: Arra
                     {satisfyingData.satisfying_controls.map((item: InheritanceItem) => (
                       <div key={item.inheritance_id} className="flex items-center justify-between rounded bg-white p-2">
                         <div>
-                          <span className="font-mono text-xs text-blue-600">{item.control.code}</span>
+                          <span className="font-mono text-xs text-primary-700">{item.control.code}</span>
                           <p className="text-sm text-gray-700">{item.control.name}</p>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-500">{item.coverage_percentage}%</span>
-                          <span className="rounded bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+                          <span className="rounded bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700 ring-1 ring-primary-100">
                             {item.inheritance_type}
                           </span>
                         </div>
@@ -1426,7 +1839,7 @@ function AddControlsModal({
                       className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-600 focus:ring-primary-500"
                     />
                     <div>
-                      <span className="font-mono text-sm text-blue-600">{control.code}</span>
+                      <span className="font-mono text-sm text-primary-700">{control.code}</span>
                       <p className="text-sm text-gray-700">{control.name}</p>
                     </div>
                   </label>
@@ -1451,7 +1864,7 @@ function AddControlsModal({
                       className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-600 focus:ring-primary-500"
                     />
                     <div>
-                      <span className="font-mono text-sm text-blue-600">{control.code}</span>
+                      <span className="font-mono text-sm text-primary-700">{control.code}</span>
                       <p className="text-sm text-gray-700">{control.name}</p>
                     </div>
                   </label>
@@ -1494,7 +1907,7 @@ function AddControlsModal({
             <button
               onClick={() => addControlsMutation.mutate()}
               disabled={totalSelected === 0 || addControlsMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-black hover:bg-primary-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
             >
               {addControlsMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -1628,7 +2041,7 @@ function EditGroupModal({
             <button
               type="submit"
               disabled={isSaving}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-black hover:bg-primary-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

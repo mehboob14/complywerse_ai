@@ -574,11 +574,15 @@ export default function ArtifactsTab({
   assessmentType,
   tenantId,
   tenantUsers,
+  relevanceText,
 }: {
   assessmentId?: number;
   assessmentType: string;
   tenantId?: number;
   tenantUsers: TenantUser[];
+  // When set (e.g. opened from a specific control), the catalog surfaces a
+  // "Suggested for this control" shortlist ranked by text overlap with this.
+  relevanceText?: string;
 }) {
   const queryClient = useQueryClient();
   const [activeSubTab, setActiveSubTab]     = useState<'catalog' | 'my-artifacts'>('catalog');
@@ -641,6 +645,41 @@ export default function ArtifactsTab({
   const stages        = catalog?.stages      ?? [];
   const frameworkName = catalog?.framework_name ?? null;
   const frameworkKey  = catalog?.framework_key  ?? assessmentType;
+
+  // "Suggested for this control": rank templates by shared meaningful words
+  // between the control text (relevanceText) and each catalog item. There is no
+  // exact control→artifact key, so this is a best-effort shortlist, not a 1:1 map.
+  const ARTIFACT_STOP = new Set([
+    'data','personal','pdpl','control','controls','assessment','evidence','procedure',
+    'procedures','completed','records','record','documented','document','documents',
+    'policy','policies','process','processing','organization','organisation','these',
+    'their','must','with','that','this','from','have','will','which','based','nature',
+    'activities','activity','ensure','should','requirements','requirement','register',
+  ]);
+  const relTokens = new Set(
+    (relevanceText || '').toLowerCase().match(/[a-z]{4,}/g)?.filter((t) => !ARTIFACT_STOP.has(t)) ?? [],
+  );
+  const suggestedItems = relTokens.size === 0 ? [] : catalogItems
+    .map((it) => {
+      const hay = `${it.name} ${it.description ?? ''} ${it.control_ref ?? ''} ${it.artifact_type}`.toLowerCase();
+      const htoks = new Set(hay.match(/[a-z]{4,}/g) ?? []);
+      let score = 0; relTokens.forEach((t) => { if (htoks.has(t)) score += 1; });
+      return { it, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((x) => x.it);
+
+  const downloadTemplate = (item: CatalogItem) => downloadAsFormat(
+    item.name,
+    buildArtifactTemplate({
+      name: item.name, artifactType: item.artifact_type, controlRef: item.control_ref,
+      description: item.description, frameworkName: frameworkName ?? frameworkKey,
+      frameworkKey, stage: item.stage, artifactId: item.artifact_id, owner: item.owner, format: item.format,
+    }),
+    item.format, item.artifact_type,
+  );
 
   const filteredCatalog = catalogItems.filter((item) => {
     const matchStage  = activeStage === 'all' || item.stage === activeStage;
@@ -743,13 +782,39 @@ export default function ArtifactsTab({
           ))}
         </div>
 
+        {/* ── Suggested for this control (only when opened from a control) ── */}
+        {activeSubTab === 'catalog' && suggestedItems.length > 0 && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3">
+            <p className="mb-2 text-xs font-semibold text-blue-800">Suggested for this control</p>
+            <div className="space-y-1.5">
+              {suggestedItems.map((item) => {
+                const Icon = getTypeIcon(item.artifact_type);
+                return (
+                  <div key={item.id} className="flex items-center gap-2 rounded-lg border border-blue-100 bg-white px-2.5 py-1.5">
+                    <Icon className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800">{item.name}</span>
+                    <span className="hidden shrink-0 text-[10px] text-gray-400 sm:inline">{item.artifact_type}</span>
+                    {!item.is_platform_native && (
+                      <button onClick={() => downloadTemplate(item)} title="Download this template"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-blue-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-blue-700">
+                        <Download className="h-3 w-3" /> Download
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[10px] text-blue-600">Best-match templates based on this control. Not the right one? Browse or search the full catalog below.</p>
+          </div>
+        )}
+
         {/* ── Artifact Catalog ── */}
         {activeSubTab === 'catalog' && (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
             <div className="px-4 py-3 border-b border-gray-100">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-xs text-gray-500">
-                  {totalCatalogItems} required artifacts across {stages.length} stages. Click <strong>Create</strong> to generate a structured document.
+                  {totalCatalogItems} required artifacts across {stages.length} stages. <strong>Template</strong> downloads a ready-structured file to fill in; <strong>Create</strong> makes a working copy you can edit &amp; track.
                 </p>
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
@@ -845,7 +910,16 @@ export default function ArtifactsTab({
                                 </div>
                               )}
                             </div>
-                            <div className="flex-shrink-0">
+                            <div className="flex-shrink-0 flex items-center gap-1.5">
+                              {!item.is_platform_native && (
+                                <button
+                                  onClick={() => downloadTemplate(item)}
+                                  title="Download a ready-structured template to fill in, then upload as evidence"
+                                  className="px-2.5 py-1 text-xs border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+                                >
+                                  <Download className="h-3 w-3" /> Template
+                                </button>
+                              )}
                               {existing ? (
                                 <span className="px-2 py-1 text-xs bg-emerald-50 text-emerald-700 rounded-lg flex items-center gap-1">
                                   <CheckCircle className="h-3 w-3" /> Created
@@ -853,6 +927,7 @@ export default function ArtifactsTab({
                               ) : (
                                 <button
                                   onClick={() => setCreateFromItem(item)}
+                                  title="Create a working copy you can edit, track and download"
                                   className="px-2.5 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1.5"
                                 >
                                   <Plus className="h-3 w-3" /> Create

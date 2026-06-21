@@ -594,6 +594,14 @@ export interface CertificationControl {
   priority: number;
   is_critical?: boolean;
   criticality_reason?: string | null;
+  // NDMO native fields (Figure-2), shown in the control-detail modal.
+  priority_level?: string | null;
+  dependencies?: string[];
+  version_history?: Array<{ date?: string; version?: string }>;
+  control_description?: string | null;
+  // Assessment criteria (spec sub-points) + per-criterion met/not-met state.
+  assessment_criteria?: string[];
+  criteria_status?: Record<string, boolean>;
   sub_controls: SubControlWithEvidence[];
   evidence_requirements: EvidenceRequirement[];
   evidence_recommendations?: string[];

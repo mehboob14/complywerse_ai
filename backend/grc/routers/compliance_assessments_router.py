@@ -1164,6 +1164,146 @@ def parse_ubl_audit_master_tracking_workbook(wb) -> tuple[List[dict], dict]:
     return items, metadata
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Saudi PDPL Compliance Assessment Toolkit
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _status_from_pdpl(maturity: object, status_text: object) -> str:
+    """Derive compliance status for a PDPL control.
+
+    The toolkit's Read Me defines the rule: maturity 0-5 drives status, where
+    3-5 = Compliant. We map 0 -> not_complied, 1-2 -> partially_complied,
+    3-5 -> complied. When maturity is blank we fall back to the sheet's textual
+    'Compliance Status' (e.g. 'Not Assessed' -> in_progress).
+    """
+    m = None
+    if maturity is not None and str(maturity).strip() != "":
+        try:
+            m = float(str(maturity).strip())
+        except (TypeError, ValueError):
+            m = None
+    if m is not None:
+        if m >= 3:
+            return "complied"
+        if m <= 0:
+            return "not_complied"
+        return "partially_complied"  # 1-2 = initial/developing
+    text = str(status_text or "").strip().lower()
+    if not text or "not assessed" in text:
+        return "in_progress"
+    if "partial" in text:
+        return "partially_complied"
+    if "non" in text or "not complied" in text or "not compliant" in text:
+        return "not_complied"
+    if "compliant" in text or "complied" in text:
+        return "complied"
+    if text in {"na", "n/a", "not applicable"}:
+        return "na"
+    return normalize_status(text)
+
+
+# The Assessment + Client Profile + Remediation Plan trio is unique to the PDPL
+# toolkit; no other supported template carries all three.
+PDPL_SIGNAL_SHEETS = {"assessment", "clientprofile", "remediationplan"}
+PDPL_ASSESSMENT_KEYS = ["Control ID", "Domain", "PDPL Ref.", "Maturity (0-5)", "Compliance Status"]
+
+
+def _pdpl_assessment_sheet_name(wb) -> Optional[str]:
+    return next((s for s in wb.sheetnames if _normalize_sheet_label(s) == "assessment"), None)
+
+
+def detect_pdpl_assessment_format(wb) -> bool:
+    """Detect the Saudi PDPL Compliance Assessment Toolkit.
+
+    Two-part signature so a look-alike workbook can't false-match: (1) the
+    distinctive Assessment + Client Profile + Remediation Plan sheet trio, and
+    (2) the Assessment sheet header row exposing the unique 'PDPL Ref.' column.
+    """
+    normalized_sheets = {_normalize_sheet_label(s) for s in wb.sheetnames}
+    if not PDPL_SIGNAL_SHEETS.issubset(normalized_sheets):
+        return False
+    sheet_name = _pdpl_assessment_sheet_name(wb)
+    if not sheet_name:
+        return False
+    ws = wb[sheet_name]
+    header_row = _find_header_row_with_keys(ws, PDPL_ASSESSMENT_KEYS)
+    if not header_row:
+        return False
+    header_norms = {_normalized_header(c.value) for c in ws[header_row] if c.value is not None}
+    return "pdplref" in header_norms
+
+
+def parse_pdpl_assessment_workbook(wb) -> tuple[List[dict], dict]:
+    """Parse the PDPL toolkit's 'Assessment' sheet into assessment items.
+
+    Maps the 14 PDPL columns onto the assessment-item shape. Maturity (0-5)
+    drives compliance_status; PDPL Ref. / maturity / risk rating / assessment
+    question are preserved in `remarks` since the item table has no dedicated
+    columns for them (so nothing from the sheet is lost on import).
+    """
+    sheet_name = _pdpl_assessment_sheet_name(wb)
+    ws = wb[sheet_name]
+    header_row = _find_header_row_with_keys(ws, PDPL_ASSESSMENT_KEYS) or 1
+    headers = [cell.value for cell in ws[header_row]]
+    header_map = {_normalized_header(h): idx for idx, h in enumerate(headers) if h is not None}
+
+    def g(row, key: str) -> Optional[str]:
+        idx = header_map.get(_normalized_header(key))
+        if idx is None or idx >= len(row):
+            return None
+        return _cell_to_text(row[idx])
+
+    items: List[dict] = []
+    for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
+        control_id = g(row, "Control ID")
+        requirement = g(row, "Control Requirement")
+        question = g(row, "Assessment Question")
+        if not control_id and not requirement:
+            continue  # skip blank / spacer rows
+        maturity = g(row, "Maturity (0-5)")
+        maturity_score = None
+        if maturity is not None and str(maturity).strip() != "":
+            try:
+                maturity_score = int(float(str(maturity).strip()))
+            except (TypeError, ValueError):
+                maturity_score = None
+        pdpl_ref = g(row, "PDPL Ref.")
+        risk = g(row, "Risk Rating")
+        remarks_parts = []
+        if pdpl_ref:
+            remarks_parts.append(f"PDPL Ref: {pdpl_ref}")
+        if question:
+            remarks_parts.append(f"Q: {question}")
+        priority = (g(row, "Priority") or "").lower().strip()
+        items.append({
+            "item_number": (control_id or str(len(items) + 1))[:50],
+            "area_domain": (g(row, "Domain") or "PDPL")[:500],
+            "control_description": (requirement or question or "")[:8000],
+            "compliance_status": _status_from_pdpl(maturity, g(row, "Compliance Status")),
+            "maturity_score": maturity_score,
+            "risk_rating": (risk or None) and risk[:50],
+            "gaps_identified": g(row, "Findings / Gap"),
+            "proposed_solution": g(row, "Remediation Action"),
+            "responsible_party": (g(row, "Owner") or None) and g(row, "Owner")[:255],
+            "timeline": (g(row, "Target Date") or None) and g(row, "Target Date")[:255],
+            "priority": priority[:50] or None,
+            "evidence_reference": g(row, "Evidence to Request"),
+            "remarks": " | ".join(remarks_parts) if remarks_parts else None,
+        })
+
+    metadata = {
+        "assessment_format": "pdpl_assessment_toolkit",
+        "detected_format": "pdpl_assessment_toolkit",
+        "framework": "Saudi PDPL",
+        "columns_detected": [
+            "item_number", "area_domain", "control_description", "compliance_status",
+            "gaps_identified", "proposed_solution", "responsible_party", "timeline",
+            "priority", "evidence_reference", "remarks",
+        ],
+    }
+    return items, metadata
+
+
 def detect_owasp_v4_checklist_format(wb) -> bool:
     if "Testing Checklist" not in wb.sheetnames:
         return False
@@ -1993,16 +2133,19 @@ async def upload_assessment(
         is_asvs_checklist = False
         is_owasp_checklist = False
         is_ubl_audit_master = False
+        is_pdpl = False
         if lower_file_name.endswith(('.xlsx', '.xls')):
             _wb_check = None
             try:
                 _wb_check = openpyxl.load_workbook(io.BytesIO(file_content), read_only=True, data_only=True)
                 is_maturity_format = detect_xlsx_maturity_format(_wb_check)
                 if not is_maturity_format:
+                    is_pdpl = detect_pdpl_assessment_format(_wb_check)
+                if not is_maturity_format and not is_pdpl:
                     is_ubl_audit_master = detect_ubl_audit_master_tracking_format(_wb_check)
-                if not is_maturity_format and not is_ubl_audit_master:
+                if not is_maturity_format and not is_pdpl and not is_ubl_audit_master:
                     is_asvs_checklist = detect_asvs_checklist_format(_wb_check)
-                if not is_maturity_format and not is_asvs_checklist and not is_ubl_audit_master:
+                if not is_maturity_format and not is_pdpl and not is_asvs_checklist and not is_ubl_audit_master:
                     is_owasp_checklist = detect_owasp_v4_checklist_format(_wb_check)
             except Exception:
                 pass
@@ -2111,6 +2254,13 @@ async def upload_assessment(
         if lower_file_name.endswith('.pdf'):
             logger.info("Detected PDF upload format")
             items_data, parser_metadata = parse_cis_windows_server_2012_r2_pdf(file_content, file.filename or "")
+        elif is_pdpl:
+            logger.info("Detected Saudi PDPL Assessment Toolkit format")
+            wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+            try:
+                items_data, parser_metadata = parse_pdpl_assessment_workbook(wb)
+            finally:
+                wb.close()
         elif is_ubl_audit_master:
             logger.info("Detected UBL Audit Master Tracking format")
             wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
@@ -2194,7 +2344,9 @@ async def upload_assessment(
                 timeline=item_data.get("timeline"),
                 priority=item_data.get("priority"),
                 evidence_reference=item_data.get("evidence_reference"),
-                remarks=item_data.get("remarks")
+                remarks=item_data.get("remarks"),
+                maturity_score=item_data.get("maturity_score"),
+                risk_rating=item_data.get("risk_rating"),
             )
             db.add(db_item)
         
@@ -2254,12 +2406,182 @@ async def upload_assessment(
         )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Remediation Plan — the client-facing action log of assessment gaps.
+# A gap is any item assessed below the compliance bar (PDPL rule: maturity < 3
+# => not_complied / partially_complied). Each gap carries an independent
+# open -> in_progress -> closed status tracked to closure.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# compliance_status values that represent an open gap needing remediation.
+_REMEDIATION_GAP_STATUSES = ["not_complied", "partially_complied"]
+_REMEDIATION_STATUSES = {"open", "in_progress", "closed"}
+
+
+def _parse_remarks_kv(remarks: Optional[str]) -> dict:
+    """Pull the 'Key: value | Key: value' pairs the PDPL parser stores in
+    remarks (e.g. 'PDPL Ref: Art. 31 | Risk: High') back into a dict."""
+    out: dict = {}
+    if not remarks:
+        return out
+    for part in str(remarks).split("|"):
+        if ":" in part:
+            key, _, val = part.partition(":")
+            out[key.strip().lower()] = val.strip()
+    return out
+
+
+@router.get("/remediation-plan")
+def get_remediation_plan(
+    tenant_id: Optional[int] = None,
+    assessment_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Return every open gap across the tenant's assessments as a remediation
+    action log. Spans all formats; for PDPL these are the controls scored < 3."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"items": [], "total": 0, "summary": {}}
+
+    q = (
+        db.query(ComplianceAssessmentDocumentItem, ComplianceAssessmentDocument)
+        .join(
+            ComplianceAssessmentDocument,
+            ComplianceAssessmentDocumentItem.assessment_id == ComplianceAssessmentDocument.id,
+        )
+        .filter(
+            ComplianceAssessmentDocumentItem.tenant_id.in_(user_tenants),
+            ComplianceAssessmentDocumentItem.compliance_status.in_(_REMEDIATION_GAP_STATUSES),
+        )
+    )
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        q = q.filter(ComplianceAssessmentDocumentItem.tenant_id == tenant_id)
+    if assessment_id:
+        q = q.filter(ComplianceAssessmentDocumentItem.assessment_id == assessment_id)
+
+    rows = q.order_by(
+        ComplianceAssessmentDocument.id, ComplianceAssessmentDocumentItem.id
+    ).all()
+
+    items = []
+    counts = {"open": 0, "in_progress": 0, "closed": 0}
+    for item, doc in rows:
+        kv = _parse_remarks_kv(item.remarks)
+        rem_status = (item.remediation_status or "open").lower()
+        counts[rem_status] = counts.get(rem_status, 0) + 1
+        items.append({
+            "id": item.id,
+            "assessment_id": doc.id,
+            "assessment_name": doc.name,
+            "assessment_format": doc.assessment_format,
+            "control_id": item.item_number,
+            "domain": item.area_domain,
+            "pdpl_ref": kv.get("pdpl ref"),
+            "risk": item.risk_rating or kv.get("risk"),
+            "gap": item.gaps_identified,
+            "remediation_action": item.proposed_solution,
+            "priority": item.priority,
+            "owner": item.responsible_party,
+            "target_date": item.timeline,
+            "compliance_status": item.compliance_status,
+            "remediation_status": rem_status,
+        })
+
+    total = len(items)
+    closed = counts.get("closed", 0)
+    summary = {
+        "total": total,
+        "open": counts.get("open", 0),
+        "in_progress": counts.get("in_progress", 0),
+        "closed": closed,
+        "closure_pct": round((closed / total) * 100, 1) if total else 0.0,
+    }
+    return {"items": items, "total": total, "summary": summary}
+
+
+class RemediationStatusUpdate(BaseModel):
+    remediation_status: str
+
+
+@router.patch("/remediation-items/{item_id}")
+def update_remediation_item(
+    item_id: int,
+    body: RemediationStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Update a single gap's remediation status (open / in_progress / closed)."""
+    user_tenants = get_user_tenants(current_user, db) or [-1]
+    item = db.query(ComplianceAssessmentDocumentItem).filter(
+        ComplianceAssessmentDocumentItem.id == item_id,
+        ComplianceAssessmentDocumentItem.tenant_id.in_(user_tenants),
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Remediation item not found")
+    new_status = (body.remediation_status or "").strip().lower()
+    if new_status not in _REMEDIATION_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid status. Use open, in_progress, or closed.",
+        )
+    item.remediation_status = new_status
+    db.commit()
+    db.refresh(item)
+    return {"id": item.id, "remediation_status": item.remediation_status}
+
+
+@router.get("/evidence/{evidence_id}/controls")
+def get_evidence_linked_controls(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Reverse lookup: which assessment controls is this evidence linked to?
+
+    Auto-populated from AssessmentItemEvidence — the evidence-library side never
+    links manually; it just reflects links made when attaching evidence to a
+    control (e.g. on the PDPL Assessment page).
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"evidence_id": evidence_id, "total": 0, "controls": []}
+    rows = (
+        db.query(AssessmentItemEvidence, ComplianceAssessmentDocumentItem, ComplianceAssessmentDocument)
+        .join(ComplianceAssessmentDocumentItem, AssessmentItemEvidence.assessment_item_id == ComplianceAssessmentDocumentItem.id)
+        .join(ComplianceAssessmentDocument, ComplianceAssessmentDocumentItem.assessment_id == ComplianceAssessmentDocument.id)
+        .filter(
+            AssessmentItemEvidence.evidence_id == evidence_id,
+            ComplianceAssessmentDocument.tenant_id.in_(user_tenants),
+        )
+        .order_by(ComplianceAssessmentDocument.id, ComplianceAssessmentDocumentItem.id)
+        .all()
+    )
+    controls = [
+        {
+            "link_id": link.id,
+            "assessment_id": doc.id,
+            "assessment_name": doc.name,
+            "assessment_format": doc.assessment_format,
+            "item_id": it.id,
+            "control_id": it.item_number,
+            "domain": it.area_domain,
+            "control_description": it.control_description,
+            "compliance_status": it.compliance_status,
+        }
+        for link, it, doc in rows
+    ]
+    return {"evidence_id": evidence_id, "total": len(controls), "controls": controls}
+
+
 @router.get("")
 def list_assessments(
     tenant_id: Optional[int] = None,
     assessment_type: Optional[str] = None,
     status_filter: Optional[str] = None,
     source: Optional[str] = None,
+    assessment_format: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
@@ -2268,13 +2590,23 @@ def list_assessments(
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return {"assessments": [], "total": 0, "summary": {}}
-    
+
     query = db.query(ComplianceAssessmentDocument).filter(
         ComplianceAssessmentDocument.tenant_id.in_(user_tenants),
-        # Hide the NCA singleton container — it's surfaced via its own top-level NCA tab
-        (ComplianceAssessmentDocument.assessment_format != "nca_container")
-        | (ComplianceAssessmentDocument.assessment_format.is_(None)),
     )
+    if assessment_format:
+        # Explicit format request (e.g. the dedicated PDPL Assessment tab):
+        # return ONLY that format and bypass the default hide-list, since the
+        # caller is a dedicated surface that owns that format.
+        query = query.filter(ComplianceAssessmentDocument.assessment_format == assessment_format)
+    else:
+        # Default list hides formats that have their own top-level tab: the NCA
+        # singleton container and PDPL toolkit uploads. They are surfaced only
+        # on their dedicated tabs, never in the generic Assessment list.
+        query = query.filter(
+            (ComplianceAssessmentDocument.assessment_format.notin_(["nca_container", "pdpl_assessment_toolkit"]))
+            | (ComplianceAssessmentDocument.assessment_format.is_(None))
+        )
 
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
@@ -3080,6 +3412,8 @@ def get_assessment(
             "area_domain": item.area_domain,
             "control_description": item.control_description,
             "compliance_status": item.compliance_status,
+            "maturity_score": item.maturity_score,
+            "risk_rating": item.risk_rating,
             "gaps_identified": item.gaps_identified,
             "proposed_solution": item.proposed_solution,
             "responsible_party": item.responsible_party,
@@ -3087,6 +3421,7 @@ def get_assessment(
             "priority": item.priority,
             "evidence_reference": item.evidence_reference,
             "remarks": item.remarks,
+            "remediation_status": item.remediation_status,
             "ai_evidence_recommendation": item.ai_evidence_recommendation,
             "ai_recommendation_generated_at": item.ai_recommendation_generated_at.isoformat() if item.ai_recommendation_generated_at else None,
             "created_at": item.created_at.isoformat(),
@@ -3121,6 +3456,8 @@ def get_assessment(
                 "area_domain": item.area_domain,
                 "control_description": item.control_description,
                 "compliance_status": item.compliance_status,
+                "maturity_score": item.maturity_score,
+                "risk_rating": item.risk_rating,
                 "gaps_identified": item.gaps_identified,
                 "proposed_solution": item.proposed_solution,
                 "responsible_party": item.responsible_party,
@@ -3128,6 +3465,7 @@ def get_assessment(
                 "priority": item.priority,
                 "evidence_reference": item.evidence_reference,
                 "remarks": item.remarks,
+                "remediation_status": item.remediation_status,
                 "ai_evidence_recommendation": item.ai_evidence_recommendation,
                 "ai_recommendation_generated_at": item.ai_recommendation_generated_at.isoformat() if item.ai_recommendation_generated_at else None,
                 "created_at": item.created_at.isoformat(),
@@ -3212,11 +3550,13 @@ def update_assessment_item(
     priority: Optional[str] = None,
     evidence_reference: Optional[str] = None,
     remarks: Optional[str] = None,
+    maturity_score: Optional[int] = None,
+    risk_rating: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
     user_tenants = get_user_tenants(current_user, db)
-    
+
     item = db.query(ComplianceAssessmentDocumentItem).filter(
         ComplianceAssessmentDocumentItem.id == item_id,
         ComplianceAssessmentDocumentItem.tenant_id.in_(user_tenants)
@@ -3246,7 +3586,20 @@ def update_assessment_item(
         item.evidence_reference = evidence_reference
     if remarks is not None:
         item.remarks = remarks
-    
+    if risk_rating is not None:
+        item.risk_rating = risk_rating or None
+    # Maturity (0-5) is the PDPL assessment driver: setting it auto-derives the
+    # compliance status (3-5 compliant). A negative value clears the score back
+    # to "Not Assessed" (in_progress). Applied last so it wins over any
+    # explicit compliance_status passed in the same call.
+    if maturity_score is not None:
+        if maturity_score < 0:
+            item.maturity_score = None
+            item.compliance_status = "in_progress"
+        else:
+            item.maturity_score = maturity_score
+            item.compliance_status = _status_from_pdpl(maturity_score, None)
+
     item.updated_at = datetime.utcnow()
     db.commit()
     
@@ -3612,7 +3965,10 @@ def get_openai_client() -> OpenAI:
             detail="AI features unavailable. OpenAI API key not configured."
         )
     api_key = get_openai_api_key()
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    # An empty AI_INTEGRATIONS_OPENAI_BASE_URL ("" in .env) must become None, or
+    # the OpenAI client treats "" as the endpoint and fails with a bare
+    # "Connection error". `or None` collapses empty string → default api.openai.com.
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL") or None
     return OpenAI(api_key=api_key, base_url=base_url)
 
 
@@ -4167,6 +4523,89 @@ def generate_ai_recommendation(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"AI recommendation generation failed: {str(e)}"
         )
+
+
+@router.post("/{assessment_id}/items/{item_id}/ai-assess")
+def ai_assess_item(
+    assessment_id: int,
+    item_id: int,
+    gap: str = "",
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Draft a full PDPL assessment for one control: likely findings/gap, a
+    recommended remediation action, a risk rating and a priority. Maturity is
+    intentionally NOT generated — it reflects the organisation's actual
+    implementation and must be judged by the assessor (it drives the score)."""
+    user_tenants = get_user_tenants(current_user, db)
+    item = db.query(ComplianceAssessmentDocumentItem).filter(
+        ComplianceAssessmentDocumentItem.id == item_id,
+        ComplianceAssessmentDocumentItem.assessment_id == assessment_id,
+        ComplianceAssessmentDocumentItem.tenant_id.in_(user_tenants),
+    ).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment item not found")
+    try:
+        client = get_openai_client()
+        kv = _parse_remarks_kv(item.remarks)
+        prompt = (
+            "You are a Saudi PDPL (Personal Data Protection Law) compliance assessor. "
+            "For the control below, produce STRICT JSON with exactly these keys:\n"
+            "  how_to_assess — string: a clear, practical explanation (4-6 sentences) for an "
+            "assessor UNFAMILIAR with this control — what to examine, the specific questions to ask, "
+            "where to look, and what a compliant ('good') implementation looks like in practice.\n"
+            "  what_good_looks_like — string: 2-3 sentences describing the ideal end-state.\n"
+            "  evidence_examples — array of 4-7 strings: specific documents/records/screens that "
+            "would demonstrate compliance for this control.\n"
+            "  findings   — string: the likely gap/finding when this control is typically unmet\n"
+            "  remediation — string: the concrete remediation action to satisfy the control\n"
+            "  risk_rating — one of: Low, Medium, High, Critical\n"
+            "  priority    — one of: low, medium, high, critical\n"
+            "  suggested_maturity — integer 0-5 (0=Absent,1=Initial,2=Developing,3=Defined,"
+            "4=Managed,5=Optimised): a conservative starting estimate of likely current maturity\n\n"
+            f"Domain: {item.area_domain or 'General'}\n"
+            f"PDPL Reference: {kv.get('pdpl ref') or 'N/A'}\n"
+            f"Control: {item.control_description or ''}\n"
+            f"Assessment question: {kv.get('q') or ''}\n"
+        )
+        gap_text = (gap or "").strip()
+        if gap_text:
+            prompt += (
+                f"\nThe assessor has ALREADY identified this specific gap for this control:\n"
+                f"\"{gap_text}\"\n"
+                "Set `findings` to this exact gap (you may lightly tidy the wording, but do not "
+                "invent a different gap). Make `remediation` a concrete, step-by-step action that "
+                "directly closes THIS gap, and set `risk_rating`/`priority` consistent with it.\n"
+            )
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a PDPL compliance expert. Respond ONLY with valid JSON."},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=800,
+            temperature=0.3,
+        )
+        result = parse_ai_response(response.choices[0].message.content or "{}")
+        return {
+            "item_id": item_id,
+            "assessment_id": assessment_id,
+            "draft": {
+                "how_to_assess": result.get("how_to_assess"),
+                "what_good_looks_like": result.get("what_good_looks_like"),
+                "evidence_examples": result.get("evidence_examples") or [],
+                "findings": result.get("findings"),
+                "remediation": result.get("remediation"),
+                "risk_rating": result.get("risk_rating"),
+                "priority": (result.get("priority") or "").lower() or None,
+                "suggested_maturity": result.get("suggested_maturity"),
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"AI assessment draft failed: {str(e)}")
 
 
 @router.get("/{assessment_id}/items/{item_id}/ai-recommendation")

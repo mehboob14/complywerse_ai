@@ -114,7 +114,8 @@ def get_openai_client() -> OpenAI:
     if not check_ai_available():
         raise_ai_unavailable(fallback_available=False)
     api_key = get_openai_api_key()
-    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    # Empty string base URL -> None so the SDK uses its default endpoint.
+    base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL") or None
     return OpenAI(
         api_key=api_key,
         base_url=base_url

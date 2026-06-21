@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { Fragment, useState, useEffect } from 'react';
+import { Fragment, useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -47,6 +47,12 @@ interface FrameworkControl {
   category: string | null;
   is_mandatory: boolean;
   priority: string;
+  // Native implementation-order tier (NDMO P1/P2/P3 → Year 1/2/3 roadmap) and
+  // control-level prerequisite codes. Null/[] for frameworks without them.
+  priority_level: string | null;
+  dependencies: string[];
+  version_history: Array<{ date?: string; version?: string }>;
+  control_description: string | null;
   section_number: string | null;
   parent_section: string | null;
   ai_confidence: number | null;
@@ -356,6 +362,518 @@ function FrameworkControlEvidenceLinkSection({ controlId }: { controlId: number 
   );
 }
 
+// ---------------------------------------------------------------------------
+// Native framework tree (NDMO-style): Domain -> Control -> Specification, with
+// P1/P2/P3 implementation-order badges, a Year 1/2/3 phased filter, and the
+// control-level dependency graph. Rendered for frameworks that carry
+// `priority_level` (the NDMO 3-year roadmap model). Self-contained: its own
+// query (fetches the full control set, unpaginated) and local UI state.
+// ---------------------------------------------------------------------------
+const PL_META: Record<string, { year: number; label: string; badge: string; dot: string }> = {
+  P1: { year: 1, label: 'Year 1', badge: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500' },
+  P2: { year: 2, label: 'Year 2', badge: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' },
+  P3: { year: 3, label: 'Year 3', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
+};
+
+function PriorityLevelBadge({ level }: { level: string | null }) {
+  if (!level) {
+    return (
+      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500" title="Not assessed by NDMO (NCA-governed)">
+        N/A
+      </span>
+    );
+  }
+  const m = PL_META[level];
+  const cls = m ? m.badge : 'bg-slate-100 text-slate-500 border-slate-200';
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${cls}`} title={m ? `Priority ${level} — implement by ${m.label}` : level}>
+      {level}
+    </span>
+  );
+}
+
+function DomainId({ code }: { code: string }) {
+  const id = (code || '').split('.')[0] || '?';
+  return (
+    <span className="inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-md bg-slate-900 px-1.5 text-[11px] font-bold tracking-wide text-white">
+      {id}
+    </span>
+  );
+}
+
+function NativeFrameworkTree({ frameworkId }: { frameworkId: number }) {
+  const [phase, setPhase] = useState<0 | 1 | 2 | 3>(0); // 0 = all
+  const [openDomains, setOpenDomains] = useState<Set<string>>(new Set());
+  const [openSpec, setOpenSpec] = useState<number | null>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['framework-controls-tree', frameworkId],
+    queryFn: async () => {
+      const res = await controlsApi.getFrameworkControls({
+        framework_id: frameworkId, limit: 2000, sort_by: 'control_id', sort_order: 'asc',
+      });
+      return res.data as FrameworkControlsResponse;
+    },
+  });
+
+  // Sort by row id = the framework's published/document order (seeded in
+  // document order), so domains render as in the source (e.g. NDMO: Data
+  // Governance first), not alphabetically by control code.
+  const controls = useMemo(() => [...(data?.controls ?? [])].sort((a, b) => a.id - b.id), [data]);
+
+  const grouped = useMemo(() => {
+    const domains: { name: string; controls: { code: string; name: string; deps: string[]; specs: FrameworkControl[] }[] }[] = [];
+    const dIdx = new Map<string, number>();
+    const cIdx = new Map<string, number>();
+    for (const c of controls) {
+      const dn = c.domain || 'Uncategorized';
+      if (!dIdx.has(dn)) { dIdx.set(dn, domains.length); domains.push({ name: dn, controls: [] }); }
+      const di = dIdx.get(dn)!;
+      const code = c.parent_section || c.control_id;
+      const ckey = dn + '||' + code;
+      if (!cIdx.has(ckey)) {
+        // Control name: the flat `category` carries "DG.1: Strategy and Plan".
+        const rawCat = c.category || '';
+        const name = rawCat.includes(':') ? rawCat.split(':').slice(1).join(':').trim() : rawCat;
+        cIdx.set(ckey, domains[di].controls.length);
+        domains[di].controls.push({ code, name, deps: c.dependencies || [], specs: [] });
+      }
+      domains[di].controls[cIdx.get(ckey)!].specs.push(c);
+    }
+    return domains;
+  }, [controls]);
+
+  const counts = useMemo(() => {
+    const c = { P1: 0, P2: 0, P3: 0, other: 0 };
+    for (const x of controls) {
+      if (x.priority_level === 'P1') c.P1++;
+      else if (x.priority_level === 'P2') c.P2++;
+      else if (x.priority_level === 'P3') c.P3++;
+      else c.other++;
+    }
+    return c;
+  }, [controls]);
+
+  const included = useMemo(() => {
+    const s = new Set<string>();
+    if (phase >= 1) s.add('P1');
+    if (phase >= 2) s.add('P2');
+    if (phase >= 3) s.add('P3');
+    return s;
+  }, [phase]);
+
+  const specVisible = (s: FrameworkControl) =>
+    phase === 0 ? true : (s.priority_level ? included.has(s.priority_level) : false);
+
+  const toggleDomain = (name: string) =>
+    setOpenDomains((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+
+  const allDomainNames = grouped.map((d) => d.name);
+  const allOpen = openDomains.size >= allDomainNames.length && allDomainNames.length > 0;
+
+  if (isLoading) {
+    return (
+      <div className="flex h-48 items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  const phaseChips: { v: 0 | 1 | 2 | 3; label: string; sub: string }[] = [
+    { v: 0, label: 'All', sub: `${controls.length}` },
+    { v: 1, label: 'Year 1', sub: `${counts.P1}` },
+    { v: 2, label: 'Year 2', sub: `${counts.P1 + counts.P2}` },
+    { v: 3, label: 'Year 3', sub: `${counts.P1 + counts.P2 + counts.P3}` },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Phased roadmap summary + filter */}
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Target className="h-4 w-4 text-slate-700" />
+          <h3 className="text-sm font-semibold text-slate-800">3-Year Implementation Roadmap</h3>
+          <span className="text-xs text-slate-500">specifications scored 100% / 0%, cascaded to control → domain → entity</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {phaseChips.map((p) => (
+            <button
+              key={p.v}
+              type="button"
+              onClick={() => setPhase(p.v)}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                phase === p.v
+                  ? 'border-slate-900 bg-slate-900 text-white'
+                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <span>{p.label}</span>
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${phase === p.v ? 'bg-white/20' : 'bg-slate-100 text-slate-600'}`}>{p.sub}</span>
+            </button>
+          ))}
+          <div className="ml-auto flex items-center gap-3 text-[11px] text-slate-500">
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" />P1</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500" />P2</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />P3</span>
+            {counts.other > 0 && <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-slate-300" />N/A ({counts.other})</span>}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-slate-500">
+          {grouped.length} domains · {controls.length} specifications
+          {phase !== 0 && ` · showing ${phaseChips[phase].label} (${phaseChips[phase].sub})`}
+        </p>
+        <button
+          type="button"
+          onClick={() => setOpenDomains(allOpen ? new Set() : new Set(allDomainNames))}
+          className="text-xs font-medium text-slate-600 hover:text-slate-900"
+        >
+          {allOpen ? 'Collapse all' : 'Expand all'}
+        </button>
+      </div>
+
+      {/* Domain -> Control -> Specification tree */}
+      <div className="space-y-2">
+        {grouped.map((domain) => {
+          const visibleControls = domain.controls
+            .map((ctrl) => ({ ...ctrl, vspecs: ctrl.specs.filter(specVisible) }))
+            .filter((ctrl) => ctrl.vspecs.length > 0);
+          if (visibleControls.length === 0) return null;
+          const specCount = visibleControls.reduce((n, c) => n + c.vspecs.length, 0);
+          const domainCode = domain.controls[0]?.code || '';
+          const isOpen = openDomains.has(domain.name);
+          return (
+            <div key={domain.name} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+              <button
+                type="button"
+                onClick={() => toggleDomain(domain.name)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50"
+              >
+                {isOpen ? <ChevronDown className="h-4 w-4 flex-shrink-0 text-slate-400" /> : <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-400" />}
+                <DomainId code={domainCode} />
+                <span className="flex-1 text-sm font-semibold text-slate-800">{domain.name}</span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                  {visibleControls.length} controls · {specCount} specs
+                </span>
+              </button>
+
+              {isOpen && (
+                <div className="border-t border-slate-100 px-3 pb-3 pt-1 sm:px-4">
+                  {visibleControls.map((ctrl) => (
+                    <div key={ctrl.code} className="mt-3 first:mt-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs font-semibold text-slate-900">{ctrl.code}</span>
+                        {ctrl.name && <span className="text-sm font-medium text-slate-700">{ctrl.name}</span>}
+                        {ctrl.deps.length > 0 && (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                            <Link2 className="h-3 w-3" />
+                            depends on:
+                            {ctrl.deps.map((d) => (
+                              <span key={d} className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">{d}</span>
+                            ))}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-1.5 space-y-1 border-l-2 border-slate-100 pl-3">
+                        {ctrl.vspecs.map((spec) => {
+                          const isSpecOpen = openSpec === spec.id;
+                          const specCode = spec.section_number || spec.original_reference || spec.control_id;
+                          return (
+                            <div key={spec.id} className="rounded-md">
+                              <button
+                                type="button"
+                                onClick={() => setOpenSpec(isSpecOpen ? null : spec.id)}
+                                className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-slate-50"
+                              >
+                                <PriorityLevelBadge level={spec.priority_level} />
+                                <span className="mt-0.5 font-mono text-[11px] text-slate-500">{specCode}</span>
+                                <span className="flex-1 text-sm text-slate-700">{spec.title}</span>
+                                {isSpecOpen ? <ChevronDown className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" /> : <ChevronRight className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />}
+                              </button>
+                              {isSpecOpen && (
+                                <div className="ml-2 mb-2 mt-1 rounded-md border border-slate-100 bg-slate-50/60 px-3 py-2 text-xs text-slate-600">
+                                  {spec.full_text || spec.description || 'No description provided.'}
+                                  <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+                                    {spec.priority_level && PL_META[spec.priority_level] && (
+                                      <span>Priority {spec.priority_level} · implement by {PL_META[spec.priority_level].label}</span>
+                                    )}
+                                    <span>{spec.is_mandatory ? 'Mandatory' : 'Optional'}</span>
+                                    <span className="inline-flex items-center gap-1">
+                                      <Paperclip className="h-3 w-3" /> {spec.evidence_count} evidence
+                                    </span>
+                                    <Link
+                                      href={`/evidence?control_id=${spec.id}`}
+                                      className="text-blue-600 hover:underline"
+                                    >
+                                      Manage evidence
+                                    </Link>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Figure-2 view: renders every control as the exact boxed "Control Structure
+// Format" table from the NDMO v1.5 standard (§7, Figure 2):
+//   Domain Name | Domain ID
+//   Control Name | Control ID
+//   Control Description
+//   [ Specification # | Specification Name | Control Specification | Priority ]
+//   Version History (Date | Version)
+//   Dependencies
+// Grouped by domain, with the same Year 1/2/3 phase filter.
+// ---------------------------------------------------------------------------
+function Figure2View({ frameworkId }: { frameworkId: number }) {
+  const [phase, setPhase] = useState<0 | 1 | 2 | 3>(0);
+  const [openDomains, setOpenDomains] = useState<Set<string>>(new Set());
+  const [openSpecs, setOpenSpecs] = useState<Set<number>>(new Set());
+  const toggleSpec = (id: number) => setOpenSpecs((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['framework-controls-doc', frameworkId],
+    queryFn: async () => {
+      const res = await controlsApi.getFrameworkControls({
+        framework_id: frameworkId, limit: 2000, sort_by: 'control_id', sort_order: 'asc',
+      });
+      return res.data as FrameworkControlsResponse;
+    },
+  });
+
+  // Sort by row id = the framework's published/document order (seeded in
+  // document order), so domains render as in the source (e.g. NDMO: Data
+  // Governance first), not alphabetically by control code.
+  const controls = useMemo(() => [...(data?.controls ?? [])].sort((a, b) => a.id - b.id), [data]);
+
+  const grouped = useMemo(() => {
+    const domains: { name: string; controls: {
+      code: string; name: string; desc: string | null; deps: string[];
+      versions: Array<{ date?: string; version?: string }>; specs: FrameworkControl[];
+    }[] }[] = [];
+    const dIdx = new Map<string, number>();
+    const cIdx = new Map<string, number>();
+    for (const c of controls) {
+      const dn = c.domain || 'Uncategorized';
+      if (!dIdx.has(dn)) { dIdx.set(dn, domains.length); domains.push({ name: dn, controls: [] }); }
+      const di = dIdx.get(dn)!;
+      const code = c.parent_section || c.control_id;
+      const ckey = dn + '||' + code;
+      if (!cIdx.has(ckey)) {
+        const rawCat = c.category || '';
+        const name = rawCat.includes(':') ? rawCat.split(':').slice(1).join(':').trim() : rawCat;
+        cIdx.set(ckey, domains[di].controls.length);
+        domains[di].controls.push({
+          code, name, desc: c.control_description || null,
+          deps: c.dependencies || [], versions: c.version_history || [], specs: [],
+        });
+      }
+      domains[di].controls[cIdx.get(ckey)!].specs.push(c);
+    }
+    return domains;
+  }, [controls]);
+
+  const counts = useMemo(() => {
+    const c = { P1: 0, P2: 0, P3: 0, other: 0 };
+    for (const x of controls) {
+      if (x.priority_level === 'P1') c.P1++;
+      else if (x.priority_level === 'P2') c.P2++;
+      else if (x.priority_level === 'P3') c.P3++;
+      else c.other++;
+    }
+    return c;
+  }, [controls]);
+
+  const included = useMemo(() => {
+    const s = new Set<string>();
+    if (phase >= 1) s.add('P1');
+    if (phase >= 2) s.add('P2');
+    if (phase >= 3) s.add('P3');
+    return s;
+  }, [phase]);
+  const specVisible = (s: FrameworkControl) =>
+    phase === 0 ? true : (s.priority_level ? included.has(s.priority_level) : false);
+
+  const toggleDomain = (name: string) =>
+    setOpenDomains((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
+      return next;
+    });
+
+  const allDomainNames = grouped.map((d) => d.name);
+  const allOpen = openDomains.size >= allDomainNames.length && allDomainNames.length > 0;
+
+  if (isLoading) {
+    return <div className="flex h-48 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>;
+  }
+
+  const phaseChips: { v: 0 | 1 | 2 | 3; label: string; sub: string }[] = [
+    { v: 0, label: 'All', sub: `${controls.length}` },
+    { v: 1, label: 'Year 1', sub: `${counts.P1}` },
+    { v: 2, label: 'Year 2', sub: `${counts.P1 + counts.P2}` },
+    { v: 3, label: 'Year 3', sub: `${counts.P1 + counts.P2 + counts.P3}` },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Phase filter */}
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Target className="h-4 w-4 text-slate-700" />
+          <h3 className="text-sm font-semibold text-slate-800">Control Structure (Figure 2 format) · 3-Year Roadmap</h3>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {phaseChips.map((p) => (
+            <button key={p.v} type="button" onClick={() => setPhase(p.v)}
+              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                phase === p.v ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
+              <span>{p.label}</span>
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${phase === p.v ? 'bg-white/20' : 'bg-slate-100 text-slate-600'}`}>{p.sub}</span>
+            </button>
+          ))}
+          <button type="button" onClick={() => setOpenDomains(allOpen ? new Set() : new Set(allDomainNames))}
+            className="ml-auto text-xs font-medium text-slate-600 hover:text-slate-900">
+            {allOpen ? 'Collapse all' : 'Expand all'}
+          </button>
+        </div>
+      </div>
+
+      {grouped.map((domain) => {
+        const domainCode = (domain.controls[0]?.code || '').split('.')[0] || '?';
+        const visibleControls = domain.controls
+          .map((ctrl) => ({ ...ctrl, vspecs: ctrl.specs.filter(specVisible) }))
+          .filter((ctrl) => ctrl.vspecs.length > 0);
+        if (visibleControls.length === 0) return null;
+        const isOpen = openDomains.has(domain.name);
+        return (
+          <div key={domain.name} className="space-y-3">
+            <button type="button" onClick={() => toggleDomain(domain.name)}
+              className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-left hover:bg-slate-100">
+              {isOpen ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+              <DomainId code={domainCode} />
+              <span className="flex-1 text-sm font-semibold text-slate-800">{domain.name}</span>
+              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-600">{visibleControls.length} controls</span>
+            </button>
+
+            {isOpen && visibleControls.map((ctrl) => (
+              <div key={ctrl.code} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+                {/* Identity block — all Figure-2 header fields, labelled */}
+                <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50/70 to-white px-5 py-4">
+                  <div className="grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Domain Name</p>
+                      <p className="mt-0.5 text-sm font-medium text-slate-800">{domain.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Domain ID</p>
+                      <p className="mt-0.5 font-mono text-sm font-semibold text-blue-700">{domainCode}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control Name</p>
+                      <p className="mt-0.5 text-sm font-medium text-slate-800">{ctrl.name || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control ID</p>
+                      <p className="mt-0.5 font-mono text-sm font-semibold text-blue-700">{ctrl.code}</p>
+                    </div>
+                  </div>
+                  {ctrl.desc && (
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control Description</p>
+                      <p className="mt-0.5 text-[13px] leading-relaxed text-slate-600">{ctrl.desc}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Specifications — scannable; click a row to reveal the
+                    Control Specification text */}
+                <div className="flex items-center justify-between px-5 pt-3 pb-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Specifications</p>
+                  <p className="text-[11px] text-slate-400">{ctrl.vspecs.length} · click to expand</p>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {ctrl.vspecs.map((s) => {
+                    const isSpecOpen = openSpecs.has(s.id);
+                    const specCode = s.section_number || s.original_reference || s.control_id;
+                    return (
+                      <div key={s.id}>
+                        <button
+                          type="button"
+                          onClick={() => toggleSpec(s.id)}
+                          className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-slate-50"
+                        >
+                          <span className="w-14 shrink-0 font-mono text-xs text-slate-400">{specCode}</span>
+                          <span className="flex-1 truncate text-sm font-medium text-slate-800">{s.title}</span>
+                          <PriorityLevelBadge level={s.priority_level} />
+                          <ChevronDown className={`h-4 w-4 shrink-0 text-slate-300 transition-transform ${isSpecOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {isSpecOpen && (
+                          <div className="px-5 pb-4 pl-[4.25rem]">
+                            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control Specification</p>
+                            <p className="rounded-lg bg-slate-50 px-4 py-3 text-[13px] leading-relaxed text-slate-600 whitespace-pre-wrap">
+                              {s.full_text || s.description || '—'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Version History + Dependencies — labelled footer */}
+                <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3 text-[12px]">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="font-semibold uppercase tracking-wide text-slate-400">Version History</span>
+                    <span className="text-slate-600">
+                      {ctrl.versions[0]?.date || '—'}{ctrl.versions[0]?.version ? ` · Version ${ctrl.versions[0].version}` : ''}
+                    </span>
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="font-semibold uppercase tracking-wide text-slate-400">Dependencies</span>
+                    {ctrl.deps.length === 0 ? (
+                      <span className="text-slate-400">None</span>
+                    ) : (
+                      <span className="inline-flex flex-wrap items-center gap-1">
+                        {ctrl.deps.map((d) => (
+                          <span key={d} className="rounded-md bg-white px-1.5 py-0.5 font-mono text-[11px] text-slate-600 ring-1 ring-slate-200">{d}</span>
+                        ))}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ControlsPage() {
   const searchParams = useSearchParams();
   const { hasPermission } = usePermissions();
@@ -375,6 +893,11 @@ export default function ControlsPage() {
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [aiRecommendations, setAiRecommendations] = useState<Record<number, AIRecommendations>>({});
   const [loadingAI, setLoadingAI] = useState<number | null>(null);
+  // Table (default global view) vs Tree (NDMO-style Domain→Control→Spec native
+  // view). The tree auto-engages the first time a phased framework is opened,
+  // unless the user has explicitly toggled.
+  const [viewMode, setViewMode] = useState<'table' | 'tree' | 'doc'>('table');
+  const [viewTouched, setViewTouched] = useState(false);
   const pageSize = 50;
 
   const aiRecommendationMutation = useMutation({
@@ -481,6 +1004,17 @@ export default function ControlsPage() {
     },
     placeholderData: (previousData) => previousData,
   });
+
+  // A framework is "phased" when its controls carry NDMO-style P1/P2/P3 tiers.
+  const isPhased = !!data?.controls?.some((c) => c.priority_level);
+
+  // Auto-engage the native Document (Figure-2) view the first time a phased
+  // framework is opened.
+  useEffect(() => {
+    if (!viewTouched && frameworkFilter && isPhased) {
+      setViewMode('doc');
+    }
+  }, [viewTouched, frameworkFilter, isPhased]);
 
   const handleSort = (field: SortField) => {
     setPage(0);
@@ -750,8 +1284,45 @@ export default function ControlsPage() {
           searchPlaceholder="Search frameworks"
           size="md"
         />
+        {frameworkFilter && isPhased && (
+          <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
+            <button
+              type="button"
+              onClick={() => { setViewTouched(true); setViewMode('doc'); }}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                viewMode === 'doc' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <FileText className="h-4 w-4" /> Document
+            </button>
+            <button
+              type="button"
+              onClick={() => { setViewTouched(true); setViewMode('tree'); }}
+              className={`flex items-center gap-1.5 border-l border-slate-200 px-3 py-2 text-sm font-medium transition-colors ${
+                viewMode === 'tree' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Layers className="h-4 w-4" /> Tree
+            </button>
+            <button
+              type="button"
+              onClick={() => { setViewTouched(true); setViewMode('table'); }}
+              className={`flex items-center gap-1.5 border-l border-slate-200 px-3 py-2 text-sm font-medium transition-colors ${
+                viewMode === 'table' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <ClipboardList className="h-4 w-4" /> Table
+            </button>
+          </div>
+        )}
       </div>
 
+      {viewMode === 'doc' && frameworkFilter ? (
+        <Figure2View frameworkId={frameworkFilter} />
+      ) : viewMode === 'tree' && frameworkFilter ? (
+        <NativeFrameworkTree frameworkId={frameworkFilter} />
+      ) : (
+      <>
       <div className="overflow-hidden rounded-lg border border-slate-200">
         <table className="w-full">
           <thead className="bg-white">
@@ -795,7 +1366,9 @@ export default function ControlsPage() {
                       <span className="text-sm text-slate-600">{control.domain || '-'}</span>
                     </td>
                     <td className="px-4 py-3">
-                      {getPriorityBadge(control.priority)}
+                      {control.priority_level
+                        ? <PriorityLevelBadge level={control.priority_level} />
+                        : getPriorityBadge(control.priority)}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <Link
@@ -875,8 +1448,20 @@ export default function ControlsPage() {
                                 </button>
                               </div>
                             )}
+                            {control.dependencies && control.dependencies.length > 0 && (
+                              <div>
+                                <h4 className="text-sm font-medium text-slate-600">Dependencies</h4>
+                                <div className="mt-1 flex flex-wrap items-center gap-1">
+                                  {control.dependencies.map((d) => (
+                                    <span key={d} className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600">
+                                      <Link2 className="h-3 w-3" />{d}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          
+
                           {control.description && (
                             <div>
                               <h4 className="text-sm font-medium text-slate-600">Description</h4>
@@ -1119,6 +1704,8 @@ export default function ControlsPage() {
               : 'Try adjusting your search or filters'}
           </p>
         </div>
+      )}
+      </>
       )}
     </div>
   );

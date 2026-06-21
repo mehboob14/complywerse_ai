@@ -559,6 +559,14 @@ def list_framework_controls(
             "category": control.category,
             "is_mandatory": control.is_mandatory,
             "priority": control.priority,
+            # Native implementation-order tier (NDMO P1/P2/P3 → Year 1/2/3
+            # roadmap) and control-level prerequisite dependencies. Null/[] for
+            # frameworks that declare neither.
+            "priority_level": control.priority_level,
+            "dependencies": control.dependencies or [],
+            "version_history": control.version_history or [],
+            "control_description": control.control_description,
+            "assessment_criteria": control.assessment_criteria or [],
             "section_number": control.section_number,
             "parent_section": control.parent_section,
             "ai_confidence": control.ai_confidence,
