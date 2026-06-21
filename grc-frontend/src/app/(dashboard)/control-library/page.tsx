@@ -82,6 +82,9 @@ interface AutoGroupResult {
   message: string;
   groups_created: number;
   groups: ControlGroup[];
+  unified_controls?: number;
+  standalone?: number;
+  controls_covered?: number;
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; icon: typeof CheckCircle }> = {
@@ -134,6 +137,17 @@ export default function ControlLibraryPage() {
         id: number; label: string; scope: string; is_baseline: boolean;
         unified_controls: number; framework_ids: number[] | null;
       }>,
+  });
+
+  // Delete a custom scoped SESSION (never the baseline — backend guards it too).
+  const deleteSession = useMutation({
+    mutationFn: async (id: number) => apiClient.delete(`/control-library/groups/sessions/${id}`),
+    onSuccess: () => {
+      setSelectedRunId(null);   // fall back to the master baseline view
+      setPage(0);
+      queryClient.invalidateQueries({ queryKey: ['normalization-sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['control-groups'] });
+    },
   });
 
   const { data: groupsData, isLoading: groupsLoading, error: groupsError, refetch: refetchGroups } = useQuery({
@@ -296,6 +310,10 @@ export default function ControlLibraryPage() {
                 groups_created: summary.unified_controls ?? summary.created_count ?? 0,
                 groups_merged: summary.merged_count || 0,
                 groups: [],
+                unified_controls: summary.unified_controls ?? 0,
+                standalone: summary.standalone ?? 0,
+                controls_covered: summary.controls_covered
+                  ?? ((summary.unified_controls ?? 0) + (summary.standalone ?? 0)),
               } as AutoGroupResult);
               // A scoped session returns its own run id — switch the view to it
               // (the master baseline stays intact and selectable).
@@ -517,6 +535,24 @@ export default function ControlLibraryPage() {
                 </option>
               ))}
             </select>
+          )}
+          {/* Delete the selected scoped session (the master baseline has no run id
+              selected, so this only ever appears for disposable sessions). */}
+          {selectedRunId && (
+            <button
+              onClick={() => {
+                const s = sessionsData?.find((x) => x.id === selectedRunId);
+                if (window.confirm(`Delete session "${s?.label ?? 'this session'}"? This removes the scoped view only — the master baseline is untouched.`)) {
+                  deleteSession.mutate(selectedRunId);
+                }
+              }}
+              disabled={deleteSession.isPending}
+              title="Delete this scoped session"
+              className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              <Trash2 size={16} />
+              {deleteSession.isPending ? 'Deleting…' : 'Delete session'}
+            </button>
           )}
           <Link
             href="/control-library/review"
@@ -1304,15 +1340,20 @@ export default function ControlLibraryPage() {
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                   <h4 className="mb-2 font-semibold text-slate-900">Results</h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-3 gap-4 text-sm">
                     <div>
-                      <p className="text-gray-600">Groups Created</p>
-                      <p className="text-2xl font-semibold text-black">{autoGroupResult.groups_created}</p>
+                      <p className="text-gray-600">Unified Controls</p>
+                      <p className="text-2xl font-semibold text-black">{autoGroupResult.unified_controls ?? autoGroupResult.groups_created}</p>
                     </div>
                     <div>
-                      <p className="text-gray-600">Total Controls Grouped</p>
+                      <p className="text-gray-600">Standalone</p>
+                      <p className="text-2xl font-semibold text-black">{autoGroupResult.standalone ?? 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600">Total Controls</p>
                       <p className="text-2xl font-semibold text-black">
-                        {autoGroupResult.groups?.reduce((sum, g) => sum + (g.total_control_count || 0), 0) || 0}
+                        {autoGroupResult.controls_covered
+                          ?? ((autoGroupResult.unified_controls ?? 0) + (autoGroupResult.standalone ?? 0))}
                       </p>
                     </div>
                   </div>

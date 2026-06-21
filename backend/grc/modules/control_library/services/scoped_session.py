@@ -173,9 +173,13 @@ def build_scoped_session(
             continue   # not cross-framework within the selection → members fall to standalone below
         gid = group_for(d["domain"])
         seq += 1
+        # Do NOT copy the baseline's consolidated evidence — it spans ALL the
+        # baseline's frameworks. A scoped control holds only the SELECTED
+        # frameworks' members, so leave evidence empty and let it regenerate from
+        # those members on first view (so it reflects only the chosen frameworks).
         nc = NormalizedControl(code=f"NCS{run.id}-{seq:04d}", name=d["name"],
                                source="ai_normalized", run_id=run.id, domain=d["domain"],
-                               maturity_level=0, recommended_evidence=d["ev"])
+                               maturity_level=0, recommended_evidence=None)
         db.add(nc); db.flush()
         db.add(CommonControlGroupMapping(group_id=gid, normalized_control_id=nc.id,
                                          mapping_source="domain", mapping_confidence=1.0))

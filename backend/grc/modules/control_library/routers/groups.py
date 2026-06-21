@@ -563,6 +563,40 @@ def list_normalization_sessions(
     return {"sessions": out}
 
 
+@router.delete("/sessions/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_normalization_session(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Delete a custom (framework-scoped) normalization SESSION and all of its
+    groups/controls. The master baseline can NEVER be deleted here — only the
+    disposable scoped sessions a user builds from 'Build Unified View'."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    run = db.query(NormalizationRun).filter(
+        NormalizationRun.id == run_id, NormalizationRun.tenant_id == tenant_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if run.is_baseline:
+        raise HTTPException(status_code=400, detail="The master baseline cannot be deleted.")
+    from sqlalchemy import text as _text
+    for stmt in (
+        "DELETE FROM grc_common_control_group_mappings WHERE group_id IN (SELECT id FROM grc_common_control_groups WHERE run_id=:r)",
+        "DELETE FROM grc_common_control_groups WHERE run_id=:r",
+        "DELETE FROM grc_evidence_control_mappings WHERE normalized_control_id IN (SELECT id FROM grc_normalized_controls WHERE run_id=:r)",
+        "DELETE FROM grc_ai_evidence_recommendations WHERE normalized_control_id IN (SELECT id FROM grc_normalized_controls WHERE run_id=:r)",
+        "DELETE FROM grc_normalized_control_links WHERE normalized_control_id IN (SELECT id FROM grc_normalized_controls WHERE run_id=:r)",
+        "DELETE FROM grc_normalized_controls WHERE run_id=:r",
+        "DELETE FROM grc_normalization_runs WHERE id=:r",
+    ):
+        try:
+            db.execute(_text(stmt), {"r": run_id})
+        except Exception:
+            _jobs_logger.exception("delete session %s: stmt failed", run_id)
+    db.commit()
+    return None
+
+
 # ── Master-list human review — drive the unified library toward 100% correct ──
 class RemoveMemberRequest(BaseModel):
     parsed_control_id: int
