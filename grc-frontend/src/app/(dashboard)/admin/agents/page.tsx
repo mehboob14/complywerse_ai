@@ -134,11 +134,6 @@ export default function AgentsAdminPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0 max-w-3xl">
           <h1 className="text-2xl font-semibold text-gray-900">Compliance Agents</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Collector or per-endpoint agents that push CIS scan results back
-            to Compliverse. Use this when WinRM/SSH is blocked or when
-            you want results pushed instead of pulled.
-          </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <Link
@@ -206,11 +201,6 @@ export default function AgentsAdminPage() {
       <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
         <div className="px-5 py-3 border-b border-gray-200">
           <h2 className="text-sm font-semibold text-gray-900">Endpoint agent packages</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            For Windows / Linux / macOS hosts where you install the agent
-            directly. Each host runs its own copy; the agent dials out to
-            Compliverse, no inbound firewall rule needed.
-          </p>
         </div>
         <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-200">
           <div className="p-4">
@@ -294,10 +284,6 @@ export default function AgentsAdminPage() {
       <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
         <div className="border-b border-gray-200 px-5 py-3">
           <h2 className="text-sm font-semibold text-gray-900">Collector agent</h2>
-          <p className="mt-0.5 text-xs text-gray-500">
-            One Linux box inside the bank LAN. Reaches OUT to remote targets — Cisco / Oracle / MSSQL / Postgres / MySQL / AD / Azure / K8s.
-            Pulls credentials from your Connect Wizard connections, executes locally, posts results back.
-          </p>
         </div>
         <div className="grid md:grid-cols-2 gap-4 p-4">
           <div className="p-4 border border-gray-200 rounded-lg">
@@ -532,21 +518,8 @@ function AgentlessTargetsSection() {
     <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 px-5 py-3">
         <h2 className="text-sm font-semibold text-gray-900">Agentless targets</h2>
-        <p className="mt-0.5 text-xs text-gray-500">
-          Network devices, cloud accounts, databases — anything you can&apos;t or
-          don&apos;t want to install software on. Each integration is set up in
-          the Connect Wizard.
-        </p>
       </div>
-      <div className="flex flex-col items-start gap-3 p-5 md:flex-row md:items-center md:justify-between">
-        <div className="max-w-xl">
-          <p className="text-sm text-gray-700">
-            The Connect Wizard groups the 12 supported integrations by
-            category (hosts · network devices · databases · identity · cloud)
-            with a one-line &ldquo;best for&rdquo; hint per group, so you know which
-            credential type fits your scenario before clicking through.
-          </p>
-        </div>
+      <div className="flex items-center justify-end gap-3 p-5">
         <Link
           href="/admin/integrations/connect"
           className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3.5 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100"

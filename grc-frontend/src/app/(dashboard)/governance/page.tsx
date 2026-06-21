@@ -910,10 +910,22 @@ export default function GovernanceDashboardPage() {
           <h1 className="text-sm font-semibold text-slate-900">Governance Overview</h1>
           <p className="text-xs text-slate-500">Real-time policy, framework, review, and oversight posture</p>
         </div>
-        <Link href="/governance/documents" className="btn-primary">
-          <FileText size={14} />
-          Manage Documents
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Attestations + Statements moved here from the sidebar — they live
+              under the Governance documents area now. */}
+          <Link href="/governance/attestations" className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50">
+            <FileCheck size={14} />
+            Attestations
+          </Link>
+          <Link href="/compliance/statements" className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50">
+            <FileText size={14} />
+            Statements
+          </Link>
+          <Link href="/governance/documents" className="btn-primary">
+            <FileText size={14} />
+            Manage Documents
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">

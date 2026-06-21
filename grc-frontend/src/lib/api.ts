@@ -851,6 +851,7 @@ export const certificationsApi = {
     apiClient.post(`/certifications/${journeyId}/controls/${controlId}/evidence/${evidenceId}/review`, data),
   
   getProgress: (id: number) => apiClient.get(`/certifications/${id}/progress`),
+  getCharts: (id: number) => apiClient.get(`/certifications/${id}/charts`),
   getGaps: (id: number) => apiClient.get(`/certifications/${id}/gaps`),
   getCDESystems: () => apiClient.get('/certifications/cde-systems'),
   updateCDESystemScope: (assetId: number, data: { cde_environment: boolean }) =>
@@ -1991,6 +1992,8 @@ export const complianceApi = {
     // active journeys.
     getFrameworksAggregate: (params?: { tenant_id?: number }) =>
       apiClient.get('/compliance/policies/dashboard/frameworks-aggregate', { params }),
+    getComplianceTrend: (days: number) =>
+      apiClient.get('/compliance/policies/dashboard/compliance-trend', { params: { days } }),
   },
   statements: {
     getAll: (params?: {

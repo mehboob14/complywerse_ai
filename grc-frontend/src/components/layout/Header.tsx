@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, LogOut, UserCircle, Users, Search, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, LogOut, UserCircle, Users, Search, Loader2, Sparkles, AlertCircle, ClipboardCheck } from 'lucide-react';
+import Link from 'next/link';
 import { apiClient, searchApi } from '@/lib/api';
 
 const navIconProps = {
@@ -80,6 +81,17 @@ export default function Header() {
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
+  const [approvalsOpen, setApprovalsOpen] = useState(false);
+  const approvalsRef = useRef<HTMLDivElement>(null);
+  const [chatQ, setChatQ] = useState('');
+
+  const submitChat = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const q = chatQ.trim();
+    router.push(q ? `/complychat?q=${encodeURIComponent(q)}` : '/complychat');
+    setChatQ('');
+  };
+
   // Real workflow in-app notifications
   const { data: notifData, refetch: refetchNotifs } = useQuery({
     queryKey: ['workflow-notifications'],
@@ -91,6 +103,22 @@ export default function Header() {
   const notifications: Array<{id: number; subject: string; message: string; notification_type: string; is_read: boolean; created_at: string}> =
     notifData?.items ?? [];
   const unreadCount = notifications.filter((n) => !n.is_read).length;
+
+  // Pending compliance approvals — surfaced as a top-bar quick-action so it's
+  // visible from anywhere (it used to be a Compliance sidebar row).
+  const { data: pendingApprovalsData } = useQuery({
+    queryKey: ['header-pending-approvals'],
+    queryFn: () => apiClient.get('/compliance/assessments/pending-approvals').then((r) => r.data),
+    refetchInterval: 60000,
+    enabled: !!currentUser,
+  });
+  const pendingApprovalItems: Array<{
+    id: number; assessment_name?: string; control_description?: string;
+    item_number?: number; evidence_name?: string; status?: string; submitted_at?: string;
+  }> = Array.isArray(pendingApprovalsData?.pending_approvals)
+    ? pendingApprovalsData.pending_approvals
+    : Array.isArray(pendingApprovalsData) ? pendingApprovalsData : [];
+  const pendingApprovalCount = pendingApprovalItems.length;
 
   const markAllRead = async () => {
     try {
@@ -122,6 +150,9 @@ export default function Header() {
       }
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setIsUserMenuOpen(false);
+      }
+      if (approvalsRef.current && !approvalsRef.current.contains(event.target as Node)) {
+        setApprovalsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -160,9 +191,93 @@ export default function Header() {
       </div>
 
       <div className="ml-3 flex items-center gap-2.5">
-        {/* Phase 9 — Global search bar (cross-domain). Placed before the
-            notification bell so keyboard-driven users hit it quickly. */}
-        <GlobalSearchBar />
+        {/* ComplyChat — global AI assistant, as a wide input (replaces the
+            old search bar). Type a question and hit Enter to open the chat. */}
+        <form onSubmit={submitChat} className="relative hidden md:block">
+          <Sparkles size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-base)]" />
+          <input
+            value={chatQ}
+            onChange={(e) => setChatQ(e.target.value)}
+            placeholder="Ask ComplyChat anything…"
+            aria-label="Ask ComplyChat"
+            className="h-8 w-64 rounded-md border border-[var(--color-base)]/30 bg-[var(--color-base)]/5 pl-7 pr-8 text-xs text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors focus:w-80 focus:border-[var(--color-base)]/60 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--color-base)]/30"
+          />
+          <button type="submit" aria-label="Send" className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--color-base)] hover:bg-[var(--color-base)]/10">
+            <ChevronRight size={14} />
+          </button>
+        </form>
+
+        {/* Issues — applies across all modules, so it lives in the top bar. */}
+        <Link
+          href="/issues"
+          title="Issues"
+          className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]"
+          aria-label="Issues"
+        >
+          <AlertCircle size={18} strokeWidth={1.75} />
+        </Link>
+
+        {/* Pending compliance approvals — opens a dropdown (not a page). */}
+        <div className="relative" ref={approvalsRef}>
+          <button
+            type="button"
+            onClick={() => setApprovalsOpen((p) => !p)}
+            title="Pending approvals"
+            aria-label="Pending approvals"
+            className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]"
+          >
+            <ClipboardCheck size={18} strokeWidth={1.75} />
+            {pendingApprovalCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white leading-none">
+                {pendingApprovalCount > 99 ? '99+' : pendingApprovalCount}
+              </span>
+            )}
+          </button>
+          {approvalsOpen && (
+            <div className="absolute right-0 z-50 mt-2 w-96 rounded-lg border border-gray-200 bg-white shadow-xl">
+              <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
+                <span className="text-sm font-semibold text-gray-800">Pending Approvals</span>
+                {pendingApprovalCount > 0 && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-600">{pendingApprovalCount} pending</span>
+                )}
+              </div>
+              <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
+                {pendingApprovalItems.length === 0 ? (
+                  <div className="px-4 py-6 text-center text-xs text-gray-400">Nothing awaiting your approval.</div>
+                ) : (
+                  pendingApprovalItems.slice(0, 12).map((item) => (
+                    <Link
+                      key={item.id}
+                      href="/compliance/assessments/approvals"
+                      onClick={() => setApprovalsOpen(false)}
+                      className="flex gap-3 px-4 py-3 text-xs hover:bg-amber-50/60"
+                    >
+                      <ClipboardCheck size={14} className="mt-0.5 flex-shrink-0 text-amber-500" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium leading-snug truncate text-gray-800">
+                          {item.assessment_name || item.evidence_name || item.control_description || `Item #${item.item_number ?? item.id}`}
+                        </p>
+                        {(item.control_description || item.evidence_name) && (
+                          <p className="mt-0.5 text-gray-500 leading-snug truncate">{item.control_description || item.evidence_name}</p>
+                        )}
+                        <p className="mt-0.5 text-gray-400">
+                          {item.status ? String(item.status).replace(/_/g, ' ') : 'pending'}{item.submitted_at ? ` · ${timeAgo(item.submitted_at)}` : ''}
+                        </p>
+                      </div>
+                    </Link>
+                  ))
+                )}
+              </div>
+              <Link
+                href="/compliance/assessments/approvals"
+                onClick={() => setApprovalsOpen(false)}
+                className="block border-t border-gray-100 px-4 py-2.5 text-center text-xs font-medium text-blue-600 hover:bg-gray-50"
+              >
+                Open approvals queue →
+              </Link>
+            </div>
+          )}
+        </div>
 
         {/* Notification bell */}
         <div className="relative" ref={notifRef}>
@@ -349,7 +464,7 @@ function GlobalSearchBar() {
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Search vulns, assets, risks…"
+          placeholder="Search…"
           className="h-8 w-56 rounded-md border border-slate-200 bg-white pl-7 pr-7 text-xs text-slate-700 focus:border-blue-300 focus:outline-none focus:ring-1 focus:ring-blue-200"
         />
         {isFetching && (

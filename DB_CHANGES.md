@@ -32,6 +32,134 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-06-19 — Asset OS normalization on ingest + benchmark-OS mapping seed (DATA + code-only, manual script)
+
+### What
+
+Two coordinated changes so ingested/imported/manually-added IT assets resolve
+to the correct CIS benchmark (the rule-applicability matcher keys off
+`grc_it_assets.os_normalized` → `grc_benchmark_os_mappings`):
+
+1. **Code-only — OS-string normalisation on every asset-entry path.**
+   * New `normalize_os_string()` in
+     [`os_detector.py`](backend/grc/modules/compliance_plugins/services/os_detector.py)
+     — pure-string parser (reuses the existing `normalise_windows/linux/cisco`
+     regexes) → `(os_family, os_normalized, os_build, os_edition)`. Also fixed
+     two latent bugs in the shared Linux regexes (greedy version capture →
+     wrong RHEL/Rocky major; this also improves the live `/etc/os-release` path).
+   * **Nessus/Rapid7 sync** ([`sync_service.py`](backend/grc/modules/integrations/services/sync_service.py)
+     `_map_asset_fields`) — the scanner's raw OS string was captured then
+     **dropped**; now normalised into `os_family/os_version/os_normalized/
+     os_build/os_edition` (create + update; never clobbers a known OS on a
+     failed parse).
+   * **Manual create** ([`assets_router.py`](backend/grc/routers/assets_router.py)
+     `create_asset`) — derives `os_normalized` from the operator's
+     `os_version`/`os_family` when not explicitly supplied (explicit value
+     still wins).
+   * **Bulk CSV/Excel import** — added an `operating_system` column to the
+     template and normalise it per row.
+
+2. **DATA — comprehensive `grc_benchmark_os_mappings` seed.** New script
+   [`scripts/seed_benchmark_os_mappings.py`](backend/scripts/seed_benchmark_os_mappings.py)
+   lays down 55 normaliser-aligned `os_pattern → benchmark` rows (Windows
+   desktop/server, Ubuntu/Debian/RHEL-family/SUSE/Amazon, macOS, VMware ESXi,
+   Cisco/Juniper/Forti/PaloAlto/Aruba/CheckPoint, AWS/Azure/k8s, Oracle DB).
+   Executable benchmark preferred; RHEL/Rocky v9 → AlmaLinux 9 executable
+   proxy; else newest non-archived manual benchmark. Tenant-global rows
+   (`tenant_id IS NULL`).
+
+### Why
+
+Manual/Excel/scanner-ingested assets landed with `os_normalized = NULL` and the
+fuzzy `os_keys` fallback mis-resolved (e.g. `windows-server-2019` → an
+*archived Windows 11* benchmark; RHEL/Rocky/ESXi/macOS → nothing). Now every
+asset-entry path produces a canonical key and that key maps to the correct,
+current benchmark.
+
+### How (Ubuntu)
+
+```
+git pull            # ships the code changes (auto-active on restart)
+cd backend
+python -m scripts.seed_benchmark_os_mappings --all-tenants     # idempotent
+```
+
+The seed is idempotent: it only fills missing `os_pattern` rows and leaves any
+pre-existing active mapping (operator edits, the legacy 17) untouched.
+
+### Risk
+
+Low. Code paths only ADD OS fields (never overwrite a known OS with a failed
+parse). The seed only inserts gap patterns; re-running is a no-op. Legacy
+mismatched patterns (`oracle-linux-9`, `amazon-linux-2023`, `cisco-nx-os`,
+`cisco-ios-xe-17`) are left in place but harmless — the new normaliser-aligned
+patterns (`oraclelinux-9`, `amazonlinux-2023`, `cisco-nxos`, `cisco-ios-xe`)
+supersede them.
+
+### Auto-applied?
+
+Code: yes (on restart). Mapping seed: **no — run the script once on Ubuntu.**
+
+---
+
+## 2026-06-19 — Framework compliance dashboard charts (NEW TABLE `grc_compliance_history`, auto-applied)
+
+### What
+
+New per-framework compliance dashboard on `/frameworks/[id]` (gauge, requirement
+status donut, automated-controls assurance, maturity radar, compliance trend +
+stat cards). Backed by:
+
+  * **New table `grc_compliance_history`** — model `ComplianceHistory` in
+    [`backend/grc/models/_16_certification_journey_models.py`](backend/grc/models/_16_certification_journey_models.py).
+    One row per (journey_id, UTC day): completion_pct, readiness_pct,
+    evidence_coverage_pct, total_controls, status_counts (JSON). Powers the
+    "compliance trend over time" chart (there was no history before).
+  * **New endpoint** `GET /certifications/{journey_id}/charts`
+    ([`backend/grc/routers/certification_router.py`](backend/grc/routers/certification_router.py))
+    — reuses the existing progress calc, derives automation
+    (PluginControlMapping → ControlMapping → parsed_control + latest passing
+    run), and **upserts today's posture snapshot** into the history table on
+    each load (so the trend fills in over time — no cron job).
+  * **Frontend**: `FrameworkChartsOverview.tsx` (recharts, light theme) wired
+    into the framework detail Overview tab; `certificationsApi.getCharts()`.
+
+### DB impact
+
+**One new table, no changes to existing tables/columns.** It is created
+automatically per-tenant by the existing `Base.metadata.create_all` self-heal
+that runs on every tenant-engine init
+([backend/grc/db.py](backend/grc/db.py) — "create any tables the model
+registry knows about but this tenant DB hasn't been populated with yet").
+`create_all` only creates MISSING tables, so this is a safe no-op where the
+table already exists. The snapshot write is the only DATA write and it is
+idempotent per (journey, day).
+
+### How (on Ubuntu)
+
+```bash
+cd ~/grc-final/complywerse_ai && git pull
+sudo systemctl restart grc-backend.service      # picks up the model + endpoint
+cd grc-frontend && npm run build && pm2 restart grc-frontend
+```
+
+The `grc_compliance_history` table is created on the first request that opens
+each tenant's engine after the restart — nothing to run manually.
+
+### Risk
+
+- Additive only — existing framework pages/queries untouched.
+- Snapshot + trend reads are best-effort (wrapped in try/except + rollback) so
+  a history hiccup can never break the charts response.
+- Trend starts with a single point per journey and builds up daily.
+
+### Auto-applied?
+
+**Yes** — `create_all` makes the table on next tenant access after the backend
+restart. No manual SQL.
+
+---
+
 ## 2026-06-19 — Seed the full CIS Benchmark library (DATA seed + manual-attestation code, NO schema)
 
 ### What

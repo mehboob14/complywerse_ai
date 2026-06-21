@@ -32,6 +32,9 @@ import {
   FolderKanban,
   ListTodo,
   ShieldCheck,
+  Gavel,
+  Landmark,
+  ShieldAlert,
   // CIS integration icons
   type LucideIcon,
 } from "lucide-react";
@@ -40,8 +43,8 @@ import { clsx } from "clsx";
 import { apiClient } from "@/lib/api";
 
 const navIconProps = {
-  size: 16,
-  strokeWidth: 1.5,
+  size: 18,
+  strokeWidth: 1.75,
 };
 
 interface NavItem {
@@ -54,6 +57,7 @@ interface NavItem {
 
 interface NavGroup {
   name: string;
+  icon?: LucideIcon;
   items: NavItem[];
   defaultOpen?: boolean;
   requiredModules?: string[];
@@ -95,11 +99,10 @@ const navigation: NavEntry[] = [
   },
   {
     name: 'Governance',
-    defaultOpen: true,
+    icon: Landmark,
     requiredModules: ['governance'],
     items: [
       { name: 'Documents', href: '/governance', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
-      { name: 'Attestations', href: '/governance/attestations', icon: ClipboardCheck, requiredPermissions: ['governance:attestations:*'] },
       { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: GitPullRequest, requiredPermissions: ['governance:regulatory_changes:*'] },
       { name: 'Regulatory Feeds', href: '/governance/regulatory-feeds', icon: Rss, requiredPermissions: ['governance:regulatory_changes:*'] },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
@@ -107,11 +110,11 @@ const navigation: NavEntry[] = [
   },
   {
     name: 'Risk Management',
+    icon: ShieldAlert,
     requiredModules: ['risks', 'erm'],
     items: [
       { name: 'ERM Overview', href: '/erm', icon: BarChart3, requiredPermissions: ['erm:risks:*'] },
       { name: 'Risk Assessments', href: '/erm/risk-assessments', icon: ClipboardList, requiredPermissions: ['risks:risk_assessment:*', 'erm:rcsa:*'] },
-      { name: 'AI Risk Assessment', href: '/erm/ai-risk-assessment', icon: Bot, requiredPermissions: ['erm:risks:*'] },
       { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle, requiredPermissions: ['erm:risks:*'] },
       { name: 'Vendor Risk', href: '/vendor-risk', icon: Shield, requiredPermissions: ['erm:risks:*'] },
       { name: 'RCSA', href: '/risks/rcsa', icon: ClipboardList, requiredPermissions: ['erm:rcsa:*'] },
@@ -123,14 +126,13 @@ const navigation: NavEntry[] = [
   },
   {
     name: 'Compliance',
+    icon: ShieldCheck,
     requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
     items: [
       { name: 'Frameworks', href: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Controls', href: '/controls', icon: Shield, requiredPermissions: ['controls:control_library:*'] },
       // { name: 'Evidence Requirements', href: '/evidence-requirements', icon: ClipboardList, requiredPermissions: ['evidence:evidence_requirements:*'] },
-      { name: 'Statements', href: '/compliance/statements', icon: FileText, requiredPermissions: ['compliance:statements:*'] },
       { name: 'Assessments', href: '/compliance/assessments', icon: ClipboardCheck, requiredPermissions: ['compliance:assessments:*'] },
-      { name: 'Pending Approvals', href: '/compliance/assessments/approvals', icon: Clock, requiredPermissions: ['compliance:assessments:*'] },
       { name: 'Evidence', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
       { name: 'Control Library', href: '/control-library', icon: Library, requiredPermissions: ['controls:control_library:*'] },
     ],
@@ -138,7 +140,7 @@ const navigation: NavEntry[] = [
   {
     name: 'Auditor Portal',
     href: '/auditor-portal',
-    icon: ShieldCheck,
+    icon: Gavel,
     requiredModules: ['frameworks', 'compliance'],
     requiredPermissions: ['compliance:frameworks:*'],
   },
@@ -149,6 +151,7 @@ const navigation: NavEntry[] = [
   // Vulnerability-management items.
   {
     name: 'IT Assets',
+    icon: Server,
     items: [
       { name: 'Inventory',                 href: '/assets',                       icon: Bot,        requiredPermissions: ['dashboard:assets*'] },
       // Single entry for the 4-tab Compliance & Scans hub. Standalone
@@ -157,7 +160,6 @@ const navigation: NavEntry[] = [
       { name: 'Compliance & Scans',        href: '/compliance-overview',          icon: BarChart3,  requiredPermissions: ['compliance:scan:execute', 'erm:risks:*', 'compliance:agents:manage'] },
       { name: 'Criticality Assessments',   href: '/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
       { name: 'Vulnerabilities',           href: '/vulnerabilities',              icon: Bug,        requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
-      { name: 'Vulnerability Exceptions',  href: '/vulnerabilities/exceptions',   icon: FileText,   requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
     ],
   },
 
@@ -175,14 +177,9 @@ const navigation: NavEntry[] = [
     requiredModules: ['critical_tasks'],
     requiredPermissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view']
   },
-  {
-    name: 'Issues',
-    href: '/issues',
-    icon: AlertCircle,
-    requiredModules: ['issue_management'],
-    requiredPermissions: ['issue_management:issues:view']
-  },
-  { name: 'ComplyChat', href: '/complychat', icon: Bot, requiredPermissions: ['dashboard:ai_insights:*'] },
+  // Issues and ComplyChat were moved to the TOP NAV BAR (Header.tsx) — Issues
+  // applies across all modules, and ComplyChat is the global AI assistant, so
+  // both live as top-bar quick-actions rather than per-module sidebar rows.
   // Bulk Discovery's standalone sidebar entry was removed. The CIDR
   // network scanner route at /admin/discover stays alive: the Setup
   // Wizard on /admin/agents still hands off discovered hostnames into
@@ -208,10 +205,10 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
     <Link
       href={item.href}
       className={clsx(
-        'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[12px] md:text-[13px] tracking-[0.01em] transition-all duration-150',
+        'group flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors duration-150',
         isActive
-          ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm font-medium'
-          : 'border-transparent text-[var(--sidebar-text)] font-medium hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
+          ? 'bg-[var(--sidebar-active-bg)] font-semibold text-[var(--color-text)]'
+          : 'font-normal text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
         collapsed && 'justify-center px-2'
       )}
       title={collapsed ? item.name : undefined}
@@ -220,7 +217,7 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
         {...navIconProps}
         className={clsx(
           'flex-shrink-0 transition-colors duration-150',
-          isActive ? 'text-[var(--color-on-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
+          isActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
         )}
       />
       {!collapsed && <span className="truncate">{item.name}</span>}
@@ -234,23 +231,32 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
     .filter((item) => pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/')))
     .sort((a, b) => b.href.length - a.href.length)[0];
   const activeChildHref = activeChild?.href;
-  const [isOpen, setIsOpen] = useState(group.defaultOpen !== false);
+  const hasActiveChild = Boolean(activeChildHref);
+  // Closed by default — only auto-open the section whose page is currently
+  // active (so a deep-link still reveals its context) or one explicitly marked
+  // defaultOpen.
+  const [isOpen, setIsOpen] = useState(group.defaultOpen === true || hasActiveChild);
+  const GroupIcon = group.icon;
 
   if (collapsed) {
     return (
       <div className="relative group/nav">
         <button
           className={clsx(
-            'flex items-center justify-center w-full rounded-[var(--radius-md)] border-l-[3px] p-2 transition-all duration-150',
-            'border-transparent text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
+            'flex items-center justify-center w-full rounded-lg p-2 transition-colors duration-150',
+            hasActiveChild
+              ? 'bg-[var(--sidebar-active-bg)] text-[var(--color-base)]'
+              : 'text-[var(--sidebar-icon)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
           )}
           title={group.name}
         >
-          <span className="text-[10px] font-bold uppercase tracking-[0.08em]">{group.name.charAt(0)}</span>
+          {GroupIcon
+            ? <GroupIcon {...navIconProps} />
+            : <span className="text-[11px] font-semibold">{group.name.charAt(0)}</span>}
         </button>
         <div className="absolute left-full top-0 ml-2 hidden group-hover/nav:block z-50">
-          <div className="min-w-[200px] rounded-[var(--radius-lg)] border border-slate-200 bg-white shadow-elevated py-1.5">
-            <div className="px-3 py-1 text-[10px] md:text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--sidebar-text-section)]">
+          <div className="min-w-[210px] rounded-xl border border-slate-200 bg-white shadow-elevated p-1.5">
+            <div className="px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-text)]">
               {group.name}
             </div>
             {group.items.map(item => (
@@ -258,13 +264,13 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
                 key={item.href}
                 href={item.href}
                 className={clsx(
-                  'flex items-center gap-2 border-l-[3px] px-3 py-1.5 text-[12px] md:text-[13px] font-medium tracking-[0.01em] transition-colors',
+                  'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
                   activeChildHref === item.href
-                    ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm'
-                    : 'border-transparent text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
+                    ? 'bg-[var(--sidebar-active-bg)] font-semibold text-[var(--color-text)]'
+                    : 'font-normal text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
                 )}
               >
-                <item.icon {...navIconProps} className="text-[var(--sidebar-icon)]" />
+                <item.icon size={16} strokeWidth={1.75} className={clsx('flex-shrink-0', activeChildHref === item.href ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')} />
                 {item.name}
               </Link>
             ))}
@@ -275,47 +281,70 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
   }
 
   return (
-    <div className="space-y-0.5">
+    <div>
       <button
         onClick={() => setIsOpen(prev => !prev)}
         className={clsx(
-          'group flex w-full items-center rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[10px] md:text-[11px] font-bold uppercase tracking-[0.12em] transition-all duration-150',
-          'border-transparent text-[var(--sidebar-text-section)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
+          'group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors duration-150',
+          hasActiveChild
+            ? 'font-semibold text-[var(--color-text)]'
+            : 'font-normal text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
         )}
       >
+        {GroupIcon && (
+          <GroupIcon
+            {...navIconProps}
+            className={clsx('flex-shrink-0 transition-colors duration-150',
+              hasActiveChild ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]')}
+          />
+        )}
         <span className="flex-1 text-left truncate">{group.name}</span>
-        {isOpen
-          ? <ChevronDown size={13} className="flex-shrink-0 opacity-60" />
-          : <ChevronRight size={13} className="flex-shrink-0 opacity-60" />
-        }
+        <ChevronDown
+          size={15}
+          className={clsx('flex-shrink-0 text-[var(--sidebar-icon)] transition-transform duration-200', !isOpen && '-rotate-90')}
+        />
       </button>
-      {isOpen && (
-        <div className="ml-3 space-y-0.5 border-l border-[var(--sidebar-hover-bg)] pl-3">
-          {group.items.map(item => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={clsx(
-                'group flex items-center gap-2.5 rounded-[var(--radius-md)] border-l-[3px] px-2.5 py-1.5 text-[12px] md:text-[13px] font-medium tracking-[0.01em] transition-all duration-150',
-                activeChildHref === item.href
-                  ? 'border-[var(--sidebar-active-border)] bg-[var(--sidebar-active-bg)] text-[var(--color-on-base)] shadow-sm'
-                  : 'border-transparent text-[var(--sidebar-text-subitem)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
-              )}
-            >
-              <item.icon
-                {...navIconProps}
-                className={clsx(
-                  'flex-shrink-0',
-                  activeChildHref === item.href
-                    ? 'text-[var(--color-on-base)]'
-                    : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]'
-                )}
-              />
-              <span className="truncate">{item.name}</span>
-            </Link>
-          ))}
+
+      {/* Animated open/close — the grid-rows 0fr→1fr trick smoothly expands the
+          height without measuring content, and the inner items fade + slide in
+          (staggered) as the section "populates". */}
+      <div
+        className={clsx(
+          'grid transition-[grid-template-rows] duration-300 ease-out',
+          isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="mt-0.5 ml-[1.6rem] space-y-px border-l border-[var(--sidebar-hover-bg)] pl-2.5">
+            {group.items.map((item, idx) => {
+              const childActive = activeChildHref === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  tabIndex={isOpen ? 0 : -1}
+                  style={{ transitionDelay: isOpen ? `${Math.min(idx, 6) * 30 + 60}ms` : '0ms' }}
+                  className={clsx(
+                    'group flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-all duration-200 ease-out',
+                    isOpen ? 'translate-x-0 opacity-100' : '-translate-x-1 opacity-0',
+                    childActive
+                      ? 'bg-[var(--sidebar-active-bg)] font-medium text-[var(--color-text)]'
+                      : 'font-normal text-[var(--sidebar-text-subitem)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
+                  )}
+                >
+                  <item.icon
+                    size={16}
+                    strokeWidth={1.75}
+                    className={clsx('flex-shrink-0',
+                      childActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)] group-hover:text-[var(--color-text)]')}
+                  />
+                  <span className="truncate">{item.name}</span>
+                </Link>
+              );
+            })}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -373,22 +402,22 @@ function AdministrationPopover({
   if (!visible) return null;
 
   return (
-    <div className="border-t border-[var(--sidebar-hover-bg)] p-2.5 relative" data-admin-popover-root>
+    <div className="border-t border-[var(--sidebar-hover-bg)] px-2.5 py-2 relative" data-admin-popover-root>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={clsx(
-          'flex w-full items-center gap-2 rounded-[var(--radius-md)] px-2.5 py-2 text-sm transition-all duration-150',
+          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors duration-150',
           open
-            ? 'bg-[var(--sidebar-hover-bg)] text-[var(--color-text)]'
-            : 'text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
+            ? 'bg-[var(--sidebar-hover-bg)] font-medium text-[var(--color-text)]'
+            : 'font-normal text-[var(--sidebar-text)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
           collapsed && 'justify-center px-2'
         )}
         title={collapsed ? 'Administration' : undefined}
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        <Settings {...navIconProps} />
+        <Settings {...navIconProps} className={clsx('flex-shrink-0', open ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')} />
         {!collapsed && <span className="truncate flex-1 text-left">Administration</span>}
         {!collapsed && (
           <ChevronRight
@@ -429,35 +458,6 @@ function AdministrationPopover({
     </div>
   );
 }
-
-// Top-of-sidebar collapse toggle. Same chevron + label as the original
-// bottom row, just relocated. Kept as its own component so the parent
-// stays readable.
-function CollapseToggleRow({
-  collapsed,
-  onToggle,
-}: { collapsed: boolean; onToggle: () => void }) {
-  return (
-    <div className="border-b border-[var(--sidebar-hover-bg)] p-2.5">
-      <button
-        onClick={onToggle}
-        className={clsx(
-          'flex w-full items-center gap-2 rounded-[var(--radius-md)] px-2.5 py-1.5 text-[11px] transition-all duration-150',
-          'text-[var(--sidebar-text-collapse)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]',
-          collapsed && 'justify-center px-2'
-        )}
-        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-      >
-        <ChevronRight
-          {...navIconProps}
-          className={clsx('transition-transform duration-300', !collapsed && 'rotate-180')}
-        />
-        {!collapsed && <span className="text-xs">Collapse</span>}
-      </button>
-    </div>
-  );
-}
-
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
@@ -597,38 +597,42 @@ export default function Sidebar() {
     <aside
       className={clsx(
         'flex flex-col bg-white border-r border-slate-200 shadow-sidebar transition-all duration-300 ease-out',
-        collapsed ? 'w-[60px]' : 'w-56'
+        collapsed ? 'w-[64px]' : 'w-60'
       )}
     >
+      {/* Brand + collapse toggle share one row to save vertical space. */}
       <div className={clsx(
-        'h-12 flex items-center border-b border-[var(--sidebar-hover-bg)] transition-all duration-300',
-        collapsed ? 'px-3 justify-center' : 'px-4'
+        'h-14 flex items-center border-b border-[var(--sidebar-hover-bg)] transition-all duration-300',
+        collapsed ? 'justify-center px-2' : 'justify-between px-4'
       )}>
-        <div className="flex items-center gap-2">
-          {collapsed ? (
-            /* Collapsed: show just styled "C" mark */
-            <span className="text-base font-bold text-[var(--color-text)] select-none">C</span>
-          ) : (
-            <span className="whitespace-nowrap text-base font-semibold text-[var(--color-text)] flex items-baseline gap-0.5">
-              Compl<span className="relative inline-block leading-none">
-                <span style={{ fontVariantLigatures: 'none' }}>ı</span>
-                <span
-                  className="logo-dot absolute left-1/2 rounded-full"
-                  style={{ top: '-3px', width: '5px', height: '5px', background: 'var(--color-base, #14b8a6)' }}
-                />
-              </span>verse
-              <span className="ml-1 text-xs font-medium text-[var(--color-base)] opacity-70">AI</span>
-            </span>
-          )}
-        </div>
+        {!collapsed && (
+          <span className="whitespace-nowrap text-base font-semibold text-[var(--color-text)] flex items-baseline gap-0.5">
+            Compl<span className="relative inline-block leading-none">
+              <span style={{ fontVariantLigatures: 'none' }}>ı</span>
+              <span
+                className="logo-dot absolute left-1/2 rounded-full"
+                style={{ top: '-3px', width: '5px', height: '5px', background: 'var(--color-base, #14b8a6)' }}
+              />
+            </span>verse
+            <span className="ml-1 text-xs font-medium text-[var(--color-base)] opacity-70">AI</span>
+          </span>
+        )}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--sidebar-icon)] transition-colors duration-150 hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]"
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <ChevronRight
+            size={17}
+            strokeWidth={1.75}
+            className={clsx('transition-transform duration-300', !collapsed && 'rotate-180')}
+          />
+        </button>
       </div>
 
-      {/* Collapse toggle moved from the bottom to the top — sits right
-          under the brand header, above the scrolling nav. Same behaviour
-          as before. */}
-      <CollapseToggleRow collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
-
-      <nav className="flex-1 overflow-y-auto scrollbar-thin p-2.5 space-y-0.5">
+      {/* Top-aligned nav — items start at the top (no vertical centering). */}
+      <nav className="flex-1 overflow-y-auto scrollbar-thin px-2.5 py-3 space-y-1">
         {filteredNavigation.map((item) => {
           if (isGroup(item)) {
             return (

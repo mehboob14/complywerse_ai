@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { GripHorizontal, Maximize2, Minimize2, RotateCcw } from 'lucide-react';
+import { GripHorizontal, Maximize2, Minimize2, RotateCcw, EyeOff, Eye } from 'lucide-react';
 
 export interface WorkspaceWidgetConfig {
   id: string;
   title: string;
+  icon?: ReactNode;
   content: ReactNode;
   defaultW?: number;
   defaultH?: number;
@@ -21,6 +22,7 @@ type LayoutItem = {
   minW: number;
   minH: number;
   minimized: boolean;
+  hidden: boolean;
   lastH: number;
   z: number;
 };
@@ -48,14 +50,23 @@ function rectsOverlap(a: Pick<LayoutItem, 'x' | 'y' | 'w' | 'h'>, b: Pick<Layout
 }
 
 function resolveLayoutCollisions(layout: LayoutState): LayoutState {
-  const entries = Object.entries(layout).sort(([, a], [, b]) => {
-    if (a.y !== b.y) return a.y - b.y;
-    if (a.x !== b.x) return a.x - b.x;
-    return a.z - b.z;
-  });
+  const resolved: LayoutState = {};
+
+  // Hidden widgets take no space on the canvas — pass them through untouched
+  // so their stored position is preserved for when they are restored.
+  for (const [id, item] of Object.entries(layout)) {
+    if (item.hidden) resolved[id] = item;
+  }
+
+  const entries = Object.entries(layout)
+    .filter(([, item]) => !item.hidden)
+    .sort(([, a], [, b]) => {
+      if (a.y !== b.y) return a.y - b.y;
+      if (a.x !== b.x) return a.x - b.x;
+      return a.z - b.z;
+    });
 
   const placed: Array<{ id: string; item: LayoutItem }> = [];
-  const resolved: LayoutState = {};
 
   const fitsAt = (candidate: Pick<LayoutItem, 'x' | 'y' | 'w' | 'h'>) => {
     if (candidate.x < 0 || candidate.y < 0) return false;
@@ -126,6 +137,7 @@ function buildDefaultLayout(widgets: WorkspaceWidgetConfig[]): LayoutState {
       minW,
       minH,
       minimized: false,
+      hidden: false,
       lastH: h,
       z: index + 1,
     };
@@ -166,6 +178,7 @@ function sanitizeStoredLayout(
       minW: clamp(Math.round(stored.minW ?? widget.minW ?? base.minW), 1, GRID_COLS),
       minH: clamp(Math.round(stored.minH ?? widget.minH ?? base.minH), 1, 8),
       minimized: Boolean(stored.minimized ?? false),
+      hidden: Boolean(stored.hidden ?? false),
       lastH: clamp(Math.round(stored.lastH ?? h), 1, 8),
       z: Math.max(1, Math.round(stored.z ?? index + 1)),
     };
@@ -341,6 +354,28 @@ export default function WidgetWorkspace({
     });
   };
 
+  const hideWidget = (id: string) => {
+    setLayout((prev) => {
+      const item = prev[id];
+      if (!item) return prev;
+      if (maximizedWidgetId === id) setMaximizedWidgetId(null);
+      return resolveLayoutCollisions({
+        ...prev,
+        [id]: { ...item, hidden: true },
+      });
+    });
+  };
+
+  const restoreAllHidden = () => {
+    setLayout((prev) => {
+      const next: LayoutState = {};
+      for (const [id, item] of Object.entries(prev)) {
+        next[id] = item.hidden ? { ...item, hidden: false } : item;
+      }
+      return resolveLayoutCollisions(next);
+    });
+  };
+
   const resetLayout = () => {
     // Nuke every cached dashboard layout, not just this tab's. Fixes the
     // edge case where new widgets were added to multiple tabs but the
@@ -361,9 +396,16 @@ export default function WidgetWorkspace({
   };
 
   const totalRows = useMemo(() => {
-    const maxY = Object.values(layout).reduce((max, item) => Math.max(max, item.y + item.h), 8);
+    const maxY = Object.values(layout)
+      .filter((item) => !item.hidden)
+      .reduce((max, item) => Math.max(max, item.y + item.h), 8);
     return Math.max(8, maxY);
   }, [layout]);
+
+  const hiddenCount = useMemo(
+    () => Object.values(layout).filter((item) => item.hidden).length,
+    [layout]
+  );
 
   const canvasHeight = totalRows * ROW_HEIGHT;
 
@@ -375,9 +417,20 @@ export default function WidgetWorkspace({
     <div className="flex h-[calc(100vh-164px)] flex-col gap-3 overflow-hidden bg-[var(--color-surface)]">
       <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
         <p className="text-xs cw-text-muted">
-          Drag by header, resize from bottom-right, minimize or maximize any widget.
+          Drag by header, resize from bottom-right, minimize, maximize or hide any widget.
         </p>
         <div className="flex items-center gap-2">
+          {hiddenCount > 0 && (
+            <button
+              type="button"
+              onClick={restoreAllHidden}
+              className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs font-medium cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text"
+              title="Show all hidden widgets"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              {hiddenCount} hidden
+            </button>
+          )}
           <div className="flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1">
             <button
               type="button"
@@ -420,7 +473,7 @@ export default function WidgetWorkspace({
           <div className="relative" style={{ height: `${canvasHeight}px` }}>
             {widgets.map((widget) => {
               const item = layout[widget.id];
-              if (!item) return null;
+              if (!item || item.hidden) return null;
               return (
                 <div
                   key={widget.id}
@@ -440,6 +493,7 @@ export default function WidgetWorkspace({
                   >
                     <div className="flex items-center gap-1.5">
                       <GripHorizontal className="h-3.5 w-3.5 cw-text-muted" />
+                      {widget.icon && <span className="flex items-center text-[var(--color-base)]">{widget.icon}</span>}
                       <span className="text-xs font-medium cw-text">{widget.title}</span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -458,6 +512,14 @@ export default function WidgetWorkspace({
                         title="Maximize"
                       >
                         <Maximize2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => hideWidget(widget.id)}
+                        className="rounded p-1 text-[var(--color-muted)] hover:bg-red-50 hover:text-red-600"
+                        title="Hide widget"
+                      >
+                        <EyeOff className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </div>

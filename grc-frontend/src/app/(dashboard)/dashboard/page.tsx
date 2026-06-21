@@ -116,6 +116,7 @@ import {
   RiskTrendBoardWidget,
 } from './components/ModuleSubWidgets';
 import WidgetWorkspace, { type WorkspaceWidgetConfig } from './components/WidgetWorkspace';
+import { FrameworkComplianceCards } from './components/FrameworkComplianceCards';
 
 // â”€â”€â”€ Color palettes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const STRATEGY_COLORS: Record<string, string> = {
@@ -2343,14 +2344,15 @@ function buildWidgetsForTab(tab: MainTab): WorkspaceWidgetConfig[] {
   switch (tab) {
     case 'executive':
       return [
-        { id: 'board-1-reporting',     title: '1. Board Reporting Dashboard',  content: <BoardReportingWidget />,           defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
-        { id: 'board-2-compliance',    title: '2. Compliance Dashboard',       content: <ComplianceDashboardBoardWidget />, defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
-        { id: 'board-3-enterprise',    title: '3. Enterprise Risk Dashboard',  content: <EnterpriseRiskBoardWidget />,      defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
-        { id: 'board-4-grc-overview',  title: '4. GRC Overview Dashboard',     content: <GRCOverviewBoardWidget />,         defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
-        { id: 'board-5-issue-incident', title: '5. Issue and Incident Dashboard', content: <IssueIncidentBoardWidget />,    defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
-        { id: 'board-6-kri',           title: '6. KPI KRI Monitoring Panel',   content: <KRIMonitoringBoardWidget />,       defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
-        { id: 'board-7-exposure',      title: '7. Risk Exposure Summary Panel', content: <RiskExposureBoardWidget />,       defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
-        { id: 'board-8-trend',         title: '8. Risk Trend Analysis Sheet',  content: <RiskTrendBoardWidget />,           defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
+        { id: 'exec-frameworks',       title: 'Framework Compliance',          icon: <Shield className="h-3.5 w-3.5" />,        content: <FrameworkComplianceCards />,       defaultW: 12, defaultH: 4, minW: 6, minH: 3 },
+        { id: 'board-1-reporting',     title: '1. Board Reporting Dashboard',  icon: <LayoutDashboard className="h-3.5 w-3.5" />, content: <BoardReportingWidget />,           defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-2-compliance',    title: '2. Compliance Dashboard',       icon: <FileCheck className="h-3.5 w-3.5" />,     content: <ComplianceDashboardBoardWidget />, defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-3-enterprise',    title: '3. Enterprise Risk Dashboard',  icon: <Scale className="h-3.5 w-3.5" />,         content: <EnterpriseRiskBoardWidget />,      defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
+        { id: 'board-4-grc-overview',  title: '4. GRC Overview Dashboard',     icon: <Building2 className="h-3.5 w-3.5" />,     content: <GRCOverviewBoardWidget />,         defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-5-issue-incident', title: '5. Issue and Incident Dashboard', icon: <AlertCircle className="h-3.5 w-3.5" />, content: <IssueIncidentBoardWidget />,    defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-6-kri',           title: '6. KPI KRI Monitoring Panel',   icon: <Gauge className="h-3.5 w-3.5" />,         content: <KRIMonitoringBoardWidget />,       defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-7-exposure',      title: '7. Risk Exposure Summary Panel', icon: <Target className="h-3.5 w-3.5" />,       content: <RiskExposureBoardWidget />,       defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
+        { id: 'board-8-trend',         title: '8. Risk Trend Analysis Sheet',  icon: <TrendingUp className="h-3.5 w-3.5" />,    content: <RiskTrendBoardWidget />,           defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
       ];
     case 'governance':
       return [
@@ -2456,31 +2458,6 @@ function buildWidgetsForTab(tab: MainTab): WorkspaceWidgetConfig[] {
 // board pack. Card chrome aligns with the platform's existing widget cards
 // (white background, slate 200 border, subtle slate header strip, no
 // gradients, no oversize accents).
-function BoardPanel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card">
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-2">
-        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-      </div>
-      <div className="p-4">{children}</div>
-    </div>
-  );
-}
-
-function ExecutiveBoardGrid() {
-  return (
-    <div className="mx-auto w-full max-w-[1400px] grid grid-cols-1 lg:grid-cols-2 gap-3">
-      <BoardPanel title="1. Board Reporting Dashboard"><BoardReportingWidget /></BoardPanel>
-      <BoardPanel title="2. Compliance Dashboard"><ComplianceDashboardBoardWidget /></BoardPanel>
-      <BoardPanel title="3. Enterprise Risk Dashboard"><EnterpriseRiskBoardWidget /></BoardPanel>
-      <BoardPanel title="4. GRC Overview Dashboard"><GRCOverviewBoardWidget /></BoardPanel>
-      <BoardPanel title="5. Issue and Incident Dashboard"><IssueIncidentBoardWidget /></BoardPanel>
-      <BoardPanel title="6. KPI KRI Monitoring Panel"><KRIMonitoringBoardWidget /></BoardPanel>
-      <BoardPanel title="7. Risk Exposure Summary Panel"><RiskExposureBoardWidget /></BoardPanel>
-      <BoardPanel title="8. Risk Trend Analysis Sheet"><RiskTrendBoardWidget /></BoardPanel>
-    </div>
-  );
-}
 
 export default function MainDashboard() {
   const [activeTab, setActiveTab] = useState<MainTab>('executive');
@@ -2512,11 +2489,7 @@ export default function MainDashboard() {
       </div>
 
       <div className="min-h-0 flex-1 bg-[var(--color-surface)] p-3 sm:p-4">
-        {activeTab === 'executive' ? (
-          <ExecutiveBoardGrid />
-        ) : (
-          <WidgetWorkspace tabKey={activeTab} widgets={activeWidgets} />
-        )}
+        <WidgetWorkspace tabKey={activeTab} widgets={activeWidgets} />
       </div>
     </div>
   );

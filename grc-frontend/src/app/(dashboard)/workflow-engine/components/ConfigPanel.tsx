@@ -360,10 +360,31 @@ function EscalationLevelsConfig({
     );
   }
 
+  // Compact "when does each level fire" preview so the timing is visible at a
+  // glance without expanding every level. Delays are relative to the previous
+  // level (Level 1 is relative to when the workflow reaches the node).
+  const fmtDelay = (d: number, h: number) => {
+    if (!d && !h) return 'immediately';
+    const parts: string[] = [];
+    if (d) parts.push(`${d}d`);
+    if (h) parts.push(`${h}h`);
+    return `after ${parts.join(' ')}`;
+  };
+
   return (
     <div className="mt-1 space-y-3">
+      {levels.length > 0 && (
+        <div className="rounded-md border border-blue-100 bg-blue-50/60 px-2 py-1.5 text-[9px] text-blue-800">
+          <span className="font-semibold">Timeline:</span>{' '}
+          {levels.map((lv, i) => (
+            <span key={i}>
+              {i > 0 && <span className="text-blue-300"> → </span>}
+              L{lv.level} {fmtDelay(Number(lv.wait_days) || 0, Number(lv.wait_hours) || 0)}
+            </span>
+          ))}
+        </div>
+      )}
       {levels.map((lv, idx) => {
-        const isLast = idx === levels.length - 1;
         const escalationMode = lv.escalation_mode || 'always';
         return (
           <div key={idx} className="border border-gray-200 rounded-md p-2 bg-slate-50">
@@ -468,50 +489,47 @@ function EscalationLevelsConfig({
               </>
             )}
 
-            {/* Wait before escalating to the next level — days AND hours both
-                (shown for all but the last level). */}
-            {!isLast && (
-              <>
-                <div className="text-[9px] text-gray-500 mt-1 mb-0.5">
-                  Wait before escalating to Level {lv.level + 1}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="Days">
-                    <input
-                      type="number"
-                      min={0}
-                      className={inputCls}
-                      value={lv.wait_days ?? 0}
-                      onChange={(e) =>
-                        updateLevel(idx, { wait_days: Math.max(0, Number(e.target.value) || 0) })
-                      }
-                      placeholder="0"
-                    />
-                  </Field>
-                  <Field label="Hours">
-                    <input
-                      type="number"
-                      min={0}
-                      max={23}
-                      className={inputCls}
-                      value={lv.wait_hours ?? 0}
-                      onChange={(e) =>
-                        updateLevel(idx, { wait_hours: Math.max(0, Number(e.target.value) || 0) })
-                      }
-                      placeholder="0"
-                    />
-                  </Field>
-                </div>
-                {(Number(lv.wait_days) || 0) === 0 && (Number(lv.wait_hours) || 0) === 0 && (
-                  <div className="text-[9px] text-amber-600 mt-0.5">
-                    0 days + 0 hours — Level {lv.level + 1} will fire immediately.
-                  </div>
-                )}
-              </>
-            )}
-            {isLast && (
-              <div className="text-[9px] text-gray-400 mt-1 italic">
-                Final level — no further escalation
+            {/* WHEN this level fires — the delay before it, measured from the
+                previous level (or from when the workflow reaches this node for
+                Level 1). Shown for EVERY level so timing is always configurable,
+                including a single-level escalation. 0 = fire immediately. */}
+            <div className="text-[9px] font-medium text-gray-600 mt-1 mb-0.5">
+              {lv.level === 1
+                ? 'Send this alert after — from when the workflow reaches this node'
+                : `Escalate to Level ${lv.level} after — from Level ${lv.level - 1}`}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Days">
+                <input
+                  type="number"
+                  min={0}
+                  className={inputCls}
+                  value={lv.wait_days ?? 0}
+                  onChange={(e) =>
+                    updateLevel(idx, { wait_days: Math.max(0, Number(e.target.value) || 0) })
+                  }
+                  placeholder="0"
+                />
+              </Field>
+              <Field label="Hours">
+                <input
+                  type="number"
+                  min={0}
+                  max={23}
+                  className={inputCls}
+                  value={lv.wait_hours ?? 0}
+                  onChange={(e) =>
+                    updateLevel(idx, { wait_hours: Math.max(0, Number(e.target.value) || 0) })
+                  }
+                  placeholder="0"
+                />
+              </Field>
+            </div>
+            {(Number(lv.wait_days) || 0) === 0 && (Number(lv.wait_hours) || 0) === 0 && (
+              <div className="text-[9px] text-amber-600 mt-0.5">
+                {lv.level === 1
+                  ? '0 days + 0 hours — fires immediately when reached.'
+                  : '0 days + 0 hours — escalates immediately after the previous level.'}
               </div>
             )}
           </div>

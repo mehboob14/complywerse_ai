@@ -5,6 +5,8 @@ export const dynamic = 'force-dynamic';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
+import { ShieldAlert, SlidersHorizontal, Search as SearchIcon, Crown } from 'lucide-react';
 import { riskPostureApi } from '@/lib/api';
 import EmptyState from '@/components/common/EmptyState';
 import WeightsPanel from './_weights-panel';
@@ -57,6 +59,23 @@ const BAND_BAR: Record<string, string> = {
   high: 'bg-orange-500',
   critical: 'bg-red-500',
 };
+
+// Higher score = MORE risk, so the colour scale is inverted vs. compliance.
+const BAND_HEX: Record<string, string> = {
+  low: '#16a34a', moderate: '#eab308', high: '#f97316', critical: '#dc2626', unknown: '#cbd5e1',
+};
+function riskHex(score: number): string {
+  if (score >= 75) return '#dc2626';
+  if (score >= 50) return '#f97316';
+  if (score >= 25) return '#eab308';
+  return '#16a34a';
+}
+const BAND_META: Array<{ key: 'low' | 'moderate' | 'high' | 'critical'; label: string; range: string }> = [
+  { key: 'critical', label: 'Critical', range: '75–100' },
+  { key: 'high',     label: 'High',     range: '50–74' },
+  { key: 'moderate', label: 'Moderate', range: '25–49' },
+  { key: 'low',      label: 'Low',      range: '0–24' },
+];
 
 type SortKey = 'score' | 'name' | 'data_quality' | 'cis' | 'open_vulns';
 type SortDir = 'asc' | 'desc';
@@ -118,122 +137,112 @@ export default function RiskPosturePage() {
     return <div className="p-6 text-sm text-red-600">Failed to load risk posture.</div>;
   }
 
-  const { summary, weights } = q.data;
-  const bandKeys: Array<'low' | 'moderate' | 'high' | 'critical'> = ['low', 'moderate', 'high', 'critical'];
+  const { summary } = q.data;
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <WeightsPanel open={weightsOpen} onClose={() => setWeightsOpen(false)} />
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="min-w-0 max-w-3xl">
-          <h1 className="text-2xl font-semibold text-gray-900">Unified Risk Posture</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Composite risk score per asset combining CIS compliance, open
-            vulnerabilities, CIA criticality, and control coverage. Score is
-            0-100, higher means more risk.
-          </p>
-          <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-900">
-            <span className="font-semibold uppercase tracking-wider text-emerald-700">v2 enhanced</span>
-            <span>
-              The vulnerabilities dimension now uses CVSS + EPSS likelihood + CISA
-              KEV + business impact. Click <strong>Drill down</strong> on any
-              asset to see the per-vuln breakdown, the Before/After triage view,
-              and the live Business Context preview.
-            </span>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 ring-1 ring-rose-100">
+            <ShieldAlert className="h-5 w-5 text-rose-600" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold tracking-tight text-gray-900">Risk Posture</h1>
+            <p className="text-xs text-gray-500">Composite risk score per asset — higher means more risk.</p>
           </div>
         </div>
         <button
           onClick={() => {
             if (!isAdmin) {
-              // Show toast instead of hiding the button — normal users
-              // still see Compliverse the same way the admin does,
-              // they just bump into a lock when they try to change
-              // tenant-wide settings.
-              alert("🔒 Permission required\n\nOnly the Tenant Administrator can change risk weights. Ask your admin to give you the Administrator role if you need to tune the scoring formula.");
+              alert("🔒 Permission required\n\nOnly the Tenant Administrator can change risk weights.");
               return;
             }
             setWeightsOpen(true);
           }}
-          className={`px-3 py-2 text-sm rounded-md border whitespace-nowrap flex-shrink-0 ${
-            isAdmin
-              ? "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-              : "border-gray-300 bg-gray-50 text-gray-400 cursor-not-allowed hover:bg-gray-50"
+          className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm whitespace-nowrap ${
+            isAdmin ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50' : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
           }`}
-          title={isAdmin
-            ? "Customise how each dimension contributes to the composite score"
-            : "Tenant Administrators only — your role can view the scoring formula but not change it"}
+          title={isAdmin ? 'Customise how each dimension contributes to the score' : 'Tenant Administrators only'}
         >
-          {isAdmin ? "⚙ Tune weights" : "🔒 Tune weights"}
+          <SlidersHorizontal className="h-4 w-4" /> Tune weights
         </button>
       </div>
 
-      {/* Summary KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
-        <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm sm:col-span-2">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Average Risk Score</div>
-          <div className="mt-1 text-3xl font-semibold text-gray-900">
-            {summary.avg_score}
-            <span className="text-base text-gray-400">/100</span>
+      {/* ─── Executive hero: portfolio gauge + band distribution ──────── */}
+      <section className="grid gap-3 lg:grid-cols-[260px_1fr]">
+        {/* Portfolio risk gauge */}
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="relative h-[160px] w-[160px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadialBarChart innerRadius="76%" outerRadius="100%" data={[{ value: summary.avg_score }]} startAngle={90} endAngle={-270}>
+                <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
+                <RadialBar dataKey="value" cornerRadius={10} fill={riskHex(summary.avg_score)} background={{ fill: '#f1f5f9' }} />
+              </RadialBarChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-4xl font-bold tabular-nums" style={{ color: riskHex(summary.avg_score) }}>{summary.avg_score}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">avg risk / 100</span>
+            </div>
           </div>
-          <div className="text-xs text-gray-500 mt-1">
-            across {summary.scored_count} scored / {summary.asset_count} total
-            {summary.by_band.unknown ? (
-              <span className="text-amber-600 ml-1">({summary.by_band.unknown} unknown)</span>
-            ) : null}
-          </div>
+          <p className="mt-1 text-center text-xs text-slate-500">
+            {summary.scored_count} of {summary.asset_count} assets scored
+            {summary.by_band.unknown ? <span className="text-amber-600"> · {summary.by_band.unknown} unknown</span> : null}
+          </p>
         </div>
-        {bandKeys.map((b) => (
-          <button
-            key={b}
-            onClick={() => setFilterBand(filterBand === b ? '' : b)}
-            className={`bg-white border rounded-lg p-4 shadow-sm text-left transition-shadow hover:shadow-md ${
-              filterBand === b ? 'ring-2 ring-blue-500' : ''
-            }`}
-          >
-            <div className={`text-xs uppercase tracking-wide font-medium ${
-              b === 'low' ? 'text-green-700'
-              : b === 'moderate' ? 'text-yellow-700'
-              : b === 'high' ? 'text-orange-700' : 'text-red-700'
-            }`}>
-              {b}
-            </div>
-            <div className="mt-1 text-2xl font-semibold text-gray-900">
-              {summary.by_band[b] ?? 0}
-            </div>
-            <div className="text-[10px] text-gray-500 mt-0.5">
-              {b === 'low' ? '0–24'
-              : b === 'moderate' ? '25–49'
-              : b === 'high' ? '50–74' : '75+'}
-            </div>
-          </button>
-        ))}
-      </div>
 
-      {/* Weights explanation */}
-      <div className="bg-blue-50 border border-blue-100 rounded-md px-4 py-3 text-xs text-blue-900 space-y-1.5">
-        <div>
-          <strong className="text-blue-700">Composite formula:</strong>{' '}
-          Score = {Math.round(weights.cis * 100)}% CIS gap
-          + {Math.round(weights.vuln * 100)}% vulnerabilities (effective)
-          + {Math.round(weights.cia * 100)}% CIA criticality
-          + {Math.round(weights.ctrl * 100)}% control gap
-          + {Math.round(weights.risk * 100)}% linked-risk residual.
-          Dimensions with no data are excluded and remaining weights are
-          renormalized — the <strong>Data Quality</strong> column shows
-          what percentage of the formula could actually be measured.
+        {/* Band distribution — clickable to filter the table below */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Assets by risk band</h3>
+            {filterBand && (
+              <button onClick={() => setFilterBand('')} className="text-[11px] font-medium text-blue-600 hover:underline">Clear filter</button>
+            )}
+          </div>
+          {/* stacked distribution bar */}
+          <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-100">
+            {BAND_META.map((b) => {
+              const n = summary.by_band[b.key] || 0;
+              const total = BAND_META.reduce((a, x) => a + (summary.by_band[x.key] || 0), 0) || 1;
+              return n > 0 && <div key={b.key} style={{ width: `${(n / total) * 100}%`, backgroundColor: BAND_HEX[b.key] }} title={`${b.label}: ${n}`} />;
+            })}
+          </div>
+          {/* clickable band cards */}
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {BAND_META.map((b) => {
+              const n = summary.by_band[b.key] || 0;
+              const active = filterBand === b.key;
+              return (
+                <button
+                  key={b.key}
+                  onClick={() => setFilterBand(active ? '' : b.key)}
+                  className={`rounded-xl border p-3 text-left transition-all ${active ? 'shadow-md ring-2 ring-offset-1' : 'border-slate-200 hover:-translate-y-0.5 hover:shadow-sm'}`}
+                  style={active ? { borderColor: BAND_HEX[b.key], boxShadow: `0 0 0 2px ${BAND_HEX[b.key]}` } : undefined}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: BAND_HEX[b.key] }} />
+                    <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: BAND_HEX[b.key] }}>{b.label}</span>
+                  </div>
+                  <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{n}</div>
+                  <div className="text-[10px] text-slate-400">score {b.range}</div>
+                </button>
+              );
+            })}
+          </div>
+          {/* highest-risk callout */}
+          {summary.highest_name && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 ring-1 ring-rose-100">
+              <Crown className="h-3.5 w-3.5 shrink-0 text-rose-500" />
+              <span className="flex-1">Highest risk: <strong>{summary.highest_name}</strong> at {summary.highest_score}/100</span>
+            </div>
+          )}
         </div>
-        <div className="border-t border-blue-200 pt-1.5">
-          <strong className="text-blue-700">Vulnerabilities sub-formula (v2):</strong>{' '}
-          effective_risk = 0.30 × CVSS/10 + 0.25 × EPSS + 0.20 × KEV + 0.10 × CIA/5 + 0.15 × (business_impact_factor − 1).
-          Floor at 0.85 when (EPSS ≥ 0.7 OR KEV) AND (CIA ≥ 4 OR business ≥ 1.3).
-          Open the per-asset page for the breakdown.
-        </div>
-      </div>
+      </section>
 
       {/* Search + sort toolbar */}
       <div className="bg-white border border-gray-200 rounded-lg shadow-sm px-4 py-3 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[240px] max-w-md">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+          <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             value={searchQ}
             onChange={(e) => setSearchQ(e.target.value)}
@@ -267,9 +276,6 @@ export default function RiskPosturePage() {
                 <th className="text-right px-4 py-2.5 w-28 cursor-pointer select-none hover:text-gray-900" onClick={() => toggleSort('score')}>
                   Risk Score{sortIndicator('score')}
                 </th>
-                <th className="text-right px-4 py-2.5 w-24 cursor-pointer select-none hover:text-gray-900" onClick={() => toggleSort('data_quality')}>
-                  Data Quality{sortIndicator('data_quality')}
-                </th>
                 <th className="text-left px-4 py-2.5 w-44">Breakdown</th>
                 <th className="text-right px-4 py-2.5 w-16 cursor-pointer select-none hover:text-gray-900" onClick={() => toggleSort('cis')}>
                   CIS{sortIndicator('cis')}
@@ -285,7 +291,7 @@ export default function RiskPosturePage() {
             <tbody className="divide-y divide-gray-100">
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-2">
+                  <td colSpan={9} className="px-4 py-2">
                     <EmptyState
                       icon="🛡️"
                       title={
@@ -341,29 +347,6 @@ export default function RiskPosturePage() {
                       >
                         {a.band.label}
                       </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex flex-col items-end gap-1">
-                      <span className={`text-xs font-medium ${
-                        a.data_quality >= 75 ? 'text-green-700'
-                        : a.data_quality >= 50 ? 'text-yellow-700'
-                        : a.data_quality >= 25 ? 'text-orange-700'
-                        : 'text-red-700'
-                      }`}>
-                        {a.data_quality}%
-                      </span>
-                      <div className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full ${
-                            a.data_quality >= 75 ? 'bg-green-500'
-                            : a.data_quality >= 50 ? 'bg-yellow-500'
-                            : a.data_quality >= 25 ? 'bg-orange-500'
-                            : 'bg-red-500'
-                          }`}
-                          style={{ width: `${a.data_quality}%` }}
-                        />
-                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">

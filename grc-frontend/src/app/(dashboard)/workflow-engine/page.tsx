@@ -133,7 +133,9 @@ function withEscalationDefaults(config: Record<string, unknown>): Record<string,
           'Please review and action this item.',
         user_ids: [],
         role_ids: [],
-        wait_days: 1,
+        // Level 1 fires immediately by default; the operator can set an
+        // "escalate after" delay (days/hours) per level in the config panel.
+        wait_days: 0,
         wait_hours: 0,
         escalation_mode: 'always',
         escalation_condition: {},
