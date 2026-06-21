@@ -31,6 +31,7 @@ import {
   Play,
   Grid3X3,
   TrendingUp,
+  Info,
 } from 'lucide-react';
 import Link from 'next/link';
 import { StatCard, ProgressRing, DataCard, SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
@@ -696,6 +697,17 @@ export default function ControlLibraryPage() {
           </button> */}
         </div>
       </div>
+
+      {canCreate && (
+        <p className="flex items-start gap-1.5 text-xs text-slate-500">
+          <Info size={14} className="mt-px shrink-0 text-amber-500" />
+          <span>
+            <b>Note:</b> “Create Master Baseline” is a <b>one-time</b> setup that rebuilds the whole library with AI (~15 min).
+            This install is already seeded with a baseline, so you only need it for a fresh DB or a new set of frameworks.
+            It builds a candidate you review, then <b>Promote</b> — your live baseline is never touched until you do.
+          </span>
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
