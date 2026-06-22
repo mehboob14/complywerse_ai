@@ -1898,26 +1898,61 @@ def _run_baseline_build_threaded(tenant_slug, job_id, user_id, label):
                 pass
 
 
+class BaselineBuildRequest(BaseModel):
+    confirm: Optional[str] = None
+
+
 @router.post("/baseline/build-dispatch")
-def baseline_build_dispatch(http_request: Request, db: Session = Depends(get_db),
+def baseline_build_dispatch(request: BaselineBuildRequest, http_request: Request,
+                            db: Session = Depends(get_db),
                             current_user: GRCUser = Depends(require_auth)):
-    """Kick off a first-time/rebuild normalization into a NEW run (NOT promoted)."""
+    """Kick off a one-time / rebuild MASTER baseline (sees ALL frameworks + controls).
+
+    GUARDED so an accidental click can't trigger a ~40-min AI run: the caller MUST
+    send the exact confirmation phrase. Runs on the Celery 'parsing' worker ONLY —
+    never in the API process — so it is heavy-but-stoppable and never blocks
+    requests. Builds a NEW candidate run (is_baseline=False); review + Promote to
+    make it live. The live baseline is never touched here.
+    """
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="User has no tenant assigned")
+    # ── Guard: must type the confirmation phrase exactly (case-insensitive) ──
+    if (request.confirm or "").strip().upper() != "REBUILD BASELINE":
+        raise HTTPException(status_code=400, detail={
+            "error": "confirmation_required",
+            "message": ("Rebuilding the master baseline is a heavy one-time AI run over ALL "
+                        "frameworks and controls. Type 'REBUILD BASELINE' to confirm.")})
     if not check_ai_available():
         raise HTTPException(status_code=503, detail={
             "error": "AI features unavailable", "message": "OpenAI API key is not configured."})
     tenant_slug = _resolve_tenant_slug(http_request, db, current_user)
     job_id = uuid.uuid4().hex
     set_job_status(tenant_slug, _BASELINE_NS, job_id, {
-        "status": "queued", "phase": "queued", "message": "Starting baseline build…", "progress_percent": 1})
+        "status": "queued", "phase": "queued",
+        "message": "Queued on the background worker…", "progress_percent": 1})
     set_job_status(tenant_slug, _BASELINE_NS, "latest", {"job_id": job_id})
-    # Run in-process (the API has the latest code); a long AI job survives here fine.
-    threading.Thread(target=_run_baseline_build_threaded,
-                     args=(tenant_slug, job_id, current_user.id, "Master baseline (candidate)"),
-                     name=f"baseline_build:{job_id}", daemon=True).start()
-    _jobs_logger.info("[baseline_build] DISPATCH tenant=%s job=%s", tenant_slug, job_id)
+    # Celery ONLY — the single heavy job that must run on the worker, never in the
+    # API process. (An in-process thread can't be stopped by stopping Celery —
+    # exactly what bit us before.) If the broker is unreachable, FAIL clearly
+    # instead of silently running in-process.
+    try:
+        from ....tasks.control_library import build_master_baseline as _baseline_task
+        _baseline_task.apply_async(
+            args=[tenant_slug, job_id],
+            kwargs={"user_id": current_user.id, "label": "Master baseline (candidate)"},
+            queue="parsing")
+    except Exception as exc:
+        _jobs_logger.exception("[baseline_build] celery dispatch failed: %s", exc)
+        set_job_status(tenant_slug, _BASELINE_NS, job_id, {
+            "status": "failed", "phase": "error", "progress_percent": 100,
+            "error": ("Baseline build needs the background worker. Start the Celery "
+                      "'parsing' worker and retry.")})
+        raise HTTPException(status_code=503, detail={
+            "error": "worker_unavailable",
+            "message": ("The baseline build runs on the background worker, which isn't "
+                        "reachable. Start the Celery 'parsing' worker and retry.")})
+    _jobs_logger.info("[baseline_build] DISPATCH (celery) tenant=%s job=%s", tenant_slug, job_id)
     return {"job_id": job_id, "status": "queued"}
 
 
@@ -1926,6 +1961,30 @@ def baseline_build_status(job_id: str, http_request: Request, db: Session = Depe
                           current_user: GRCUser = Depends(require_auth)):
     tenant_slug = _resolve_tenant_slug(http_request, db, current_user)
     return get_job_status(tenant_slug, _BASELINE_NS, job_id)
+
+
+@router.post("/baseline/build-cancel/{job_id}")
+def baseline_build_cancel(job_id: str, http_request: Request, db: Session = Depends(get_db),
+                          current_user: GRCUser = Depends(require_auth)):
+    """Request cancellation of a running/queued master-baseline build. Sets a flag
+    the worker checks between phases; it stops cleanly. The live baseline is never
+    touched (the candidate run is only persisted near the very end)."""
+    tenant_slug = _resolve_tenant_slug(http_request, db, current_user)
+    st = get_job_status(tenant_slug, _BASELINE_NS, job_id) or {}
+    cur = st.get("status")
+    if cur in ("completed", "failed", "cancelled"):
+        return {"status": cur, "message": "Build already finished."}
+    st["cancel_requested"] = True
+    if cur == "queued":
+        # Not started yet — cancel immediately; the start-of-task check aborts it
+        # before any AI work if a worker later picks it up.
+        st.update({"status": "cancelled", "phase": "cancelled",
+                   "message": "Cancelled before it started.", "progress_percent": 100})
+        set_job_status(tenant_slug, _BASELINE_NS, job_id, st)
+        return {"status": "cancelled", "job_id": job_id}
+    st.update({"status": "cancelling", "message": "Cancelling — stopping after the current phase…"})
+    set_job_status(tenant_slug, _BASELINE_NS, job_id, st)
+    return {"status": "cancelling", "job_id": job_id}
 
 
 @router.post("/baseline/promote/{run_id}")

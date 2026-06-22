@@ -34,7 +34,7 @@ import {
   Info,
 } from 'lucide-react';
 import Link from 'next/link';
-import { StatCard, ProgressRing, DataCard, SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
+import { ProgressRing, SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
 
 interface ControlGroup {
   id: number;
@@ -153,20 +153,21 @@ export default function ControlLibraryPage() {
 
   // ── Create / rebuild the MASTER BASELINE (first-time normalization) ──
   // Builds a CANDIDATE run (not live); the admin reviews it then Promotes it.
-  const [baselineBuild, setBaselineBuild] = useState<{ message: string; percent: number; status: string } | null>(null);
+  const [baselineBuild, setBaselineBuild] = useState<{ message: string; percent: number; status: string; jobId?: string } | null>(null);
   const baselinePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const createBaseline = useMutation({
-    mutationFn: async () => (await apiClient.post('/control-library/groups/baseline/build-dispatch')).data,
+    mutationFn: async (confirm: string) =>
+      (await apiClient.post('/control-library/groups/baseline/build-dispatch', { confirm })).data,
     onSuccess: (data: any) => {
       const jobId = data?.job_id;
       if (!jobId) return;
-      setBaselineBuild({ message: 'Starting baseline build…', percent: 1, status: 'running' });
+      setBaselineBuild({ message: 'Starting baseline build…', percent: 1, status: 'running', jobId });
       if (baselinePollRef.current) clearInterval(baselinePollRef.current);
       baselinePollRef.current = setInterval(async () => {
         try {
           const st = (await apiClient.get(`/control-library/groups/baseline/build-status/${jobId}`)).data || {};
-          setBaselineBuild({ message: st.message || st.phase || 'Working…', percent: Math.max(1, Math.min(100, st.progress_percent ?? 1)), status: st.status });
-          if (st.status === 'completed' || st.status === 'failed') {
+          setBaselineBuild({ message: st.message || st.phase || 'Working…', percent: Math.max(1, Math.min(100, st.progress_percent ?? 1)), status: st.status, jobId });
+          if (st.status === 'completed' || st.status === 'failed' || st.status === 'cancelled') {
             if (baselinePollRef.current) clearInterval(baselinePollRef.current);
             baselinePollRef.current = null;
             if (st.status === 'completed' && typeof st.run_id === 'number') {
@@ -180,7 +181,26 @@ export default function ControlLibraryPage() {
         } catch { /* transient */ }
       }, 2500);
     },
-    onError: () => setBaselineBuild({ message: 'Failed to start baseline build.', percent: 100, status: 'failed' }),
+    onError: (err: any) => setBaselineBuild({
+      message: err?.response?.data?.detail?.message
+        || err?.response?.data?.message
+        || 'Failed to start baseline build.',
+      percent: 100, status: 'failed',
+    }),
+  });
+  // Stop a running/queued master-baseline build (sets a cancel flag the worker
+  // checks between phases; the live baseline is never touched).
+  const cancelBaseline = useMutation({
+    mutationFn: async (jobId: string) =>
+      (await apiClient.post(`/control-library/groups/baseline/build-cancel/${jobId}`)).data,
+    onSuccess: (data: any) => {
+      setBaselineBuild((prev) => prev ? { ...prev, status: data?.status || 'cancelling', message: data?.status === 'cancelled' ? 'Build cancelled.' : 'Cancelling — stopping after the current phase…' } : prev);
+      if (data?.status === 'cancelled') {
+        if (baselinePollRef.current) clearInterval(baselinePollRef.current);
+        baselinePollRef.current = null;
+        setTimeout(() => setBaselineBuild(null), 4000);
+      }
+    },
   });
   // Promote the selected candidate run to be the live master baseline.
   const promoteBaseline = useMutation({
@@ -519,9 +539,23 @@ export default function ControlLibraryPage() {
             <p className="text-sm font-semibold text-slate-900">
               {baselineBuild.status === 'completed' ? 'Baseline candidate ready — review it, then “Promote to baseline”.'
                 : baselineBuild.status === 'failed' ? 'Baseline build failed.'
+                : baselineBuild.status === 'cancelled' ? 'Baseline build cancelled.'
+                : baselineBuild.status === 'cancelling' ? 'Cancelling baseline build…'
                 : 'Building master-baseline candidate…'}
             </p>
-            <span className="text-sm font-bold tabular-nums text-primary-700">{baselineBuild.percent}%</span>
+            <div className="flex shrink-0 items-center gap-3">
+              <span className="text-sm font-bold tabular-nums text-primary-700">{baselineBuild.percent}%</span>
+              {(baselineBuild.status === 'running' || baselineBuild.status === 'cancelling') && baselineBuild.jobId && (
+                <button
+                  onClick={() => cancelBaseline.mutate(baselineBuild.jobId!)}
+                  disabled={cancelBaseline.isPending || baselineBuild.status === 'cancelling'}
+                  title="Stop the baseline build"
+                  className="flex items-center gap-1 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  <X className="h-3.5 w-3.5" /> Stop
+                </button>
+              )}
+            </div>
           </div>
           <p className="mt-1 truncate text-xs text-slate-500">{baselineBuild.message}</p>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-primary-100">
@@ -569,17 +603,21 @@ export default function ControlLibraryPage() {
           </p>
         </div>
       )}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-sm">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 px-5 py-4 shadow-lg sm:px-6 sm:py-5">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 right-40 h-44 w-44 rounded-full bg-white/5 blur-2xl" />
+        <div className="relative flex flex-col gap-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex items-center gap-3.5">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15 shadow-sm ring-1 ring-white/25 backdrop-blur">
             <Library className="h-6 w-6 text-white" />
           </span>
           <div>
-            <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Unified Control Library</h1>
-            <p className="text-sm text-slate-500">Unified, de-duplicated controls across all 30 frameworks — filter to any subset</p>
+            <h1 className="text-xl font-bold text-white sm:text-2xl">Unified Control Library</h1>
+            <p className="max-w-md text-sm text-primary-100">Unified, de-duplicated controls across all 30 frameworks — filter to any subset</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 lg:max-w-2xl lg:justify-end">
           {sessionsData && sessionsData.length > 1 && (
             <select
               value={selectedRunId ?? ''}
@@ -644,7 +682,7 @@ export default function ControlLibraryPage() {
               setAutoGroupResult(null);
               setShowAutoGroupModal(true);
             }}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-700"
+            className="flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-primary-700 shadow-sm hover:bg-primary-50"
           >
             <Sparkles size={18} />
             Build Unified View
@@ -652,8 +690,18 @@ export default function ControlLibraryPage() {
           {canCreate && (
             <button
               onClick={() => {
-                if (window.confirm('Run the full normalization pipeline to build a NEW master-baseline candidate? This is the first-time/rebuild grouping (~15 min, AI). It builds a separate run you can review, then Promote — your current baseline stays live until you promote.')) {
-                  createBaseline.mutate();
+                const phrase = window.prompt(
+                  '⚠ HEAVY ONE-TIME REBUILD\n\n' +
+                  'This rebuilds the ENTIRE library with AI across all 30 frameworks and ~3,400 ' +
+                  'controls (~15–40 min) on the background worker. It does NOT touch your live ' +
+                  'baseline — it builds a separate candidate you review, then Promote.\n\n' +
+                  'To confirm, type exactly:  REBUILD BASELINE',
+                );
+                if (phrase === null) return;                  // cancelled
+                if (phrase.trim().toUpperCase() === 'REBUILD BASELINE') {
+                  createBaseline.mutate('REBUILD BASELINE');
+                } else {
+                  window.alert('Phrase did not match — baseline build was NOT started.');
                 }
               }}
               disabled={createBaseline.isPending || (baselineBuild?.status === 'running')}
@@ -696,52 +744,104 @@ export default function ControlLibraryPage() {
             Run AI Analysis
           </button> */}
         </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 border-t border-white/15 pt-3 text-xs font-semibold text-white">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 ring-1 ring-white/20">
+            <Library className="h-3.5 w-3.5" />{groupsLoading ? '—' : totalGroups} domains
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 ring-1 ring-white/20">
+            <GitMerge className="h-3.5 w-3.5" />{groupsLoading ? '—' : totalControls} mapped controls
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 ring-1 ring-white/20">
+            <Shield className="h-3.5 w-3.5" />{groupsLoading ? '—' : (availableFrameworks?.length || 0)} frameworks
+          </span>
+          <span className="ml-auto hidden items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-primary-50 ring-1 ring-white/15 sm:inline-flex">
+            <Sparkles className="h-3.5 w-3.5" />AI-normalized · filter any subset, no re-run
+          </span>
+        </div>
+      </div>
       </div>
 
       {canCreate && (
-        <p className="flex items-start gap-1.5 text-xs text-slate-500">
-          <Info size={14} className="mt-px shrink-0 text-amber-500" />
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white px-4 py-3 text-xs text-amber-900 shadow-sm">
+          <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100">
+            <Info size={13} className="text-amber-600" />
+          </span>
           <span>
             <b>Note:</b> “Create Master Baseline” is a <b>one-time</b> setup that rebuilds the whole library with AI (~15 min).
             This install is already seeded with a baseline, so you only need it for a fresh DB or a new set of frameworks.
             It builds a candidate you review, then <b>Promote</b> — your live baseline is never touched until you do.
           </span>
-        </p>
+        </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard
-          title="Total Control Groups"
-          value={groupsLoading ? '-' : totalGroups}
-          icon={Library}
-          variant="default"
-          subtitle="Organized control sets"
-        />
-        <StatCard
-          title="Total Mapped Controls"
-          value={groupsLoading ? '-' : totalControls}
-          icon={GitMerge}
-          variant="info"
-          subtitle="Across all groups"
-        />
-        <StatCard
-          title="Frameworks Covered"
-          value={groupsLoading ? '-' : availableFrameworks?.length || 0}
-          icon={Layers}
-          variant="success"
-          subtitle="Available compliance frameworks"
-        />
-        <StatCard
-          title="Evidence Coverage"
-          value={`${gapDashboard?.evidence_coverage_percentage || 0}%`}
-          icon={TrendingUp}
-          variant={gapDashboard?.evidence_coverage_percentage >= 70 ? 'success' : gapDashboard?.evidence_coverage_percentage >= 40 ? 'warning' : 'danger'}
-          subtitle="Controls with evidence"
-        />
-        <div className="rounded-xl border border-gray-200 bg-white p-4 flex items-center justify-center">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {/* Control Domains */}
+        <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary-500 to-primary-700" />
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : totalGroups}</p>
+              <p className="mt-1.5 text-xs font-semibold text-slate-600">Control Domains</p>
+            </div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-sm transition-transform group-hover:scale-105">
+              <Library className="h-5 w-5" />
+            </span>
+          </div>
+          <p className="mt-3 text-[11px] text-slate-400">Organized control sets</p>
+        </div>
+        {/* Mapped Controls */}
+        <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500 to-blue-600" />
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : totalControls}</p>
+              <p className="mt-1.5 text-xs font-semibold text-slate-600">Mapped Controls</p>
+            </div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-sm transition-transform group-hover:scale-105">
+              <GitMerge className="h-5 w-5" />
+            </span>
+          </div>
+          <p className="mt-3 text-[11px] text-slate-400">Across all domains</p>
+        </div>
+        {/* Frameworks */}
+        <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 to-violet-600" />
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : availableFrameworks?.length || 0}</p>
+              <p className="mt-1.5 text-xs font-semibold text-slate-600">Frameworks Covered</p>
+            </div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm transition-transform group-hover:scale-105">
+              <Layers className="h-5 w-5" />
+            </span>
+          </div>
+          <p className="mt-3 text-[11px] text-slate-400">Compliance standards</p>
+        </div>
+        {/* Evidence Coverage */}
+        <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${(gapDashboard?.evidence_coverage_percentage || 0) >= 70 ? 'from-emerald-500 to-green-600' : (gapDashboard?.evidence_coverage_percentage || 0) >= 40 ? 'from-amber-500 to-orange-500' : 'from-rose-500 to-red-600'}`} />
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{gapDashboard?.evidence_coverage_percentage || 0}%</p>
+              <p className="mt-1.5 text-xs font-semibold text-slate-600">Evidence Coverage</p>
+            </div>
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm transition-transform group-hover:scale-105 bg-gradient-to-br ${(gapDashboard?.evidence_coverage_percentage || 0) >= 70 ? 'from-emerald-500 to-green-600' : (gapDashboard?.evidence_coverage_percentage || 0) >= 40 ? 'from-amber-500 to-orange-500' : 'from-rose-500 to-red-600'}`}>
+              <TrendingUp className="h-5 w-5" />
+            </span>
+          </div>
+          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className={`h-full rounded-full bg-gradient-to-r ${(gapDashboard?.evidence_coverage_percentage || 0) >= 70 ? 'from-emerald-500 to-green-600' : (gapDashboard?.evidence_coverage_percentage || 0) >= 40 ? 'from-amber-500 to-orange-500' : 'from-rose-500 to-red-600'}`}
+              style={{ width: `${Math.max(2, Math.min(100, gapDashboard?.evidence_coverage_percentage || 0))}%` }}
+            />
+          </div>
+        </div>
+        {/* Completion ring */}
+        <div className="relative col-span-2 flex items-center justify-center gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-primary-50 to-white p-4 shadow-sm sm:col-span-1">
           <ProgressRing
             percentage={averageCompletion}
-            size={80}
+            size={68}
             color={averageCompletion >= 70 ? 'success' : averageCompletion >= 40 ? 'warning' : 'danger'}
             label="Completion"
           />
@@ -896,16 +996,17 @@ export default function ControlLibraryPage() {
             return (
               <div
                 key={group.id}
-                className="group rounded-xl border border-slate-200 bg-white p-5 transition-all hover:border-primary-300 hover:shadow-md"
+                className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-5 transition-all hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-lg"
               >
+                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary-400 via-primary-600 to-primary-700 opacity-70 transition-opacity group-hover:opacity-100" />
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 ring-1 ring-primary-100">
-                        <Shield className="h-4.5 w-4.5 text-primary-600" />
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-sm">
+                        <Shield className="h-5 w-5" />
                       </span>
                       <div className="min-w-0">
-                        <span className="font-mono text-[11px] font-semibold text-primary-700">{group.code}</span>
-                        <h3 className="font-semibold text-slate-900 line-clamp-1">{group.name}</h3>
+                        <span className="inline-block rounded-md bg-primary-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary-700 ring-1 ring-primary-100">{group.code}</span>
+                        <h3 className="mt-0.5 font-semibold text-slate-900 line-clamp-1">{group.name}</h3>
                       </div>
                     </div>
                     <ProgressRing
@@ -921,51 +1022,49 @@ export default function ControlLibraryPage() {
                     <p className="text-sm text-slate-500 line-clamp-2 mb-3">{group.description}</p>
                   )}
 
-                  <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-                    <div className="flex items-center gap-3 text-sm">
-                      <div className="flex items-center gap-1.5">
-                        <Layers className="h-4 w-4 text-primary-500" />
-                        <span className="font-semibold text-slate-900">{group.normalized_control_count}</span>
-                        <span className="text-slate-500">unified</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Shield className="h-4 w-4 text-slate-400" />
-                        <span className="font-semibold text-slate-900">{group.standalone_control_count ?? 0}</span>
-                        <span className="text-slate-500">standalone</span>
-                      </div>
+                  <div className="border-t border-slate-100 pt-3">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 font-semibold text-primary-700 ring-1 ring-primary-100">
+                        <Layers className="h-3.5 w-3.5" />
+                        {group.normalized_control_count} <span className="font-medium text-primary-500">unified</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 font-semibold text-slate-600 ring-1 ring-slate-200">
+                        <Shield className="h-3.5 w-3.5" />
+                        {group.standalone_control_count ?? 0} <span className="font-medium text-slate-400">standalone</span>
+                      </span>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="mt-2.5 flex items-center justify-end gap-1 border-t border-slate-50 pt-2 opacity-60 transition-opacity group-hover:opacity-100">
                       <Link
                         href={`/control-library/${group.id}`}
                         title="View Details"
-                        className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black"
+                        className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                       >
-                        <Eye size={14} />
+                        <Eye size={15} />
                       </Link>
                       {canEdit && (
                         <button
                           title="Edit"
                           onClick={() => setEditingGroup(group)}
-                          className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black"
+                          className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                         >
-                          <Edit2 size={14} />
+                          <Edit2 size={15} />
                         </button>
                       )}
                       <button
                         title="Generate AI Summary"
                         onClick={() => generateSummaryMutation.mutate(group.id)}
                         disabled={generateSummaryMutation.isPending}
-                        className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-primary-700"
+                        className="rounded-md p-1.5 text-slate-500 hover:bg-primary-50 hover:text-primary-700 disabled:opacity-40"
                       >
-                        <Sparkles size={14} />
+                        <Sparkles size={15} />
                       </button>
                       {canDelete && (
                         <button
                           title="Delete"
                           onClick={() => handleDeleteGroup(group)}
-                          className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-400"
+                          className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={15} />
                         </button>
                       )}
                     </div>

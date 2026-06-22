@@ -628,4 +628,65 @@ def ai_normalize_controls(
         raise
 
 
-__all__ = ["ai_compare_frameworks", "ai_auto_group", "ai_normalize_controls"]
+@celery_app.task(
+    base=TenantTask,
+    bind=True,
+    name="grc.tasks.control_library.build_master_baseline",
+    max_retries=0,
+)
+def build_master_baseline(self, tenant_slug, job_id, user_id=None, label=None, db=None):
+    """Heavy one-time / rebuild MASTER BASELINE build (sees ALL frameworks + ALL
+    controls). This is the ONLY control-library job that runs on the Celery worker
+    and NEVER in the API process — so it can't block requests and is stoppable by
+    stopping the worker. Builds a NEW candidate run (is_baseline=False); the caller
+    reviews it and Promotes it. The live baseline is never touched here."""
+    namespace = "control_baseline_build"
+    logger.info("build_master_baseline START tenant=%s job=%s", tenant_slug, job_id)
+    try:
+        with tenant_lock(tenant_slug, f"baseline_build:{job_id}",
+                         ttl_seconds=3600, owner=self.request.id):
+            from ..models import Tenant
+            tenant = db.query(Tenant).filter(Tenant.slug == tenant_slug).first()
+            if not tenant:
+                raise RuntimeError(f"Tenant slug '{tenant_slug}' not found")
+            from ..modules.control_library.services.baseline_builder import build_baseline_run
+            from ..modules.control_library.routers.groups import AutoGroupCancelled
+
+            def _progress(done, total, msg):
+                cur = get_status(tenant_slug, namespace, job_id) or {}
+                if cur.get("cancel_requested"):
+                    raise AutoGroupCancelled()
+                cur.update({"status": "running", "phase": "building", "message": msg,
+                            "progress_percent": int(done * 100 / max(1, total))})
+                set_status(tenant_slug, namespace, job_id, cur)
+
+            try:
+                res = build_baseline_run(
+                    db, tenant.id, label=label, user_id=user_id, progress_cb=_progress,
+                    should_cancel=lambda: bool((get_status(tenant_slug, namespace, job_id) or {}).get("cancel_requested")))
+            except AutoGroupCancelled:
+                set_status(tenant_slug, namespace, job_id, {
+                    "status": "cancelled", "phase": "cancelled",
+                    "message": "Cancelled.", "progress_percent": 100})
+                return {"status": "cancelled"}
+            set_status(tenant_slug, namespace, job_id, {
+                "status": "completed", "phase": "done",
+                "message": (f"Built {res['unified_controls']} unified + {res['standalone']} "
+                            "standalone controls. Review it from the dropdown, then Promote to make it live."),
+                "summary": res, "run_id": res["run_id"], "progress_percent": 100})
+            logger.info("build_master_baseline DONE tenant=%s job=%s run=%s",
+                        tenant_slug, job_id, res["run_id"])
+            return {"status": "completed", "run_id": res["run_id"], "summary": res}
+    except LockNotAcquired:
+        set_status(tenant_slug, namespace, job_id, {
+            "status": "skipped", "message": "Another baseline build is already running."})
+        return {"status": "skipped"}
+    except Exception as exc:
+        logger.exception("build_master_baseline FAILED: %s", exc)
+        set_status(tenant_slug, namespace, job_id, {
+            "status": "failed", "phase": "error", "error": str(exc)[:500], "progress_percent": 100})
+        raise
+
+
+__all__ = ["ai_compare_frameworks", "ai_auto_group", "ai_normalize_controls",
+           "build_master_baseline"]
