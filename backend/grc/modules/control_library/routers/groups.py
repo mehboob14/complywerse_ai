@@ -1579,6 +1579,44 @@ def auto_group_dispatch(
     # after a page reload (persistent progress + stop button).
     set_job_status(tenant_slug, "control_auto_group", "latest", {"job_id": job_id})
 
+    # ── Fast path: a PURE FILTER (every selected framework is already in the
+    # master baseline → no AI needed) runs SYNCHRONOUSLY right here — no queue,
+    # no Celery worker. A 5-second DB filter shouldn't depend on a background
+    # process. Only a brand-new framework (AI classify) or a full rebuild below
+    # actually needs the queue.
+    try:
+        from ..services.scoped_session import get_baseline_run, build_scoped_session
+        base = get_baseline_run(db, tenant_id)
+        if base and len(framework_ids) >= 2:
+            base_gids = [gid for (gid,) in db.query(CommonControlGroup.id).filter(
+                CommonControlGroup.run_id == base.id).all()]
+            base_fws = set()
+            if base_gids:
+                base_fws = {fid for (fid,) in db.query(ParsedFrameworkControl.uploaded_framework_id)
+                            .join(CommonControlGroupMapping,
+                                  CommonControlGroupMapping.parsed_control_id == ParsedFrameworkControl.id)
+                            .filter(CommonControlGroupMapping.group_id.in_(base_gids)).distinct().all()}
+            new_fws = [f for f in framework_ids if f not in base_fws]
+            if not new_fws:   # pure filter — no AI → run inline
+                res = build_scoped_session(db, tenant_id, framework_ids, user_id=user_id)
+                set_job_status(tenant_slug, "control_auto_group", job_id, {
+                    "status": "completed", "phase": "done",
+                    "message": (f"Built a unified view of {res['unified_controls']} controls "
+                                "— reused the master baseline, no AI."),
+                    "summary": res, "run_id": res["run_id"], "progress_percent": 100,
+                })
+                _jobs_logger.info("[auto_group] SYNC pure-filter tenant=%s job=%s run=%s",
+                                  tenant_slug, job_id, res["run_id"])
+                return {"job_id": job_id, "status": "completed",
+                        "run_id": res["run_id"], "summary": res}
+    except ValueError as ve:
+        set_job_status(tenant_slug, "control_auto_group", job_id, {"status": "failed", "error": str(ve)})
+        raise HTTPException(status_code=400, detail=str(ve))
+    except HTTPException:
+        raise
+    except Exception as exc:   # unexpected → fall through to the queue, don't break the button
+        _jobs_logger.warning("[auto_group] sync pure-filter failed (%s) — falling back to queue", exc)
+
     # Preferred path: dispatch to Celery so the work runs on the dedicated
     # `parsing` queue worker. The worker carries its own DB session per the
     # TenantTask base, status flows through Redis-backed job_status, and a

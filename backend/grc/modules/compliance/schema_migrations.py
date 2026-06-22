@@ -225,6 +225,10 @@ _COLUMN_ADDS = [
     # owner's baseline and a user's custom run coexist. run_id tags each row.
     ("grc_normalized_controls", "run_id", "INTEGER", "ix_normalized_control_run"),
     ("grc_common_control_groups", "run_id", "INTEGER", "ix_common_group_run"),
+    # Human-review of the master list toward 100% correctness.
+    ("grc_normalized_controls", "review_status", "VARCHAR(20)", "ix_normalized_control_review"),
+    ("grc_normalized_controls", "reviewed_by", "INTEGER", None),
+    ("grc_normalized_controls", "reviewed_at", "TIMESTAMP", None),
     # NCA risk register: platform-aware ownership + asset linking
     ("grc_nca_risk_entries", "risk_owner_user_id", "INTEGER", None),
     ("grc_nca_risk_entries", "treatment_owner_user_id", "INTEGER", None),
