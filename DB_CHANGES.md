@@ -32,6 +32,449 @@ you know nothing extra needs to run on Ubuntu.
 
 ---
 
+## 2026-06-22 — PDPL/NDMO assessment + Control Library normalization merge (NEW TABLES + columns, auto-applied)
+
+### What
+
+Merge of `feat/pdpl-ndmo-assessment` (control library normalization pipeline,
+NDMO native control tree, PDPL/NDMO assessment toolkit). DB surface:
+
+**New tables** — auto-created on existing tenant DBs by
+`Base.metadata.create_all(checkfirst=True)` inside `ensure_compliance_columns()`:
+
+  * `grc_normalization_runs` — one grouping/normalization session (owner baseline
+    vs. per-user custom runs). Model `NormalizationRun`
+    ([`_08_normalized_control_model.py`](backend/grc/models/_08_normalized_control_model.py)).
+  * `grc_normalized_control_links` — NormalizedControl ↔ parsed/framework-control
+    membership ("comply once → comply everywhere"). Model `NormalizedControlLink`.
+  * `grc_compliance_snapshots` — point-in-time journey compliance snapshot
+    (year/label/overall_pct/breakdown). Model `ComplianceSnapshot`
+    ([`_16_certification_journey_models.py`](backend/grc/models/_16_certification_journey_models.py)).
+
+**New columns on existing tables** — added by `schema_migrations._COLUMN_ADDS`
+(idempotent `ALTER TABLE ... ADD COLUMN`):
+
+  * `grc_normalized_controls`: `run_id`, `domain`, `source`, `common_group_id`,
+    `recommended_evidence`, **`review_status`**, **`reviewed_by`**,
+    **`reviewed_at`**.
+  * `grc_common_control_groups`: `run_id`.
+  * `grc_parsed_framework_controls`: `priority_level`, `dependencies`,
+    `version_history`, `control_description`, `assessment_criteria`.
+  * `grc_control_implementations`: `criteria_status`.
+  * `grc_compliance_assessment_document_items`: `maturity_score`, `risk_rating`,
+    `remediation_status`.
+
+### Why
+
+Control Library normalization (per-domain unified controls, isolated runs,
+human review), the NDMO native control tree (priority tiers, dependencies,
+version history, assessment criteria), and the PDPL assessment workflow
+(maturity score, risk rating, remediation tracking) all read these
+columns/tables; without them the corresponding pages 500.
+
+**Gap closed in this session:** the merge added `review_status`,
+`reviewed_by`, `reviewed_at` to the `NormalizedControl` model but the branch
+only registered 5 of the 8 new `grc_normalized_controls` columns in
+`_COLUMN_ADDS`. On an existing tenant DB the Control Library **review** page
+would have crashed with `column ... does not exist`. The three missing entries
+are now added so the startup self-heal covers them.
+
+### How (Ubuntu)
+
+```
+git pull        # ships models + schema_migrations
+# restart the backend service — ensure_compliance_columns() runs on startup
+sudo systemctl restart <grc-backend-service>
+```
+
+Nothing manual: every column above is applied per-tenant by
+`ensure_compliance_columns()` on boot, and as a request-time backstop by
+`_ensure_for_engine()`. New tables are created the same pass.
+
+Optional data (only if you want NDMO/PDPL seed content populated; **not**
+required for schema):
+
+```
+cd backend
+python -m grc.seed_frameworks            # NDMO + PDPL framework defs (idempotent)
+python seed_normalization_baseline.py    # owner baseline normalization run
+python _reseed_ndmo.py                   # NDMO control tree re-seed
+python _seed_ndmo_artifact_catalog.py    # NDMO artifact catalog
+# _backfill_*.py — one-time backfills for pre-existing NDMO rows only
+```
+
+### Risk
+
+Low. All column adds are nullable (or have a safe default) and idempotent —
+re-running skips columns that already exist. New tables are `create_all`
+no-ops once present. Existing rows are untouched (defaults/NULL preserve
+current behavior until a writer populates them).
+
+### Auto-applied?
+
+**Yes** — schema (tables + columns) on next backend restart via
+`ensure_compliance_columns()`. Seed/backfill scripts above are optional and
+manual.
+
+---
+
+## 2026-06-19 — Asset OS normalization on ingest + benchmark-OS mapping seed (DATA + code-only, manual script)
+
+### What
+
+Two coordinated changes so ingested/imported/manually-added IT assets resolve
+to the correct CIS benchmark (the rule-applicability matcher keys off
+`grc_it_assets.os_normalized` → `grc_benchmark_os_mappings`):
+
+1. **Code-only — OS-string normalisation on every asset-entry path.**
+   * New `normalize_os_string()` in
+     [`os_detector.py`](backend/grc/modules/compliance_plugins/services/os_detector.py)
+     — pure-string parser (reuses the existing `normalise_windows/linux/cisco`
+     regexes) → `(os_family, os_normalized, os_build, os_edition)`. Also fixed
+     two latent bugs in the shared Linux regexes (greedy version capture →
+     wrong RHEL/Rocky major; this also improves the live `/etc/os-release` path).
+   * **Nessus/Rapid7 sync** ([`sync_service.py`](backend/grc/modules/integrations/services/sync_service.py)
+     `_map_asset_fields`) — the scanner's raw OS string was captured then
+     **dropped**; now normalised into `os_family/os_version/os_normalized/
+     os_build/os_edition` (create + update; never clobbers a known OS on a
+     failed parse).
+   * **Manual create** ([`assets_router.py`](backend/grc/routers/assets_router.py)
+     `create_asset`) — derives `os_normalized` from the operator's
+     `os_version`/`os_family` when not explicitly supplied (explicit value
+     still wins).
+   * **Bulk CSV/Excel import** — added an `operating_system` column to the
+     template and normalise it per row.
+
+2. **DATA — comprehensive `grc_benchmark_os_mappings` seed.** New script
+   [`scripts/seed_benchmark_os_mappings.py`](backend/scripts/seed_benchmark_os_mappings.py)
+   lays down 55 normaliser-aligned `os_pattern → benchmark` rows (Windows
+   desktop/server, Ubuntu/Debian/RHEL-family/SUSE/Amazon, macOS, VMware ESXi,
+   Cisco/Juniper/Forti/PaloAlto/Aruba/CheckPoint, AWS/Azure/k8s, Oracle DB).
+   Executable benchmark preferred; RHEL/Rocky v9 → AlmaLinux 9 executable
+   proxy; else newest non-archived manual benchmark. Tenant-global rows
+   (`tenant_id IS NULL`).
+
+### Why
+
+Manual/Excel/scanner-ingested assets landed with `os_normalized = NULL` and the
+fuzzy `os_keys` fallback mis-resolved (e.g. `windows-server-2019` → an
+*archived Windows 11* benchmark; RHEL/Rocky/ESXi/macOS → nothing). Now every
+asset-entry path produces a canonical key and that key maps to the correct,
+current benchmark.
+
+### How (Ubuntu)
+
+```
+git pull            # ships the code changes (auto-active on restart)
+cd backend
+python -m scripts.seed_benchmark_os_mappings --all-tenants     # idempotent
+```
+
+The seed is idempotent: it only fills missing `os_pattern` rows and leaves any
+pre-existing active mapping (operator edits, the legacy 17) untouched.
+
+### Risk
+
+Low. Code paths only ADD OS fields (never overwrite a known OS with a failed
+parse). The seed only inserts gap patterns; re-running is a no-op. Legacy
+mismatched patterns (`oracle-linux-9`, `amazon-linux-2023`, `cisco-nx-os`,
+`cisco-ios-xe-17`) are left in place but harmless — the new normaliser-aligned
+patterns (`oraclelinux-9`, `amazonlinux-2023`, `cisco-nxos`, `cisco-ios-xe`)
+supersede them.
+
+### Auto-applied?
+
+Code: yes (on restart). Mapping seed: **no — run the script once on Ubuntu.**
+
+---
+
+## 2026-06-19 — Framework compliance dashboard charts (NEW TABLE `grc_compliance_history`, auto-applied)
+
+### What
+
+New per-framework compliance dashboard on `/frameworks/[id]` (gauge, requirement
+status donut, automated-controls assurance, maturity radar, compliance trend +
+stat cards). Backed by:
+
+  * **New table `grc_compliance_history`** — model `ComplianceHistory` in
+    [`backend/grc/models/_16_certification_journey_models.py`](backend/grc/models/_16_certification_journey_models.py).
+    One row per (journey_id, UTC day): completion_pct, readiness_pct,
+    evidence_coverage_pct, total_controls, status_counts (JSON). Powers the
+    "compliance trend over time" chart (there was no history before).
+  * **New endpoint** `GET /certifications/{journey_id}/charts`
+    ([`backend/grc/routers/certification_router.py`](backend/grc/routers/certification_router.py))
+    — reuses the existing progress calc, derives automation
+    (PluginControlMapping → ControlMapping → parsed_control + latest passing
+    run), and **upserts today's posture snapshot** into the history table on
+    each load (so the trend fills in over time — no cron job).
+  * **Frontend**: `FrameworkChartsOverview.tsx` (recharts, light theme) wired
+    into the framework detail Overview tab; `certificationsApi.getCharts()`.
+
+### DB impact
+
+**One new table, no changes to existing tables/columns.** It is created
+automatically per-tenant by the existing `Base.metadata.create_all` self-heal
+that runs on every tenant-engine init
+([backend/grc/db.py](backend/grc/db.py) — "create any tables the model
+registry knows about but this tenant DB hasn't been populated with yet").
+`create_all` only creates MISSING tables, so this is a safe no-op where the
+table already exists. The snapshot write is the only DATA write and it is
+idempotent per (journey, day).
+
+### How (on Ubuntu)
+
+```bash
+cd ~/grc-final/complywerse_ai && git pull
+sudo systemctl restart grc-backend.service      # picks up the model + endpoint
+cd grc-frontend && npm run build && pm2 restart grc-frontend
+```
+
+The `grc_compliance_history` table is created on the first request that opens
+each tenant's engine after the restart — nothing to run manually.
+
+### Risk
+
+- Additive only — existing framework pages/queries untouched.
+- Snapshot + trend reads are best-effort (wrapped in try/except + rollback) so
+  a history hiccup can never break the charts response.
+- Trend starts with a single point per journey and builds up daily.
+
+### Auto-applied?
+
+**Yes** — `create_all` makes the table on next tenant access after the backend
+restart. No manual SQL.
+
+---
+
+## 2026-06-19 — Seed the full CIS Benchmark library (DATA seed + manual-attestation code, NO schema)
+
+### What
+
+A large **data seed** plus supporting **code** (no schema changes — uses
+existing `grc_compliance_plugins` / `grc_os_versions` columns):
+
+  1. **Importer** —
+     [`backend/scripts/import_cis_benchmarks_json.py`](backend/scripts/import_cis_benchmarks_json.py)
+     ingests the parsed CIS Benchmark JSON corpus (`CIS_Benchmarks/*.json`,
+     497 PDFs / ~53k recommendations) into `grc_compliance_plugins` as
+     GLOBAL rules (`tenant_id IS NULL`). Per the product decisions:
+       - **CIS-only** categories (Cloud, Desktop, DevSecOps, Mobile, Network,
+         Operating Systems, Server) — DISA STIG + Uncategorized excluded.
+       - **Gap-fill**: for the Operating Systems category it SKIPS benchmarks
+         that duplicate the existing executable library (Jaccard ≥ 0.85 on a
+         normalised product+version signature), so the curated executable
+         Windows/Linux rules are kept and only missing coverage is added.
+       - ~**36.9k** new rules per tenant (345 benchmarks), `runner_type="manual"`,
+         `check_definition={"manual": true, "source": "cis_benchmark_pdf"}`,
+         `level` = CIS profile (L1/L2), audit/remediation/rationale as text.
+       - Rebuilds `grc_os_versions` from every distinct `os_keys` array so the
+         library tree groups **family → product → benchmark** for BOTH the new
+         rules AND the pre-existing executable rules (which were previously
+         orphaned under "Other" because `grc_os_versions` was empty).
+  2. **Manual-attestation runner** —
+     [`backend/grc/modules/compliance_plugins/runners/manual_runner.py`](backend/grc/modules/compliance_plugins/runners/manual_runner.py)
+     (registered in `runners/registry.py`). The text-only CIS rules carry no
+     executable check, so an operator records a Pass / Fail / N-A decision per
+     asset; `run_service.execute_plugin()` injects that decision and the run
+     flows through the SAME run-row / control-cascade / audit pipeline as
+     automated checks. `PluginRunCreate` gained `manual_result` / `manual_note`;
+     the `POST /compliance-plugins/{id}/runs` endpoint passes them through.
+     Frontend: the library page shows Pass/Fail/N-A buttons (and an "Attest"
+     affordance) for `runner_type="manual"` rules — same run UI otherwise.
+
+### Why
+
+The platform shipped only ~5.4k curated executable rules across 27 (mostly
+Windows/Linux) benchmarks. Operators needed the broad CIS catalogue —
+Cloud, Network, Mobile, Desktop, DevSecOps, Server, plus the OS coverage the
+executable set lacks (RHEL, Rocky, SUSE, macOS, Solaris, AIX, Windows
+Server/10, …) — visible and testable in every tenant with the existing UI.
+
+### DB impact
+
+**No schema.** No new tables/columns, no `ALTER`/`CREATE`. The importer only
+INSERTs rows into the existing `grc_compliance_plugins` table (global,
+`tenant_id IS NULL`) and rebuilds the derived `grc_os_versions` registry.
+Idempotent on `(tenant_id, plugin_key)` — re-running inserts 0 new rules.
+The `grc_os_versions` rebuild is delete-and-recreate of derived grouping data
+(safe: only family/normalized_key/parent_key/display_name/build are used).
+
+### How (on Ubuntu)
+
+The `CIS_Benchmarks/` folder is gitignored (the 113 MB `Operating_Systems.json`
+exceeds GitHub's 100 MB limit), so copy it to the server first, then run the
+importer per existing tenant:
+
+```bash
+# 1. ship the corpus (from the dev box)
+scp -r c:\Users\Admin\Documents\GRC-Tenant\CIS_Benchmarks \
+    ubuntu-host:/opt/grc/app/CIS_Benchmarks
+
+# 2. import into every existing tenant
+cd /opt/grc/app/backend
+source venv/bin/activate
+export CIS_BENCHMARKS_DIR=/opt/grc/app/CIS_Benchmarks
+python -m scripts.import_cis_benchmarks_json --all-tenants     # or --tenant <slug>
+# preview first with --dry-run
+
+# 3. restart backend so the new `manual` runner is registered
+sudo systemctl restart grc-backend.service
+# frontend rebuild for the Pass/Fail/N-A attestation UI
+cd ../grc-frontend && npm run build && pm2 restart grc-frontend
+```
+
+New tenants created AFTER the canonical source (`CANONICAL_LIBRARY_SOURCE_SLUG`,
+default `company`) has been seeded inherit the rules automatically via
+`sync_global_plugins_from_source` at provisioning — no manual step. Run the
+`--all-tenants` import once to catch up the tenants that already exist.
+
+### Risk
+
+- Idempotent — re-running skips rules already present (by `plugin_key`).
+- Large data load: ~36.9k global rows **per tenant** (the OS corpus is the
+  bulk). The library-tree / counts queries already scale to this on the
+  existing 5.4k set; expect a one-time insert cost.
+- Tenant-scoped data untouched (rules are global, `tenant_id IS NULL`).
+- A `manual` rule "tested" without the backend restart (so the runner isn't
+  registered) records a `status="error"` run, harmless and self-corrects once
+  the backend is restarted.
+
+### Auto-applied?
+
+**No** — run the importer once per deployment (`--all-tenants`) after copying
+the corpus, then restart backend + rebuild frontend. New tenants auto-inherit.
+
+---
+
+## 2026-06-18 — Workflow auto-trigger, Escalation node, Risk-Posture & audit fixes (code-only, NO schema)
+
+**Summary:** Everything in this session is **code-only**. No new tables,
+no new columns, no `ALTER` / `CREATE`, no one-shot SQL to run against any
+tenant DB. Several changes alter DB read/write **behaviour** (audit rows
+now land in the right table, the new Escalation node writes more
+notification / audit rows, the Risk-Posture query was widened), so they
+are recorded here for completeness. On Ubuntu the entire session applies
+with: `git pull` → restart backend → (re)start the workflow worker → set
+the three env vars below. Nothing runs against a tenant DB.
+
+### New / changed env vars (set in `backend/.env` on Ubuntu)
+
+```
+# Run the workflow runtime as a SEPARATE worker process, not inside the API.
+DISABLE_EMBEDDED_WORKFLOW_RUNTIME=1
+# Cross-process event queue backend for the workflow engine. "redis" (default)
+# is required when API and worker are separate processes; "memory" only works
+# single-process.
+WORKFLOW_QUEUE_BACKEND=redis     # uses REDIS_URL
+# Account lockout is now OFF by default (failed logins give a clear error and
+# never lock). Set to "true" only if you want the old lock-after-N behaviour.
+AUTH_ACCOUNT_LOCKOUT_ENABLED=false
+```
+
+The worker is a new standalone process —
+[`backend/workflow_worker.py`](backend/workflow_worker.py). Run it alongside
+the API (e.g. its own systemd unit): `python workflow_worker.py`.
+
+### Audit-log writes now land in the TENANT DB (the auto-trigger root fix)
+
+- **What**: `write_audit_log` in
+  [`backend/grc/audit_logger.py`](backend/grc/audit_logger.py) now (a) writes
+  every generic CRUD audit row to the **per-tenant** `grc_audit_logs` (via
+  `open_tenant_session(slug)`) instead of the master catalog, and (b) reads
+  the tenant id from `request.state.tenant_id` (the middleware stores
+  `request.state.tenant` as a dict, so the old `getattr(tenant, "id")`
+  always returned `None`). Also accepts the JWT from an
+  `Authorization: Bearer` header, not just the `grc_auth_token` cookie.
+- **Why**: CRUD audits were silently failing — `write_audit_log` either
+  targeted the master DB (which has no `grc_audit_logs`) or bailed at
+  `if not tenant_id: return`. With no audit rows, the workflow dispatcher
+  (which polls each tenant's `grc_audit_logs`) saw no platform events and
+  **nothing auto-triggered**.
+- **DB impact**: **No schema.** Behavioural: generic CRUD audit rows are
+  now actually `INSERT`ed into each tenant's existing `grc_audit_logs`
+  table. Existing rows untouched. Expect audit-row volume per tenant to
+  rise to its intended level.
+- **How**: `git pull` + restart backend (the write happens in the API
+  middleware — restart the **API**, not just the worker).
+- **Auto-applied?**: N/A — code only.
+
+### Evidence-Management deletes map to `compliance.evidence` events
+
+- **What**: Added `evidence-mgmt`/`evidence_mgmt` → `(compliance, evidence)`
+  rows to `_CANONICAL_RESOURCE_MAP` in
+  [`backend/grc/modules/workflow_engine/services/trigger_dispatcher.py`](backend/grc/modules/workflow_engine/services/trigger_dispatcher.py).
+  Also: the dispatcher / runtime / timer service are now **tenant-aware**
+  (iterate every tenant, poll each tenant's `grc_audit_logs` +
+  `grc_workflow_engine_*` tables with a per-tenant watermark), and webhook
+  notification is best-effort so a missing `grc_workflow_engine_webhooks`
+  table can't roll back instance completion.
+- **Why**: Users delete evidence at `DELETE /grc/evidence-mgmt/items/{id}`,
+  which derived `evidence.delete`, never the `compliance.evidence.delete`
+  that an evidence workflow listens for — so the workflow never fired.
+- **DB impact**: **No schema.** Read-only change to event derivation; the
+  tenant-aware polling reads per-tenant tables that already exist.
+- **How**: `git pull` + restart the workflow worker.
+- **Auto-applied?**: N/A — code only.
+
+### Risk-Posture dashboard no longer hides unowned assets
+
+- **What**: In
+  [`backend/grc/modules/risk_posture/service.py`](backend/grc/modules/risk_posture/service.py)
+  `compute_tenant_posture`, an owner-scoped caller now matches
+  `owner_id == <viewer> OR owner_id IS NULL` instead of `owner_id == <viewer>`.
+- **Why**: Assets are commonly created with `owner_id IS NULL`, and the
+  tenant's `grc_user_roles` table is empty so every user is treated as
+  owner-scoped — the dashboard filtered out every asset and showed nothing
+  (no CIS, no anything), even though the scan data and scoring were correct.
+- **DB impact**: **No schema, no row mutation.** Pure widening of a read
+  query. (The 2026-06-09 `owner_id` backfill snippet is still the way to
+  *assign* owners; this change makes unowned assets visible regardless.)
+- **How**: `git pull` + restart backend.
+- **Auto-applied?**: N/A — code only.
+
+### Multi-level Escalation node (new) — uses existing tables only
+
+- **What**: New "Escalation" workflow node. The standalone escalation
+  executor in
+  [`backend/grc/modules/workflow_engine/services/step_executor.py`](backend/grc/modules/workflow_engine/services/step_executor.py)
+  was rewritten as a multi-level state machine: notify each level's users +
+  roles over in-app **and** email, then wait the level's `wait_days` +
+  `wait_hours` before escalating to the next level (using the same
+  `waiting_timer` / `next_run_at` resume mechanism as the timer node).
+- **DB impact**: **No schema.** It only writes to tables that already
+  exist — `grc_workflow_engine_steps.output_payload` (existing JSON column,
+  used to track the current level across resumes), `grc_workflow_audit_logs`
+  and `grc_workflow_notifications`. The node's config (the
+  `escalation_levels` array incl. `wait_days` / `wait_hours`) is stored in
+  the workflow definition's existing JSON node-config — no column change.
+  Existing saved workflows load unchanged.
+- **How**: `git pull` + restart backend **and** the workflow worker (the
+  per-level waits resume in the worker's timer loop).
+- **Auto-applied?**: N/A — code only.
+
+### rich_audit actor tagging (workflow loop-prevention)
+
+- **What**: [`backend/grc/rich_audit.py`](backend/grc/rich_audit.py) gained
+  `workflow_actor_context` / `actor_source` so workflow-initiated mutations
+  are tagged. The dispatcher skips audit rows whose `changes.actor_source ==
+  "workflow"` to prevent a workflow's own writes from re-triggering it.
+- **DB impact**: **No schema.** `actor_source` / `actor_type` are stored
+  inside the existing `changes` JSON column of `grc_audit_logs`.
+- **How**: `git pull` + restart backend + worker.
+- **Auto-applied?**: N/A — code only.
+
+### Account lockout is opt-in
+
+- **What**: [`backend/grc/services/password_policy.py`](backend/grc/services/password_policy.py)
+  gates `is_account_locked` / `register_failed_login` behind
+  `AUTH_ACCOUNT_LOCKOUT_ENABLED` (default **false**).
+- **DB impact**: **None.** Reads the existing `grc_users` login-attempt
+  fields; doesn't write or alter them when disabled.
+- **How**: set the env var (see above) + restart backend.
+- **Auto-applied?**: N/A — code only.
+
+---
+
 ## 2026-06-09 — Asset auto-create: heartbeat + wizard now stamp owner_id (code-only)
 
 ### What

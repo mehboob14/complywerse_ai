@@ -121,6 +121,8 @@ def execute_plugin(
     connection: Optional[IntegrationConnection],
     triggered_by: str = "manual",
     attributed_to_asset: Optional[ITAsset] = None,
+    manual_result: Optional[str] = None,
+    manual_note: Optional[str] = None,
 ) -> CompliancePluginRun:
     """Execute a plugin and persist a CompliancePluginRun row.
 
@@ -180,7 +182,14 @@ def execute_plugin(
         return run
 
     credentials = resolve_credentials_for_connection(connection) if connection else {}
-    result = run_check(plugin.runner_type, plugin.check_definition or {}, credentials)
+    # Manual (attestation) rules carry no executable check — the operator's
+    # pass/fail/N-A decision is injected onto the check_definition so the
+    # `manual` runner can turn it into a result through the same pipeline.
+    effective_check = dict(plugin.check_definition or {})
+    if plugin.runner_type == "manual" and (manual_result is not None or manual_note is not None):
+        effective_check["_manual_result"] = manual_result
+        effective_check["_manual_note"] = manual_note
+    result = run_check(plugin.runner_type, effective_check, credentials)
 
     completed = datetime.utcnow()
     duration_ms = int((completed - started).total_seconds() * 1000)

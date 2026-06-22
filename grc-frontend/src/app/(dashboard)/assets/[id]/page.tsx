@@ -628,17 +628,6 @@ export default function AssetDetailPage() {
 
         <div className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="mb-3 flex items-center gap-2 text-slate-600">
-            <DollarSign className="h-4 w-4" />
-            <span className="text-sm font-medium">Valuation</span>
-          </div>
-          <div className="text-3xl font-bold text-green-600">
-            {formatCurrency(asset.valuation)}
-          </div>
-          <p className="mt-2 text-sm text-slate-500">Estimated asset value</p>
-        </div>
-
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-slate-600">
             <Target className="h-4 w-4" />
             <span className="text-sm font-medium">Control Coverage</span>
           </div>
@@ -1002,7 +991,7 @@ function EditAssetModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
       {/*
         Layout: fixed-height column with sticky header + sticky footer.
         Body scrolls internally — the modal NEVER overflows the viewport,
@@ -2570,7 +2559,7 @@ function DeleteConfirmModal({
   isDeleting: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50">
@@ -2656,7 +2645,7 @@ function LifecycleTransitionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-900">Change Lifecycle State</h2>

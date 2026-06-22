@@ -122,6 +122,12 @@ class StepExecutor:
         if node_type == "action":
             cfg = getattr(node, "config", {}) or {}
             action_name = (cfg.get("action_name") or "").strip().lower()
+            # Escalation is a first-class node (multi-level, per-level day/hour
+            # waits, in-app + email) handled by the standalone escalation
+            # executor — route it there even though the palette serialises it as
+            # an "action" with action_name=escalate_to_management.
+            if action_name == "escalate_to_management" or cfg.get("escalation_levels"):
+                return "escalation"
             if action_name in _SAFE_ACTIONS or action_name.startswith("platform_action."):
                 return "action"
             return "blocked"
@@ -135,7 +141,12 @@ class StepExecutor:
             return "timer"
         if cfg.get("condition_kind") or cfg.get("condition"):
             return "condition"
-        if cfg.get("escalation_type") or cfg.get("escalate_to_user_ids") or cfg.get("escalation_level"):
+        if (
+            cfg.get("escalation_type")
+            or cfg.get("escalate_to_user_ids")
+            or cfg.get("escalation_level")
+            or cfg.get("escalation_levels")
+        ):
             return "escalation"
         if cfg.get("action_name"):
             action_name = (cfg.get("action_name") or "").strip().lower()
@@ -1087,58 +1098,170 @@ class StepExecutor:
     # ------------------------------------------------------------------
     # Escalation node
     # ------------------------------------------------------------------
-    def _execute_escalation_node(self, db, instance, definition, step: WorkflowEngineStep, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Standalone escalation node.
+    # ── Escalation helpers ────────────────────────────────────────────────────
+    @staticmethod
+    def _escalation_wait_seconds(level: Dict[str, Any]) -> int:
+        """Per-level wait before escalating to the NEXT level.
 
-        Sends an in-app notification (and optionally email) to the designated
-        escalation targets.  Configure in the workflow UI:
-          user_ids            : list of user IDs to notify
-          role_ids            : list of role IDs whose members are notified
-          subject             : notification / email subject
-          message             : body text
-          channels            : ["in_app", "email"]  (default: both)
-          escalation_level    : informational label, e.g. "1", "2", "manager"
-
-        Outgoing edges can branch on ``step.escalated == true`` or
-        ``step.level == "2"`` to chain multi-level escalations.
+        Primary fields are ``wait_days`` + ``wait_hours`` (both can be set, e.g.
+        2 days and 6 hours). Falls back to the legacy ``timeout_value`` +
+        ``timeout_unit`` (days|hours) shape for older saved configs.
         """
-        user_ids = self._normalize_user_ids(
-            config.get("user_ids") or config.get("escalate_to_user_ids") or []
-        )
-        role_ids = self._normalize_role_ids(
-            config.get("role_ids") or config.get("escalate_to_role_ids") or []
-        )
-        subject = config.get("subject") or f"Escalation Required: {definition.name}"
-        message = (
-            config.get("message") or config.get("body")
-            or f"Workflow '{definition.name}' has reached an escalation point and requires your attention."
-        )
-        channels = self._notification_channels(config)
-        level = str(config.get("escalation_level") or config.get("level") or "1")
+        def _num(v) -> float:
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return 0.0
 
-        # Resolve role members into user IDs
+        days = _num(level.get("wait_days"))
+        hours = _num(level.get("wait_hours"))
+        if days or hours:
+            return int(days * 86400 + hours * 3600)
+
+        raw_value = level.get("timeout_value")
+        if raw_value is None:
+            raw_value = level.get("timeout_hours")
+        value = _num(raw_value)
+        unit = str(level.get("timeout_unit") or "hours").strip().lower()
+        if value:
+            return int(value * (86400 if unit == "days" else 3600))
+        return 0
+
+    @staticmethod
+    def _escalation_channels(level: Dict[str, Any]) -> list[str]:
+        """Resolve which channels a level notifies on — defaults to BOTH
+        in-app and email so an escalation is never silent."""
+        raw = level.get("channels") or level.get("notification_channels")
+        if isinstance(raw, list) and raw:
+            out: list[str] = []
+            for channel in raw:
+                key = str(channel or "").strip().lower()
+                if key in {"in_app", "in-app", "app"}:
+                    out.append("in_app")
+                elif key in {"email", "mail"}:
+                    out.append("email")
+            if out:
+                return list(dict.fromkeys(out))
+        return ["in_app", "email"]
+
+    def _parse_escalation_levels(self, config: Dict[str, Any]) -> list[Dict[str, Any]]:
+        """Normalise the node config into an ordered list of level dicts.
+
+        Supports the new ``escalation_levels`` array AND the legacy flat
+        single-level config (user_ids/role_ids/subject/message at top level)."""
+        raw = config.get("escalation_levels")
+        levels: list[Dict[str, Any]] = []
+        if isinstance(raw, list):
+            for idx, lv in enumerate(raw):
+                if isinstance(lv, dict):
+                    level = dict(lv)
+                    level.setdefault("level", idx + 1)
+                    levels.append(level)
+        if levels:
+            return levels
+
+        # Legacy flat / AI-template single-level escalate node.
+        user_ids = (
+            config.get("user_ids")
+            or config.get("escalate_to_user_ids")
+            or config.get("escalate_user_ids")
+            or []
+        )
+        role_ids = (
+            config.get("role_ids")
+            or config.get("escalate_to_role_ids")
+            or config.get("escalate_role_ids")
+            or []
+        )
+        return [
+            {
+                "level": 1,
+                "user_ids": user_ids,
+                "role_ids": role_ids,
+                "subject": config.get("subject"),
+                "message": config.get("message") or config.get("body") or config.get("reason"),
+                "escalation_mode": "always",
+            }
+        ]
+
+    @staticmethod
+    def _escalation_condition_met(instance, step: WorkflowEngineStep, condition: Dict[str, Any]) -> bool:
+        """Evaluate an ``on_condition`` escalation gate. Fail-open (escalate)
+        when the condition is empty or evaluation errors, so a misconfigured
+        condition never silently swallows an escalation."""
+        if not isinstance(condition, dict) or not condition.get("path"):
+            return True
+        data = {
+            "trigger": instance.trigger_payload or {},
+            "context": instance.context or {},
+            "step": step.input_payload or {},
+        }
+        try:
+            return bool(ConditionEvaluator.evaluate(condition, data))
+        except Exception:  # noqa: BLE001
+            return True
+
+    @staticmethod
+    def _escalation_resolved(instance) -> bool:
+        """Best-effort check for whether the escalated item was resolved before
+        the next level fires — used by the ``if_unresolved_timeout`` rule."""
+        resolved_states = {"resolved", "closed", "done", "mitigated", "completed"}
+        ctx = instance.context or {}
+        if ctx.get("resolved") is True:
+            return True
+        if str(ctx.get("status") or "").strip().lower() in resolved_states:
+            return True
+        tp = instance.trigger_payload or {}
+        return str(tp.get("status") or "").strip().lower() in resolved_states
+
+    def _send_escalation_level(
+        self, db, instance, definition, step: WorkflowEngineStep,
+        level: Dict[str, Any], ctx: Dict[str, Any], level_num: int, total: int,
+    ) -> list[int]:
+        """Notify one escalation level's recipients (users + roles) over the
+        configured channels, with informative default subject/message, and
+        audit it. Returns the resolved recipient user-id list."""
+        user_ids = self._normalize_user_ids(level.get("user_ids") or [])
+        role_ids = self._normalize_role_ids(level.get("role_ids") or [])
+
+        subject = _resolve_template(str(level.get("subject") or ""), ctx).strip()
+        if not subject:
+            subject = f"Escalation Level {level_num}/{total}: {definition.name}"
+        message = _resolve_template(str(level.get("message") or ""), ctx).strip()
+        if not message:
+            message = _default_notification_message(instance, definition, ctx)
+
+        channels = self._escalation_channels(level)
+
         role_user_ids = self._resolve_role_user_ids(db, instance.tenant_id, role_ids)
-        all_user_ids = list(dict.fromkeys([*user_ids, *role_user_ids]))
+        resolved_ids = list(dict.fromkeys([*user_ids, *role_user_ids]))
 
-        if all_user_ids:
+        # Fallback to the workflow owner so an escalation is never silently
+        # dropped when a level has no recipients configured.
+        if resolved_ids:
+            send_user_ids, send_role_ids = user_ids, role_ids
+        else:
+            owner_ids = self._default_recipient_user_ids(definition)
+            resolved_ids = owner_ids
+            send_user_ids, send_role_ids = owner_ids, []
+
+        if resolved_ids:
             send_workflow_notification(
                 db,
                 tenant_id=instance.tenant_id,
-                user_ids=all_user_ids,
-                role_ids=[],
+                user_ids=send_user_ids,
+                role_ids=send_role_ids,
                 channels=channels,
                 workflow_instance_id=instance.id,
-                notification_type="error",
+                notification_type="error" if level_num > 1 else "warning",
                 subject=subject,
                 message=message,
             )
         else:
             logger.warning(
-                "workflow.step.escalation.no_targets instance_id=%s step_id=%s node_key=%s "
-                "— add 'user_ids' or 'role_ids' to this escalation node's config",
-                instance.id,
-                step.id,
-                step.node_key,
+                "workflow.step.escalation.no_targets instance_id=%s step_id=%s level=%s "
+                "— add users or roles to this escalation level",
+                instance.id, step.id, level_num,
             )
 
         db.add(
@@ -1147,19 +1270,146 @@ class StepExecutor:
                 workflow_definition_id=definition.id,
                 workflow_instance_id=instance.id,
                 workflow_step_id=step.id,
-                event_type="step.escalation",
-                message=f"Escalation triggered at node {step.node_key} (level {level})",
-                payload={"escalated_to": all_user_ids, "level": level},
+                event_type="step.escalation.level",
+                message=(
+                    f"Escalation level {level_num}/{total} at node {step.node_key}: "
+                    f"notified {len(resolved_ids)} recipient(s) via {', '.join(channels)}"
+                ),
+                payload={
+                    "level": level_num,
+                    "total_levels": total,
+                    "recipients": resolved_ids,
+                    "channels": channels,
+                    "subject": subject,
+                },
             )
         )
         logger.info(
-            "workflow.step.escalation instance_id=%s step_id=%s escalated_to=%s level=%s",
-            instance.id,
-            step.id,
-            all_user_ids,
-            level,
+            "workflow.step.escalation.level instance_id=%s step_id=%s level=%s/%s "
+            "recipients=%s channels=%s",
+            instance.id, step.id, level_num, total, resolved_ids, channels,
+        )
+        return resolved_ids
+
+    def _execute_escalation_node(self, db, instance, definition, step: WorkflowEngineStep, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Multi-level escalation node.
+
+        Each level fires after its OWN configured delay — "Escalate after"
+        (``wait_days`` + ``wait_hours``), measured from when the previous level
+        fired (for Level 1, from when the workflow reaches this node; 0 =
+        immediately). When a level's delay elapses, its rule is evaluated and,
+        if it passes, the level notifies its users + roles (in-app + email):
+          • always                — fire after the delay.
+          • if_unresolved_timeout — fire only if the item is still unresolved
+                                    when the delay elapses (the SLA case).
+          • on_condition          — fire only if ``escalation_condition``
+                                    ({path, operator, value}) evaluates true.
+
+        Progress (``escalation_sent_levels``) AND which level's pre-delay has
+        already elapsed (``escalation_awaited_level``) are persisted on
+        ``step.output_payload`` so the node resumes correctly via the
+        waiting_timer/next_run_at mechanism the timer node uses.
+        """
+        levels = self._parse_escalation_levels(config)
+        total = len(levels)
+
+        prev_output = step.output_payload if isinstance(step.output_payload, dict) else {}
+        sent = int(prev_output.get("escalation_sent_levels") or 0)
+        awaited = int(prev_output.get("escalation_awaited_level", -1))
+        history = list(prev_output.get("escalation_history") or [])
+
+        ctx = _build_template_context(db, instance, definition)
+
+        while sent < total:
+            level = levels[sent]
+
+            # 1) Wait this level's "Escalate after" delay before it fires. The
+            #    delay is measured from the previous level (node entry for L1).
+            delay = self._escalation_wait_seconds(level)
+            if delay > 0 and awaited != sent:
+                run_at = datetime.utcnow() + timedelta(seconds=delay)
+                logger.info(
+                    "workflow.step.escalation.waiting instance_id=%s step_id=%s "
+                    "level=%s fire_at=%s",
+                    instance.id, step.id, sent + 1, run_at.isoformat(),
+                )
+                return {
+                    "status": "waiting_timer",
+                    "next_run_at": run_at,
+                    "output": {
+                        "escalated": sent > 0,
+                        "escalation_sent_levels": sent,
+                        "escalation_awaited_level": sent,  # this level's wait is now in flight
+                        "escalation_history": history,
+                        "pending_level": sent + 1,
+                        "next_escalation_at": run_at.isoformat(),
+                    },
+                }
+
+            # 2) Delay elapsed (or zero) — evaluate this level's rule, then fire.
+            mode = str(level.get("escalation_mode") or "always").strip().lower()
+            if mode == "if_unresolved_timeout" and self._escalation_resolved(instance):
+                return self._finish_escalation(
+                    db, instance, definition, step, sent, history,
+                    stopped_reason="resolved",
+                )
+            if mode == "on_condition" and not self._escalation_condition_met(
+                instance, step, level.get("escalation_condition") or {}
+            ):
+                return self._finish_escalation(
+                    db, instance, definition, step, sent, history,
+                    stopped_reason="condition_not_met",
+                )
+
+            recipients = self._send_escalation_level(
+                db, instance, definition, step, level, ctx, sent + 1, total,
+            )
+            history.append({
+                "level": sent + 1,
+                "recipients": recipients,
+                "at": datetime.utcnow().isoformat(),
+            })
+            sent += 1
+            # awaited stays at the just-fired index; the next loop iteration has
+            # sent > awaited, so the next level's delay is honoured.
+
+        return self._finish_escalation(
+            db, instance, definition, step, sent, history, all_levels=True,
+        )
+
+    def _finish_escalation(
+        self, db, instance, definition, step: WorkflowEngineStep,
+        sent: int, history: list, *, all_levels: bool = False, stopped_reason: str = "",
+    ) -> Dict[str, Any]:
+        """Terminal state for the escalation node — emits a summary audit row
+        and returns ``completed`` so the workflow proceeds to the next node."""
+        if stopped_reason:
+            msg = f"Escalation stopped after level {sent}: {stopped_reason}"
+        else:
+            msg = f"Escalation complete — all {sent} level(s) notified"
+        db.add(
+            WorkflowAuditLog(
+                tenant_id=instance.tenant_id,
+                workflow_definition_id=definition.id,
+                workflow_instance_id=instance.id,
+                workflow_step_id=step.id,
+                event_type="step.escalation.complete",
+                message=msg,
+                payload={"sent_levels": sent, "stopped_reason": stopped_reason or None},
+            )
+        )
+        logger.info(
+            "workflow.step.escalation.complete instance_id=%s step_id=%s sent_levels=%s reason=%s",
+            instance.id, step.id, sent, stopped_reason or "all_levels",
         )
         return {
             "status": "completed",
-            "output": {"escalated": True, "escalated_to": all_user_ids, "level": level},
+            "output": {
+                "escalated": sent > 0,
+                "escalation_sent_levels": sent,
+                "escalation_history": history,
+                "all_levels_escalated": all_levels,
+                "final_level": sent,
+                "stopped_reason": stopped_reason or None,
+            },
         }

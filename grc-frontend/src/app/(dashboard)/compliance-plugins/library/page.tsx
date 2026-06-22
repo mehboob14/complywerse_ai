@@ -437,25 +437,40 @@ function RuleListItem({ rule, depth, onClick }: { rule: RuleRow; depth: number; 
       <code className="flex-shrink-0 font-mono text-[10px] font-semibold text-blue-700">{rule.rule_id}</code>
       <span className="min-w-0 flex-1 truncate text-gray-800">{rule.title}</span>
       {rule.severity && <SeverityBadge severity={rule.severity} />}
-      {rule.os_keys && rule.os_keys.length > 0 && (
+      {rule.runner_type === 'manual' && (
+        <span className="hidden flex-shrink-0 items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0 text-[9px] text-amber-700 lg:inline-flex">
+          Manual
+        </span>
+      )}
+      {rule.os_keys && rule.os_keys.length > 0 && rule.runner_type !== 'manual' && (
         <span className="hidden flex-shrink-0 items-center gap-0.5 rounded-full bg-violet-50 px-1.5 py-0 text-[9px] text-violet-700 lg:inline-flex">
           <Cpu className="h-2.5 w-2.5" /> AI tagged
         </span>
       )}
-      <button
-        onClick={runAll}
-        disabled={runState === 'running'}
-        className={`flex-shrink-0 inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium ${
-          runState === 'running' ? 'border-amber-300 bg-amber-50 text-amber-700' :
-          runState === 'done' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' :
-          runState === 'fail' ? 'border-red-300 bg-red-50 text-red-700' :
-          'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-        }`}
-        title="Run this check on all matching assets"
-      >
-        {runState === 'running' ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Target className="h-2.5 w-2.5" />}
-        {runState === 'running' ? 'Running' : runState === 'done' ? 'Queued' : runState === 'fail' ? 'Failed' : 'Run check'}
-      </button>
+      {rule.runner_type === 'manual' ? (
+        <button
+          onClick={(e) => { e.stopPropagation(); onClick(rule.id); }}
+          className="flex-shrink-0 inline-flex items-center gap-0.5 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-100"
+          title="Record a Pass / Fail / N-A attestation per asset"
+        >
+          <Target className="h-2.5 w-2.5" /> Attest
+        </button>
+      ) : (
+        <button
+          onClick={runAll}
+          disabled={runState === 'running'}
+          className={`flex-shrink-0 inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium ${
+            runState === 'running' ? 'border-amber-300 bg-amber-50 text-amber-700' :
+            runState === 'done' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' :
+            runState === 'fail' ? 'border-red-300 bg-red-50 text-red-700' :
+            'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+          }`}
+          title="Run this check on all matching assets"
+        >
+          {runState === 'running' ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Target className="h-2.5 w-2.5" />}
+          {runState === 'running' ? 'Running' : runState === 'done' ? 'Queued' : runState === 'fail' ? 'Failed' : 'Run check'}
+        </button>
+      )}
     </li>
   );
 }
@@ -469,10 +484,13 @@ function RuleTargetsDrawer({ ruleId, onClose }: { ruleId: number; onClose: () =>
   });
 
   const runSingleMut = useMutation({
-    mutationFn: (assetId: number) =>
-      compliancePluginsApi.execute(ruleId, { asset_id: assetId }).then((r: any) => r.data),
-    onSuccess: (data: any, assetId) => {
-      setRunToast(`Run queued on asset #${assetId} (run id: ${data?.id ?? '-'})`);
+    mutationFn: ({ assetId, result }: { assetId: number; result?: string }) =>
+      compliancePluginsApi
+        .execute(ruleId, { asset_id: assetId, ...(result ? { manual_result: result } : {}) })
+        .then((r: any) => r.data),
+    onSuccess: (data: any, vars) => {
+      const verb = vars.result ? `Recorded "${vars.result}"` : 'Run queued';
+      setRunToast(`${verb} on asset #${vars.assetId} (run id: ${data?.id ?? '-'}, status: ${data?.status ?? '-'})`);
       qc.invalidateQueries({ queryKey: ['compliance-plugins', 'runs'] });
     },
     onError: (e: any) => setRunToast(e?.response?.data?.detail || e?.message || 'Run failed'),
@@ -496,6 +514,7 @@ function RuleTargetsDrawer({ ruleId, onClose }: { ruleId: number; onClose: () =>
 
   const ai = data?.ai_verdict;
   const rule = data?.rule;
+  const isManual = rule?.runner_type === 'manual';
   const assets = data?.assets || [];
   const verdictColor = ai?.confidence === 'high' ? 'emerald' : ai?.confidence === 'medium' ? 'amber' : 'red';
 
@@ -563,8 +582,10 @@ function RuleTargetsDrawer({ ruleId, onClose }: { ruleId: number; onClose: () =>
 
             <div>
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold text-gray-700">Will run on these assets:</span>
-                {assets.length > 0 && (
+                <span className="text-xs font-semibold text-gray-700">
+                  {isManual ? 'Attest this rule per asset:' : 'Will run on these assets:'}
+                </span>
+                {assets.length > 0 && !isManual && (
                   <button
                     onClick={() => runAllMut.mutate()}
                     disabled={runAllMut.isPending}
@@ -575,6 +596,12 @@ function RuleTargetsDrawer({ ruleId, onClose }: { ruleId: number; onClose: () =>
                   </button>
                 )}
               </div>
+              {isManual && (
+                <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-[10px] text-amber-800">
+                  This is a manual-attestation rule (no automated check). Review the audit &amp;
+                  remediation guidance, then record a Pass / Fail / N-A decision per asset.
+                </div>
+              )}
               {runToast && (
                 <div className="mb-2 rounded-md border border-blue-200 bg-blue-50 p-2 text-[11px] text-blue-800">
                   {runToast}
@@ -596,13 +623,39 @@ function RuleTargetsDrawer({ ruleId, onClose }: { ruleId: number; onClose: () =>
                       </div>
                       <span className="font-mono text-[10px] text-blue-700">{a.os_normalized || 'unknown'}</span>
                       {a.os_build && <span className="rounded-full bg-blue-50 px-1 text-[9px] text-blue-700">{a.os_build}</span>}
-                      <button
-                        onClick={() => runSingleMut.mutate(a.id)}
-                        disabled={runSingleMut.isPending}
-                        className="rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
-                      >
-                        Run
-                      </button>
+                      {isManual ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => runSingleMut.mutate({ assetId: a.id, result: 'pass' })}
+                            disabled={runSingleMut.isPending}
+                            className="rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                          >
+                            Pass
+                          </button>
+                          <button
+                            onClick={() => runSingleMut.mutate({ assetId: a.id, result: 'fail' })}
+                            disabled={runSingleMut.isPending}
+                            className="rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+                          >
+                            Fail
+                          </button>
+                          <button
+                            onClick={() => runSingleMut.mutate({ assetId: a.id, result: 'na' })}
+                            disabled={runSingleMut.isPending}
+                            className="rounded border border-gray-300 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-60"
+                          >
+                            N/A
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => runSingleMut.mutate({ assetId: a.id })}
+                          disabled={runSingleMut.isPending}
+                          className="rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+                        >
+                          Run
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

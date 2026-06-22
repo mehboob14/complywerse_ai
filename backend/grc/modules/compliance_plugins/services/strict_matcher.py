@@ -162,3 +162,79 @@ def applicable_plugins_for_asset(
         .all()
     )
     return (plugins, benchmark_name)
+
+
+def applicable_benchmarks_for_asset(db: Session, tenant_id: int, asset) -> List[dict]:
+    """Every benchmark that applies to an asset — its OS benchmark PLUS any
+    benchmark covering software detected on the host.
+
+    A real server is rarely "just an OS": a Windows box running SQL Server, a
+    Linux host running PostgreSQL, etc. The OS benchmark alone understates the
+    asset's true compliance surface. This walks ``asset.detected_software_json``
+    (populated by the Connect-Wizard probe / agent inventory and normalised via
+    ``software_normaliser``) and adds each software's benchmark so posture
+    aggregates across the whole stack.
+
+    Returns ``[{"benchmark": name, "source": "os"|"software",
+    "software_key": str|None}]`` — de-duplicated, OS first.
+    """
+    out: List[dict] = []
+    seen = set()
+
+    os_norm = getattr(asset, "os_normalized", None)
+    mapping = pick_benchmark_for_os(db, tenant_id, os_norm)
+    os_bench = mapping.benchmark_name if mapping is not None else None
+    if not os_bench and os_norm:
+        from .software_normaliser import benchmark_for_software_key
+        os_bench = benchmark_for_software_key(db, os_norm)
+    if os_bench:
+        seen.add(os_bench)
+        out.append({"benchmark": os_bench, "source": "os", "software_key": None})
+
+    software = getattr(asset, "detected_software_json", None) or []
+    if isinstance(software, list) and software:
+        from .software_normaliser import benchmark_for_software_key
+        for item in software:
+            if not isinstance(item, dict):
+                continue
+            key = item.get("software_key")
+            bench = item.get("benchmark_name")
+            if not bench and key:
+                bench = benchmark_for_software_key(db, key)
+            if bench and bench not in seen:
+                seen.add(bench)
+                out.append({"benchmark": bench, "source": "software", "software_key": key})
+    return out
+
+
+def applicable_plugins_for_asset_multi(
+    db: Session, tenant_id: int, asset,
+) -> Tuple[List[CompliancePlugin], List[dict]]:
+    """Multi-benchmark variant of ``applicable_plugins_for_asset``.
+
+    Returns ``(plugins, benchmarks)`` where ``plugins`` is the union of enabled
+    rules across the asset's OS benchmark + every software benchmark, and
+    ``benchmarks`` is the list from ``applicable_benchmarks_for_asset`` enriched
+    with a per-benchmark ``rule_count``.
+    """
+    benchmarks = applicable_benchmarks_for_asset(db, tenant_id, asset)
+    if not benchmarks:
+        return ([], [])
+    names = [b["benchmark"] for b in benchmarks]
+    plugins = (
+        db.query(CompliancePlugin)
+        .filter(
+            or_(
+                CompliancePlugin.tenant_id == tenant_id,
+                CompliancePlugin.tenant_id.is_(None),
+            ),
+            CompliancePlugin.benchmark.in_(names),
+            CompliancePlugin.enabled.is_(True),
+        )
+        .all()
+    )
+    from collections import Counter
+    counts = Counter(p.benchmark for p in plugins)
+    for b in benchmarks:
+        b["rule_count"] = counts.get(b["benchmark"], 0)
+    return (plugins, benchmarks)

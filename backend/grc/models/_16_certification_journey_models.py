@@ -33,6 +33,33 @@ class CertificationJourney(Base):
     )
 
 
+class ComplianceHistory(Base):
+    """Point-in-time snapshot of a certification journey's compliance posture.
+
+    Powers the "compliance trend" chart on the framework dashboard. One row per
+    (journey_id, snapshot_day) — upserted whenever progress is computed, so the
+    trend builds up over time without a separate cron job. Table is created
+    automatically per-tenant by the create_all self-heal on engine init."""
+    __tablename__ = "grc_compliance_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    journey_id = Column(Integer, ForeignKey("grc_certification_journeys.id"), nullable=False, index=True)
+    framework_id = Column(Integer, nullable=True, index=True)
+    snapshot_day = Column(DateTime, nullable=False, index=True)  # date at 00:00 UTC
+    completion_pct = Column(Float, default=0.0)
+    readiness_pct = Column(Float, default=0.0)
+    evidence_coverage_pct = Column(Float, default=0.0)
+    total_controls = Column(Integer, default=0)
+    status_counts = Column(JSON, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("journey_id", "snapshot_day", name="uq_compliance_history_journey_day"),
+        Index("ix_compliance_history_journey_day", "journey_id", "snapshot_day"),
+    )
+
+
 class CertificationPhase(Base):
     """Framework-specific certification phases"""
     __tablename__ = "grc_certification_phases"

@@ -608,13 +608,13 @@ export default function AssetsPage() {
 
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex-1 min-w-[180px] sm:max-w-xs">
+      <div className="flex flex-nowrap items-center gap-1.5 min-w-0">
+        <div className="min-w-0 flex-1 max-w-[200px] shrink">
           <SearchInput
             value={searchTerm}
             onChange={setSearchTerm}
-            placeholder="Search assets..."
-            size="md"
+            placeholder="Search…"
+            size="sm"
           />
         </div>
 
@@ -630,7 +630,7 @@ export default function AssetsPage() {
           multiSelect={false}
           autoApply
           placeholder="All Status"
-          size="md"
+          size="sm"
         />
 
         <MultiSelectDropdown
@@ -646,7 +646,7 @@ export default function AssetsPage() {
           multiSelect={false}
           autoApply
           placeholder="All Criticality"
-          size="md"
+          size="sm"
         />
 
         {/* ── Phase 5 list filters ─────────────────────────────────────── */}
@@ -664,7 +664,7 @@ export default function AssetsPage() {
           multiSelect={false}
           autoApply
           placeholder="All Lifecycle"
-          size="md"
+          size="sm"
         />
 
         <MultiSelectDropdown
@@ -680,64 +680,34 @@ export default function AssetsPage() {
           multiSelect={false}
           autoApply
           placeholder="All Classifications"
-          size="md"
+          size="sm"
         />
 
-        <button
-          type="button"
-          onClick={() => setStaleOnly((s) => !s)}
-          className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-            staleOnly
-              ? 'border-amber-300 bg-amber-50 text-amber-700'
-              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-          }`}
-          title="Show only assets not observed for 30+ days"
-        >
-          Stale only ({'>'}30d)
-        </button>
-
-        <MultiSelectDropdown
-          title="Source"
-          items={[
-            { value: 'cloud', label: 'Any cloud (AWS/Azure/GCP)' },
-            { value: 'aws_inspector', label: 'AWS Inspector' },
-            { value: 'azure_defender', label: 'Azure Defender' },
-            { value: 'gcp_scc', label: 'GCP SCC' },
-            { value: 'nessus', label: 'Nessus' },
-            { value: 'nexpose', label: 'Nexpose' },
-            { value: 'manual', label: 'Manual / unknown' },
-          ]}
-          selectedValues={sourceFilter !== 'all' ? [sourceFilter] : []}
-          onApply={(v) => setSourceFilter(v[0] || 'all')}
-          multiSelect={false}
-          autoApply
-          placeholder="All Sources"
-          size="md"
-        />
-
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => assetsApi.downloadTemplate()}
-            className="btn-secondary"
+            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
             title="Download CSV template for bulk import"
           >
-            <Download size={16} />
-            Template
+            <Download size={14} />
+            <span className="hidden 2xl:inline">Template</span>
           </button>
           <button
             onClick={() => setIsImportModalOpen(true)}
-            className="btn-secondary border-primary-200 text-primary-600"
+            className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-white px-2.5 py-1.5 text-xs font-medium text-primary-600 hover:bg-primary-50"
+            title="Import assets from CSV"
           >
-            <Upload size={16} />
-            Import
+            <Upload size={14} />
+            <span className="hidden 2xl:inline">Import</span>
           </button>
           {canCreate && (
             <button
               onClick={() => setIsModalOpen(true)}
-              className="btn-primary"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-primary-700"
+              title="Add a new asset"
             >
-              <Plus size={18} />
-              Add Asset
+              <Plus size={15} />
+              <span className="hidden md:inline">Add Asset</span>
             </button>
           )}
         </div>
@@ -865,7 +835,7 @@ export default function AssetsPage() {
         <table className="w-full">
           <thead className="bg-slate-50">
             <tr>
-              <th className="px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500" style={{ width: 36 }}>
+              <th className="px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500" style={{ width: 36 }}>
                 {/* Select-all checkbox — covers only assets that have a
                     host_name (others can't be connected anyway). */}
                 <input
@@ -887,13 +857,13 @@ export default function AssetsPage() {
                   title="Select all assets with a host_name"
                 />
               </th>
-              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Asset</th>
-              <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 md:table-cell">Type</th>
-              <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">CIA Ratings</th>
-              <th className="hidden px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">Valuation</th>
-              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Criticality</th>
-              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
-              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Actions</th>
+              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Asset</th>
+              <th className="hidden px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 md:table-cell">Type</th>
+              <th className="hidden px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">CIA Ratings</th>
+              <th className="hidden px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">Valuation</th>
+              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Criticality</th>
+              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
+              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -917,7 +887,7 @@ export default function AssetsPage() {
                   >
                     {/* Bulk-connect checkbox — disabled for assets with
                         no host_name (nothing to connect to). */}
-                    <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         className="h-4 w-4 cursor-pointer rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
@@ -931,7 +901,7 @@ export default function AssetsPage() {
                         }
                       />
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2">
                       <div className="flex items-center gap-3">
                         {getAssetIcon(asset.asset_type)}
                         <div>
@@ -945,25 +915,25 @@ export default function AssetsPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="hidden px-3 py-2.5 md:table-cell">
+                    <td className="hidden px-3 py-2 md:table-cell">
                       {getTypeBadge(asset.asset_type)}
                     </td>
-                    <td className="hidden px-3 py-2.5 lg:table-cell">
-                      <div className="flex flex-col gap-1">
+                    <td className="hidden px-3 py-2 lg:table-cell">
+                      <div className="flex items-center gap-3">
                         {getCIARatingBar(asset.confidentiality_rating, 'Confidentiality', 'bg-blue-500')}
                         {getCIARatingBar(asset.integrity_rating, 'Integrity', 'bg-green-500')}
                         {getCIARatingBar(asset.availability_rating, 'Availability', 'bg-yellow-500')}
                       </div>
                     </td>
-                    <td className="hidden px-3 py-2.5 lg:table-cell">
+                    <td className="hidden px-3 py-2 lg:table-cell">
                       <div className="flex items-center gap-1 text-sm">
                         <DollarSign className="h-3 w-3 text-green-400" />
                         <span className="text-slate-700">{formatCurrency(asset.valuation)}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-2.5">{getCriticalityBadge(asset.criticality)}</td>
-                    <td className="px-3 py-2.5">{getStatusBadge(asset.status)}</td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2">{getCriticalityBadge(asset.criticality)}</td>
+                    <td className="px-3 py-2">{getStatusBadge(asset.status)}</td>
+                    <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-2">
                         {/* Connect — opens the Connect Wizard with this
                             asset's hostname pre-filled, so the operator

@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { certificationsApi, governanceApi, assetsApi } from '@/lib/api';
 import apiClient from '@/lib/api';
+import { FrameworkChartsOverview } from '../_components/FrameworkChartsOverview';
 import { usePermissions } from '@/hooks/usePermissions';
 import { CertificationJourney, ControlImplementation, ProgressSummary, CertificationControl, SubControlWithEvidence, ControlEvidence, ITAsset } from '@/types';
 import ControlImplementationModal from '@/components/ControlImplementationModal';
@@ -1819,6 +1820,9 @@ export default function CertificationJourneyPage() {
 
   const renderOverviewTab = () => (
     <div className="space-y-4">
+      {/* Compliance dashboard charts — gauge, requirement status, automated
+          controls assurance, maturity radar, trend + top stat cards. */}
+      <FrameworkChartsOverview journeyId={journeyId} />
       {renderCriticalItemsPanel()}
       {!isCertificationFramework ? (
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

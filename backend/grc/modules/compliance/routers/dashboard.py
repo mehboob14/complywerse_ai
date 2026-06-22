@@ -8,7 +8,7 @@ from ....models import (
     PolicyStatement, PolicyStatementCompliance, GovernanceDocument,
     CertificationJourney, ControlImplementation, ImplementationEvidence,
     UploadedFramework, ParsedFrameworkControl, FrameworkControl,
-    GRCUser, get_db
+    GRCUser, get_db, ComplianceHistory,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -350,6 +350,58 @@ def _classify_status(status: Optional[str], has_evidence: bool) -> str:
     if has_evidence:
         return "in_progress"
     return status or "not_started"
+
+
+@router.get("/compliance-trend")
+def get_compliance_trend(
+    days: int = 30,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Tenant-wide compliance trend over time for the frameworks dashboard.
+
+    Aggregates the per-journey ``grc_compliance_history`` snapshots into one
+    controls-weighted daily series (completion % + readiness %), filtered to the
+    requested window. ``days`` accepts 7 / 15 / 30 / 365 (or any positive int);
+    the series fills in as snapshots accumulate."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"days": days, "trend": []}
+    try:
+        days = max(1, min(int(days), 3650))
+    except (TypeError, ValueError):
+        days = 30
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    try:
+        rows = db.query(ComplianceHistory).filter(
+            ComplianceHistory.tenant_id.in_(user_tenants),
+            ComplianceHistory.snapshot_day >= cutoff,
+        ).order_by(ComplianceHistory.snapshot_day.asc()).all()
+    except Exception:  # noqa: BLE001 — history table may not exist yet
+        db.rollback()
+        return {"days": days, "trend": []}
+
+    by_day: dict = {}
+    for r in rows:
+        key = r.snapshot_day.strftime("%Y-%m-%d")
+        agg = by_day.setdefault(key, {
+            "label": r.snapshot_day.strftime("%b %d"), "comp_w": 0.0, "ready_w": 0.0, "w": 0,
+        })
+        weight = int(r.total_controls or 0) or 1
+        agg["comp_w"] += float(r.completion_pct or 0) * weight
+        agg["ready_w"] += float(r.readiness_pct or 0) * weight
+        agg["w"] += weight
+
+    trend = []
+    for key in sorted(by_day):
+        a = by_day[key]
+        w = a["w"] or 1
+        trend.append({
+            "label": a["label"],
+            "completion": round(a["comp_w"] / w, 1),
+            "readiness": round(a["ready_w"] / w, 1),
+        })
+    return {"days": days, "trend": trend}
 
 
 @router.get("/frameworks-aggregate")

@@ -22,6 +22,12 @@ import {
   ClipboardCheck,
   Shield,
   ShieldCheck,
+  Server,
+  ClipboardList,
+  Bug,
+  Lock,
+  TrendingUp,
+  type LucideIcon,
 } from 'lucide-react';
 import NcaTab from '@/components/compliance/NcaTab';
 import PDPLAssessmentTab from '@/components/compliance/PDPLAssessmentTab';
@@ -168,6 +174,41 @@ function formatAssessmentType(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
 }
 
+// Supported assessment formats that should surface as their own tab (alongside
+// the dedicated NCA and PDPL tabs). Tabs are rendered data-driven from the live
+// `summary.by_format` distribution, so only formats with real uploads appear.
+// nca_container / pdpl_assessment_toolkit are intentionally excluded — they own
+// dedicated top-level tabs and are hidden from the generic list by the backend.
+const FORMAT_TAB_META: Record<string, { label: string; icon: LucideIcon }> = {
+  standard: { label: 'Standard', icon: FileText },
+  xlsx_maturity: { label: 'Maturity Model', icon: TrendingUp },
+  asvs_checklist: { label: 'OWASP ASVS', icon: Lock },
+  owasp_v4_testing_checklist: { label: 'OWASP Testing', icon: Bug },
+  ubl_audit_master_tracking: { label: 'Internal Audit', icon: ClipboardList },
+};
+
+const FORMAT_TAB_HIDDEN = new Set(['nca_container', 'pdpl_assessment_toolkit']);
+
+function formatTabLabel(fmt: string): string {
+  if (FORMAT_TAB_META[fmt]) return FORMAT_TAB_META[fmt].label;
+  if (fmt.startsWith('cis_')) return 'CIS Benchmark';
+  return fmt
+    .replace(/_pdf$/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function formatTabIcon(fmt: string): LucideIcon {
+  if (FORMAT_TAB_META[fmt]) return FORMAT_TAB_META[fmt].icon;
+  if (fmt.startsWith('cis_')) return Server;
+  if (fmt.startsWith('nca_')) return Shield;
+  if (fmt.includes('owasp')) return Bug;
+  if (fmt.includes('asvs')) return Lock;
+  if (fmt.includes('ubl')) return ClipboardList;
+  if (fmt.includes('maturity')) return TrendingUp;
+  return FileText;
+}
+
 function formatDate(dateString: string | null) {
   if (!dateString) return '-';
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -225,7 +266,11 @@ export default function AssessmentsPage() {
   const [assessmentToDelete, setAssessmentToDelete] = useState<Assessment | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [chartsReady, setChartsReady] = useState(false);
-  const [activeView, setActiveView] = useState<'overview' | 'assessment' | 'nca' | 'pdpl'>('overview');
+  // activeView is one of the fixed views ('overview' | 'assessment' | 'nca' |
+  // 'pdpl') or a per-format list view encoded as `fmt:<assessment_format>`.
+  const [activeView, setActiveView] = useState<string>('overview');
+  const formatFilter = activeView.startsWith('fmt:') ? activeView.slice(4) : '';
+  const isListView = activeView === 'assessment' || activeView.startsWith('fmt:');
 
   // NCA singleton container fetch — created lazily on first NCA tab visit
   const { data: ncaContainer } = useQuery<{ id: number; tenant_id: number }>({
@@ -255,8 +300,13 @@ export default function AssessmentsPage() {
     setChartsReady(true);
   }, []);
 
+  // Reset pagination when switching between list views (All / per-format tabs).
+  useEffect(() => {
+    setPage(0);
+  }, [activeView]);
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['compliance-assessments', statusFilter, typeFilter, sourceFilter, page, pageSize],
+    queryKey: ['compliance-assessments', statusFilter, typeFilter, sourceFilter, formatFilter, page, pageSize],
     queryFn: async () => {
       const params: Record<string, string | number> = {
         skip: page * pageSize,
@@ -265,11 +315,36 @@ export default function AssessmentsPage() {
       if (statusFilter) params.status_filter = statusFilter;
       if (typeFilter) params.assessment_type = typeFilter;
       if (sourceFilter) params.source = sourceFilter;
+      if (formatFilter) params.assessment_format = formatFilter;
 
       const response = await apiClient.get('/compliance/assessments', { params });
       return response.data as AssessmentsResponse;
     },
   });
+
+  // Live format distribution drives the per-format tabs. Fetched independently
+  // (no format filter) so the tab strip is stable regardless of active tab.
+  const { data: formatDist } = useQuery<Record<string, number>>({
+    queryKey: ['compliance-assessment-formats'],
+    queryFn: async () => {
+      const response = await apiClient.get('/compliance/assessments', { params: { skip: 0, limit: 1 } });
+      return (response.data as AssessmentsResponse).summary?.by_format || {};
+    },
+    staleTime: 60_000,
+  });
+
+  const formatTabs = useMemo(() => {
+    const dist = formatDist || {};
+    return Object.keys(dist)
+      .filter((fmt) => fmt && !FORMAT_TAB_HIDDEN.has(fmt))
+      .sort((a, b) => formatTabLabel(a).localeCompare(formatTabLabel(b)))
+      .map((fmt) => ({
+        id: `fmt:${fmt}` as const,
+        label: formatTabLabel(fmt),
+        icon: formatTabIcon(fmt),
+        count: dist[fmt],
+      }));
+  }, [formatDist]);
 
   const { data: assessorUsers = [] } = useQuery<TenantUserOption[]>({
     queryKey: ['compliance-assessment-assessor-users'],
@@ -327,6 +402,7 @@ export default function AssessmentsPage() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['compliance-assessments'] });
+      queryClient.invalidateQueries({ queryKey: ['compliance-assessment-formats'] });
       // PDPL uploads live only on the PDPL Assessment tab (hidden from the
       // generic list). Refresh that tab's data and jump to it so the user
       // sees their upload immediately instead of an apparently empty list.
@@ -349,6 +425,7 @@ export default function AssessmentsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['compliance-assessments'] });
+      queryClient.invalidateQueries({ queryKey: ['compliance-assessment-formats'] });
       setDeleteModalOpen(false);
       setAssessmentToDelete(null);
       setDeleteError(null);
@@ -683,33 +760,45 @@ export default function AssessmentsPage() {
     <div className="space-y-4 sm:space-y-5">
       <div className="border-b border-gray-200 overflow-x-auto">
         <div className="flex items-center gap-0 min-w-max">
-          {[
-            { id: 'overview' as const, label: 'Overview', icon: LayoutDashboard },
-            { id: 'assessment' as const, label: 'Assessment', icon: ClipboardCheck },
-            { id: 'nca' as const, label: 'NCA', icon: Shield },
-            { id: 'pdpl' as const, label: 'PDPL Assessment', icon: ShieldCheck },
-          ].map(({ id, label, icon: Icon }) => {
-            const isActive = activeView === id;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setActiveView(id)}
-                className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
-                  isActive
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <Icon size={14} />
-                {label}
-              </button>
-            );
-          })}
+          {([
+            { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+            { id: 'assessment', label: 'All Assessments', icon: ClipboardCheck },
+            ...formatTabs,
+            { id: 'nca', label: 'NCA', icon: Shield },
+            { id: 'pdpl', label: 'PDPL Assessment', icon: ShieldCheck },
+          ] as Array<{ id: string; label: string; icon: LucideIcon; count?: number }>).map(
+            ({ id, label, icon: Icon, count }) => {
+              const isActive = activeView === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveView(id)}
+                  className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
+                    isActive
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Icon size={14} />
+                  {label}
+                  {typeof count === 'number' && (
+                    <span
+                      className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+                        isActive ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            },
+          )}
         </div>
       </div>
 
-      {activeView === 'assessment' && (
+      {isListView && (
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex-1 min-w-[180px] sm:min-w-[260px]">
             <SearchInput
@@ -971,7 +1060,7 @@ export default function AssessmentsPage() {
         </>
       )}
 
-      {activeView === 'assessment' && (
+      {isListView && (
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <div>
           <table className="w-full table-fixed">
@@ -1092,7 +1181,7 @@ export default function AssessmentsPage() {
       </section>
       )}
 
-      {activeView === 'assessment' && totalPages > 1 && (
+      {isListView && totalPages > 1 && (
         <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
           <p className="text-xs text-slate-500">
             Showing {page * pageSize + 1}-{Math.min((page + 1) * pageSize, total)} of {total} assessments

@@ -25,6 +25,8 @@ from ..models import (
     # v2 — Issue Management open-issues-per-control read-only signal.
     # Used to enrich /controls list with `open_issues_count`. Additive only.
     Issue, IssueControlLink,
+    # Framework compliance dashboard — trend history + automation derivation.
+    ComplianceHistory, PluginControlMapping, ControlMapping, CompliancePluginRun,
 )
 from ..schemas import (
     CertificationJourneyCreate, CertificationJourneyUpdate, CertificationJourneyResponse,
@@ -2141,6 +2143,201 @@ def get_progress_summary(
 ):
     journey = get_journey_or_404(journey_id, current_user, db)
     return calculate_progress_summary(journey, db)
+
+
+# ── Framework compliance dashboard (charts) ──────────────────────────────────
+# Status enum → (display label, hex). Mirrors the frontend chart palette.
+_STATUS_CHART = {
+    "not_started":    ("Not Started", "#94a3b8"),
+    "in_progress":    ("In Progress", "#f59e0b"),
+    "implemented":    ("Implemented", "#3b82f6"),
+    "verified":       ("Verified", "#10b981"),
+    "not_applicable": ("Not Applicable", "#cbd5e1"),
+}
+
+
+def _snapshot_and_trend(journey: CertificationJourney, db: Session, prog: ProgressSummary) -> list:
+    """Upsert today's posture snapshot and return the trailing trend series.
+
+    One row per (journey, UTC day). Best-effort: a snapshot failure must never
+    break the charts response."""
+    now = datetime.utcnow()
+    day = datetime(now.year, now.month, now.day)
+    try:
+        row = db.query(ComplianceHistory).filter(
+            ComplianceHistory.journey_id == journey.id,
+            ComplianceHistory.snapshot_day == day,
+        ).first()
+        if row:
+            row.completion_pct = prog.completion_percentage
+            row.readiness_pct = prog.readiness_percentage
+            row.evidence_coverage_pct = prog.evidence_coverage_percentage
+            row.total_controls = prog.total_controls
+            row.status_counts = prog.by_status
+        else:
+            db.add(ComplianceHistory(
+                tenant_id=journey.tenant_id, journey_id=journey.id,
+                framework_id=journey.framework_id, snapshot_day=day,
+                completion_pct=prog.completion_percentage,
+                readiness_pct=prog.readiness_percentage,
+                evidence_coverage_pct=prog.evidence_coverage_percentage,
+                total_controls=prog.total_controls, status_counts=prog.by_status,
+            ))
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+    try:
+        hist = db.query(ComplianceHistory).filter(
+            ComplianceHistory.journey_id == journey.id,
+        ).order_by(ComplianceHistory.snapshot_day.asc()).all()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        hist = []
+    return [
+        {
+            "label": h.snapshot_day.strftime("%b %d"),
+            "completion": round(h.completion_pct or 0, 1),
+            "readiness": round(h.readiness_pct or 0, 1),
+        }
+        for h in hist[-30:]
+    ]
+
+
+def _automation_for_journey(journey: CertificationJourney, db: Session) -> dict:
+    """Derive how many of this journey's requirements are AUTOMATED (linked to a
+    compliance plugin via PluginControlMapping → ControlMapping) and how many of
+    those are PASSING (latest plugin run = passed)."""
+    impls = db.query(ControlImplementation).filter(
+        ControlImplementation.journey_id == journey.id,
+    ).all()
+    total = len(impls)
+    blank = {"automated": 0, "passed": 0, "total": total}
+    if not impls:
+        return blank
+
+    pcms = db.query(PluginControlMapping).filter(
+        or_(PluginControlMapping.tenant_id == journey.tenant_id,
+            PluginControlMapping.tenant_id.is_(None)),
+    ).all()
+    if not pcms:
+        return blank
+
+    # Bridge plugin mappings to parsed_control_id (via ControlMapping) and keep
+    # any direct framework_control_id links.
+    norm_ids = {m.normalized_control_id for m in pcms if getattr(m, "normalized_control_id", None)}
+    norm_to_parsed: dict = {}
+    if norm_ids:
+        for cm in db.query(ControlMapping).filter(
+            ControlMapping.normalized_control_id.in_(list(norm_ids)),
+        ).all():
+            pid = getattr(cm, "parsed_control_id", None)
+            if pid:
+                norm_to_parsed.setdefault(cm.normalized_control_id, set()).add(pid)
+
+    parsed_to_plugins: dict = {}
+    fc_to_plugins: dict = {}
+    for m in pcms:
+        nkey = getattr(m, "normalized_control_id", None)
+        if nkey:
+            for pid in norm_to_parsed.get(nkey, ()):  # parsed control ids
+                parsed_to_plugins.setdefault(pid, set()).add(m.plugin_id)
+        fckey = getattr(m, "framework_control_id", None)
+        if fckey:
+            fc_to_plugins.setdefault(fckey, set()).add(m.plugin_id)
+
+    automated_plugin_ids: set = set()
+    for s in parsed_to_plugins.values():
+        automated_plugin_ids |= s
+    for s in fc_to_plugins.values():
+        automated_plugin_ids |= s
+
+    passing_plugins: set = set()
+    if automated_plugin_ids:
+        seen: set = set()
+        for r in db.query(CompliancePluginRun).filter(
+            CompliancePluginRun.tenant_id == journey.tenant_id,
+            CompliancePluginRun.plugin_id.in_(list(automated_plugin_ids)),
+        ).order_by(CompliancePluginRun.plugin_id, CompliancePluginRun.id.desc()).all():
+            if r.plugin_id in seen:
+                continue
+            seen.add(r.plugin_id)  # first row per plugin = latest (id desc)
+            if r.status == "passed":
+                passing_plugins.add(r.plugin_id)
+
+    automated = passed = 0
+    for impl in impls:
+        plugins: set = set()
+        if impl.parsed_control_id and impl.parsed_control_id in parsed_to_plugins:
+            plugins |= parsed_to_plugins[impl.parsed_control_id]
+        if impl.framework_control_id and impl.framework_control_id in fc_to_plugins:
+            plugins |= fc_to_plugins[impl.framework_control_id]
+        if plugins:
+            automated += 1
+            if plugins & passing_plugins:
+                passed += 1
+    return {"automated": automated, "passed": passed, "total": total}
+
+
+@router.get("/{journey_id}/charts")
+def get_framework_charts(
+    journey_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """All data for the framework compliance dashboard charts: gauge, requirement
+    status donut, automated-controls assurance, maturity radar (by domain),
+    compliance trend (history), and the top stat cards. Also records today's
+    posture snapshot so the trend fills in over time."""
+    journey = get_journey_or_404(journey_id, current_user, db)
+    prog = calculate_progress_summary(journey, db)
+    auto = _automation_for_journey(journey, db)
+    trend = _snapshot_and_trend(journey, db, prog)
+
+    applicable = prog.total_controls - prog.not_applicable_count
+
+    status_donut = []
+    for key, (label, color) in _STATUS_CHART.items():
+        val = int(prog.by_status.get(key, 0) or 0)
+        if val > 0:
+            status_donut.append({"key": key, "label": label, "value": val, "color": color})
+
+    maturity = [
+        {
+            "label": d.get("domain_name") or "General",
+            "value": round((d.get("completed", 0) / d["total"] * 100), 1) if d.get("total") else 0,
+            "maxValue": 100,
+        }
+        for d in prog.by_domain
+    ]
+
+    manual = max(0, prog.total_controls - auto["automated"])
+    automation_donut = [
+        {"label": "Automated & passing", "value": auto["passed"], "color": "#10b981"},
+        {"label": "Automated, not passing", "value": max(0, auto["automated"] - auto["passed"]), "color": "#f59e0b"},
+        {"label": "Manual", "value": manual, "color": "#cbd5e1"},
+    ]
+
+    return {
+        "gauge": {
+            "completion_pct": prog.completion_percentage,
+            "readiness_pct": prog.readiness_percentage,
+            "evidence_coverage_pct": prog.evidence_coverage_percentage,
+        },
+        "stats": {
+            "total_in_scope": prog.total_controls,
+            "applicable": applicable,
+            "not_applicable": prog.not_applicable_count,
+            "implemented": prog.implemented_count,
+            "ready_to_audit": prog.approved_evidence_controls,
+            "with_evidence": prog.with_evidence_count,
+            "automated": auto["automated"],
+            "automated_passed": auto["passed"],
+        },
+        "status_donut": status_donut,
+        "automation_donut": automation_donut,
+        "maturity": maturity,
+        "trend": trend,
+    }
 
 
 @router.get("/{journey_id}/report")

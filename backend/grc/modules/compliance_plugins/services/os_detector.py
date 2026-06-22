@@ -43,13 +43,13 @@ _WIN_EDITION_RE = re.compile(
 _CISCO_IOSXE_MINOR_RE = re.compile(r"ios[\s-]*xe.*?(\d+)\.(\d+)", re.IGNORECASE)
 
 _UBUNTU_RE  = re.compile(r"ubuntu\s+(?P<v>\d+\.\d+)", re.IGNORECASE)
-_DEBIAN_RE  = re.compile(r"debian.*\b(\d+)\b", re.IGNORECASE)
-_ALMA_RE    = re.compile(r"alma\s*linux.*\b(\d+)\b", re.IGNORECASE)
-_ORACLE_RE  = re.compile(r"oracle\s*linux.*\b(\d+)\b", re.IGNORECASE)
+_DEBIAN_RE  = re.compile(r"debian.*?\b(\d+)\b", re.IGNORECASE)
+_ALMA_RE    = re.compile(r"alma\s*linux.*?\b(\d+)\b", re.IGNORECASE)
+_ORACLE_RE  = re.compile(r"oracle\s*linux.*?\b(\d+)\b", re.IGNORECASE)
 _AMAZON_RE  = re.compile(r"amazon\s*linux\s*(?P<v>\d{4})", re.IGNORECASE)
-_RHEL_RE    = re.compile(r"red\s*hat.*\b(\d+)\b", re.IGNORECASE)
-_CENTOS_RE  = re.compile(r"cent[o0]s.*\b(\d+)\b", re.IGNORECASE)
-_ROCKY_RE   = re.compile(r"rocky\s*linux.*\b(\d+)\b", re.IGNORECASE)
+_RHEL_RE    = re.compile(r"red\s*hat.*?\b(\d+)\b", re.IGNORECASE)
+_CENTOS_RE  = re.compile(r"cent[o0]s.*?\b(\d+)\b", re.IGNORECASE)
+_ROCKY_RE   = re.compile(r"rocky\s*linux.*?\b(\d+)\b", re.IGNORECASE)
 _SUSE_RE    = re.compile(r"suse|sles", re.IGNORECASE)
 _OPENSUSE_RE = re.compile(r"opensuse", re.IGNORECASE)
 _FEDORA_RE  = re.compile(r"fedora", re.IGNORECASE)
@@ -253,6 +253,80 @@ def normalise_cisco(raw: str) -> Optional[str]:
     if "gaia" in low or "check point" in low or "checkpoint" in low:
         return "checkpoint-gaia"
     return None
+
+
+# ─── String normaliser (for ingested assets, NOT a live probe) ──────────
+#
+# Scanners (Nessus/Rapid7), CMDB exports, Excel imports and manual entry all
+# hand us a free-form OS string ("Microsoft Windows Server 2019 Standard",
+# "Ubuntu 22.04.3 LTS", "VMware ESXi 7.0"). detect_*() can't help — there is
+# no host to probe. This dispatcher reuses the SAME normalise_* regexes the
+# live-probe path uses, so an ingested asset lands with the identical
+# canonical os_normalized key the strict matcher expects. Returns
+# (family, normalized, build, edition); any field is None when unknown, and
+# (None, None, None, None) when the string is unrecognisable (caller leaves
+# os_normalized NULL rather than guessing).
+
+_ESXI_RE = re.compile(r"esxi\s*(\d+)(?:\.(\d+))?", re.IGNORECASE)
+_MACOS_RE = re.compile(r"(?:mac\s*os\s*x?|macos)\s*(\d+)(?:[._](\d+))?", re.IGNORECASE)
+_NETDEV_HINTS = ("junos", "arubaos", "aruba os", "big-ip", "tmos", "pan-os",
+                 "panos", "fortios", "fortigate", "gaia", "check point",
+                 "checkpoint", "meraki")
+
+
+def normalize_os_string(raw_os: Optional[str]) -> Tuple[
+    Optional[str], Optional[str], Optional[str], Optional[str]
+]:
+    """Best-effort parse of a free-form OS string into
+    (os_family, os_normalized, os_build, os_edition).
+
+    Pure string parsing — safe to call on any ingested asset. Reuses
+    normalise_windows / normalise_linux / normalise_cisco so the keys match
+    the live-probe path exactly.
+    """
+    if not raw_os or not str(raw_os).strip():
+        return (None, None, None, None)
+    raw = str(raw_os).strip()
+    low = raw.lower()
+
+    # ── Windows ──
+    if "windows" in low:
+        norm = normalise_windows(raw)
+        if norm:
+            return ("windows", norm, detect_windows_build(raw), detect_windows_edition(raw))
+        return ("windows", "windows", None, None)
+
+    # ── Network devices (Cisco / Juniper / Aruba / F5 / Palo Alto / Forti / Check Point) ──
+    # Checked BEFORE macOS: "Cisco IOS XE" contains the substring "os x".
+    if _CISCO_RE.search(low) or any(k in low for k in _NETDEV_HINTS):
+        norm = normalise_cisco(raw)
+        if norm:
+            family = "cisco" if norm.startswith("cisco") else norm.split("-", 1)[0]
+            return (family, norm, None, None)
+
+    # ── VMware ESXi ──
+    if "esxi" in low or "vmware" in low:
+        m = _ESXI_RE.search(raw)
+        if m:
+            ver = m.group(1) + (f".{m.group(2)}" if m.group(2) else "")
+            return ("vmware", f"vmware-esxi-{ver}", None, None)
+        return ("vmware", "vmware-esxi", None, None)
+
+    # ── macOS ── ("os x" only with word boundaries so it can't match "iOS XE")
+    if "macos" in low or "mac os" in low or "darwin" in low or re.search(r"\bos\s*x\b", low):
+        m = _MACOS_RE.search(raw)
+        if m and m.group(1):
+            return ("macos", f"macos-{m.group(1)}", None, None)
+        return ("macos", "macos", None, None)
+
+    # ── Linux distros ──
+    norm = normalise_linux(raw)
+    if norm:
+        return ("linux", norm, None, None)
+    if "linux" in low or "gnu/linux" in low:
+        return ("linux", "linux", None, None)
+
+    return (None, None, None, None)
 
 
 # ─── Detection probes — runs ONE remote command per asset, best-effort ──

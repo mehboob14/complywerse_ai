@@ -119,6 +119,32 @@ function withNotificationDefaults(config: Record<string, unknown>): Record<strin
   return config;
 }
 
+// Seed one default escalation level so a freshly-dropped Escalation node shows a
+// ready-to-edit Level 1 (recipients + day/hour wait) instead of an empty editor.
+function withEscalationDefaults(config: Record<string, unknown>): Record<string, unknown> {
+  if (config.action_name !== 'escalate_to_management') return config;
+  if (!Array.isArray(config.escalation_levels) || (config.escalation_levels as unknown[]).length === 0) {
+    config.escalation_levels = [
+      {
+        level: 1,
+        subject: 'Escalation: {{workflow_name}}',
+        message:
+          'The "{{workflow_name}}" workflow requires attention ({{action}} on {{resource_type}} #{{resource_id}}). ' +
+          'Please review and action this item.',
+        user_ids: [],
+        role_ids: [],
+        // Level 1 fires immediately by default; the operator can set an
+        // "escalate after" delay (days/hours) per level in the config panel.
+        wait_days: 0,
+        wait_hours: 0,
+        escalation_mode: 'always',
+        escalation_condition: {},
+      },
+    ];
+  }
+  return config;
+}
+
 function getEdgeLabel(edge: Edge): string {
   if (typeof edge.label === 'string') return edge.label;
   const cond = (edge.data as Record<string, unknown>)?.condition as Record<string, unknown>;
@@ -256,6 +282,13 @@ function buildPalette(catalog: CatalogResponse): PaletteItem[] {
       key: 'send_in_app_alert',
       label: 'In-App Notification',
       description: 'Send an in-app notification to selected users or roles.',
+      group: 'actions',
+    },
+    {
+      key: 'escalate_to_management',
+      label: 'Escalation',
+      description:
+        'Multi-level escalation: notify users/roles at each level, wait a configurable time (days + hours), then escalate to the next level via in-app + email.',
       group: 'actions',
     },
   ];
@@ -1091,6 +1124,7 @@ function WorkflowEngineContent() {
       if (nodeType === 'timer') config.timer_kind = item.key;
       config = configWithPaletteContext(item, nodeType, config);
       config = withNotificationDefaults(config);
+      config = withEscalationDefaults(config);
       const newNode: Node<FlowNodeData> = {
         id: nodeKey,
         type: 'workflowNode',
@@ -1439,6 +1473,7 @@ function WorkflowEngineContent() {
               if (nodeType === 'condition') config.condition_kind = item.key;
               config = configWithPaletteContext(item, nodeType, config);
               config = withNotificationDefaults(config);
+              config = withEscalationDefaults(config);
               wfLog(`PICK node "${item.label}"`, {
                 paletteKey: item.key, group: item.group, module: item.module, submodule: item.submodule,
                 resolvedNodeType: nodeType, nodeKey, action_name: config.action_name, config,

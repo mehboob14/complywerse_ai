@@ -16,12 +16,16 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import {
+  ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis,
+  PieChart, Pie, Cell, Tooltip,
+} from 'recharts';
 import { apiClient } from '@/lib/api';
 import {
   Cloud, Database, Server, RouterIcon as RouterI, Users as UsersIcon,
   Container, CloudCog, Search, ChevronDown, ChevronRight, ExternalLink,
   Loader2, ShieldCheck, AlertTriangle, AlertCircle, CheckCircle2,
-  BarChart3, BookOpen, Gauge, Cpu,
+  BarChart3, BookOpen, Gauge, Cpu, ShieldAlert, Activity,
   type LucideIcon,
 } from 'lucide-react';
 // Consolidated "Compliance & Scans" host — Overview owns the URL, the
@@ -259,6 +263,215 @@ export default function ComplianceOverviewPage() {
 }
 
 // ─── Overview tab body (the original /compliance-overview page) ─────────────
+// ─── Executive summary hero — the attention-catching "first view" ──────────
+// Four at-a-glance panels anyone can read in two seconds: an overall
+// compliance gauge, the pass/fail/error split, scan coverage, and a glance at
+// asset risk. Built to read top-to-bottom for execs, not just operators.
+type OverviewTotals = {
+  assets: number; scanned: number; passed: number; failed: number; errored: number;
+  passRate: number; assetsActuallyScanned: number; assetsWithBenchmark: number;
+};
+
+function scoreHex(pct: number): string {
+  if (pct >= 80) return '#16a34a';
+  if (pct >= 50) return '#f59e0b';
+  return '#dc2626';
+}
+
+const RISK_BANDS: Array<{ key: string; label: string; color: string }> = [
+  { key: 'critical', label: 'Critical', color: '#dc2626' },
+  { key: 'high',     label: 'High',     color: '#f97316' },
+  { key: 'moderate', label: 'Moderate', color: '#f59e0b' },
+  { key: 'low',      label: 'Low',      color: '#22c55e' },
+];
+
+function ExecutiveSummary({ totals }: { totals: OverviewTotals }) {
+  const riskQ = useQuery({
+    queryKey: ['compliance-overview.risk-posture'],
+    queryFn: async () => (await apiClient.get('/risk-posture/dashboard')).data as {
+      summary?: { by_band?: Record<string, number>; avg_score?: number; asset_count?: number; scored_count?: number };
+      assets?: Array<{ id: number; name: string; score: number | null; band?: { label: string } }>;
+    },
+    staleTime: 60_000,
+  });
+
+  const passRate = totals.passRate;
+  const gColor = scoreHex(passRate);
+
+  const resultDonut = [
+    { name: 'Passed', value: totals.passed, color: '#22c55e' },
+    { name: 'Failed', value: totals.failed, color: '#ef4444' },
+    { name: 'Errored', value: totals.errored, color: '#94a3b8' },
+  ].filter((d) => d.value > 0);
+  const resultTotal = resultDonut.reduce((a, d) => a + d.value, 0);
+
+  const awaiting = Math.max(0, totals.assetsWithBenchmark - totals.assetsActuallyScanned);
+  const unmapped = Math.max(0, totals.assets - totals.assetsWithBenchmark);
+  const coverage = [
+    { label: 'Scanned', value: totals.assetsActuallyScanned, color: '#22c55e' },
+    { label: 'Awaiting scan', value: awaiting, color: '#f59e0b' },
+    { label: 'Not mapped', value: unmapped, color: '#cbd5e1' },
+  ];
+  const covTotal = totals.assets || 1;
+
+  const bands = riskQ.data?.summary?.by_band || {};
+  const avgRisk = Math.round(riskQ.data?.summary?.avg_score ?? 0);
+  const riskTotal = RISK_BANDS.reduce((a, b) => a + (bands[b.key] || 0), 0);
+  const topRisk = (riskQ.data?.assets || []).filter((a) => a.score != null).slice(0, 3);
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="grid divide-y divide-slate-100 lg:grid-cols-4 lg:divide-x lg:divide-y-0">
+        {/* 1 — Overall compliance gauge */}
+        <div className="flex flex-col items-center justify-center gap-2 p-5">
+          <div className="relative h-[150px] w-[150px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadialBarChart innerRadius="78%" outerRadius="100%" data={[{ value: passRate }]} startAngle={90} endAngle={-270}>
+                <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
+                <RadialBar dataKey="value" cornerRadius={10} fill={gColor} background={{ fill: '#f1f5f9' }} />
+              </RadialBarChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-4xl font-bold tabular-nums" style={{ color: gColor }}>{passRate}%</span>
+              <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Compliant</span>
+            </div>
+          </div>
+          <p className="text-center text-xs text-slate-500">
+            {totals.passed.toLocaleString()} of {totals.scanned.toLocaleString()} security checks passed
+          </p>
+        </div>
+
+        {/* 2 — Check results donut */}
+        <div className="p-5">
+          <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Check Results
+          </h3>
+          {resultTotal > 0 ? (
+            <div className="flex items-center gap-3">
+              <div className="relative h-[120px] w-[120px] shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={resultDonut} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={56} paddingAngle={2} stroke="#fff" strokeWidth={2}>
+                      {resultDonut.map((d) => <Cell key={d.name} fill={d.color} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: any, n: any) => [v, n]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-xl font-bold tabular-nums text-slate-900">{resultTotal.toLocaleString()}</span>
+                  <span className="text-[8px] uppercase tracking-wider text-slate-400">checks</span>
+                </div>
+              </div>
+              <div className="flex-1 space-y-1.5">
+                {resultDonut.map((d) => (
+                  <div key={d.name} className="flex items-center gap-2 text-[11px]">
+                    <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: d.color }} />
+                    <span className="flex-1 text-slate-600">{d.name}</span>
+                    <span className="font-semibold tabular-nums text-slate-800">{d.value.toLocaleString()}</span>
+                    <span className="w-9 text-right text-slate-400">{Math.round((d.value / resultTotal) * 100)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex h-[120px] items-center justify-center text-xs text-slate-400">No scans run yet</div>
+          )}
+        </div>
+
+        {/* 3 — Scan coverage */}
+        <div className="p-5">
+          <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
+            <Gauge className="h-3.5 w-3.5 text-blue-600" /> Scan Coverage
+          </h3>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-3xl font-bold tabular-nums text-slate-900">{totals.assetsActuallyScanned}</span>
+            <span className="text-xs text-slate-500">of {totals.assets} devices scanned</span>
+          </div>
+          <div className="mt-3 flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+            {coverage.map((c) => c.value > 0 && (
+              <div key={c.label} style={{ width: `${(c.value / covTotal) * 100}%`, backgroundColor: c.color }} title={`${c.label}: ${c.value}`} />
+            ))}
+          </div>
+          <div className="mt-2.5 space-y-1">
+            {coverage.map((c) => (
+              <div key={c.label} className="flex items-center gap-2 text-[11px]">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} />
+                <span className="flex-1 text-slate-600">{c.label}</span>
+                <span className="font-semibold tabular-nums text-slate-800">{c.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 4 — Asset risk glance */}
+        <div className="p-5">
+          <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
+            <ShieldAlert className="h-3.5 w-3.5 text-rose-600" /> Asset Risk
+          </h3>
+          {riskTotal > 0 ? (
+            <>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl font-bold tabular-nums" style={{ color: scoreHex(100 - avgRisk) }}>{avgRisk}</span>
+                <span className="text-xs text-slate-500">avg risk score · {riskTotal} assets</span>
+              </div>
+              <div className="mt-3 flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+                {RISK_BANDS.map((b) => (bands[b.key] || 0) > 0 && (
+                  <div key={b.key} style={{ width: `${((bands[b.key] || 0) / riskTotal) * 100}%`, backgroundColor: b.color }} title={`${b.label}: ${bands[b.key]}`} />
+                ))}
+              </div>
+              <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1">
+                {RISK_BANDS.map((b) => (
+                  <div key={b.key} className="flex items-center gap-1.5 text-[11px]">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: b.color }} />
+                    <span className="flex-1 text-slate-600">{b.label}</span>
+                    <span className="font-semibold tabular-nums text-slate-800">{bands[b.key] || 0}</span>
+                  </div>
+                ))}
+              </div>
+              {topRisk.length > 0 && (
+                <Link href="/risk-posture" className="mt-3 block text-[11px] font-medium text-blue-600 hover:underline">
+                  Highest risk: {topRisk.map((a) => a.name).join(', ')} →
+                </Link>
+              )}
+            </>
+          ) : riskQ.isLoading ? (
+            <div className="flex h-[120px] items-center justify-center text-xs text-slate-400">Loading risk…</div>
+          ) : (
+            <div className="flex h-[120px] flex-col items-center justify-center gap-1 text-center text-xs text-slate-400">
+              <Activity className="h-5 w-5 text-slate-300" />
+              No scored assets yet
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// Circular pass-rate ring for the category health cards.
+function CategoryRing({ pct }: { pct: number | null }) {
+  const r = 20;
+  const circ = 2 * Math.PI * r;
+  const color = pct === null ? '#cbd5e1' : scoreHex(pct);
+  const dash = ((pct ?? 0) / 100) * circ;
+  return (
+    <div className="relative h-14 w-14 shrink-0">
+      <svg viewBox="0 0 48 48" className="h-14 w-14 -rotate-90">
+        <circle cx="24" cy="24" r={r} fill="none" stroke="#e2e8f0" strokeWidth="5" />
+        {pct !== null && (
+          <circle cx="24" cy="24" r={r} fill="none" stroke={color} strokeWidth="5" strokeLinecap="round"
+            strokeDasharray={`${dash} ${circ}`} className="transition-all duration-700" />
+        )}
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        {pct === null
+          ? <span className="text-[9px] font-medium text-slate-400">N/S</span>
+          : <span className="text-sm font-bold tabular-nums" style={{ color }}>{pct}%</span>}
+      </div>
+    </div>
+  );
+}
+
 function OverviewTabContent() {
   const overviewQ = useQuery({
     queryKey: ['compliance-overview.assets'],
@@ -355,50 +568,8 @@ function OverviewTabContent() {
         </div>
       </header>
 
-      {/* ─── Top metrics ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <MetricTile icon={<ShieldCheck className="h-4 w-4" />} label="Devices"        value={totals.assets} />
-        <MetricTile icon={<Search className="h-4 w-4" />}      label="Rules scanned"  value={totals.scanned} />
-        <MetricTile icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} label="Passed"   value={totals.passed}  valueClass="text-emerald-700" />
-        <MetricTile icon={<AlertTriangle className="h-4 w-4 text-red-600" />}    label="Failed"   value={totals.failed}  valueClass="text-red-700" />
-        <MetricTile icon={<AlertCircle  className="h-4 w-4 text-slate-500" />}   label="Errored"  value={totals.errored} valueClass="text-slate-700" />
-      </div>
-
-      {/* tenant-wide pass-rate progress */}
-      {totals.scanned > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Tenant pass rate</span>
-            <span className={'text-sm font-semibold ' + passColor(totals.passRate)}>{totals.passRate}%</span>
-          </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-            <div className={'h-full rounded-full ' + passBg(totals.passRate)} style={{ width: `${totals.passRate}%` }} />
-          </div>
-          <div className="mt-1 text-[11px] text-slate-500">
-            {/* Honest framing: the "across N devices" denominator was
-                misleading — it counted the whole inventory while only a
-                fraction had actually been scanned. Now we surface the
-                real scanned/mapped/total split so the operator knows
-                what coverage they have. */}
-            {totals.passed.toLocaleString()} of {totals.scanned.toLocaleString()} rule runs passed.{' '}
-            <span className="text-slate-400">·</span>{' '}
-            {totals.assetsActuallyScanned} of {totals.assets} device{totals.assets === 1 ? '' : 's'} actually scanned
-            {totals.assetsWithBenchmark > totals.assetsActuallyScanned && (
-              <>
-                {' '}<span className="text-slate-400">·</span>{' '}
-                {totals.assetsWithBenchmark - totals.assetsActuallyScanned} more {(totals.assetsWithBenchmark - totals.assetsActuallyScanned) === 1 ? 'has' : 'have'} a benchmark mapped but {(totals.assetsWithBenchmark - totals.assetsActuallyScanned) === 1 ? 'is' : 'are'} awaiting first scan
-              </>
-            )}
-            {totals.assets > totals.assetsWithBenchmark && (
-              <>
-                {' '}<span className="text-slate-400">·</span>{' '}
-                {totals.assets - totals.assetsWithBenchmark} {(totals.assets - totals.assetsWithBenchmark) === 1 ? 'has' : 'have'} no benchmark mapped yet
-              </>
-            )}
-            .
-          </div>
-        </div>
-      )}
+      {/* ─── Executive summary — attention-catching first view ────────── */}
+      <ExecutiveSummary totals={totals} />
 
       {isLoading && (
         <div className="rounded-lg border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
@@ -413,81 +584,110 @@ function OverviewTabContent() {
 
       {/* ─── L1: category card grid ─────────────────────────────────── */}
       <section>
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Device categories</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {CATEGORIES.map(cat => {
-            const rows = buckets[cat.key] || [];
-            const isEmpty = rows.length === 0;
-            // Empty categories were previously hidden via `return null`,
-            // which collapsed the grid to whatever happened to have devices.
-            // Operators now see every supported category so the panel is a
-            // stable map of "where do my assets land" — empty cards display
-            // a muted "0 devices" prompt instead of disappearing.
-            const Icon = cat.icon;
-            const scanned = rows.reduce((a, r) => a + (r.scanned_rules || 0), 0);
-            const passed  = rows.reduce((a, r) => a + (r.passed  || 0), 0);
-            const failed  = rows.reduce((a, r) => a + (r.failed  || 0), 0);
-            const passRate = scanned > 0 ? Math.round((passed / scanned) * 100) : null;
-            const isOpen = expandedCat === cat.key && !isEmpty;
-            return (
-              <button
-                key={cat.key}
-                onClick={() => {
-                  if (isEmpty) return;
-                  setExpandedCat(isOpen ? null : cat.key);
-                  setExpandedAsset(null);
-                }}
-                disabled={isEmpty}
-                className={
-                  `group relative text-left rounded-xl border bg-gradient-to-br ${cat.cardTone.bgFrom} ${cat.cardTone.bgTo} p-4 transition-all ` +
-                  (isEmpty
-                    ? 'border-slate-200 opacity-70 cursor-default'
-                    : isOpen
-                    ? `border-transparent ring-2 ${cat.cardTone.ring} shadow-md`
-                    : 'border-slate-200 hover:border-slate-300 hover:shadow-sm hover:-translate-y-0.5')
-                }
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`h-11 w-11 rounded-lg flex items-center justify-center flex-shrink-0 ${cat.cardTone.iconBg} ${cat.cardTone.iconColor}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-slate-900 truncate">{cat.label}</h3>
-                      <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180 text-slate-700' : ''}`} />
-                    </div>
-                    <p className="mt-0.5 text-[11px] text-slate-500 line-clamp-1">{cat.description}</p>
-                    <div className="mt-3 flex items-baseline gap-2">
-                      <span className={`text-3xl font-bold leading-none ${isEmpty ? 'text-slate-400' : cat.cardTone.numText}`}>{rows.length}</span>
-                      <span className="text-[11px] text-slate-500">{rows.length === 1 ? 'device' : 'devices'}</span>
-                    </div>
-                    {isEmpty && (
-                      <div className="mt-2.5 text-[10px] text-slate-400 italic">No assets in this category</div>
-                    )}
-                    {!isEmpty && passRate !== null && (
-                      <div className="mt-2.5">
-                        <div className="flex items-center justify-between mb-1 text-[10px]">
-                          <span className="text-slate-500">Pass rate</span>
-                          <span className={'font-semibold ' + passColor(passRate)}>{passRate}%</span>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Compliance by device category</h2>
+          {(() => {
+            const active = CATEGORIES.filter(c => (buckets[c.key] || []).length > 0).length;
+            return <span className="text-[11px] text-slate-400">{active} of {CATEGORIES.length} categories in use</span>;
+          })()}
+        </div>
+
+        {(() => {
+          const activeCats = CATEGORIES.filter(c => (buckets[c.key] || []).length > 0);
+          const emptyCats = CATEGORIES.filter(c => (buckets[c.key] || []).length === 0);
+
+          return (
+            <>
+              {activeCats.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
+                  <Server className="mx-auto mb-2 h-7 w-7 text-slate-300" />
+                  <p className="text-sm font-medium text-slate-600">No devices connected yet</p>
+                  <p className="mt-1 text-xs text-slate-400">Connect a scanner to start monitoring compliance across your estate.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {activeCats.map(cat => {
+                    const rows = buckets[cat.key] || [];
+                    const Icon = cat.icon;
+                    const scanned = rows.reduce((a, r) => a + (r.scanned_rules || 0), 0);
+                    const passed = rows.reduce((a, r) => a + (r.passed || 0), 0);
+                    const failed = rows.reduce((a, r) => a + (r.failed || 0), 0);
+                    const scannedDevices = rows.filter(r => (r.scanned_rules || 0) > 0).length;
+                    const passRate = scanned > 0 ? Math.round((passed / scanned) * 100) : null;
+                    const accent = passRate === null ? '#cbd5e1' : scoreHex(passRate);
+                    const isOpen = expandedCat === cat.key;
+                    return (
+                      <button
+                        key={cat.key}
+                        onClick={() => { setExpandedCat(isOpen ? null : cat.key); setExpandedAsset(null); }}
+                        className={
+                          'group relative overflow-hidden rounded-xl border bg-white p-4 text-left transition-all ' +
+                          (isOpen ? 'border-transparent shadow-md ring-2 ring-blue-200' : 'border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md')
+                        }
+                      >
+                        {/* health accent stripe */}
+                        <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: accent }} />
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-start gap-3">
+                            <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg ${cat.cardTone.iconBg} ${cat.cardTone.iconColor}`}>
+                              <Icon className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="flex items-center gap-1 text-sm font-semibold text-slate-900">
+                                <span className="truncate">{cat.label}</span>
+                                <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180 text-slate-700' : ''}`} />
+                              </h3>
+                              <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500">{cat.description}</p>
+                              <div className="mt-2 flex items-baseline gap-1.5">
+                                <span className="text-3xl font-bold leading-none text-slate-900">{rows.length}</span>
+                                <span className="text-[11px] text-slate-500">{rows.length === 1 ? 'device' : 'devices'}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <CategoryRing pct={passRate} />
                         </div>
-                        <div className="h-1.5 w-full rounded-full bg-white/70 overflow-hidden">
-                          <div className={'h-full rounded-full transition-all ' + passBg(passRate)} style={{ width: `${passRate}%` }} />
+
+                        <div className="mt-3 flex items-center gap-3 text-[11px]">
+                          <span className="flex items-center gap-1 text-slate-500">
+                            <Gauge className="h-3 w-3" /> {scannedDevices}/{rows.length} scanned
+                          </span>
+                          {passRate !== null ? (
+                            <>
+                              <span className="text-emerald-700">{passed.toLocaleString()} pass</span>
+                              {failed > 0 && <span className="text-rose-700">{failed.toLocaleString()} fail</span>}
+                            </>
+                          ) : (
+                            <span className="italic text-slate-400">Not scanned yet</span>
+                          )}
                         </div>
-                        <div className="mt-1 text-[10px] text-slate-500 flex gap-2">
-                          <span className="text-emerald-700">{passed.toLocaleString()} pass</span>
-                          {failed > 0 && <span className="text-red-700">{failed.toLocaleString()} fail</span>}
-                        </div>
-                      </div>
-                    )}
-                    {!isEmpty && passRate === null && (
-                      <div className="mt-2.5 text-[10px] text-slate-400 italic">Not scanned yet</div>
-                    )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Coverage gaps — compact strip instead of a wall of dead cards. */}
+              {emptyCats.length > 0 && (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Not yet covered</span>
+                    {emptyCats.map(cat => {
+                      const Icon = cat.icon;
+                      return (
+                        <span key={cat.key} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-500">
+                          <Icon className="h-3 w-3" /> {cat.label}
+                        </span>
+                      );
+                    })}
+                    <Link href="/admin/agents" className="ml-auto text-[11px] font-medium text-blue-600 hover:underline">
+                      Connect a scanner →
+                    </Link>
                   </div>
                 </div>
-              </button>
-            );
-          })}
-        </div>
+              )}
+            </>
+          );
+        })()}
       </section>
 
       {/* ─── L2: expanded category panel (asset list grouped by variant) ── */}

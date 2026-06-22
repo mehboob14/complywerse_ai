@@ -76,6 +76,10 @@ class PluginOut(BaseModel):
 class PluginRunCreate(BaseModel):
     asset_id: Optional[int] = None
     connection_id: Optional[int] = None
+    # Manual attestation (for text-only CIS rules with runner_type="manual"):
+    # the operator's recorded outcome + optional evidence note.
+    manual_result: Optional[str] = None   # "pass" | "fail" | "na"
+    manual_note: Optional[str] = None
 
 
 class PluginRunOut(BaseModel):
@@ -2995,6 +2999,8 @@ def execute(
         asset=asset,
         connection=connection,
         triggered_by="manual",
+        manual_result=body.manual_result,
+        manual_note=body.manual_note,
     )
     return _run_to_dict(run, plugin, asset, connection, triggered_by_user=current_user)
 
