@@ -139,14 +139,6 @@ async def audit_log_middleware(request: Request, call_next):
 
     try:
         response = await call_next(request)
-
-        # Workflow/Audit-AI integration: for non-2xx JSON responses, capture
-        # the error body so the AI summary endpoint can surface the actual
-        # failure reason (validator messages, detail strings). We must
-        # consume the streaming body and re-attach an identical iterator so
-        # the client still receives the response unchanged. Body cap 16 KB
-        # to keep audit-log rows small. Any capture exception is swallowed
-        # so this can never break the actual response.
         response_error = None
         try:
             status = getattr(response, "status_code", 200)

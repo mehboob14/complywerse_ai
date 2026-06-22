@@ -173,9 +173,16 @@ export default function ComplianceOverviewPage() {
   const notApplicableCount = byStatus.not_applicable || 0;
   
   const applicableCount = totalStatements - notApplicableCount;
-  const compliantPercent = applicableCount > 0 
-    ? Math.round((compliantCount / applicableCount) * 100) 
-    : 0;
+  const compliantPercent: number | null = totalStatements === 0
+    ? null
+    : (applicableCount > 0 ? Math.round((compliantCount / applicableCount) * 100) : 0);
+  // Headline donut uses the backend's weighted compliance_score — the same
+  // metric shown in the ring's center — so the arc and the number always agree.
+  // No statements => unknown, shown as "—" rather than a misleading 0%.
+  const complianceScore: number | null = totalStatements === 0
+    ? null
+    : Math.round(summary?.compliance_score ?? 0);
+  const complianceArc = complianceScore ?? 0;
 
   const statCards = [
     {
@@ -187,7 +194,7 @@ export default function ComplianceOverviewPage() {
     },
     {
       name: 'Compliant Rate',
-      value: `${compliantPercent}%`,
+      value: compliantPercent === null ? '—' : `${compliantPercent}%`,
       icon: CheckCircle,
       iconColor: 'text-emerald-600',
       bgColor: 'bg-emerald-50',
@@ -408,13 +415,13 @@ export default function ComplianceOverviewPage() {
                   a 15.9155 15.9155 0 0 1 0 31.831
                   a 15.9155 15.9155 0 0 1 0 -31.831"
                 fill="none"
-                stroke={compliantPercent >= 80 ? 'rgb(16, 185, 129)' : compliantPercent >= 50 ? 'rgb(245, 158, 11)' : 'rgb(239, 68, 68)'}
+                stroke={complianceArc >= 80 ? 'rgb(16, 185, 129)' : complianceArc >= 50 ? 'rgb(245, 158, 11)' : 'rgb(239, 68, 68)'}
                 strokeWidth="3"
-                strokeDasharray={`${compliantPercent}, 100`}
+                strokeDasharray={`${complianceArc}, 100`}
               />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-xl font-bold text-black">{summary?.compliance_score?.toFixed(0) || compliantPercent}%</span>
+              <span className="text-xl font-bold text-black">{complianceScore === null ? '—' : `${complianceScore}%`}</span>
             </div>
           </div>
           <div className="flex-1">
@@ -433,7 +440,7 @@ export default function ComplianceOverviewPage() {
               </div>
               <div className="rounded-lg bg-gray-50 p-2.5">
                 <p className="text-sm text-gray-600">Compliance Rate</p>
-                <p className="text-lg font-semibold text-emerald-600">{summary?.compliance_rate?.toFixed(1) || 0}%</p>
+                <p className="text-lg font-semibold text-emerald-600">{totalStatements === 0 ? '—' : `${(summary?.compliance_rate ?? 0).toFixed(1)}%`}</p>
               </div>
             </div>
           </div>

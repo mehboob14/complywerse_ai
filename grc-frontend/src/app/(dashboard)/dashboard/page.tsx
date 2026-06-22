@@ -63,6 +63,7 @@ import {
   GovernanceFrameworkCoverageWidget,
   GovernanceQueueWidget,
   GovernanceRecentPublicationsWidget,
+  GovernanceActivityWidget,
   RiskSummaryWidget,
   RiskDistributionWidget,
   RiskCategoryWidget,
@@ -109,6 +110,11 @@ import {
   BoardReportingWidget,
   ComplianceDashboardBoardWidget,
   EnterpriseRiskBoardWidget,
+  ProgressOverTimeWidget,
+  VulnerabilitiesBoardWidget,
+  AssetsBoardWidget,
+  TasksBoardWidget,
+  GovernanceDashboardWidget,
   GRCOverviewBoardWidget,
   IssueIncidentBoardWidget,
   KRIMonitoringBoardWidget,
@@ -2344,24 +2350,24 @@ function buildWidgetsForTab(tab: MainTab): WorkspaceWidgetConfig[] {
   switch (tab) {
     case 'executive':
       return [
-        { id: 'exec-frameworks',       title: 'Framework Compliance',          icon: <Shield className="h-3.5 w-3.5" />,        content: <FrameworkComplianceCards />,       defaultW: 12, defaultH: 4, minW: 6, minH: 3 },
-        { id: 'board-1-reporting',     title: '1. Board Reporting Dashboard',  icon: <LayoutDashboard className="h-3.5 w-3.5" />, content: <BoardReportingWidget />,           defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
-        { id: 'board-2-compliance',    title: '2. Compliance Dashboard',       icon: <FileCheck className="h-3.5 w-3.5" />,     content: <ComplianceDashboardBoardWidget />, defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
-        { id: 'board-3-enterprise',    title: '3. Enterprise Risk Dashboard',  icon: <Scale className="h-3.5 w-3.5" />,         content: <EnterpriseRiskBoardWidget />,      defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
-        { id: 'board-4-grc-overview',  title: '4. GRC Overview Dashboard',     icon: <Building2 className="h-3.5 w-3.5" />,     content: <GRCOverviewBoardWidget />,         defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
-        { id: 'board-5-issue-incident', title: '5. Issue and Incident Dashboard', icon: <AlertCircle className="h-3.5 w-3.5" />, content: <IssueIncidentBoardWidget />,    defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'exec-frameworks',       title: 'Active Journey Frameworks',     icon: <Shield className="h-3.5 w-3.5" />,        content: <FrameworkComplianceCards />,       defaultW: 12, defaultH: 4, minW: 6, minH: 3 },
+        { id: 'board-1-reporting',     title: '1. Risk Posture Overview',      icon: <Activity className="h-3.5 w-3.5" />,      content: <BoardReportingWidget />,         defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-2-vulnerabilities', title: '2. Vulnerabilities',          icon: <BugIcon className="h-3.5 w-3.5" />,       content: <VulnerabilitiesBoardWidget />,     defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-3-governance',    title: '3. Governance Dashboard',       icon: <Building2 className="h-3.5 w-3.5" />,     content: <GovernanceDashboardWidget />,      defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-4-assets',        title: '4. Assets',                     icon: <Server className="h-3.5 w-3.5" />,        content: <AssetsBoardWidget />,              defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
+        { id: 'board-5-tasks',         title: '5. Critical Tasks',             icon: <ListTodo className="h-3.5 w-3.5" />,      content: <TasksBoardWidget />,               defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
         { id: 'board-6-kri',           title: '6. KPI KRI Monitoring Panel',   icon: <Gauge className="h-3.5 w-3.5" />,         content: <KRIMonitoringBoardWidget />,       defaultW: 6, defaultH: 3, minW: 4, minH: 2 },
         { id: 'board-7-exposure',      title: '7. Risk Exposure Summary Panel', icon: <Target className="h-3.5 w-3.5" />,       content: <RiskExposureBoardWidget />,       defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
         { id: 'board-8-trend',         title: '8. Risk Trend Analysis Sheet',  icon: <TrendingUp className="h-3.5 w-3.5" />,    content: <RiskTrendBoardWidget />,           defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
       ];
     case 'governance':
+      // Consolidated: a total-first Governance Dashboard (status/types/mix/
+      // timeline) + an expandable Approvals & Reviews activity widget + the
+      // framework compliance coverage chart.
       return [
-        { id: 'gov-summary', title: 'Governance Summary', content: <GovernanceSummaryWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
-        { id: 'gov-status', title: 'Document Status', content: <GovernanceStatusWidget />, defaultW: 4, defaultH: 3, minW: 3, minH: 2 },
-        { id: 'gov-trend', title: 'Publishing Trend', content: <GovernanceTrendWidget />, defaultW: 8, defaultH: 4, minW: 5, minH: 3 },
-        { id: 'gov-framework-coverage', title: 'Framework Compliance Coverage', content: <GovernanceFrameworkCoverageWidget />, defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
-        { id: 'gov-queue', title: 'Approval & Review Queue', content: <GovernanceQueueWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
-        { id: 'gov-recent', title: 'Recent Publications', content: <GovernanceRecentPublicationsWidget />, defaultW: 3, defaultH: 3, minW: 3, minH: 2 },
+        { id: 'gov-dashboard', title: 'Governance Dashboard',          icon: <Building2 className="h-3.5 w-3.5" />,  content: <GovernanceDashboardWidget />,         defaultW: 7, defaultH: 4, minW: 4, minH: 3 },
+        { id: 'gov-activity',  title: 'Approvals & Reviews',           icon: <ClipboardList className="h-3.5 w-3.5" />, content: <GovernanceActivityWidget />,          defaultW: 5, defaultH: 4, minW: 3, minH: 2 },
+        { id: 'gov-coverage',  title: 'Framework Compliance Coverage', icon: <Shield className="h-3.5 w-3.5" />,     content: <GovernanceFrameworkCoverageWidget />, defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
       ];
     case 'risk':
       return [

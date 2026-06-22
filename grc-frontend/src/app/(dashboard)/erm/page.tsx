@@ -129,10 +129,11 @@ function RiskSpeedometer({
   score,
   signals,
 }: {
-  score: number;
+  score: number | null;
   signals: Array<{ label: string; value: string; tone?: string }>;
 }) {
-  const safeScore = Math.max(0, Math.min(100, score));
+  const hasScore = score !== null;
+  const safeScore = score === null ? 0 : Math.max(0, Math.min(100, score));
   // Multi-color speedometer bands (red → green from low to high posture)
   const bands = [
     { value: 20, fill: '#ef4444' }, // Critical (0-20%)
@@ -141,7 +142,9 @@ function RiskSpeedometer({
     { value: 20, fill: '#a3e635' }, // Low     (60-80%)
     { value: 20, fill: '#22c55e' }, // Healthy (80-100%)
   ];
-  const currentBand = safeScore >= 80
+  const currentBand = !hasScore
+    ? { label: 'No data', color: '#94a3b8' }
+    : safeScore >= 80
     ? { label: 'Healthy', color: '#16a34a' }
     : safeScore >= 60
       ? { label: 'Low', color: '#65a30d' }
@@ -151,7 +154,7 @@ function RiskSpeedometer({
           ? { label: 'High', color: '#ea580c' }
           : { label: 'Critical', color: '#dc2626' };
   // Needle: half-circle goes from 180° (left) to 0° (right). Score 0% = -90°, 100% = +90°.
-  const needleAngle = -90 + (safeScore / 100) * 180;
+  const needleAngle = hasScore ? -90 + (safeScore / 100) * 180 : 0;
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -203,8 +206,8 @@ function RiskSpeedometer({
           />
           {/* Score readout */}
           <div className="absolute inset-x-0 flex flex-col items-center z-10" style={{ bottom: '8%' }}>
-            <span className="text-2xl font-bold leading-none" style={{ color: currentBand.color }}>{safeScore}%</span>
-            <span className="mt-0.5 text-[11px] font-medium" style={{ color: currentBand.color }}>{currentBand.label} posture</span>
+            <span className="text-2xl font-bold leading-none" style={{ color: currentBand.color }}>{hasScore ? `${safeScore}%` : '—'}</span>
+            <span className="mt-0.5 text-[11px] font-medium" style={{ color: currentBand.color }}>{hasScore ? `${currentBand.label} posture` : 'No risks scored'}</span>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
@@ -639,19 +642,30 @@ export default function ERMOverviewPage() {
     if (!appetiteData || !Array.isArray(appetiteData)) return [];
 
     return appetiteData.slice(0, 6).map((item: any) => {
-      const current = item.current_avg_score || item.avg_score || 0;
-      const threshold = item.max_acceptable_score || item.tolerance_threshold || 25;
+      const threshold = item.tolerance_threshold || item.max_acceptable_score || 25;
+      // The endpoint does NOT return a current average score, so we derive it
+      // from the ACTUAL risk register: the mean residual (fallback inherent) of
+      // this category's scored risks. No scored risks => 0 utilization (honest).
+      const catRisks = (risks || []).filter(
+        (r: any) => (r.risk_category || 'operational') === item.category && (r.residual_score ?? r.inherent_score ?? 0) > 0
+      );
+      const current = catRisks.length > 0
+        ? catRisks.reduce((sum: number, r: any) => sum + (r.residual_score ?? r.inherent_score ?? 0), 0) / catRisks.length
+        : 0;
       const utilization = threshold > 0 ? Math.round((current / threshold) * 100) : 0;
+      // The backend already counts risks over tolerance for this category.
+      const exceeding = item.exceeding_count ?? 0;
 
       return {
         category: CATEGORY_LABELS[item.category] || item.category || 'Unknown',
         current: Math.round(current * 10) / 10,
         threshold,
         utilization: Math.min(utilization, 150),
-        status: utilization >= 100 ? 'breach' : utilization >= 75 ? 'warning' : 'normal',
+        status: (exceeding > 0 || utilization >= 100) ? 'breach' : utilization >= 75 ? 'warning' : 'normal',
+        exceeding,
       };
     });
-  }, [appetiteData]);
+  }, [appetiteData, risks]);
 
   const totalRisks = dashboard?.total_risks || 0;
   const openRisks = dashboard?.open_risks || 0;
@@ -659,7 +673,15 @@ export default function ERMOverviewPage() {
   const criticalHighRisks = (dashboard?.by_score_range?.critical || 0) + (dashboard?.by_score_range?.high || 0);
   const recentIncidents = incidents?.slice(0, 5) || [];
   const appetiteBreaches = appetiteUtilization.filter((item) => item.status === 'breach').length;
-  const residualHealth = Math.max(0, 100 - Math.round((avgRiskScore.value / 25) * 100));
+  // Posture is grounded in the ACTUAL risk register: the average residual
+  // score (falling back to inherent when residual isn't set) across risks that
+  // are actually scored. If nothing is scored yet, posture is unknown — we do
+  // NOT pretend it's a perfect 100% (the old `100 - 0` did exactly that).
+  const scoredRiskList = (risks || []).filter((r: any) => (r.residual_score ?? r.inherent_score ?? 0) > 0);
+  const realAvgResidual: number | null = scoredRiskList.length > 0
+    ? scoredRiskList.reduce((sum: number, r: any) => sum + (r.residual_score ?? r.inherent_score ?? 0), 0) / scoredRiskList.length
+    : (dashboard?.avg_residual_score && dashboard.avg_residual_score > 0 ? dashboard.avg_residual_score : null);
+  const residualHealth = realAvgResidual === null ? 100 : Math.max(0, 100 - Math.round((realAvgResidual / 25) * 100));
   const exposureHealth = totalRisks > 0 ? Math.max(0, 100 - Math.round((criticalHighRisks / totalRisks) * 100)) : 100;
   const kriHealth = kriSummary.total > 0 ? Math.max(0, 100 - Math.round((kriSummary.red / kriSummary.total) * 100)) : 100;
   const actionHealth = mitigationProgress.total > 0
@@ -672,7 +694,7 @@ export default function ERMOverviewPage() {
   // Sticking to the heatmap keeps the value intuitive: the score now
   // mirrors the average residual position on the 5×5 matrix, where Medium
   // risks sit around 50, High around 25–35, Low around 75–80, etc.
-  const ermHealthScore = residualHealth;
+  const ermHealthScore = realAvgResidual === null ? null : residualHealth;
 
   const scoreRangeData = [
     { name: 'Critical', value: dashboard?.by_score_range?.critical || 0, color: '#ef4444' },
@@ -1010,7 +1032,7 @@ export default function ERMOverviewPage() {
         <RiskSpeedometer
           score={ermHealthScore}
           signals={[
-            { label: 'Residual', value: avgRiskScore.value.toFixed(1), tone: 'text-blue-600' },
+            { label: 'Residual', value: realAvgResidual === null ? '—' : realAvgResidual.toFixed(1), tone: 'text-blue-600' },
             { label: 'Priority', value: `${criticalHighRisks}`, tone: 'text-rose-600' },
             { label: 'KRIs Red', value: `${kriSummary.red}`, tone: 'text-amber-600' },
             { label: 'Breaches', value: `${appetiteBreaches}`, tone: 'text-violet-600' },

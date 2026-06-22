@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   apiClient,
@@ -31,6 +33,8 @@ import {
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
+  RadialBarChart,
+  RadialBar,
   CartesianGrid,
   XAxis,
   YAxis,
@@ -42,6 +46,7 @@ import {
   PieChart as PieChartIcon, Building2, Shield,
   Folder, RefreshCw, Clock, CheckCircle2,
   TrendingUp, AlertOctagon, FileCheck,
+  ChevronDown, FileText, Server, Bug,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -322,19 +327,36 @@ export function ExecutiveRiskAppetiteWidget() {
 }
 
 export function GovernanceSummaryWidget() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['widget-gov-summary'],
-    queryFn: async () => (await governanceApi.getDashboard()).data,
+  // NOTE: governanceApi.getDashboard() hits the legacy /governance/dashboard
+  // (objectives/exceptions/issues) endpoint whose keys don't match the document
+  // metrics shown here. The document-centric data lives on the dedicated
+  // /governance/dashboard/* sub-routes — summary (counts) + pending/overdue/
+  // upcoming queues — so we read those directly.
+  const summaryQ = useQuery({
+    queryKey: ['widget-gov-doc-summary'],
+    queryFn: async () => (await governanceApi.getDashboardSummary()).data,
   });
-  if (isLoading) return <MiniLoading />;
-  const gov = (data || {}) as unknown as AnyRecord;
+  const pendingQ = useQuery({
+    queryKey: ['widget-gov-pending'],
+    queryFn: async () => (await governanceApi.getDashboardPendingApprovals()).data,
+  });
+  const overdueQ = useQuery({
+    queryKey: ['widget-gov-overdue'],
+    queryFn: async () => (await governanceApi.getDashboardOverdueReviews()).data,
+  });
+  const upcomingQ = useQuery({
+    queryKey: ['widget-gov-upcoming'],
+    queryFn: async () => (await governanceApi.getUpcomingReviewsDashboard()).data,
+  });
+  if (summaryQ.isLoading) return <MiniLoading />;
+  const gov = (summaryQ.data || {}) as unknown as AnyRecord;
   return (
     <MetricGrid
       items={[
         { label: 'Documents', value: num(gov.total_documents) },
-        { label: 'Pending Approvals', value: num(gov.pending_approvals), tone: 'warn' },
-        { label: 'Overdue Reviews', value: num(gov.overdue_reviews), tone: 'danger' },
-        { label: 'Upcoming Reviews', value: num(gov.upcoming_reviews), tone: 'neutral' },
+        { label: 'Pending Approvals', value: countPayload(pendingQ.data), tone: 'warn' },
+        { label: 'Overdue Reviews', value: countPayload(overdueQ.data), tone: 'danger' },
+        { label: 'Upcoming Reviews', value: countPayload(upcomingQ.data), tone: 'neutral' },
       ]}
     />
   );
@@ -342,8 +364,8 @@ export function GovernanceSummaryWidget() {
 
 export function GovernanceStatusWidget() {
   const { data, isLoading } = useQuery({
-    queryKey: ['widget-gov-summary'],
-    queryFn: async () => (await governanceApi.getDashboard()).data,
+    queryKey: ['widget-gov-doc-summary'],
+    queryFn: async () => (await governanceApi.getDashboardSummary()).data,
   });
   if (isLoading) return <MiniLoading />;
   const byStatus = rec(((data || {}) as unknown as AnyRecord).by_status);
@@ -660,11 +682,17 @@ export function IncidentSnapshotWidget() {
   const d = (data || {}) as AnyRecord;
   const bySeverity = rec(d.by_severity);
   const criticalHigh = num(bySeverity.critical) + num(bySeverity.high);
+  // Backend returns by_status but no `open_incidents` field — derive open as
+  // everything not closed/resolved (the old read was always 0).
+  const byStatus = rec(d.by_status);
+  const openIncidents = Object.entries(byStatus)
+    .filter(([k]) => !['closed', 'resolved'].includes(k.toLowerCase()))
+    .reduce((s, [, v]) => s + v, 0);
   return (
     <MetricGrid
       items={[
         { label: 'Total Incidents', value: num(d.total_incidents) },
-        { label: 'Open Incidents', value: num(d.open_incidents), tone: 'danger' },
+        { label: 'Open Incidents', value: openIncidents, tone: openIncidents > 0 ? 'danger' : 'good' },
         { label: 'Critical + High', value: criticalHigh, tone: criticalHigh > 0 ? 'warn' : 'good' },
         { label: 'Last 30 Days', value: num(d.last_30_days ?? d.incidents_last_30d) },
       ]}
@@ -787,7 +815,7 @@ export function VulnerabilitySummaryWidget() {
         { label: 'Total Vulns', value: num(d.total_vulnerabilities ?? d.total), tone: 'neutral' },
         { label: 'Critical + High', value: criticalHigh, tone: criticalHigh > 0 ? 'danger' : 'good' },
         { label: 'Overdue', value: num(d.overdue_count), tone: num(d.overdue_count) > 0 ? 'warn' : 'good' },
-        { label: 'MTTR (days)', value: num(d.mttr_days).toFixed(1) },
+        { label: 'MTTR (days)', value: d.mttr_days == null ? '—' : num(d.mttr_days).toFixed(1) },
       ]}
     />
   );
@@ -1449,32 +1477,101 @@ function ScoreTile({
   );
 }
 
-function ProgressBarRow({ label, pct }: { label: string; pct: number }) {
+function ProgressBarRow({ label, pct, na }: { label: string; pct: number; na?: boolean }) {
   // Bar fill follows the platform's existing DistBars row tone scale
   // (blue accent below threshold, emerald above). Slate label + small
   // percentage chip mirrors how the platform's compliance dashboard renders
-  // progress bars in other widgets.
+  // progress bars in other widgets. When `na` is set the metric has no
+  // backing data source yet — we show "N/A" rather than a fabricated value.
   const clamped = Math.max(0, Math.min(100, pct));
   const fill = clamped >= 70 ? '#10b981' : clamped >= 50 ? '#f59e0b' : '#ef4444';
   return (
     <div>
       <div className="flex items-center justify-between text-[11px] mb-1">
         <span className="text-slate-700">{label}</span>
-        <span className="text-slate-900 font-semibold">{clamped}%</span>
+        <span className="text-slate-900 font-semibold">{na ? 'N/A' : `${clamped}%`}</span>
       </div>
       <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
-        <div className="h-full rounded-full transition-all" style={{ width: `${clamped}%`, background: fill }} />
+        {!na && <div className="h-full rounded-full transition-all" style={{ width: `${clamped}%`, background: fill }} />}
       </div>
     </div>
   );
 }
 
-// 1. Board Reporting Dashboard. 5 score pills.
+// Risk posture color ramp (residual risk score 0-25), mirrors the ERM
+// risk-posture page: green (low) -> amber -> orange -> red (critical).
+function riskHex(score: number): string {
+  if (score >= 17) return '#dc2626';
+  if (score >= 11) return '#f97316';
+  if (score >= 6) return '#eab308';
+  return '#22c55e';
+}
+function riskBand(score: number): string {
+  if (score >= 17) return 'Critical';
+  if (score >= 11) return 'High';
+  if (score >= 6) return 'Medium';
+  return 'Low';
+}
+
+// Radial "clock" gauge for the ERM risk-posture score (avg residual, 0-25),
+// mirroring the ERM risk-posture page. Replaces the old fabricated numeric
+// "Risk Profile". Clicking drills into the full risk posture view.
+function RiskPostureGauge({ score, count }: { score: number | null; count: number }) {
+  if (score === null) {
+    return (
+      <div className="flex h-[132px] flex-col items-center justify-center text-center">
+        <span className="text-2xl font-bold text-slate-300">—</span>
+        <span className="text-[10px] text-slate-400">No risks scored</span>
+      </div>
+    );
+  }
+  const clamped = Math.max(0, Math.min(25, score));
+  const hex = riskHex(clamped);
+  return (
+    <Link href="/risk-posture" className="group block">
+      <div className="relative mx-auto" style={{ width: 132, height: 132 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <RadialBarChart innerRadius="72%" outerRadius="100%" data={[{ value: clamped }]} startAngle={90} endAngle={-270}>
+            <PolarAngleAxis type="number" domain={[0, 25]} tick={false} />
+            <RadialBar dataKey="value" cornerRadius={10} fill={hex} background={{ fill: '#f1f5f9' }} />
+          </RadialBarChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-bold tabular-nums" style={{ color: hex }}>{clamped.toFixed(1)}</span>
+          <span className="text-[10px] font-semibold" style={{ color: hex }}>{riskBand(clamped)}</span>
+          <span className="text-[9px] text-slate-400">avg residual</span>
+        </div>
+      </div>
+      <p className="mt-1 text-center text-[10px] text-slate-500 group-hover:text-blue-600">{count} risks · view posture →</p>
+    </Link>
+  );
+}
+
+// Status/priority colors for the expandable Risk-Posture breakdowns.
+const ISSUE_STATUS_HEX: Record<string, string> = {
+  new: '#3b82f6', triage: '#06b6d4', in_progress: '#f59e0b', resolution: '#8b5cf6',
+  closure_review: '#a855f7', resolved: '#22c55e', closed: '#64748b', cancelled: '#94a3b8',
+};
+const PRIORITY_HEX: Record<string, string> = { critical: '#dc2626', high: '#f97316', medium: '#eab308', low: '#22c55e' };
+const KRI_HEX: Record<string, string> = { red: '#ef4444', amber: '#f59e0b', green: '#22c55e' };
+
+// Section label + total used inside the inline breakdown panels.
+function PanelHeading({ title, total, totalLabel = 'total' }: { title: string; total?: number; totalLabel?: string }) {
+  return (
+    <div className="mb-1.5 flex items-baseline justify-between">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</p>
+      {total !== undefined && <span className="text-[11px] text-slate-400"><span className="font-bold text-slate-900">{total}</span> {totalLabel}</span>}
+    </div>
+  );
+}
+
+// 1. Risk Posture Overview. Risk-posture clock + four tiles (Controls / Issues /
+// KRI / Incidents). Each tile is clickable and expands an INLINE breakdown
+// (status-, priority-, evidence-wise counts) instead of navigating away.
 export function BoardReportingWidget() {
-  const { data: unified } = useQuery({
-    queryKey: ['widget-board-reporting-unified'],
-    queryFn: async () => (await dashboardApi.getUnified()).data,
-  });
+  const [expanded, setExpanded] = useState<'controls' | 'issues' | 'kri' | 'incidents' | null>(null);
+  const toggle = (k: 'controls' | 'issues' | 'kri' | 'incidents') => setExpanded((cur) => (cur === k ? null : k));
+
   const { data: risksData } = useQuery({
     queryKey: ['widget-board-reporting-risks'],
     queryFn: async () => (await ermApi.risks.getAll()).data,
@@ -1489,63 +1586,165 @@ export function BoardReportingWidget() {
       return obj?.items || [];
     },
   });
-  const { data: certs } = useQuery({
-    queryKey: ['widget-board-reporting-certs'],
-    queryFn: async () => {
-      const r = await certificationsApi.getAll();
-      const list = (r.data as Array<{ id: number; name: string }>) || [];
-      const out = await Promise.all(list.map(async (c) => {
-        try {
-          const p = await certificationsApi.getProgress(c.id);
-          const v = p.data as { readiness_percentage?: number };
-          return Math.max(0, Math.min(100, Math.round(v.readiness_percentage ?? 0)));
-        } catch {
-          return 0;
-        }
-      }));
-      return out;
-    },
+  const { data: kriData } = useQuery({
+    queryKey: ['widget-board-reporting-kris'],
+    queryFn: async () => (await ermApi.kris.getAll({ is_active: true })).data,
+  });
+  const { data: incidentData } = useQuery({
+    queryKey: ['widget-board-reporting-incidents'],
+    queryFn: async () => (await enrichedDashboardApi.getIncidentSummary()).data,
+  });
+  // Controls breakdown — frameworks-aggregate kpis give the full control
+  // lifecycle (implemented/verified/in_progress/not_started/NA), approved
+  // evidence, and open gaps in one cohesive source.
+  const { data: controlsAggData } = useQuery({
+    queryKey: ['widget-board-reporting-controls'],
+    queryFn: async () => (await complianceApi.dashboard.getFrameworksAggregate()).data,
+  });
+  // Priority split comes from the compliance summary; only fetched on expand.
+  const { data: controlsPriorityData } = useQuery({
+    queryKey: ['widget-board-reporting-controls-priority'],
+    queryFn: async () => (await complianceApi.dashboard.getSummary()).data,
+    enabled: expanded === 'controls',
   });
 
   const risks = arr<DashRisk>(risksData);
   const issues = arr<DashIssue>(issuesData);
-  const u = (unified || {}) as AnyRecord;
+  const kris = arr<{ status?: string }>(kriData);
+  const inc = (incidentData || {}) as AnyRecord;
 
+  // Risk posture = average residual score across the ENTIRE risk register (0-25).
+  const scoredRisks = risks.filter((r) => (num(r.residual_score) || num(r.inherent_score)) > 0);
+  const postureScore = scoredRisks.length === 0
+    ? null
+    : scoredRisks.reduce((s, r) => s + Math.min(25, num(r.residual_score) || num(r.inherent_score)), 0) / scoredRisks.length;
+
+  // Controls — share implemented + status / evidence / priority breakdown.
+  const cKpis = ((controlsAggData || {}) as AnyRecord).kpis as AnyRecord || {};
+  const cTotal = num(cKpis.total_controls);
+  const cImpl = num(cKpis.implemented);
+  const controlsScore = cTotal > 0 ? Math.round((cImpl / cTotal) * 100) : null;
+  const controlsLabel = controlsScore === null ? 'No controls' : `${cImpl}/${cTotal} implemented`;
+  const controlStatusChips = [
+    { label: 'Implemented', value: num(cKpis.implemented), color: '#22c55e' },
+    { label: 'Verified', value: num(cKpis.verified), color: '#16a34a' },
+    { label: 'In Progress', value: num(cKpis.in_progress), color: '#f59e0b' },
+    { label: 'Not Started', value: num(cKpis.not_started), color: '#cbd5e1' },
+    { label: 'N/A', value: num(cKpis.not_applicable), color: '#94a3b8' },
+  ].filter((c) => c.value > 0);
+  const evidenceChips = [
+    { label: 'Evidence Collected', value: num(cKpis.approved_evidence_count), color: '#0891b2' },
+    { label: 'Open Gaps', value: num(cKpis.open_gaps), color: '#ef4444' },
+  ];
+  const byPriority = rec(((controlsPriorityData || {}) as AnyRecord).by_priority);
+  const priorityChips = Object.entries(byPriority)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => ({ label: titleize(k), value: v, color: PRIORITY_HEX[k.toLowerCase()] || '#94a3b8' }));
+
+  // Issues — total + open + by workflow status.
+  const totalIssues = issues.length;
+  const issuesByStatus: Record<string, number> = {};
+  issues.forEach((i) => {
+    const k = (i.workflow_state || i.status || 'unknown').toString().toLowerCase();
+    issuesByStatus[k] = (issuesByStatus[k] || 0) + 1;
+  });
   const openIssues = issues.filter((i) => {
     const s = (i.workflow_state || i.status || '').toLowerCase();
     return s !== 'closed' && s !== 'resolved' && s !== 'cancelled';
   }).length;
+  const issueChips = Object.entries(issuesByStatus)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => ({ label: titleize(k), value: v, color: ISSUE_STATUS_HEX[k] || '#94a3b8' }));
 
-  const openRisks = risks.filter((r) => r.status !== 'closed' && r.status !== 'mitigated');
-  const avgResid = openRisks.length > 0
-    ? openRisks.reduce((sum, r) => sum + Math.min(25, Math.max(0, r.residual_score || 0)), 0) / openRisks.length
-    : 0;
-  const riskProfile = openRisks.length === 0 ? 95 : Math.max(0, Math.min(100, Math.round(100 - (avgResid / 25) * 100)));
-  const riskLabel = riskProfile >= 80 ? 'Low' : riskProfile >= 60 ? 'Moderate' : riskProfile >= 40 ? 'High' : 'Critical';
+  // KRI — breaches (red) + status breakdown.
+  const kriBreaches = kris.filter((k) => (k.status || '').toLowerCase() === 'red').length;
+  const kriByStatus: Record<string, number> = {};
+  kris.forEach((k) => { const s = (k.status || 'unknown').toString().toLowerCase(); kriByStatus[s] = (kriByStatus[s] || 0) + 1; });
+  const kriChips = Object.entries(kriByStatus)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => ({ label: titleize(k), value: v, color: KRI_HEX[k] || '#94a3b8' }));
 
-  const compliance = (u.compliance || {}) as AnyRecord;
-  const impl = num(compliance.controls_implemented);
-  const total = num(compliance.total_controls);
-  const controlsScore = total > 0 ? Math.round((impl / total) * 100) : 0;
-  const controlsLabel = controlsScore >= 80 ? 'Strong' : controlsScore >= 60 ? 'Adequate' : controlsScore >= 40 ? 'Weak' : 'Critical';
+  // Incidents — open + severity breakdown.
+  const incByStatus = rec(inc.by_status);
+  const incBySev = rec(inc.by_severity);
+  const totalIncidents = num(inc.total_incidents);
+  const openIncidents = Object.entries(incByStatus)
+    .filter(([k]) => !['closed', 'resolved'].includes(k.toLowerCase()))
+    .reduce((s, [, v]) => s + v, 0);
+  const incidentChips = ['critical', 'high', 'medium', 'low', 'info']
+    .filter((k) => num(incBySev[k]) > 0)
+    .map((k) => ({ label: titleize(k), value: num(incBySev[k]), color: SEV_HEX[k] }));
 
-  const summary = (u.executive_summary || {}) as AnyRecord;
-  const complianceScore = num(summary.overall_compliance_score);
-  const complianceLabel = complianceScore >= 80 ? 'Compliant' : complianceScore >= 60 ? 'Partial' : 'At Risk';
-
-  const certScores = arr<number>(certs);
-  const auditReadiness = certScores.length > 0
-    ? Math.round(certScores.reduce((s, n) => s + n, 0) / certScores.length)
-    : complianceScore;
-  const auditLabel = auditReadiness >= 80 ? 'Ready' : auditReadiness >= 60 ? 'Nearing' : 'In Progress';
+  const scoreTone = (n: number | null): 'green' | 'amber' | 'red' | 'slate' =>
+    n === null ? 'slate' : n >= 70 ? 'green' : n >= 50 ? 'amber' : 'red';
+  const tileCls = (k: 'controls' | 'issues' | 'kri' | 'incidents') =>
+    `block w-full rounded-lg text-left transition ${expanded === k ? 'ring-2 ring-blue-300' : 'hover:-translate-y-0.5'}`;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-      <ScoreTile label="Risk Profile" value={riskProfile} status={riskLabel} tone={riskProfile >= 70 ? 'green' : riskProfile >= 50 ? 'amber' : 'red'} icon={AlertTriangle} />
-      <ScoreTile label="Controls" value={controlsScore} status={controlsLabel} tone={controlsScore >= 70 ? 'green' : controlsScore >= 50 ? 'amber' : 'red'} icon={ShieldCheck} />
-      <ScoreTile label="Compliance" value={`${complianceScore}%`} status={complianceLabel} tone={complianceScore >= 70 ? 'green' : complianceScore >= 50 ? 'amber' : 'red'} icon={ClipboardCheck} />
-      <ScoreTile label="Open Issues" value={openIssues} status="Open" tone="amber" icon={ClipboardList} />
-      <ScoreTile label="Audit Readiness" value={auditReadiness} status={auditLabel} tone={auditReadiness >= 70 ? 'green' : auditReadiness >= 50 ? 'amber' : 'red'} icon={PieChartIcon} />
+    <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="sm:w-[140px] sm:flex-shrink-0 sm:border-r sm:border-slate-100 sm:pr-3">
+          <p className="mb-0.5 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-500">Risk Posture</p>
+          <RiskPostureGauge score={postureScore} count={risks.length} />
+        </div>
+        <div className="grid flex-1 grid-cols-2 gap-2">
+          <button type="button" onClick={() => toggle('controls')} className={tileCls('controls')} title="Controls breakdown">
+            <ScoreTile label="Controls" value={controlsScore === null ? '—' : `${controlsScore}%`} status={controlsLabel} tone={scoreTone(controlsScore)} icon={ShieldCheck} />
+          </button>
+          <button type="button" onClick={() => toggle('issues')} className={tileCls('issues')} title="Issues breakdown">
+            <ScoreTile label="Issues" value={totalIssues} status={`${openIssues} open`} tone={openIssues > 0 ? 'amber' : 'green'} icon={ClipboardList} />
+          </button>
+          <button type="button" onClick={() => toggle('kri')} className={tileCls('kri')} title="KRI breakdown">
+            <ScoreTile label="KRI Breaches" value={kriBreaches} status={`${kris.length} active`} tone={kriBreaches > 0 ? 'red' : 'green'} icon={AlertOctagon} />
+          </button>
+          <button type="button" onClick={() => toggle('incidents')} className={tileCls('incidents')} title="Incidents breakdown">
+            <ScoreTile label="Incidents" value={openIncidents} status={`${totalIncidents} total`} tone={openIncidents > 0 ? 'red' : 'green'} icon={AlertTriangle} />
+          </button>
+        </div>
+      </div>
+
+      {expanded === 'controls' && (
+        <div className="mt-3 space-y-2.5 border-t border-slate-100 pt-2.5">
+          <div>
+            <PanelHeading title="Controls by Status" total={cTotal} totalLabel="controls" />
+            {controlStatusChips.length ? <ChipGrid cols="grid-cols-3" items={controlStatusChips} /> : <MiniEmpty label="No control data yet" />}
+          </div>
+          <div>
+            <PanelHeading title="Evidence & Gaps" />
+            <ChipGrid cols="grid-cols-2" items={evidenceChips} />
+          </div>
+          <div>
+            <PanelHeading title="By Priority" />
+            {priorityChips.length ? <ChipGrid cols="grid-cols-4" items={priorityChips} /> : <MiniEmpty label="No priority data" />}
+          </div>
+          <Link href="/controls" className="block text-[11px] font-medium text-blue-600 hover:text-blue-700">Open controls →</Link>
+        </div>
+      )}
+
+      {expanded === 'issues' && (
+        <div className="mt-3 border-t border-slate-100 pt-2.5">
+          <PanelHeading title="Issues by Status" total={totalIssues} />
+          {issueChips.length ? <ChipGrid cols="grid-cols-4" items={issueChips} /> : <MiniEmpty label="No issues logged yet" />}
+          <Link href="/issues" className="mt-2 block text-[11px] font-medium text-blue-600 hover:text-blue-700">Open issue management →</Link>
+        </div>
+      )}
+
+      {expanded === 'kri' && (
+        <div className="mt-3 border-t border-slate-100 pt-2.5">
+          <PanelHeading title="KRIs by Status" total={kris.length} totalLabel="active" />
+          {kriChips.length ? <ChipGrid cols="grid-cols-3" items={kriChips} /> : <MiniEmpty label="No KRIs configured" />}
+          <Link href="/risks/kris" className="mt-2 block text-[11px] font-medium text-blue-600 hover:text-blue-700">Open KRIs →</Link>
+        </div>
+      )}
+
+      {expanded === 'incidents' && (
+        <div className="mt-3 border-t border-slate-100 pt-2.5">
+          <PanelHeading title="Incidents by Severity" total={totalIncidents} />
+          {incidentChips.length ? <ChipGrid cols="grid-cols-5" items={incidentChips} /> : <MiniEmpty label="No incidents recorded" />}
+          <Link href="/risks/incidents" className="mt-2 block text-[11px] font-medium text-blue-600 hover:text-blue-700">Open incidents →</Link>
+        </div>
+      )}
     </div>
   );
 }
@@ -1569,31 +1768,35 @@ export function ComplianceDashboardBoardWidget() {
 
   const u = (unified || {}) as AnyRecord;
   const compliance = (u.compliance || {}) as AnyRecord;
-  const summary = (u.executive_summary || {}) as AnyRecord;
-  const complianceScore = num(summary.overall_compliance_score);
 
+  // Obligations = % of controls implemented. No controls => N/A (not the
+  // overall compliance score — that's a different denominator).
   const impl = num(compliance.controls_implemented);
-  const total = num(compliance.total_controls);
-  const obligationsPct = total > 0 ? Math.round((impl / total) * 100) : complianceScore;
+  const total = num(compliance.controls_total); // backend key is controls_total
+  const obligationsNa = total === 0;
+  const obligationsPct = total > 0 ? Math.round((impl / total) * 100) : 0;
 
+  // Attestations = the backend's real campaign completion_rate. No active
+  // campaigns => N/A (previously fabricated from the compliance score).
   const attest = (u.attestations || {}) as AnyRecord;
-  const totalAttest = num(attest.active_campaigns);
-  const signedAttest = num(attest.completed_attestations) || Math.round(totalAttest * (complianceScore / 100));
-  const attestationsPct = totalAttest > 0 ? Math.min(100, Math.round((signedAttest / totalAttest) * 100)) : Math.min(100, complianceScore);
+  const attestationsNa = num(attest.active_campaigns) === 0;
+  const attestationsPct = Math.min(100, Math.round(num(attest.completion_rate)));
 
+  // Evidence freshness = % of evidence that is not stale. No evidence => N/A
+  // (the old max(1, len) denominator made an empty library read as 100%).
   const evArr = arr(evidenceList) as Array<{ is_stale?: boolean }>;
-  const totalEv = Math.max(1, evArr.length);
+  const evidenceNa = evArr.length === 0;
   const stale = evArr.filter((e) => e.is_stale).length;
-  const evidencePct = Math.round(((totalEv - stale) / totalEv) * 100);
+  const evidencePct = evidenceNa ? 0 : Math.round(((evArr.length - stale) / evArr.length) * 100);
 
-  const trainingPct = Math.min(100, Math.round(complianceScore));
-
+  // No training / LMS data source is wired yet — show N/A rather than a fake
+  // proxy of the compliance score.
   return (
     <div className="space-y-2.5">
-      <ProgressBarRow label="Obligations" pct={obligationsPct} />
-      <ProgressBarRow label="Attestations" pct={attestationsPct} />
-      <ProgressBarRow label="Evidence" pct={evidencePct} />
-      <ProgressBarRow label="Training" pct={trainingPct} />
+      <ProgressBarRow label="Obligations" pct={obligationsPct} na={obligationsNa} />
+      <ProgressBarRow label="Attestations" pct={attestationsPct} na={attestationsNa} />
+      <ProgressBarRow label="Evidence" pct={evidencePct} na={evidenceNa} />
+      <ProgressBarRow label="Training" pct={0} na />
     </div>
   );
 }
@@ -1651,35 +1854,40 @@ export function GRCOverviewBoardWidget() {
   const summary = (u.executive_summary || {}) as AnyRecord;
   const compliance = (u.compliance || {}) as AnyRecord;
   const gov = (u.governance || {}) as AnyRecord;
-  const attest = (u.attestations || {}) as AnyRecord;
 
-  const pendingApprovals = num(gov.pending_approvals);
-  const activeCampaigns = num(attest.active_campaigns);
-  const totalGov = Math.max(1, pendingApprovals + activeCampaigns + 1);
-  const governance = Math.max(40, Math.round(100 - (pendingApprovals / totalGov) * 60));
+  // Governance health = share of governance documents that are published/approved
+  // (i.e. current and in force). No documents => no basis to score (—), NOT a
+  // fabricated 100 from an arbitrary max(40, 100 - pending/…) formula.
+  const totalDocs = num(gov.total_documents);
+  const govByStatus = rec(gov.by_status);
+  const currentDocs = num(govByStatus.published) + num(govByStatus.approved);
+  const governance = totalDocs === 0 ? null : Math.round((currentDocs / totalDocs) * 100);
 
   const risks = arr<DashRisk>(risksData);
+  const hasRisks = risks.length > 0;
   const openRisks = risks.filter((r) => r.status !== 'closed' && r.status !== 'mitigated');
   const avgResid = openRisks.length > 0
     ? openRisks.reduce((s, r) => s + Math.min(25, Math.max(0, num(r.residual_score))), 0) / openRisks.length
     : 0;
-  const risk = openRisks.length === 0 ? 95 : Math.max(0, Math.min(100, Math.round(100 - (avgResid / 25) * 100)));
+  const risk = !hasRisks ? null : (openRisks.length === 0 ? 100 : Math.max(0, Math.min(100, Math.round(100 - (avgResid / 25) * 100))));
 
-  const complianceScore = num(summary.overall_compliance_score);
+  const frameworksTracked = num(compliance.frameworks_tracked);
+  const complianceScore = frameworksTracked > 0 ? num(summary.overall_compliance_score) : null;
 
   const impl = num(compliance.controls_implemented);
-  const total = num(compliance.total_controls);
-  const controls = total > 0 ? Math.round((impl / total) * 100) : 0;
+  const total = num(compliance.controls_total); // backend key is controls_total
+  const controls = total > 0 ? Math.round((impl / total) * 100) : null;
 
-  const tone = (n: number): 'green' | 'amber' | 'red' => n >= 70 ? 'green' : n >= 50 ? 'amber' : 'red';
-  const label = (n: number) => n >= 80 ? 'Strong' : n >= 60 ? 'Good' : n >= 40 ? 'Weak' : 'Critical';
+  const tone = (n: number | null): 'green' | 'amber' | 'red' | 'slate' => n === null ? 'slate' : n >= 70 ? 'green' : n >= 50 ? 'amber' : 'red';
+  const label = (n: number | null) => n === null ? 'No Data' : n >= 80 ? 'Strong' : n >= 60 ? 'Good' : n >= 40 ? 'Weak' : 'Critical';
+  const dash = (n: number | null) => (n === null ? '—' : n);
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-      <ScoreTile label="Governance" value={governance} status={label(governance)} tone={tone(governance)} icon={Building2} />
-      <ScoreTile label="Risk" value={risk} status={label(risk)} tone={tone(risk)} icon={AlertTriangle} />
-      <ScoreTile label="Compliance" value={complianceScore} status={label(complianceScore)} tone={tone(complianceScore)} icon={ClipboardCheck} />
-      <ScoreTile label="Controls" value={controls} status={label(controls)} tone={tone(controls)} icon={Shield} />
+      <ScoreTile label="Governance" value={dash(governance)} status={label(governance)} tone={tone(governance)} icon={Building2} />
+      <ScoreTile label="Risk" value={dash(risk)} status={label(risk)} tone={tone(risk)} icon={AlertTriangle} />
+      <ScoreTile label="Compliance" value={dash(complianceScore)} status={label(complianceScore)} tone={tone(complianceScore)} icon={ClipboardCheck} />
+      <ScoreTile label="Controls" value={dash(controls)} status={label(controls)} tone={tone(controls)} icon={Shield} />
     </div>
   );
 }
@@ -1921,76 +2129,646 @@ export function RiskExposureBoardWidget() {
   );
 }
 
-// 8. Risk Trend Analysis Sheet. 4 mini line charts seeded from current values.
-export function RiskTrendBoardWidget() {
-  const { data: unified } = useQuery({
-    queryKey: ['widget-board-trend-unified'],
+// Broad "Progress Over Time" panel (replaces the Enterprise Risk category
+// chart). Plots the REAL monthly history the backend tracks: open risks vs
+// evidence collected. No seeded/fabricated series.
+export function ProgressOverTimeWidget() {
+  const { data: unified, isLoading } = useQuery({
+    queryKey: ['widget-board-progress-over-time'],
     queryFn: async () => (await dashboardApi.getUnified()).data,
   });
-  const { data: risksData } = useQuery({
-    queryKey: ['widget-board-trend-risks'],
-    queryFn: async () => (await ermApi.risks.getAll()).data,
-  });
-  const { data: issuesData } = useQuery({
-    queryKey: ['widget-board-trend-issues'],
-    queryFn: async () => {
-      const r = await issuesApi.list({ limit: 500 });
-      const d = r.data as unknown;
-      if (Array.isArray(d)) return d;
-      const obj = d as { items?: unknown[] };
-      return obj?.items || [];
-    },
-  });
-  const { data: kriData } = useQuery({
-    queryKey: ['widget-board-trend-kris'],
-    queryFn: async () => (await ermApi.kris.getAll({ is_active: true })).data,
-  });
-
+  if (isLoading) return <MiniLoading />;
   const u = (unified || {}) as AnyRecord;
-  const summary = (u.executive_summary || {}) as AnyRecord;
-  const complianceScore = num(summary.overall_compliance_score);
-  const risks = arr<DashRisk>(risksData);
-  const issues = arr<DashIssue>(issuesData);
-  const kris = arr<{ status?: string }>(kriData);
-
-  const openRiskCount = risks.filter((r) => r.status !== 'closed').length;
-  const breaches = kris.filter((k) => (k.status || '').toLowerCase() === 'red').length;
-  const exceptions = issues.filter((i) => {
-    const t = (i.issue_type || '').toLowerCase();
-    return t === 'non_conformance' || t === 'process_gap';
-  }).length;
-
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-  const seed = (n: number, i: number) => Math.max(0, Math.round(n * (0.7 + 0.05 * i)));
-  const data = months.map((m, i) => ({
-    month: m,
-    risk: seed(openRiskCount, i),
-    complianceGaps: seed(Math.max(0, 100 - complianceScore), i),
-    controlExceptions: seed(exceptions, i),
-    kriBreaches: seed(breaches, i),
+  const kpis = (u.kpis || {}) as AnyRecord;
+  const riskTrend = arr<AnyRecord>(kpis.risk_trend);
+  const evidenceTrend = arr<AnyRecord>(kpis.evidence_trend);
+  const base = riskTrend.length ? riskTrend : evidenceTrend;
+  const rows = base.map((p, i) => ({
+    month: String(p.month ?? ''),
+    openRisks: num(riskTrend[i]?.value),
+    evidence: num(evidenceTrend[i]?.value),
   }));
-
-  const mini = (title: string, key: string, stroke: string) => (
-    <div className="rounded-md border border-slate-200 p-1.5">
-      <p className="text-[10px] font-semibold text-slate-600 mb-0.5 text-center">{title}</p>
-      <div className="h-[60px]">
+  if (rows.length === 0) return <MiniEmpty label="No trend history yet" />;
+  return (
+    <div className="flex h-full flex-col">
+      <p className="mb-1 text-[11px] text-slate-500">Open risks vs evidence collected, by month</p>
+      <div className="min-h-[160px] flex-1">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-            <XAxis dataKey="month" tick={{ fontSize: 9, fill: '#94a3b8' }} stroke="#e2e8f0" />
-            <Tooltip contentStyle={{ ...CHART_TOOLTIP_STYLE, fontSize: 10 }} />
-            <Line type="monotone" dataKey={key} stroke={stroke} strokeWidth={2} dot={{ r: 2 }} />
-          </LineChart>
+          <ComposedChart data={rows} margin={{ top: 6, right: 8, left: -14, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} />
+            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} allowDecimals={false} />
+            <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+            <Legend wrapperStyle={{ fontSize: 10 }} />
+            <Bar dataKey="evidence" name="Evidence collected" fill="#10b981" radius={[4, 4, 0, 0]} barSize={14} />
+            <Line type="monotone" dataKey="openRisks" name="Open risks" stroke="#ef4444" strokeWidth={2} dot={{ r: 2 }} />
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </div>
   );
+}
+
+// 8. Risk Trend Analysis Sheet. REAL open-risk history (no Compliance Gaps,
+// no seeded data) — the backend's kpis.risk_trend over the last months.
+export function RiskTrendBoardWidget() {
+  const { data: unified, isLoading } = useQuery({
+    queryKey: ['widget-board-trend-unified'],
+    queryFn: async () => (await dashboardApi.getUnified()).data,
+  });
+  if (isLoading) return <MiniLoading />;
+  const u = (unified || {}) as AnyRecord;
+  const kpis = (u.kpis || {}) as AnyRecord;
+  const riskTrend = arr<AnyRecord>(kpis.risk_trend).map((p) => ({ month: String(p.month ?? ''), value: num(p.value) }));
+  if (riskTrend.length === 0 || riskTrend.every((p) => p.value === 0)) {
+    return <MiniEmpty label="No risk trend history yet" />;
+  }
+  return (
+    <div className="flex h-full flex-col">
+      <p className="mb-1 text-[11px] text-slate-500">Open risks over the last {riskTrend.length} months</p>
+      <div className="min-h-[160px] flex-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={riskTrend} margin={{ top: 6, right: 8, left: -14, bottom: 0 }}>
+            <defs>
+              <linearGradient id="riskTrendFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.35} />
+                <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.03} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+            <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} />
+            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} allowDecimals={false} />
+            <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+            <Area type="monotone" dataKey="value" name="Open risks" stroke="#3b82f6" strokeWidth={2} fill="url(#riskTrendFill)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ── Shared building blocks for the expandable executive breakdown widgets ──
+const MIX_PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f43f5e'];
+
+function ChipGrid({ items, cols = 'grid-cols-3' }: { items: Array<{ label: string; value: number | string; color?: string }>; cols?: string }) {
+  return (
+    <div className={`grid ${cols} gap-1.5`}>
+      {items.map((it) => (
+        <div key={it.label} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-center">
+          <p className="text-base font-bold tabular-nums leading-none" style={{ color: it.color || '#0f172a' }}>{it.value}</p>
+          <p className="mt-0.5 text-[9px] capitalize leading-tight text-slate-500">{it.label}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ExpandToggle({ open, onClick, labelClosed, labelOpen }: { open: boolean; onClick: () => void; labelClosed: string; labelOpen: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-2 flex w-full items-center justify-center gap-1 rounded-md border border-slate-200 py-1 text-[11px] font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+    >
+      {open ? labelOpen : labelClosed}
+      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+    </button>
+  );
+}
+
+// Donut + legend breakdown, mirroring the visual used on the Assets and
+// Vulnerabilities module pages (center total, ring, colored legend list).
+function DonutBreakdown({ data, centerValue, centerLabel, footer, layout = 'row', size }: {
+  data: Array<{ name: string; value: number; fill: string }>;
+  centerValue: number | string;
+  centerLabel: string;
+  footer?: ReactNode;
+  layout?: 'row' | 'stack';
+  size?: number;
+}) {
+  if (data.length === 0) {
+    return <div className="flex h-[100px] items-center justify-center text-xs text-slate-400">No data</div>;
+  }
+  const dim = size ?? (layout === 'stack' ? 92 : 110);
+  const inner = Math.round(dim * 0.27);
+  const outer = Math.round(dim * 0.46);
+  const donut = (
+    <div className="relative flex-shrink-0" style={{ height: dim, width: dim }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie data={data} cx="50%" cy="50%" innerRadius={inner} outerRadius={outer} dataKey="value" paddingAngle={2}>
+            {data.map((e, i) => <Cell key={i} fill={e.fill} />)}
+          </Pie>
+          <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-base font-bold text-slate-900">{centerValue}</span>
+        <span className="text-[9px] text-slate-400">{centerLabel}</span>
+      </div>
+    </div>
+  );
+  const legend = (
+    <div className="flex min-w-0 flex-col gap-1 text-[11px]">
+      {data.map((e) => (
+        <div key={e.name} className="flex items-center gap-1.5">
+          <span className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: e.fill }} />
+          <span className="truncate capitalize text-slate-500">{e.name}</span>
+          <span className="ml-auto font-semibold text-slate-800">{e.value}</span>
+        </div>
+      ))}
+      {footer}
+    </div>
+  );
+  if (layout === 'stack') {
+    return (
+      <div className="flex flex-col items-center gap-2">
+        {donut}
+        <div className="w-full">{legend}</div>
+      </div>
+    );
+  }
+  return <div className="flex items-center gap-4">{donut}<div className="min-w-0 flex-1">{legend}</div></div>;
+}
+
+// Module-aligned color maps (match the Assets / Vulnerabilities module pages).
+const SEV_HEX: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e', info: '#06b6d4' };
+const ASSET_TYPE_HEX: Record<string, string> = { application: '#3b82f6', infrastructure: '#8b5cf6', data: '#10b981', cloud: '#f59e0b', third_party: '#ec4899' };
+const ASSET_CRIT_HEX: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#eab308', low: '#22c55e' };
+
+// Vulnerabilities board widget — mirrors the Vulnerabilities module: a severity
+// donut, expanding to the SLA-compliance gauge + remediation status.
+export function VulnerabilitiesBoardWidget() {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading } = useQuery({
+    queryKey: ['widget-board-vulns'],
+    queryFn: async () => (await vulnManagementApi.dashboard.get()).data,
+  });
+  if (isLoading) return <MiniLoading />;
+  const d = (data || {}) as AnyRecord;
+  const total = num(d.total_vulnerabilities);
+  const sev = rec(d.by_severity);
+  const byStatus = rec(d.by_status);
+  const sevData = ['critical', 'high', 'medium', 'low', 'info']
+    .filter((k) => num(sev[k]) > 0)
+    .map((k) => ({ name: k.charAt(0).toUpperCase() + k.slice(1), value: num(sev[k]), fill: SEV_HEX[k] }));
+
+  const sla = (d.sla_compliance || {}) as Record<string, AnyRecord>;
+  let onTime = 0;
+  let resolvedForSla = 0;
+  Object.values(sla).forEach((row) => { onTime += num(row.on_time); resolvedForSla += num(row.resolved); });
+  const slaPct = resolvedForSla > 0 ? Math.round((onTime / resolvedForSla) * 100) : null;
+  const slaColor = slaPct === null ? '#94a3b8' : slaPct >= 80 ? '#22c55e' : slaPct >= 50 ? '#f59e0b' : '#ef4444';
+
+  const remediated = num(byStatus.remediated) + num(byStatus.resolved);
+  const verified = num(byStatus.verified);
+  const accepted = num(byStatus.accepted);
 
   return (
-    <div className="grid grid-cols-2 gap-2">
-      {mini('Risk Trend', 'risk', '#3b82f6')}
-      {mini('Compliance Gaps', 'complianceGaps', '#10b981')}
-      {mini('Control Exceptions', 'controlExceptions', '#f59e0b')}
-      {mini('KRI Breaches', 'kriBreaches', '#ef4444')}
+    <div>
+      {!open ? (
+        <>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">By Severity</p>
+          <DonutBreakdown
+            data={sevData}
+            centerValue={total}
+            centerLabel="total"
+            footer={<div className="mt-1 flex justify-between border-t border-slate-100 pt-1 text-[10px] text-slate-400"><span>Overdue</span><span className="font-semibold text-rose-600">{num(d.overdue_count)}</span></div>}
+          />
+        </>
+      ) : (
+        // Side-by-side: severity donut + SLA gauge, so the widget stays short.
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="mb-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">By Severity</p>
+            <DonutBreakdown data={sevData} centerValue={total} centerLabel="total" layout="stack" />
+          </div>
+          <div>
+            <p className="mb-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">SLA Compliance</p>
+            <div className="flex flex-col items-center">
+              <div className="relative h-[92px] w-[92px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadialBarChart innerRadius="68%" outerRadius="100%" data={[{ value: slaPct ?? 0 }]} startAngle={90} endAngle={-270}>
+                    <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
+                    <RadialBar dataKey="value" cornerRadius={8} fill={slaColor} background={{ fill: '#f1f5f9' }} />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-base font-bold" style={{ color: slaColor }}>{slaPct === null ? 'N/A' : `${slaPct}%`}</span>
+                </div>
+              </div>
+              <p className="mt-1 text-center text-[10px] text-slate-400">{onTime} on-time / {resolvedForSla} resolved · {num(d.overdue_count)} overdue</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {open && (
+        <div className="mt-3 border-t border-slate-100 pt-2.5">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Remediation Status</p>
+          <ChipGrid cols="grid-cols-3" items={[
+            { label: 'Remediated', value: remediated, color: '#16a34a' },
+            { label: 'Verified', value: verified, color: '#0891b2' },
+            { label: 'Accepted', value: accepted, color: '#64748b' },
+          ]} />
+          <Link href="/vulnerabilities" className="mt-2 block text-[11px] font-medium text-blue-600 hover:text-blue-700">Open vulnerability management →</Link>
+        </div>
+      )}
+      <ExpandToggle open={open} onClick={() => setOpen((o) => !o)} labelClosed="View SLA & remediation" labelOpen="Hide SLA & remediation" />
+    </div>
+  );
+}
+
+// Assets board widget — mirrors the Assets module: an asset-type donut (+ High
+// Value / Need CIA), expanding to the criticality donut (+ Active).
+export function AssetsBoardWidget() {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading } = useQuery({
+    queryKey: ['widget-board-assets'],
+    queryFn: async () => (await assetsApi.getDashboard()).data,
+  });
+  if (isLoading) return <MiniLoading />;
+  const d = (data || {}) as AnyRecord;
+  const total = num(d.total_assets);
+  const byType = rec(d.by_type);
+  const byCrit = rec(d.by_criticality);
+  const byStatus = rec(d.by_status);
+  const typeData = Object.entries(byType)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => ({ name: k.replace(/_/g, ' '), value: v, fill: ASSET_TYPE_HEX[k] || '#6b7280' }));
+  const critData = ['critical', 'high', 'medium', 'low']
+    .filter((k) => num(byCrit[k]) > 0)
+    .map((k) => ({ name: k.charAt(0).toUpperCase() + k.slice(1), value: num(byCrit[k]), fill: ASSET_CRIT_HEX[k] }));
+
+  return (
+    <div>
+      {!open ? (
+        <>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">By Asset Type</p>
+          <DonutBreakdown
+            data={typeData}
+            centerValue={total}
+            centerLabel="total"
+            footer={<>
+              <div className="mt-1 flex justify-between border-t border-slate-100 pt-1 text-[10px] text-slate-400"><span>High Value</span><span className="font-semibold text-emerald-600">{num(d.high_value_assets)}</span></div>
+              <div className="flex justify-between text-[10px] text-slate-400"><span>Need CIA</span><span className="font-semibold text-amber-500">{num(d.assets_needing_assessment)}</span></div>
+            </>}
+          />
+        </>
+      ) : (
+        // Side-by-side: asset-type donut + criticality donut, so the widget stays short.
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="mb-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">By Asset Type</p>
+            <DonutBreakdown data={typeData} centerValue={total} centerLabel="total" layout="stack" />
+          </div>
+          <div>
+            <p className="mb-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">By Criticality</p>
+            <DonutBreakdown data={critData} centerValue={critData.reduce((s, e) => s + e.value, 0)} centerLabel="assets" layout="stack" />
+          </div>
+        </div>
+      )}
+
+      {open && (
+        <>
+          <div className="mt-3 grid grid-cols-3 gap-1.5 border-t border-slate-100 pt-2.5">
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-center">
+              <p className="text-sm font-bold leading-none text-emerald-700">{num(d.high_value_assets)}</p>
+              <p className="mt-0.5 text-[9px] text-emerald-600">High Value</p>
+            </div>
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-center">
+              <p className="text-sm font-bold leading-none text-amber-700">{num(d.assets_needing_assessment)}</p>
+              <p className="mt-0.5 text-[9px] text-amber-600">Need CIA</p>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-center">
+              <p className="text-sm font-bold leading-none text-slate-700">{num(byStatus.active)}</p>
+              <p className="mt-0.5 text-[9px] text-slate-500">Active</p>
+            </div>
+          </div>
+          <Link href="/assets" className="mt-2 block text-[11px] font-medium text-blue-600 hover:text-blue-700">Open asset inventory →</Link>
+        </>
+      )}
+      <ExpandToggle open={open} onClick={() => setOpen((o) => !o)} labelClosed="View criticality" labelOpen="Hide criticality" />
+    </div>
+  );
+}
+
+// Governance dashboard widget (replaces GRC Overview). Compact = total docs +
+// status mix. Expands to document types, portfolio mix, and a progress-over-time
+// chart with a month/quarter/year timeline + a look-back window.
+const GOV_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function aggregateGovSeries(created: AnyRecord[], published: AnyRecord[], gran: 'month' | 'quarter' | 'year') {
+  const bucketOf = (m: string): string => {
+    const [y, mm] = m.split('-');
+    if (gran === 'year') return y;
+    if (gran === 'quarter') return `${y} Q${Math.floor((Number(mm) - 1) / 3) + 1}`;
+    return `${GOV_MONTHS[Number(mm) - 1] || mm} '${(y || '').slice(2)}`;
+  };
+  const map = new Map<string, { label: string; created: number; published: number; sort: string }>();
+  const apply = (rows: AnyRecord[], key: 'created' | 'published') => {
+    rows.forEach((p) => {
+      const m = String(p.month ?? '');
+      if (!m.includes('-')) return;
+      const b = bucketOf(m);
+      const e = map.get(b) || { label: b, created: 0, published: 0, sort: m };
+      e[key] += num(p.count);
+      if (m < e.sort) e.sort = m;
+      map.set(b, e);
+    });
+  };
+  apply(created, 'created');
+  apply(published, 'published');
+  return Array.from(map.values()).sort((a, b) => a.sort.localeCompare(b.sort));
+}
+
+const GOV_STATUS_SEGMENTS: Array<{ key: string; label: string; color: string }> = [
+  { key: 'published', label: 'Published', color: 'var(--color-status-published)' },
+  { key: 'approved', label: 'Approved', color: 'var(--color-status-approved)' },
+  { key: 'pending_approval', label: 'Approval', color: 'var(--color-status-approval)' },
+  { key: 'pending_review', label: 'In Review', color: 'var(--color-status-review)' },
+  { key: 'draft', label: 'Draft', color: 'var(--color-status-draft)' },
+  { key: 'expired', label: 'Expired', color: 'var(--color-status-expired)' },
+  { key: 'archived', label: 'Archived', color: 'var(--color-status-archived)' },
+];
+
+export function GovernanceDashboardWidget() {
+  const [open, setOpen] = useState(false);
+  const [gran, setGran] = useState<'month' | 'quarter' | 'year'>('month');
+  const [months, setMonths] = useState(12);
+  const summaryQ = useQuery({
+    queryKey: ['widget-board-gov-summary'],
+    queryFn: async () => (await governanceApi.getDashboardSummary()).data,
+  });
+  const trendsQ = useQuery({
+    queryKey: ['widget-board-gov-trends', months],
+    queryFn: async () => (await governanceApi.getTrends(months)).data,
+    enabled: open,
+  });
+  if (summaryQ.isLoading) return <MiniLoading />;
+  const s = (summaryQ.data || {}) as AnyRecord;
+  const totalDocs = num(s.total_documents);
+  const byType = rec(s.by_type);
+  const byStatus = rec(s.by_status);
+  const byClass = rec(s.by_classification);
+  const mix = Object.keys(byClass).length ? byClass : byType;
+
+  // Status donut mirrors the Governance module's Document Status donut, with
+  // the total documents in the center (shown first, before expanding).
+  const knownStatus = new Set(GOV_STATUS_SEGMENTS.map((x) => x.key));
+  const statusData = [
+    ...GOV_STATUS_SEGMENTS
+      .filter((x) => num(byStatus[x.key]) > 0)
+      .map((x) => ({ name: x.label, value: num(byStatus[x.key]), fill: x.color })),
+    ...Object.entries(byStatus)
+      .filter(([k, v]) => v > 0 && !knownStatus.has(k))
+      .map(([k, v], i) => ({ name: titleize(k), value: v, fill: MIX_PALETTE[i % MIX_PALETTE.length] })),
+  ];
+  const typeData = Object.entries(byType)
+    .filter(([, v]) => v > 0)
+    .map(([k, v], i) => ({ name: titleize(k), value: v, fill: MIX_PALETTE[i % MIX_PALETTE.length] }));
+
+  const t = (trendsQ.data || {}) as AnyRecord;
+  const trendRows = aggregateGovSeries(arr<AnyRecord>(t.created), arr<AnyRecord>(t.published), gran);
+
+  const segBtn = (active: boolean) =>
+    `rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${active ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`;
+
+  return (
+    <div>
+      {!open ? (
+        // Compact: Document Status donut — total documents in the center.
+        <>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Document Status</p>
+          <DonutBreakdown
+            data={statusData}
+            centerValue={totalDocs}
+            centerLabel="documents"
+            footer={<div className="mt-1 flex justify-between border-t border-slate-100 pt-1 text-[10px] text-slate-400"><span>Published</span><span className="font-semibold text-emerald-600">{num(byStatus.published)}</span></div>}
+          />
+        </>
+      ) : (
+        // Side-by-side: status donut + type donut, so the widget stays short.
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="mb-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">Document Status</p>
+            <DonutBreakdown data={statusData} centerValue={totalDocs} centerLabel="documents" layout="stack" />
+          </div>
+          <div>
+            <p className="mb-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">Document Types</p>
+            <DonutBreakdown data={typeData} centerValue={typeData.reduce((a, e) => a + e.value, 0)} centerLabel="docs" layout="stack" />
+          </div>
+        </div>
+      )}
+
+      {open && (
+        <div className="mt-3 space-y-3 border-t border-slate-100 pt-2.5">
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Portfolio Mix</p>
+            <ChipGrid cols="grid-cols-4" items={Object.entries(mix).map(([k, v], i) => ({ label: titleize(k), value: v, color: MIX_PALETTE[i % MIX_PALETTE.length] }))} />
+          </div>
+          <div>
+            <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Progress Over Time</p>
+              <div className="flex items-center gap-1">
+                {(['month', 'quarter', 'year'] as const).map((g) => (
+                  <button key={g} onClick={() => setGran(g)} className={segBtn(gran === g)}>{g[0].toUpperCase() + g.slice(1)}</button>
+                ))}
+              </div>
+            </div>
+            <div className="mb-1.5 flex items-center gap-1">
+              <span className="text-[10px] text-slate-400">Window:</span>
+              {[6, 12, 24].map((m) => (
+                <button key={m} onClick={() => setMonths(m)} className={segBtn(months === m)}>{m}M</button>
+              ))}
+            </div>
+            {trendsQ.isLoading ? (
+              <MiniLoading />
+            ) : trendRows.length === 0 ? (
+              <MiniEmpty label="No timeline history yet" />
+            ) : (
+              <div className="h-[150px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={trendRows} margin={{ top: 6, right: 8, left: -14, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} />
+                    <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} allowDecimals={false} />
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                    <Legend wrapperStyle={{ fontSize: 10 }} />
+                    <Bar dataKey="created" name="Created" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={14} />
+                    <Line type="monotone" dataKey="published" name="Published" stroke="#16a34a" strokeWidth={2} dot={{ r: 2 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+          <Link href="/governance" className="block text-[11px] font-medium text-blue-600 hover:text-blue-700">Open governance →</Link>
+        </div>
+      )}
+      <ExpandToggle open={open} onClick={() => setOpen((o) => !o)} labelClosed="View types, mix & timeline" labelOpen="Hide details" />
+    </div>
+  );
+}
+
+// Governance Activity — consolidates the Approval Queue, Overdue/Upcoming
+// Reviews, and Recent Publications cards into one total-first widget that
+// expands to the actual item lists (side-by-side, real data).
+export function GovernanceActivityWidget() {
+  const [open, setOpen] = useState(false);
+  const pendingQ = useQuery({
+    queryKey: ['widget-gov-act-pending'],
+    queryFn: async () => (await governanceApi.getDashboardPendingApprovals()).data,
+  });
+  const overdueQ = useQuery({
+    queryKey: ['widget-gov-act-overdue'],
+    queryFn: async () => (await governanceApi.getDashboardOverdueReviews()).data,
+  });
+  const upcomingQ = useQuery({
+    queryKey: ['widget-gov-act-upcoming'],
+    queryFn: async () => (await governanceApi.getUpcomingReviewsDashboard()).data,
+  });
+  const recentQ = useQuery({
+    queryKey: ['widget-gov-act-recent'],
+    queryFn: async () => (await governanceApi.getRecentlyPublished(8)).data,
+    enabled: open,
+  });
+
+  const pending = countPayload(pendingQ.data);
+  const overdue = countPayload(overdueQ.data);
+  const upcoming = countPayload(upcomingQ.data);
+
+  const listFrom = (raw: unknown, keys: string[]): AnyRecord[] => {
+    if (Array.isArray(raw)) return raw as AnyRecord[];
+    const o = (raw || {}) as AnyRecord;
+    for (const k of keys) if (Array.isArray(o[k])) return o[k] as AnyRecord[];
+    return [];
+  };
+  const approvalItems = listFrom(pendingQ.data, ['approvals', 'items', 'documents']).slice(0, 6)
+    .map((r, i) => ({ id: String(r.id ?? i), title: String(r.title || r.document_title || 'Document'), subtitle: r.status ? titleize(String(r.status)) : undefined }));
+  const overdueItems = listFrom(overdueQ.data, ['documents', 'items', 'reviews']).slice(0, 6)
+    .map((r, i) => ({ id: String(r.id ?? i), title: String(r.title || 'Document'), subtitle: r.next_review_date ? `Due ${String(r.next_review_date).slice(0, 10)}` : undefined }));
+  const recentItems = arr<AnyRecord>(recentQ.data).slice(0, 6)
+    .map((r, i) => ({ id: String(r.id ?? i), title: String(r.title || 'Untitled document'), subtitle: r.doc_type ? titleize(String(r.doc_type)) : undefined }));
+
+  return (
+    <div>
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Approvals & Reviews</p>
+      <ChipGrid cols="grid-cols-3" items={[
+        { label: 'Pending Approvals', value: pending, color: '#f59e0b' },
+        { label: 'Overdue Reviews', value: overdue, color: '#ef4444' },
+        { label: 'Upcoming Reviews', value: upcoming, color: '#3b82f6' },
+      ]} />
+
+      {open && (
+        <div className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-100 pt-2.5">
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Pending Approvals</p>
+            <ListMini items={approvalItems} emptyLabel="Nothing pending" />
+          </div>
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Overdue Reviews</p>
+            <ListMini items={overdueItems} emptyLabel="None overdue" />
+          </div>
+          <div className="col-span-2">
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recently Published</p>
+            <ListMini items={recentItems} emptyLabel="No recent publications" />
+          </div>
+          <Link href="/governance" className="col-span-2 block text-[11px] font-medium text-blue-600 hover:text-blue-700">Open governance →</Link>
+        </div>
+      )}
+      <ExpandToggle open={open} onClick={() => setOpen((o) => !o)} labelClosed="View queues & recent activity" labelOpen="Hide details" />
+    </div>
+  );
+}
+
+// Tasks board widget — mirrors the Critical Tasks module: a status donut,
+// expanding to a priority donut + overdue aging and completion/SLA stats.
+const TASK_STATUS_HEX: Record<string, string> = {
+  completed: '#22c55e', in_progress: '#f59e0b', not_started: '#cbd5e1',
+  overdue: '#ef4444', blocked: '#dc2626', on_hold: '#8b5cf6',
+  cancelled: '#94a3b8', pending: '#3b82f6',
+};
+
+export function TasksBoardWidget() {
+  const [open, setOpen] = useState(false);
+  const { data, isLoading } = useQuery({
+    queryKey: ['widget-board-tasks'],
+    queryFn: async () => (await criticalTasksApi.reportsSummary()).data,
+  });
+  if (isLoading) return <MiniLoading />;
+  const d = (data || {}) as AnyRecord;
+  const total = num(d.total);
+  const overdue = num(d.overdue);
+  const completion = num(d.completion_rate);
+  const slaPct = num(d.sla_compliance);
+  const byStatus = rec(d.by_status);
+  const byPriority = rec(d.by_priority);
+  const aging = rec(d.overdue_aging);
+
+  const statusData = Object.entries(byStatus)
+    .filter(([, v]) => v > 0)
+    .map(([k, v], i) => ({ name: titleize(k), value: v, fill: TASK_STATUS_HEX[k.toLowerCase()] || MIX_PALETTE[i % MIX_PALETTE.length] }));
+  const priorityData = ['critical', 'high', 'medium', 'low']
+    .filter((k) => num(byPriority[k]) > 0)
+    .map((k) => ({ name: titleize(k), value: num(byPriority[k]), fill: PRIORITY_HEX[k] }));
+  const agingChips = Object.entries(aging)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => ({ label: titleize(k), value: v, color: /1[5-9]|[3-9][0-9]/.test(k) ? '#ef4444' : '#f59e0b' }));
+
+  return (
+    <div>
+      {!open ? (
+        <>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">By Status</p>
+          <DonutBreakdown
+            data={statusData}
+            centerValue={total}
+            centerLabel="tasks"
+            footer={<>
+              <div className="mt-1 flex justify-between border-t border-slate-100 pt-1 text-[10px] text-slate-400"><span>Overdue</span><span className="font-semibold text-rose-600">{overdue}</span></div>
+              <div className="flex justify-between text-[10px] text-slate-400"><span>Completion</span><span className="font-semibold text-emerald-600">{completion}%</span></div>
+            </>}
+          />
+        </>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="mb-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">By Status</p>
+            <DonutBreakdown data={statusData} centerValue={total} centerLabel="tasks" layout="stack" />
+          </div>
+          <div>
+            <p className="mb-1.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">By Priority</p>
+            <DonutBreakdown data={priorityData} centerValue={priorityData.reduce((s, e) => s + e.value, 0)} centerLabel="tasks" layout="stack" />
+          </div>
+        </div>
+      )}
+
+      {open && (
+        <>
+          <div className="mt-3 grid grid-cols-3 gap-1.5 border-t border-slate-100 pt-2.5">
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1.5 text-center">
+              <p className="text-sm font-bold leading-none text-rose-700">{overdue}</p>
+              <p className="mt-0.5 text-[9px] text-rose-600">Overdue</p>
+            </div>
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-center">
+              <p className="text-sm font-bold leading-none text-emerald-700">{completion}%</p>
+              <p className="mt-0.5 text-[9px] text-emerald-600">Completion</p>
+            </div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-center">
+              <p className="text-sm font-bold leading-none text-slate-700">{slaPct}%</p>
+              <p className="mt-0.5 text-[9px] text-slate-500">SLA</p>
+            </div>
+          </div>
+          {agingChips.length > 0 && (
+            <div className="mt-2">
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Overdue Aging</p>
+              <ChipGrid cols="grid-cols-4" items={agingChips} />
+            </div>
+          )}
+          <Link href="/tasks" className="mt-2 block text-[11px] font-medium text-blue-600 hover:text-blue-700">Open critical tasks →</Link>
+        </>
+      )}
+      <ExpandToggle open={open} onClick={() => setOpen((o) => !o)} labelClosed="View priority & aging" labelOpen="Hide details" />
     </div>
   );
 }

@@ -295,8 +295,11 @@ function ExecutiveSummary({ totals }: { totals: OverviewTotals }) {
     staleTime: 60_000,
   });
 
+  const hasScans = totals.scanned > 0;
   const passRate = totals.passRate;
-  const gColor = scoreHex(passRate);
+  // No scans run yet => the gauge has no basis; show a neutral "—" instead of a
+  // red 0% that reads as "failing" when it's really "no data".
+  const gColor = hasScans ? scoreHex(passRate) : '#cbd5e1';
 
   const resultDonut = [
     { name: 'Passed', value: totals.passed, color: '#22c55e' },
@@ -326,18 +329,18 @@ function ExecutiveSummary({ totals }: { totals: OverviewTotals }) {
         <div className="flex flex-col items-center justify-center gap-2 p-5">
           <div className="relative h-[150px] w-[150px]">
             <ResponsiveContainer width="100%" height="100%">
-              <RadialBarChart innerRadius="78%" outerRadius="100%" data={[{ value: passRate }]} startAngle={90} endAngle={-270}>
+              <RadialBarChart innerRadius="78%" outerRadius="100%" data={[{ value: hasScans ? passRate : 0 }]} startAngle={90} endAngle={-270}>
                 <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
                 <RadialBar dataKey="value" cornerRadius={10} fill={gColor} background={{ fill: '#f1f5f9' }} />
               </RadialBarChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-4xl font-bold tabular-nums" style={{ color: gColor }}>{passRate}%</span>
+              <span className="text-4xl font-bold tabular-nums" style={{ color: hasScans ? gColor : '#94a3b8' }}>{hasScans ? `${passRate}%` : '—'}</span>
               <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Compliant</span>
             </div>
           </div>
           <p className="text-center text-xs text-slate-500">
-            {totals.passed.toLocaleString()} of {totals.scanned.toLocaleString()} security checks passed
+            {hasScans ? `${totals.passed.toLocaleString()} of ${totals.scanned.toLocaleString()} security checks passed` : 'No compliance scans run yet'}
           </p>
         </div>
 

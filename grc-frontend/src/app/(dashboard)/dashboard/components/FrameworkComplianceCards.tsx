@@ -21,11 +21,20 @@ type FwRow = {
   short_code?: string;
   total?: number;
   implemented?: number;
+  in_progress?: number;
+  not_started?: number;
   verified?: number;
   completion_pct?: number;
   readiness_pct?: number;
   trend_pct?: number;
 };
+
+// Per-framework control status breakdown shown when a card is expanded.
+const FW_STATUS_BREAKDOWN: { key: 'implemented' | 'in_progress' | 'not_started'; label: string; color: string }[] = [
+  { key: 'implemented', label: 'Implemented', color: '#22c55e' },
+  { key: 'in_progress', label: 'In Progress', color: '#f59e0b' },
+  { key: 'not_started', label: 'Not Started', color: '#cbd5e1' },
+];
 
 const PER_PAGE = 4;
 
@@ -67,6 +76,7 @@ function SemiGauge({ pct, done, total }: { pct: number; done: number; total: num
 }
 
 function FrameworkCard({ row }: { row: FwRow }) {
+  const [open, setOpen] = useState(false);
   const name = row.framework_name || row.name || 'Framework';
   const total = row.total ?? 0;
   const done = row.implemented ?? 0;
@@ -74,6 +84,14 @@ function FrameworkCard({ row }: { row: FwRow }) {
   const trend = Math.round(row.trend_pct ?? 0);
   const color = bandColor(pct);
   const href = row.journey_id ? `/frameworks/${row.journey_id}` : '/frameworks';
+
+  // Control status counts. not_started falls back to (total - implemented -
+  // in_progress) when the backend hasn't sent it explicitly.
+  const counts: Record<'implemented' | 'in_progress' | 'not_started', number> = {
+    implemented: row.implemented ?? 0,
+    in_progress: row.in_progress ?? 0,
+    not_started: row.not_started ?? Math.max(0, total - (row.implemented ?? 0) - (row.in_progress ?? 0)),
+  };
 
   return (
     <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm">
@@ -87,7 +105,14 @@ function FrameworkCard({ row }: { row: FwRow }) {
         </Link>
       </div>
 
-      <div className="relative">
+      {/* The gauge area is a button: click to reveal the status breakdown. */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title={open ? 'Hide breakdown' : 'Show status breakdown'}
+        className="relative w-full cursor-pointer rounded-lg text-left transition-colors hover:bg-slate-50"
+      >
         <span className={`absolute right-0 top-0 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
           trend < 0 ? 'bg-rose-50 text-rose-600' : trend > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'
         }`}>
@@ -95,9 +120,43 @@ function FrameworkCard({ row }: { row: FwRow }) {
           {trend === 0 ? '0%' : `${Math.abs(trend)}%`}
         </span>
         <SemiGauge pct={pct} done={done} total={total} />
+      </button>
+
+      {/* Stacked status band — always visible, segments sized by control count. */}
+      <div className="mt-3 flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+        {total > 0 ? FW_STATUS_BREAKDOWN.map((s) => (
+          counts[s.key] > 0 ? (
+            <div key={s.key} style={{ width: `${(counts[s.key] / total) * 100}%`, backgroundColor: s.color }} title={`${s.label}: ${counts[s.key]}`} />
+          ) : null
+        )) : <div className="w-full" style={{ backgroundColor: color, opacity: 0.9 }} />}
       </div>
 
-      <div className="mt-3 h-1.5 w-full rounded-full" style={{ backgroundColor: color, opacity: 0.9 }} />
+      {open && (
+        <div className="mt-2.5 space-y-1.5 border-t border-slate-100 pt-2.5">
+          {FW_STATUS_BREAKDOWN.map((s) => {
+            const v = counts[s.key];
+            const share = total > 0 ? Math.round((v / total) * 100) : 0;
+            return (
+              <div key={s.key} className="flex items-center gap-2 text-[11px]">
+                <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                <span className="flex-1 text-slate-600">{s.label}</span>
+                <span className="font-semibold text-slate-900">{v}</span>
+                <span className="w-9 text-right text-[10px] text-slate-400">{share}%</span>
+              </div>
+            );
+          })}
+          <div className="flex items-center justify-between border-t border-slate-100 pt-1.5 text-[11px]">
+            <span className="text-slate-500">Total controls</span>
+            <span className="font-semibold text-slate-900">{total}</span>
+          </div>
+          <Link href={href} className="mt-0.5 block text-[11px] font-medium text-blue-600 hover:text-blue-700">
+            View full framework →
+          </Link>
+        </div>
+      )}
+      {!open && (
+        <p className="mt-1 text-center text-[9px] text-slate-400">Click gauge for status breakdown</p>
+      )}
     </div>
   );
 }
@@ -129,7 +188,7 @@ export function FrameworkComplianceCards() {
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 ring-1 ring-blue-100">
           <LayoutGrid className="h-3.5 w-3.5 text-blue-600" />
         </div>
-        <h3 className="text-sm font-semibold text-slate-900">Framework</h3>
+        <h3 className="text-sm font-semibold text-slate-900">Active Journey Frameworks</h3>
       </div>
       {!inModal && total > 0 && (
         <div className="flex items-center gap-1.5 text-slate-500">
