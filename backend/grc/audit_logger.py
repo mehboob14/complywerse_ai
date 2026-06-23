@@ -101,6 +101,7 @@ _MODULE_RESOURCE_ALIASES: dict[str, str] = {
     "governance": "governance",
     "compliance": "compliance",
     "audit-management": "audits",
+    "auditor-portal": "audits",
     "control-library": "controls",
     "vendor-risk": "vendor_risk",
     "chatbot": "chatbot",

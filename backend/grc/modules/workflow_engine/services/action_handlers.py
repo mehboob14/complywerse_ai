@@ -1065,6 +1065,41 @@ class WorkflowActionHandlers:
     # -----------------------------------------------------------------------------------
     @staticmethod
     def _escalate_to_management(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        # ── Guided fixed-shell builder: per-trigger escalation config ─────────
+        # The guided builder stores escalation settings keyed by the trigger event
+        # that fired (`config.per_trigger = { "<event>": { ...fields } }`). Select
+        # the section matching the event that actually started this instance so a
+        # multi-trigger (OR) workflow escalates with that trigger's context. Fall
+        # back to the first configured section, then to the flat payload as-is.
+        per_trigger = payload.get("per_trigger")
+        if isinstance(per_trigger, dict) and per_trigger:
+            fired_event = getattr(instance, "trigger_event", None) or ""
+            selected = per_trigger.get(fired_event)
+            if not isinstance(selected, dict):
+                selected = next(
+                    (v for v in per_trigger.values() if isinstance(v, dict)),
+                    None,
+                )
+            if isinstance(selected, dict):
+                # Overlay the chosen section onto the node config so the existing
+                # multi-level / flat machinery below sees it as ordinary fields.
+                merged = {**payload, **selected}
+                # Surface a human-readable reason from curated escalation fields
+                # when the section doesn't carry an explicit one.
+                if not merged.get("reason"):
+                    role = selected.get("escalate_to_role") or selected.get("escalate_to")
+                    note = selected.get("message") or selected.get("note")
+                    parts = []
+                    if role:
+                        parts.append(f"Escalate to {role}")
+                    if note:
+                        parts.append(str(note))
+                    if fired_event:
+                        parts.append(f"(trigger: {fired_event})")
+                    if parts:
+                        merged["reason"] = " — ".join(parts)
+                payload = merged
+
         escalation_levels = payload.get("escalation_levels")
 
         # ── New multi-level mode ──────────────────────────────────────────────

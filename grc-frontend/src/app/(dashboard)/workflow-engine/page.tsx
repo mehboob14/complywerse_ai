@@ -25,6 +25,7 @@ import { AIPanel } from './components/AIPanel';
 import { AnalyticsTab } from './components/AnalyticsTab';
 import { ApprovalsTab } from './components/ApprovalsTab';
 import { ConfigPanel } from './components/ConfigPanel';
+import GuidedBuilder from './components/GuidedBuilder';
 import { nodeTypes } from './components/CustomNodes';
 import { NodePalette } from './components/NodePalette';
 import { SchedulesTab } from './components/SchedulesTab';
@@ -1428,6 +1429,20 @@ function WorkflowEngineContent() {
       {/* Builder tab (hidden when other tab active, to preserve state) */}
       <div className={activeTab === 'builder' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}>
 
+      {/* Guided fixed-shell builder — replaces the free-form canvas.
+          Start → Trigger(s) → Notification(s) → Escalation → End.
+          Remounts per selection so a fresh "New Workflow" starts clean. */}
+      {activeTab === 'builder' && (
+        <GuidedBuilder
+          key={selectedId ?? 'new'}
+          definitionId={selectedId}
+          onSaved={(id) => { setSelectedId(id); loadAll(); }}
+          onClose={discardChanges}
+        />
+      )}
+
+      {/* ── Legacy free-form canvas (disabled; retained for reference) ── */}
+      {false && (<>
       {/* Toolbar */}
       <TopToolbar
         definitions={definitions}
@@ -1616,6 +1631,7 @@ function WorkflowEngineContent() {
           onUse={handleUseTemplate}
         />
       )}
+      </>)}{/* end legacy free-form canvas */}
       </div>{/* end builder tab wrapper */}
 
       {/* SMTP Configuration Modal */}

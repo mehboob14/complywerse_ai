@@ -817,6 +817,14 @@ const PATH_TO_RESOURCE_FRONTEND: Array<[string, string]> = [
   ['erm.risk',                          'risks'],
   ['erm',                               'risks'],
 
+  // ── Issue Management (only the issues lifecycle is a trigger source) ──
+  ['issue_management.issues',           'issues'],
+
+  // ── Audit (Auditor Portal) ──
+  ['auditor_portal.controls',           'audit.controls'],
+  ['auditor_portal.reviews',            'audit.reviews'],
+  ['auditor_portal',                    'audits'],
+
   // ── Other modules ──
   ['audit_management',                  'audits'],
   ['evidence_mgmt',                     'compliance.evidence'],
@@ -957,6 +965,15 @@ const PRIMARY_TRIGGER_FRONTEND: Record<string, string> = {
   'audits:create':           'audit_finding_created',
   'audits:update':           'audits.update',
   'audits:delete':           'audits.delete',
+
+  // ── Issue Management ──
+  'issues:create':           'issue_created',
+  'issues:update':           'issue_state_changed',
+  'issues:delete':           'issue-management.issues.delete',
+
+  // ── Audit (Auditor Portal) — real write events ──
+  'audit.controls:trigger':  'audit_control_approved',
+  'audit.reviews:create':    'audit_review_submitted',
 };
 
 /**

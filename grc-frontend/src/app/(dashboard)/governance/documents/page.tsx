@@ -49,6 +49,8 @@ import Link from 'next/link';
 import NcaTemplateSelect, { NcaTemplateMeta } from '@/components/governance/NcaTemplateSelect';
 import RecommendedDocsModal, { NCA_DOC_TYPE_MAP, ARTIFACT_DOC_TYPE_MAP } from './_RecommendedDocsModal';
 import type { RecommendedDoc } from './_recommendedDocsCatalog';
+import RichTextEditor from './_RichTextEditor';
+import { buildTemplateContent, buildArtifactContent } from './_templateContent';
 
 interface TenantUser {
   id: number;
@@ -1632,18 +1634,45 @@ export default function GovernanceDocumentsPage() {
             void doc;
           }}
           onPickAny={(pick) => {
-            // Single funnel for every tab — derive the AI-draft prefill from
-            // whichever payload the picker emitted. Closing the templates
-            // modal and opening AI Draft happens once at the bottom so all
-            // three tabs share the navigation behaviour.
+            // Standard Templates + Artifact Templates ship "already generated":
+            // picking one opens the create modal pre-filled with ready-to-edit
+            // content (deterministic, no AI round-trip / wait). The user then
+            // refines it in the WYSIWYG editor. NCA + reference-law remain
+            // AI-draft sources (handled below). This reuses the SAME create
+            // path the AI flow uses (editingDocument → modal), so nothing else
+            // changes.
+            if (pick.kind === 'recommended' || pick.kind === 'artifact') {
+              const isRec = pick.kind === 'recommended';
+              const content = isRec
+                ? buildTemplateContent(pick.doc)
+                : buildArtifactContent({
+                    name: pick.item.name,
+                    artifact_type: pick.item.artifact_type,
+                    description: pick.item.description || undefined,
+                    framework_key: pick.frameworkName,
+                    control_ref: pick.item.control_ref || undefined,
+                  });
+              setEditingDocument({
+                title: isRec ? pick.doc.title : pick.item.name,
+                content,
+                doc_type: isRec ? pick.doc.doc_type : ARTIFACT_DOC_TYPE_MAP(pick.item.artifact_type),
+                description: isRec ? pick.doc.blurb : (pick.item.description || ''),
+                // Auto-link the source framework for artifact templates.
+                framework_ids: (!isRec && pick.frameworkUploadedId) ? [pick.frameworkUploadedId] : [],
+              } as any);
+              // Templates carry bracketed placeholders — don't auto-extract
+              // policy statements until the user has filled them in.
+              setAutoParseAfterCreate(false);
+              setIsRecommendedOpen(false);
+              setIsModalOpen(true);
+              return;
+            }
+
+            // Single funnel for the remaining tabs — derive the AI-draft prefill
+            // from whichever payload the picker emitted. Closing the templates
+            // modal and opening AI Draft happens once at the bottom.
             let prefill: typeof aiDraftPrefill = null;
-            if (pick.kind === 'recommended') {
-              prefill = {
-                title: pick.doc.title,
-                description: pick.doc.description,
-                doc_type: pick.doc.doc_type,
-              };
-            } else if (pick.kind === 'nca') {
+            if (pick.kind === 'nca') {
               const docType = NCA_DOC_TYPE_MAP[pick.template.category] ?? 'policy';
               prefill = {
                 title: pick.template.title,
@@ -1670,20 +1699,9 @@ export default function GovernanceDocumentsPage() {
                 doc_type: docType,
                 reference_law_id: pick.law.id,
               };
-            } else if (pick.kind === 'artifact') {
-              const docType = ARTIFACT_DOC_TYPE_MAP(pick.item.artifact_type);
-              prefill = {
-                title: pick.item.name,
-                description:
-                  pick.item.description ||
-                  `Artifact "${pick.item.name}" from the ${pick.frameworkName} catalogue (${pick.item.artifact_type}${pick.item.control_ref ? `, control ${pick.item.control_ref}` : ''}).`,
-                doc_type: docType,
-                // Auto-select the source framework so the new document is
-                // linked back automatically — the user can still
-                // add/remove frameworks inside the AI Draft modal.
-                framework_ids: pick.frameworkUploadedId ? [pick.frameworkUploadedId] : undefined,
-              };
             }
+            // Note: 'recommended' and 'artifact' are handled above with an early
+            // return (ready-made content), so they never reach this prefill chain.
             if (!prefill) return;
             setAIDraftPrefill(prefill);
             setIsRecommendedOpen(false);
@@ -2491,13 +2509,13 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
 
           <div>
             <label className="block text-sm font-medium text-gray-800 mb-1">Content</label>
-            <textarea
+            <RichTextEditor
               value={formData.content}
-              onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
-              rows={6}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              onChange={(content) => setFormData(prev => ({ ...prev, content }))}
               placeholder="Document content..."
+              minHeight={240}
             />
+            <p className="mt-1 text-[11px] text-gray-400">Format with the toolbar — no markdown symbols needed. Switch to “Markdown” any time to view the raw source.</p>
           </div>
 
           <div className="grid grid-cols-3 gap-4">

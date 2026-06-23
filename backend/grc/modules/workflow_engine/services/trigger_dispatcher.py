@@ -73,6 +73,16 @@ _EVENT_MAP: Dict[str, Dict[str, List[str]]] = {
         "update": ["asset_updated", "assets.update"],
         "delete": ["asset_deleted", "assets.delete"],
     },
+    # ── Audit (Auditor Portal) ───────────────────────────────────────────
+    # `resource_type='audits'` comes from the audit_logger alias
+    # `auditor-portal → audits`.  The portal's only writes are review
+    # submission (POST /auditor-portal/reviews → action=create) and control
+    # auto-approval (POST .../controls/{id}/auto-approve → action=auto_approve,
+    # the hyphenated trailing segment is parsed as a sub-action verb).
+    "audits": {
+        "create": ["audit_review_submitted", "audits.create"],
+        "auto_approve": ["audit_control_approved", "audits.auto_approve"],
+    },
     # ── Issue Management ─────────────────────────────────────────────────
     # `resource_type='issues'` comes from the audit_logger's
     # _MODULE_SUB_ENTITY_PREFIXES extraction on /issue-management/issues/...
@@ -776,11 +786,21 @@ class TriggerDispatcher:
             WorkflowDefinition.is_active == True,
         ).all()
 
+        def _matches(trig: str) -> bool:
+            # Exact match or prefix wildcard (e.g. "risks.*" matches "risks.update")
+            if not trig:
+                return False
+            return trig == event_name or (trig.endswith(".*") and event_name.startswith(trig[:-2]))
+
         triggered = 0
         for definition in definitions:
-            trigger = definition.trigger_event or ""
-            # Exact match or prefix wildcard (e.g. "risks.*" matches "risks.update")
-            if trigger == event_name or (trigger.endswith(".*") and event_name.startswith(trigger[:-2])):
+            # Multi-trigger OR logic: the workflow fires when the incoming event
+            # matches the primary trigger_event OR any entry in trigger_events.
+            candidate_triggers = [definition.trigger_event or ""]
+            extra = definition.trigger_events
+            if isinstance(extra, list):
+                candidate_triggers.extend(str(t) for t in extra if t)
+            if any(_matches(t) for t in candidate_triggers):
                 if ConditionEvaluator.evaluate(definition.trigger_conditions or {}, payload):
                     self.event_queue.publish(
                         {

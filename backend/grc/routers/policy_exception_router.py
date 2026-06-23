@@ -5,6 +5,7 @@ import json
 import logging
 import os
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..models import PolicyException, PolicyExceptionComment, GovernanceDocument, GRCUser, get_db
@@ -121,6 +122,140 @@ def _generate_exception_suggestion(title: str, document: GovernanceDocument) -> 
     except Exception as exc:
         logger.warning(f"Policy exception suggestion fallback used: {exc}")
         return _fallback_exception_suggestion(title, document)
+
+
+def _make_snippet(text: str, term: str, width: int = 180) -> str:
+    """Return a short context window around the first occurrence of `term`."""
+    if not text:
+        return ""
+    low = text.lower()
+    idx = low.find((term or "").lower())
+    if idx < 0:
+        return text[:width].strip()
+    start = max(0, idx - width // 2)
+    end = min(len(text), idx + len(term) + width // 2)
+    snippet = text[start:end].strip()
+    return ("… " if start > 0 else "") + snippet + (" …" if end < len(text) else "")
+
+
+def _fallback_candidate_exceptions(documents) -> list:
+    """Deterministic candidate suggestions when the LLM is unavailable — keeps the
+    feature working (no hard failure) without an API key."""
+    out = []
+    for d in documents:
+        if d is None:
+            continue
+        name = (d.title or "this policy").strip()
+        out.append({
+            "document_id": d.id,
+            "document_title": d.title,
+            "suggested_title": f"Temporary exception to {name}",
+            "rationale": (
+                f"Operational or technical constraints may require a time-bound deviation from '{name}'. "
+                "Review the policy's mandatory controls and confirm whether an exception with compensating "
+                "controls is warranted."
+            ),
+            "suggested_priority": "medium",
+            "source": "template",
+        })
+    return out
+
+
+def _generate_candidate_exceptions(documents, focus: Optional[GovernanceDocument], limit: int) -> dict:
+    """AI-driven suggestion of candidate policy exceptions across (or within) policies.
+    Mirrors `_generate_exception_suggestion`: same client/env pattern, strict-JSON
+    parsing, and graceful template fallback so it never raises to the caller."""
+    pool = [focus] if focus is not None else list(documents or [])
+    if not _check_ai_available() or not pool:
+        return {"source": "template", "candidates": _fallback_candidate_exceptions(pool)[:limit]}
+
+    try:
+        from openai import OpenAI
+
+        api_key = get_openai_api_key()
+        base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+        model = os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4o"
+        client = OpenAI(api_key=api_key, base_url=base_url)
+
+        if focus is not None:
+            corpus = "\n".join([
+                f"Policy id: {focus.id}",
+                f"Policy title: {focus.title or ''}",
+                f"Policy type: {focus.doc_type or ''}",
+                f"Policy content excerpt: {(focus.content or '')[:4000]}",
+            ])
+            instruction = (
+                f"Analyze the SINGLE policy below and propose up to {limit} realistic policy EXCEPTION candidates "
+                "an organization might legitimately need to request against it."
+            )
+        else:
+            parts = []
+            for d in (documents or [])[:15]:
+                excerpt = ((d.description or d.content or "")[:300]).strip().replace("\n", " ")
+                parts.append(f"- id={d.id} | {d.title or ''} ({d.doc_type or 'policy'}): {excerpt}")
+            corpus = "\n".join(parts)
+            instruction = (
+                f"Analyze the policies below and propose up to {limit} realistic policy EXCEPTION candidates across them "
+                "(the deviations organizations most commonly need to request)."
+            )
+
+        prompt = (
+            f"{instruction} You are a GRC governance specialist. Respond as STRICT JSON only with this shape: "
+            '{"candidates": [{"document_id": <int>, "suggested_title": <string>, "rationale": <string>, '
+            '"suggested_priority": "low|medium|high|critical"}]}. '
+            "Only use document_id values that appear in the input. Keep each rationale to 1-2 sentences.\n\n"
+            f"Policies:\n{corpus}"
+        )
+
+        completion = client.chat.completions.create(
+            model=model,
+            temperature=0.4,
+            messages=[
+                {"role": "system", "content": "Respond with valid JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        content = completion.choices[0].message.content if completion.choices else ""
+        parsed = _parse_json_response(content or "") or {}
+        raw = parsed.get("candidates") if isinstance(parsed, dict) else None
+
+        valid_ids = {d.id for d in pool} | {d.id for d in (documents or [])}
+        title_by_id = {d.id: d.title for d in pool}
+        for d in (documents or []):
+            title_by_id.setdefault(d.id, d.title)
+
+        candidates = []
+        if isinstance(raw, list):
+            for c in raw:
+                if not isinstance(c, dict):
+                    continue
+                try:
+                    did = int(c.get("document_id"))
+                except (TypeError, ValueError):
+                    continue
+                if did not in valid_ids:
+                    continue
+                st = str(c.get("suggested_title") or "").strip()
+                if not st:
+                    continue
+                pr = str(c.get("suggested_priority") or "medium").strip().lower()
+                if pr not in ("low", "medium", "high", "critical"):
+                    pr = "medium"
+                candidates.append({
+                    "document_id": did,
+                    "document_title": title_by_id.get(did),
+                    "suggested_title": st,
+                    "rationale": str(c.get("rationale") or "").strip(),
+                    "suggested_priority": pr,
+                    "source": "ai",
+                })
+
+        if not candidates:
+            return {"source": "template", "candidates": _fallback_candidate_exceptions(pool)[:limit]}
+        return {"source": "ai", "candidates": candidates[:limit]}
+    except Exception as exc:
+        logger.warning(f"Candidate exception suggestion fallback used: {exc}")
+        return {"source": "template", "candidates": _fallback_candidate_exceptions(pool)[:limit]}
 
 
 @router.get("/expiring-soon")
@@ -283,6 +418,131 @@ def suggest_exception_content(
         "compensating_controls": suggestion.get("compensating_controls", ""),
         "source": suggestion.get("source", "template"),
     }
+
+
+# NOTE: the two routes below are intentionally declared BEFORE `/{exception_id}`.
+# FastAPI matches in declaration order, so a literal path like `/search-policies`
+# must come first or it would be captured by the `{exception_id}` path param.
+@router.get("/search-policies")
+def search_policies(
+    q: str = Query(..., min_length=1, description="Sentence or keyword to search across policy content"),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Search any sentence/keyword across governance policy/document CONTENT and
+    parsed policy statements (clauses), for the exceptions workflow. Read-only,
+    tenant-scoped, ILIKE-based; returns matched policies with a context snippet."""
+    user_tenants = get_user_tenants(current_user, db)
+    term = (q or "").strip()
+    if not user_tenants or not term:
+        return {"query": term, "count": 0, "results": []}
+
+    like = f"%{term}%"
+    results = []
+    seen_docs = set()
+
+    # 1) Document-level matches (title / description / full content)
+    docs = (
+        db.query(GovernanceDocument)
+        .filter(
+            GovernanceDocument.tenant_id.in_(user_tenants),
+            or_(
+                GovernanceDocument.title.ilike(like),
+                GovernanceDocument.description.ilike(like),
+                GovernanceDocument.content.ilike(like),
+            ),
+        )
+        .order_by(GovernanceDocument.updated_at.desc())
+        .limit(limit)
+        .all()
+    )
+    tl = term.lower()
+    for d in docs:
+        if tl in (d.title or "").lower():
+            field, src = "title", d.title or ""
+        elif tl in (d.description or "").lower():
+            field, src = "description", d.description or ""
+        else:
+            field, src = "content", d.content or ""
+        results.append({
+            "document_id": d.id,
+            "document_title": d.title,
+            "doc_type": d.doc_type,
+            "document_code": getattr(d, "document_code", None),
+            "match_field": field,
+            "snippet": _make_snippet(src, term),
+            "statement_id": None,
+            "statement_code": None,
+        })
+        seen_docs.add(d.id)
+
+    # 2) Clause-level matches via parsed PolicyStatement rows (best-effort).
+    if len(results) < limit:
+        try:
+            from ..models import PolicyStatement
+            rows = (
+                db.query(PolicyStatement, GovernanceDocument)
+                .join(GovernanceDocument, GovernanceDocument.id == PolicyStatement.document_id)
+                .filter(
+                    GovernanceDocument.tenant_id.in_(user_tenants),
+                    PolicyStatement.statement_text.ilike(like),
+                )
+                .limit((limit - len(results)) * 2)
+                .all()
+            )
+            for s, d in rows:
+                results.append({
+                    "document_id": d.id,
+                    "document_title": d.title,
+                    "doc_type": d.doc_type,
+                    "document_code": getattr(d, "document_code", None),
+                    "match_field": "policy_statement",
+                    "snippet": _make_snippet(s.statement_text or "", term),
+                    "statement_id": s.id,
+                    "statement_code": getattr(s, "statement_code", None),
+                })
+                if len(results) >= limit:
+                    break
+        except Exception as exc:  # noqa: BLE001 — clause search is a best-effort enrichment
+            logger.info(f"policy statement search skipped: {exc}")
+
+    return {"query": term, "count": len(results), "results": results[:limit]}
+
+
+@router.get("/suggest-candidates")
+def suggest_candidate_exceptions(
+    document_id: Optional[int] = Query(None, description="Focus on one policy; omit to scan across policies"),
+    limit: int = Query(8, ge=1, le=15),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """AI-driven, automatic suggestion of policy EXCEPTION candidates — either
+    across the tenant's policies (no document_id) or focused on one policy.
+    Falls back to deterministic template suggestions when AI is unavailable."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"source": "template", "candidates": []}
+
+    focus = None
+    if document_id:
+        focus = db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == int(document_id),
+            GovernanceDocument.tenant_id.in_(user_tenants),
+        ).first()
+        if not focus:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+        documents = [focus]
+    else:
+        documents = (
+            db.query(GovernanceDocument)
+            .filter(GovernanceDocument.tenant_id.in_(user_tenants))
+            .order_by(GovernanceDocument.updated_at.desc())
+            .limit(25)
+            .all()
+        )
+
+    return _generate_candidate_exceptions(documents, focus, limit)
 
 
 @router.get("/{exception_id}")

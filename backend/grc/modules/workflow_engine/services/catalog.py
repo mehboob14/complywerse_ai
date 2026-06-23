@@ -42,6 +42,8 @@ TRIGGER_NODE_TYPES = [
     {"key": "control_review_due",          "label": "Control effectiveness review due"},
     {"key": "attestation_overdue",         "label": "Attestation campaign overdue"},
     # ── Audit triggers ────────────────────────────────────────────────────────
+    {"key": "audit_review_submitted",      "label": "Auditor review submitted"},
+    {"key": "audit_control_approved",      "label": "Auditor auto-approved a control"},
     {"key": "audit_finding_created",       "label": "Audit finding created"},
     {"key": "audit_finding_updated",       "label": "Audit finding updated"},
     {"key": "audit_finding_closed",        "label": "Audit finding closed / resolved"},

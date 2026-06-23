@@ -177,6 +177,12 @@ ASSESSMENT_TYPE_MAP: dict[str, str] = {
     "sri lanka bss": "sri_lanka_bss",
     "sri lanka baseline security standard": "sri_lanka_bss",
     "sri lanka baseline security standard (bss)": "sri_lanka_bss",
+    # KSA Personal Data Transfer Regulation (PDPL implementing regulation)
+    "ksa data transfer": "ksa_data_transfer",
+    "personal data transfer": "ksa_data_transfer",
+    "data transfer outside kingdom": "ksa_data_transfer",
+    "regulation on personal data transfer outside the kingdom": "ksa_data_transfer",
+    "regulation on personal data transfer outside ksa": "ksa_data_transfer",
 }
 
 # Artifact names that map to real platform data
@@ -210,20 +216,28 @@ def _ensure_catalog_seeded(db: Session) -> None:
     except Exception:
         logger.exception("Failed to auto-create artifact tables")
 
-    try:
-        count = db.query(func.count(ArtifactCatalogItem.id)).scalar()
-    except Exception:
-        logger.exception("Cannot query artifact catalog table")
-        return
-    if count and count > 0:
-        return
     if not _CATALOG_PATH.exists():
         logger.warning("Artifact catalog JSON not found at %s", _CATALOG_PATH)
         return
     with open(_CATALOG_PATH, encoding="utf-8") as f:
         catalog: dict = json.load(f)
+
+    # Self-heal: seed ONLY framework_keys not already present, so frameworks
+    # added to the JSON after a tenant DB was first seeded still land in that
+    # DB. (Previously this returned early whenever the table was non-empty, so
+    # newly added frameworks never appeared for existing tenants.)
+    try:
+        existing_keys = {row[0] for row in db.query(ArtifactCatalogItem.framework_key).distinct().all()}
+    except Exception:
+        logger.exception("Cannot query artifact catalog table")
+        return
+    missing_keys = [k for k in catalog if k not in existing_keys]
+    if not missing_keys:
+        return
+
     items: list[ArtifactCatalogItem] = []
-    for fw_key, fw_data in catalog.items():
+    for fw_key in missing_keys:
+        fw_data = catalog[fw_key]
         fw_name = fw_data["name"]
         for art in fw_data["artifacts"]:
             stage_str: str = art.get("stage", "")
@@ -254,7 +268,7 @@ def _ensure_catalog_seeded(db: Session) -> None:
             )
     db.bulk_save_objects(items)
     db.commit()
-    logger.info("Seeded %d artifact catalog items", len(items))
+    logger.info("Seeded %d artifact catalog items across %d new framework(s)", len(items), len(missing_keys))
 
 
 # ---------------------------------------------------------------------------

@@ -563,6 +563,9 @@ _COLUMN_ADDS = [
     ("grc_vulnerabilities", "effective_risk_score", "FLOAT", None),
     ("grc_vulnerabilities", "effective_risk_reason", "TEXT", None),
     ("grc_vulnerabilities", "effective_risk_computed_at", "TIMESTAMP", None),
+    # Workflow engine — multi-trigger OR logic. A workflow fires when ANY of the
+    # listed platform events occurs; `trigger_event` stays the primary entry.
+    ("grc_workflow_definitions", "trigger_events", "JSON DEFAULT '[]'::json", None),
 ]
 
 

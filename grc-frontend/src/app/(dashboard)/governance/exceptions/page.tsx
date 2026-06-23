@@ -20,6 +20,7 @@ import {
   MessageSquare,
   Sparkles,
   Trash2,
+  Search,
 } from 'lucide-react';
 import {
   PieChart,
@@ -102,6 +103,26 @@ interface GovernancePolicyOption {
   doc_type?: string;
 }
 
+interface PolicySearchResult {
+  document_id: number;
+  document_title?: string;
+  doc_type?: string;
+  document_code?: string | null;
+  match_field: string;
+  snippet: string;
+  statement_id?: number | null;
+  statement_code?: string | null;
+}
+
+interface ExceptionCandidate {
+  document_id: number;
+  document_title?: string;
+  suggested_title: string;
+  rationale: string;
+  suggested_priority: string;
+  source?: string;
+}
+
 function formatDate(dateStr: string | null | undefined) {
   if (!dateStr) return '-';
   return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -134,6 +155,16 @@ export default function PolicyExceptionsPage() {
     effective_date: '',
     expiry_date: '',
   });
+
+  // ── Discover & generate exceptions (policy-content search + AI suggestions) ──
+  const [discoverOpen, setDiscoverOpen] = useState(false);
+  const [policyQuery, setPolicyQuery] = useState('');
+  const [policyResults, setPolicyResults] = useState<PolicySearchResult[]>([]);
+  const [searchingPolicies, setSearchingPolicies] = useState(false);
+  const [searchedOnce, setSearchedOnce] = useState(false);
+  const [candidates, setCandidates] = useState<ExceptionCandidate[]>([]);
+  const [loadingCandidates, setLoadingCandidates] = useState(false);
+  const [candidateSource, setCandidateSource] = useState('');
 
   const queryClient = useQueryClient();
 
@@ -346,6 +377,61 @@ export default function PolicyExceptionsPage() {
     }
   };
 
+  // Open the (existing) create modal pre-filled — used by policy-search results
+  // and AI candidate suggestions. Does not alter the create flow itself.
+  const openCreateForDocument = (
+    documentId: number,
+    opts?: { title?: string; justification?: string; priority?: string }
+  ) => {
+    setFormData({
+      title: opts?.title || '',
+      document_id: documentId || '',
+      justification: opts?.justification || '',
+      risk_assessment: '',
+      compensating_controls: '',
+      priority: opts?.priority || 'medium',
+      effective_date: '',
+      expiry_date: '',
+    });
+    setEditingException(null);
+    setShowCreateModal(true);
+  };
+
+  const runPolicySearch = async () => {
+    const q = policyQuery.trim();
+    if (!q) return;
+    setSearchingPolicies(true);
+    setSearchedOnce(true);
+    try {
+      const res = await policyExceptionApi.searchPolicies(q, 25);
+      setPolicyResults((res.data?.results || []) as PolicySearchResult[]);
+    } catch {
+      setPolicyResults([]);
+    } finally {
+      setSearchingPolicies(false);
+    }
+  };
+
+  const loadCandidates = async () => {
+    setLoadingCandidates(true);
+    try {
+      const res = await policyExceptionApi.suggestCandidates({ limit: 8 });
+      setCandidates((res.data?.candidates || []) as ExceptionCandidate[]);
+      setCandidateSource(res.data?.source || '');
+    } catch {
+      setCandidates([]);
+    } finally {
+      setLoadingCandidates(false);
+    }
+  };
+
+  // Reveal the panel; auto-load AI suggestions the first time it's opened.
+  const toggleDiscover = () => {
+    const willOpen = !discoverOpen;
+    setDiscoverOpen(willOpen);
+    if (willOpen && candidates.length === 0 && !loadingCandidates) loadCandidates();
+  };
+
   const allExceptions = Array.isArray(exceptions) ? exceptions : [];
   const exceptionList = searchTerm.trim()
     ? allExceptions.filter(
@@ -523,6 +609,125 @@ export default function PolicyExceptionsPage() {
           <Plus className="h-4 w-4" />
           New Exception
         </button>
+        )}
+      </div>
+
+      {/* ── Discover & generate exceptions ─────────────────────────────────────
+          1) Search any sentence/keyword across policy CONTENT (+ parsed clauses)
+          2) AI-driven suggestions of exceptions that could be raised across policies
+          Both pre-fill the existing "New Exception" modal — nothing else changes. */}
+      <div className="rounded-lg border border-gray-200 bg-white">
+        <button
+          onClick={toggleDiscover}
+          className="flex w-full items-center justify-between px-3 py-2.5 text-left"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-black">
+            <Sparkles className="h-4 w-4 text-indigo-600" />
+            Find &amp; generate exceptions
+            <span className="hidden sm:inline text-[11px] font-normal text-gray-400">
+              search policy content · AI suggestions
+            </span>
+          </span>
+          <span className="text-xs text-gray-400">{discoverOpen ? 'Hide' : 'Show'}</span>
+        </button>
+
+        {discoverOpen && (
+          <div className="grid grid-cols-1 gap-4 border-t border-gray-100 p-3 lg:grid-cols-2">
+            {/* Feature 1 — search across policy content */}
+            <div>
+              <p className="mb-1.5 text-xs font-semibold text-gray-700">Search across policy content</p>
+              <div className="flex gap-1.5">
+                <input
+                  value={policyQuery}
+                  onChange={(e) => setPolicyQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') runPolicySearch(); }}
+                  placeholder="Search any sentence or keyword across policies…"
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                />
+                <button
+                  onClick={runPolicySearch}
+                  disabled={searchingPolicies || !policyQuery.trim()}
+                  className="btn-primary flex items-center gap-1 px-2.5 py-1.5 text-xs disabled:opacity-50"
+                >
+                  {searchingPolicies ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                  Search
+                </button>
+              </div>
+              <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">
+                {searchedOnce && !searchingPolicies && policyResults.length === 0 && (
+                  <p className="px-1 py-2 text-xs text-gray-400">No policies matched “{policyQuery}”.</p>
+                )}
+                {policyResults.map((r, i) => (
+                  <div key={`${r.document_id}-${r.statement_id ?? 'doc'}-${i}`} className="rounded border border-gray-100 bg-gray-50 p-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-black">{r.document_title || `Policy #${r.document_id}`}</p>
+                        <p className="text-[10px] uppercase tracking-wide text-gray-400">
+                          {r.doc_type || 'policy'}{r.document_code ? ` · ${r.document_code}` : ''}{r.match_field === 'policy_statement' ? ' · clause' : ''}
+                        </p>
+                      </div>
+                      {canCreate && (
+                        <button
+                          onClick={() => openCreateForDocument(r.document_id)}
+                          className="flex flex-shrink-0 items-center gap-1 rounded border border-indigo-200 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 hover:bg-indigo-50"
+                        >
+                          <Plus className="h-3 w-3" /> Exception
+                        </button>
+                      )}
+                    </div>
+                    {r.snippet && <p className="mt-1 text-[11px] leading-snug text-gray-600">{r.snippet}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Feature 2 — AI-suggested candidate exceptions */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <p className="text-xs font-semibold text-gray-700">AI-suggested exceptions across policies</p>
+                <button
+                  onClick={loadCandidates}
+                  disabled={loadingCandidates}
+                  className="flex items-center gap-1 rounded border border-indigo-200 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                >
+                  {loadingCandidates ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                  {candidates.length ? 'Refresh' : 'Suggest'}
+                </button>
+              </div>
+              <div className="max-h-64 space-y-1.5 overflow-y-auto">
+                {loadingCandidates && (
+                  <div className="flex items-center gap-2 px-1 py-3 text-xs text-gray-500">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analyzing policies…
+                  </div>
+                )}
+                {!loadingCandidates && candidates.length === 0 && (
+                  <p className="px-1 py-2 text-xs text-gray-400">No suggestions yet — click “Suggest” to let AI propose exceptions across your policies.</p>
+                )}
+                {candidates.map((c, i) => (
+                  <div key={`${c.document_id}-${i}`} className="rounded border border-gray-100 bg-gray-50 p-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-black">{c.suggested_title}</p>
+                        <p className="text-[10px] text-gray-400">{c.document_title || `Policy #${c.document_id}`} · {c.suggested_priority}</p>
+                      </div>
+                      {canCreate && (
+                        <button
+                          onClick={() => openCreateForDocument(c.document_id, { title: c.suggested_title, justification: c.rationale, priority: c.suggested_priority })}
+                          className="flex flex-shrink-0 items-center gap-1 rounded border border-indigo-200 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 hover:bg-indigo-50"
+                        >
+                          <Plus className="h-3 w-3" /> Use
+                        </button>
+                      )}
+                    </div>
+                    {c.rationale && <p className="mt-1 text-[11px] leading-snug text-gray-600">{c.rationale}</p>}
+                  </div>
+                ))}
+                {candidateSource === 'template' && candidates.length > 0 && (
+                  <p className="px-1 text-[10px] italic text-gray-400">Generated from policy metadata (configure an AI key for richer, content-aware suggestions).</p>
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </div>
 

@@ -75,6 +75,20 @@ _PATH_TO_RESOURCE = [
     ("erm.risk",                         "risks"),
     ("erm",                              "risks"),
 
+    # ── Issue Management submodules ──
+    # Only the `issues` lifecycle is a workflow trigger source; links /
+    # comments / matrices are sub-actions, not issue events, so they are left
+    # unmapped (and therefore non-triggerable).
+    ("issue_management.issues",    "issues"),
+
+    # ── Audit (Auditor Portal) ──
+    # The auditor portal's only write surface is control auto-approval and
+    # review submission; map each to its own resource so they yield distinct
+    # audit trigger events.
+    ("auditor_portal.controls",    "audit.controls"),
+    ("auditor_portal.reviews",     "audit.reviews"),
+    ("auditor_portal",             "audits"),
+
     # ── Other modules ──
     ("audit_management",           "audits"),
     ("evidence_mgmt",              "compliance.evidence"),
@@ -156,6 +170,15 @@ _PRIMARY_TRIGGER: dict[tuple[str, str], str] = {
     ("audits",          "create"):  "audit_finding_created",
     ("audits",          "update"):  "audits.update",
     ("audits",          "delete"):  "audits.delete",
+
+    # ── Issue Management ──
+    ("issues",          "create"):  "issue_created",
+    ("issues",          "update"):  "issue_state_changed",
+    ("issues",          "delete"):  "issue-management.issues.delete",
+
+    # ── Audit (Auditor Portal) — real write events ──
+    ("audit.controls",  "trigger"): "audit_control_approved",
+    ("audit.reviews",   "create"):  "audit_review_submitted",
 }
 
 
@@ -281,6 +304,51 @@ def _validate_workflow_graph(nodes: List[dict], edges: List[dict]) -> None:
             ),
         )
 
+    # ── Fixed-shell (guided builder) invariants ───────────────────────────────
+    # The guided builder serializes the fixed shell
+    #   [Start] → [Trigger(s)] → [Notification(s)?] → [Escalation?] → [End]
+    # marking each trigger node with `config.is_workflow_trigger` and the single
+    # escalation node with `action_name == "escalate_to_management"`. These checks
+    # only engage when those markers are present, so legacy free-form graphs are
+    # untouched. Notifications stay optional (trigger → escalation directly is
+    # valid); escalation requires at least one trigger.
+    def _cfg(n: dict) -> dict:
+        c = n.get("config")
+        return c if isinstance(c, dict) else {}
+
+    trigger_nodes = [n for n in work_nodes if _cfg(n).get("is_workflow_trigger")]
+    escalation_nodes = [
+        n for n in work_nodes
+        if (_cfg(n).get("action_name") or "") == "escalate_to_management"
+    ]
+    is_guided = bool(trigger_nodes) or bool(escalation_nodes)
+    if is_guided:
+        if not trigger_nodes:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Add at least one Trigger node after Start. The escalation step "
+                    "stays empty until a trigger is selected."
+                ),
+            )
+        if len(escalation_nodes) > 1:
+            raise HTTPException(
+                status_code=400,
+                detail="A workflow can have only one Escalation node.",
+            )
+        for tn in trigger_nodes:
+            _tc = _cfg(tn)
+            # A trigger node is configured when it maps to a platform function
+            # (action_name) OR carries a curated semantic event (event_name).
+            if not ((_tc.get("action_name") or "").strip() or (_tc.get("event_name") or "").strip()):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Every Trigger node must map to a platform functionality "
+                        "or a platform event before the workflow can be saved."
+                    ),
+                )
+
     # Locate the Start node (placeholder or user-added trigger placed first).
     start_key: Optional[str] = None
     # Prefer the explicit Start placeholder (node_key == "start") over generic
@@ -337,6 +405,10 @@ def _validate_workflow_graph(nodes: List[dict], edges: List[dict]) -> None:
         return
 
     first_cfg = first_node.get("config") or {}
+    # Curated event trigger (guided builder) — the event lives in
+    # ``config.event_name`` and is a valid trigger on its own.
+    if (first_cfg.get("event_name") or "").strip():
+        return
     is_structural_trigger = (
         first_node.get("is_start")
         or (first_node.get("node_type") or "").lower() == "start"
@@ -440,7 +512,15 @@ def _derive_trigger_event(nodes: List[dict], edges: List[dict]) -> Optional[str]
 
     cfg = first_node.get("config") or {}
 
-    # 1. Dedicated trigger node (manual / scheduled / webhook).
+    # 1. Curated event trigger node (guided builder). The semantic event the
+    #    workflow fires on is stored directly in ``config.event_name`` (e.g.
+    #    "evidence_uploaded", "vulnerability_sla_breach"). These have no
+    #    platform_action CRUD mapping — the event IS the trigger.
+    explicit_event = (cfg.get("event_name") or "").strip()
+    if explicit_event:
+        return explicit_event
+
+    # 2. Dedicated trigger node (manual / scheduled / webhook).
     is_structural_trigger = (
         first_node.get("is_start")
         or (first_node.get("node_type") or "").lower() == "start"
@@ -449,7 +529,7 @@ def _derive_trigger_event(nodes: List[dict], edges: List[dict]) -> Optional[str]
     if is_structural_trigger and trigger_type:
         return _TRIGGER_TYPE_TO_EVENT.get(trigger_type, trigger_type)
 
-    # 2. Platform Function CRUD inference.
+    # 3. Platform Function CRUD inference.
     return _infer_trigger_event(nodes, edges)
 
 
@@ -514,14 +594,22 @@ def _default_workflow_name(name: Optional[str], derived_trigger: Optional[str]) 
 
 
 def _mark_trigger_node(node_dicts: List[dict], edge_dicts: List[dict]) -> None:
-    """Tag the trigger node's config with ``_is_trigger_node`` (and clear it
-    everywhere else) so the runtime skips executing it. Mutates node_dicts."""
+    """Tag every trigger-block node's config with ``_is_trigger_node`` (and clear
+    it everywhere else) so the runtime skips executing them — they represent the
+    triggering EVENT, not an action to perform. Mutates node_dicts.
+
+    The guided fixed-shell builder flags each trigger node with
+    ``config.is_workflow_trigger`` (multiple triggers = OR). The derived
+    first-after-start trigger is also marked, for back-compat with workflows
+    authored on the legacy single-trigger canvas.
+    """
     tk = _trigger_node_key(node_dicts, edge_dicts)
     for n in node_dicts:
         cfg = n.get("config")
         if not isinstance(cfg, dict):
             continue
-        if tk is not None and n.get("node_key") == tk:
+        is_trigger = bool(cfg.get("is_workflow_trigger")) or (tk is not None and n.get("node_key") == tk)
+        if is_trigger:
             cfg["_is_trigger_node"] = True
         else:
             cfg.pop("_is_trigger_node", None)
@@ -544,6 +632,7 @@ def _to_definition_response(definition: WorkflowDefinition) -> WorkflowDefinitio
         version=definition.version,
         is_active=definition.is_active,
         trigger_event=definition.trigger_event,
+        trigger_events=definition.trigger_events if isinstance(definition.trigger_events, list) and definition.trigger_events else [definition.trigger_event],
         trigger_conditions=definition.trigger_conditions or {},
         definition_json=definition.definition_json or {},
         nodes=[
@@ -649,11 +738,17 @@ def create_workflow_definition(
             payload.trigger_event, derived,
         )
 
+    # Multi-trigger OR set. The guided builder sends every trigger event; the
+    # primary derived/resolved trigger is always included and kept first so the
+    # NOT NULL `trigger_event` column and the OR-set stay consistent.
+    trigger_events = [resolved_trigger, *[t for t in (payload.trigger_events or []) if t and t != resolved_trigger]]
+
     definition = WorkflowDefinition(
         tenant_id=tenant_id,
         name=_default_workflow_name(payload.name, resolved_trigger),
         description=payload.description,
         trigger_event=resolved_trigger,
+        trigger_events=trigger_events,
         trigger_conditions=payload.trigger_conditions,
         definition_json=payload.definition_json,
         is_active=payload.is_active,
@@ -799,6 +894,17 @@ def update_workflow_definition(
                 "workflow.definition.trigger_inferred definition_id=%s trigger=%s",
                 definition.id, derived,
             )
+
+    # Multi-trigger OR set. When the guided builder sends an explicit list, use
+    # it; otherwise keep the existing set. The primary trigger_event is always
+    # first so the OR-set and the NOT NULL column stay consistent.
+    if "trigger_events" in update_data:
+        explicit = [t for t in (update_data.get("trigger_events") or []) if t]
+        primary = definition.trigger_event
+        definition.trigger_events = [primary, *[t for t in explicit if t != primary]] if primary else explicit
+    elif derived:
+        existing = definition.trigger_events if isinstance(definition.trigger_events, list) else []
+        definition.trigger_events = [derived, *[t for t in existing if t and t != derived]]
         # Give an untitled workflow a meaningful name from its derived trigger.
         _named = _default_workflow_name(definition.name, derived)
         if _named != (definition.name or ""):
@@ -811,12 +917,16 @@ def update_workflow_definition(
             definition.id, update_data["trigger_event"],
         )
 
-    # Mark/clear the trigger node on the persisted rows so the runtime skips
-    # executing it (handles partial updates that don't resend the full graph).
+    # Mark/clear the trigger nodes on the persisted rows so the runtime skips
+    # executing them (handles partial updates that don't resend the full graph).
+    # Mirror `_mark_trigger_node`: every guided trigger node (config
+    # `is_workflow_trigger`, multiple = OR) plus the derived first-after-start
+    # trigger is flagged — so multi-trigger workflows skip ALL trigger nodes,
+    # not just the first.
     _tk = _trigger_node_key(effective_nodes, effective_edges)
     for _n in db.query(WorkflowNode).filter(WorkflowNode.workflow_definition_id == definition.id).all():
         _cfg = dict(_n.config or {})
-        _want = (_tk is not None and _n.node_key == _tk)
+        _want = bool(_cfg.get("is_workflow_trigger")) or (_tk is not None and _n.node_key == _tk)
         if _want and not _cfg.get("_is_trigger_node"):
             _cfg["_is_trigger_node"] = True
             _n.config = _cfg

@@ -13,8 +13,12 @@ class WorkflowDefinition(Base):
     description = Column(Text, nullable=True)
     version = Column(Integer, default=1)
     is_active = Column(Boolean, default=True, index=True)
-    trigger_event = Column(String(255), nullable=False, index=True)
+    trigger_event = Column(String(255), nullable=False, index=True)   # primary trigger (back-compat + index)
     trigger_conditions = Column(JSON, default={})
+    # Multi-trigger OR logic: the workflow fires when ANY of these platform
+    # events occurs. `trigger_event` remains the primary/first entry (keeps the
+    # existing NOT NULL + tenant_trigger index working); the full set lives here.
+    trigger_events = Column(JSON, default=list)
     definition_json = Column(JSON, default={})  # Canvas viewport/layout state (zoom, pan, positions)
     created_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     updated_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)

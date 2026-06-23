@@ -510,6 +510,12 @@ export const policyExceptionApi = {
     apiClient.get('/governance/policy-exceptions', { params }),
   suggestContent: (data: { title: string; document_id: number }) =>
     apiClient.post('/governance/policy-exceptions/suggest-content', data),
+  // Search any sentence/keyword across policy/document content + parsed clauses.
+  searchPolicies: (q: string, limit = 20) =>
+    apiClient.get('/governance/policy-exceptions/search-policies', { params: { q, limit } }),
+  // AI-driven candidate exceptions across policies (or focused on one document).
+  suggestCandidates: (params?: { document_id?: number; limit?: number }) =>
+    apiClient.get('/governance/policy-exceptions/suggest-candidates', { params: params || {} }),
   getById: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}`),
   create: (data: Record<string, unknown>) => apiClient.post('/governance/policy-exceptions', data),
   update: (id: number, data: Record<string, unknown>) => apiClient.put(`/governance/policy-exceptions/${id}`, data),

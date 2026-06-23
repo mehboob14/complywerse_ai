@@ -29,6 +29,9 @@ class WorkflowDefinitionCreate(BaseModel):
     name: str
     description: Optional[str] = None
     trigger_event: str
+    # Multi-trigger OR set. The guided builder sends every trigger node's event;
+    # the workflow fires when ANY of them occurs. `trigger_event` stays primary.
+    trigger_events: List[str] = Field(default_factory=list)
     trigger_conditions: Dict[str, Any] = Field(default_factory=dict)
     definition_json: Dict[str, Any] = Field(default_factory=dict)
     is_active: bool = True
@@ -40,6 +43,7 @@ class WorkflowDefinitionUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     trigger_event: Optional[str] = None
+    trigger_events: Optional[List[str]] = None
     trigger_conditions: Optional[Dict[str, Any]] = None
     definition_json: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
@@ -55,6 +59,7 @@ class WorkflowDefinitionResponse(BaseModel):
     version: int
     is_active: bool
     trigger_event: str
+    trigger_events: List[str] = Field(default_factory=list)
     trigger_conditions: Dict[str, Any]
     definition_json: Dict[str, Any]
     nodes: List[Dict[str, Any]]
