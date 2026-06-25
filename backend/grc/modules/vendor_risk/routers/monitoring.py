@@ -1,5 +1,6 @@
 """SLA tracking + vendor incident management endpoints."""
 
+import logging
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -12,6 +13,7 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Vendor Monitoring"])
 
 
@@ -77,6 +79,7 @@ def serialize_incident(inc: VendorIncident) -> dict:
         "resolved_at": inc.resolved_at.isoformat() if inc.resolved_at else None,
         "impact_description": inc.impact_description,
         "corrective_actions": inc.corrective_actions,
+        "linked_issue_id": getattr(inc, "linked_issue_id", None),
         "reported_by": inc.reported_by,
         "created_at": inc.created_at.isoformat() if inc.created_at else None,
         "updated_at": inc.updated_at.isoformat() if inc.updated_at else None,
@@ -245,6 +248,35 @@ def create_incident(
     db.add(incident)
     db.commit()
     db.refresh(incident)
+
+    # ── Linkage: a CRITICAL vendor incident opens an Issue in Issue Management
+    # so it shows up in the CISO/auditor "what's open" view and gets a CAPA
+    # workflow. Guarded — never blocks incident creation.
+    if (incident.severity or "").lower() == "critical":
+        try:
+            from ....models import Issue
+            issue = Issue(
+                tenant_id=incident.tenant_id,
+                title=f"Vendor incident: {incident.title}",
+                description=(incident.description or "") +
+                            (f"\n\nImpact: {incident.impact_description}" if incident.impact_description else ""),
+                severity="critical",
+                status="open",
+                issue_type="vendor_breach",
+                category="security",
+                source_type="incident_report",
+                source_id=incident.id,
+                workflow_state="new",
+                reporter_id=current_user.id,
+                detected_at=incident.occurred_at,
+            )
+            db.add(issue)
+            db.flush()
+            incident.linked_issue_id = issue.id
+            db.commit()
+        except Exception:  # noqa: BLE001 — linkage is best-effort
+            logger.warning("vendor incident → Issue linkage skipped", exc_info=True)
+            db.rollback()
 
     # Reload with reporter relationship
     incident = db.query(VendorIncident).options(

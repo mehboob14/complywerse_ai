@@ -1,5 +1,6 @@
 """Vendor assessment CRUD + risk scoring endpoints."""
 
+import logging
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -13,6 +14,7 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Vendor Assessments"])
 
 
@@ -67,6 +69,8 @@ def serialize_assessment(a: VendorAssessment) -> dict:
         "risk_rating": a.risk_rating,
         "findings": a.findings or [],
         "recommendations": a.recommendations or [],
+        "gap_analysis": getattr(a, "gap_analysis", None) or [],
+        "linked_risk_id": getattr(a, "linked_risk_id", None),
         "assessed_by": a.assessed_by,
         "reviewed_by": a.reviewed_by,
         "due_date": a.due_date.isoformat() if a.due_date else None,
@@ -446,6 +450,47 @@ def approve_assessment(
         vendor.residual_risk_score = assessment.residual_score
         vendor.risk_rating = assessment.risk_rating
         vendor.updated_at = datetime.utcnow()
+
+    # ── Linkage: surface the vendor's residual risk in the enterprise Risk
+    # Register so it rolls up to the ERM dashboard. Fully guarded — a linkage
+    # failure must never block the approval itself.
+    try:
+        if vendor is not None:
+            from ....models import Risk
+            desc = (
+                f"Residual third-party risk from the {assessment.assessment_type} assessment of "
+                f"vendor '{vendor.name}'. Rating: {assessment.risk_rating or 'n/a'}. "
+                f"Open findings: {len(assessment.findings or [])}."
+            )
+            existing = None
+            if getattr(assessment, "linked_risk_id", None):
+                existing = db.query(Risk).filter(Risk.id == assessment.linked_risk_id).first()
+            if existing:
+                existing.description = desc
+                existing.inherent_score = assessment.inherent_score
+                existing.residual_score = assessment.residual_score
+                existing.updated_at = datetime.utcnow()
+            else:
+                risk = Risk(
+                    tenant_id=assessment.tenant_id,
+                    business_unit_id=vendor.business_unit_id,
+                    title=f"Third-party risk: {vendor.name}",
+                    description=desc,
+                    category="third_party",
+                    risk_category="third_party",
+                    register_type="Third-Party Risk",
+                    owner_id=vendor.owner_id,
+                    inherent_score=assessment.inherent_score,
+                    residual_score=assessment.residual_score,
+                    status="open",
+                    source_type="assessment",
+                    source_reference=f"vendor:{vendor.id}/vendor_assessment:{assessment.id}",
+                )
+                db.add(risk)
+                db.flush()
+                assessment.linked_risk_id = risk.id
+    except Exception:  # noqa: BLE001 — linkage is best-effort
+        logger.warning("vendor assessment → Risk Register linkage skipped", exc_info=True)
 
     db.commit()
     db.refresh(assessment)

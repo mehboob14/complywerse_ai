@@ -46,6 +46,8 @@ interface Assessment {
   risk_rating: string | null;
   findings: string[];
   recommendations: string[];
+  gap_analysis?: Array<{ gap?: string; severity?: string; control_ref?: string; residual_after_controls?: string }>;
+  linked_risk_id?: number | null;
   assessed_by: number | null;
   reviewed_by: number | null;
   assessor?: { id: number; full_name: string } | null;
@@ -244,6 +246,17 @@ export default function AssessmentDetailPage() {
     },
   });
 
+  // AI gap analysis — derives a real residual-vs-inherent delta + per-gap detail
+  // (persisted on the assessment). Graceful: the endpoint never 503s.
+  const [gapResult, setGapResult] = useState<{ residual_score?: number; summary?: string; source?: string } | null>(null);
+  const gapMutation = useMutation({
+    mutationFn: async () => (await vendorRiskApi.aiGapAnalysis(assessmentId)).data,
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['assessment', assessmentId] });
+      setGapResult({ residual_score: data?.residual_score, summary: data?.summary, source: data?.source });
+    },
+  });
+
   const approveMutation = useMutation({
     mutationFn: async () => {
       const payload: Record<string, unknown> = {};
@@ -436,6 +449,59 @@ export default function AssessmentDetailPage() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Gap analysis & residual risk (stage 4) */}
+          <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                <BarChart3 className="h-4 w-4 text-slate-500" /> Gap analysis &amp; residual risk
+              </h3>
+              <div className="flex items-center gap-2">
+                {assessment.linked_risk_id && (
+                  <Link href={`/erm/risks/${assessment.linked_risk_id}`} className="text-[11px] font-medium text-blue-600 hover:text-blue-800">
+                    Linked risk #{assessment.linked_risk_id} →
+                  </Link>
+                )}
+                {canEdit && (
+                  <button
+                    onClick={() => gapMutation.mutate()}
+                    disabled={gapMutation.isPending}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                  >
+                    {gapMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Star className="h-3.5 w-3.5" />}
+                    Run AI gap analysis
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
+              <span>Inherent: <span className="font-semibold">{assessment.inherent_score?.toFixed(1) ?? '—'}</span></span>
+              <span>Residual (after controls): <span className="font-semibold">{assessment.residual_score?.toFixed(1) ?? '—'}</span></span>
+              {gapResult?.source === 'fallback' && <span className="text-[10px] italic text-slate-400">(heuristic — no AI key)</span>}
+            </div>
+            {gapResult?.summary && <p className="mt-1 text-[11px] text-slate-500">{gapResult.summary}</p>}
+            {Array.isArray(assessment.gap_analysis) && assessment.gap_analysis.length > 0 ? (
+              <div className="mt-2 space-y-1">
+                {assessment.gap_analysis.map((g, idx) => (
+                  <div key={idx} className="rounded-lg border border-gray-100 bg-gray-50 p-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-medium text-slate-800">{g.gap || 'Control gap'}</p>
+                      {g.severity && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize ${getRatingColor(g.severity)}`}>{g.severity}</span>}
+                    </div>
+                    {(g.control_ref || g.residual_after_controls) && (
+                      <p className="mt-0.5 text-[10px] text-slate-500">
+                        {g.control_ref ? `Control: ${g.control_ref}` : ''}
+                        {g.control_ref && g.residual_after_controls ? ' · ' : ''}
+                        {g.residual_after_controls ? `Residual: ${g.residual_after_controls}` : ''}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-gray-400">Run AI gap analysis to estimate the residual risk that remains after the vendor's existing controls and explain each gap.</p>
+            )}
           </div>
 
           {/* Details Grid */}

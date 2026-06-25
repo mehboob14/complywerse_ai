@@ -38,6 +38,36 @@ def get_openai_client():
     return OpenAI(api_key=api_key, base_url=base_url)
 
 
+def _run_ai_json(prompt: str, system: str, fallback: dict) -> dict:
+    """Run a strict-JSON completion and return the parsed dict. On ANY failure
+    (no key, network, bad JSON) return `fallback` with source='fallback' so the
+    TPRA AI features degrade gracefully and never 503 the lifecycle UI."""
+    try:
+        client = get_openai_client()
+        response = client.chat.completions.create(
+            model=os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or "gpt-4o",
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=1800,
+        )
+        content = (response.choices[0].message.content or "").strip()
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+        parsed = json.loads(content)
+        if isinstance(parsed, dict):
+            parsed.setdefault("source", "ai")
+            return parsed
+        return {**fallback, "source": "fallback"}
+    except Exception:
+        return {**fallback, "source": "fallback"}
+
+
 # ── Schemas ───────────────────────────────────────────────────────
 
 class ScoreAssessmentRequest(BaseModel):
@@ -309,3 +339,196 @@ Provide a JSON response with:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"AI analysis failed: {str(e)}",
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TPRA lifecycle AI — graceful (never 503; falls back deterministically).
+# ─────────────────────────────────────────────────────────────────────────────
+
+class RecommendTierRequest(BaseModel):
+    vendor_id: int
+
+
+class GapAnalysisRequest(BaseModel):
+    assessment_id: int
+
+
+class RemediationPlanRequest(BaseModel):
+    vendor_id: int
+    assessment_id: Optional[int] = None
+
+
+_TIER_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+_ACCESS_TIER = {"confidential": "critical", "restricted": "high", "internal": "medium", "public": "low", "none": "low"}
+
+
+@router.post("/recommend-tier")
+def ai_recommend_tier(
+    payload: RecommendTierRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Stage 2 — recommend an inherent risk tier from the vendor profile."""
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        raise HTTPException(status_code=403, detail="User not associated with any tenant")
+    vendor = db.query(Vendor).filter(
+        Vendor.id == payload.vendor_id, Vendor.tenant_id.in_(tenant_ids),
+    ).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    fallback_tier = _ACCESS_TIER.get((vendor.data_access_level or "none").lower(), "medium")
+    fallback = {
+        "recommended_tier": fallback_tier,
+        "rationale": (
+            f"Based on data access level '{vendor.data_access_level or 'none'}' and the service profile, "
+            f"a '{fallback_tier}' inherent tier is suggested. Review the blast radius if this vendor fails or is breached."
+        ),
+        "key_factors": [
+            f"Data access: {vendor.data_access_level or 'none'}",
+            f"Vendor type: {vendor.vendor_type or 'n/a'}",
+        ],
+    }
+    prompt = (
+        "You are a third-party risk expert performing inherent risk tiering (before any controls). "
+        "Recommend a tier of critical|high|medium|low for this vendor based on data sensitivity, integration depth, "
+        "operational criticality, and blast radius. Respond as STRICT JSON: "
+        '{"recommended_tier": "critical|high|medium|low", "rationale": "<2-3 sentences>", "key_factors": ["..."]}.\n\n'
+        f"Vendor: {vendor.name}\nType: {vendor.vendor_type or 'n/a'}\nIndustry: {vendor.industry or 'n/a'}\n"
+        f"Data access level: {vendor.data_access_level or 'none'}\n"
+        f"Data types: {', '.join(vendor.data_types_accessed or []) or 'n/a'}\n"
+        f"Services: {', '.join(vendor.services_provided or []) or 'n/a'}\n"
+        f"Description: {(vendor.description or '')[:600]}"
+    )
+    result = _run_ai_json(prompt, "You are a GRC third-party risk expert. Respond with valid JSON only.", fallback)
+    rt = str(result.get("recommended_tier") or fallback_tier).lower()
+    if rt not in _TIER_RANK:
+        rt = fallback_tier
+    result["recommended_tier"] = rt
+    result["current_tier"] = vendor.tier
+    return result
+
+
+@router.post("/gap-analysis")
+def ai_gap_analysis(
+    payload: GapAnalysisRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Stage 4 — derive a real residual-vs-inherent delta and per-gap analysis."""
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        raise HTTPException(status_code=403, detail="User not associated with any tenant")
+    assessment = (
+        db.query(VendorAssessment).options(joinedload(VendorAssessment.vendor))
+        .filter(VendorAssessment.id == payload.assessment_id, VendorAssessment.tenant_id.in_(tenant_ids))
+        .first()
+    )
+    if not assessment:
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    findings = assessment.findings or []
+    inherent = assessment.inherent_score if assessment.inherent_score is not None else 50.0
+    sev_weight = {"critical": 12, "high": 8, "medium": 4, "low": 2}
+    penalty = sum(sev_weight.get(str(f.get("severity") or "medium").lower(), 4) for f in findings)
+    fb_residual = max(0.0, min(100.0, round(inherent - max(0, 25 - penalty), 1)))
+    fallback = {
+        "inherent_score": inherent,
+        "residual_score": fb_residual,
+        "gap_analysis": [
+            {
+                "gap": str(f.get("finding") or f.get("category") or "Control gap"),
+                "severity": str(f.get("severity") or "medium"),
+                "control_ref": str(f.get("category") or ""),
+                "residual_after_controls": str(f.get("severity") or "medium"),
+            }
+            for f in findings
+        ],
+        "summary": f"{len(findings)} gap(s) assessed; residual risk estimated at {fb_residual}.",
+    }
+    prompt = (
+        "You are a third-party risk analyst doing gap analysis. Given the vendor's findings and inherent score, "
+        "estimate the RESIDUAL risk that remains after the vendor's existing controls, and explain each gap. "
+        "Respond as STRICT JSON: {\"inherent_score\": <0-100>, \"residual_score\": <0-100>, "
+        '"gap_analysis": [{"gap": "...", "severity": "critical|high|medium|low", "control_ref": "...", '
+        '"residual_after_controls": "..."}], "summary": "..."}.\n\n'
+        f"Vendor: {assessment.vendor.name if assessment.vendor else 'n/a'}\n"
+        f"Assessment type: {assessment.assessment_type}\nInherent score: {inherent}\n"
+        f"Findings: {json.dumps(findings)[:3000]}"
+    )
+    result = _run_ai_json(prompt, "You are a GRC third-party risk analyst. Respond with valid JSON only.", fallback)
+    try:
+        if isinstance(result.get("gap_analysis"), list):
+            assessment.gap_analysis = result["gap_analysis"]
+        rs = result.get("residual_score")
+        if isinstance(rs, (int, float)):
+            assessment.residual_score = float(rs)
+        assessment.updated_at = datetime.utcnow()
+        db.commit()
+    except Exception:
+        db.rollback()
+    return result
+
+
+@router.post("/remediation-plan")
+def ai_remediation_plan(
+    payload: RemediationPlanRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Stage 5 — draft remediation actions for a vendor's open findings.
+    Returns suggested actions; the UI adds the chosen ones to the tracker."""
+    tenant_ids = get_user_tenants(current_user, db)
+    if not tenant_ids:
+        raise HTTPException(status_code=403, detail="User not associated with any tenant")
+    vendor = db.query(Vendor).filter(
+        Vendor.id == payload.vendor_id, Vendor.tenant_id.in_(tenant_ids),
+    ).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    findings = []
+    if payload.assessment_id:
+        a = db.query(VendorAssessment).filter(
+            VendorAssessment.id == payload.assessment_id, VendorAssessment.tenant_id.in_(tenant_ids),
+        ).first()
+        if a:
+            findings = a.findings or []
+    if not findings:
+        a = (
+            db.query(VendorAssessment)
+            .filter(VendorAssessment.vendor_id == vendor.id, VendorAssessment.tenant_id.in_(tenant_ids))
+            .order_by(VendorAssessment.created_at.desc())
+            .first()
+        )
+        if a:
+            findings = a.findings or []
+
+    fallback = {
+        "actions": [
+            {
+                "title": str(f.get("finding") or f.get("category") or "Address control gap"),
+                "action": "Define a remediation plan with the vendor and an agreed timeline.",
+                "treatment_type": "remediate",
+                "severity": str(f.get("severity") or "medium"),
+                "finding_ref": str(f.get("category") or ""),
+            }
+            for f in findings
+        ] or [{
+            "title": "Establish baseline security controls",
+            "action": "Request and review the vendor's SOC 2 / ISO 27001 and close any control gaps.",
+            "treatment_type": "remediate", "severity": "medium", "finding_ref": "",
+        }],
+    }
+    prompt = (
+        "You are a third-party risk manager. For each finding, propose a remediation action with a treatment type "
+        "of remediate|mitigate|transfer|accept. Respond as STRICT JSON: "
+        '{"actions": [{"title": "...", "action": "...", "treatment_type": "remediate|mitigate|transfer|accept", '
+        '"severity": "critical|high|medium|low", "finding_ref": "..."}]}.\n\n'
+        f"Vendor: {vendor.name}\nFindings: {json.dumps(findings)[:3000]}"
+    )
+    result = _run_ai_json(prompt, "You are a GRC third-party risk manager. Respond with valid JSON only.", fallback)
+    if not isinstance(result.get("actions"), list):
+        result["actions"] = fallback["actions"]
+    return result

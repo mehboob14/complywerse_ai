@@ -566,6 +566,27 @@ _COLUMN_ADDS = [
     # Workflow engine — multi-trigger OR logic. A workflow fires when ANY of the
     # listed platform events occurs; `trigger_event` stays the primary entry.
     ("grc_workflow_definitions", "trigger_events", "JSON DEFAULT '[]'::json", None),
+    # ── Third-Party Risk Assessment (TPRA) lifecycle ──────────────────────────
+    # 8-stage lifecycle backbone + per-stage trackers. All additive (JSON / int
+    # columns on existing vendor tables — no new tables, no FK constraints).
+    ("grc_vendors", "lifecycle_stage", "VARCHAR(40) DEFAULT 'intake'",
+     "ix_grc_vendors_lifecycle_stage"),
+    ("grc_vendors", "lifecycle_history", "JSON DEFAULT '[]'::json", None),
+    ("grc_vendors", "reassessment_cadence_days", "INTEGER", None),
+    ("grc_vendors", "next_reassessment_date", "TIMESTAMP",
+     "ix_grc_vendors_next_reassessment"),
+    ("grc_vendors", "contract_document_id", "INTEGER",
+     "ix_grc_vendors_contract_document_id"),
+    ("grc_vendors", "offboarding_checklist", "JSON DEFAULT '[]'::json", None),
+    ("grc_vendors", "remediation_actions", "JSON DEFAULT '[]'::json", None),
+    ("grc_vendor_assessments", "linked_risk_id", "INTEGER",
+     "ix_grc_vendor_assessments_linked_risk_id"),
+    ("grc_vendor_assessments", "gap_analysis", "JSON DEFAULT '[]'::json", None),
+    ("grc_vendor_incidents", "linked_issue_id", "INTEGER",
+     "ix_grc_vendor_incidents_linked_issue_id"),
+    # ── ERM risk register: reviewable AI-assist fields (root cause + recommendations) ──
+    ("grc_risks", "root_cause", "TEXT", None),
+    ("grc_risks", "recommendations", "TEXT", None),
 ]
 
 

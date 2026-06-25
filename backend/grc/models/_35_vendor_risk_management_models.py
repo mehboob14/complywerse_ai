@@ -33,6 +33,24 @@ class Vendor(Base):
     owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     business_unit_id = Column(Integer, ForeignKey("grc_business_units.id"), nullable=True, index=True)
     notes = Column(Text, nullable=True)
+    # ── TPRA 8-stage lifecycle (additive) ─────────────────────────────────────
+    # Current lifecycle stage: intake → tiering → due_diligence → rating →
+    # remediation → contracting → monitoring → offboarding (+ terminated).
+    lifecycle_stage = Column(String(40), default="intake", index=True)
+    # Append-only audit of stage transitions: [{stage, at, by, note}].
+    lifecycle_history = Column(JSON, default=list)
+    # Stage 7 — continuous monitoring cadence + next due date.
+    reassessment_cadence_days = Column(Integer, nullable=True)
+    next_reassessment_date = Column(DateTime, nullable=True)
+    # Stage 6 — link the executed contract to a Governance Document (loose
+    # coupling: plain id, no FK/relationship to avoid cross-module constraints).
+    contract_document_id = Column(Integer, nullable=True)
+    # Stage 8 — offboarding checklist: [{item, done, at, by}].
+    offboarding_checklist = Column(JSON, default=list)
+    # Stage 5 — remediation/treatment tracker: [{id, finding_ref, title, action,
+    # treatment_type, severity, owner_id, due_date, status, accepted_by,
+    # accepted_at, rationale, created_at}].
+    remediation_actions = Column(JSON, default=list)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -94,6 +112,11 @@ class VendorAssessment(Base):
     risk_rating = Column(String(20), nullable=True)
     findings = Column(JSON, default=[])
     recommendations = Column(JSON, default=[])
+    # Stage 4 — AI gap analysis output (residual vs inherent delta): list of
+    # {gap, control_ref, severity, inherent_contribution, residual_after_controls}.
+    gap_analysis = Column(JSON, default=list)
+    # Stage 4→linkage — the Risk Register entry created/updated on approval.
+    linked_risk_id = Column(Integer, nullable=True, index=True)
     assessed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     reviewed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     due_date = Column(DateTime, nullable=True)
@@ -207,6 +230,8 @@ class VendorIncident(Base):
     resolved_at = Column(DateTime, nullable=True)
     impact_description = Column(Text, nullable=True)
     corrective_actions = Column(Text, nullable=True)
+    # Linkage — the Issue auto-created for a critical incident (loose: plain id).
+    linked_issue_id = Column(Integer, nullable=True, index=True)
     reported_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

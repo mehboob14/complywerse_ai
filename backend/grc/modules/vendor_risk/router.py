@@ -5,6 +5,7 @@ from .routers import (
     questionnaires_router,
     monitoring_router,
     ai_analysis_router,
+    lifecycle_router,
 )
 
 router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
@@ -14,6 +15,7 @@ router.include_router(assessments_router)
 router.include_router(questionnaires_router)
 router.include_router(monitoring_router)
 router.include_router(ai_analysis_router)
+router.include_router(lifecycle_router)
 
 
 @router.get("")

@@ -1911,6 +1911,49 @@ export const vendorRiskApi = {
     apiClient.get('/vendor-risk/questionnaire-responses', { params }),
   updateQuestionnaireResponse: (responseId: number, data: { assessment_id?: number }) =>
     apiClient.patch(`/vendor-risk/questionnaire-responses/${responseId}`, data),
+
+  // ── TPRA 8-stage lifecycle ──
+  getLifecycleStages: () => apiClient.get('/vendor-risk/lifecycle/stages'),
+  advanceStage: (vendorId: number, data?: { target_stage?: string; note?: string }) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/advance-stage`, data || {}),
+  // Remediation tracker (stage 5)
+  getRemediation: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/remediation`),
+  addRemediation: (vendorId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/remediation`, data),
+  updateRemediation: (vendorId: number, actionId: string, data: Record<string, unknown>) =>
+    apiClient.patch(`/vendor-risk/vendors/${vendorId}/remediation/${actionId}`, data),
+  deleteRemediation: (vendorId: number, actionId: string) =>
+    apiClient.delete(`/vendor-risk/vendors/${vendorId}/remediation/${actionId}`),
+  // Reassessment scheduling (stage 7)
+  scheduleReassessment: (vendorId: number, data?: { cadence_days?: number; next_date?: string }) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/schedule-reassessment`, data || {}),
+  // Offboarding checklist (stage 8)
+  getOffboarding: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/offboarding`),
+  updateOffboarding: (vendorId: number, items: Array<{ item: string; done: boolean }>) =>
+    apiClient.patch(`/vendor-risk/vendors/${vendorId}/offboarding`, { items }),
+  // TPRA AI (graceful — never 503)
+  aiRecommendTier: (vendorId: number) => apiClient.post('/vendor-risk/ai/recommend-tier', { vendor_id: vendorId }),
+  aiGapAnalysis: (assessmentId: number) => apiClient.post('/vendor-risk/ai/gap-analysis', { assessment_id: assessmentId }),
+  aiRemediationPlan: (vendorId: number, assessmentId?: number) =>
+    apiClient.post('/vendor-risk/ai/remediation-plan', { vendor_id: vendorId, assessment_id: assessmentId }),
+};
+
+// Generic AI-recommendation store — save a reviewed AI output so it persists
+// per tenant and every user with module access sees the same saved result.
+export const aiRecommendationsApi = {
+  list: (params: { module: string; entity_type?: string; entity_id?: string | number; recommendation_type?: string }) =>
+    apiClient.get('/ai-recommendations', { params }),
+  save: (data: {
+    module: string;
+    recommendation_type: string;
+    entity_type?: string;
+    entity_id?: string | number;
+    title?: string;
+    summary?: string;
+    output: Record<string, unknown>;
+    model?: string;
+  }) => apiClient.post('/ai-recommendations', data),
+  remove: (id: number) => apiClient.delete(`/ai-recommendations/${id}`),
 };
 
 export const frameworkUploadApi = {

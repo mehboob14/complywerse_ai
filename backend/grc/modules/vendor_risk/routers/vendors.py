@@ -66,6 +66,9 @@ class VendorUpdate(BaseModel):
     owner_id: Optional[int] = None
     business_unit_id: Optional[int] = None
     notes: Optional[str] = None
+    # TPRA additive fields (lifecycle_stage / trackers managed via dedicated endpoints)
+    reassessment_cadence_days: Optional[int] = None
+    contract_document_id: Optional[int] = None
 
 
 # ── Serializers ───────────────────────────────────────────────────
@@ -97,6 +100,16 @@ def serialize_vendor(v: Vendor, include_counts: bool = False) -> dict:
         "owner_id": v.owner_id,
         "business_unit_id": v.business_unit_id,
         "notes": v.notes,
+        # ── TPRA lifecycle (additive) ──
+        "lifecycle_stage": getattr(v, "lifecycle_stage", None) or "intake",
+        "lifecycle_history": getattr(v, "lifecycle_history", None) or [],
+        "reassessment_cadence_days": getattr(v, "reassessment_cadence_days", None),
+        "next_reassessment_date": (
+            v.next_reassessment_date.isoformat() if getattr(v, "next_reassessment_date", None) else None
+        ),
+        "contract_document_id": getattr(v, "contract_document_id", None),
+        "offboarding_checklist": getattr(v, "offboarding_checklist", None) or [],
+        "remediation_actions": getattr(v, "remediation_actions", None) or [],
         "created_at": v.created_at.isoformat() if v.created_at else None,
         "updated_at": v.updated_at.isoformat() if v.updated_at else None,
     }

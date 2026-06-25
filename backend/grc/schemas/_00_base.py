@@ -481,6 +481,8 @@ class RiskCreate(RiskBase):
     risk_appetite: Optional[str] = None
     status: Optional[str] = "open"
     treatment_plan: Optional[str] = None
+    root_cause: Optional[str] = None
+    recommendations: Optional[str] = None
     closure_status: Optional[str] = None
 
 
@@ -500,6 +502,9 @@ class RiskUpdate(BaseModel):
     team_id: Optional[int] = None
     business_unit_id: Optional[int] = None
     status: Optional[str] = None
+    treatment_plan: Optional[str] = None
+    root_cause: Optional[str] = None
+    recommendations: Optional[str] = None
     closure_status: Optional[str] = None
     closure_notes: Optional[str] = None
     source_type: Optional[str] = None
@@ -531,6 +536,8 @@ class RiskResponse(BaseModel):
     risk_appetite: Optional[str]
     status: str
     treatment_plan: Optional[str]
+    root_cause: Optional[str] = None
+    recommendations: Optional[str] = None
     closure_status: Optional[str] = None
     closed_at: Optional[datetime] = None
     closed_by: Optional[int] = None
