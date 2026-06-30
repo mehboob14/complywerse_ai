@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 import json
 import logging
 import os
@@ -195,7 +196,7 @@ CRITICAL: Only use control IDs from the list above. Return an empty array [] if 
 
             client = openai.OpenAI(**client_kwargs)
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model=get_openai_model(),
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
                 max_tokens=2000,

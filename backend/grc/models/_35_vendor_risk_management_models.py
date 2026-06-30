@@ -51,6 +51,11 @@ class Vendor(Base):
     # treatment_type, severity, owner_id, due_date, status, accepted_by,
     # accepted_at, rationale, created_at}].
     remediation_actions = Column(JSON, default=list)
+    # ── TPRA productionization (additive; see _41_tpra_lifecycle_models) ───────
+    # Pointer to the vendor's current (latest, non-superseded) assessment version.
+    active_assessment_id = Column(Integer, nullable=True, index=True)
+    # Soft-delete: vendors carry history, so they are never hard-deleted.
+    deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -121,6 +126,22 @@ class VendorAssessment(Base):
     reviewed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     due_date = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+    # ── TPRA productionization: versioned assessment + lifecycle (additive) ────
+    # Version chain so reassessments never overwrite prior history.
+    version_no = Column(Integer, default=1)
+    supersedes_id = Column(Integer, nullable=True, index=True)
+    # Lifecycle status of THIS assessment version: active | superseded | archived.
+    lifecycle_status = Column(String(30), default="active", index=True)
+    # Current stage key (mirrors the latest in-progress TPRAStageInstance).
+    current_stage = Column(String(40), default="intake", index=True)
+    inherent_tier = Column(String(20), nullable=True)     # critical | high | medium | low
+    residual_rating = Column(String(20), nullable=True)
+    rating_grade = Column(String(2), nullable=True)       # A–F at-a-glance grade
+    # Per-domain residual breakdown: {domain_key: {inherent, residual, score}}.
+    domain_scores = Column(JSON, default=dict)
+    # Optimistic-concurrency token for edits.
+    row_version = Column(Integer, default=1)
+    deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

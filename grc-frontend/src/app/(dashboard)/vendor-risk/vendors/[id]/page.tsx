@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
-import TpraLifecyclePanel from './_TpraLifecyclePanel';
+import TpraLifecycle from './_tpra/TpraLifecycle';
 
 interface Vendor {
   id: number;
@@ -168,7 +168,7 @@ export default function VendorDetailPage() {
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:vendors:edit');
   const canCreate = hasPermission('vendor_risk:vendors:create');
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>('lifecycle');
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
@@ -380,11 +380,10 @@ export default function VendorDetailPage() {
         </nav>
       </div>
 
-      {/* Lifecycle Tab */}
+      {/* Lifecycle Tab — productionized 11-stage TPRA lifecycle */}
       {activeTab === 'lifecycle' && (
-        <TpraLifecyclePanel
+        <TpraLifecycle
           vendorId={vendorId}
-          vendor={vendor}
           onChanged={() => queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] })}
         />
       )}

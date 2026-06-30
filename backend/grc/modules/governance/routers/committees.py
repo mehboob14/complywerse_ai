@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 from typing import List, Optional
 from datetime import datetime
 import json
@@ -385,7 +386,7 @@ def extract_text_from_uploaded_action_file(upload_file: UploadFile, file_bytes: 
 def generate_action_ai_text(prompt: str) -> str:
     client = get_openai_client()
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=get_openai_model(),
         messages=[
             {
                 "role": "system",
@@ -2583,7 +2584,7 @@ Make the charter comprehensive, professional, and specific to the committee type
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a governance expert. Return only valid JSON."},
                 {"role": "user", "content": prompt}
@@ -2778,7 +2779,7 @@ Return ONLY valid JSON."""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a governance compliance expert. Return only valid JSON."},
                 {"role": "user", "content": prompt}

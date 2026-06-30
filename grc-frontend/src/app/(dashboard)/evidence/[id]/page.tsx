@@ -1059,6 +1059,9 @@ export default function EvidenceDetailPage() {
             linkFeedback={linkFeedback}
           />
         )}
+        {activeTab === 'assessment' && (
+          <RecommendTargetsPanel evidenceId={evidenceId} />
+        )}
         {activeTab === 'controls' && (
           <ControlsTab
             controlsData={controlsData}
@@ -2771,6 +2774,142 @@ function PolicyStatementPicker({
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── AI: recommend governance documents / internal controls / active compliance
+// assessments this evidence can be mapped to or used in. Parallel to the
+// framework-control recommendations on the assessment. Self-contained.
+interface TargetRec {
+  id: number;
+  code: string | null;
+  title: string | null;
+  subtitle: string | null;
+  confidence: number | null;
+  coverage_type: string | null;
+  rationale: string | null;
+  link_source: string | null;
+}
+interface TargetRecsResponse {
+  evidence_id: number;
+  ai_available: boolean;
+  governance_documents: TargetRec[];
+  internal_controls: TargetRec[];
+  compliance_assessments: TargetRec[];
+}
+
+function RecommendTargetsPanel({ evidenceId }: { evidenceId: number }) {
+  const [data, setData] = useState<TargetRecsResponse | null>(null);
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.post(`/evidence-mgmt/ai/${evidenceId}/recommend-targets`);
+      return res.data as TargetRecsResponse;
+    },
+    onSuccess: (d) => setData(d),
+  });
+
+  const sections: Array<{
+    key: keyof Pick<TargetRecsResponse, 'governance_documents' | 'internal_controls' | 'compliance_assessments'>;
+    label: string;
+    icon: typeof FileText;
+    href: (item: TargetRec) => string;
+    emptyHint: string;
+  }> = [
+    { key: 'governance_documents', label: 'Governance documents', icon: FileText, href: () => '/governance/documents', emptyHint: 'No relevant governance documents found.' },
+    { key: 'internal_controls', label: 'Internal controls', icon: Building2, href: () => '/erm/internal-controls', emptyHint: 'No relevant internal controls found (none may exist yet).' },
+    { key: 'compliance_assessments', label: 'Active compliance assessments', icon: ClipboardList, href: (i) => `/compliance/assessments/${i.id}`, emptyHint: 'No relevant active assessments found.' },
+  ];
+
+  const total = data
+    ? data.governance_documents.length + data.internal_controls.length + data.compliance_assessments.length
+    : 0;
+
+  return (
+    <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Brain className="h-4 w-4 text-indigo-600" />
+          <h3 className="text-sm font-semibold text-slate-900">Documents, controls &amp; assessments to map</h3>
+          {data && (
+            <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-700">{total}</span>
+          )}
+        </div>
+        <button
+          onClick={() => mutation.mutate()}
+          disabled={mutation.isPending}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+        >
+          {mutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
+          {data ? 'Re-run recommendations' : 'Recommend with AI'}
+        </button>
+      </div>
+      <p className="mt-1 text-[11px] text-gray-500">
+        AI scans the governance documents, internal controls and active compliance assessments in this tenant and suggests where this evidence can be mapped or reused.
+      </p>
+
+      {mutation.isError && (
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+          <AlertCircle className="h-3.5 w-3.5" />
+          {((mutation.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail) || 'Could not generate recommendations. Try again.'}
+        </div>
+      )}
+
+      {!data ? (
+        !mutation.isPending && (
+          <div className="mt-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-center text-xs text-gray-500">
+            Click “Recommend with AI” to find related documents, internal controls and assessments for this evidence.
+          </div>
+        )
+      ) : (
+        <div className="mt-3 space-y-4">
+          {!data.ai_available && (
+            <p className="rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700">
+              AI is unavailable — showing closest lexical matches instead.
+            </p>
+          )}
+          {sections.map((section) => {
+            const items = data[section.key];
+            const Icon = section.icon;
+            return (
+              <div key={section.key}>
+                <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                  <Icon className="h-3.5 w-3.5" /> {section.label} <span className="text-gray-400">({items.length})</span>
+                </p>
+                {items.length === 0 ? (
+                  <p className="text-[11px] text-gray-400">{section.emptyHint}</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {items.map((item) => {
+                      const pct = item.link_source === 'ai' && typeof item.confidence === 'number'
+                        ? `${Math.round(item.confidence * 100)}%` : null;
+                      return (
+                        <Link
+                          key={`${section.key}-${item.id}`}
+                          href={section.href(item)}
+                          className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 hover:border-primary-300 hover:bg-primary-50/30"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {item.code && <span className="text-xs font-semibold text-slate-800">{item.code}</span>}
+                              <span className="truncate text-sm text-slate-700">{item.title || 'Untitled'}</span>
+                              {pct && <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600">{pct} match</span>}
+                              {item.coverage_type && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{item.coverage_type}</span>}
+                            </div>
+                            {item.rationale && <p className="mt-0.5 text-[11px] text-gray-500">{item.rationale}</p>}
+                            {item.subtitle && <p className="mt-0.5 truncate text-[10px] text-gray-400">{item.subtitle}</p>}
+                          </div>
+                          <ExternalLink className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

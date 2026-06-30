@@ -9,6 +9,7 @@ standalone, under 18 domains. Built into a NEW NormalizationRun (is_baseline=Fal
 the caller reviews it and PROMOTES it; the live baseline is never touched here.
 """
 from __future__ import annotations
+from ....config import get_openai_model
 import re, json
 from collections import defaultdict, Counter
 from typing import Any, Callable, Dict, List, Optional
@@ -19,7 +20,6 @@ from ....models import (
     NormalizedControl, NormalizedControlLink, CommonControlGroup,
     CommonControlGroupMapping, ParsedFrameworkControl, UploadedFramework, NormalizationRun,
 )
-from ....config import get_openai_model
 from ..routers.groups import get_openai_client
 from . import normalization as N
 

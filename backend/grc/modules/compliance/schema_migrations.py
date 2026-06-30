@@ -587,6 +587,29 @@ _COLUMN_ADDS = [
     # ── ERM risk register: reviewable AI-assist fields (root cause + recommendations) ──
     ("grc_risks", "root_cause", "TEXT", None),
     ("grc_risks", "recommendations", "TEXT", None),
+    # ── TPRA productionization (11-stage versioned lifecycle). New TPRA tables
+    # (grc_tpra_*, grc_risk_domains) are auto-created via create_all; only these
+    # additive columns on the existing vendor tables need an ALTER on live DBs. ──
+    ("grc_vendors", "active_assessment_id", "INTEGER",
+     "ix_grc_vendors_active_assessment_id"),
+    ("grc_vendors", "deleted_at", "TIMESTAMP", None),
+    ("grc_vendor_assessments", "version_no", "INTEGER DEFAULT 1", None),
+    ("grc_vendor_assessments", "supersedes_id", "INTEGER",
+     "ix_grc_vendor_assessments_supersedes_id"),
+    ("grc_vendor_assessments", "lifecycle_status", "VARCHAR(30) DEFAULT 'active'",
+     "ix_grc_vendor_assessments_lifecycle_status"),
+    ("grc_vendor_assessments", "current_stage", "VARCHAR(40) DEFAULT 'intake'",
+     "ix_grc_vendor_assessments_current_stage"),
+    ("grc_vendor_assessments", "inherent_tier", "VARCHAR(20)", None),
+    ("grc_vendor_assessments", "residual_rating", "VARCHAR(20)", None),
+    ("grc_vendor_assessments", "domain_scores", "JSON DEFAULT '{}'::json", None),
+    ("grc_vendor_assessments", "row_version", "INTEGER DEFAULT 1", None),
+    ("grc_vendor_assessments", "deleted_at", "TIMESTAMP", None),
+    # TPRM revamp — A–F grade snapshot of residual at score time.
+    ("grc_vendor_assessments", "rating_grade", "VARCHAR(2)", None),
+    # Finding → ERM Risk Register promotion link (vendor-sourced risk).
+    ("grc_tpra_findings", "linked_risk_id", "INTEGER",
+     "ix_grc_tpra_findings_linked_risk_id"),
 ]
 
 

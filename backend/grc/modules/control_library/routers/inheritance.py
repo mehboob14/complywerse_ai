@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 import os
 import json
 from typing import List, Optional
@@ -576,7 +577,7 @@ Return JSON:
 Only include controls with meaningful inheritance relationships (coverage >= 30%)."""
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {
                     "role": "system",

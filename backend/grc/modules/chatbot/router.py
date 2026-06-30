@@ -3,6 +3,7 @@ ComplyChatRouter - AI-Powered Compliance Q&A Integration
 Integrates RAG-based chatbot into the main GRC platform
 """
 
+from ...config import get_openai_model
 import os
 import sys
 import json
@@ -806,7 +807,7 @@ def answer_grc_knowledge_question(
         messages.append({"role": "user", "content": question})
 
         completion = _client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=messages,
             temperature=0.2,
             max_tokens=1500,

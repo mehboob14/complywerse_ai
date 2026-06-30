@@ -1,4 +1,5 @@
-from ..config import get_openai_api_key
+from ..config import get_openai_api_key, get_openai_model
+
 import os
 import json
 import logging
@@ -15,7 +16,8 @@ logger = logging.getLogger(__name__)
 from ..models import (
     NormalizedControl, ControlMapping, GRCRequiredEvidence,
     FrameworkControl, Framework, GRCUser, get_db,
-    ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping
+    ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping,
+    Risk, RiskFrameworkControlLink,
 )
 from ..schemas import (
     NormalizedControlCreate, NormalizedControlUpdate, NormalizedControlResponse,
@@ -23,7 +25,8 @@ from ..schemas import (
     RequiredEvidenceCreate, RequiredEvidenceResponse,
     MessageResponse
 )
-from .auth_router import require_auth, get_user_tenants
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from datetime import datetime
 
 
 class ControlAIRecommendationRequest(BaseModel):
@@ -31,6 +34,21 @@ class ControlAIRecommendationRequest(BaseModel):
     control_title: str
     control_description: Optional[str] = None
     framework_name: Optional[str] = None
+
+
+class PromoteControlRiskRequest(BaseModel):
+    """Promote an AI-suggested 'risk if this control isn't implemented' into the
+    real ERM Risk Register, linked back to the framework control (source)."""
+    control_id: int
+    framework_name: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    category: str = "compliance"        # strategic|operational|financial|compliance|technology|third_party|project_change
+    inherent_likelihood: Optional[int] = None  # 1–5
+    inherent_impact: Optional[int] = None       # 1–5
+    owner_id: Optional[int] = None
+    treatment_plan: Optional[str] = None
+    due_date: Optional[str] = None      # ISO date
 
 
 class FrameworkControlEvidenceLinkCreate(BaseModel):
@@ -143,7 +161,18 @@ Generate professional, audit-ready recommendations in the following JSON format:
         }}
     ],
     "key_risks_addressed": ["<risk 1>", "<risk 2>", ...],
-    "audit_focus_areas": ["<focus area 1>", "<focus area 2>", ...]
+    "audit_focus_areas": ["<focus area 1>", "<focus area 2>", ...],
+    "risks_if_not_implemented": [
+        {{
+            "title": "<concise risk title — the risk that materialises if this control is NOT implemented>",
+            "description": "<what happens / the exposure>",
+            "category": "<one of: strategic|operational|financial|compliance|technology|third_party|project_change>",
+            "severity": "<critical|high|medium|low>",
+            "likelihood": <1-5 integer>,
+            "impact": <1-5 integer>,
+            "rationale": "<one-sentence reasoning: WHY not implementing this control creates this risk>"
+        }}
+    ]
 }}
 
 REQUIREMENTS:
@@ -151,8 +180,8 @@ REQUIREMENTS:
 2. Generate 3-7 evidence requirements covering policies, procedures, and actual evidence artifacts
 3. Identify 2-5 key risks that this control addresses
 4. Identify 2-4 audit focus areas that auditors would typically scrutinize
-5. Be specific and actionable - procedures should be executable by an auditor
-6. Evidence requirements should be comprehensive and realistic
+5. For risks_if_not_implemented: identify 2-4 concrete enterprise risks that would arise if this control were absent or failed, each with a likelihood/impact (1-5) and a one-sentence rationale. These feed directly into a risk register, so phrase them as register-ready risk statements.
+6. Be specific and actionable - procedures should be executable by an auditor
 7. Respond ONLY with valid JSON, no additional text"""
 
 
@@ -174,7 +203,7 @@ def get_control_ai_recommendations(
         )
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a Senior GRC Auditor providing audit test procedures and evidence requirements. Respond only with valid JSON."},
                 {"role": "user", "content": prompt}
@@ -231,12 +260,36 @@ def get_control_ai_recommendations(
                 "audit_focus_areas": ["Evidence of control operation", "Completeness of documentation"]
             }
         
+        # ── Real register linkage: actual ERM risks this control already addresses
+        # (via RiskFrameworkControlLink) — not generic AI text. Best-effort.
+        addressed_risks = []
+        try:
+            tids = get_user_tenants(current_user, db)
+            links = db.query(RiskFrameworkControlLink).options(
+                joinedload(RiskFrameworkControlLink.risk)
+            ).filter(RiskFrameworkControlLink.framework_control_id == request.control_id).all()
+            for ln in links:
+                r = ln.risk
+                if r and r.tenant_id in tids:
+                    addressed_risks.append({
+                        "id": r.id, "title": r.title, "category": r.category,
+                        "status": r.status, "inherent_score": r.inherent_score,
+                        "residual_score": r.residual_score,
+                        "mitigation_effectiveness": ln.mitigation_effectiveness,
+                    })
+        except Exception:  # noqa: BLE001 — linkage is best-effort
+            logger.warning("addressed-risks lookup failed for control %s", request.control_id, exc_info=True)
+
         return {
             "control_id": request.control_id,
             "test_procedures": result.get("test_procedures", []),
             "evidence_requirements": result.get("evidence_requirements", []),
             "key_risks_addressed": result.get("key_risks_addressed", []),
-            "audit_focus_areas": result.get("audit_focus_areas", [])
+            "audit_focus_areas": result.get("audit_focus_areas", []),
+            # Real risks already linked in the register that this control mitigates.
+            "addressed_risks": addressed_risks,
+            # AI-reasoned risks that arise WITHOUT this control — promotable to the register.
+            "risks_if_not_implemented": result.get("risks_if_not_implemented", []),
         }
         
     except HTTPException:
@@ -247,6 +300,79 @@ def get_control_ai_recommendations(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate AI recommendations: {str(e)}"
         )
+
+
+_RISK_CATEGORIES = {"strategic", "operational", "financial", "compliance", "technology", "third_party", "project_change"}
+
+
+@router.post("/ai-recommendations/promote-risk", status_code=status.HTTP_201_CREATED)
+def promote_control_risk(
+    request: PromoteControlRiskRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Create a real ERM Risk from an AI-suggested 'risk if this control isn't
+    implemented', and link it to the framework control (the control is the
+    mitigating control; the framework is the source). The risk lands in the actual
+    Risk Register under /erm/risks."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="User is not assigned to any tenant")
+
+    control = db.query(FrameworkControl).filter(FrameworkControl.id == request.control_id).first()
+    if not control:
+        raise HTTPException(status_code=404, detail="Framework control not found")
+
+    category = request.category if request.category in _RISK_CATEGORIES else "compliance"
+    likelihood = request.inherent_likelihood if request.inherent_likelihood in (1, 2, 3, 4, 5) else None
+    impact = request.inherent_impact if request.inherent_impact in (1, 2, 3, 4, 5) else None
+    score = float(likelihood * impact) if (likelihood and impact) else None
+
+    due = None
+    if request.due_date:
+        try:
+            due = datetime.fromisoformat(request.due_date.replace("Z", "+00:00"))
+        except ValueError:
+            due = None
+
+    risk = Risk(
+        tenant_id=tenant_id,
+        title=request.title[:255],
+        description=request.description,
+        category=category,
+        risk_category=category,
+        register_type=request.framework_name or "Control Gap",
+        owner_id=request.owner_id or current_user.id,
+        inherent_likelihood=likelihood,
+        inherent_impact=impact,
+        inherent_score=score,
+        # Control not yet implemented → residual starts at inherent.
+        residual_likelihood=likelihood,
+        residual_impact=impact,
+        residual_score=score,
+        status="open",
+        treatment_plan=request.treatment_plan,
+        due_date=due,
+        source_type="control_gap",
+        source_reference=f"framework_control:{request.control_id}",
+    )
+    db.add(risk)
+    db.flush()
+
+    # Link the control as a mitigating control (idempotent on the unique key).
+    if not db.query(RiskFrameworkControlLink).filter(
+        RiskFrameworkControlLink.risk_id == risk.id,
+        RiskFrameworkControlLink.framework_control_id == request.control_id,
+    ).first():
+        db.add(RiskFrameworkControlLink(
+            risk_id=risk.id, framework_control_id=request.control_id,
+            mitigation_effectiveness="full",
+            notes=f"Promoted from control AI analysis — implementing this control mitigates the risk.",
+        ))
+    db.commit()
+    db.refresh(risk)
+    return {"risk_id": risk.id, "title": risk.title, "category": risk.category,
+            "inherent_score": risk.inherent_score, "status": risk.status}
 
 
 @router.get("", response_model=List[NormalizedControlResponse])

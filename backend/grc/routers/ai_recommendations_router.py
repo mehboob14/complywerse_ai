@@ -6,7 +6,7 @@ output. Keyed by (module, entity_type, entity_id, recommendation_type) — savin
 again for the same key upserts.
 """
 import logging
-from typing import Optional
+from typing import Optional, Union
 from datetime import datetime
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -43,7 +43,7 @@ class SaveRecommendationRequest(BaseModel):
     module: str
     recommendation_type: str
     entity_type: Optional[str] = None
-    entity_id: Optional[str] = None
+    entity_id: Optional[Union[str, int]] = None  # coerced to str on save
     title: Optional[str] = None
     summary: Optional[str] = None
     output: dict = {}

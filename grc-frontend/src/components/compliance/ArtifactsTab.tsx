@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -27,7 +27,37 @@ import {
   FolderOpen,
   Download,
   Upload,
+  Eye,
+  FileSpreadsheet,
+  Loader2,
 } from 'lucide-react';
+
+// ─── Native-format download helpers (server-rendered xlsx/csv/docx/pdf/md) ────
+
+const FORMAT_LABEL: Record<string, string> = {
+  xlsx: 'Excel (.xlsx)', csv: 'CSV (.csv)', docx: 'Word (.docx)', pdf: 'PDF (.pdf)', md: 'Markdown (.md)',
+};
+
+function formatsForMode(contentFormat?: string | null): string[] {
+  return (contentFormat || '').toLowerCase() === 'table'
+    ? ['xlsx', 'csv', 'pdf', 'md']
+    : ['docx', 'pdf', 'md'];
+}
+
+async function downloadFromServer(url: string, params: Record<string, unknown>, fallbackName: string) {
+  const res = await apiClient.get(url, { params, responseType: 'blob' });
+  const cd = (res.headers?.['content-disposition'] as string) || '';
+  const m = /filename="?([^"]+)"?/.exec(cd);
+  const name = m ? m[1] : fallbackName;
+  const blobUrl = window.URL.createObjectURL(new Blob([res.data]));
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(blobUrl);
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -231,6 +261,147 @@ function EditPreviewToggle({
   );
 }
 
+// ─── Download menu (native formats) ──────────────────────────────────────────
+
+function DownloadMenu({
+  formats, onPick, busy, label = 'Download', size = 'sm',
+}: { formats: string[]; onPick: (fmt: string) => void; busy?: string | null; label?: string; size?: 'sm' | 'md' }) {
+  const [open, setOpen] = useState(false);
+  const pad = size === 'md' ? 'px-3 py-1.5 text-sm' : 'px-2.5 py-1 text-xs';
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className={`flex items-center gap-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 ${pad}`}>
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+        {label}
+      </button>
+      {open && (
+        <div className="absolute right-0 z-30 mt-1 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+          {formats.map((f) => (
+            <button
+              key={f}
+              onMouseDown={(e) => { e.preventDefault(); setOpen(false); onPick(f); }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50">
+              {f === 'xlsx' || f === 'csv' ? <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" /> : <FileText className="h-3.5 w-3.5 text-blue-600" />}
+              {FORMAT_LABEL[f] || f}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── View Generated Artifact Modal ───────────────────────────────────────────
+
+interface CatalogContent {
+  found: boolean;
+  title?: string;
+  type?: string;
+  control_ref?: string | null;
+  content?: string | null;
+  content_format?: string;
+  format?: string | null;
+}
+
+export function ViewArtifactModal({
+  item, frameworkKey, onClose, onCreate,
+}: { item: CatalogItem; frameworkKey: string; onClose: () => void; onCreate?: () => void }) {
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const { data, isLoading } = useQuery<CatalogContent>({
+    queryKey: ['artifact-content', frameworkKey, item.artifact_id],
+    queryFn: async () => {
+      const r = await apiClient.get('/artifacts/catalog/content', {
+        params: { artifact_id: item.artifact_id, framework_key: frameworkKey },
+      });
+      return r.data;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const found = !!data?.found;
+  const mode = data?.content_format || 'markdown';
+  const formats = formatsForMode(mode);
+
+  const handleDownload = async (fmt: string) => {
+    setDownloading(fmt);
+    try {
+      await downloadFromServer(
+        '/artifacts/catalog/export',
+        { artifact_id: item.artifact_id, framework_key: frameworkKey, fmt },
+        `${item.name}.${fmt}`,
+      );
+    } catch {
+      alert('Download failed — has this artifact been generated yet?');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const modeBadge: Record<string, { t: string; c: string }> = {
+    table: { t: 'Spreadsheet template', c: 'bg-emerald-50 text-emerald-700' },
+    guide: { t: 'Collection guide', c: 'bg-amber-50 text-amber-700' },
+    markdown: { t: 'Document', c: 'bg-blue-50 text-blue-700' },
+  };
+  const mb = modeBadge[mode] || modeBadge.markdown;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative z-10 flex max-h-[92vh] w-full max-w-3xl flex-col rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-gray-100 px-6 py-4">
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold text-black">{item.name}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+              <span>{item.artifact_type}</span>
+              {item.control_ref && <span className="font-mono">· {item.control_ref}</span>}
+              {item.format && <span>· {item.format}</span>}
+              {found && <span className={`rounded px-1.5 py-0.5 font-medium ${mb.c}`}>{mb.t}</span>}
+            </div>
+          </div>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            {found && <DownloadMenu formats={formats} onPick={handleDownload} busy={downloading} />}
+            <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"><X className="h-4 w-4" /></button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-2 py-16 text-gray-500">
+              <Loader2 className="h-5 w-5 animate-spin" /> Loading…
+            </div>
+          ) : !found ? (
+            <div className="py-12 text-center">
+              <Package className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+              <p className="text-sm font-medium text-gray-600">Not generated yet</p>
+              <p className="mx-auto mt-1 max-w-md text-xs text-gray-400">
+                This artifact&apos;s content hasn&apos;t been generated. Once the artifact-content
+                generator has run for this framework, its document/template/guide will appear here.
+              </p>
+            </div>
+          ) : (
+            <ReactMarkdown remarkPlugins={mdRemarkPlugins} components={mdComponents}>
+              {data?.content || ''}
+            </ReactMarkdown>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-6 py-4">
+          {found && onCreate && (
+            <button onClick={onCreate}
+              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">
+              <Plus className="h-3.5 w-3.5" /> Create working copy
+            </button>
+          )}
+          <button onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Create Modal ─────────────────────────────────────────────────────────────
 
 export function CreateArtifactModal({
@@ -267,10 +438,31 @@ export function CreateArtifactModal({
 
   const [name, setName]           = useState(item.name);
   const [description, setDescription] = useState(item.description || '');
-  const [content, setContent]     = useState(item.is_platform_native ? '' : buildArtifactTemplate(meta));
+  const initialTemplate = item.is_platform_native ? '' : buildArtifactTemplate(meta);
+  const [content, setContent]     = useState(initialTemplate);
   const [assignedToId, setAssignedToId] = useState<number | null>(null);
   const [contentMode, setContentMode] = useState<'edit' | 'preview'>('preview');
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Prefer the AI-generated, type-/control-specific content over the generic
+  // client-side template. Only adopt it while the user hasn't edited yet.
+  const { data: generated } = useQuery<CatalogContent>({
+    queryKey: ['artifact-content', frameworkKey, item.artifact_id],
+    queryFn: async () => {
+      const r = await apiClient.get('/artifacts/catalog/content', {
+        params: { artifact_id: item.artifact_id, framework_key: frameworkKey },
+      });
+      return r.data;
+    },
+    enabled: !item.is_platform_native,
+    staleTime: 5 * 60_000,
+  });
+  useEffect(() => {
+    if (generated?.found && generated.content && content === initialTemplate) {
+      setContent(generated.content);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generated]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -591,6 +783,7 @@ export default function ArtifactsTab({
   const [expandedItem, setExpandedItem]     = useState<number | null>(null);
   const [editingArtifact, setEditingArtifact] = useState<TenantArtifact | null>(null);
   const [createFromItem, setCreateFromItem] = useState<CatalogItem | null>(null);
+  const [viewingItem, setViewingItem]       = useState<CatalogItem | null>(null);
 
   const { data: catalog, isLoading: catalogLoading } = useQuery<CatalogData>({
     queryKey: ['artifact-catalog', assessmentType],
@@ -743,6 +936,14 @@ export default function ArtifactsTab({
           onSave={(data) => updateMutation.mutate({ id: editingArtifact.id, data })}
           onClose={() => setEditingArtifact(null)}
           isPending={updateMutation.isPending}
+        />
+      )}
+      {viewingItem && (
+        <ViewArtifactModal
+          item={viewingItem}
+          frameworkKey={frameworkKey}
+          onClose={() => setViewingItem(null)}
+          onCreate={viewingItem.is_platform_native ? undefined : () => { setCreateFromItem(viewingItem); setViewingItem(null); }}
         />
       )}
 
@@ -911,15 +1112,13 @@ export default function ArtifactsTab({
                               )}
                             </div>
                             <div className="flex-shrink-0 flex items-center gap-1.5">
-                              {!item.is_platform_native && (
-                                <button
-                                  onClick={() => downloadTemplate(item)}
-                                  title="Download a ready-structured template to fill in, then upload as evidence"
-                                  className="px-2.5 py-1 text-xs border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5"
-                                >
-                                  <Download className="h-3 w-3" /> Template
-                                </button>
-                              )}
+                              <button
+                                onClick={() => setViewingItem(item)}
+                                title="View the generated document/template and download it as Word, PDF, Excel, CSV or Markdown"
+                                className="px-2.5 py-1 text-xs border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+                              >
+                                <Eye className="h-3 w-3" /> View
+                              </button>
                               {existing ? (
                                 <span className="px-2 py-1 text-xs bg-emerald-50 text-emerald-700 rounded-lg flex items-center gap-1">
                                   <CheckCircle className="h-3 w-3" /> Created
@@ -1012,13 +1211,17 @@ export default function ArtifactsTab({
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           {!artifact.is_platform_native && artifact.content && (
-                            <button
-                              onClick={() => downloadAsFormat(artifact.name, artifact.content!, artifact.format, artifact.artifact_type)}
-                              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-                              title="Download"
-                            >
-                              <Download className="h-4 w-4" />
-                            </button>
+                            <DownloadMenu
+                              label=""
+                              formats={(() => {
+                                const p = (artifact.format || '').toUpperCase().split('/')[0].trim();
+                                return p === 'XLSX' || p === 'CSV' ? ['xlsx', 'csv', 'pdf', 'md'] : ['docx', 'pdf', 'md'];
+                              })()}
+                              onPick={(fmt) =>
+                                downloadFromServer(`/artifacts/${artifact.id}/export`, { fmt }, `${artifact.name}.${fmt}`)
+                                  .catch(() => alert('Download failed.'))
+                              }
+                            />
                           )}
                           {artifact.is_platform_native && (
                             <button

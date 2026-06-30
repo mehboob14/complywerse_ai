@@ -33,6 +33,27 @@ router = APIRouter(prefix="/artifacts", tags=["Artifacts"])
 # Catalog seed path
 # ---------------------------------------------------------------------------
 _CATALOG_PATH = Path(__file__).parent.parent / "seed_data" / "artifact_catalog.json"
+# Pre-generated, type-/control-specific artifact document bodies (one-time job:
+# scripts/generate_artifact_content.py). Served on create so the governance flow
+# uses ready content instead of re-drafting. Cached in-process by mtime.
+_CONTENT_PATH = Path(__file__).parent.parent / "seed_data" / "artifact_content.json"
+_content_cache: dict = {"mtime": None, "data": {}}
+
+
+def _load_artifact_content() -> dict:
+    """Load (and cache) the pre-generated artifact content map, reloading if the
+    file changed. Returns {} if it hasn't been generated yet."""
+    try:
+        if not _CONTENT_PATH.exists():
+            return {}
+        mtime = _CONTENT_PATH.stat().st_mtime
+        if _content_cache["mtime"] != mtime:
+            _content_cache["data"] = json.loads(_CONTENT_PATH.read_text(encoding="utf-8"))
+            _content_cache["mtime"] = mtime
+        return _content_cache["data"]
+    except Exception:  # noqa: BLE001 — content is an optional enhancement
+        logger.warning("could not load artifact_content.json", exc_info=True)
+        return {}
 
 # Map assessment_type strings → catalog framework_key
 ASSESSMENT_TYPE_MAP: dict[str, str] = {
@@ -663,6 +684,79 @@ def _artifact_out(artifact: TenantArtifact) -> dict:
 # Routes
 # ---------------------------------------------------------------------------
 
+@router.get("/catalog/content")
+def get_artifact_content(
+    artifact_id: str = Query(..., description="Catalog artifact_id, e.g. ISO27-001"),
+    framework_key: Optional[str] = Query(None, description="Optional — disambiguates if ids ever collide"),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Return the pre-generated, type-/control-specific document body for a catalog
+    artifact (from artifact_content.json). The governance create flow uses this so
+    each artifact gets proper content instead of generic boilerplate. `found=false`
+    signals the caller to fall back to its client-side template."""
+    data = _load_artifact_content()
+    entry = None
+    if framework_key and framework_key in data:
+        entry = data[framework_key].get(artifact_id)
+    if not entry:
+        for fw_bucket in data.values():
+            if artifact_id in fw_bucket:
+                entry = fw_bucket[artifact_id]
+                break
+    if not entry or not entry.get("content"):
+        return {"artifact_id": artifact_id, "found": False, "content": None}
+    return {
+        "artifact_id": artifact_id, "found": True,
+        "title": entry.get("title"), "type": entry.get("type"),
+        "control_ref": entry.get("control_ref"), "content": entry.get("content"),
+        # format-aware extras (additive): the generation mode + the structured
+        # table (tabular artifacts) so the UI can render/download natively.
+        "content_format": entry.get("content_format") or "markdown",
+        "format": entry.get("format"),
+        "table": entry.get("table"),
+    }
+
+
+def _lookup_catalog_entry(data: dict, artifact_id: str, framework_key: Optional[str]) -> Optional[dict]:
+    if framework_key and framework_key in data:
+        entry = data[framework_key].get(artifact_id)
+        if entry:
+            return entry
+    for fw_bucket in data.values():
+        if artifact_id in fw_bucket:
+            return fw_bucket[artifact_id]
+    return None
+
+
+@router.get("/catalog/export")
+def export_catalog_artifact(
+    artifact_id: str = Query(..., description="Catalog artifact_id, e.g. ISO27-001"),
+    framework_key: Optional[str] = Query(None),
+    fmt: str = Query("md", description="md | csv | xlsx | docx | pdf"),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Download a catalog artifact's pre-generated content as a native file
+    (xlsx/csv for templates, docx/pdf/md for documents & guides)."""
+    from ._artifact_export import build_export, SUPPORTED_FORMATS  # local import: heavy libs
+    entry = _lookup_catalog_entry(_load_artifact_content(), artifact_id, framework_key)
+    if not entry or not entry.get("content"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="No generated content for this artifact yet.")
+    if fmt.lower() not in SUPPORTED_FORMATS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Unsupported format. Use one of: {', '.join(SUPPORTED_FORMATS)}")
+    title = entry.get("title") or artifact_id
+    body, media, ext = build_export(
+        fmt, title=title, content=entry.get("content"),
+        content_format=entry.get("content_format"), table=entry.get("table"),
+    )
+    filename = f"{_safe_filename(title)}.{ext}"
+    return StreamingResponse(
+        BytesIO(body), media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/catalog")
 def get_catalog(
     framework_key: Optional[str] = Query(None),
@@ -1011,22 +1105,27 @@ def _build_asset_inventory_xlsx(db: Session, tenant_id: int, title: str) -> Byte
     return buf
 
 
+def _default_fmt_for(format_str: Optional[str]) -> str:
+    """Pick a sensible download format from the catalog `format` string."""
+    primary = (format_str or "").upper().split("/")[0].split("(")[0].strip()
+    return {"XLSX": "xlsx", "CSV": "csv", "PDF": "pdf", "DOCX": "docx"}.get(primary, "docx")
+
+
 @router.get("/{artifact_id}/export")
 def export_artifact(
     artifact_id: int,
+    fmt: str = Query("auto", description="auto | md | csv | xlsx | docx | pdf"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    """Download a tenant artifact as a file.
+    """Download a tenant artifact as a native file in any supported format.
 
-    For platform-native artifacts (risk register, asset inventory, …) we
-    generate an XLSX from the live tenant data so the exported file always
-    reflects the current state of the source — not a cached snapshot.
-
-    For non-platform artifacts the caller already has the ``content`` field
-    and renders the file client-side; this endpoint returns 400 to make
-    that explicit.
+    Platform-native artifacts (risk register, asset inventory) export a LIVE
+    XLSX from current tenant data. All other artifacts are rendered from their
+    stored ``content`` (+ table) into the requested format (xlsx/csv for
+    tabular templates, docx/pdf/md for documents & guides).
     """
+    from ._artifact_export import build_export, SUPPORTED_FORMATS  # local import: heavy libs
     tenant_id = get_user_primary_tenant(current_user, db)
     artifact = (
         db.query(TenantArtifact)
@@ -1036,33 +1135,30 @@ def export_artifact(
     if not artifact:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found")
 
-    if not artifact.is_platform_native:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "This artifact is not a platform-native data export. The "
-                "frontend renders its content directly via the existing "
-                "download helper — call /artifacts/{id} for the content."
-            ),
-        )
-
-    pdt = (artifact.platform_data_type or "").strip().lower()
     title = artifact.name or "artifact"
+    pdt = (artifact.platform_data_type or "").strip().lower()
 
-    if pdt == "risk_register":
-        buf = _build_risk_register_xlsx(db, tenant_id, title)
-    elif pdt == "asset_inventory":
-        buf = _build_asset_inventory_xlsx(db, tenant_id, title)
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=f"Export not implemented for platform_data_type='{pdt}'",
+    # Platform-native exports stay live-from-data (XLSX of current tenant state).
+    if artifact.is_platform_native and pdt in ("risk_register", "asset_inventory"):
+        buf = _build_risk_register_xlsx(db, tenant_id, title) if pdt == "risk_register" \
+            else _build_asset_inventory_xlsx(db, tenant_id, title)
+        filename = f"{_safe_filename(title)}.xlsx"
+        return StreamingResponse(
+            buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    filename = f"{_safe_filename(title)}.xlsx"
+    if not (artifact.content or "").strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="This artifact has no content to export.")
+    chosen = _default_fmt_for(artifact.format) if (fmt or "auto").lower() == "auto" else fmt.lower()
+    if chosen not in SUPPORTED_FORMATS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Unsupported format. Use one of: {', '.join(SUPPORTED_FORMATS)}")
+    body, media, ext = build_export(chosen, title=title, content=artifact.content)
+    filename = f"{_safe_filename(title)}.{ext}"
     return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        BytesIO(body), media_type=media,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 import os
 import io
 import json
@@ -1080,7 +1081,7 @@ Provide a JSON response with:
 Be specific, actionable, and focus on business impact."""
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {
                     "role": "system",

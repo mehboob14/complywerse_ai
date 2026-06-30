@@ -134,3 +134,49 @@ class PolicyStatementCompliance(Base):
         Index("ix_policy_compliance_owner", "owner_id"),
     )
 
+
+class StatementControlMapping(Base):
+    """Auto-mapped 360° linkage from a policy statement to controls across every
+    universe (normalized / framework / parsed / internal). Populated by the AI
+    auto-mapper after a governance document is parsed. Control id columns are
+    plain integers (no FK) so the table never couples to a control universe that
+    a given tenant DB may not have populated. Control code/title/framework are
+    denormalised so the linkage renders without cross-joins (auditor-defensible).
+    """
+    __tablename__ = "grc_statement_control_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    statement_id = Column(Integer, ForeignKey("grc_policy_statements.id"), nullable=False, index=True)
+
+    # control_kind ∈ normalized | framework | parsed | internal — exactly one of
+    # the *_control_id columns below is set to match.
+    control_kind = Column(String(20), nullable=False)
+    normalized_control_id = Column(Integer, nullable=True)
+    framework_control_id = Column(Integer, nullable=True)
+    parsed_control_id = Column(Integer, nullable=True)
+    internal_control_id = Column(Integer, nullable=True)
+
+    # Denormalised display fields.
+    control_code = Column(String(100), nullable=True)
+    control_title = Column(String(500), nullable=True)
+    framework_name = Column(String(255), nullable=True)
+    domain = Column(String(100), nullable=True)
+
+    confidence = Column(Float, nullable=True)              # 0.0–1.0
+    coverage_type = Column(String(30), default="partial")  # full | partial | supporting
+    rationale = Column(Text, nullable=True)
+    # ai  = directly chosen by the LLM for this statement.
+    # derived = added by traversing existing control↔control mappings.
+    link_source = Column(String(20), default="ai")
+    is_locked = Column(Boolean, default=False)            # user lock against re-map drift
+    created_by_ai = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    statement = relationship("PolicyStatement")
+
+    __table_args__ = (
+        Index("ix_stmt_ctrl_map_tenant_stmt", "tenant_id", "statement_id"),
+        Index("ix_stmt_ctrl_map_kind", "statement_id", "control_kind"),
+    )
+

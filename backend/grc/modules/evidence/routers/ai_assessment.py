@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 import os
 import json
 import hashlib
@@ -17,7 +18,8 @@ logger = logging.getLogger(__name__)
 from ....models import (
     Evidence, EvidenceAIAssessment, EvidenceControlMapping, EvidenceAssessmentCache,
     GRCUser, get_db, Framework, FrameworkDomain, ControlObjective, FrameworkControl,
-    UploadedFramework, ParsedFrameworkControl
+    UploadedFramework, ParsedFrameworkControl,
+    GovernanceDocument, InternalControl, ComplianceAssessmentDocument,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -34,7 +36,7 @@ AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_UR
 PROMPT_VERSION = "3.0"
 # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
 # Using gpt-4o for compatibility with Replit AI integrations
-MODEL_VERSION = "gpt-4o"
+MODEL_VERSION = get_openai_model()
 
 # Enhanced prompt for intent-based analysis with cross-framework mapping
 # Version 3.0: Intent-based analysis with three-tier matching system
@@ -1388,6 +1390,172 @@ def batch_assess_evidence(
         failed=failed_count,
         results=results
     )
+
+
+# ─── Recommend mappable targets (governance docs / internal controls / assessments) ──
+# Parallel to the framework-control recommendations (clause_mappings): given an
+# uploaded evidence, AI-recommend the governance documents, internal controls and
+# active compliance assessments this evidence supports / can be mapped to or used in.
+
+import re as _re
+
+_WORD_RE = _re.compile(r"[a-z0-9]+")
+
+
+def _kw(s: str) -> set:
+    return set(_WORD_RE.findall((s or "").lower()))
+
+
+RECOMMEND_TARGETS_PROMPT = """You are a Senior GRC analyst. You are given a piece of compliance EVIDENCE and a numbered \
+list of candidate {category}. Select ONLY the candidates that this evidence is genuinely relevant to — i.e. the evidence \
+could be MAPPED to it or USED as evidence for it. Be precise; do not select loosely-related items.
+
+For each selected candidate give: confidence (0.0-1.0), coverage (full|partial|supporting) and a one-sentence rationale.
+Respond with STRICT JSON only: {{"matches":[{{"index":<int>,"confidence":<0-1>,"coverage":"full|partial|supporting","rationale":"<one sentence>"}}]}}.
+Use only indices from the list. If none genuinely match, return an empty matches array.
+
+## EVIDENCE
+{evidence}
+
+## CANDIDATE {category_upper}
+{candidates}"""
+
+
+def _ai_select_targets(client, evidence_excerpt: str, category: str, candidates: List[dict]) -> List[dict]:
+    """Ask the LLM which candidates the evidence maps to. `candidates` is a list of
+    {id, code, title, subtitle, kwtext}. Returns the same dicts enriched with
+    confidence/coverage_type/rationale/link_source (kwtext stripped)."""
+    if not candidates:
+        return []
+    # Narrow to the most lexically-relevant candidates so the prompt stays small.
+    ev_kw = _kw(evidence_excerpt)
+    scored = sorted(candidates, key=lambda c: len(ev_kw & _kw(c.get("kwtext", ""))), reverse=True)
+    narrowed = [c for c in scored if len(ev_kw & _kw(c.get("kwtext", ""))) > 0][:25] or scored[:15]
+
+    def _clean(c: dict, **extra) -> dict:
+        return {
+            "id": c["id"], "code": c.get("code"), "title": c.get("title"),
+            "subtitle": c.get("subtitle"), **extra,
+        }
+
+    if client is None:
+        # Deterministic keyword fallback when AI is unavailable.
+        return [_clean(c, confidence=None, coverage_type="supporting",
+                       rationale="Lexical match to the evidence content", link_source="keyword")
+                for c in narrowed[:8]]
+
+    lines = [f'[{i}] {(c.get("code") or "")} {c.get("title") or ""}: {(c.get("subtitle") or "")[:160]}'
+             for i, c in enumerate(narrowed)]
+    prompt = RECOMMEND_TARGETS_PROMPT.format(
+        category=category, category_upper=category.upper(),
+        evidence=evidence_excerpt[:3500], candidates="\n".join(lines),
+    )
+    try:
+        resp = client.chat.completions.create(
+            model=MODEL_VERSION,
+            messages=[
+                {"role": "system", "content": "You are a precise GRC analyst. Respond with valid JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=1500,
+        )
+        data = parse_ai_response(resp.choices[0].message.content or "")
+        out = []
+        for m in (data.get("matches") or []):
+            try:
+                idx = int(m.get("index"))
+            except (TypeError, ValueError):
+                continue
+            if not (0 <= idx < len(narrowed)):
+                continue
+            try:
+                conf = max(0.0, min(1.0, float(m.get("confidence"))))
+            except (TypeError, ValueError):
+                conf = 0.6
+            cov = str(m.get("coverage") or "partial").lower()
+            if cov not in ("full", "partial", "supporting"):
+                cov = "partial"
+            out.append(_clean(narrowed[idx], confidence=conf, coverage_type=cov,
+                              rationale=str(m.get("rationale") or "")[:400], link_source="ai"))
+        return out
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("recommend-targets LLM call failed for %s: %s", category, exc)
+        return [_clean(c, confidence=None, coverage_type="supporting",
+                       rationale="Lexical match to the evidence content", link_source="keyword")
+                for c in narrowed[:8]]
+
+
+@router.post("/{evidence_id}/recommend-targets")
+def recommend_targets(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """AI-recommend the governance documents, internal controls and active compliance
+    assessments this evidence can be mapped to / used in. Mirrors the framework-control
+    recommendations. Degrades to lexical matching when AI is unavailable."""
+    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+    validate_evidence_access(current_user, evidence, db)
+
+    user_tenants = get_user_tenants(current_user, db)
+    excerpt = (evidence.content_summary or evidence.ocr_content
+               or f"{evidence.name or ''}. {getattr(evidence, 'description', '') or ''}")[:3500]
+
+    # AI client (None → keyword fallback so the feature still returns results).
+    client = None
+    try:
+        client = get_openai_client()
+    except HTTPException:
+        client = None
+
+    # Candidate pools (tenant-scoped).
+    gov_docs = db.query(GovernanceDocument).filter(
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).order_by(GovernanceDocument.updated_at.desc()).limit(300).all()
+    gov_candidates = [{
+        "id": d.id, "code": getattr(d, "document_code", None), "title": d.title,
+        "subtitle": (d.description or (d.doc_type or "")),
+        "doc_type": d.doc_type,
+        "kwtext": f"{d.title or ''} {d.description or ''} {(d.content or '')[:600]}",
+    } for d in gov_docs]
+
+    internal_controls = db.query(InternalControl).filter(
+        InternalControl.tenant_id.in_(user_tenants)
+    ).order_by(InternalControl.control_id.asc()).limit(500).all()
+    ic_candidates = [{
+        "id": c.id, "code": c.control_id, "title": c.name,
+        "subtitle": (c.description or c.category or ""),
+        "category": c.category,
+        "kwtext": f"{c.control_id or ''} {c.name or ''} {c.description or ''} {c.category or ''}",
+    } for c in internal_controls]
+
+    # "Active" assessments — ongoing (draft / in_progress); fall back to all if none.
+    active_q = db.query(ComplianceAssessmentDocument).filter(
+        ComplianceAssessmentDocument.tenant_id.in_(user_tenants),
+        ComplianceAssessmentDocument.status.in_(["draft", "in_progress"]),
+    ).order_by(ComplianceAssessmentDocument.updated_at.desc())
+    assessments = active_q.limit(200).all()
+    if not assessments:
+        assessments = db.query(ComplianceAssessmentDocument).filter(
+            ComplianceAssessmentDocument.tenant_id.in_(user_tenants)
+        ).order_by(ComplianceAssessmentDocument.updated_at.desc()).limit(200).all()
+    asmt_candidates = [{
+        "id": a.id, "code": (a.source or a.assessment_type), "title": a.name,
+        "subtitle": f"{a.assessment_type or ''} · {a.status or ''}",
+        "status": a.status, "assessment_type": a.assessment_type,
+        "kwtext": f"{a.name or ''} {a.assessment_type or ''} {a.source or ''} {a.notes or ''}",
+    } for a in assessments]
+
+    return {
+        "evidence_id": evidence_id,
+        "ai_available": client is not None,
+        "governance_documents": _ai_select_targets(client, excerpt, "governance documents", gov_candidates),
+        "internal_controls": _ai_select_targets(client, excerpt, "internal controls", ic_candidates),
+        "compliance_assessments": _ai_select_targets(client, excerpt, "active compliance assessments", asmt_candidates),
+    }
 
 
 @router.get("/low-quality", response_model=List[LowQualityEvidenceResponse])

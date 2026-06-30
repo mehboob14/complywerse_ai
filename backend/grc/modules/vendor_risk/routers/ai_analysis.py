@@ -1,6 +1,7 @@
 """AI-powered vendor risk analysis endpoints."""
 
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 import os
 import json
 from typing import Optional
@@ -45,7 +46,7 @@ def _run_ai_json(prompt: str, system: str, fallback: dict) -> dict:
     try:
         client = get_openai_client()
         response = client.chat.completions.create(
-            model=os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or "gpt-4o",
+            model=os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or get_openai_model(),
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": prompt},
@@ -163,7 +164,7 @@ Be specific and actionable in your findings and recommendations. Base scores on 
     try:
         client = get_openai_client()
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a GRC (Governance, Risk, and Compliance) expert specializing in third-party vendor risk management. Always respond with valid JSON."},
                 {"role": "user", "content": prompt},
@@ -305,7 +306,7 @@ Provide a JSON response with:
     try:
         client = get_openai_client()
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a GRC expert specializing in vendor risk management. Always respond with valid JSON."},
                 {"role": "user", "content": prompt},

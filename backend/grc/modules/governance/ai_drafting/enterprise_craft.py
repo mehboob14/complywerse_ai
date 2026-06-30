@@ -76,7 +76,11 @@ Function / role nomenclature — use the canonical bank titles:
   (Risk, Compliance, Information Security), Third Line (Internal Audit)
 - Reference roles, never named individuals.
 
-Concrete numbers a banking SME would actually write
+INDUSTRY DEFAULTS — fallback numbers ONLY. Precedence is absolute: a value
+configured for THIS tenant (e.g. the supplied password/session policy) or a
+value stated in a CITED framework clause ALWAYS wins. Use a number below only
+when neither the tenant config nor a cited clause specifies one, and never
+contradict a configured or cited value:
 - Retention: regulatory records 7–10 years (use 7 unless context says
   otherwise); audit logs minimum 1 year online + 6 years archived; access
   reviews quarterly for privileged, semi-annually for standard.
@@ -86,9 +90,10 @@ Concrete numbers a banking SME would actually write
   recertification at least semi-annually; policy review at least annually.
 - Crypto: TLS 1.2+, AES-256, RSA-2048+ (ECC P-256+); key rotation annually
   for static keys, on-event for compromise.
-- Passwords (when no tenant-specific number is supplied): 14+ chars,
-  complexity, 90-day rotation for non-privileged, 60-day for privileged,
-  MFA mandatory for all external + privileged access.
+- Passwords: 14+ chars, complexity, 90-day rotation for non-privileged,
+  60-day for privileged, MFA mandatory for all external + privileged access.
+  (If a tenant password/session policy is supplied in the prompt, cite THOSE
+  numbers verbatim and ignore these defaults entirely.)
 
 Hallmarks of real enterprise governance writing
 - Every obligation states: WHO (named function/role), WHAT (specific
@@ -149,7 +154,7 @@ Voice
   Standards / Procedures / Guidelines.
 
 Structure of the artefact
-- Numbered atomic clauses (7.1, 7.2, 7.2.1 …). Each clause expresses
+- Numbered atomic clauses (7.1, 7.2, 7.2.1 …). covering areas section then under them atomic clauses where applicable Each clause expresses
   exactly ONE obligation. Compound obligations are split.
 - Every clause has an implied or explicit owner. Where the owner is
   ambiguous, the clause specifies the function by name.
@@ -350,6 +355,58 @@ Things to NEVER do in a Guideline
 """
 
 
+CHARTER_CRAFT_BLOCK = """\
+CHARTER DRAFTING CRAFT — characteristics of a real bank Charter:
+
+Purpose of the artefact
+- A Charter is the CONSTITUTIONAL document of a governance body, committee,
+  or function. It establishes WHY the body exists, the authority the Board
+  delegates to it, who sits on it, how it decides, and to whom it reports.
+- It is read by: the Board, regulators, external auditors, and the members
+  of the body itself. It is the document an auditor uses to test whether the
+  body actually operates within its mandate and quorum.
+- A Charter is NOT operational. It says what the body is empowered to do and
+  is accountable for — never the step-by-step of how work gets done (that is
+  a Procedure) and never technical requirements (that is a Standard).
+
+Voice
+- Formal, board-grade, constitutional. Authority and accountability are
+  stated precisely. Use "is responsible for", "is authorised to", "shall
+  report to" — define powers, do not exhort.
+- Never aspirational ("strives to", "is committed to") and never a how-to.
+- Plain enough that a regulator can read a clause aloud and know exactly
+  what the body may and may not do.
+
+Structure of the artefact
+- Purpose & Mandate — why the body exists and what it is accountable for.
+- Authority — the decisions it owns in its own right vs. those it only
+  recommends, the resources it may direct, and the limits of its authority.
+- Composition & Membership — Chair, voting members by role, Secretary,
+  standing invitees, term/tenure, appointment/removal, and the QUORUM.
+- Meetings & Operating Procedures — frequency, convening, agenda, quorum
+  for decisions, the voting/decision mechanism (consensus / majority /
+  Chair's casting vote), minute-keeping, and conflict-of-interest handling.
+- Decision Rights & Escalation — the boundary between this body's decisions
+  and matters reserved to the Board/parent, with named escalation triggers.
+- Reporting & Accountability — to whom it reports, the cadence, and the form.
+
+Must-haves
+- An explicit QUORUM and meeting frequency — never "as required".
+- A named reporting line to a real committee/the Board (use the actual
+  committee names supplied; do not invent one).
+- The source of authority (Board delegation) and the limits of it.
+- Named roles for Chair and Secretary; members identified by role/title.
+- A Charter review cadence (at least annual) and the approver of changes.
+
+Things to NEVER do in a Charter
+- Do not write step-by-step operational procedures or runbooks.
+- Do not write technical requirements, thresholds, or configuration numbers.
+- Do not invent committees, members, or reporting lines not in tenant context.
+- Do not use mandatory "shall" obligation clauses as if it were a Policy —
+  a Charter confers authority and accountability, it does not issue controls.
+"""
+
+
 # ─── Module entry point ──────────────────────────────────────────────────────
 
 _CRAFT_BLOCKS = {
@@ -357,6 +414,7 @@ _CRAFT_BLOCKS = {
     "standard":  STANDARD_CRAFT_BLOCK,
     "procedure": PROCEDURE_CRAFT_BLOCK,
     "guideline": GUIDELINE_CRAFT_BLOCK,
+    "charter":   CHARTER_CRAFT_BLOCK,
 }
 
 
@@ -395,13 +453,86 @@ SME_SYSTEM_ADDENDUM = (
 )
 
 
+# ─── Multi-tenant / multi-industry generalisation ────────────────────────────
+# The craft blocks above are written in bank vocabulary ("the Bank", "a
+# regulated bank", "banking SME"). For non-bank tenants we re-skin that
+# vocabulary to the tenant's sector while keeping the same rigor. For bank or
+# unset industries this is a strict NO-OP — the text is returned byte-for-byte
+# unchanged, so existing bank tenants get identical output.
+
+import re as _re
+from dataclasses import dataclass as _dataclass
+
+
+@_dataclass
+class IndustryProfile:
+    entity_noun: str = "the Bank"     # how the document refers to the organisation
+    sector_label: str = "bank"        # singular noun, e.g. "insurer", "company"
+    sector_adj: str = "banking"       # adjective, e.g. "enterprise", "healthcare"
+    is_bank_default: bool = True       # True → skip all re-skinning (bank/unset)
+
+
+def industry_profile(industry: Optional[str], regulatory_scope: Optional[str] = None) -> IndustryProfile:
+    """Derive the self-reference vocabulary from the tenant's industry.
+
+    Bank / financial / unset → the current bank wording (is_bank_default=True),
+    so `apply_industry` is a no-op and existing tenants are unchanged.
+    """
+    ind = (industry or "").strip().lower()
+    if not ind or any(k in ind for k in ("bank", "financ", "capital market")):
+        return IndustryProfile()  # bank defaults; no re-skin
+    if "insur" in ind:
+        return IndustryProfile("the Insurer", "insurer", "insurance", False)
+    if any(k in ind for k in ("government", "public sector", "regulator", "authority", "ministry", "agency")):
+        return IndustryProfile("the Authority", "public-sector body", "public-sector", False)
+    if any(k in ind for k in ("health", "hospital", "clinic", "pharma", "medical")):
+        return IndustryProfile("the Organisation", "healthcare organisation", "healthcare", False)
+    if any(k in ind for k in ("tech", "software", "saas", "fintech")):
+        return IndustryProfile("the Company", "technology company", "enterprise", False)
+    # Generic non-bank fallback.
+    return IndustryProfile("the Organisation", "organisation", "enterprise", False)
+
+
+# Longer phrases first so they win over the single-word replacements.
+def _industry_substitutions(p: IndustryProfile) -> list:
+    return [
+        (_re.compile(r"\bregulated banks\b", _re.I), f"regulated {p.sector_label}s"),
+        (_re.compile(r"\ba regulated bank\b", _re.I), f"a regulated {p.sector_label}"),
+        (_re.compile(r"\breal bank SME\b", _re.I), f"real {p.sector_label} SME"),
+        (_re.compile(r"\bbanking SME\b", _re.I), f"{p.sector_label} SME"),
+        (_re.compile(r"\bbanking-grade\b", _re.I), f"{p.sector_adj}-grade"),
+        (_re.compile(r"\breal bank\b", _re.I), f"real {p.sector_label}"),
+        (_re.compile(r"\bthe Bank\b"), p.entity_noun),
+        (_re.compile(r"\bbank's\b", _re.I), f"{p.sector_label}'s"),
+        (_re.compile(r"\bin a bank\b", _re.I), f"in a {p.sector_label}"),
+        (_re.compile(r"\ba bank\b", _re.I), f"a {p.sector_label}"),
+        (_re.compile(r"\bbanks\b", _re.I), f"{p.sector_label}s"),
+        (_re.compile(r"\bbanking\b", _re.I), p.sector_adj),
+        (_re.compile(r"\bbank\b", _re.I), p.sector_label),
+    ]
+
+
+def apply_industry(text: str, profile: Optional[IndustryProfile]) -> str:
+    """Re-skin bank vocabulary to the tenant's sector. No-op for bank/unset."""
+    if not text or profile is None or profile.is_bank_default:
+        return text
+    out = text
+    for pattern, repl in _industry_substitutions(profile):
+        out = pattern.sub(repl, out)
+    return out
+
+
 __all__ = [
     "BANKING_REALITY_BLOCK",
     "POLICY_CRAFT_BLOCK",
     "STANDARD_CRAFT_BLOCK",
     "PROCEDURE_CRAFT_BLOCK",
     "GUIDELINE_CRAFT_BLOCK",
+    "CHARTER_CRAFT_BLOCK",
     "SME_SYSTEM_ADDENDUM",
     "craft_block_for",
     "enterprise_drafting_block",
+    "IndustryProfile",
+    "industry_profile",
+    "apply_industry",
 ]

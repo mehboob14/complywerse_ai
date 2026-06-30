@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 import json
 import os
 from datetime import datetime, timedelta
@@ -384,7 +385,7 @@ def ai_natural_language_to_workflow(
     try:
         client = _get_openai_client()
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Create a workflow for: {payload.prompt}"},
@@ -538,7 +539,7 @@ def ai_workflow_suggestions(
             "Suggest 6 GRC workflow automations most relevant to this tenant."
         )
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": _SUGGESTIONS_SYSTEM_PROMPT},
                 {"role": "user", "content": user_msg},
@@ -668,7 +669,7 @@ def ai_optimize_workflow(
         }, indent=2)
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": _OPTIMIZE_SYSTEM_PROMPT},
                 {"role": "user", "content": f"Analyze this GRC workflow:\n{graph_context}"},

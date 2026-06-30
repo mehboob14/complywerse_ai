@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -162,6 +163,44 @@ class FrameworkIndex:
     def all_topics_with_hits(self) -> List[str]:
         return [t for t, citations in self.topics.items() if citations]
 
+    def all_citations(self) -> List["FrameworkCitation"]:
+        """Deduplicated flat list of every citation across all topics."""
+        seen: set = set()
+        out: List[FrameworkCitation] = []
+        for citations in self.topics.values():
+            for c in citations:
+                key = (c.framework_code, c.control_ref)
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(c)
+        return out
+
+    def known_clause_refs(self) -> Dict[str, set]:
+        """Map framework_code → set of valid control_refs, for QA citation checks."""
+        refs: Dict[str, set] = {}
+        for c in self.all_citations():
+            if c.control_ref:
+                refs.setdefault(c.framework_code, set()).add(c.control_ref)
+        return refs
+
+    def slice_by_refs(self, refs: List[str], limit: int = 12) -> List["FrameworkCitation"]:
+        """Return citations whose control_ref matches one of `refs` (order preserved).
+
+        Used when the user pins specific clauses (`target_clauses`) so those
+        exact clauses drive the citation slice rather than a topic bucket.
+        """
+        wanted = {re.sub(r"\s+", "", str(r)).lower() for r in (refs or []) if r}
+        if not wanted:
+            return []
+        out: List[FrameworkCitation] = []
+        for c in self.all_citations():
+            if re.sub(r"\s+", "", str(c.control_ref)).lower() in wanted:
+                out.append(c)
+                if len(out) >= limit:
+                    break
+        return out
+
 
 def _classify_topics(haystack: str) -> List[str]:
     """Score a control's text against the topic taxonomy. Returns ordered list."""
@@ -175,6 +214,28 @@ def _classify_topics(haystack: str) -> List[str]:
             scored.append((score, topic))
     scored.sort(reverse=True)
     return [t for _, t in scored]
+
+
+def classify_topics(text: str) -> List[str]:
+    """Public wrapper: classify free text (a focus area, a parent statement) into
+    governance topics, most-relevant first. Empty when nothing matches."""
+    return _classify_topics(text or "")
+
+
+def resolve_area_to_topic(area: str) -> Optional[str]:
+    """Resolve a user-supplied focus area to a topic key.
+
+    Accepts an exact topic key (`access_control`) or free text ("password
+    rotation") which is classified to its best topic. Returns None if nothing
+    matches — the caller then falls back to the section's own topic.
+    """
+    if not area:
+        return None
+    key = area.strip().lower().replace(" ", "_").replace("-", "_")
+    if key in TOPIC_KEYWORDS:
+        return key
+    topics = _classify_topics(area)
+    return topics[0] if topics else None
 
 
 def _resolve_framework_meta(journey: CertificationJourney, db: Session) -> Optional[dict]:

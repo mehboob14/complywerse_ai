@@ -6,7 +6,9 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { controlsApi, evidenceApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { SearchInput, MultiSelectDropdown, InlineLinkPicker, PageLoader } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, InlineLinkPicker, PageLoader, RightSlidePanel } from '@/components/ui';
+import { useToast } from '@/components/ui/ToastProvider';
+import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import {
   Shield,
   Loader2,
@@ -33,7 +35,9 @@ import {
   ClipboardList,
   FolderOpen,
   AlertTriangle,
-  Target
+  Target,
+  Plus,
+  ShieldAlert
 } from 'lucide-react';
 
 interface FrameworkControl {
@@ -63,9 +67,13 @@ interface FrameworkControl {
   framework_version: string | null;
   created_at: string | null;
   evidence_count: number;
+  // Saved per-control evidence recommendations (seed shape: name/description/filetype).
+  // Older callers used title/artifact_type, so both are accepted for safety.
   evidence_requirements: Array<{
-    title: string;
+    name?: string;
+    title?: string;
     description?: string;
+    filetype?: string;
     artifact_type?: string;
   }>;
 }
@@ -106,12 +114,32 @@ interface EvidenceRequirement {
   mandatory: boolean;
 }
 
+interface AddressedRisk {
+  id: number; title: string; category: string | null; status: string | null;
+  inherent_score: number | null; residual_score: number | null; mitigation_effectiveness: string | null;
+}
+interface PotentialRisk {
+  title: string; description?: string; category?: string; severity?: string;
+  likelihood?: number; impact?: number; rationale?: string;
+}
 interface AIRecommendations {
   control_id: number;
   test_procedures: TestProcedure[];
   evidence_requirements: EvidenceRequirement[];
   key_risks_addressed: string[];
   audit_focus_areas: string[];
+  addressed_risks: AddressedRisk[];
+  risks_if_not_implemented: PotentialRisk[];
+}
+
+const RISK_CATEGORIES = ['strategic', 'operational', 'financial', 'compliance', 'technology', 'third_party', 'project_change'];
+const RISK_INPUT_CLS = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
+function riskSevCls(sev?: string): string {
+  const m: Record<string, string> = {
+    critical: 'bg-red-50 text-red-700 border-red-200', high: 'bg-orange-50 text-orange-700 border-orange-200',
+    medium: 'bg-amber-50 text-amber-700 border-amber-200', low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  };
+  return m[(sev || 'medium').toLowerCase()] || m.medium;
 }
 
 type SortField =
@@ -926,6 +954,42 @@ export default function ControlsPage() {
     });
   };
 
+  // ── Promote an AI "risk if not implemented" into the real ERM Risk Register ──
+  const { toast } = useToast();
+  const [promoteCtx, setPromoteCtx] = useState<{ control: FrameworkControl; risk: PotentialRisk } | null>(null);
+  const [promoteForm, setPromoteForm] = useState({ title: '', category: 'compliance', likelihood: 3, impact: 3, treatment_plan: '', due_date: '' });
+
+  const openPromote = (control: FrameworkControl, risk: PotentialRisk) => {
+    setPromoteCtx({ control, risk });
+    setPromoteForm({
+      title: risk.title || '',
+      category: risk.category && RISK_CATEGORIES.includes(risk.category) ? risk.category : 'compliance',
+      likelihood: risk.likelihood && risk.likelihood >= 1 && risk.likelihood <= 5 ? risk.likelihood : 3,
+      impact: risk.impact && risk.impact >= 1 && risk.impact <= 5 ? risk.impact : 3,
+      treatment_plan: '', due_date: '',
+    });
+  };
+
+  const promoteRiskMutation = useMutation({
+    mutationFn: () => controlsApi.promoteControlRisk({
+      control_id: promoteCtx!.control.id,
+      framework_name: promoteCtx!.control.framework_name || undefined,
+      title: promoteForm.title,
+      description: promoteCtx!.risk.description,
+      category: promoteForm.category,
+      inherent_likelihood: promoteForm.likelihood,
+      inherent_impact: promoteForm.impact,
+      treatment_plan: promoteForm.treatment_plan || undefined,
+      due_date: promoteForm.due_date || undefined,
+    }),
+    onSuccess: () => {
+      toast({ type: 'success', title: 'Risk added to register', message: 'Created in the ERM Risk Register and linked to this control as a mitigation.' });
+      setPromoteCtx(null);
+    },
+    onError: (e: { response?: { data?: { detail?: string } } }) =>
+      toast({ type: 'error', title: 'Could not add risk', message: e?.response?.data?.detail || 'Try again.' }),
+  });
+
   const getProcedureTypeBadge = (type: string) => {
     const colors: Record<string, string> = {
       walkthrough: 'bg-blue-50 text-blue-700',
@@ -1480,32 +1544,39 @@ export default function ControlsPage() {
 
                           {control.evidence_requirements && control.evidence_requirements.length > 0 && (
                             <div>
-                              {/* <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
+                              <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
                                 <FileText className="h-4 w-4 text-amber-600" />
                                 Recommended Evidence
-                              </h4> */}
-                              {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {control.evidence_requirements.map((evidence, idx) => (
-                                  <div key={idx} className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
-                                    <div className="flex items-start gap-2">
-                                      <div className="flex-shrink-0 mt-0.5 text-amber-600">
-                                        {getEvidenceTypeIcon(evidence.artifact_type || 'document')}
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <h5 className="text-sm font-medium text-black">{evidence.title}</h5>
-                                        {evidence.description && (
-                                          <p className="text-xs text-slate-600 mt-1">{evidence.description}</p>
-                                        )}
-                                        {evidence.artifact_type && (
-                                          <span className="inline-block rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700 mt-2 capitalize">
-                                            {evidence.artifact_type}
-                                          </span>
-                                        )}
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                                  {control.evidence_requirements.length}
+                                </span>
+                              </h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {control.evidence_requirements.map((evidence, idx) => {
+                                  const evTitle = evidence.name || evidence.title || 'Evidence';
+                                  const evType = evidence.filetype || evidence.artifact_type;
+                                  return (
+                                    <div key={idx} className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                                      <div className="flex items-start gap-2">
+                                        <div className="flex-shrink-0 mt-0.5 text-amber-600">
+                                          {getEvidenceTypeIcon(evType || 'document')}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <h5 className="text-sm font-medium text-black">{evTitle}</h5>
+                                          {evidence.description && (
+                                            <p className="text-xs text-slate-600 mt-1">{evidence.description}</p>
+                                          )}
+                                          {evType && (
+                                            <span className="inline-block rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700 mt-2 uppercase">
+                                              {evType}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                ))}
-                              </div> */}
+                                  );
+                                })}
+                              </div>
                             </div>
                           )}
                           
@@ -1561,6 +1632,15 @@ export default function ControlsPage() {
 
                             {aiRecommendations[control.id] && (
                               <div className="space-y-6">
+                                <AiRecommendationSaver
+                                  module="control_library"
+                                  recommendationType="control_ai_recommendations"
+                                  entityType="framework_control"
+                                  entityId={control.id}
+                                  title={`AI recommendations · ${control.control_id}`}
+                                  output={aiRecommendations[control.id] as unknown as Record<string, unknown>}
+                                  model="gpt-4o"
+                                />
                                 <div className="rounded-lg border border-primary-200 bg-primary-500/5 p-4">
                                   <div className="flex items-center gap-2 mb-3">
                                     <ClipboardList className="h-4 w-4 text-primary-600" />
@@ -1587,48 +1667,44 @@ export default function ControlsPage() {
                                   </div>
                                 </div>
 
-                                <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
-                                  <div className="flex items-center gap-2 mb-3">
-                                    <FolderOpen className="h-4 w-4 text-blue-600" />
-                                    <h5 className="text-sm font-medium text-blue-300">Evidence Requirements</h5>
-                                  </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {aiRecommendations[control.id].evidence_requirements.map((ev, idx) => (
-                                      <div key={idx} className="rounded-lg border border-slate-200 bg-white/50 p-3">
-                                        <div className="flex items-start gap-2">
-                                          <div className="flex-shrink-0 mt-0.5 text-blue-600">
-                                            {getEvidenceTypeIcon(ev.evidence_type)}
-                                          </div>
-                                          <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-sm font-medium text-black">{ev.title}</span>
-                                              {ev.mandatory && (
-                                                <span className="rounded bg-rose-50 px-1.5 py-0.5 text-xs text-rose-600">Required</span>
-                                              )}
-                                            </div>
-                                            <span className="inline-block rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600 mt-1 capitalize">{ev.evidence_type}</span>
-                                            <p className="text-xs text-slate-600 mt-1">{ev.description}</p>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
+                                {/* Evidence recommendations are sourced from the framework's saved
+                                    evidence requirements (the "Recommended Evidence" section above) —
+                                    the same set shown on the compliance framework's controls/requirements
+                                    view — rather than being re-generated by the LLM here. */}
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  {/* Real register risks this control mitigates */}
                                   <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
                                     <div className="flex items-center gap-2 mb-2">
                                       <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                      <h5 className="text-sm font-medium text-amber-300">Key Risks Addressed</h5>
+                                      <h5 className="text-sm font-medium text-amber-600">Risks addressed</h5>
+                                      <span className="text-[10px] text-slate-400">from the Risk Register</span>
                                     </div>
-                                    <ul className="space-y-1">
-                                      {aiRecommendations[control.id].key_risks_addressed.map((risk, idx) => (
-                                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
-                                          <span className="text-amber-600 mt-1">•</span>
-                                          {risk}
-                                        </li>
-                                      ))}
-                                    </ul>
+                                    {aiRecommendations[control.id].addressed_risks.length > 0 ? (
+                                      <ul className="space-y-1.5">
+                                        {aiRecommendations[control.id].addressed_risks.map((r) => (
+                                          <li key={r.id}>
+                                            <Link href="/erm/risks/list" className="flex items-start gap-2 text-sm text-slate-700 hover:text-primary-600">
+                                              <span className="text-amber-600 mt-1">•</span>
+                                              <span className="flex-1">{r.title}
+                                                {r.residual_score != null && <span className="ml-1.5 font-mono text-[11px] text-slate-400">res {r.residual_score}</span>}
+                                              </span>
+                                            </Link>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    ) : (
+                                      <>
+                                        <p className="text-xs text-slate-500">No Risk Register entries are linked to this control yet.</p>
+                                        {aiRecommendations[control.id].key_risks_addressed.length > 0 && (
+                                          <ul className="mt-2 space-y-1">
+                                            {aiRecommendations[control.id].key_risks_addressed.map((risk, idx) => (
+                                              <li key={idx} className="flex items-start gap-2 text-xs text-slate-500"><span className="text-amber-600 mt-0.5">•</span>{risk}</li>
+                                            ))}
+                                          </ul>
+                                        )}
+                                      </>
+                                    )}
                                   </div>
 
                                   <div className="rounded-lg border border-emerald-200 bg-emerald-500/5 p-4">
@@ -1646,6 +1722,39 @@ export default function ControlsPage() {
                                     </ul>
                                   </div>
                                 </div>
+
+                                {/* Risks that arise WITHOUT this control — AI-reasoned, promotable to the real register */}
+                                {aiRecommendations[control.id].risks_if_not_implemented.length > 0 && (
+                                  <div className="rounded-lg border border-red-200 bg-red-500/5 p-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <ShieldAlert className="h-4 w-4 text-red-600" />
+                                      <h5 className="text-sm font-medium text-red-600">Risks if this control isn’t implemented</h5>
+                                      <span className="text-[10px] text-slate-400">AI-reasoned · add to Risk Register</span>
+                                    </div>
+                                    <div className="space-y-2">
+                                      {aiRecommendations[control.id].risks_if_not_implemented.map((r, idx) => (
+                                        <div key={idx} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
+                                          <span className={`mt-0.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize ${riskSevCls(r.severity)}`}>{r.severity || 'medium'}</span>
+                                          <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-medium text-slate-800">{r.title}</p>
+                                            {r.description && <p className="text-xs text-slate-500 mt-0.5">{r.description}</p>}
+                                            {r.rationale && <p className="text-[11px] text-slate-400 mt-1 italic">Why: {r.rationale}</p>}
+                                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                                              {r.category && <span className="capitalize">{r.category.replace('_', ' ')}</span>}
+                                              {!!r.likelihood && !!r.impact && <span>· L{r.likelihood}×I{r.impact} = {r.likelihood * r.impact}</span>}
+                                            </div>
+                                          </div>
+                                          {canCreate && (
+                                            <button onClick={(e) => { e.stopPropagation(); openPromote(control, r); }}
+                                              className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-red-700">
+                                              <Plus className="h-3.5 w-3.5" /> Add to Risk Register
+                                            </button>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )}
 
@@ -1706,6 +1815,65 @@ export default function ControlsPage() {
         </div>
       )}
       </>
+      )}
+
+      {/* Promote an AI risk → real ERM Risk Register entry */}
+      {promoteCtx && (
+        <RightSlidePanel
+          isOpen
+          onClose={() => setPromoteCtx(null)}
+          title="Add risk to register"
+          subtitle={`From control ${promoteCtx.control.control_id} — implementing it mitigates this risk`}
+          width="w-full max-w-lg"
+          footer={
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setPromoteCtx(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => promoteRiskMutation.mutate()} disabled={promoteRiskMutation.isPending || !promoteForm.title.trim()}
+                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+                {promoteRiskMutation.isPending ? 'Adding…' : 'Add to Risk Register'}
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <p className="rounded-lg bg-red-50 p-2 text-[11px] text-red-700">
+              Creates a real risk in the ERM Risk Register (source: {promoteCtx.control.framework_name || 'framework'}), linked to this control as a mitigation. Residual starts at inherent until the control is implemented.
+            </p>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Risk title</label>
+              <input className={RISK_INPUT_CLS} value={promoteForm.title} onChange={(e) => setPromoteForm({ ...promoteForm, title: e.target.value })} required />
+            </div>
+            {promoteCtx.risk.description && <p className="text-xs text-slate-500">{promoteCtx.risk.description}</p>}
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Category</label>
+                <select className={RISK_INPUT_CLS} value={promoteForm.category} onChange={(e) => setPromoteForm({ ...promoteForm, category: e.target.value })}>
+                  {RISK_CATEGORIES.map((c) => <option key={c} value={c}>{c.replace('_', ' ')}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Likelihood</label>
+                <select className={RISK_INPUT_CLS} value={promoteForm.likelihood} onChange={(e) => setPromoteForm({ ...promoteForm, likelihood: Number(e.target.value) })}>
+                  {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Impact</label>
+                <select className={RISK_INPUT_CLS} value={promoteForm.impact} onChange={(e) => setPromoteForm({ ...promoteForm, impact: Number(e.target.value) })}>
+                  {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Treatment plan <span className="text-gray-400">(optional)</span></label>
+              <textarea className={RISK_INPUT_CLS} rows={2} value={promoteForm.treatment_plan} onChange={(e) => setPromoteForm({ ...promoteForm, treatment_plan: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Due date <span className="text-gray-400">(optional)</span></label>
+              <input type="date" className={RISK_INPUT_CLS} value={promoteForm.due_date} onChange={(e) => setPromoteForm({ ...promoteForm, due_date: e.target.value })} />
+            </div>
+          </div>
+        </RightSlidePanel>
       )}
     </div>
   );

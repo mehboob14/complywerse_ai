@@ -1,4 +1,5 @@
-from ..config import get_openai_api_key
+from ..config import get_openai_api_key, get_openai_model
+
 import os
 import json
 import uuid
@@ -2681,7 +2682,7 @@ Return ONLY valid JSON in this exact format:
     try:
         client = get_openai_client()
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a world-class GRC consultant specializing in compliance frameworks and certification journeys. Always respond with valid JSON only. Be specific, practical, and actionable."},
                 {"role": "user", "content": prompt}
@@ -2862,7 +2863,7 @@ Return ONLY valid JSON in this exact format:
     try:
         client = get_openai_client()
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a GRC certification expert. Always respond with valid JSON only."},
                 {"role": "user", "content": prompt}
@@ -2997,7 +2998,7 @@ Return ONLY valid JSON in this exact format:
     try:
         client = get_openai_client()
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a GRC certification expert. Always respond with valid JSON only."},
                 {"role": "user", "content": prompt}
@@ -3375,7 +3376,7 @@ def get_framework_phases(
 # =============================================================================
 
 _CRITICAL_BATCH_SIZE = 40
-_CRITICAL_MODEL = "gpt-4o"
+_CRITICAL_MODEL = get_openai_model()
 
 # Hard cap on the fraction of a framework that may be flagged critical. If the
 # AI returns more than this, we keep only the top-N by reason length / order

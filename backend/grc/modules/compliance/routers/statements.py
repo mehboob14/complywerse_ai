@@ -6,7 +6,8 @@ from pydantic import BaseModel
 
 from ....models import (
     PolicyStatement, PolicyStatementCompliance, GovernanceDocument,
-    GRCUser, TenantUser, Tenant, UserRole, Role, Evidence, get_db
+    GRCUser, TenantUser, Tenant, UserRole, Role, Evidence, get_db,
+    StatementControlMapping, EvidencePolicyLink,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..schema_migrations import ensure_assigned_column
@@ -221,6 +222,80 @@ def list_policy_statements(
         })
 
     return {"statements": result, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get("/{statement_id}/linkage")
+def get_statement_linkage(
+    statement_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """360° auto-mapped linkage for a policy statement: controls grouped by
+    universe (normalized / framework / parsed / internal) + linked evidence."""
+    user_tenants = get_user_tenants(current_user, db)
+    stmt = db.query(PolicyStatement).filter(
+        PolicyStatement.id == statement_id,
+        PolicyStatement.tenant_id.in_(user_tenants),
+    ).first()
+    if not stmt:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Statement not found")
+
+    grouped = {"normalized": [], "framework": [], "parsed": [], "internal": []}
+    try:
+        for m in db.query(StatementControlMapping).filter(
+            StatementControlMapping.statement_id == statement_id
+        ).order_by(StatementControlMapping.confidence.desc().nullslast()).all():
+            grouped.setdefault(m.control_kind, []).append({
+                "id": m.id,
+                "control_kind": m.control_kind,
+                "normalized_control_id": m.normalized_control_id,
+                "framework_control_id": m.framework_control_id,
+                "parsed_control_id": m.parsed_control_id,
+                "internal_control_id": m.internal_control_id,
+                "control_code": m.control_code,
+                "control_title": m.control_title,
+                "framework_name": m.framework_name,
+                "domain": m.domain,
+                "confidence": m.confidence,
+                "coverage_type": m.coverage_type,
+                "rationale": m.rationale,
+                "link_source": m.link_source,
+                "is_locked": m.is_locked,
+            })
+    except Exception:
+        # Table may not exist yet on a tenant DB that hasn't been migrated;
+        # surface an empty linkage rather than a 500.
+        db.rollback()
+
+    ev_links = db.query(EvidencePolicyLink).filter(
+        EvidencePolicyLink.policy_statement_id == statement_id
+    ).all()
+    ev_by_id = {}
+    ev_ids = [l.evidence_id for l in ev_links]
+    if ev_ids:
+        for e in db.query(Evidence).filter(Evidence.id.in_(ev_ids)).all():
+            ev_by_id[e.id] = e
+    evidence = []
+    for l in ev_links:
+        e = ev_by_id.get(l.evidence_id)
+        evidence.append({
+            "id": l.evidence_id,
+            "link_id": l.id,
+            "name": getattr(e, "name", None) if e else None,
+            "evidence_type": getattr(e, "evidence_type", None) if e else None,
+            "status": getattr(e, "status", None) if e else None,
+            "link_type": l.link_type,
+        })
+
+    counts = {k: len(v) for k, v in grouped.items()}
+    counts["evidence"] = len(evidence)
+    return {
+        "statement_id": statement_id,
+        "ai_suggested_controls": stmt.ai_suggested_controls or [],
+        "controls": grouped,
+        "evidence": evidence,
+        "counts": counts,
+    }
 
 
 @router.get("/by-document/{document_id}")

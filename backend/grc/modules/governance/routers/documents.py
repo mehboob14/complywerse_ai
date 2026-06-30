@@ -1,3 +1,4 @@
+from ....config import get_openai_model
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import logging
@@ -1919,7 +1920,7 @@ Return a JSON object with:
         # whole budget on reasoning) or raises. Falls back to gpt-4o so the
         # user still gets a real document instead of an empty-body stub.
         if not result_text:
-            _fallback_model = os.environ.get("OPENAI_DRAFT_FALLBACK_MODEL", "gpt-4o")
+            _fallback_model = os.environ.get("OPENAI_DRAFT_FALLBACK_MODEL", get_openai_model())
             if _fallback_model and _fallback_model != _legacy_model:
                 logger.info(
                     "Legacy generator falling back from %r to %r after empty primary output",
@@ -2119,30 +2120,34 @@ def _semantic_dedup_against_existing(
     ]
 
     system_msg = (
-        "You are a governance librarian. You output ONLY strict JSON. Your "
-        "job is to AGGRESSIVELY identify duplicate document suggestions. "
-        "When in doubt, mark as duplicate — the user is frustrated when the "
-        "system suggests something they already have. False-positive (over-"
-        "deduplicating) is preferable to false-negative (re-suggesting an "
-        "existing doc)."
+        "You are a governance librarian. You output ONLY strict JSON. Your job "
+        "is to flag a NEW suggestion as a duplicate ONLY when it covers the SAME "
+        "SPECIFIC topic as an existing document (an alias, rename, or reordering "
+        "of the same subject). A complete governance library deliberately "
+        "contains many distinct sub-domain policies, standards, and procedures, "
+        "so DO NOT treat a broad parent policy (e.g. 'Information Security "
+        "Policy') as covering its sub-topics — distinct documents like 'Access "
+        "Control Policy' or 'Encryption Policy' are NOT duplicates of it. When "
+        "in doubt, KEEP the suggestion (false-negative is far better than wiping "
+        "out the framework's policy set)."
     )
     user_msg = f"""Two lists below: NEW (suggested documents to potentially add) and EXISTING (documents the organisation already maintains).
 
-For each NEW item, decide whether it COVERS THE SAME PRIMARY TOPIC as ANY EXISTING item. If yes → duplicate, drop it.
+For each NEW item, mark it as a duplicate ONLY when it is the SAME SPECIFIC document as an EXISTING item (an alias / rename / reordering of the same subject). Otherwise KEEP it.
 
-DUPLICATE (drop) when ANY of these is true:
+DUPLICATE (drop) ONLY when ANY of these is true:
 - Same subject, different abbreviation: "Information Security Policy" vs "InfoSec Policy" vs "ISMS Policy" vs "ISMS Manual"
 - Same subject, reordered words: "Access Control Policy" vs "Policy on Access Control" vs "User Access Management Policy"
 - Same subject, different doc_type label: existing "Access Control Procedure" vs new "Access Control Policy" — same scope, drop
-- Sub-topic the parent obviously covers: existing "Information Security Policy" vs new "Password Policy" / "Encryption Policy" / "Acceptable Use Policy" → drop unless the new one is a deeply specialised standard/procedure with operational detail beyond the parent
 - Renamed equivalent: "Disaster Recovery Plan" vs "Business Continuity Plan" when only one of the two would normally be maintained
 - Singular/plural, hyphen, casing, version variants: "Risk Management Policy" vs "Risk Management Policies"
 - Localized variants: "Data Protection Policy" vs "Privacy Policy" vs "GDPR Policy" — same primary topic
 - Standards covering same domain: existing "Cryptographic Controls Standard" vs new "Encryption Standard" — same topic
 
-NOT duplicate (keep):
+NOT duplicate (KEEP — this is the default):
+- A NEW sub-domain document when only a BROAD parent exists: existing "Information Security Policy" vs new "Access Control Policy" / "Encryption Policy" / "Acceptable Use Policy" / "Password Policy" → KEEP all of them. A parent policy does NOT make its sub-domain policies duplicates; the org needs the distinct documents.
 - Genuinely distinct primary topics: "Acceptable Use Policy" vs "Vendor Risk Management Policy"
-- Materially narrower OPERATIONAL document with concrete procedure not in the parent: existing "Information Security Policy" vs new "Vulnerability Scanning Procedure" → keep, the procedure has operational steps the policy doesn't
+- Materially narrower OPERATIONAL document with concrete procedure not in the parent: existing "Information Security Policy" vs new "Vulnerability Scanning Procedure" → keep
 - Different lifecycle phase: existing "Incident Response Policy" vs new "Incident Response Tabletop Exercise Procedure" → keep
 
 Return STRICT JSON ONLY:
@@ -2159,7 +2164,7 @@ NEW:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             response_format={"type": "json_object"},
             temperature=0.0,
             max_tokens=2000,
@@ -2284,18 +2289,24 @@ def suggest_policies_for_framework(
     suggestion whose normalized title collides with an existing title is
     filtered out before the response is returned.
     """
+    logger.info("[ai-suggest] step1 request: framework_ids=%s doc_type=%r user_id=%s",
+                request.framework_ids, request.doc_type, getattr(current_user, "id", None))
     if not request.framework_ids:
         raise HTTPException(status_code=400, detail="At least one framework must be selected")
 
     frameworks = db.query(UploadedFramework).filter(
         UploadedFramework.id.in_(request.framework_ids)
     ).all()
+    logger.info("[ai-suggest] step2 frameworks resolved: requested=%s found=%d names=%s",
+                request.framework_ids, len(frameworks), [f.name for f in frameworks])
 
     if not frameworks:
         raise HTTPException(status_code=404, detail="No frameworks found")
 
     controls_summary, framework_alignment, domain_context = build_framework_control_context(frameworks, db)
-    
+    logger.info("[ai-suggest] step3 control context: controls_summary_len=%d domains=%s",
+                len(controls_summary or ""), domain_context)
+
     if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -2323,6 +2334,9 @@ def suggest_policies_for_framework(
     existing_documents = _fetch_existing_documents_for_frameworks(
         request.framework_ids, user_tenant_ids, requested_doc_type, db
     )
+    logger.info("[ai-suggest] step4 existing docs: requested_doc_type=%r tenant_ids=%s existing=%d titles=%s",
+                requested_doc_type, user_tenant_ids, len(existing_documents),
+                [d.get("title") for d in existing_documents][:20])
     existing_normalized_titles = {
         _normalize_doc_title(d["title"]) for d in existing_documents if d.get("title")
     }
@@ -2368,28 +2382,25 @@ Analysis requirements:
 - Where applicable, distinguish parent policy documents from subordinate standards, procedures, or guidelines.
 - Cover these major inferred domains: {', '.join(domain_context) if domain_context else 'Use the control themes provided.'}
 
-For each suggestion, provide:
-- A clear, professional title
-- A detailed description of what the document should cover
-- The primary governance domain it belongs to
-- The priority level (high, medium, low) based on regulatory importance
-- Which specific control references from the framework it addresses
-- Why this document is needed for the cited control themes
-- The key sections the document should contain, reflecting ISO-style structure and the relevant domain obligations
+For each suggestion, provide ONLY these fields — keep it concise so the list returns fast:
+- doc_type: the document type
+- title: a clear, professional, reusable title
+- description: ONE short sentence (max ~25 words) on what the document covers — do NOT write a paragraph
+- priority: high, medium, or low based on regulatory importance
+- relevant_controls: up to 4 specific control references from the framework
 
-Return a JSON object with this structure:
+Do NOT include key sections, rationale, domain, or any other fields — they are not needed and slow the response.
+
+Return a compact JSON object with EXACTLY this structure:
 {{
   "framework_names": "{framework_names}",
   "suggestions": [
     {{
       "doc_type": "policy",
       "title": "Information Security Policy",
-      "description": "Establishes the organization's approach to information security, defining objectives, principles, and responsibilities for protecting information assets.",
-            "domain": "Information Security Governance",
+      "description": "Defines objectives, principles, and responsibilities for protecting information assets.",
       "priority": "high",
-      "relevant_controls": ["Control-1.1", "Control-1.2"],
-                        "coverage_rationale": "Addresses governance, ownership, and protection requirements in the cited controls.",
-      "key_sections": ["Purpose", "Scope", "Policy Statements", "Roles and Responsibilities", "Compliance", "Review"]
+      "relevant_controls": ["A.5.1", "A.5.2"]
     }}
   ],
   "total_suggestions": 0
@@ -2400,24 +2411,31 @@ Return a JSON object with this structure:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are an expert governance and compliance consultant. Always respond with valid JSON and prioritize domain accuracy, clause coverage, and non-generic titles."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
-            max_completion_tokens=12000
+            max_completion_tokens=5000
         )
-        
+
+        _finish = response.choices[0].finish_reason
         result_text = response.choices[0].message.content or "{}"
+        logger.info("[ai-suggest] step5 AI call: model=%s finish_reason=%s content_len=%d",
+                    get_openai_model(), _finish, len(result_text))
         result = json.loads(result_text)
         if isinstance(result, dict) and isinstance(result.get("suggestions"), list):
+            _raw_count = len(result.get("suggestions", []))
+            _raw_doctypes = sorted({str(s.get("doc_type", "")).strip().lower() for s in result.get("suggestions", [])})
             if requested_doc_type:
                 result["suggestions"] = [
                     suggestion
                     for suggestion in result.get("suggestions", [])
                     if str(suggestion.get("doc_type", "")).strip().lower() == requested_doc_type
                 ]
+            logger.info("[ai-suggest] step6 parsed: raw_suggestions=%d raw_doc_types=%s after_doc_type_filter(%r)=%d",
+                        _raw_count, _raw_doctypes, requested_doc_type, len(result.get("suggestions", [])))
 
             raw_suggestions = result.get("suggestions", [])
 
@@ -2504,6 +2522,23 @@ Return a JSON object with this structure:
                     suggestions=after_stage2,
                     existing_documents=existing_documents,
                 )
+                # Safety backstop: a single broad existing document (e.g. a generic
+                # "Information Security Policy") must not be allowed to invalidate the
+                # entire suggested policy set. One existing doc can legitimately match
+                # only a handful of suggestions, so cap the semantic drops at a small
+                # multiple of the existing-document count. If the model flags more than
+                # that, treat the pass as over-aggressive and discard it (exact + token
+                # title dedup already removed real duplicates). Prevents the "0 results"
+                # failure where the AI collapses every sub-domain policy into a parent.
+                semantic_cap = 3 * max(1, len(existing_documents))
+                if semantic_skip_ids and len(semantic_skip_ids) > semantic_cap:
+                    logger.warning(
+                        "Semantic dedup over-aggressive: flagged %d/%d suggestions as "
+                        "duplicates against %d existing doc(s); discarding the semantic "
+                        "pass to avoid wiping the suggestion set.",
+                        len(semantic_skip_ids), len(after_stage2), len(existing_documents),
+                    )
+                    semantic_skip_ids, semantic_matches = set(), []
                 if semantic_skip_ids:
                     after_stage3 = [s for i, s in enumerate(after_stage2) if i not in semantic_skip_ids]
                     skipped_matches.extend(semantic_matches)
@@ -2532,14 +2567,25 @@ Return a JSON object with this structure:
                 "token_overlap": stage2_count,
                 "semantic": stage3_count,
             }
+            logger.info("[ai-suggest] step7 dedup done: stage1_exact=%d stage2_token=%d stage3_semantic=%d "
+                        "-> FINAL suggestions=%d (already_covered=%d)",
+                        stage1_count, stage2_count, stage3_count, len(result["suggestions"]), len(existing_documents))
+        else:
+            logger.warning("[ai-suggest] step6b UNEXPECTED AI shape: type=%s keys=%s — returning as-is "
+                           "(frontend will see 0 suggestions). Raw preview=%r",
+                           type(result).__name__,
+                           list(result.keys()) if isinstance(result, dict) else None,
+                           result_text[:300])
         return result
-    
+
     except json.JSONDecodeError as e:
+        logger.error("[ai-suggest] FAILED json parse: %s | content preview=%r", e, (result_text[:300] if 'result_text' in dir() else None))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to parse AI response: {str(e)}"
         )
     except Exception as e:
+        logger.exception("[ai-suggest] FAILED with exception: %s", e)
         error_msg = str(e)
         if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
             raise HTTPException(
@@ -2735,7 +2781,7 @@ Return strict JSON with keys:
 """
 
             completion = client.chat.completions.create(
-                model="gpt-4o",
+                model=get_openai_model(),
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0.3,

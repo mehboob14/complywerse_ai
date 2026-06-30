@@ -196,7 +196,20 @@ export const controlsApi = {
       }>;
       key_risks_addressed: string[];
       audit_focus_areas: string[];
+      addressed_risks: Array<{
+        id: number; title: string; category: string | null; status: string | null;
+        inherent_score: number | null; residual_score: number | null; mitigation_effectiveness: string | null;
+      }>;
+      risks_if_not_implemented: Array<{
+        title: string; description?: string; category?: string; severity?: string;
+        likelihood?: number; impact?: number; rationale?: string;
+      }>;
       }>('/controls/ai-recommendations', data),
+  promoteControlRisk: (data: {
+    control_id: number; framework_name?: string; title: string; description?: string;
+    category?: string; inherent_likelihood?: number; inherent_impact?: number;
+    owner_id?: number; treatment_plan?: string; due_date?: string;
+  }) => apiClient.post('/controls/ai-recommendations/promote-risk', data),
   getFrameworkControlsSummary: () => apiClient.get('/controls/framework-controls/summary'),
   getFrameworkControls: (params?: {
     framework_id?: number;
@@ -407,6 +420,8 @@ export const governanceApi = {
     apiClient.post('/governance/mappings/control', data),
   unlinkControl: (linkId: number) =>
     apiClient.delete(`/governance/mappings/control/${linkId}`),
+  linkRecommendedControl: (documentId: number, data: { control_kind: string; control_code: string | null; link: boolean }) =>
+    apiClient.post(`/governance/mappings/document/${documentId}/recommended-controls/link`, data),
   linkDocumentToRisk: (data: { document_id: number; risk_id: number; link_type?: string; notes?: string }) =>
     apiClient.post('/governance/mappings/risk', data),
   unlinkDocumentFromRisk: (linkId: number) =>
@@ -1938,6 +1953,109 @@ export const vendorRiskApi = {
     apiClient.post('/vendor-risk/ai/remediation-plan', { vendor_id: vendorId, assessment_id: assessmentId }),
 };
 
+// ── TPRA productionized 11-stage lifecycle (normalized) ──────────────────────
+// Talks to /vendor-risk/tpra/*. Separate from the legacy vendorRiskApi flat
+// methods above so the new lifecycle UI has a clean, grouped client surface.
+export const tpraApi = {
+  // Program dashboard + analytics
+  dashboard: (scope: 'portfolio' | 'mine' = 'portfolio') =>
+    apiClient.get('/vendor-risk/tpra/dashboard', { params: { scope } }),
+  riskTrend: (params?: { scope?: 'portfolio' | 'vendor'; vendor_id?: number; months?: number }) =>
+    apiClient.get('/vendor-risk/tpra/risk-trend', { params: params || {} }),
+  findingsRegister: (params?: {
+    status?: string; severity?: string; domain?: string; vendor_id?: number;
+    overdue_only?: boolean; sort?: string; order?: 'asc' | 'desc'; skip?: number; limit?: number;
+  }) => apiClient.get('/vendor-risk/tpra/findings-register', { params: params || {} }),
+  monitoringFeed: (params?: {
+    severity?: string; signal_type?: string; acknowledged?: boolean; vendor_id?: number;
+    skip?: number; limit?: number;
+  }) => apiClient.get('/vendor-risk/tpra/monitoring-feed', { params: params || {} }),
+  riskRegister: () => apiClient.get('/vendor-risk/tpra/risk-register'),
+  // Lifecycle
+  getStages: () => apiClient.get('/vendor-risk/tpra/stages'),
+  getBoard: () => apiClient.get('/vendor-risk/tpra/board'),
+  getLifecycle: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle`),
+  initLifecycle: (vendorId: number) => apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle/init`, {}),
+  listAssessmentVersions: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/assessments`),
+  advance: (assessmentId: number, data?: { note?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/advance`, data || {}),
+  sendBack: (assessmentId: number, data: { target_stage: string; reason: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/send-back`, data),
+  skip: (assessmentId: number, data: { stage_key: string; reason: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/skip`, data),
+  gateDecision: (assessmentId: number, data: { stage_key: string; decision: string; rationale?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/gate-decision`, data),
+  runTiering: (assessmentId: number, data?: { factors?: Record<string, number> }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/run-tiering`, data || {}),
+  runScoring: (assessmentId: number) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/run-scoring`, {}),
+  reassess: (vendorId: number, data: { reason: string; assessment_type?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/reassess`, data),
+
+  // Findings + remediation + acceptance
+  listFindings: (assessmentId: number, params?: {
+    status?: string; domain?: string; severity?: string;
+    sort?: string; order?: string; skip?: number; limit?: number; include_deleted?: boolean;
+  }) => apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/findings`, { params }),
+  createFinding: (assessmentId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/findings`, data),
+  getFinding: (findingId: number) => apiClient.get(`/vendor-risk/tpra/findings/${findingId}`),
+  updateFinding: (findingId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/vendor-risk/tpra/findings/${findingId}`, data),
+  deleteFinding: (findingId: number) => apiClient.delete(`/vendor-risk/tpra/findings/${findingId}`),
+  restoreFinding: (findingId: number) => apiClient.post(`/vendor-risk/tpra/findings/${findingId}/restore`, {}),
+  listRemediations: (findingId: number) => apiClient.get(`/vendor-risk/tpra/findings/${findingId}/remediations`),
+  createRemediation: (findingId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/tpra/findings/${findingId}/remediations`, data),
+  updateRemediation: (remId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/vendor-risk/tpra/remediations/${remId}`, data),
+  deleteRemediation: (remId: number) => apiClient.delete(`/vendor-risk/tpra/remediations/${remId}`),
+  createAcceptance: (findingId: number, data: { rationale: string; expiry?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/findings/${findingId}/acceptances`, data),
+  revokeAcceptance: (accId: number) => apiClient.delete(`/vendor-risk/tpra/acceptances/${accId}`),
+  // Move a finding into the ERM Risk Register as a vendor-sourced risk.
+  promoteFindingToRegister: (findingId: number) =>
+    apiClient.post(`/vendor-risk/tpra/findings/${findingId}/promote-to-register`, {}),
+
+  // Evidence — upload OR link existing (assessment-level pack + per-finding)
+  listEvidence: (assessmentId: number, params?: { finding_id?: number }) =>
+    apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/evidence`, { params: params || {} }),
+  uploadEvidence: (assessmentId: number, data: FormData) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/evidence/upload`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  linkEvidence: (assessmentId: number, data: { evidence_id: number; finding_id?: number; response_id?: number; note?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/evidence/link`, data),
+  unlinkEvidence: (linkId: number) => apiClient.delete(`/vendor-risk/tpra/evidence-links/${linkId}`),
+
+  // Contracts + obligations
+  listContracts: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/contracts`),
+  createContract: (vendorId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/contracts`, data),
+  updateContract: (contractId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/vendor-risk/tpra/contracts/${contractId}`, data),
+  deleteContract: (contractId: number) => apiClient.delete(`/vendor-risk/tpra/contracts/${contractId}`),
+  listObligations: (contractId: number) => apiClient.get(`/vendor-risk/tpra/contracts/${contractId}/obligations`),
+  createObligation: (contractId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/tpra/contracts/${contractId}/obligations`, data),
+  updateObligation: (oblId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/vendor-risk/tpra/obligations/${oblId}`, data),
+  deleteObligation: (oblId: number) => apiClient.delete(`/vendor-risk/tpra/obligations/${oblId}`),
+
+  // Approvals (append-only)
+  listApprovals: (assessmentId: number) => apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`),
+  createApproval: (assessmentId: number, data: { decision: string; conditions?: string[]; rationale?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`, data),
+
+  // Monitoring signals
+  listSignals: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/signals`),
+  createSignal: (vendorId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/signals`, data),
+  updateSignal: (signalId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/vendor-risk/tpra/signals/${signalId}`, data),
+  deleteSignal: (signalId: number) => apiClient.delete(`/vendor-risk/tpra/signals/${signalId}`),
+};
+
 // Generic AI-recommendation store — save a reviewed AI output so it persists
 // per tenant and every user with module access sees the same saved result.
 export const aiRecommendationsApi = {
@@ -2057,6 +2175,9 @@ export const complianceApi = {
     }) => apiClient.get('/compliance/policies/statements', { params }),
     getById: (id: number) =>
       apiClient.get(`/compliance/policies/statements/${id}`),
+    // 360° auto-mapped linkage: controls (normalized/framework/parsed/internal) + evidence.
+    getLinkage: (id: number) =>
+      apiClient.get(`/compliance/policies/statements/${id}/linkage`),
     getByDocument: (documentId: number, params?: { category?: string; compliance_status?: string }) =>
       apiClient.get(`/compliance/policies/statements/by-document/${documentId}`, { params }),
     update: (id: number, data: {

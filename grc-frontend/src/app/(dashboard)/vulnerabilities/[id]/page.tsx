@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi, assetsApi, ermApi, apiClient } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { InlineLinkPicker, PageLoader, ComboBoxInput, type ComboBoxOption } from '@/components/ui';
+import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import { Abbr } from '@/components/common/Abbr';
 import {
   Bug,
@@ -2922,6 +2923,18 @@ function AIAnalysisTab({
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           <strong>AI analysis failed.</strong> {job?.error_message || 'Please try again.'}
         </div>
+      )}
+
+      {output && (
+        <AiRecommendationSaver
+          module="vuln_remediation"
+          recommendationType="ai_remediation"
+          entityType="vulnerability"
+          entityId={vulnerability.id}
+          title={`AI remediation · ${vulnerability.cve_id || `#${vulnerability.id}`}`}
+          output={output as unknown as Record<string, unknown>}
+          model="gpt-4o"
+        />
       )}
 
       {summary && (

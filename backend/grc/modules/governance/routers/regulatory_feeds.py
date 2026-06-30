@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import json
@@ -155,7 +156,7 @@ Return ONLY valid JSON, no other text."""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a Senior GRC Compliance Expert. Respond only with valid JSON."},
                 {"role": "user", "content": prompt}
@@ -177,7 +178,7 @@ Return ONLY valid JSON, no other text."""
         analysis = json.loads(response_text)
         
         analysis["analyzed_at"] = datetime.utcnow().isoformat()
-        analysis["model_used"] = "gpt-4o"
+        analysis["model_used"] = get_openai_model()
         analysis["frameworks_analyzed"] = len(frameworks)
         analysis["controls_analyzed"] = len(controls)
         analysis["policies_analyzed"] = len(policies)

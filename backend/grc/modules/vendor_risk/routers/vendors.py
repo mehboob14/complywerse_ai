@@ -40,6 +40,8 @@ class VendorCreate(BaseModel):
     owner_id: Optional[int] = None
     business_unit_id: Optional[int] = None
     notes: Optional[str] = None
+    # Intake duplicate-relationship check: set True to create despite a name/website match.
+    allow_duplicate: Optional[bool] = False
 
 
 class VendorUpdate(BaseModel):
@@ -189,6 +191,29 @@ def create_vendor(
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
 
     tenant_id = payload.tenant_id if payload.tenant_id and payload.tenant_id in tenant_ids else tenant_ids[0]
+
+    # Intake (Stage 01): check for an existing / duplicate relationship before
+    # committing. Matches on case-insensitive name, or on website host when given.
+    # Caller can override with allow_duplicate=True (e.g. a genuine second contract).
+    if not payload.allow_duplicate:
+        dup_q = db.query(Vendor).filter(
+            Vendor.tenant_id == tenant_id,
+            func.lower(Vendor.name) == (payload.name or "").strip().lower(),
+        )
+        existing = dup_q.first()
+        if not existing and payload.website:
+            host = payload.website.strip().lower().replace("https://", "").replace("http://", "").strip("/")
+            if host:
+                existing = (
+                    db.query(Vendor)
+                    .filter(Vendor.tenant_id == tenant_id, func.lower(Vendor.website).contains(host))
+                    .first()
+                )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A vendor named “{existing.name}” already exists (ID {existing.id}). It may be the same relationship.",
+            )
 
     vendor = Vendor(
         tenant_id=tenant_id,

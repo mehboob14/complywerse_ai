@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 from typing import Any, Dict, List, Optional
 from datetime import datetime, date
 from io import BytesIO
@@ -2912,7 +2913,7 @@ def get_risk_ai_suggestions(
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are an expert ERM consultant. Return only valid JSON."},
                 {"role": "user", "content": prompt}

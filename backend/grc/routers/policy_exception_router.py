@@ -1,4 +1,5 @@
-from ..config import get_openai_api_key
+from ..config import get_openai_api_key, get_openai_model
+
 from typing import List, Optional
 from datetime import datetime, timedelta
 import json
@@ -75,7 +76,7 @@ def _generate_exception_suggestion(title: str, document: GovernanceDocument) -> 
 
         api_key = get_openai_api_key()
         base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-        model = os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4o"
+        model = os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or get_openai_model()
 
         client = OpenAI(api_key=api_key, base_url=base_url)
 
@@ -174,7 +175,7 @@ def _generate_candidate_exceptions(documents, focus: Optional[GovernanceDocument
 
         api_key = get_openai_api_key()
         base_url = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
-        model = os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4o"
+        model = os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or get_openai_model()
         client = OpenAI(api_key=api_key, base_url=base_url)
 
         if focus is not None:
@@ -447,6 +448,7 @@ def search_policies(
         db.query(GovernanceDocument)
         .filter(
             GovernanceDocument.tenant_id.in_(user_tenants),
+            GovernanceDocument.doc_type.ilike("policy"),
             or_(
                 GovernanceDocument.title.ilike(like),
                 GovernanceDocument.description.ilike(like),
@@ -486,6 +488,7 @@ def search_policies(
                 .join(GovernanceDocument, GovernanceDocument.id == PolicyStatement.document_id)
                 .filter(
                     GovernanceDocument.tenant_id.in_(user_tenants),
+                    GovernanceDocument.doc_type.ilike("policy"),
                     PolicyStatement.statement_text.ilike(like),
                 )
                 .limit((limit - len(results)) * 2)
@@ -529,14 +532,23 @@ def suggest_candidate_exceptions(
         focus = db.query(GovernanceDocument).filter(
             GovernanceDocument.id == int(document_id),
             GovernanceDocument.tenant_id.in_(user_tenants),
+            GovernanceDocument.doc_type.ilike("policy"),
         ).first()
         if not focus:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Policy not found — exceptions can only be raised against policy documents",
+            )
         documents = [focus]
     else:
+        # Exceptions can ONLY be raised against policies — never scan procedures,
+        # standards, guidelines, charters or other document types.
         documents = (
             db.query(GovernanceDocument)
-            .filter(GovernanceDocument.tenant_id.in_(user_tenants))
+            .filter(
+                GovernanceDocument.tenant_id.in_(user_tenants),
+                GovernanceDocument.doc_type.ilike("policy"),
+            )
             .order_by(GovernanceDocument.updated_at.desc())
             .limit(25)
             .all()

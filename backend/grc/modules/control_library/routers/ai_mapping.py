@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 import os
 import json
 from typing import List, Optional
@@ -151,7 +152,7 @@ Similarity score guidelines:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {
                     "role": "system",
@@ -218,7 +219,7 @@ Only include pairs with similarity_score >= 0.5."""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {
                     "role": "system",
@@ -261,7 +262,7 @@ Return a JSON object with an array of 5-10 key terms:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {
                     "role": "system",

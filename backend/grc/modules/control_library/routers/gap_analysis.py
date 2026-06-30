@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 import csv
 import io
 import json
@@ -1559,7 +1560,7 @@ def ai_prioritize_gaps(
         client = get_openai_client()
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {
                     "role": "system",

@@ -69,6 +69,7 @@ celery_app = Celery(
         # task that fans out daily; lives on `parsing` until the dedicated
         # `notification` queue spins up.
         "grc.tasks.exceptions",
+        "grc.tasks.tprm",
         # Phase 7 — Cloud connector sync. Lives on `parsing` until the
         # dedicated `sync` queue spins up.
         "grc.tasks.cloud_sync",
@@ -135,6 +136,9 @@ celery_app.conf.update(
         "grc.tasks.frameworks.*": {"queue": "parsing"},
         "grc.tasks.governance.parse_policy_document": {"queue": "parsing"},
         "grc.tasks.governance.run_gap_analysis": {"queue": "parsing"},
+        # Post-parse control recommendation (internal ERM + framework controls
+        # per statement). Same AI-heavy character as policy parse / gap analysis.
+        "grc.tasks.governance.auto_map_document_controls": {"queue": "parsing"},
         "grc.tasks.control_library.ai_compare_frameworks": {"queue": "parsing"},
         # Vuln enrichment shares the parsing queue — same worker can handle
         # it; the work is light (HTTP calls + a small DB write per row).
@@ -146,6 +150,7 @@ celery_app.conf.update(
         # Phase 8 — exception workflow sweep. Same story: shares `parsing`
         # until the dedicated `notification` queue lands.
         "grc.tasks.exceptions.*": {"queue": "parsing"},
+        "grc.tasks.tprm.*": {"queue": "parsing"},
         # Phase 7 — cloud connector sync. Shares `parsing` for now.
         "grc.tasks.cloud_sync.*": {"queue": "parsing"},
         # External-connector framework (ticketing / SIEM / pentest / collab /
@@ -185,6 +190,13 @@ celery_app.conf.update(
         # without further code changes.
         "exception-expiry-daily-sweep": {
             "task": "grc.tasks.exceptions.daily_exception_expiry_sweep",
+            "schedule": 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # TPRM — daily portfolio + per-vendor risk snapshot so the dashboard
+        # "risk over time" trend keeps moving between assessments.
+        "tprm-daily-snapshot-sweep": {
+            "task": "grc.tasks.tprm.daily_tprm_snapshot_sweep",
             "schedule": 24 * 60 * 60,
             "options": {"queue": "parsing"},
         },

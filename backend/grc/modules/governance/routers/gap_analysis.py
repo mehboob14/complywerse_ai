@@ -1,3 +1,4 @@
+from ....config import get_openai_model
 import os
 import io
 import csv
@@ -147,7 +148,7 @@ Return a JSON object with a "findings" array containing one object per clause.""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": prompt}
@@ -604,7 +605,7 @@ def run_gap_analysis(
             framework_name=framework.name,
             status="running",
             run_type="manual",
-            ai_model_used="gpt-4o",
+            ai_model_used=get_openai_model(),
             started_at=datetime.utcnow(),
             created_by=current_user.id
         )
@@ -955,7 +956,7 @@ Rules for proposed_text:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_msg},

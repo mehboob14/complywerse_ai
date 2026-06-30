@@ -61,6 +61,16 @@ class TenantContextBundle:
         """Best name to use inline in the document body."""
         return self.legal_entity or self.organization_name
 
+    def industry_profile(self):
+        """Sector self-reference vocabulary derived from `industry`.
+
+        Bank / financial / unset industries return the bank defaults (a strict
+        no-op for the prompt re-skin), so existing tenants are unchanged.
+        Lazy import keeps this data bundle free of the craft module at import.
+        """
+        from .enterprise_craft import industry_profile as _ip
+        return _ip(self.industry, self.regulatory_scope)
+
     def committee_names(self) -> List[str]:
         return [c["name"] for c in self.committees if c.get("name")]
 

@@ -176,7 +176,7 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
               </span>
             </h2>
             <p className="mt-0.5 text-xs sm:text-sm text-gray-600 max-w-2xl">
-              Standard pre-curated artefacts, NCA Saudi reference templates, and per-framework artifact catalogues — all wired into the AI Draft flow.
+              Standard, NCA Saudi and per-framework artifact templates open in the editor ready to edit and save; reference laws open the AI Draft flow.
             </p>
           </div>
           <button
@@ -250,7 +250,7 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
         {/* Footer */}
         <div className="border-t border-gray-200 px-6 py-3 bg-gray-50 flex items-center justify-between gap-3">
           <p className="text-[11px] text-gray-500">
-            Picking a template opens the AI Draft modal pre-filled with the source title and a sensible doc-type default.
+            Standard, NCA and artifact templates open in the editor ready to edit and save; reference laws open the AI Draft modal.
           </p>
           <button
             type="button"
@@ -476,15 +476,15 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
                     onClick={() => {
                       toast({
                         type: 'info',
-                        title: 'Opening AI Draft',
-                        message: `Pre-filling "${t.title}" from the NCA template.`,
+                        title: 'Opening template',
+                        message: `Loading "${t.title}" into the editor — edit and save as your own document.`,
                       });
                       onPick(t);
                     }}
                     className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
                   >
-                    <Sparkles className="h-3 w-3" />
-                    Draft
+                    <FileText className="h-3 w-3" />
+                    Use &amp; edit
                   </button>
                 </div>
               ))}
@@ -500,8 +500,8 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
             setPreviewTemplate(null);
             toast({
               type: 'info',
-              title: 'Opening AI Draft',
-              message: `Pre-filling "${t.title}" from the NCA template.`,
+              title: 'Opening template',
+              message: `Loading "${t.title}" into the editor — edit and save as your own document.`,
             });
             onPick(t);
           }}
@@ -571,8 +571,8 @@ function NcaPreviewPopup({
             onClick={() => onDraft(template)}
             className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100 shrink-0"
           >
-            <Sparkles className="h-3 w-3" />
-            Use as draft
+            <FileText className="h-3 w-3" />
+            Use &amp; edit
           </button>
           <button
             onClick={onClose}
@@ -1061,8 +1061,8 @@ function ArtifactsTab({
                           onDraft={() => {
                             toast({
                               type: 'info',
-                              title: 'Opening AI Draft',
-                              message: `Pre-filling "${item.name}" from the ${group.framework} artifact catalogue.${
+                              title: 'Opening template',
+                              message: `Loading "${item.name}" (${group.framework}) into the editor — edit and save.${
                                 group.frameworkUploadedId ? ' Framework auto-selected.' : ''
                               }`,
                             });
@@ -1088,8 +1088,8 @@ function ArtifactsTab({
             setDetailItem(null);
             toast({
               type: 'info',
-              title: 'Opening AI Draft',
-              message: `Pre-filling "${picked.item.name}" from the ${picked.frameworkName} artifact catalogue.${
+              title: 'Opening template',
+              message: `Loading "${picked.item.name}" (${picked.frameworkName}) into the editor — edit and save.${
                 picked.frameworkUploadedId ? ' Framework auto-selected.' : ''
               }`,
             });
@@ -1196,7 +1196,7 @@ function ArtifactCard({
             className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
           >
             <Eye className="h-3 w-3" />
-            Details
+            View
           </button>
           <button
             type="button"
@@ -1237,6 +1237,46 @@ function ArtifactDetailsPopup({
     { label: 'Suggested doc type', value: docType },
     { label: 'Mandatory', value: item.mandatory ? 'Yes' : 'No' },
   ];
+
+  // Pull the pre-generated, format-aware content so it can be viewed + downloaded
+  // here (documents → Word/PDF, tabular templates → Excel/CSV, guides → PDF/MD).
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const { data: gen, isLoading: genLoading } = useQuery<{
+    found?: boolean; content?: string; content_format?: string;
+  }>({
+    queryKey: ['artifact-content-view', item.artifact_id],
+    queryFn: async () => {
+      const r = await apiClient.get('/artifacts/catalog/content', { params: { artifact_id: item.artifact_id } });
+      return r.data;
+    },
+    staleTime: 5 * 60_000,
+  });
+  const genMode = gen?.content_format || 'markdown';
+  const dlFormats = genMode === 'table' ? ['xlsx', 'csv', 'pdf', 'md'] : ['docx', 'pdf', 'md'];
+  const handleDownload = async (fmt: string) => {
+    setDownloading(fmt);
+    try {
+      const res = await apiClient.get('/artifacts/catalog/export', {
+        params: { artifact_id: item.artifact_id, fmt }, responseType: 'blob',
+      });
+      const cd = (res.headers?.['content-disposition'] as string) || '';
+      const m = /filename="?([^"]+)"?/.exec(cd);
+      const fname = m ? m[1] : `${item.name}.${fmt}`;
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url; a.download = fname;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert('Download failed — has this artifact been generated yet?');
+    } finally {
+      setDownloading(null);
+    }
+  };
+  const genBadge =
+    genMode === 'table' ? { t: 'Spreadsheet template', c: 'bg-emerald-50 text-emerald-700' }
+      : genMode === 'guide' ? { t: 'Collection guide', c: 'bg-amber-50 text-amber-700' }
+        : { t: 'Document', c: 'bg-blue-50 text-blue-700' };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-6">
@@ -1279,6 +1319,40 @@ function ArtifactDetailsPopup({
                   </div>
                 ))}
             </dl>
+          </section>
+
+          {/* Generated content — view + native-format download */}
+          <section>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h3 className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Generated content</h3>
+                {gen?.found && <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${genBadge.c}`}>{genBadge.t}</span>}
+              </div>
+              {gen?.found && (
+                <div className="flex items-center gap-1">
+                  {dlFormats.map((f) => (
+                    <button key={f} type="button" onClick={() => handleDownload(f)} disabled={!!downloading}
+                      className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                      {downloading === f ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                      {f.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {genLoading ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-xs text-gray-400">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading generated content…
+              </div>
+            ) : gen?.found && gen.content ? (
+              <div className="max-h-[42vh] overflow-y-auto rounded-lg border border-gray-200 bg-white p-3">
+                <GovernanceDocumentMarkdown content={gen.content} />
+              </div>
+            ) : (
+              <p className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-4 text-center text-xs italic text-gray-400">
+                Not generated yet — run the artifact-content generator for this framework, then it appears here.
+              </p>
+            )}
           </section>
         </div>
 

@@ -248,4 +248,116 @@ def run_gap_analysis(self, tenant_slug: str, run_ids: list, document_id: int, us
         raise
 
 
-__all__ = ["parse_policy_document", "run_gap_analysis"]
+# ─── Control recommendation (statement → controls) ───────────────────────────
+# After a document is parsed, recommend & link the internal (ERM) controls and
+# framework controls each statement implements. Runs as its OWN background step
+# (dispatched by the parse flow once statements are committed) so parsing reports
+# "completed" immediately and the recommendation populates afterwards.
+
+
+@celery_app.task(
+    base=TenantTask,
+    bind=True,
+    name="grc.tasks.governance.auto_map_document_controls",
+    max_retries=1,
+)
+def auto_map_document_controls(self, tenant_slug: str, document_id: int, db: Session = None) -> dict:
+    """Recommend internal (ERM) + framework controls for every statement of a
+    freshly-parsed document and persist the 360° linkage. Idempotent per document
+    (a Redis lock prevents overlapping runs)."""
+    logger.info("auto_map_document_controls START tenant=%s doc=%s task=%s", tenant_slug, document_id, self.request.id)
+    try:
+        with tenant_lock(tenant_slug, f"statement_auto_map:{document_id}", ttl_seconds=1800, owner=self.request.id):
+            from ..modules.governance.statement_auto_map import auto_map_document
+            set_status(tenant_slug, "statement_auto_map", document_id,
+                       {"status": "running", "message": "Recommending controls for statements", "task_id": self.request.id})
+            result = auto_map_document(db, document_id)
+            set_status(tenant_slug, "statement_auto_map", document_id, {"status": "completed", **(result or {})})
+            logger.info("auto_map_document_controls DONE tenant=%s doc=%s result=%s", tenant_slug, document_id, result)
+            return result or {"status": "completed"}
+    except LockNotAcquired:
+        set_status(tenant_slug, "statement_auto_map", document_id,
+                   {"status": "skipped", "message": "Control recommendation already running for this document"})
+        return {"status": "skipped"}
+    except Exception as exc:
+        logger.exception("auto_map_document_controls failed: %s", exc)
+        set_status(tenant_slug, "statement_auto_map", document_id, {"status": "failed", "error": str(exc)[:500]})
+        raise
+
+
+def _run_auto_map_with_own_session(tenant_slug: str, document_id: int, task_id: str) -> None:
+    """Thread entry-point mirroring the Celery task — opens its own tenant
+    session so the control recommendation runs without a worker."""
+    from ..db import open_tenant_session
+    try:
+        db = open_tenant_session(tenant_slug)
+    except Exception as exc:
+        logger.exception("Failed to open tenant session for auto-map doc %s", document_id)
+        set_status(tenant_slug, "statement_auto_map", document_id,
+                   {"status": "failed", "error": f"Could not open tenant DB session: {exc}"})
+        return
+    try:
+        with tenant_lock(tenant_slug, f"statement_auto_map:{document_id}", ttl_seconds=1800, owner=task_id):
+            from ..modules.governance.statement_auto_map import auto_map_document
+            set_status(tenant_slug, "statement_auto_map", document_id,
+                       {"status": "running", "message": "Thread worker picked up the job", "task_id": task_id})
+            result = auto_map_document(db, document_id)
+            set_status(tenant_slug, "statement_auto_map", document_id, {"status": "completed", **(result or {})})
+            logger.info("auto_map(thread) DONE tenant=%s doc=%s task=%s result=%s", tenant_slug, document_id, task_id, result)
+    except LockNotAcquired:
+        set_status(tenant_slug, "statement_auto_map", document_id,
+                   {"status": "skipped", "message": "Another worker is already recommending controls"})
+    except Exception as exc:  # noqa: BLE001
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.exception("Auto-map thread crashed: %s", exc)
+        set_status(tenant_slug, "statement_auto_map", document_id, {"status": "failed", "error": str(exc)[:500]})
+    finally:
+        try:
+            db.close()
+        except Exception:
+            pass
+
+
+def dispatch_auto_map_in_thread(tenant_slug: str, document_id: int) -> str:
+    """Run the control recommendation on a daemon thread (no worker required)."""
+    import threading
+    import uuid
+    task_id = f"thread-{uuid.uuid4().hex[:12]}"
+    t = threading.Thread(
+        target=_run_auto_map_with_own_session,
+        args=(tenant_slug, document_id, task_id),
+        daemon=True,
+        name=f"auto-map-{document_id}",
+    )
+    t.start()
+    return task_id
+
+
+def dispatch_auto_map(tenant_slug: str, document_id: int) -> str:
+    """Fire the control-recommendation step in the background. Prefers Celery
+    (a worker on the `parsing` queue picks it up); falls back to an in-process
+    daemon thread when the broker is unreachable or dispatch is disabled.
+
+    Safe to call from inside the parse flow — the caller must have committed the
+    statements first, since the job reads them through a separate session.
+    """
+    import os as _os
+    force_thread = _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
+    if not force_thread:
+        try:
+            return auto_map_document_controls.delay(tenant_slug, document_id).id
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("auto-map celery dispatch failed (%s); falling back to thread", exc)
+    return dispatch_auto_map_in_thread(tenant_slug, document_id)
+
+
+__all__ = [
+    "parse_policy_document",
+    "run_gap_analysis",
+    "auto_map_document_controls",
+    "dispatch_auto_map",
+    "dispatch_auto_map_in_thread",
+]

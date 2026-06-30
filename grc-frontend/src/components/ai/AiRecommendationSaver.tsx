@@ -71,7 +71,9 @@ export default function AiRecommendationSaver({
     setSaving(true);
     try {
       const res = await aiRecommendationsApi.save({
-        module, recommendation_type: recommendationType, entity_type: entityType, entity_id: entityId,
+        module, recommendation_type: recommendationType, entity_type: entityType,
+        // Backend stores entity_id as a string — coerce so numeric ids don't 422.
+        entity_id: entityId == null ? undefined : String(entityId),
         title, summary, output, model,
       });
       setSaved(res.data as SavedAiRec);

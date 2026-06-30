@@ -1,4 +1,5 @@
-from ..config import get_openai_api_key
+from ..config import get_openai_api_key, get_openai_model
+
 import os
 import json
 import logging
@@ -1088,7 +1089,7 @@ Use these action_link patterns:
 - Assessments: /risks/rcsa/assessments/[id]"""
 
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model=get_openai_model(),
                 messages=[
                     {"role": "system", "content": "You are a compliance advisor. Return only valid JSON arrays."},
                     {"role": "user", "content": prompt}

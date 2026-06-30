@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 import os
 import json
 from typing import List, Optional
@@ -98,7 +99,7 @@ Constraints:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a precise assistant. Return JSON only."},
                 {"role": "user", "content": prompt}
@@ -414,7 +415,7 @@ Return ONLY valid JSON, no additional text."""
     try:
         client = get_openai_client()
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a GRC expert specializing in incident analysis, root cause determination, and control recommendations. Always respond with valid JSON."},
                 {"role": "user", "content": prompt}

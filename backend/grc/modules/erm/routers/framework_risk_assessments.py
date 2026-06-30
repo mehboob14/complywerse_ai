@@ -1,3 +1,4 @@
+from ....config import get_openai_model
 from typing import List, Optional
 from datetime import datetime
 import os
@@ -554,7 +555,7 @@ def _generate_questions_with_ai(framework: Framework, controls: List[dict], coun
     if not controls:
         return []
 
-    model = os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL", "gpt-4o")
+    model = os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL", get_openai_model())
     control_chunks = _chunk_controls_for_generation(controls)
     if not control_chunks:
         return []

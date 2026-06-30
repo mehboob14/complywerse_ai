@@ -1,3 +1,4 @@
+from ....config import get_openai_model
 from typing import List, Optional
 from datetime import datetime
 from io import BytesIO
@@ -2035,7 +2036,7 @@ Format your response as JSON:
 {{"suggestion": "your suggestion text", "confidence": 0.85, "gaps": ["gap1"], "evidence_recommendations": [{{"evidence_type": "Policy Document", "description": "Formal policy covering this control area", "example_files": ["access-control-policy.pdf", "security-policy-v2.docx"]}}, ...]}}"""
 
                 response = client.chat.completions.create(
-                    model="gpt-4o",
+                    model=get_openai_model(),
                     messages=[{"role": "user", "content": prompt}],
                     response_format={"type": "json_object"}
                 )

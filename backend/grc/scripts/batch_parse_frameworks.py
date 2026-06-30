@@ -9,6 +9,7 @@ Usage:
     cd backend && python -m grc.scripts.batch_parse_frameworks
 """
 
+from ..config import get_openai_model
 import os
 import sys
 import json
@@ -434,7 +435,7 @@ def extract_document_structure(client: OpenAI, text: str, framework_name: str) -
         print(f"  [STRUCTURE] Analyzing document structure...")
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a GRC expert analyzing regulatory framework documents."},
                 {"role": "user", "content": f"""Analyze this regulatory framework document "{framework_name}" and provide structural analysis.
@@ -495,7 +496,7 @@ Target 15-25+ controls per chunk. Split compound requirements."""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a compliance expert extracting regulatory requirements. Extract the MAXIMUM number of individual controls by splitting compound requirements."},
                 {"role": "user", "content": prompt}
@@ -531,7 +532,7 @@ def enhance_controls(client: OpenAI, controls: List[dict], framework_name: str) 
             controls_json = json.dumps(batch, indent=2)
             
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model=get_openai_model(),
                 messages=[
                     {"role": "system", "content": "You are a GRC expert adding audit-ready evidence requirements to compliance controls."},
                     {"role": "user", "content": f"""For framework "{framework_name}", enhance these controls with additional details.

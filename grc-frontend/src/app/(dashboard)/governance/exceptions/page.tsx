@@ -165,6 +165,9 @@ export default function PolicyExceptionsPage() {
   const [candidates, setCandidates] = useState<ExceptionCandidate[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [candidateSource, setCandidateSource] = useState('');
+  // Which policy drives AI exception suggestions. 'all' = scan across every
+  // policy; a document id = AI proposes exceptions for that exact policy.
+  const [candidatePolicyId, setCandidatePolicyId] = useState<number | 'all'>('all');
 
   const queryClient = useQueryClient();
 
@@ -198,13 +201,12 @@ export default function PolicyExceptionsPage() {
     queryKey: ['governance-documents-list'],
     queryFn: async () => {
       try {
-        const response = await governanceApi.getDocuments({ limit: 200 });
-        const allDocs = extractItemsArray(response.data);
-        const policyDocs = allDocs.filter((doc: any) => {
-          const t = String(doc?.doc_type || '').toLowerCase();
-          return t === 'policy' || t === 'standard' || t === 'procedure' || t === 'guideline' || t === 'charter';
-        });
-        return (policyDocs.length > 0 ? policyDocs : allDocs) as GovernancePolicyOption[];
+        const response = await governanceApi.getDocuments({ limit: 500 });
+        // Exceptions can ONLY be raised against policies — show policy documents
+        // only, never procedures / standards / guidelines / other doc types.
+        return extractItemsArray(response.data).filter(
+          (doc: any) => String(doc?.doc_type || '').toLowerCase() === 'policy'
+        ) as GovernancePolicyOption[];
       } catch {
         const fallback = await documentsApi.getAll();
         return extractItemsArray(fallback.data) as GovernancePolicyOption[];
@@ -412,10 +414,14 @@ export default function PolicyExceptionsPage() {
     }
   };
 
-  const loadCandidates = async () => {
+  // Load AI exception candidates. With a specific policy selected the backend
+  // focuses on that exact document; with 'all' it scans across every policy.
+  const loadCandidates = async (target: number | 'all' = candidatePolicyId) => {
     setLoadingCandidates(true);
     try {
-      const res = await policyExceptionApi.suggestCandidates({ limit: 8 });
+      const params: { document_id?: number; limit: number } = { limit: 8 };
+      if (target !== 'all') params.document_id = target;
+      const res = await policyExceptionApi.suggestCandidates(params);
       setCandidates((res.data?.candidates || []) as ExceptionCandidate[]);
       setCandidateSource(res.data?.source || '');
     } catch {
@@ -423,6 +429,13 @@ export default function PolicyExceptionsPage() {
     } finally {
       setLoadingCandidates(false);
     }
+  };
+
+  // Selecting a policy immediately surfaces AI exceptions for that exact policy.
+  const onSelectCandidatePolicy = (value: string) => {
+    const target: number | 'all' = value === 'all' ? 'all' : Number(value);
+    setCandidatePolicyId(target);
+    loadCandidates(target);
   };
 
   // Reveal the panel; auto-load AI suggestions the first time it's opened.
@@ -683,25 +696,47 @@ export default function PolicyExceptionsPage() {
 
             {/* Feature 2 — AI-suggested candidate exceptions */}
             <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <p className="text-xs font-semibold text-gray-700">AI-suggested exceptions across policies</p>
-                <button
-                  onClick={loadCandidates}
-                  disabled={loadingCandidates}
-                  className="flex items-center gap-1 rounded border border-indigo-200 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+              <div className="mb-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-gray-700">
+                    AI-suggested exceptions {candidatePolicyId === 'all' ? 'across policies' : 'for the selected policy'}
+                  </p>
+                  <button
+                    onClick={() => loadCandidates()}
+                    disabled={loadingCandidates}
+                    className="flex flex-shrink-0 items-center gap-1 rounded border border-indigo-200 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                  >
+                    {loadingCandidates ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    {candidates.length ? 'Refresh' : 'Suggest'}
+                  </button>
+                </div>
+                {/* Pick a policy → AI immediately shows possible exceptions for
+                    that exact document. 'All policies' scans across the board. */}
+                <select
+                  value={String(candidatePolicyId)}
+                  onChange={(e) => onSelectCandidatePolicy(e.target.value)}
+                  className="mt-1.5 w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
                 >
-                  {loadingCandidates ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                  {candidates.length ? 'Refresh' : 'Suggest'}
-                </button>
+                  <option value="all">All policies (scan across every policy)</option>
+                  {(documents || []).map((d: GovernancePolicyOption) => (
+                    <option key={d.id} value={d.id}>
+                      {d.document_code ? `${d.document_code} · ` : ''}{d.title}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="max-h-64 space-y-1.5 overflow-y-auto">
                 {loadingCandidates && (
                   <div className="flex items-center gap-2 px-1 py-3 text-xs text-gray-500">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analyzing policies…
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> {candidatePolicyId === 'all' ? 'Analyzing your policies…' : 'Analyzing this policy…'}
                   </div>
                 )}
                 {!loadingCandidates && candidates.length === 0 && (
-                  <p className="px-1 py-2 text-xs text-gray-400">No suggestions yet — click “Suggest” to let AI propose exceptions across your policies.</p>
+                  <p className="px-1 py-2 text-xs text-gray-400">
+                    {candidatePolicyId === 'all'
+                      ? 'Select a policy above to see exceptions for that exact policy, or “Suggest” to scan across all policies.'
+                      : 'No AI-suggested exceptions found for this policy — click “Suggest” to retry.'}
+                  </p>
                 )}
                 {candidates.map((c, i) => (
                   <div key={`${c.document_id}-${i}`} className="rounded border border-gray-100 bg-gray-50 p-2">

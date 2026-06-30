@@ -2,13 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, ClipboardList, FileQuestion } from 'lucide-react';
+import { LayoutDashboard, Building2, ClipboardList, AlertTriangle, Radio, FileQuestion, Shield } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const vendorRiskNavigation = [
-  { name: 'Vendor Risk', href: '/vendor-risk', icon: Building2, exact: true },
+  { name: 'Dashboard', href: '/vendor-risk', icon: LayoutDashboard, exact: true },
+  { name: 'Vendors', href: '/vendor-risk/vendors', icon: Building2 },
   { name: 'Assessments', href: '/vendor-risk/assessments', icon: ClipboardList },
+  { name: 'Findings', href: '/vendor-risk/findings', icon: AlertTriangle },
+  { name: 'Monitoring', href: '/vendor-risk/monitoring', icon: Radio },
   { name: 'Questionnaires', href: '/vendor-risk/questionnaires', icon: FileQuestion },
+  { name: 'Risk 360°', href: '/vendor-risk/risk-360', icon: Shield },
 ];
 
 export default function VendorRiskLayout({

@@ -1641,30 +1641,84 @@ export default function GovernanceDocumentsPage() {
             // AI-draft sources (handled below). This reuses the SAME create
             // path the AI flow uses (editingDocument → modal), so nothing else
             // changes.
-            if (pick.kind === 'recommended' || pick.kind === 'artifact') {
-              const isRec = pick.kind === 'recommended';
-              const content = isRec
-                ? buildTemplateContent(pick.doc)
-                : buildArtifactContent({
-                    name: pick.item.name,
-                    artifact_type: pick.item.artifact_type,
-                    description: pick.item.description || undefined,
-                    framework_key: pick.frameworkName,
-                    control_ref: pick.item.control_ref || undefined,
-                  });
+            // Standard Templates ship "already generated" client-side.
+            if (pick.kind === 'recommended') {
               setEditingDocument({
-                title: isRec ? pick.doc.title : pick.item.name,
-                content,
-                doc_type: isRec ? pick.doc.doc_type : ARTIFACT_DOC_TYPE_MAP(pick.item.artifact_type),
-                description: isRec ? pick.doc.blurb : (pick.item.description || ''),
-                // Auto-link the source framework for artifact templates.
-                framework_ids: (!isRec && pick.frameworkUploadedId) ? [pick.frameworkUploadedId] : [],
+                title: pick.doc.title,
+                content: buildTemplateContent(pick.doc),
+                doc_type: pick.doc.doc_type,
+                description: pick.doc.blurb,
+                framework_ids: [],
               } as any);
-              // Templates carry bracketed placeholders — don't auto-extract
-              // policy statements until the user has filled them in.
               setAutoParseAfterCreate(false);
               setIsRecommendedOpen(false);
               setIsModalOpen(true);
+              return;
+            }
+
+            // Artifact Templates: prefer the pre-generated, type-/control-specific
+            // document body (artifact_content.json via the backend); fall back to
+            // the client-side template if it hasn't been generated yet.
+            if (pick.kind === 'artifact') {
+              const item = pick.item;
+              const fallback = buildArtifactContent({
+                name: item.name,
+                artifact_type: item.artifact_type,
+                description: item.description || undefined,
+                framework_key: pick.frameworkName,
+                control_ref: item.control_ref || undefined,
+              });
+              setIsRecommendedOpen(false);
+              (async () => {
+                let content = fallback;
+                try {
+                  const res = await apiClient.get('/artifacts/catalog/content', {
+                    params: { artifact_id: item.artifact_id },
+                  });
+                  const d = res.data as { found?: boolean; content?: string };
+                  if (d?.found && d.content) content = d.content;
+                } catch {
+                  // keep the client-side fallback
+                }
+                setEditingDocument({
+                  title: item.name,
+                  content,
+                  doc_type: ARTIFACT_DOC_TYPE_MAP(item.artifact_type),
+                  description: item.description || '',
+                  framework_ids: pick.frameworkUploadedId ? [pick.frameworkUploadedId] : [],
+                } as any);
+                setAutoParseAfterCreate(false);
+                setIsModalOpen(true);
+              })();
+              return;
+            }
+
+            // NCA templates ship as ready, EDITABLE documents: fetch the exact
+            // template content and open the create modal pre-filled (WYSIWYG), so
+            // the user edits the real document instead of regenerating it from
+            // scratch — same behaviour as Standard / Artifact templates.
+            if (pick.kind === 'nca') {
+              const docType = NCA_DOC_TYPE_MAP[pick.template.category] ?? 'policy';
+              const tpl = pick.template;
+              setIsRecommendedOpen(false);
+              (async () => {
+                let content = '';
+                try {
+                  const res = await apiClient.get(`/governance/nca-templates/${tpl.id}/content`);
+                  content = ((res.data as { content?: string })?.content) || '';
+                } catch {
+                  // Fall back to an empty editor the user can fill in.
+                }
+                setEditingDocument({
+                  title: tpl.title,
+                  content,
+                  doc_type: docType,
+                  description: `Based on the NCA template "${tpl.title}" (${tpl.category}).`,
+                  framework_ids: [],
+                } as any);
+                setAutoParseAfterCreate(false);
+                setIsModalOpen(true);
+              })();
               return;
             }
 
@@ -1672,15 +1726,7 @@ export default function GovernanceDocumentsPage() {
             // from whichever payload the picker emitted. Closing the templates
             // modal and opening AI Draft happens once at the bottom.
             let prefill: typeof aiDraftPrefill = null;
-            if (pick.kind === 'nca') {
-              const docType = NCA_DOC_TYPE_MAP[pick.template.category] ?? 'policy';
-              prefill = {
-                title: pick.template.title,
-                description: `Seeded from NCA template "${pick.template.title}" (${pick.template.category}).`,
-                doc_type: docType,
-                nca_template_id: pick.template.id,
-              };
-            } else if (pick.kind === 'reference-law') {
+            if (pick.kind === 'reference-law') {
               // The law isn't a single document — it's a source of
               // obligations. Seed a sensible title + doc type the user can
               // change in the AI Draft modal, and carry the law id so the
