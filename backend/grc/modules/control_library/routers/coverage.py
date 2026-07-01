@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from ....models import (
     Framework, FrameworkDomain, ControlObjective, FrameworkControl,
     CommonControlGroup, CommonControlGroupMapping, NormalizedControl,
+    NormalizedControlLink,
     Evidence, EvidenceControlMapping, UploadedFramework, ParsedFrameworkControl,
     ControlImplementation, ImplementationEvidence, GRCUser, get_db
 )
@@ -208,6 +209,25 @@ def calculate_coverage_matrix(db: Session, tenant_id: int, visible_tenant_ids: O
         )
     ).all())
 
+    # Map each parsed control to its UNIFIED domain (one of the 20 control-type
+    # domains) so the matrix's category axis matches the unified library instead
+    # of each framework's own granular taxonomy (which produced 1000+ buckets).
+    from ..services.scoped_session import get_baseline_run
+    _cov_base = get_baseline_run(db, tenant_id)
+    pc_unified_domain: dict = {}
+    if _cov_base is not None:
+        _dom_rows = (
+            db.query(NormalizedControlLink.parsed_control_id, CommonControlGroup.domain)
+            .join(NormalizedControl, NormalizedControl.id == NormalizedControlLink.normalized_control_id)
+            .join(CommonControlGroupMapping, CommonControlGroupMapping.normalized_control_id == NormalizedControl.id)
+            .join(CommonControlGroup, CommonControlGroup.id == CommonControlGroupMapping.group_id)
+            .filter(NormalizedControl.run_id == _cov_base.id)
+            .all()
+        )
+        for _pcid, _dom in _dom_rows:
+            if _pcid is not None and _dom:
+                pc_unified_domain[_pcid] = _dom
+
     if uploaded_frameworks:
         uploaded_ids = [uf.id for uf in uploaded_frameworks]
 
@@ -248,7 +268,9 @@ def calculate_coverage_matrix(db: Session, tenant_id: int, visible_tenant_ids: O
             }
 
             for pc_id, pc_category, pc_domain in rows:
-                cat_key = pc_category or pc_domain or "Uncategorized"
+                # Prefer the unified 20-domain grouping; fall back to the
+                # framework's own category only for controls not in the baseline.
+                cat_key = pc_unified_domain.get(pc_id) or pc_category or pc_domain or "Uncategorized"
                 categories.add(cat_key)
                 cat = matrix[fw_key]["categories"].setdefault(cat_key, {
                     "controls_total": 0,

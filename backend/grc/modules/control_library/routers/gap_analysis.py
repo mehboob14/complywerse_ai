@@ -1136,7 +1136,33 @@ def get_gap_analysis_dashboard(
     
     controls_with_evidence = nc_with_evidence + fc_with_evidence + pc_with_evidence
     controls_without_evidence = total_controls - controls_with_evidence
-    
+
+    # ── Prefer the locked master baseline as the library scope ─────────────
+    # The legacy counts above sum THREE control models (normalized + framework
+    # + parsed) across ALL runs, which double-counts (a parsed control is the
+    # same thing a normalized control links to) and inflates the denominator.
+    # When a baseline exists, scope every headline number to its unified
+    # controls so they match the rest of the product (the unified library).
+    from ..services.scoped_session import get_baseline_run
+    _base = get_baseline_run(db, tenant_id)
+    if _base is not None:
+        _baseline_nc_ids = select(NormalizedControl.id).where(
+            NormalizedControl.run_id == _base.id
+        )
+        total_controls = db.query(NormalizedControl).filter(
+            NormalizedControl.run_id == _base.id
+        ).count()
+        mapped_controls = db.query(CommonControlGroupMapping.normalized_control_id).filter(
+            CommonControlGroupMapping.normalized_control_id.in_(_baseline_nc_ids)
+        ).distinct().count()
+        unmapped_controls = total_controls - mapped_controls
+        _tev_ids = select(Evidence.id).where(Evidence.tenant_id.in_(user_tenants))
+        controls_with_evidence = db.query(EvidenceControlMapping.normalized_control_id).filter(
+            EvidenceControlMapping.evidence_id.in_(_tev_ids),
+            EvidenceControlMapping.normalized_control_id.in_(_baseline_nc_ids),
+        ).distinct().count()
+        controls_without_evidence = total_controls - controls_with_evidence
+
     coverage_by_framework = []
 
     # Only show Framework records published from this tenant's uploaded frameworks
@@ -1319,9 +1345,12 @@ def export_gap_analysis(
                     framework_name
                 ])
         
-        output.seek(0)
-        return StreamingResponse(
-            iter([output.getvalue()]),
+        # Use a plain Response (not StreamingResponse): the app's
+        # audit_log_middleware (BaseHTTPMiddleware) breaks streaming bodies on
+        # POST with "Unexpected message received: http.request".
+        from fastapi.responses import Response as _PlainResponse
+        return _PlainResponse(
+            content=output.getvalue(),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename=gap_analysis_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"}
         )

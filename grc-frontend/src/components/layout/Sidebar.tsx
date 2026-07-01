@@ -360,12 +360,16 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
 // any of the four broad admin permissions). The popover itself only
 // renders for users who pass this check.
 
-const ADMIN_POPOVER_ITEMS: Array<{ id: string; label: string; icon: LucideIcon }> = [
+// Most items deep-link into the admin tab bar via `/admin?tab=<id>`. Items
+// that live at their own standalone route (e.g. Access Reviews) set `href`
+// to override that and link directly.
+const ADMIN_POPOVER_ITEMS: Array<{ id: string; label: string; icon: LucideIcon; href?: string }> = [
   { id: 'company',          label: 'Company',            icon: Settings },
   { id: 'users',            label: 'User Management',    icon: Users },
   { id: 'roles',            label: 'Role Management',    icon: ShieldCheck },
   { id: 'teams',            label: 'Teams',              icon: Users },
   { id: 'password-policy',  label: 'Password Policy',    icon: Shield },
+  { id: 'access-reviews',   label: 'Access Reviews',     icon: ClipboardCheck, href: '/admin/access-reviews' },
   { id: 'integrations',     label: 'Integrations',       icon: Bot },
   { id: 'cloud-connectors', label: 'Cloud Connectors',   icon: Globe },
   { id: 'connectors',       label: 'Connectors',         icon: Layers },
@@ -441,10 +445,10 @@ function AdministrationPopover({
           <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-100 mb-1">
             Administration
           </div>
-          {ADMIN_POPOVER_ITEMS.map(({ id, label, icon: Icon }) => (
+          {ADMIN_POPOVER_ITEMS.map(({ id, label, icon: Icon, href }) => (
             <Link
               key={id}
-              href={`/admin?tab=${id}`}
+              href={href ?? `/admin?tab=${id}`}
               role="menuitem"
               onClick={() => setOpen(false)}
               className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900"

@@ -348,17 +348,23 @@ export default function GapAnalysisDashboardPage() {
   const highCount = dashboard?.critical_gaps?.filter(g => g.priority === 'high').length || 0;
 
   return (
-    <div className="assets-light min-h-full space-y-4 bg-slate-50 p-4 md:p-6">
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900 sm:text-xl">Gap Analysis Dashboard</h1>
-            <p className="text-sm text-slate-600">Identify and address control mapping and evidence gaps</p>
+    <div className="assets-light min-h-full space-y-5 bg-slate-50 p-4 md:p-6">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 via-orange-600 to-rose-600 p-6 text-white shadow-sm">
+        <div className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white/10" />
+        <div className="pointer-events-none absolute -right-20 bottom-0 h-44 w-44 rounded-full bg-white/5" />
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25"><Target size={24} /></span>
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-wide text-amber-100">Control library · analytics</div>
+              <h1 className="text-2xl font-bold leading-tight">Gap Analysis</h1>
+              <p className="mt-1 max-w-2xl text-sm text-amber-50/90">Find controls without evidence and close coverage gaps across the unified library.</p>
+            </div>
           </div>
           <div className="relative">
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-white/15 px-3.5 py-2 text-sm font-medium text-white ring-1 ring-white/25 backdrop-blur transition-colors hover:bg-white/25 disabled:opacity-50"
               disabled={exportMutation.isPending}
             >
               {exportMutation.isPending ? (

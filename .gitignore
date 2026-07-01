@@ -101,3 +101,23 @@ grc-frontend/uploads/
 # Large CIS benchmark reference data — too big for GitHub (Operating_Systems.json is 113MB,
 # over the 100MB hard limit). Kept on disk locally, excluded from version control.
 CIS_Benchmarks/
+
+# ---------------------------------------------------------------------------
+# Scratch, logs, one-off scripts, and generated dumps (not source of record)
+# ---------------------------------------------------------------------------
+*.log
+*.bak
+backend/_*
+grc-frontend/_*
+# accidental nested uploads dir
+backend/backend/
+backend/uploads/
+backend/pipeline_snapshots/
+backend/pipeline_traces/
+grc-frontend/public/domain_*.json
+grc-frontend/public/library_data.json
+grc-frontend/public/stage4_governance.json
+grc-frontend/src/app/library-preview/
+grc-frontend/src/app/redesign-preview/
+grc-frontend/src/components/compliance/_redesign/
+grc-frontend/**/*.tsx.bak

@@ -2,7 +2,7 @@
 
 
 import { PageLoader } from '@/components/ui';
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -22,6 +22,7 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronRight,
+  Search,
   Calendar,
   User,
   CheckCircle,
@@ -155,12 +156,12 @@ const STATUS_OPTIONS = [
   { value: 'na', label: 'N/A' },
 ];
 
-const COMPLIANCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string; icon: typeof CheckCircle }> = {
-  complied: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Complied', icon: CheckCircle },
-  partially_complied: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Partial', icon: AlertTriangle },
-  not_complied: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Not Complied', icon: XCircle },
-  in_progress: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'In Progress', icon: Clock },
-  na: { bg: 'bg-gray-50', text: 'text-gray-600', label: 'N/A', icon: Minus },
+const COMPLIANCE_STATUS_STYLES: Record<string, { bg: string; text: string; border: string; label: string; icon: typeof CheckCircle }> = {
+  complied: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200', label: 'Complied', icon: CheckCircle },
+  partially_complied: { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200', label: 'Partial', icon: AlertTriangle },
+  not_complied: { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-200', label: 'Not Complied', icon: XCircle },
+  in_progress: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200', label: 'In Progress', icon: Clock },
+  na: { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200', label: 'N/A', icon: Minus },
 };
 
 const ASSESSMENT_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -178,6 +179,13 @@ const EVIDENCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: 
   rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
   returned: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Returned' },
   framework_linked: { bg: 'bg-purple-50', text: 'text-purple-700', label: 'Framework Linked' },
+};
+
+const PRIORITY_STYLES: Record<string, { bg: string; text: string; border: string; dot: string; label: string }> = {
+  critical: { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-200', dot: 'bg-rose-500', label: 'Critical' },
+  high: { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-200', dot: 'bg-orange-500', label: 'High' },
+  medium: { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200', dot: 'bg-amber-500', label: 'Medium' },
+  low: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200', dot: 'bg-emerald-500', label: 'Low' },
 };
 
 function getScoreColor(score: number | null): { bg: string; text: string } {
@@ -261,6 +269,16 @@ export default function AssessmentDetailPage() {
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
   // Add new item drawer state.
   const [newItemOpen, setNewItemOpen] = useState<boolean>(false);
+  // When adding an item, the user picks an existing domain (or creates a new
+  // one). Selecting an existing domain reveals only the fields that domain
+  // actually uses (see domainFieldUsage below).
+  const [addNewDomain, setAddNewDomain] = useState(false);
+  // Left-sidebar domain navigator: which domain is in focus ('__all__' = all).
+  const [selectedDomain, setSelectedDomain] = useState<string>('__all__');
+  // Inventory-style filter bar over the items table.
+  const [itemSearch, setItemSearch] = useState('');
+  const [itemStatusFilter, setItemStatusFilter] = useState('');
+  const [itemPriorityFilter, setItemPriorityFilter] = useState('');
   const [newItemForm, setNewItemForm] = useState({
     item_number: '',
     area_domain: '',
@@ -483,6 +501,7 @@ export default function AssessmentDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['compliance-assessment-detail', assessmentId] });
       setNewItemOpen(false);
+      setAddNewDomain(false);
       setNewItemForm({
         item_number: '',
         area_domain: '',
@@ -827,6 +846,45 @@ export default function AssessmentDetailPage() {
   })();
   const domains = domainEntries.map((entry) => entry.key);
   const allItems = assessment.items || [];
+
+  // One Evidence/AI side panel for the whole page, driven by panelItemId — so
+  // the items table rows stay clean (no overlay markup nested in the table).
+  const activePanelItem = allItems.find((i) => i.id === panelItemId) || null;
+  const activePanelEvidence = activePanelItem ? (itemEvidence?.[activePanelItem.id] || []) : [];
+  const activePanelAi = activePanelItem ? parseAIRecommendation(activePanelItem.ai_evidence_recommendation) : null;
+  const activePanelLinkedIds = new Set(
+    activePanelEvidence.map((ev) => ev.evidence_id).filter((evId): evId is number => typeof evId === 'number' && Number.isFinite(evId) && evId > 0),
+  );
+  const activePanelSearch = activePanelItem ? (existingEvidenceSearch[activePanelItem.id] || '').trim().toLowerCase() : '';
+  const activePanelEvidenceOptions = evidenceLibraryOptions.filter((ev) => {
+    if (activePanelLinkedIds.has(ev.id)) return false;
+    if (!activePanelSearch) return true;
+    return ev.name.toLowerCase().includes(activePanelSearch) || (ev.file_name || '').toLowerCase().includes(activePanelSearch) || String(ev.id).includes(activePanelSearch);
+  });
+
+  // Existing domains (actual area_domain values) for the "Add item" dropdown,
+  // and which optional fields each domain actually uses — inferred from its
+  // items, since there is no separate per-domain schema. Selecting a domain in
+  // the add form then shows only that domain's fields.
+  const existingDomains = Object.keys(assessment.items_by_domain || {})
+    .filter((d) => d && d !== 'Uncategorized')
+    .sort((a, b) => a.localeCompare(b));
+  const DOMAIN_OPTIONAL_FIELDS = ['responsible_party', 'timeline', 'gaps_identified', 'proposed_solution', 'evidence_reference', 'remarks'];
+  const domainFieldUsage = {};
+  for (const dom of existingDomains) {
+    const used = new Set();
+    for (const it of assessment.items_by_domain[dom] || []) {
+      for (const f of DOMAIN_OPTIONAL_FIELDS) {
+        const v = it[f];
+        if (v !== null && v !== undefined && String(v).trim() !== '') used.add(f);
+      }
+    }
+    domainFieldUsage[dom] = used;
+  }
+  // For the add form: which optional fields to show for the chosen domain.
+  const selectedDomainUsage = !addNewDomain && newItemForm.area_domain ? domainFieldUsage[newItemForm.area_domain] : undefined;
+  const showItemField = (f) => !selectedDomainUsage || selectedDomainUsage.size === 0 || selectedDomainUsage.has(f);
+
   const fallbackStatusCounts = allItems.reduce(
     (acc, item) => {
       const normalized = normalizeComplianceStatus(item.compliance_status);
@@ -875,6 +933,18 @@ export default function AssessmentDetailPage() {
       color: STATUS_COLORS[key],
     };
   });
+  // Hero (redesigned dashboard) — overall compliance ring + plain verdict.
+  const heroPct = assessment.overall_score != null ? Math.round(assessment.overall_score) : 0;
+  const heroColor = heroPct >= 70 ? '#10b981' : heroPct >= 40 ? '#f59e0b' : '#ef4444';
+  const heroC = 2 * Math.PI * 48;
+  const heroAssessed = (statusCounts['complied'] || 0) + (statusCounts['partially_complied'] || 0) + (statusCounts['not_complied'] || 0) + (statusCounts['na'] || 0);
+  let heroReadiness = 'Not started';
+  let heroVerdict = 'No items assessed yet — score the controls to see where you stand.';
+  if (heroAssessed > 0) {
+    if (heroPct >= 70) { heroReadiness = 'On track'; heroVerdict = 'Most items are compliant. Keep closing the remaining gaps.'; }
+    else if (heroPct >= 40) { heroReadiness = 'Developing'; heroVerdict = 'Partially compliant — several items still need attention.'; }
+    else { heroReadiness = 'At risk'; heroVerdict = 'Early stage — many items remain non-compliant.'; }
+  }
   const domainCoverageRows = domainEntries
     .map((entry) => {
       const items = entry.items;
@@ -999,178 +1069,7 @@ export default function AssessmentDetailPage() {
 
 
       {activeTab === 'assessment' && (
-      <><div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-            <div className="mb-2">
-              <h2 className="text-sm font-semibold text-black">Overall Compliance Score</h2>
-              <p className="text-xs text-gray-500">Based on {normalizedTotal} items</p>
-            </div>
-            <div className="space-y-2.5">
-              <div className="flex items-center gap-3">
-                <div className="flex-1">
-                  <div className="h-2.5 bg-gray-200 rounded-full overflow-hidden flex">
-                    {statusSegments.map((segment) => (
-                      <div
-                        key={segment.key}
-                        className="h-full transition-all"
-                        style={{
-                          width: `${segment.percent}%`,
-                          backgroundColor: segment.color,
-                        }}
-                      />
-                    ))}
-                    {remainingDraftCount > 0 && (
-                      <div
-                        className="h-full"
-                        style={{
-                          width: `${normalizedTotal > 0 ? (remainingDraftCount / normalizedTotal) * 100 : 0}%`,
-                          backgroundColor: DRAFT_REMAINDER_COLOR,
-                        }}
-                      />
-                    )}
-                  </div>
-                </div>
-                <span className={`text-lg font-semibold ${scoreColor.text}`}>
-                  {assessment.overall_score !== null ? `${Math.round(assessment.overall_score)}%` : '-'}
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-600">
-                {statusSegments.map((segment) => (
-                  <span key={segment.key} className="inline-flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: segment.color }} />
-                    {segment.label}: {segment.count}
-                  </span>
-                ))}
-                {remainingDraftCount > 0 && (
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: DRAFT_REMAINDER_COLOR }} />
-                    Draft: {remainingDraftCount}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-          <div className="mb-3">
-            <h2 className="text-sm font-semibold text-black">Assessment Details</h2>
-          </div>
-          <div className="space-y-2.5 text-sm">
-            {assessment.source && (
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Source</span>
-                <span className="text-black">{assessment.source}</span>
-              </div>
-            )}
-            {assessment.assessor && (
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Assessor</span>
-                <div className="flex items-center gap-2">
-                  <User className="h-3.5 w-3.5 text-gray-400" />
-                  <span className="text-black">{assessment.assessor}</span>
-                </div>
-              </div>
-            )}
-            {assessment.due_date && (
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Due Date</span>
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-3.5 w-3.5 text-gray-400" />
-                  <span className="text-black">{formatDate(assessment.due_date)}</span>
-                </div>
-              </div>
-            )}
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">Created</span>
-              <span className="text-black">{formatDate(assessment.created_at)}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm xl:col-span-4">
-          <h3 className="text-sm font-semibold text-black mb-3">Status Coverage</h3>
-          <div className="grid grid-cols-2 gap-3">
-            {ringMetrics.map((metric) => {
-              const Icon = metric.icon;
-              return (
-                <div key={metric.key} className="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
-                  <div className="mx-auto relative h-16 w-16">
-                    <div
-                      className="absolute inset-0 rounded-full"
-                      style={{
-                        background: `conic-gradient(${metric.color} ${Math.max(metric.percent * 3.6, 2)}deg, #e5e7eb ${Math.max(metric.percent * 3.6, 2)}deg 360deg)`,
-                      }}
-                    />
-                    <div className="absolute inset-[6px] rounded-full bg-white flex items-center justify-center">
-                      <Icon className="h-4 w-4" style={{ color: metric.color }} />
-                    </div>
-                  </div>
-                  <p className="mt-2 text-base font-semibold text-center text-black">{metric.percent.toFixed(1)}%</p>
-                  <p className="text-[11px] text-center text-gray-600">{metric.label}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm xl:col-span-8">
-          <h3 className="text-sm font-semibold text-black mb-3">Domain Coverage</h3>
-          <div className="space-y-2.5">
-            {domainCoverageRows.length === 0 ? (
-              <p className="text-sm text-gray-500">No domain data available.</p>
-            ) : (
-              domainCoverageRows.slice(0, 8).map((row, idx) => (
-                <div key={`${row.name}-${idx}`} className="grid grid-cols-12 items-center gap-2">
-                  <div className="col-span-5 truncate text-sm text-gray-800">{row.name}</div>
-                  <div className="col-span-1 text-xs text-gray-500 text-right">{row.total}</div>
-                  <div className="col-span-5 h-2 rounded-full bg-gray-200 overflow-hidden flex">
-                    {row.segments.map((segment) => (
-                      <div
-                        key={`${row.name}-${String(segment.key)}`}
-                        className="h-full"
-                        style={{ width: `${segment.percent}%`, backgroundColor: segment.color }}
-                      />
-                    ))}
-                    {row.remainderPercent > 0 && (
-                      <div
-                        className="h-full"
-                        style={{ width: `${row.remainderPercent}%`, backgroundColor: DRAFT_REMAINDER_COLOR }}
-                      />
-                    )}
-                  </div>
-                  <div className="col-span-1 text-xs font-medium text-gray-700 text-right">{row.completedPercent}%</div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-black mb-3">Category Coverage</h3>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-          {categoryCoverageRows.length === 0 ? (
-            <p className="text-sm text-gray-500">No category data available.</p>
-          ) : (
-            categoryCoverageRows.map((row) => (
-              <div key={row.name} className="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
-                <div className="mb-1.5 flex items-center justify-between">
-                  <span className="text-sm text-gray-800 truncate pr-2">{row.name}</span>
-                  <span className="text-xs text-gray-600">{row.total}</span>
-                </div>
-                <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
-                  <div className="h-full bg-emerald-500" style={{ width: `${row.completion}%` }} />
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
+      <>
       {assessment.assessment_format === 'xlsx_maturity' && (
         <XlsxMaturityViewer assessmentId={assessmentId} assessmentItems={assessment.items || []} />
       )}
@@ -1183,25 +1082,49 @@ export default function AssessmentDetailPage() {
               {domains.length} domain{domains.length !== 1 ? 's' : ''} • {normalizedTotal} items
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={expandAll} className="px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-              Expand All
+          {canEdit && (
+            <button
+              onClick={() => { setAddNewDomain(false); setNewItemOpen(true); }}
+              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              <span className="text-base leading-none">+</span> New Item
             </button>
-            <button onClick={collapseAll} className="px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-              Collapse All
-            </button>
-            {canEdit && (
-              <button
-                onClick={() => setNewItemOpen(true)}
-                className="px-2.5 py-1.5 bg-blue-600 border border-blue-600 rounded-lg text-xs font-medium text-white hover:bg-blue-700 transition-colors inline-flex items-center gap-1"
-              >
-                <span className="text-base leading-none">+</span> New Item
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
         <div className="space-y-4">
+          {/* Filter bar over the items (inventory-style) */}
+          {domains.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[180px] flex-1">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={itemSearch}
+                  onChange={(e) => setItemSearch(e.target.value)}
+                  placeholder="Search items by number or description…"
+                  className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm focus:border-blue-400 focus:outline-none"
+                />
+              </div>
+              <select value={itemStatusFilter} onChange={(e) => setItemStatusFilter(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none">
+                <option value="">All statuses</option>
+                <option value="complied">Complied</option>
+                <option value="partially_complied">Partially Complied</option>
+                <option value="not_complied">Not Complied</option>
+                <option value="in_progress">In Progress</option>
+                <option value="na">N/A</option>
+              </select>
+              <select value={itemPriorityFilter} onChange={(e) => setItemPriorityFilter(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none">
+                <option value="">All priorities</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+              {(itemSearch || itemStatusFilter || itemPriorityFilter) && (
+                <button onClick={() => { setItemSearch(''); setItemStatusFilter(''); setItemPriorityFilter(''); }} className="text-xs font-medium text-blue-600 hover:underline">Clear</button>
+              )}
+            </div>
+          )}
           {domains.length === 0 ? (
             <div className="text-center py-8">
               <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
@@ -1210,7 +1133,16 @@ export default function AssessmentDetailPage() {
           ) : (
             domainEntries.map((domainEntry) => {
               const domain = domainEntry.key;
-              const items = domainEntry.items;
+              const itemSearchLc = itemSearch.trim().toLowerCase();
+              const items = domainEntry.items.filter((it) => {
+                if (itemStatusFilter && it.compliance_status !== itemStatusFilter) return false;
+                if (itemPriorityFilter && (it.priority || '').toLowerCase() !== itemPriorityFilter) return false;
+                if (itemSearchLc) {
+                  const hay = `${it.item_number || ''} ${it.control_description || ''}`.toLowerCase();
+                  if (!hay.includes(itemSearchLc)) return false;
+                }
+                return true;
+              });
               const isExpanded = expandedDomains.has(domain);
               const domainComplied = items.filter((i) => i.compliance_status === 'complied').length;
               const domainPercentage = items.length > 0 ? Math.round((domainComplied / items.length) * 100) : 0;
@@ -1252,641 +1184,199 @@ export default function AssessmentDetailPage() {
                   </div>
 
                   {isExpanded && (
-                    <div className="divide-y divide-gray-200">
-                      {items.map((item) => {
-                        const itemStatusStyle =
-                          COMPLIANCE_STATUS_STYLES[item.compliance_status] ||
-                          COMPLIANCE_STATUS_STYLES.in_progress;
-                        const StatusIcon = itemStatusStyle.icon;
-                        const isEditing = editingItemId === item.id;
-                        const currentItemEvidence = itemEvidence?.[item.id] || [];
-                        const aiRecommendation = parseAIRecommendation(item.ai_evidence_recommendation);
-                        const linkedEvidenceIds = new Set(
-                          currentItemEvidence
-                            .map((ev) => ev.evidence_id)
-                            .filter((evId): evId is number => typeof evId === 'number' && Number.isFinite(evId) && evId > 0)
-                        );
-                        const currentSearchTerm = (existingEvidenceSearch[item.id] || '').trim().toLowerCase();
-                        const availableEvidenceOptions = evidenceLibraryOptions.filter((ev) => {
-                          if (linkedEvidenceIds.has(ev.id)) return false;
-                          if (!currentSearchTerm) return true;
-                          return (
-                            ev.name.toLowerCase().includes(currentSearchTerm) ||
-                            (ev.file_name || '').toLowerCase().includes(currentSearchTerm) ||
-                            String(ev.id).includes(currentSearchTerm)
-                          );
-                        });
-                        const isAuditItemExpanded = !isAuditMasterAssessment || expandedAuditItems.has(item.id);
-
-                        return (
-                          <div key={item.id} className="bg-white">
-                            <div className="p-4">
-                              <div className="flex items-start gap-3">
-                                <span className="text-sm font-mono text-gray-500 mt-1 shrink-0">
-                                  {item.item_number}
-                                </span>
-                                <div className="flex-1 min-w-0">
-                                  <p className={`text-black ${isAuditMasterAssessment ? 'text-sm font-medium' : 'mb-2'}`}>
-                                    {item.control_description}
-                                  </p>
-
-                                  {isAuditMasterAssessment && !isAuditItemExpanded && (
-                                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
-                                      <span className="rounded bg-gray-100 px-2 py-0.5">
-                                        Responsible: {item.responsible_party || 'Unassigned'}
-                                      </span>
-                                      <span className="rounded bg-gray-100 px-2 py-0.5">
-                                        Timeline: {formatTimelineDisplay(item.timeline)}
-                                      </span>
-                                      <span className="rounded bg-gray-100 px-2 py-0.5">
-                                        Remarks: {item.remarks ? 'Available' : 'None'}
-                                      </span>
-                                    </div>
-                                  )}
-
-                                  {isAuditItemExpanded && (
-                                    <>
-                                      {/* Unified Control Information panel.
-                                          Used for every assessment type (UBL
-                                          audit master AND framework-style
-                                          assessments like NCA, Cloud
-                                          Cybersecurity, NIST, OWASP) so the
-                                          editable surface is identical
-                                          everywhere. */}
-                                      <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/30 p-4">
-                                          <div className="mb-3 flex items-center justify-between">
-                                            <h4 className="text-sm font-semibold text-black">Control Information</h4>
-                                            <span className="text-xs text-gray-500">
-                                              {isEditing ? 'Editing' : 'Read Only'}
-                                            </span>
-                                          </div>
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            <div>
-                                              <p className="mb-1 text-xs text-gray-600">Responsible Party</p>
-                                              {isEditing && canEdit ? (
-                                                <select
-                                                  value={editingResponsibleParty}
-                                                  onChange={(e) => setEditingResponsibleParty(e.target.value)}
-                                                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                >
-                                                  <option value="">Unassigned</option>
-                                                  {responsiblePartyOptions.map((option) => (
-                                                    <option key={option} value={option}>
-                                                      {option}
-                                                    </option>
-                                                  ))}
-                                                </select>
-                                              ) : (
-                                                <p className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
-                                                  {item.responsible_party || '-'}
-                                                </p>
-                                              )}
-                                            </div>
-                                            <div>
-                                              <p className="mb-1 text-xs text-gray-600">Timeline</p>
-                                              {isEditing && canEdit ? (
-                                                <input
-                                                  type="date"
-                                                  value={editingTimeline}
-                                                  onChange={(e) => {
-                                                    setEditingTimeline(e.target.value);
-                                                    setEditingTimelineTouched(true);
-                                                  }}
-                                                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                />
-                                              ) : (
-                                                <p className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
-                                                  {formatTimelineDisplay(item.timeline)}
-                                                </p>
-                                              )}
-                                            </div>
-                                            <div className="md:col-span-2">
-                                              <p className="mb-1 text-xs text-gray-600">Remarks</p>
-                                              {isEditing && canEdit ? (
-                                                <textarea
-                                                  value={editingRemarks}
-                                                  onChange={(e) => setEditingRemarks(e.target.value)}
-                                                  rows={3}
-                                                  placeholder="Add comments or remediation remarks"
-                                                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                />
-                                              ) : (
-                                                <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
-                                                  {item.remarks ? item.remarks : '-'}
-                                                </div>
-                                              )}
-                                            </div>
-                                          </div>
-                                          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            <div className="rounded-lg border border-gray-200 bg-white p-3">
-                                              <p className="text-xs text-gray-600 mb-1">Gaps Identified</p>
-                                              {isEditing && canEdit ? (
-                                                <textarea
-                                                  value={editingGapsIdentified}
-                                                  onChange={(e) => setEditingGapsIdentified(e.target.value)}
-                                                  rows={3}
-                                                  placeholder="Describe the gaps observed..."
-                                                  className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                />
-                                              ) : (
-                                                <p className="text-sm text-gray-700 whitespace-pre-line">
-                                                  {item.gaps_identified || <span className="italic text-gray-400">No gaps recorded</span>}
-                                                </p>
-                                              )}
-                                            </div>
-                                            <div className="rounded-lg border border-gray-200 bg-white p-3">
-                                              <p className="text-xs text-gray-600 mb-1">Proposed Solution</p>
-                                              {isEditing && canEdit ? (
-                                                <textarea
-                                                  value={editingProposedSolution}
-                                                  onChange={(e) => setEditingProposedSolution(e.target.value)}
-                                                  rows={3}
-                                                  placeholder="Suggest remediation steps..."
-                                                  className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                />
-                                              ) : (
-                                                <p className="text-sm text-gray-700 whitespace-pre-line">
-                                                  {item.proposed_solution || <span className="italic text-gray-400">No proposed solution</span>}
-                                                </p>
-                                              )}
-                                            </div>
-                                            <div className="rounded-lg border border-gray-200 bg-white p-3">
-                                              <p className="text-xs text-gray-600 mb-1">Area / Domain</p>
-                                              {isEditing && canEdit ? (
-                                                <input
-                                                  type="text"
-                                                  value={editingAreaDomain}
-                                                  onChange={(e) => setEditingAreaDomain(e.target.value)}
-                                                  placeholder="e.g. Access Control"
-                                                  className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                />
-                                              ) : (
-                                                <p className="text-sm text-gray-700">{item.area_domain || <span className="italic text-gray-400">—</span>}</p>
-                                              )}
-                                            </div>
-                                            <div className="rounded-lg border border-gray-200 bg-white p-3">
-                                              <p className="text-xs text-gray-600 mb-1">Priority</p>
-                                              {isEditing && canEdit ? (
-                                                <select
-                                                  value={editingPriority}
-                                                  onChange={(e) => setEditingPriority(e.target.value)}
-                                                  className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                >
-                                                  <option value="">— Select priority —</option>
-                                                  <option value="critical">Critical</option>
-                                                  <option value="high">High</option>
-                                                  <option value="medium">Medium</option>
-                                                  <option value="low">Low</option>
-                                                </select>
-                                              ) : (
-                                                <p className="text-sm text-gray-700 capitalize">{item.priority || <span className="italic text-gray-400">—</span>}</p>
-                                              )}
-                                            </div>
-                                          </div>
-                                          {/* Per-item evidence is managed via
-                                              the Paperclip toggle on each
-                                              row — that opens the rich
-                                              search-existing + upload-new
-                                              panel below, which is the
-                                              canonical evidence linking flow
-                                              for every assessment type. */}
-                                        </div>
-                                    </>
-                                  )}
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  {isEditing ? (
-                                    <>
-                                      <select
-                                        value={editingStatus}
-                                        onChange={(e) => setEditingStatus(e.target.value)}
-                                        className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                      >
-                                        {STATUS_OPTIONS.map((opt) => (
-                                          <option key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                          </option>
-                                        ))}
-                                      </select>
-                                      <button
-                                        onClick={saveEditing}
-                                        disabled={updateItemMutation.isPending}
-                                        className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                                      >
-                                        {updateItemMutation.isPending ? (
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                          <Save className="h-4 w-4" />
-                                        )}
-                                      </button>
-                                      <button onClick={cancelEditing} className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors">
-                                        <X className="h-4 w-4" />
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <span
-                                        className={`px-2 py-1 text-xs font-medium rounded ${itemStatusStyle.bg} ${itemStatusStyle.text} flex items-center gap-1`}
-                                      >
-                                        <StatusIcon className="h-3 w-3" />
-                                        {itemStatusStyle.label}
-                                      </span>
-                                      {canEdit && (
-                                      <button
-                                        onClick={() => startEditing(item)}
-                                        className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                        title={isAuditMasterAssessment ? 'Edit control fields' : 'Edit status'}
-                                      >
-                                        <Edit2 className="h-4 w-4" />
-                                      </button>
-                                      )}
-                                      {canEdit && (
-                                      <button
-                                        onClick={() => setDeleteItemTarget({ id: item.id, name: item.control_description?.slice(0, 80) || `Item ${item.item_number}` })}
-                                        className="p-2 text-gray-600 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                        title="Delete item"
-                                      >
-                                        <X className="h-4 w-4" />
-                                      </button>
-                                      )}
-                                      <button
-                                        onClick={() => openItemPanel(item.id, 'evidence')}
-                                        className={`p-2 rounded-lg transition-colors relative ${panelItemId === item.id ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'}`}
-                                        title="Evidence"
-                                      >
-                                        <Paperclip className="h-4 w-4" />
-                                        {currentItemEvidence.length > 0 && (
-                                          <span className="absolute -top-1 -right-1 h-4 w-4 text-xs bg-blue-600 text-white rounded-full flex items-center justify-center">
-                                            {currentItemEvidence.length}
-                                          </span>
-                                        )}
-                                      </button>
-                                      <button
-                                        onClick={() => handleGenerateAIRecommendation(item.id)}
-                                        disabled={generatingAIForItem === item.id}
-                                        className={`p-2 rounded-lg transition-colors ${aiRecommendation ? 'text-purple-600 bg-purple-50' : 'text-gray-600 hover:text-purple-600 hover:bg-purple-50'} disabled:opacity-50`}
-                                        title="AI Suggest Evidence"
-                                      >
-                                        {generatingAIForItem === item.id ? (
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                        <Sparkles className="h-4 w-4" />
-                                      )}
+                    items.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-sm text-gray-400">No items match the filters.</div>
+                    ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full table-fixed text-sm">
+                        <colgroup>
+                          <col style={{ width: '40px' }} />
+                          <col style={{ width: '56px' }} />
+                          <col />
+                          <col className="hidden lg:table-column" style={{ width: '150px' }} />
+                          <col className="hidden lg:table-column" style={{ width: '120px' }} />
+                          <col style={{ width: '132px' }} />
+                          <col className="hidden md:table-column" style={{ width: '104px' }} />
+                          <col style={{ width: '128px' }} />
+                        </colgroup>
+                        <thead>
+                          <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            <th className="px-2 py-2.5"></th>
+                            <th className="px-2 py-2.5">#</th>
+                            <th className="px-2 py-2.5">Control</th>
+                            <th className="hidden px-2 py-2.5 lg:table-cell">Responsible</th>
+                            <th className="hidden px-2 py-2.5 lg:table-cell">Timeline</th>
+                            <th className="px-2 py-2.5">Status</th>
+                            <th className="hidden px-2 py-2.5 md:table-cell">Priority</th>
+                            <th className="px-2 py-2.5 text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {items.map((item) => {
+                            const itemStatusStyle = COMPLIANCE_STATUS_STYLES[item.compliance_status] || COMPLIANCE_STATUS_STYLES.in_progress;
+                            const StatusIcon = itemStatusStyle.icon;
+                            const isEditing = editingItemId === item.id;
+                            const evCount = (itemEvidence?.[item.id] || []).length;
+                            const hasAi = !!parseAIRecommendation(item.ai_evidence_recommendation);
+                            const rowExpanded = expandedAuditItems.has(item.id);
+                            return (
+                              <Fragment key={item.id}>
+                                <tr className="align-top transition-colors hover:bg-slate-50">
+                                  <td className="px-2 py-2.5">
+                                    <button type="button" onClick={() => toggleAuditItem(item.id)} className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label={rowExpanded ? 'Collapse' : 'Expand'}>
+                                      {rowExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                     </button>
-                                      {isAuditMasterAssessment && (
-                                        <button
-                                          onClick={() => toggleAuditItem(item.id)}
-                                          className={`p-2 rounded-lg transition-colors ${
-                                            isAuditItemExpanded ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
-                                          }`}
-                                          title={isAuditItemExpanded ? 'Collapse control' : 'Expand control'}
-                                        >
-                                          {isAuditItemExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                        </button>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            <RightSlidePanel
-                              isOpen={panelItemId === item.id}
-                              onClose={() => setPanelItemId(null)}
-                              title={`${item.item_number ?? ''} · Evidence & AI`}
-                              subtitle={item.control_description || undefined}
-                              width="w-full max-w-2xl"
-                            >
-                              {/* Step tabs */}
-                              <div className="mb-4 flex items-center gap-1 rounded-lg bg-slate-100 p-1">
-                                {([
-                                  { id: 'ai', label: 'AI Suggestions', icon: Sparkles },
-                                  { id: 'evidence', label: 'Evidence', icon: Paperclip },
-                                ] as { id: 'ai' | 'evidence'; label: string; icon: typeof Sparkles }[]).map(({ id, label, icon: Icon }) => (
-                                  <button key={id} onClick={() => setPanelTab(id)}
-                                    className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold transition ${panelTab === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                                    <Icon className="h-3.5 w-3.5" /> {label}
-                                    {id === 'evidence' && currentItemEvidence.length > 0 && <span className="ml-0.5 rounded-full bg-blue-100 px-1.5 text-[10px] font-bold text-blue-700">{currentItemEvidence.length}</span>}
-                                  </button>
-                                ))}
-                              </div>
-
-                              {panelTab === 'ai' && (
-                              <div className="space-y-4">
-                                {aiRecommendation && (
-                                  <div className="space-y-3">
-                                    <div className="flex items-center gap-2">
-                                      <Sparkles className="h-4 w-4 text-purple-600" />
-                                      <h4 className="text-sm font-medium text-purple-600">AI Evidence Recommendations</h4>
-                                      {item.ai_recommendation_generated_at && (
-                                        <span className="text-xs text-gray-500">
-                                          Generated {formatDateTime(item.ai_recommendation_generated_at)}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-sm text-gray-700">{aiRecommendation.summary}</p>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                      {aiRecommendation.recommendations.map((rec, idx) => (
-                                        <div key={idx} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                                          <div className="flex items-center justify-between mb-2">
-                                            <span className="text-sm font-medium text-black">{rec.evidence_type}</span>
-                                            <span className={`text-xs px-2 py-0.5 rounded ${
-                                              rec.priority === 'high' ? 'bg-rose-50 text-rose-700' :
-                                              rec.priority === 'medium' ? 'bg-amber-50 text-amber-700' :
-                                              'bg-gray-100 text-gray-700'
-                                            }`}>
-                                              {rec.priority}
-                                            </span>
-                                          </div>
-                                          <p className="text-xs text-gray-600 mb-2">{rec.description}</p>
-                                          {rec.example_files.length > 0 && (
-                                            <div className="text-xs text-gray-500">
-                                              Examples: {rec.example_files.join(', ')}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {!aiRecommendation && (
-                                  <div className="flex items-center gap-3 py-2">
-                                    <button
-                                      onClick={() => handleGenerateAIRecommendation(item.id)}
-                                      disabled={generatingAIForItem === item.id}
-                                      className="btn-secondary btn-sm flex items-center gap-2">
-                                      {generatingAIForItem === item.id ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <Sparkles className="h-4 w-4" />
-                                      )}
-                                      Generate AI Suggestions
+                                  </td>
+                                  <td className="truncate px-2 py-2.5 align-top font-mono text-xs text-slate-400">{item.item_number}</td>
+                                  <td className="px-2 py-2.5 align-top">
+                                    <button type="button" onClick={() => toggleAuditItem(item.id)} className="block w-full text-left">
+                                      <p className="line-clamp-2 text-sm leading-snug text-slate-800">{item.control_description}</p>
                                     </button>
-                                    <span className="text-xs text-gray-500">
-                                      Get AI-powered recommendations for evidence to upload
+                                  </td>
+                                  <td className="hidden truncate px-2 py-2.5 align-top text-xs text-slate-600 lg:table-cell" title={item.responsible_party || undefined}>{item.responsible_party || '—'}</td>
+                                  <td className="hidden truncate px-2 py-2.5 align-top text-xs text-slate-600 lg:table-cell">{formatTimelineDisplay(item.timeline)}</td>
+                                  <td className="px-2 py-2.5 align-top">
+                                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${itemStatusStyle.bg} ${itemStatusStyle.text} ${itemStatusStyle.border}`}>
+                                      <StatusIcon className="h-3 w-3 shrink-0" /> <span className="truncate">{itemStatusStyle.label}</span>
                                     </span>
-                                  </div>
-                                )}
-                              </div>
-                              )}
-
-                              {panelTab === 'evidence' && (
-                              <div className="space-y-4">
-                                {currentItemEvidence.length > 0 && (
-                                  <div className="space-y-3">
-                                    <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                                      <Paperclip className="h-4 w-4" />
-                                      Linked Evidence ({currentItemEvidence.length})
-                                    </h4>
-                                    <div className="space-y-2">
-                                      {currentItemEvidence.map((ev) => {
-                                        const isFrameworkLink = ev.source === 'framework_link';
-                                        const evStatusStyle = EVIDENCE_STATUS_STYLES[ev.status] || EVIDENCE_STATUS_STYLES.draft;
-                                        return (
-                                          <div key={ev.id} className={`border rounded-lg p-3 ${isFrameworkLink ? 'bg-purple-50 border-purple-200' : 'bg-gray-50 border-gray-200'}`}>
-                                            <div className="flex items-start justify-between">
-                                              <div className="flex-1">
-                                                <div className="flex items-center gap-2">
-                                                  <FileText className={`h-4 w-4 ${isFrameworkLink ? 'text-purple-600' : 'text-gray-600'}`} />
-                                                  <span className="text-sm font-medium text-black">
-                                                    {ev.evidence?.name || 'Evidence'}
-                                                  </span>
-                                                  <span className={`px-2 py-0.5 text-xs rounded ${evStatusStyle.bg} ${evStatusStyle.text}`}>
-                                                    {evStatusStyle.label}
-                                                  </span>
-                                                  {isFrameworkLink && (
-                                                    <span className="px-2 py-0.5 text-xs rounded bg-purple-100 text-purple-700 flex items-center gap-1">
-                                                      <Sparkles className="h-3 w-3" />
-                                                      Linked from Evidence Module
-                                                    </span>
-                                                  )}
-                                                </div>
-                                                {ev.evidence && (
-                                                  <div className="flex items-center gap-2 mt-1">
-                                                    <p className="text-xs text-gray-500">
-                                                      {ev.evidence.file_name} • {ev.evidence.file_type}
-                                                    </p>
-                                                    <EvidencePreviewButton evidenceId={ev.evidence.id} label="Preview" className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 hover:bg-blue-100" />
-                                                  </div>
-                                                )}
-                                                {isFrameworkLink && ev.framework_name && (
-                                                  <p className="text-xs text-purple-600 mt-1">
-                                                    {ev.framework_name}{ev.control_code ? ` · ${ev.control_code}` : ''}
-                                                    {ev.confidence_score ? ` · ${Math.round(ev.confidence_score)}% confidence` : ''}
-                                                  </p>
-                                                )}
-                                                <p className="text-xs text-gray-500">
-                                                  Linked {formatDateTime(ev.created_at)}
-                                                </p>
-                                              </div>
-                                              {!isFrameworkLink && ev.status === 'draft' && (
-                                                <button
-                                                  onClick={() => approvalActionMutation.mutate({
-                                                    evidenceLinkId: ev.id as number,
-                                                    action: 'submit',
-                                                    comments: ''
-                                                  })}
-                                                  disabled={approvalActionMutation.isPending}
-                                                  className="btn-primary flex items-center gap-2 text-sm ml-4"
-                                                >
-                                                  {approvalActionMutation.isPending ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                                  ) : (
-                                                    <Send className="h-4 w-4" />
-                                                  )}
-                                                  Submit for Review
-                                                </button>
-                                              )}
-                                              {!isFrameworkLink && (ev.status === 'pending_review' || ev.status === 'in_approval') && (
-                                                <div className="flex items-center gap-2 ml-4">
-                                                  <input
-                                                    type="text"
-                                                    placeholder="Comments (optional)"
-                                                    value={approvalComments[ev.id as number] || ''}
-                                                    onChange={(e) => setApprovalComments({ ...approvalComments, [ev.id as number]: e.target.value })}
-                                                    className="input text-xs py-1 px-2 w-32"
-                                                  />
-                                                  <button
-                                                    onClick={() => handleApprovalAction(ev.id as number, 'approve')}
-                                                    disabled={approvalActionMutation.isPending}
-                                                    className="btn-ghost btn-sm text-emerald-400 hover:bg-emerald-500/20"
-                                                    title="Approve"
-                                                  >
-                                                    <ThumbsUp className="h-4 w-4" />
-                                                  </button>
-                                                  <button
-                                                    onClick={() => handleApprovalAction(ev.id as number, 'reject')}
-                                                    disabled={approvalActionMutation.isPending}
-                                                    className="btn-ghost btn-sm text-rose-400 hover:bg-rose-500/20"
-                                                    title="Reject"
-                                                  >
-                                                    <ThumbsDown className="h-4 w-4" />
-                                                  </button>
-                                                  <button
-                                                    onClick={() => handleApprovalAction(ev.id as number, 'return')}
-                                                    disabled={approvalActionMutation.isPending}
-                                                    className="btn-ghost btn-sm text-orange-400 hover:bg-orange-500/20"
-                                                    title="Return for revision"
-                                                  >
-                                                    <RotateCcw className="h-4 w-4" />
-                                                  </button>
-                                                </div>
-                                              )}
-                                            </div>
-                                            {ev.approval_history && ev.approval_history.length > 0 && (
-                                              <div className="mt-2 pt-2 border-t border-gray-200">
-                                                <p className="text-xs text-gray-600 mb-1">Approval History</p>
-                                                <div className="space-y-1">
-                                                  {ev.approval_history.map((history) => (
-                                                    <div key={history.id} className="text-xs text-gray-600">
-                                                      <span className={`font-medium ${
-                                                        history.action === 'approved' ? 'text-emerald-700' :
-                                                        history.action === 'rejected' ? 'text-rose-700' :
-                                                        'text-orange-700'
-                                                      }`}>
-                                                        {history.action}
-                                                      </span>
-                                                      {' by '}
-                                                      {history.performer?.full_name || 'Unknown'}
-                                                      {' at Tier '}
-                                                      {history.tier_number}
-                                                      {history.comments && (
-                                                        <span className="text-gray-500"> - {history.comments}</span>
-                                                      )}
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              </div>
+                                  </td>
+                                  <td className="hidden px-2 py-2.5 align-top md:table-cell">
+                                    {(() => {
+                                      const p = PRIORITY_STYLES[(item.priority || '').toLowerCase()];
+                                      return p ? (
+                                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${p.bg} ${p.text} ${p.border}`}>
+                                          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${p.dot}`} />{p.label}
+                                        </span>
+                                      ) : <span className="text-xs text-slate-400">—</span>;
+                                    })()}
+                                  </td>
+                                  <td className="px-2 py-2.5">
+                                    <div className="flex items-center justify-end gap-1">
+                                      {isEditing ? (
+                                        <>
+                                          <button onClick={saveEditing} disabled={updateItemMutation.isPending} className="rounded-lg bg-blue-600 p-1.5 text-white hover:bg-blue-700 disabled:opacity-50" title="Save">
+                                            {updateItemMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                                          </button>
+                                          <button onClick={cancelEditing} className="rounded-lg p-1.5 text-gray-600 hover:bg-gray-100" title="Cancel"><X className="h-4 w-4" /></button>
+                                        </>
+                                      ) : (
+                                        <>
+                                          {canEdit && (
+                                            <button onClick={() => { startEditing(item); if (!expandedAuditItems.has(item.id)) toggleAuditItem(item.id); }} className="rounded-lg p-1.5 text-gray-600 hover:bg-blue-50 hover:text-blue-600" title="Edit"><Edit2 className="h-4 w-4" /></button>
+                                          )}
+                                          {canEdit && (
+                                            <button onClick={() => setDeleteItemTarget({ id: item.id, name: item.control_description?.slice(0, 80) || `Item ${item.item_number}` })} className="rounded-lg p-1.5 text-gray-600 hover:bg-rose-50 hover:text-rose-600" title="Delete"><X className="h-4 w-4" /></button>
+                                          )}
+                                          <button onClick={() => openItemPanel(item.id, 'evidence')} className={`relative rounded-lg p-1.5 ${panelItemId === item.id ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'}`} title="Evidence">
+                                            <Paperclip className="h-4 w-4" />
+                                            {evCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] text-white">{evCount}</span>}
+                                          </button>
+                                          <button onClick={() => handleGenerateAIRecommendation(item.id)} disabled={generatingAIForItem === item.id} className={`rounded-lg p-1.5 ${hasAi ? 'bg-purple-50 text-purple-600' : 'text-gray-600 hover:bg-purple-50 hover:text-purple-600'} disabled:opacity-50`} title="AI Suggest Evidence">
+                                            {generatingAIForItem === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                                {rowExpanded && (
+                                  <tr className="bg-slate-50/60">
+                                    <td colSpan={8} className="px-3 pb-3 pt-1 sm:px-4">
+                                      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                                        <table className="w-full table-fixed text-sm">
+                                          <colgroup>
+                                            <col style={{ width: '190px' }} />
+                                            <col />
+                                          </colgroup>
+                                          <tbody className="divide-y divide-slate-100">
+                                            <tr className="align-top">
+                                              <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Control / Audit Point</th>
+                                              <td className="whitespace-pre-line px-3 py-2 text-sm text-slate-700">{item.control_description}</td>
+                                            </tr>
+                                            <tr className="align-top">
+                                              <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Responsible Party</th>
+                                              <td className="px-3 py-2 text-sm text-slate-700">
+                                                {isEditing && canEdit ? (
+                                                  <select value={editingResponsibleParty} onChange={(e) => setEditingResponsibleParty(e.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                    <option value="">Unassigned</option>
+                                                    {responsiblePartyOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                                                  </select>
+                                                ) : (item.responsible_party || <span className="italic text-slate-400">—</span>)}
+                                              </td>
+                                            </tr>
+                                            <tr className="align-top">
+                                              <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Timeline</th>
+                                              <td className="px-3 py-2 text-sm text-slate-700">
+                                                {isEditing && canEdit ? (
+                                                  <input type="date" value={editingTimeline} onChange={(e) => { setEditingTimeline(e.target.value); setEditingTimelineTouched(true); }} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                                ) : formatTimelineDisplay(item.timeline)}
+                                              </td>
+                                            </tr>
+                                            <tr className="align-top">
+                                              <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Priority</th>
+                                              <td className="px-3 py-2 text-sm capitalize text-slate-700">
+                                                {isEditing && canEdit ? (
+                                                  <select value={editingPriority} onChange={(e) => setEditingPriority(e.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                    <option value="">— Select —</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+                                                  </select>
+                                                ) : (item.priority || <span className="italic text-slate-400">—</span>)}
+                                              </td>
+                                            </tr>
+                                            <tr className="align-top">
+                                              <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Area / Domain</th>
+                                              <td className="px-3 py-2 text-sm text-slate-700">
+                                                {isEditing && canEdit ? (
+                                                  <input type="text" value={editingAreaDomain} onChange={(e) => setEditingAreaDomain(e.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                                ) : (item.area_domain || <span className="italic text-slate-400">—</span>)}
+                                              </td>
+                                            </tr>
+                                            {isEditing && canEdit && (
+                                              <tr className="align-top">
+                                                <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Status</th>
+                                                <td className="px-3 py-2 text-sm text-slate-700">
+                                                  <select value={editingStatus} onChange={(e) => setEditingStatus(e.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                    {STATUS_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                                                  </select>
+                                                </td>
+                                              </tr>
                                             )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </div>
+                                            <tr className="align-top">
+                                              <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Remarks</th>
+                                              <td className="px-3 py-2 text-sm text-slate-700">
+                                                {isEditing && canEdit ? (
+                                                  <textarea value={editingRemarks} onChange={(e) => setEditingRemarks(e.target.value)} rows={2} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                                ) : (item.remarks || <span className="italic text-slate-400">—</span>)}
+                                              </td>
+                                            </tr>
+                                            <tr className="align-top">
+                                              <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Gaps Identified</th>
+                                              <td className="whitespace-pre-line px-3 py-2 text-sm text-slate-700">
+                                                {isEditing && canEdit ? (
+                                                  <textarea value={editingGapsIdentified} onChange={(e) => setEditingGapsIdentified(e.target.value)} rows={3} placeholder="Describe the gaps observed…" className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                                ) : (item.gaps_identified || <span className="italic text-slate-400">No gaps recorded</span>)}
+                                              </td>
+                                            </tr>
+                                            <tr className="align-top">
+                                              <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Proposed Solution</th>
+                                              <td className="whitespace-pre-line px-3 py-2 text-sm text-slate-700">
+                                                {isEditing && canEdit ? (
+                                                  <textarea value={editingProposedSolution} onChange={(e) => setEditingProposedSolution(e.target.value)} rows={3} placeholder="Suggest remediation steps…" className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                                ) : (item.proposed_solution || <span className="italic text-slate-400">No proposed solution</span>)}
+                                              </td>
+                                            </tr>
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </td>
+                                  </tr>
                                 )}
-
-                                <div className="space-y-3 pt-2 border-t border-gray-200">
-                                  <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                                    <Paperclip className="h-4 w-4" />
-                                    Link Existing Evidence
-                                  </h4>
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    <div className="md:col-span-1">
-                                      <label className="block text-xs text-gray-600 mb-1">Search</label>
-                                      <input
-                                        type="text"
-                                        value={existingEvidenceSearch[item.id] || ''}
-                                        onChange={(e) =>
-                                          setExistingEvidenceSearch((prev) => ({
-                                            ...prev,
-                                            [item.id]: e.target.value,
-                                          }))
-                                        }
-                                        placeholder="Search evidence by name or file"
-                                        className="input text-sm"
-                                      />
-                                    </div>
-                                    <div className="md:col-span-2">
-                                      <label className="block text-xs text-gray-600 mb-1">Evidence Library</label>
-                                      <select
-                                        value={selectedExistingEvidence[item.id] ?? ''}
-                                        onChange={(e) =>
-                                          setSelectedExistingEvidence((prev) => ({
-                                            ...prev,
-                                            [item.id]: e.target.value ? Number(e.target.value) : null,
-                                          }))
-                                        }
-                                        className="input text-sm"
-                                      >
-                                        <option value="">
-                                          {isEvidenceLibraryLoading ? 'Loading evidence...' : 'Select evidence to link'}
-                                        </option>
-                                        {availableEvidenceOptions.map((ev) => (
-                                          <option key={ev.id} value={ev.id}>
-                                            {ev.name} ({ev.file_name || `Evidence #${ev.id}`})
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => handleLinkExistingEvidence(item.id)}
-                                    disabled={!selectedExistingEvidence[item.id] || linkingExistingEvidenceItemId === item.id}
-                                    className="btn-secondary btn-sm flex items-center gap-2"
-                                  >
-                                    {linkingExistingEvidenceItemId === item.id ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Paperclip className="h-4 w-4" />
-                                    )}
-                                    Link Selected Evidence
-                                  </button>
-                                  {availableEvidenceOptions.length === 0 && (
-                                    <p className="text-xs text-gray-500">
-                                      No unmatched evidence found for this search.
-                                    </p>
-                                  )}
-                                </div>
-
-                                <div className="space-y-3 pt-2 border-t border-gray-200">
-                                  <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                                    <FileUp className="h-4 w-4" />
-                                    Upload New Evidence
-                                  </h4>
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    <div>
-                                      <label className="block text-xs text-gray-600 mb-1">File</label>
-                                      <input
-                                        type="file"
-                                        accept="*/*"
-                                        onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
-                                        className="input text-sm py-1"
-                                      />
-                                      <p className="mt-1 text-[11px] text-gray-500">Any file type is supported.</p>
-                                    </div>
-                                    <div>
-                                      <label className="block text-xs text-gray-600 mb-1">Evidence Name</label>
-                                      <input
-                                        type="text"
-                                        value={evidenceName}
-                                        onChange={(e) => setEvidenceName(e.target.value)}
-                                        placeholder="e.g., Security Policy v2"
-                                        className="input text-sm"
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="block text-xs text-gray-600 mb-1">Description (optional)</label>
-                                      <input
-                                        type="text"
-                                        value={evidenceDescription}
-                                        onChange={(e) => setEvidenceDescription(e.target.value)}
-                                        placeholder="Brief description"
-                                        className="input text-sm"
-                                      />
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => handleUploadEvidence(item.id)}
-                                    disabled={!evidenceFile || uploadEvidenceMutation.isPending}
-                                    className="btn-primary btn-sm flex items-center gap-2"
-                                  >
-                                    {uploadEvidenceMutation.isPending ? (
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <Send className="h-4 w-4" />
-                                    )}
-                                    Upload Evidence
-                                  </button>
-                                </div>
-                              </div>
-                              )}
-                            </RightSlidePanel>
-                          </div>
-                        );
-                      })}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
+                    )
                   )}
                 </div>
               );
@@ -1895,6 +1385,143 @@ export default function AssessmentDetailPage() {
         </div>
       </div>
       </>)}
+
+      {/* Evidence & AI side panel — single instance, driven by panelItemId. */}
+      {activePanelItem && (
+        <RightSlidePanel
+          isOpen={panelItemId === activePanelItem.id}
+          onClose={() => setPanelItemId(null)}
+          title={`${activePanelItem.item_number ?? ''} · Evidence & AI`}
+          subtitle={activePanelItem.control_description || undefined}
+          width="w-full max-w-2xl"
+        >
+          <div className="mb-4 flex items-center gap-1 rounded-lg bg-slate-100 p-1">
+            {([{ id: 'ai', label: 'AI Suggestions', icon: Sparkles }, { id: 'evidence', label: 'Evidence', icon: Paperclip }] as { id: 'ai' | 'evidence'; label: string; icon: typeof Sparkles }[]).map(({ id, label, icon: Icon }) => (
+              <button key={id} onClick={() => setPanelTab(id)} className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold transition ${panelTab === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                <Icon className="h-3.5 w-3.5" /> {label}
+                {id === 'evidence' && activePanelEvidence.length > 0 && <span className="ml-0.5 rounded-full bg-blue-100 px-1.5 text-[10px] font-bold text-blue-700">{activePanelEvidence.length}</span>}
+              </button>
+            ))}
+          </div>
+
+          {panelTab === 'ai' && (
+            <div className="space-y-4">
+              {activePanelAi ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-purple-600" />
+                    <h4 className="text-sm font-medium text-purple-600">AI Evidence Recommendations</h4>
+                    {activePanelItem.ai_recommendation_generated_at && <span className="text-xs text-gray-500">Generated {formatDateTime(activePanelItem.ai_recommendation_generated_at)}</span>}
+                  </div>
+                  <p className="text-sm text-gray-700">{activePanelAi.summary}</p>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {activePanelAi.recommendations.map((rec, idx) => (
+                      <div key={idx} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-sm font-medium text-black">{rec.evidence_type}</span>
+                          <span className={`rounded px-2 py-0.5 text-xs ${rec.priority === 'high' ? 'bg-rose-50 text-rose-700' : rec.priority === 'medium' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-700'}`}>{rec.priority}</span>
+                        </div>
+                        <p className="mb-2 text-xs text-gray-600">{rec.description}</p>
+                        {rec.example_files.length > 0 && <div className="text-xs text-gray-500">Examples: {rec.example_files.join(', ')}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 py-2">
+                  <button onClick={() => handleGenerateAIRecommendation(activePanelItem.id)} disabled={generatingAIForItem === activePanelItem.id} className="btn-secondary btn-sm flex items-center gap-2">
+                    {generatingAIForItem === activePanelItem.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    Generate AI Suggestions
+                  </button>
+                  <span className="text-xs text-gray-500">Get AI-powered recommendations for evidence to upload</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {panelTab === 'evidence' && (
+            <div className="space-y-4">
+              {activePanelEvidence.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="flex items-center gap-2 text-sm font-medium text-gray-700"><Paperclip className="h-4 w-4" /> Linked Evidence ({activePanelEvidence.length})</h4>
+                  <div className="space-y-2">
+                    {activePanelEvidence.map((ev) => {
+                      const isFrameworkLink = ev.source === 'framework_link';
+                      const evStatusStyle = EVIDENCE_STATUS_STYLES[ev.status] || EVIDENCE_STATUS_STYLES.draft;
+                      return (
+                        <div key={ev.id} className={`rounded-lg border p-3 ${isFrameworkLink ? 'border-purple-200 bg-purple-50' : 'border-gray-200 bg-gray-50'}`}>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <FileText className={`h-4 w-4 ${isFrameworkLink ? 'text-purple-600' : 'text-gray-600'}`} />
+                                <span className="text-sm font-medium text-black">{ev.evidence?.name || 'Evidence'}</span>
+                                <span className={`rounded px-2 py-0.5 text-xs ${evStatusStyle.bg} ${evStatusStyle.text}`}>{evStatusStyle.label}</span>
+                              </div>
+                              {ev.evidence && (
+                                <div className="mt-1 flex items-center gap-2">
+                                  <p className="text-xs text-gray-500">{ev.evidence.file_name} • {ev.evidence.file_type}</p>
+                                  <EvidencePreviewButton evidenceId={ev.evidence.id} label="Preview" className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 hover:bg-blue-100" />
+                                </div>
+                              )}
+                              <p className="text-xs text-gray-500">Linked {formatDateTime(ev.created_at)}</p>
+                            </div>
+                            {!isFrameworkLink && ev.status === 'draft' && (
+                              <button onClick={() => approvalActionMutation.mutate({ evidenceLinkId: ev.id as number, action: 'submit', comments: '' })} disabled={approvalActionMutation.isPending} className="btn-primary ml-4 flex items-center gap-2 text-sm">
+                                {approvalActionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Submit for Review
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3 border-t border-gray-200 pt-2">
+                <h4 className="flex items-center gap-2 text-sm font-medium text-gray-700"><Paperclip className="h-4 w-4" /> Link Existing Evidence</h4>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="md:col-span-1">
+                    <label className="mb-1 block text-xs text-gray-600">Search</label>
+                    <input type="text" value={existingEvidenceSearch[activePanelItem.id] || ''} onChange={(e) => setExistingEvidenceSearch((prev) => ({ ...prev, [activePanelItem.id]: e.target.value }))} placeholder="Search evidence by name or file" className="input text-sm" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="mb-1 block text-xs text-gray-600">Evidence Library</label>
+                    <select value={selectedExistingEvidence[activePanelItem.id] ?? ''} onChange={(e) => setSelectedExistingEvidence((prev) => ({ ...prev, [activePanelItem.id]: e.target.value ? Number(e.target.value) : null }))} className="input text-sm">
+                      <option value="">{isEvidenceLibraryLoading ? 'Loading evidence...' : 'Select evidence to link'}</option>
+                      {activePanelEvidenceOptions.map((ev) => <option key={ev.id} value={ev.id}>{ev.name} ({ev.file_name || `Evidence #${ev.id}`})</option>)}
+                    </select>
+                  </div>
+                </div>
+                <button onClick={() => handleLinkExistingEvidence(activePanelItem.id)} disabled={!selectedExistingEvidence[activePanelItem.id] || linkingExistingEvidenceItemId === activePanelItem.id} className="btn-secondary btn-sm flex items-center gap-2">
+                  {linkingExistingEvidenceItemId === activePanelItem.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />} Link Selected Evidence
+                </button>
+              </div>
+
+              <div className="space-y-3 border-t border-gray-200 pt-2">
+                <h4 className="flex items-center gap-2 text-sm font-medium text-gray-700"><FileUp className="h-4 w-4" /> Upload New Evidence</h4>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-gray-600">File</label>
+                    <input type="file" accept="*/*" onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)} className="input py-1 text-sm" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-gray-600">Evidence Name</label>
+                    <input type="text" value={evidenceName} onChange={(e) => setEvidenceName(e.target.value)} placeholder="e.g., Security Policy v2" className="input text-sm" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-gray-600">Description (optional)</label>
+                    <input type="text" value={evidenceDescription} onChange={(e) => setEvidenceDescription(e.target.value)} placeholder="Brief description" className="input text-sm" />
+                  </div>
+                </div>
+                <button onClick={() => handleUploadEvidence(activePanelItem.id)} disabled={!evidenceFile || uploadEvidenceMutation.isPending} className="btn-primary btn-sm flex items-center gap-2">
+                  {uploadEvidenceMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Upload Evidence
+                </button>
+              </div>
+            </div>
+          )}
+        </RightSlidePanel>
+      )}
 
       {/* Add new item drawer. Compatible with every assessment type since
           ComplianceAssessmentDocumentItem is the shared row schema. */}
@@ -1920,12 +1547,32 @@ export default function AssessmentDetailPage() {
                 />
               </FieldRow>
               <FieldRow label="Area / Domain">
-                <input
-                  value={newItemForm.area_domain}
-                  onChange={(e) => setNewItemForm((s) => ({ ...s, area_domain: e.target.value }))}
-                  placeholder="e.g. Access Control, Data Protection"
-                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                {existingDomains.length > 0 && (
+                  <select
+                    value={addNewDomain ? '__new__' : newItemForm.area_domain}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '__new__') { setAddNewDomain(true); setNewItemForm((s) => ({ ...s, area_domain: '' })); }
+                      else { setAddNewDomain(false); setNewItemForm((s) => ({ ...s, area_domain: v })); }
+                    }}
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select a domain…</option>
+                    {existingDomains.map((d) => <option key={d} value={d}>{d}</option>)}
+                    <option value="__new__">+ New domain…</option>
+                  </select>
+                )}
+                {(addNewDomain || existingDomains.length === 0) && (
+                  <input
+                    value={newItemForm.area_domain}
+                    onChange={(e) => setNewItemForm((s) => ({ ...s, area_domain: e.target.value }))}
+                    placeholder="New domain name (e.g. Access Control)"
+                    className={`w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${existingDomains.length > 0 ? 'mt-2' : ''}`}
+                  />
+                )}
+                {!addNewDomain && newItemForm.area_domain && selectedDomainUsage && selectedDomainUsage.size > 0 && (
+                  <p className="mt-1 text-[11px] text-slate-400">Showing the fields used by “{newItemForm.area_domain}”.</p>
+                )}
               </FieldRow>
               <FieldRow label="Control Description" required>
                 <textarea
@@ -1963,53 +1610,65 @@ export default function AssessmentDetailPage() {
                   </select>
                 </FieldRow>
               </div>
-              <FieldRow label="Responsible Party">
-                <input
-                  value={newItemForm.responsible_party}
-                  onChange={(e) => setNewItemForm((s) => ({ ...s, responsible_party: e.target.value }))}
-                  placeholder="Owner team or person"
-                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </FieldRow>
-              <FieldRow label="Timeline">
-                <input
-                  value={newItemForm.timeline}
-                  onChange={(e) => setNewItemForm((s) => ({ ...s, timeline: e.target.value }))}
-                  placeholder="Target date or Q3 2026"
-                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </FieldRow>
-              <FieldRow label="Gaps Identified">
-                <textarea
-                  value={newItemForm.gaps_identified}
-                  onChange={(e) => setNewItemForm((s) => ({ ...s, gaps_identified: e.target.value }))}
-                  rows={2}
-                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </FieldRow>
-              <FieldRow label="Proposed Solution">
-                <textarea
-                  value={newItemForm.proposed_solution}
-                  onChange={(e) => setNewItemForm((s) => ({ ...s, proposed_solution: e.target.value }))}
-                  rows={2}
-                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </FieldRow>
-              <FieldRow label="Evidence Reference">
-                <input
-                  value={newItemForm.evidence_reference}
-                  onChange={(e) => setNewItemForm((s) => ({ ...s, evidence_reference: e.target.value }))}
-                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </FieldRow>
-              <FieldRow label="Remarks">
-                <textarea
-                  value={newItemForm.remarks}
-                  onChange={(e) => setNewItemForm((s) => ({ ...s, remarks: e.target.value }))}
-                  rows={2}
-                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </FieldRow>
+              {showItemField('responsible_party') && (
+                <FieldRow label="Responsible Party">
+                  <input
+                    value={newItemForm.responsible_party}
+                    onChange={(e) => setNewItemForm((s) => ({ ...s, responsible_party: e.target.value }))}
+                    placeholder="Owner team or person"
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </FieldRow>
+              )}
+              {showItemField('timeline') && (
+                <FieldRow label="Timeline">
+                  <input
+                    value={newItemForm.timeline}
+                    onChange={(e) => setNewItemForm((s) => ({ ...s, timeline: e.target.value }))}
+                    placeholder="Target date or Q3 2026"
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </FieldRow>
+              )}
+              {showItemField('gaps_identified') && (
+                <FieldRow label="Gaps Identified">
+                  <textarea
+                    value={newItemForm.gaps_identified}
+                    onChange={(e) => setNewItemForm((s) => ({ ...s, gaps_identified: e.target.value }))}
+                    rows={2}
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </FieldRow>
+              )}
+              {showItemField('proposed_solution') && (
+                <FieldRow label="Proposed Solution">
+                  <textarea
+                    value={newItemForm.proposed_solution}
+                    onChange={(e) => setNewItemForm((s) => ({ ...s, proposed_solution: e.target.value }))}
+                    rows={2}
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </FieldRow>
+              )}
+              {showItemField('evidence_reference') && (
+                <FieldRow label="Evidence Reference">
+                  <input
+                    value={newItemForm.evidence_reference}
+                    onChange={(e) => setNewItemForm((s) => ({ ...s, evidence_reference: e.target.value }))}
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </FieldRow>
+              )}
+              {showItemField('remarks') && (
+                <FieldRow label="Remarks">
+                  <textarea
+                    value={newItemForm.remarks}
+                    onChange={(e) => setNewItemForm((s) => ({ ...s, remarks: e.target.value }))}
+                    rows={2}
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </FieldRow>
+              )}
             </div>
             <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3 bg-slate-50">
               <button

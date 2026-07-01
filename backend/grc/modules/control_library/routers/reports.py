@@ -680,8 +680,9 @@ def export_harmonization_report(
         }
         
         output.seek(0)
-        return StreamingResponse(
-            output,
+        from fastapi.responses import Response as _PlainResponse
+        return _PlainResponse(
+            content=output.getvalue(),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": f"attachment; filename={filename}.xlsx"}
         )
@@ -716,8 +717,9 @@ def export_harmonization_report(
         }
         
         output.seek(0)
-        return StreamingResponse(
-            output,
+        from fastapi.responses import Response as _PlainResponse
+        return _PlainResponse(
+            content=output.getvalue(),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}.csv"}
         )
@@ -1156,8 +1158,9 @@ def download_report(
     else:
         media_type = "application/octet-stream"
     
-    return StreamingResponse(
-        io.BytesIO(content),
+    from fastapi.responses import Response as _PlainResponse
+    return _PlainResponse(
+        content=content,
         media_type=media_type,
         headers={"Content-Disposition": f"attachment; filename={report.get('filename', 'report')}"}
     )

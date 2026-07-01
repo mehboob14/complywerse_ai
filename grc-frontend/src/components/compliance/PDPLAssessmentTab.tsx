@@ -9,12 +9,14 @@
  *                        manually-editable fields. Maturity 0-5 auto-derives status.
  *   • Remediation Plan — client-facing action log for controls scored < 3.
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ShieldCheck, Loader2, AlertTriangle, CheckCircle2, Gauge, Layers,
+  ShieldCheck, Loader2, AlertTriangle, CheckCircle2, Gauge,
   Pencil, Save, X, LayoutDashboard, ClipboardCheck, Wrench, Search, Trash2,
   Paperclip, Sparkles, Upload, FileText, Plus, Link2, Download,
+  ChevronRight, Zap, Target,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
@@ -23,6 +25,8 @@ import {
 import apiClient from '@/lib/api';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { buildArtifactTemplate } from '@/components/compliance/artifactTemplates';
+import { SlaClosurePanel } from '@/components/compliance/_redesign/SlaClosurePanel';
+import type { SlaPolicy, SlaItemInput } from '@/components/compliance/_redesign/slaEngine';
 import { downloadAsFormat } from '@/components/compliance/downloadUtils';
 
 // Per-control linked artifacts come straight from the toolkit's
@@ -60,6 +64,8 @@ const PDPL_DOMAINS = [
   'Security', 'Breach Management', 'Cross-Border Transfers', 'Processor / Vendor Mgmt',
   'Special Categories', 'Marketing',
 ];
+// Shared grid template so the controls table header and each row line up.
+const PDPL_COLS = '64px minmax(0,1fr) 132px 150px 96px 96px';
 
 type Item = {
   id: number; item_number: string | null; area_domain: string | null;
@@ -274,21 +280,31 @@ function ControlRow({ item, assessmentId }: { item: Item; assessmentId: number }
 
   return (
     <li className="px-4 py-3">
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 shrink-0 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-600">{item.item_number}</span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm text-slate-800">{item.control_description}</p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
-            {r.pdplRef && <span className="font-mono text-slate-400" title="PDPL article reference">{r.pdplRef}</span>}
-            <span className="inline-flex items-center gap-1.5" title="Compliance status (derived from maturity)">
-              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: meta.color }} />
-              <span className="font-medium text-slate-700">{meta.label}</span>
-            </span>
-            <span title="Maturity score (0–5)">Maturity <span className="font-medium text-slate-700">{item.maturity_score == null ? '—' : `${item.maturity_score}/5`}</span></span>
-            {item.priority && <span title="Priority">Priority <span className={`font-semibold capitalize ${priorityText[item.priority] ?? 'text-slate-600'}`}>{item.priority}</span></span>}
-          </div>
+      <div className="grid items-center gap-3" style={{ gridTemplateColumns: PDPL_COLS }}>
+        {/* Control */}
+        <span className="w-fit justify-self-start rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-600">{item.item_number}</span>
+        {/* Requirement */}
+        <div className="min-w-0">
+          <p className="text-sm leading-snug text-slate-800">{item.control_description}</p>
+          {r.pdplRef && <span className="mt-1 inline-block rounded bg-slate-50 px-1.5 py-0.5 font-mono text-[10.5px] text-slate-400" title="PDPL article reference">{r.pdplRef}</span>}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        {/* Status */}
+        <span className="inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: `${meta.color}1f`, color: meta.color }} title="Compliance status (derived from maturity)">
+          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: meta.color }} />{meta.label}
+        </span>
+        {/* Maturity */}
+        <div className="flex items-center gap-2" title="Maturity score (0–5)">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${((item.maturity_score ?? 0) / 5) * 100}%`, backgroundColor: item.maturity_score == null ? 'transparent' : meta.color }} /></div>
+          <span className="w-7 shrink-0 text-right text-[11px] font-semibold text-slate-600">{item.maturity_score == null ? '—' : `${item.maturity_score}/5`}</span>
+        </div>
+        {/* Priority */}
+        <div>
+          {item.priority
+            ? <span className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${['critical', 'high'].includes(item.priority.toLowerCase()) ? 'bg-rose-50 text-rose-700' : item.priority.toLowerCase() === 'medium' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>{item.priority}</span>
+            : <span className="text-[11px] text-slate-300">—</span>}
+        </div>
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-1">
           <button onClick={() => { setStep('guidance'); setOpen(true); }} title="Open assessment" className={chip(open, 'blue')}><Pencil className="h-3 w-3" /> Assess</button>
           {confirmDel ? (
             <span className="flex items-center gap-1">
@@ -589,9 +605,9 @@ function ControlRow({ item, assessmentId }: { item: Item; assessmentId: number }
 }
 
 /** New-control inline form. */
-function NewControlForm({ assessmentId, onDone }: { assessmentId: number; onDone: () => void }) {
+function NewControlForm({ assessmentId, onDone, defaultDomain }: { assessmentId: number; onDone: () => void; defaultDomain?: string }) {
   const qc = useQueryClient();
-  const [f, setF] = useState({ control_id: '', domain: PDPL_DOMAINS[0], pdpl_ref: '', requirement: '' });
+  const [f, setF] = useState({ control_id: '', domain: defaultDomain || PDPL_DOMAINS[0], pdpl_ref: '', requirement: '' });
   const create = useMutation({
     mutationFn: async () => (await apiClient.post(`/compliance/assessments/${assessmentId}/items`, {
       item_number: f.control_id || undefined, area_domain: f.domain, control_description: f.requirement,
@@ -599,28 +615,43 @@ function NewControlForm({ assessmentId, onDone }: { assessmentId: number; onDone
     })).data,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['pdpl-detail', assessmentId] }); qc.invalidateQueries({ queryKey: ['pdpl-assessments'] }); onDone(); },
   });
-  return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-        <label className="text-[11px]"><span className="mb-1 block font-semibold text-slate-600">Control ID</span>
-          <input value={f.control_id} onChange={(e) => setF({ ...f, control_id: e.target.value })} placeholder="e.g. G-08" className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm" /></label>
-        <label className="text-[11px] sm:col-span-2"><span className="mb-1 block font-semibold text-slate-600">Domain</span>
-          <select value={f.domain} onChange={(e) => setF({ ...f, domain: e.target.value })} className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm">
-            {PDPL_DOMAINS.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select></label>
-        <label className="text-[11px]"><span className="mb-1 block font-semibold text-slate-600">PDPL Ref.</span>
-          <input value={f.pdpl_ref} onChange={(e) => setF({ ...f, pdpl_ref: e.target.value })} placeholder="e.g. Art. 30" className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm" /></label>
-        <label className="text-[11px] sm:col-span-4"><span className="mb-1 block font-semibold text-slate-600">Control Requirement</span>
-          <textarea value={f.requirement} onChange={(e) => setF({ ...f, requirement: e.target.value })} rows={2} className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm" /></label>
+  const inp = 'w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm focus:border-blue-400 focus:outline-none';
+  const lbl = 'mb-1 block text-xs font-semibold text-slate-600';
+  return createPortal(
+    <>
+      <div onClick={onDone} className="fixed inset-0 z-40" style={{ background: 'rgba(15,23,42,0.32)' }} />
+      <div className="fixed right-0 top-0 z-50 flex h-screen w-[460px] max-w-[94vw] flex-col bg-white shadow-[-12px_0_40px_-16px_rgba(15,23,42,0.3)]">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-[22px] py-[18px]">
+          <div className="min-w-0">
+            <div className="text-[15.5px] font-bold tracking-tight text-slate-900">Add control</div>
+            {f.domain && <div className="mt-0.5 truncate text-[11.5px] text-slate-400">to <span className="font-semibold text-blue-700">{f.domain}</span></div>}
+          </div>
+          <button onClick={onDone} className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900"><X className="h-[17px] w-[17px]" /></button>
+        </div>
+        <div className="flex-1 space-y-3.5 overflow-y-auto px-[22px] py-5">
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Control ID</label><input value={f.control_id} onChange={(e) => setF({ ...f, control_id: e.target.value })} placeholder="e.g. G-08" className={inp} /></div>
+            <div><label className={lbl}>PDPL Ref.</label><input value={f.pdpl_ref} onChange={(e) => setF({ ...f, pdpl_ref: e.target.value })} placeholder="e.g. Art. 30" className={inp} /></div>
+          </div>
+          <div><label className={lbl}>Domain</label>
+            <select value={f.domain} onChange={(e) => setF({ ...f, domain: e.target.value })} className={inp}>
+              {PDPL_DOMAINS.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+          <div><label className={lbl}>Control Requirement</label>
+            <textarea value={f.requirement} onChange={(e) => setF({ ...f, requirement: e.target.value })} rows={4} placeholder="Describe the control requirement…" className={`${inp} resize-y`} />
+          </div>
+          {create.isError && <span className="text-[11px] text-red-600">Could not add control.</span>}
+        </div>
+        <div className="flex items-center justify-end gap-2.5 border-t border-slate-100 px-[22px] py-4">
+          <button onClick={onDone} className="rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button onClick={() => create.mutate()} disabled={!f.requirement.trim() || create.isPending} className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">
+            {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add control
+          </button>
+        </div>
       </div>
-      <div className="mt-2.5 flex items-center gap-2">
-        <button onClick={() => create.mutate()} disabled={!f.requirement.trim() || create.isPending} className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-blue-700 disabled:opacity-50">
-          {create.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />} Add control
-        </button>
-        <button onClick={onDone} className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-        {create.isError && <span className="text-[11px] text-red-600">Could not add control.</span>}
-      </div>
-    </div>
+    </>,
+    document.body,
   );
 }
 
@@ -722,9 +753,24 @@ export default function PDPLAssessmentTab() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [view, setView] = useState<'dashboard' | 'controls' | 'remediation'>('dashboard');
   const [activeDomain, setActiveDomain] = useState<string>('__all__');
+  // Overview drill-down filters — set when the user clicks a chart/row, then
+  // the view switches to Controls pre-filtered to that slice.
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [riskFilter, setRiskFilter] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [domainToDelete, setDomainToDelete] = useState<string | null>(null);
+
+  // Shared tenant SLA policy (same cache key as the board so tuning is global).
+  const { data: slaPolicy } = useQuery<SlaPolicy>({
+    queryKey: ['redesign-sla-policy'],
+    queryFn: async () => (await apiClient.get('/compliance/assessments/sla-policy')).data,
+    staleTime: 60_000,
+  });
+  const saveSlaPolicy = async (p: SlaPolicy) => {
+    await apiClient.put('/compliance/assessments/sla-policy', null, { params: p as unknown as Record<string, number> });
+    qc.invalidateQueries({ queryKey: ['redesign-sla-policy'] });
+  };
 
   const { data: listData, isLoading: listLoading } = useQuery({
     queryKey: ['pdpl-assessments'],
@@ -757,6 +803,36 @@ export default function PDPLAssessmentTab() {
       setActiveDomain('__all__'); setDomainToDelete(null);
     },
   });
+
+  // Re-upload an updated PDPL toolkit (.xlsx) → refreshes this assessment's
+  // controls from the file (uses the PDPL template on the backend).
+  const reuploadRef = useRef<HTMLInputElement>(null);
+  const [reuploading, setReuploading] = useState(false);
+  const onReupload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setReuploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      if (activeId) {
+        // Existing PDPL assessment → refresh its controls from the file.
+        await apiClient.post(`/compliance/assessments/${activeId}/reupload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      } else {
+        // No PDPL assessment yet → create one from the toolkit (PDPL template).
+        fd.append('name', file.name.replace(/\.[^.]+$/, ''));
+        fd.append('assessment_type', 'gap_assessment');
+        await apiClient.post('/compliance/assessments/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      }
+      qc.invalidateQueries({ queryKey: ['pdpl-assessments'] });
+      if (activeId) qc.invalidateQueries({ queryKey: ['pdpl-detail', activeId] });
+    } catch {
+      alert('Upload failed — make sure it is a Saudi PDPL Assessment Toolkit workbook.');
+    } finally {
+      setReuploading(false);
+      if (reuploadRef.current) reuploadRef.current.value = '';
+    }
+  };
 
   const metrics = useMemo(() => {
     // Sort by id (original upload/sheet order) so controls keep a STABLE
@@ -809,15 +885,61 @@ export default function PDPLAssessmentTab() {
     { id: 'controls' as const, label: 'Controls', icon: ClipboardCheck },
     { id: 'remediation' as const, label: 'Remediation Plan', icon: Wrench },
   ];
-  const visibleControls = activeDomain === '__all__' ? metrics.items : metrics.items.filter((i) => (i.area_domain || 'Uncategorized') === activeDomain);
+  const visibleControls = metrics.items.filter((i) => {
+    if (activeDomain !== '__all__' && (i.area_domain || 'Uncategorized') !== activeDomain) return false;
+    if (statusFilter && i.compliance_status !== statusFilter) return false;
+    if (riskFilter && (i.risk_rating || '').trim().toLowerCase() !== riskFilter.toLowerCase()) return false;
+    return true;
+  });
+  // Click a chart/row on the Overview → jump to Controls, pre-filtered.
+  const jumpToControls = (opts: { domain?: string; status?: string; risk?: string }) => {
+    setActiveDomain(opts.domain ?? '__all__');
+    setStatusFilter(opts.status ?? null);
+    setRiskFilter(opts.risk ?? null);
+    setView('controls');
+  };
+
+  // ---- Overview (dashboard) derived data ----
+  const assessedPct = metrics.total ? Math.round((metrics.assessed / metrics.total) * 100) : 0;
+  const scoreColor = metrics.compliancePct >= 70 ? '#10b981' : metrics.compliancePct >= 40 ? '#f59e0b' : '#ef4444';
+  const RISK_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+  const compliedCount = metrics.statusData.find((s) => s.key === 'complied')?.value ?? 0;
+  const partialCount = metrics.statusData.find((s) => s.key === 'partially_complied')?.value ?? 0;
+  const notCompliedCount = metrics.statusData.find((s) => s.key === 'not_complied')?.value ?? 0;
+  const notAssessedCount = Math.max(0, metrics.total - compliedCount - partialCount - notCompliedCount);
+  const highRisk = metrics.items.filter((i) => GAP_STATUSES.has(i.compliance_status) && ['high', 'critical'].includes((i.risk_rating || '').toLowerCase())).length;
+  // Show the full risk spread (all levels) so the card fills; the empty state
+  // only shows when nothing is rated at all.
+  const riskCounts = ['Critical', 'High', 'Medium', 'Low']
+    .map((r) => ({ r, n: metrics.items.filter((i) => (i.risk_rating || '').trim().toLowerCase() === r.toLowerCase()).length }));
+  const anyRisk = riskCounts.some((x) => x.n > 0);
+  const topGaps = metrics.items
+    .filter((i) => GAP_STATUSES.has(i.compliance_status))
+    .sort((a, b) => (RISK_RANK[(b.risk_rating || '').toLowerCase()] || 0) - (RISK_RANK[(a.risk_rating || '').toLowerCase()] || 0) || (a.maturity_score ?? 0) - (b.maturity_score ?? 0))
+    .slice(0, 6);
+  const quickWins = metrics.items.filter((i) => i.compliance_status === 'partially_complied' && (i.maturity_score ?? 0) === 2).slice(0, 5);
+  let readiness = 'Not started';
+  let verdict = 'No controls assessed yet. Score your controls on the Controls tab to see where you stand.';
+  if (metrics.assessed > 0) {
+    if (metrics.compliancePct >= 70) { readiness = 'On track'; verdict = 'Most assessed controls are compliant. Keep closing the remaining gaps.'; }
+    else if (metrics.compliancePct >= 40) { readiness = 'Developing'; verdict = 'Partially compliant — several areas still need attention.'; }
+    else { readiness = 'At risk'; verdict = 'Early stage — many gaps still to address.'; }
+  }
+  const RISK_COLOR: Record<string, string> = { Critical: '#dc2626', High: '#f97316', Medium: '#f59e0b', Low: '#64748b' };
+  const ringR = 52; const ringC = 2 * Math.PI * ringR;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900"><ShieldCheck className="h-5 w-5 text-white" /></div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl" style={{ backgroundColor: '#177a4a' }}><ShieldCheck className="h-6 w-6 text-white" /></div>
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">PDPL Compliance Assessment</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-[15px] font-bold text-gray-900">PDPL Compliance Assessment</h3>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> In progress
+              </span>
+            </div>
             <p className="text-[11px] text-gray-500">Saudi Personal Data Protection Law · Royal Decree M/19 (amended M/148), SDAIA</p>
           </div>
         </div>
@@ -838,6 +960,10 @@ export default function PDPLAssessmentTab() {
               {pdplAssessments.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           )}
+          <input ref={reuploadRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onReupload} />
+          <button onClick={() => reuploadRef.current?.click()} disabled={reuploading} title={activeId ? 'Import an updated PDPL Assessment Toolkit (.xlsx) — refreshes every control from the file' : 'Upload the Saudi PDPL Assessment Toolkit (.xlsx) to create this assessment'} className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
+            {reuploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {reuploading ? 'Uploading…' : 'Upload Excel'}
+          </button>
           {activeId && (confirmDelete ? (
             <span className="flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px]">
               <span className="font-medium text-red-700">Delete assessment?</span>
@@ -854,6 +980,7 @@ export default function PDPLAssessmentTab() {
         {SUBTABS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setView(id)} className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition ${view === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
             <Icon className="h-3.5 w-3.5" /> {label}
+            {id === 'controls' && metrics.total > 0 && <span className={`ml-1 rounded-full px-1.5 text-[10px] font-bold ${view === id ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'}`}>{metrics.total}</span>}
             {id === 'remediation' && metrics.gaps > 0 && <span className="ml-1 rounded-full bg-red-100 px-1.5 text-[10px] font-bold text-red-700">{metrics.gaps}</span>}
           </button>
         ))}
@@ -865,49 +992,78 @@ export default function PDPLAssessmentTab() {
         <RemediationPlanView assessmentId={activeId!} />
       ) : view === 'dashboard' ? (
         <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            <KpiCard label="Compliance" value={`${metrics.compliancePct}%`} sub="of assessed controls" tone="text-blue-500" icon={Gauge} />
-            <KpiCard label="Avg Maturity" value={metrics.avgMaturity != null ? `${metrics.avgMaturity}/5` : '—'} sub="0–5 scale" tone="text-indigo-500" icon={Gauge} />
-            <KpiCard label="Assessed" value={`${metrics.assessed}/${metrics.total}`} sub="controls scored" tone="text-emerald-500" icon={CheckCircle2} />
-            <KpiCard label="Open Gaps" value={`${metrics.gaps}`} sub="scored below 3" tone="text-red-500" icon={AlertTriangle} />
-            <KpiCard label="Controls" value={`${metrics.total}`} sub="total in scope" tone="text-slate-500" icon={Layers} />
-          </div>
-          <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Status mix</h4>
-              {metrics.statusData.length === 0 ? <div className="flex h-60 items-center justify-center text-xs text-slate-400">No data</div> : (
-                <div className="flex flex-col items-center gap-3 sm:flex-row">
-                  <div className="relative h-44 w-full sm:w-1/2">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={metrics.statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={42} outerRadius={66} paddingAngle={2}>
-                          {metrics.statusData.map((d) => <Cell key={d.key} fill={d.color} />)}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    {/* Total in the donut hole */}
-                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-xl font-bold text-slate-800">{metrics.total}</span>
-                      <span className="text-[10px] uppercase tracking-wider text-slate-400">Controls</span>
-                    </div>
+          {/* ── Hero: where do we stand ── */}
+          <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5">
+            <div className="flex flex-col items-center gap-5 sm:flex-row">
+              <div className="relative h-32 w-32 shrink-0">
+                <svg viewBox="0 0 120 120" className="h-32 w-32 -rotate-90">
+                  <circle cx="60" cy="60" r={ringR} fill="none" stroke="#e2e8f0" strokeWidth="12" />
+                  <circle cx="60" cy="60" r={ringR} fill="none" stroke={scoreColor} strokeWidth="12" strokeLinecap="round" strokeDasharray={ringC} strokeDashoffset={ringC * (1 - metrics.compliancePct / 100)} style={{ transition: 'stroke-dashoffset .6s ease' }} />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-3xl font-bold tabular-nums text-slate-900">{metrics.compliancePct}%</span>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-400">Compliant</span>
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full px-2.5 py-0.5 text-xs font-bold text-white" style={{ backgroundColor: scoreColor }}>{readiness}</span>
+                  <span className="text-xs text-slate-400">PDPL readiness</span>
+                </div>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{verdict}</p>
+                <div className="mt-3">
+                  <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Assessment progress</span>
+                    <span className="font-semibold text-slate-700">{metrics.assessed}/{metrics.total} assessed · {assessedPct}%</span>
                   </div>
-                  {/* Breakdown beside the donut — fills the empty space. */}
-                  <div className="grid w-full grid-cols-1 content-center gap-y-2 sm:w-1/2">
-                    {metrics.statusData.map((d) => {
-                      const pct = metrics.total ? Math.round((d.value / metrics.total) * 100) : 0;
-                      return (
-                        <div key={d.key} className="flex items-center gap-2 text-xs">
-                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
-                          <span className="min-w-0 flex-1 truncate font-semibold text-slate-700">{d.name}</span>
-                          <span className="shrink-0 font-bold text-slate-800">{d.value}</span>
-                          <span className="w-9 shrink-0 text-right text-slate-400">{pct}%</span>
-                        </div>
-                      );
-                    })}
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-full rounded-full bg-blue-500" style={{ width: `${assessedPct}%`, transition: 'width .6s ease' }} />
                   </div>
                 </div>
-              )}
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <button onClick={() => jumpToControls({ status: 'complied' })} className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700 hover:bg-emerald-100"><CheckCircle2 className="h-3.5 w-3.5" /> {compliedCount} compliant</button>
+                  <button onClick={() => jumpToControls({ status: 'not_complied' })} className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-700 hover:bg-amber-100"><AlertTriangle className="h-3.5 w-3.5" /> {metrics.gaps} gaps</button>
+                  <button onClick={() => jumpToControls({ risk: 'High' })} className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 font-medium text-red-700 hover:bg-red-100"><AlertTriangle className="h-3.5 w-3.5" /> {highRisk} high-risk</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── KPI tiles ── */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <KpiCard label="Compliance" value={`${metrics.compliancePct}%`} sub="of assessed controls" tone="text-blue-500" icon={Gauge} />
+            <KpiCard label="Avg Maturity" value={metrics.avgMaturity != null ? `${metrics.avgMaturity}/5` : '—'} sub={metrics.avgMaturity != null ? MATURITY_LABELS[Math.round(metrics.avgMaturity)] : 'not scored yet'} tone="text-indigo-500" icon={Gauge} />
+            <KpiCard label="Assessed" value={`${metrics.assessed}/${metrics.total}`} sub={`${assessedPct}% done`} tone="text-emerald-500" icon={CheckCircle2} />
+            <KpiCard label="Open Gaps" value={`${metrics.gaps}`} sub="need remediation" tone="text-red-500" icon={AlertTriangle} />
+            <KpiCard label="High Risk" value={`${highRisk}`} sub="high/critical gaps" tone="text-orange-500" icon={AlertTriangle} />
+          </div>
+
+          {/* ── Compliance by domain (clickable) + Maturity radar ── */}
+          <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Compliance by domain</h4>
+                <span className="text-[10px] text-slate-400">click a domain to view its controls</span>
+              </div>
+              <div className="h-44 space-y-0.5 overflow-y-auto pr-1">
+                {metrics.domainData.map((d) => {
+                  const tone = d.compliancePct >= 70 ? '#10b981' : d.compliancePct >= 40 ? '#f59e0b' : '#ef4444';
+                  return (
+                    <button key={d.domain} onClick={() => jumpToControls({ domain: d.domain })} className="group flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[10px] font-bold text-blue-700">{d.idx}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-xs font-medium text-slate-700" title={d.domain}>{d.domain}</span>
+                          <span className="shrink-0 text-[11px] font-bold" style={{ color: tone }}>{d.compliancePct}%</span>
+                        </div>
+                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${d.compliancePct}%`, backgroundColor: tone }} /></div>
+                      </div>
+                      {d.gaps > 0 && <span className="shrink-0 rounded-full bg-red-50 px-1.5 text-[10px] font-bold text-red-600" title={`${d.gaps} gap(s)`}>{d.gaps}</span>}
+                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-slate-500" />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Maturity by domain (0–5)</h4>
@@ -920,43 +1076,178 @@ export default function PDPLAssessmentTab() {
                     </RadarChart>
                   </ResponsiveContainer>
                 </div>
-                {/* Bold numbered legend — scrollable so the card stays compact. */}
-                <div className="grid h-44 w-full grid-cols-1 content-start gap-y-1 overflow-y-auto pr-1 sm:w-1/2">
+                <div className="grid h-44 w-full grid-cols-1 content-start gap-y-0.5 overflow-y-auto pr-1 sm:w-1/2">
                   {metrics.domainData.map((d) => {
                     const tone = d.compliancePct >= 70 ? '#10b981' : d.compliancePct >= 40 ? '#f59e0b' : '#ef4444';
                     return (
-                      <div key={d.domain} className="flex items-center gap-2 text-[11px]">
+                      <button key={d.domain} onClick={() => jumpToControls({ domain: d.domain })} className="flex items-center gap-2 rounded px-1 py-0.5 text-left text-[11px] hover:bg-slate-50">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[10px] font-bold text-blue-700">{d.idx}</span>
                         <span className="min-w-0 flex-1 truncate font-bold text-slate-700" title={d.domain}>{d.domain}</span>
                         <span className="shrink-0 text-slate-400">{d.maturity}/5</span>
                         <span className="w-9 shrink-0 text-right font-bold" style={{ color: tone }}>{d.compliancePct}%</span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
               </div>
             </div>
           </div>
+
+          {/* ── Status mix + Risk spread ── */}
+          <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Status mix</h4>
+              {metrics.statusData.length === 0 ? <div className="flex h-44 items-center justify-center text-xs text-slate-400">No data yet</div> : (
+                <div className="flex flex-col items-center gap-3 sm:flex-row">
+                  <div className="relative h-44 w-full sm:w-1/2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={metrics.statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={42} outerRadius={66} paddingAngle={2}>
+                          {metrics.statusData.map((d) => <Cell key={d.key} fill={d.color} />)}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-xl font-bold text-slate-800">{metrics.total}</span>
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400">Controls</span>
+                    </div>
+                  </div>
+                  <div className="grid w-full grid-cols-1 content-center gap-y-1 sm:w-1/2">
+                    {metrics.statusData.map((d) => {
+                      const pct = metrics.total ? Math.round((d.value / metrics.total) * 100) : 0;
+                      return (
+                        <button key={d.key} onClick={() => jumpToControls({ status: d.key })} className="flex items-center gap-2 rounded px-1 py-1 text-left text-xs hover:bg-slate-50">
+                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: d.color }} />
+                          <span className="min-w-0 flex-1 truncate font-semibold text-slate-700">{d.name}</span>
+                          <span className="shrink-0 font-bold text-slate-800">{d.value}</span>
+                          <span className="w-9 shrink-0 text-right text-slate-400">{pct}%</span>
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Risk spread</h4>
+              {!anyRisk ? (
+                <div className="flex h-44 flex-col items-center justify-center gap-1 text-center text-xs text-slate-400">
+                  <Target className="h-6 w-6 text-slate-300" />
+                  No risk ratings yet. Score controls below 3 and rate the gap on the Remediation tab.
+                </div>
+              ) : (
+                <div className="flex h-44 flex-col justify-between gap-1.5 py-1">
+                  {riskCounts.map(({ r, n }) => {
+                    const max = Math.max(1, ...riskCounts.map((x) => x.n));
+                    return (
+                      <button key={r} onClick={() => jumpToControls({ risk: r })} className="group flex items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50">
+                        <span className="w-16 shrink-0 text-xs font-semibold" style={{ color: RISK_COLOR[r] }}>{r}</span>
+                        <div className="h-3 flex-1 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${Math.round((n / max) * 100)}%`, backgroundColor: RISK_COLOR[r] }} /></div>
+                        <span className="w-6 shrink-0 text-right text-xs font-bold text-slate-800">{n}</span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-slate-500" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── What to fix first + Quick wins ── */}
+          <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500"><Target className="h-3.5 w-3.5 text-red-500" /> Fix these first</h4>
+              {topGaps.length === 0 ? (
+                <p className="py-6 text-center text-xs text-slate-400">{metrics.assessed === 0 ? 'Assess your controls to surface priorities here.' : 'No open gaps — nicely done.'}</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {topGaps.map((g) => {
+                    const rk = (g.risk_rating || '').trim();
+                    const rc = RISK_COLOR[rk] || '#94a3b8';
+                    return (
+                      <li key={g.id}>
+                        <button onClick={() => jumpToControls({ domain: g.area_domain || 'Uncategorized' })} className="group flex w-full items-start gap-2 rounded-lg border border-slate-100 px-2.5 py-2 text-left hover:border-slate-200 hover:bg-slate-50">
+                          <span className="mt-0.5 shrink-0 font-mono text-[10px] text-slate-400">{g.item_number}</span>
+                          <span className="min-w-0 flex-1 truncate text-xs text-slate-700" title={g.control_description || ''}>{g.control_description}</span>
+                          {rk && <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ backgroundColor: rc }}>{rk}</span>}
+                          <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 group-hover:text-slate-500" />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500"><Zap className="h-3.5 w-3.5 text-emerald-500" /> Quick wins</h4>
+              {quickWins.length === 0 ? (
+                <p className="py-6 text-center text-xs text-slate-400">Controls one step from compliant (maturity 2/5) will appear here.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {quickWins.map((q) => (
+                    <li key={q.id}>
+                      <button onClick={() => jumpToControls({ domain: q.area_domain || 'Uncategorized' })} className="group flex w-full items-start gap-2 rounded-lg border border-slate-100 px-2.5 py-2 text-left hover:border-slate-200 hover:bg-slate-50">
+                        <span className="mt-0.5 shrink-0 font-mono text-[10px] text-slate-400">{q.item_number}</span>
+                        <span className="min-w-0 flex-1 truncate text-xs text-slate-700" title={q.control_description || ''}>{q.control_description}</span>
+                        <span className="shrink-0 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">2/5</span>
+                        <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 group-hover:text-slate-500" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
         </>
       ) : (
         <div className="space-y-3">
+          {/* ── Assessment progress summary ── */}
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,300px)_1fr]">
+            <div className="flex flex-col justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-4">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold tabular-nums text-slate-900">{assessedPct}%</span>
+                <span className="text-sm font-medium text-slate-400">assessed</span>
+              </div>
+              <div className="flex h-2 overflow-hidden rounded-full bg-slate-100">
+                {metrics.total > 0 && ([['#10b981', compliedCount], ['#f59e0b', partialCount], ['#ef4444', notCompliedCount]] as [string, number][]).map(([c, n], i) => (
+                  n > 0 ? <div key={i} style={{ width: `${(n / metrics.total) * 100}%`, backgroundColor: c }} /> : null
+                ))}
+              </div>
+              <span className="text-[11px] text-slate-400">{metrics.assessed} of {metrics.total} controls assessed</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {([
+                ['Compliant', compliedCount, '#10b981'],
+                ['Partial', partialCount, '#f59e0b'],
+                ['Gaps', notCompliedCount, '#ef4444'],
+                ['Not assessed', notAssessedCount, '#94a3b8'],
+              ] as [string, number, string][]).map(([label, n, color]) => (
+                <div key={label} className="flex flex-col justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} /> {label}</span>
+                  <span className="text-2xl font-bold tabular-nums text-slate-900">{n}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Domain filter bar (single scrollable row) + New control */}
           <div className="flex items-center gap-3">
             <div className="-mb-1 flex-1 overflow-x-auto pb-1">
               <div className="flex w-max items-center gap-1.5">
-                <button onClick={() => setActiveDomain('__all__')} className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition ${activeDomain === '__all__' ? 'bg-blue-600 text-white shadow-sm' : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800'}`}>
-                  All <span className={activeDomain === '__all__' ? 'text-blue-100' : 'text-slate-400'}>{metrics.total}</span>
+                <button onClick={() => setActiveDomain('__all__')} className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition ${activeDomain === '__all__' ? 'text-white shadow-sm' : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800'}`} style={activeDomain === '__all__' ? { backgroundColor: '#177a4a' } : undefined}>
+                  All <span className={`rounded-full px-1.5 text-[10px] font-bold ${activeDomain === '__all__' ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-500'}`}>{metrics.total}</span>
                 </button>
                 {metrics.domainData.map((d) => {
                   const on = activeDomain === d.domain;
                   return (
-                    <span key={d.domain} className={`inline-flex shrink-0 items-center gap-1 rounded-full py-1 pl-3 pr-1 text-xs font-medium transition ${on ? 'bg-blue-600 text-white shadow-sm' : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
+                    <span key={d.domain} className={`inline-flex shrink-0 items-center gap-1 rounded-full py-1 pl-3 pr-1 text-xs font-medium transition ${on ? 'text-white shadow-sm' : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`} style={on ? { backgroundColor: '#177a4a' } : undefined}>
                       <button onClick={() => setActiveDomain(d.domain)} className="inline-flex items-center gap-1.5">
                         {d.domain}
-                        <span className={on ? 'text-blue-100' : 'text-slate-400'}>{d.count}</span>
-                        {d.gaps > 0 && <span className={`h-1.5 w-1.5 rounded-full ${on ? 'bg-white' : 'bg-red-500'}`} title={`${d.gaps} gap(s)`} />}
+                        <span className={`rounded-full px-1.5 text-[10px] font-bold ${on ? 'bg-white/25 text-white' : d.gaps > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-500'}`}>{d.count}</span>
                       </button>
-                      <button onClick={() => setDomainToDelete(d.domain)} title="Delete this domain & its controls" className={`rounded-full p-0.5 ${on ? 'text-blue-100 hover:bg-blue-500' : 'text-slate-300 hover:bg-red-50 hover:text-red-500'}`}>
+                      <button onClick={() => setDomainToDelete(d.domain)} title="Delete this domain & its controls" className={`rounded-full p-0.5 ${on ? 'text-white/70 hover:bg-white/20' : 'text-slate-300 hover:bg-red-50 hover:text-red-500'}`}>
                         <X className="h-3 w-3" />
                       </button>
                     </span>
@@ -964,10 +1255,28 @@ export default function PDPLAssessmentTab() {
                 })}
               </div>
             </div>
-            <button onClick={() => setShowNew((v) => !v)} className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
-              <Plus className="h-3.5 w-3.5" /> New control
+            <button onClick={() => setShowNew((v) => !v)} className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
+              <Plus className="h-3.5 w-3.5" /> Add item
             </button>
           </div>
+
+          {/* Active drill-down filters from the Overview — clearable */}
+          {(statusFilter || riskFilter) && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-slate-400">Filtered from Overview:</span>
+              {statusFilter && (
+                <button onClick={() => setStatusFilter(null)} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-600 hover:bg-slate-200">
+                  Status: {STATUS_META[statusFilter]?.label ?? statusFilter} <X className="h-3 w-3" />
+                </button>
+              )}
+              {riskFilter && (
+                <button onClick={() => setRiskFilter(null)} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-600 hover:bg-slate-200">
+                  Risk: {riskFilter} <X className="h-3 w-3" />
+                </button>
+              )}
+              <button onClick={() => { setStatusFilter(null); setRiskFilter(null); setActiveDomain('__all__'); }} className="text-blue-600 hover:underline">Clear all</button>
+            </div>
+          )}
 
           {domainToDelete && (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs">
@@ -978,15 +1287,20 @@ export default function PDPLAssessmentTab() {
             </div>
           )}
 
-          {showNew && <NewControlForm assessmentId={activeId!} onDone={() => setShowNew(false)} />}
+          {showNew && <NewControlForm assessmentId={activeId!} defaultDomain={activeDomain !== '__all__' ? activeDomain : undefined} onDone={() => setShowNew(false)} />}
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
             {visibleControls.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-400">No controls in this domain. Click <strong>New control</strong> to add one.</div>
+              <div className="py-12 text-center text-xs text-slate-400">No controls in this domain. Click <strong>Add item</strong> to add one.</div>
             ) : (
-              <ul className="divide-y divide-slate-50">
-                {visibleControls.map((it) => <ControlRow key={it.id} item={it} assessmentId={activeId!} />)}
-              </ul>
+              <>
+                <div className="grid items-center gap-3 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-white" style={{ gridTemplateColumns: PDPL_COLS, backgroundColor: '#177a4a' }}>
+                  <div>Control</div><div>Requirement</div><div>Status</div><div>Maturity</div><div>Priority</div><div className="text-right">Actions</div>
+                </div>
+                <ul className="divide-y divide-slate-100">
+                  {visibleControls.map((it) => <ControlRow key={it.id} item={it} assessmentId={activeId!} />)}
+                </ul>
+              </>
             )}
           </div>
         </div>

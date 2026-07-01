@@ -26,7 +26,7 @@ from ..models import (
     AssessmentEvidenceApprovalWorkflow, AssessmentEvidenceApprovalTier,
     AssessmentItemEvidence, AssessmentEvidenceApprovalHistory,
     Evidence, GRCUser, Tenant, get_db,
-    EvidenceControlMapping, ParsedFrameworkControl
+    EvidenceControlMapping, ParsedFrameworkControl, ComplianceSlaPolicy
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -2406,6 +2406,204 @@ async def upload_assessment(
         )
 
 
+def _parse_assessment_file(file_content: bytes, filename: str):
+    """Detect the workbook template and parse it into (items_data, format,
+    xlsx_data) — the same detection/parsers used by /upload, reused by the
+    re-upload endpoint so an updated workbook refreshes an existing assessment."""
+    lower = (filename or "").lower()
+    is_maturity = is_pdpl = is_ubl = is_asvs = is_owasp = False
+    if lower.endswith(('.xlsx', '.xls')):
+        _wb = None
+        try:
+            _wb = openpyxl.load_workbook(io.BytesIO(file_content), read_only=True, data_only=True)
+            is_maturity = detect_xlsx_maturity_format(_wb)
+            if not is_maturity:
+                is_pdpl = detect_pdpl_assessment_format(_wb)
+            if not is_maturity and not is_pdpl:
+                is_ubl = detect_ubl_audit_master_tracking_format(_wb)
+            if not (is_maturity or is_pdpl or is_ubl):
+                is_asvs = detect_asvs_checklist_format(_wb)
+            if not (is_maturity or is_pdpl or is_ubl or is_asvs):
+                is_owasp = detect_owasp_v4_checklist_format(_wb)
+        except Exception:
+            pass
+        finally:
+            try:
+                if _wb:
+                    _wb.close()
+            except Exception:
+                pass
+
+    if is_maturity:
+        xlsx_data = parse_xlsx_maturity_tool(file_content)
+        details = xlsx_data.get("sheets", {}).get("details", [])
+        items_data = [
+            {
+                "item_number": d.get("subcategory", "")[:50] if d.get("subcategory") else str(i + 1),
+                "area_domain": f"{d.get('function', '')} - {d.get('category', '')}".strip(" -"),
+                "control_description": d.get("subcategory", ""),
+                "compliance_status": "in_progress",
+                "remarks": (
+                    f"Policy Maturity: {d['policy_maturity']}, Practice Maturity: {d['practice_maturity']}"
+                    if d.get("policy_maturity") is not None else None
+                ),
+            }
+            for i, d in enumerate(details)
+        ]
+        return items_data, "xlsx_maturity", xlsx_data
+
+    if lower.endswith('.pdf'):
+        items_data, meta = parse_cis_windows_server_2012_r2_pdf(file_content, filename or "")
+        return items_data, meta.get("assessment_format", "standard"), None
+    if is_pdpl:
+        wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+        try:
+            items_data, meta = parse_pdpl_assessment_workbook(wb)
+        finally:
+            wb.close()
+        return items_data, meta.get("assessment_format", "pdpl_assessment_toolkit"), None
+    if is_ubl:
+        wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+        try:
+            items_data, meta = parse_ubl_audit_master_tracking_workbook(wb)
+        finally:
+            wb.close()
+        return items_data, meta.get("assessment_format", "ubl_audit_master_tracking"), None
+    if is_asvs:
+        wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+        try:
+            items_data, meta = parse_asvs_checklist_workbook(wb)
+        finally:
+            wb.close()
+        return items_data, meta.get("assessment_format", "asvs_checklist"), None
+    if is_owasp:
+        wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+        try:
+            items_data, meta = parse_owasp_v4_checklist_workbook(wb)
+        finally:
+            wb.close()
+        return items_data, meta.get("assessment_format", "owasp_v4_testing_checklist"), None
+
+    items_data, _column_map = parse_excel_file(file_content, filename)
+    return items_data, "standard", None
+
+
+@router.post("/{assessment_id}/reupload")
+async def reupload_assessment(
+    assessment_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Refresh an EXISTING assessment from an updated workbook with the same
+    structure. Items are matched by item_number and updated in place (new rows
+    added) so linked evidence on unchanged controls is preserved."""
+    user_tenants = get_user_tenants(current_user, db)
+    assessment = db.query(ComplianceAssessmentDocument).filter(
+        ComplianceAssessmentDocument.id == assessment_id,
+        ComplianceAssessmentDocument.tenant_id.in_(user_tenants),
+    ).first()
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
+
+    lower_file_name = (file.filename or "").lower()
+    if not lower_file_name.endswith(('.xlsx', '.xls', '.csv', '.pdf')):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File must be an Excel (.xlsx, .xls), CSV, or supported PDF file")
+
+    file_path = None
+    try:
+        file_content = await file.read()
+        file_ext = os.path.splitext(file.filename)[1]
+        file_id = str(uuid.uuid4())
+        file_path = os.path.join(UPLOAD_DIR, f"{file_id}{file_ext}")
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+
+        items_data, detected_format, xlsx_data = _parse_assessment_file(file_content, file.filename)
+        if not items_data:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid assessment items found in the file. Please check the column headers.")
+
+        existing = db.query(ComplianceAssessmentDocumentItem).filter(
+            ComplianceAssessmentDocumentItem.assessment_id == assessment.id
+        ).all()
+        by_number = {(it.item_number or "").strip(): it for it in existing}
+        FIELDS = [
+            "area_domain", "control_description", "compliance_status", "gaps_identified",
+            "proposed_solution", "responsible_party", "timeline", "priority",
+            "evidence_reference", "remarks", "maturity_score", "risk_rating",
+        ]
+        updated = 0
+        added = 0
+        for idx, item_data in enumerate(items_data):
+            number = (item_data.get("item_number") or str(idx + 1)).strip()
+            target = by_number.get(number)
+            if target is None:
+                target = ComplianceAssessmentDocumentItem(
+                    assessment_id=assessment.id, tenant_id=assessment.tenant_id, item_number=number,
+                )
+                db.add(target)
+                added += 1
+            else:
+                updated += 1
+            for fld in FIELDS:
+                if fld not in item_data:
+                    continue
+                val = item_data.get(fld)
+                # Only overwrite when the workbook actually carries a value for this
+                # field. A blank cell leaves the existing (possibly hand-entered)
+                # value untouched — so re-uploading updated data overrides what the
+                # file changed and preserves everything the file left blank.
+                if val is None or (isinstance(val, str) and val.strip() == ""):
+                    continue
+                setattr(target, fld, val)
+            if not getattr(target, "compliance_status", None):
+                target.compliance_status = item_data.get("compliance_status", "in_progress")
+
+        db.flush()
+        items = db.query(ComplianceAssessmentDocumentItem).filter(
+            ComplianceAssessmentDocumentItem.assessment_id == assessment.id
+        ).all()
+        stats = calculate_assessment_stats(items)
+        assessment.complied_count = stats["complied"]
+        assessment.partially_complied_count = stats["partially_complied"]
+        assessment.not_complied_count = stats["not_complied"]
+        assessment.in_progress_count = stats["in_progress"]
+        assessment.na_count = stats["na"]
+        assessment.overall_score = stats["overall_score"]
+        assessment.total_items = len(items)
+        assessment.file_name = file.filename
+        assessment.file_path = file_path
+        if xlsx_data is not None and hasattr(assessment, "xlsx_data"):
+            assessment.xlsx_data = xlsx_data
+
+        db.commit()
+        db.refresh(assessment)
+        return {
+            "id": assessment.id,
+            "name": assessment.name,
+            "assessment_format": assessment.assessment_format or "standard",
+            "total_items": assessment.total_items,
+            "overall_score": assessment.overall_score,
+            "updated_count": updated,
+            "added_count": added,
+            "message": f"Refreshed assessment from {file.filename}: {updated} updated, {added} added",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Assessment re-upload failed: {str(e)}")
+        logger.error(traceback.format_exc())
+        db.rollback()
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to refresh assessment: {str(e)}")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Remediation Plan — the client-facing action log of assessment gaps.
 # A gap is any item assessed below the compliance bar (PDPL rule: maturity < 3
@@ -3379,6 +3577,126 @@ def generate_xlsx_detail_ai_recommendation(
     }
 
 
+# ── SLA policy (tenant-level) ────────────────────────────────────────────────
+# Days allowed per priority tier + the default "due soon" horizon. Drives the
+# dynamic-SLA closure board: a point's target date = raised date + tier days
+# (unless it carries an explicit target_date). One row per tenant. Registered
+# BEFORE the "/{assessment_id}" route so the static path isn't shadowed.
+_SLA_DEFAULTS = {
+    "critical_days": 30, "high_days": 60, "medium_days": 90, "low_days": 180, "due_soon_days": 30,
+    "score_closed_ontime": 100, "score_closed_late": 70, "score_on_track": 40,
+    "score_due_soon": 20, "score_overdue": 0, "score_no_date": 30,
+}
+
+
+def _sla_policy_dict(p: "ComplianceSlaPolicy") -> dict:
+    return {
+        "critical_days": p.critical_days,
+        "high_days": p.high_days,
+        "medium_days": p.medium_days,
+        "low_days": p.low_days,
+        "due_soon_days": p.due_soon_days,
+        "score_closed_ontime": getattr(p, "score_closed_ontime", 100),
+        "score_closed_late": getattr(p, "score_closed_late", 70),
+        "score_on_track": getattr(p, "score_on_track", 40),
+        "score_due_soon": getattr(p, "score_due_soon", 20),
+        "score_overdue": getattr(p, "score_overdue", 0),
+        "score_no_date": getattr(p, "score_no_date", 30),
+    }
+
+
+@router.get("/sla-policy")
+def get_sla_policy(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    p = db.query(ComplianceSlaPolicy).filter(ComplianceSlaPolicy.tenant_id == tenant_id).first()
+    return _sla_policy_dict(p) if p else dict(_SLA_DEFAULTS)
+
+
+@router.put("/sla-policy")
+def update_sla_policy(
+    critical_days: Optional[int] = None,
+    high_days: Optional[int] = None,
+    medium_days: Optional[int] = None,
+    low_days: Optional[int] = None,
+    due_soon_days: Optional[int] = None,
+    score_closed_ontime: Optional[int] = None,
+    score_closed_late: Optional[int] = None,
+    score_on_track: Optional[int] = None,
+    score_due_soon: Optional[int] = None,
+    score_overdue: Optional[int] = None,
+    score_no_date: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    p = db.query(ComplianceSlaPolicy).filter(ComplianceSlaPolicy.tenant_id == tenant_id).first()
+    if not p:
+        p = ComplianceSlaPolicy(tenant_id=tenant_id, **_SLA_DEFAULTS)
+        db.add(p)
+    # Day fields must be positive; score weights may be 0-100 (0 is valid).
+    for field, val in (
+        ("critical_days", critical_days), ("high_days", high_days),
+        ("medium_days", medium_days), ("low_days", low_days),
+        ("due_soon_days", due_soon_days),
+    ):
+        if val is not None and val > 0:
+            setattr(p, field, val)
+    for field, val in (
+        ("score_closed_ontime", score_closed_ontime), ("score_closed_late", score_closed_late),
+        ("score_on_track", score_on_track), ("score_due_soon", score_due_soon),
+        ("score_overdue", score_overdue), ("score_no_date", score_no_date),
+    ):
+        if val is not None and 0 <= val <= 100:
+            setattr(p, field, val)
+    db.commit()
+    db.refresh(p)
+    return _sla_policy_dict(p)
+
+
+@router.get("/points")
+def list_all_points(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Flat list of every assessment point across the tenant, with the fields
+    the dynamic-SLA closure board needs. One query (join), no per-assessment
+    round-trips. Each point keeps its own dates — the board never blends them."""
+    user_tenants = get_user_tenants(current_user, db)
+    rows = (
+        db.query(ComplianceAssessmentDocumentItem, ComplianceAssessmentDocument)
+        .join(
+            ComplianceAssessmentDocument,
+            ComplianceAssessmentDocumentItem.assessment_id == ComplianceAssessmentDocument.id,
+        )
+        .filter(ComplianceAssessmentDocument.tenant_id.in_(user_tenants))
+        .all()
+    )
+    points = []
+    for item, a in rows:
+        points.append({
+            "id": item.id,
+            "assessment_id": a.id,
+            "assessment_name": a.name,
+            "assessment_type": a.assessment_type,
+            "assessment_format": getattr(a, "assessment_format", "standard") or "standard",
+            "item_number": item.item_number,
+            "area_domain": item.area_domain,
+            "control_description": item.control_description,
+            "priority": item.priority,
+            "compliance_status": item.compliance_status,
+            "remediation_status": item.remediation_status,
+            "timeline": item.timeline,
+            "target_date": item.target_date.isoformat() if getattr(item, "target_date", None) else None,
+            "closed_at": item.closed_at.isoformat() if getattr(item, "closed_at", None) else None,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+            "updated_at": item.updated_at.isoformat() if item.updated_at else None,
+        })
+    return {"points": points}
+
+
 @router.get("/{assessment_id}")
 def get_assessment(
     assessment_id: int,
@@ -3401,12 +3719,29 @@ def get_assessment(
             detail="Assessment not found"
         )
     
+    # Real linked-evidence count per item (single grouped query, no N+1) so the
+    # controls table can show an accurate evidence badge.
+    item_ids = [it.id for it in assessment.items]
+    evidence_counts = {}
+    if item_ids:
+        for row in (
+            db.query(
+                AssessmentItemEvidence.assessment_item_id,
+                func.count(AssessmentItemEvidence.id),
+            )
+            .filter(AssessmentItemEvidence.assessment_item_id.in_(item_ids))
+            .group_by(AssessmentItemEvidence.assessment_item_id)
+            .all()
+        ):
+            evidence_counts[row[0]] = row[1]
+
     items_by_domain = {}
     for item in assessment.items:
         domain = item.area_domain or "Uncategorized"
         if domain not in items_by_domain:
             items_by_domain[domain] = []
         items_by_domain[domain].append({
+            "evidence_count": evidence_counts.get(item.id, 0),
             "id": item.id,
             "item_number": item.item_number,
             "area_domain": item.area_domain,
@@ -3424,6 +3759,8 @@ def get_assessment(
             "remediation_status": item.remediation_status,
             "ai_evidence_recommendation": item.ai_evidence_recommendation,
             "ai_recommendation_generated_at": item.ai_recommendation_generated_at.isoformat() if item.ai_recommendation_generated_at else None,
+            "target_date": item.target_date.isoformat() if getattr(item, "target_date", None) else None,
+            "closed_at": item.closed_at.isoformat() if getattr(item, "closed_at", None) else None,
             "created_at": item.created_at.isoformat(),
             "updated_at": item.updated_at.isoformat() if item.updated_at else None
         })
@@ -3452,6 +3789,7 @@ def get_assessment(
         "items": [
             {
                 "id": item.id,
+                "evidence_count": evidence_counts.get(item.id, 0),
                 "item_number": item.item_number,
                 "area_domain": item.area_domain,
                 "control_description": item.control_description,
@@ -3468,6 +3806,8 @@ def get_assessment(
                 "remediation_status": item.remediation_status,
                 "ai_evidence_recommendation": item.ai_evidence_recommendation,
                 "ai_recommendation_generated_at": item.ai_recommendation_generated_at.isoformat() if item.ai_recommendation_generated_at else None,
+                "target_date": item.target_date.isoformat() if getattr(item, "target_date", None) else None,
+                "closed_at": item.closed_at.isoformat() if getattr(item, "closed_at", None) else None,
                 "created_at": item.created_at.isoformat(),
                 "updated_at": item.updated_at.isoformat() if item.updated_at else None
             }
@@ -3542,6 +3882,7 @@ def update_assessment(
 def update_assessment_item(
     item_id: int,
     compliance_status: Optional[str] = None,
+    control_description: Optional[str] = None,
     area_domain: Optional[str] = None,
     gaps_identified: Optional[str] = None,
     proposed_solution: Optional[str] = None,
@@ -3552,6 +3893,8 @@ def update_assessment_item(
     remarks: Optional[str] = None,
     maturity_score: Optional[int] = None,
     risk_rating: Optional[str] = None,
+    remediation_status: Optional[str] = None,
+    target_date: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -3570,6 +3913,10 @@ def update_assessment_item(
     
     if compliance_status is not None:
         item.compliance_status = normalize_status(compliance_status)
+    if control_description is not None:
+        item.control_description = control_description
+    if remediation_status is not None:
+        item.remediation_status = remediation_status or None
     if area_domain is not None:
         item.area_domain = area_domain
     if gaps_identified is not None:
@@ -3599,6 +3946,25 @@ def update_assessment_item(
         else:
             item.maturity_score = maturity_score
             item.compliance_status = _status_from_pdpl(maturity_score, None)
+
+    # Per-point SLA deadline. Empty string clears it (back to policy-derived).
+    if target_date is not None:
+        if not target_date.strip():
+            item.target_date = None
+        else:
+            try:
+                item.target_date = datetime.fromisoformat(target_date.replace("Z", "+00:00"))
+            except Exception:
+                pass
+    # Stamp / clear closed_at from the effective closed state so the closure /
+    # aging math always has a real close date, even for points whose workbook
+    # never carried one. A point is "closed" when its remediation is closed or
+    # its compliance is fully complied.
+    _is_closed = (item.remediation_status == "closed") or (item.compliance_status == "complied")
+    if _is_closed and not item.closed_at:
+        item.closed_at = datetime.utcnow()
+    elif not _is_closed and item.closed_at:
+        item.closed_at = None
 
     item.updated_at = datetime.utcnow()
     db.commit()
@@ -3637,6 +4003,8 @@ def update_assessment_item(
         "priority": item.priority,
         "evidence_reference": item.evidence_reference,
         "remarks": item.remarks,
+        "target_date": item.target_date.isoformat() if item.target_date else None,
+        "closed_at": item.closed_at.isoformat() if item.closed_at else None,
         "updated_at": item.updated_at.isoformat()
     }
 

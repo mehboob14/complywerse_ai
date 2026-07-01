@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import apiClient from '@/lib/api';
@@ -22,6 +23,10 @@ import {
   Loader2,
   FileSpreadsheet,
   Info,
+  X,
+  Paperclip,
+  Upload,
+  Plus,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -220,6 +225,38 @@ function DCCRow({
     }
   };
 
+  // Evidence — load lazily when the popup opens; upload via the shared endpoint.
+  const evUpload = useRef<HTMLInputElement>(null);
+  const [evUploading, setEvUploading] = useState(false);
+  const { data: evidence = [], refetch: refetchEv } = useQuery<Array<Record<string, unknown>>>({
+    queryKey: ['dcc-evidence', item.id],
+    queryFn: async () => {
+      const res = await apiClient.get(`/compliance/assessments/${assessmentId}/items/${item.id}/evidence`);
+      const list = res.data?.evidence || res.data || [];
+      return Array.isArray(list) ? list : [];
+    },
+    enabled: expanded,
+    staleTime: 15_000,
+  });
+  const onEvFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEvUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('name', file.name.replace(/\.[^.]+$/, ''));
+      await apiClient.post(`/compliance/assessments/${assessmentId}/items/${item.id}/evidence/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await refetchEv();
+    } catch {
+      setAiError('Evidence upload failed.');
+      setTimeout(() => setAiError(null), 4000);
+    } finally {
+      setEvUploading(false);
+      if (evUpload.current) evUpload.current.value = '';
+    }
+  };
+
   const style = STATUS_STYLE[item.compliance_status] || STATUS_STYLE.in_progress;
   const StatusIcon = style.icon;
 
@@ -312,83 +349,104 @@ function DCCRow({
         </td>
       </tr>
 
-      {/* Expanded detail row */}
-      {(expanded || aiError) && (
-        <tr className="bg-slate-50 border-b border-gray-100">
-          <td colSpan={7} className="px-4 py-3">
-            {aiError && (
-              <div className="mb-2 flex items-center gap-2 text-xs text-rose-600 bg-rose-50 px-3 py-2 rounded-lg">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {aiError}
-              </div>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* Remarks */}
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">Remarks / Observations</label>
-                <textarea
-                  rows={2}
-                  defaultValue={item.remarks || ''}
-                  onBlur={(e) => { if (e.target.value !== (item.remarks || '')) updateField('remarks', e.target.value || null); }}
-                  placeholder="Add remarks..."
-                  className="w-full text-xs px-2.5 py-2 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                />
-              </div>
-              {/* Corrective Action */}
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">Corrective Procedures</label>
-                <textarea
-                  rows={2}
-                  defaultValue={item.proposed_solution || ''}
-                  onBlur={(e) => { if (e.target.value !== (item.proposed_solution || '')) updateField('proposed_solution', e.target.value || null); }}
-                  placeholder="Describe corrective procedures..."
-                  className="w-full text-xs px-2.5 py-2 border border-gray-200 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                />
-              </div>
-              {/* Expected date + Owner (mobile) */}
-              <div className="space-y-2">
-                <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">
-                    <Calendar className="h-3 w-3 inline mr-1" />Expected Compliance Date
-                  </label>
-                  <input
-                    type="date"
-                    defaultValue={item.timeline || ''}
-                    onBlur={(e) => { if (e.target.value !== (item.timeline || '')) updateField('timeline', e.target.value || null); }}
-                    className="w-full text-xs px-2.5 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                  />
+      {/* AI error toast */}
+      {aiError && createPortal(
+        <div className="fixed bottom-4 right-4 z-[70] flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 shadow-lg">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {aiError}
+        </div>, document.body)}
+
+      {/* Editable detail popup */}
+      {expanded && createPortal(
+        <div onClick={() => setExpanded(false)} className="fixed inset-0 z-[60] flex items-center justify-center p-6" style={{ background: 'rgba(15,23,42,0.45)' }}>
+          <div onClick={(e) => e.stopPropagation()} className="flex max-h-[88vh] w-[720px] max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.4)]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+              <div className="min-w-0">
+                <div className="text-[13px] font-semibold text-slate-500">Control detail · edit</div>
+                <div className="mt-0.5 flex items-center gap-2 text-[12px]">
+                  <span className="font-mono font-semibold text-slate-700">{item.item_number}</span>
+                  {item.subdomain_name && <span className="truncate text-slate-400">{item.subdomain_name}</span>}
                 </div>
-                <div className="lg:hidden">
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">
-                    <User className="h-3 w-3 inline mr-1" />Owner
-                  </label>
-                  <select
-                    defaultValue={item.responsible_party || ''}
-                    onBlur={(e) => { if (e.target.value !== (item.responsible_party || '')) updateField('responsible_party', e.target.value || null); }}
-                    className="w-full text-xs px-2 py-1.5 border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500"
-                  >
+              </div>
+              <button onClick={() => setExpanded(false)} className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900"><X className="h-[17px] w-[17px]" /></button>
+            </div>
+            <div className="flex-1 space-y-3.5 overflow-y-auto px-5 py-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Control</label>
+                <textarea rows={3} defaultValue={item.control_description || ''} onBlur={(e) => { if (e.target.value !== (item.control_description || '')) updateField('control_description', e.target.value || null); }} className="w-full resize-y rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] focus:border-transparent focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Status</label>
+                  <select value={item.compliance_status} onChange={(e) => updateField('compliance_status', e.target.value)} className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-[13px] focus:ring-2 focus:ring-blue-500">
+                    {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Owner</label>
+                  <select value={item.responsible_party || ''} onChange={(e) => updateField('responsible_party', e.target.value || null)} className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-[13px] focus:ring-2 focus:ring-blue-500">
                     <option value="">— Unassigned —</option>
                     {tenantUsers.map((u) => <option key={u.id} value={u.label}>{u.label}</option>)}
                   </select>
                 </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Priority</label>
+                  <select value={item.priority || ''} onChange={(e) => updateField('priority', e.target.value || null)} className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-[13px] focus:ring-2 focus:ring-blue-500">
+                    <option value="">— None —</option>
+                    {PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Remarks / Observations</label>
+                <textarea rows={2} defaultValue={item.remarks || ''} onBlur={(e) => { if (e.target.value !== (item.remarks || '')) updateField('remarks', e.target.value || null); }} placeholder="Add remarks..." className="w-full resize-y rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] focus:border-transparent focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Corrective Procedures</label>
+                <textarea rows={2} defaultValue={item.proposed_solution || ''} onBlur={(e) => { if (e.target.value !== (item.proposed_solution || '')) updateField('proposed_solution', e.target.value || null); }} placeholder="Describe corrective procedures..." className="w-full resize-y rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] focus:border-transparent focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600"><Calendar className="mr-1 inline h-3 w-3" />Expected Compliance Date</label>
+                <input type="date" defaultValue={item.timeline || ''} onBlur={(e) => { if (e.target.value !== (item.timeline || '')) updateField('timeline', e.target.value || null); }} className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] focus:border-transparent focus:ring-2 focus:ring-blue-500" />
+              </div>
+              {/* Evidence */}
+              <div>
+                <label className="mb-1 flex items-center gap-1 text-xs font-medium text-gray-600"><Paperclip className="h-3 w-3" /> Evidence ({evidence.length})</label>
+                <input ref={evUpload} type="file" accept=".pdf,.xlsx,.xls,.png,.jpg,.jpeg,.csv,.docx" className="hidden" onChange={onEvFile} />
+                <div onClick={() => evUpload.current?.click()} className="cursor-pointer rounded-lg border-[1.5px] border-dashed border-gray-300 p-3 text-center hover:border-blue-400 hover:bg-blue-50/40">
+                  {evUploading ? <Loader2 className="mx-auto mb-1 h-5 w-5 animate-spin text-blue-600" /> : <Upload className="mx-auto mb-1 h-5 w-5 text-blue-600" />}
+                  <div className="text-[12px] font-medium text-gray-700">{evUploading ? 'Uploading…' : 'Drop a file or click to upload'}</div>
+                  <div className="text-[10.5px] text-gray-400">PDF, XLSX, PNG · up to 25 MB</div>
+                </div>
+                {evidence.length > 0 && (
+                  <div className="mt-2 space-y-1.5">
+                    {evidence.map((ev, i) => {
+                      const fileName = String(ev.evidence_file_name || ev.evidence_name || ev.file_name || `Evidence ${i + 1}`);
+                      const ext = (fileName.split('.').pop() || 'FILE').toUpperCase().slice(0, 4);
+                      return (
+                        <div key={String(ev.id ?? i)} className="flex items-center gap-2.5 rounded-lg border border-gray-200 px-2.5 py-2">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-50 text-[9px] font-bold text-blue-600">{ext}</div>
+                          <div className="min-w-0 flex-1"><div className="truncate text-[12.5px] font-semibold text-gray-800">{String(ev.evidence_name || fileName)}</div><div className="text-[10.5px] text-gray-400">Linked · {String(ev.approval_status || ev.status || 'linked')}</div></div>
+                          <Download className="h-4 w-4 shrink-0 text-gray-300" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* AI */}
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="flex items-center gap-1 text-xs font-medium text-gray-600"><Sparkles className="h-3 w-3 text-violet-500" /> AI Recommendation{item.ai_recommendation_generated_at && <span className="ml-1 font-normal text-gray-400">· {new Date(item.ai_recommendation_generated_at).toLocaleDateString()}</span>}</p>
+                  <button onClick={generateAI} disabled={aiLoading} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700 hover:bg-violet-100 disabled:opacity-50">
+                    {aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />} {item.ai_evidence_recommendation ? 'Regenerate' : 'Generate'}
+                  </button>
+                </div>
+                {item.ai_evidence_recommendation ? <AIPanel raw={item.ai_evidence_recommendation} /> : <p className="rounded-lg border border-dashed border-gray-200 px-3 py-4 text-center text-xs text-gray-400">No AI recommendation yet.</p>}
               </div>
             </div>
-            {/* AI Recommendation */}
-            {item.ai_evidence_recommendation && (
-              <div className="mt-3">
-                <p className="text-xs font-medium text-gray-600 mb-1 flex items-center gap-1">
-                  <Sparkles className="h-3 w-3 text-violet-500" /> AI Recommendation
-                  {item.ai_recommendation_generated_at && (
-                    <span className="text-gray-400 font-normal ml-1">
-                      · {new Date(item.ai_recommendation_generated_at).toLocaleDateString()}
-                    </span>
-                  )}
-                </p>
-                <AIPanel raw={item.ai_evidence_recommendation} />
-              </div>
-            )}
-          </td>
-        </tr>
-      )}
+          </div>
+        </div>, document.body)}
     </>
   );
 }
@@ -496,6 +554,63 @@ function exportToExcel(data: DCCData) {
   URL.revokeObjectURL(url);
 }
 
+// ─── Add DCC control popup ────────────────────────────────────────────────────
+
+function DCCAddItemModal({
+  assessmentId, domains, tenantUsers, onClose, onAdded,
+}: {
+  assessmentId: number; domains: string[]; tenantUsers: TenantUser[]; onClose: () => void; onAdded: () => void;
+}) {
+  const [f, setF] = useState({ item_number: '', area_domain: domains[0] ?? '', subdomain: '', control_description: '', compliance_status: 'in_progress', responsible_party: '', priority: '' });
+  const [saving, setSaving] = useState(false);
+  const set = (k: keyof typeof f, v: string) => setF((s) => ({ ...s, [k]: v }));
+  const save = async () => {
+    if (!f.control_description.trim()) return;
+    setSaving(true);
+    try {
+      await apiClient.post(`/compliance/assessments/${assessmentId}/items`, {
+        item_number: f.item_number || undefined,
+        area_domain: f.area_domain,
+        control_description: f.control_description,
+        compliance_status: f.compliance_status,
+        responsible_party: f.responsible_party || undefined,
+        priority: f.priority || undefined,
+        remarks: f.subdomain ? `Subdomain: ${f.subdomain}` : undefined,
+      });
+      onAdded();
+    } catch { alert('Failed to add control.'); }
+    finally { setSaving(false); }
+  };
+  const inp = 'w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] focus:border-transparent focus:ring-2 focus:ring-blue-500';
+  const lbl = 'mb-1 block text-xs font-medium text-gray-600';
+  return createPortal(
+    <div onClick={onClose} className="fixed inset-0 z-[60] flex items-center justify-center p-6" style={{ background: 'rgba(15,23,42,0.45)' }}>
+      <div onClick={(e) => e.stopPropagation()} className="flex max-h-[88vh] w-[560px] max-w-[96vw] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_60px_-20px_rgba(15,23,42,0.4)]">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+          <div className="text-[14px] font-semibold text-gray-800">Add DCC control</div>
+          <button onClick={onClose} className="flex h-[30px] w-[30px] items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900"><X className="h-[17px] w-[17px]" /></button>
+        </div>
+        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Control Ref (optional)</label><input className={inp} value={f.item_number} onChange={(e) => set('item_number', e.target.value)} placeholder="e.g. 1-1-2" /></div>
+            <div><label className={lbl}>Domain</label><select className={inp} value={f.area_domain} onChange={(e) => set('area_domain', e.target.value)}>{domains.map((d) => <option key={d} value={d}>{d}</option>)}</select></div>
+          </div>
+          <div><label className={lbl}>Subdomain (optional)</label><input className={inp} value={f.subdomain} onChange={(e) => set('subdomain', e.target.value)} /></div>
+          <div><label className={lbl}>Control description</label><textarea className={`${inp} min-h-[80px] resize-y`} value={f.control_description} onChange={(e) => set('control_description', e.target.value)} placeholder="Describe the control…" /></div>
+          <div className="grid grid-cols-3 gap-3">
+            <div><label className={lbl}>Status</label><select className={inp} value={f.compliance_status} onChange={(e) => set('compliance_status', e.target.value)}>{STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+            <div><label className={lbl}>Owner</label><select className={inp} value={f.responsible_party} onChange={(e) => set('responsible_party', e.target.value)}><option value="">— Unassigned —</option>{tenantUsers.map((u) => <option key={u.id} value={u.label}>{u.label}</option>)}</select></div>
+            <div><label className={lbl}>Priority</label><select className={inp} value={f.priority} onChange={(e) => set('priority', e.target.value)}><option value="">— None —</option>{PRIORITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2.5 border-t border-slate-100 px-5 py-3">
+          <button onClick={onClose} className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+          <button onClick={save} disabled={saving || !f.control_description.trim()} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add control</button>
+        </div>
+      </div>
+    </div>, document.body);
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function DCCAssessmentTab({
@@ -509,6 +624,7 @@ export default function DCCAssessmentTab({
   const [search, setSearch] = useState('');
   const [domainFilter, setDomainFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showAdd, setShowAdd] = useState(false);
 
   // Local optimistic cache for item updates
   const [localUpdates, setLocalUpdates] = useState<Record<number, Partial<DCCItem>>>({});
@@ -639,13 +755,31 @@ export default function DCCAssessmentTab({
             Data Cybersecurity Controls · {liveSummary.total} controls
           </p>
         </div>
-        <button
-          onClick={() => exportToExcel(mergedData)}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-        >
-          <Download className="h-3.5 w-3.5" /> Export XLSX
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportToExcel(mergedData)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Download className="h-3.5 w-3.5" /> Export XLSX
+          </button>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add item
+          </button>
+        </div>
       </div>
+
+      {showAdd && (
+        <DCCAddItemModal
+          assessmentId={assessmentId}
+          domains={domainNames}
+          tenantUsers={tenantUsers}
+          onClose={() => setShowAdd(false)}
+          onAdded={() => { queryClient.invalidateQueries({ queryKey: ['dcc-assessment', assessmentId] }); setShowAdd(false); }}
+        />
+      )}
 
       {/* Progress */}
       <ProgressBar summary={liveSummary} />

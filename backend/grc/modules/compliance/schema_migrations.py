@@ -214,6 +214,23 @@ _COLUMN_ADDS = [
     ("grc_compliance_assessment_document_items", "maturity_score", "INTEGER", None),
     # PDPL risk rating (Low/Medium/High/Critical) — editable per-control.
     ("grc_compliance_assessment_document_items", "risk_rating", "VARCHAR(50)", None),
+    # SLA / closure tracking per point — each audit point carries its own
+    # timeline. target_date = the point's deadline (NULL => derived from the
+    # tenant SLA policy by priority); closed_at = when it was closed. Drive the
+    # dynamic-SLA closure board. grc_compliance_sla_policy is a new table,
+    # auto-created via Base.metadata.create_all.
+    ("grc_compliance_assessment_document_items", "target_date", "TIMESTAMP",
+     "ix_assessment_item_target_date"),
+    ("grc_compliance_assessment_document_items", "closed_at", "TIMESTAMP", None),
+    # Point-score weights on the tenant SLA policy (grc_compliance_sla_policy is
+    # a new table via create_all; these ALTERs cover tenants whose table was
+    # created before the weight columns existed).
+    ("grc_compliance_sla_policy", "score_closed_ontime", "INTEGER DEFAULT 100", None),
+    ("grc_compliance_sla_policy", "score_closed_late", "INTEGER DEFAULT 70", None),
+    ("grc_compliance_sla_policy", "score_on_track", "INTEGER DEFAULT 40", None),
+    ("grc_compliance_sla_policy", "score_due_soon", "INTEGER DEFAULT 20", None),
+    ("grc_compliance_sla_policy", "score_overdue", "INTEGER DEFAULT 0", None),
+    ("grc_compliance_sla_policy", "score_no_date", "INTEGER DEFAULT 30", None),
     # AI normalization — domain + provenance on NormalizedControl so the Control
     # Library can show normalized controls per domain. The new
     # grc_normalized_control_links table is auto-created via create_all.
