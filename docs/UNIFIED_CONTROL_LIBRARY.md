@@ -97,7 +97,31 @@ Two artifact systems exist and are both preserved:
 2. **Catalog** `artifacts[]` (also `seed_data/artifact_catalog.json`, keyed by framework key) →
    `ArtifactCatalogItem` (`grc_artifact_catalog_items`), served by `/artifacts/catalog`.
 
-### 3.2 Taxonomy / staging data — `backend/grc/seed_data/*.json`
+### 3.2 The complete unified library, as portable data — `backend/grc/seed_data/normalization_baseline.json`
+
+The **entire** unified library (baseline run 47) is committed as a portable JSON seed so a fresh
+clone reconstructs the exact 2,332‑control library **without re‑running any AI**:
+
+```jsonc
+{
+  "version": 1, "label": "Master baseline",
+  "domains": [ … 20 … ],
+  "unified":   [ { "name": "…", "domain": "…", "evidence": […], "members": [ {"framework","ref","title"} … ] } ],  // 426 sets
+  "standalone":[ { "framework": "…", "ref": "…", "title": "…", "domain": "…", "evidence": […] } ],                  // 1,906
+  "counts": { "domains": 20, "unified": 426, "standalone": 1906, "members": 1513 }
+}
+```
+
+Members are referenced by `(framework, ref, title)` — **not** DB primary keys — so the loader maps
+them onto whatever parsed‑control ids exist after the framework seeds run.
+
+- **Export** (regenerate from the live baseline): `python backend/export_baseline_seed.py`
+  (reads the `is_baseline` run, writes this file). It captures true sets (≥2 members) as `unified`
+  **and** single‑member normalized controls as `standalone` — so nothing is dropped.
+- **Load** into a fresh DB (after framework seeds): `python backend/seed_normalization_baseline.py`
+  (idempotent; `--force` loads as a non‑baseline session). No AI required.
+
+### 3.3 Taxonomy / staging data — `backend/grc/seed_data/*.json`
 
 `canonical_taxonomy.json`, `stage1..stage4*.json`, `pre2_controls_by_framework_category.json` are
 the intermediate/canonical artifacts from building the baseline (the 20‑domain, 160‑family
