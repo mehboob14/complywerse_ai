@@ -45,6 +45,7 @@ class Evidence(Base):
     
     tenant = relationship("Tenant", back_populates="evidence")
     uploader = relationship("GRCUser", back_populates="uploaded_evidence", foreign_keys=[uploaded_by])
+    owner = relationship("GRCUser", foreign_keys=[owner_id])
     submitter = relationship("GRCUser", foreign_keys=[submitted_by])
     reviewer = relationship("GRCUser", foreign_keys=[reviewed_by])
     approver = relationship("GRCUser", foreign_keys=[approved_by])

@@ -54,6 +54,11 @@ class Risk(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Transient (non-persisted) human-readable provenance, populated by the list
+    # endpoint from source_reference (e.g. the vendor name). Class default ensures
+    # RiskResponse.from_attributes always finds the attribute.
+    source_label = None
+
     tenant = relationship("Tenant", back_populates="risks")
     owner = relationship("GRCUser", back_populates="owned_risks", foreign_keys=[owner_id])
     business_owner = relationship("GRCUser", foreign_keys=[business_owner_id])

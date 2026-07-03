@@ -19,6 +19,14 @@ export interface GateResult {
   is_gate?: boolean;
 }
 
+export interface ChecklistItem {
+  text: string;
+  done: boolean;
+  note?: string | null;
+  owner_id?: number | null;
+  due_date?: string | null;
+}
+
 export interface StageInstance {
   id: number;
   stage_key: string;
@@ -31,6 +39,7 @@ export interface StageInstance {
   exit_criteria_result: { passed?: boolean; blockers?: string[] };
   gate_decision: { decision?: string; by?: number | null; at?: string; rationale?: string | null };
   skipped_reason: string | null;
+  checklist?: ChecklistItem[];
   row_version: number;
 }
 
@@ -57,6 +66,10 @@ export interface TpraAssessment {
   domain_scores: Record<string, DomainScore>;
   status: string;
   row_version: number;
+  template_id?: number | null;
+  reviewed_by?: number | null;
+  due_date?: string | null;
+  team_roster?: Record<string, number> | null;
   created_at: string;
   updated_at: string;
 }
@@ -81,6 +94,7 @@ export interface Finding {
   is_critical_control_fail: boolean;
   source_response_id: number | null;
   linked_risk_id: number | null;
+  linked_issue_id: number | null;
   row_version: number;
   deleted_at: string | null;
   created_at: string;

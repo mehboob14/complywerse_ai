@@ -1,40 +1,64 @@
-<!-- iso_27001_2022 / ISO27-032 | type=Record/Log | model=gpt-4o | 4164 chars -->
+<!-- iso_27001_2022 / ISO27-032 | type=Record/Log | mode=table | model=gpt-5.5 | 12650 chars -->
 
-| Document ID      | Version | Owner                | Effective Date | Framework         | Control Reference | Classification       |
-|------------------|---------|----------------------|----------------|-------------------|-------------------|----------------------|
-| CM-LOG-001       | 1.0     | [Change Manager]     | [YYYY-MM-DD]   | ISO/IEC 27001:2022| A.8.32            | Internal Use Only    |
+## Change Management Records (XLSX template)
 
-## Purpose
-The purpose of this document is to maintain a comprehensive record of all change management activities within the organization, specifically focusing on the approval and rejection of change tickets. This record supports compliance with ISO/IEC 27001:2022 control A.8.32, ensuring that changes to information systems are controlled and documented.
+_Editable template — add your own rows. The example row(s) below are placeholders to replace._
 
-## Scope
-This record applies to all change management activities affecting the organization’s information systems, including hardware, software, and network configurations. It covers changes initiated by internal staff, contractors, and third-party service providers.
+| Change Ticket ID | Change Title | Change Description | Change Type | Change Category | Change Priority | Requestor | Requesting Department/Team | Date Requested | Business Justification | Affected Information Assets/Systems | Affected Data Classification | Affected Locations/Environments | Security Impact Assessment Completed | Security Impact Summary | Risk Assessment Reference | Risk Rating Before Change | Required Security Controls/Conditions | Testing Plan Reference | Testing Completed | Test Results Summary | Rollback/Backout Plan Reference | Implementation Plan Reference | Planned Implementation Start | Planned Implementation End | Expected Service Impact | User/Stakeholder Communication Required | Approver Name | Approver Role | Approval Decision | Approval/Rejection Date | Approval/Rejection Rationale | Emergency Change | Emergency Approval Details | Implemented By | Actual Implementation Start | Actual Implementation End | Implementation Status | Post-Implementation Review Completed | Post-Implementation Review Date | Post-Implementation Review Outcome | Incidents/Issues Linked | Change Closure Date | Record Owner | Evidence/Attachment Links |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [EXAMPLE: CHG-000123] | [EXAMPLE: Upgrade VPN gateway firmware] | [EXAMPLE: Upgrade production VPN gateway firmware from version x.x to y.y to remediate vendor security vulnerabilities.] | [EXAMPLE: Normal] | [EXAMPLE: Network] | [EXAMPLE: High] | [EXAMPLE: Jane Smith, Network Operations Lead] | [EXAMPLE: Infrastructure Operations] | [EXAMPLE: 2026-02-03] | [EXAMPLE: Required to remediate critical vendor advisory and maintain secure remote access service.] | [EXAMPLE: ASSET-NET-014 VPN Gateway; Remote Access Service] | [EXAMPLE: Confidential] | [EXAMPLE: Production; Primary Data Centre] | [EXAMPLE: Yes] | [EXAMPLE: Availability risk during reboot; confidentiality/integrity improved through security patch; logging configuration unchanged.] | [EXAMPLE: RISK-2026-017] | [EXAMPLE: High] | [EXAMPLE: Backup configuration verified; maintenance window approved; monitoring enabled; rollback firmware available.] | [EXAMPLE: TEST-CHG-000123] | [EXAMPLE: Yes] | [EXAMPLE: Firmware validated in lab; VPN authentication and failover tests passed.] | [EXAMPLE: RB-CHG-000123] | [EXAMPLE: RUNBOOK-CHG-000123] | [EXAMPLE: 2026-02-10 22:00 UTC] | [EXAMPLE: 2026-02-10 23:00 UTC] | [EXAMPLE: Remote access unavailable for up to 15 minutes during reboot.] | [EXAMPLE: Yes] | [EXAMPLE: Alex Brown] | [EXAMPLE: CAB Chair] | [EXAMPLE: Approved] | [EXAMPLE: 2026-02-07] | [EXAMPLE: Approved following successful testing and confirmation of rollback plan.] | [EXAMPLE: No] | [EXAMPLE: Not Applicable] | [EXAMPLE: Network Operations Team] | [EXAMPLE: 2026-02-10 22:05 UTC] | [EXAMPLE: 2026-02-10 22:42 UTC] | [EXAMPLE: Implemented Successfully] | [EXAMPLE: Yes] | [EXAMPLE: 2026-02-11] | [EXAMPLE: Service restored successfully; no incidents reported; vulnerability remediation confirmed.] | [EXAMPLE: None] | [EXAMPLE: 2026-02-11] | [EXAMPLE: Change Manager] | [EXAMPLE: Link to approval, CAB minutes, test evidence, implementation log, and PIR record.] |
+| [EXAMPLE: CHG-000124] | [EXAMPLE: Disable legacy database encryption setting] | [EXAMPLE: Proposed change to disable current database encryption configuration for troubleshooting performance issues.] | [EXAMPLE: Normal] | [EXAMPLE: Database] | [EXAMPLE: Medium] | [EXAMPLE: Mark Patel, Database Administrator] | [EXAMPLE: Data Platform Team] | [EXAMPLE: 2026-02-04] | [EXAMPLE: Requested to investigate query latency affecting reporting service.] | [EXAMPLE: ASSET-DB-009 Customer Reporting Database] | [EXAMPLE: Restricted] | [EXAMPLE: Production] | [EXAMPLE: Yes] | [EXAMPLE: Change would reduce confidentiality protection for restricted customer data and conflict with encryption requirements.] | [EXAMPLE: RISK-2026-021] | [EXAMPLE: Critical] | [EXAMPLE: Alternative troubleshooting method required; encryption must remain enabled.] | [EXAMPLE: Not Applicable] | [EXAMPLE: No] | [EXAMPLE: Testing not performed because change was rejected at security assessment stage.] | [EXAMPLE: Not Applicable] | [EXAMPLE: Not Applicable] | [EXAMPLE: 2026-02-12 20:00 UTC] | [EXAMPLE: 2026-02-12 21:00 UTC] | [EXAMPLE: Potential exposure of restricted customer data if implemented.] | [EXAMPLE: No] | [EXAMPLE: Priya Chen] | [EXAMPLE: Information Security Manager] | [EXAMPLE: Rejected] | [EXAMPLE: 2026-02-06] | [EXAMPLE: Rejected because the change would remove required encryption control for restricted data without approved compensating controls.] | [EXAMPLE: No] | [EXAMPLE: Not Applicable] | [EXAMPLE: Not Applicable] | [EXAMPLE: ] | [EXAMPLE: ] | [EXAMPLE: Cancelled] | [EXAMPLE: Not Required] | [EXAMPLE: ] | [EXAMPLE: Change not implemented; no post-implementation review required.] | [EXAMPLE: None] | [EXAMPLE: 2026-02-06] | [EXAMPLE: Change Manager] | [EXAMPLE: Link to security assessment and rejection approval record.] |
 
-## Captured Fields
+### Column Guidance
 
-| Field             | Description                                                                                   |
-|-------------------|-----------------------------------------------------------------------------------------------|
-| Change ID         | Unique identifier for each change request.                                                    |
-| Requestor         | Name and role of the individual who submitted the change request.                             |
-| Date Submitted    | Date when the change request was submitted.                                                   |
-| Change Description| Brief description of the change requested.                                                    |
-| Impact Assessment | Summary of the potential impact of the change on systems and operations.                      |
-| Approval Status   | Status of the change request (e.g., Approved, Rejected, Pending).                             |
-| Approver          | Name and role of the individual who approved or rejected the change.                          |
-| Approval Date     | Date when the change was approved or rejected.                                                |
-| Implementation Date| Date when the change was implemented, if approved.                                           |
-| Comments          | Additional notes or comments related to the change request.                                   |
+| Column | What to enter |
+|---|---|
+| Change Ticket ID | Enter the unique identifier from the change management system, e.g. CHG-000123; must be unique and traceable. |
+| Change Title | Enter a short descriptive title of the proposed change. |
+| Change Description | Describe exactly what is being changed, including scope, components, configuration, software, infrastructure, process, or access changes. |
+| Change Type | Select one allowed value: Standard, Normal, Emergency. |
+| Change Category | Select the most relevant category, e.g. Application, Infrastructure, Network, Security, Cloud, Database, Endpoint, Identity and Access, Process, Supplier. |
+| Change Priority | Select one allowed value: Low, Medium, High, Critical, based on business urgency and impact. |
+| Requestor | Enter the full name and job title or user ID of the person requesting the change. |
+| Requesting Department/Team | Enter the department, function, or team requesting the change. |
+| Date Requested | Enter the date the change was requested in YYYY-MM-DD format. |
+| Business Justification | Enter the business reason for the change, including problem, requirement, regulatory driver, risk treatment, or improvement objective. |
+| Affected Information Assets/Systems | List all affected systems, services, applications, databases, networks, information assets, or configuration items; use asset IDs where available. |
+| Affected Data Classification | Select the highest classification of information affected by the change, e.g. Public, Internal, Confidential, Restricted, or the organisation's approved classification labels. |
+| Affected Locations/Environments | Identify affected environments or locations, e.g. Production, UAT, Development, DR, Cloud Region, Data Centre, Office Location. |
+| Security Impact Assessment Completed | Select Yes, No, or Not Required; Yes means the security implications of the change have been assessed before approval. |
+| Security Impact Summary | Summarise identified security implications, including impact on confidentiality, integrity, availability, logging, monitoring, access control, vulnerabilities, resilience, or compliance. |
+| Risk Assessment Reference | Enter the linked risk assessment ID, security assessment ID, or risk register reference; enter Not Required only if formally exempted. |
+| Risk Rating Before Change | Enter the assessed pre-change risk rating using the organisation's scale, e.g. Low, Medium, High, Critical. |
+| Required Security Controls/Conditions | Record any controls, conditions, or prerequisites required before implementation, such as MFA enabled, backup verified, vulnerability scan passed, firewall rule reviewed, segregation of duties confirmed, or logging enabled. |
+| Testing Plan Reference | Enter the test plan, validation checklist, deployment verification, or release test reference; include a link if maintained electronically. |
+| Testing Completed | Select Yes, No, Partially, or Not Required; record whether testing was completed before approval or implementation as applicable. |
+| Test Results Summary | Summarise the outcome of testing, including pass/fail status, defects, security test results, and any accepted residual issues. |
+| Rollback/Backout Plan Reference | Enter the rollback plan reference or link; if not applicable, enter Not Applicable and state why in the linked change record. |
+| Implementation Plan Reference | Enter the implementation plan, runbook, deployment plan, or release reference used to perform the change. |
+| Planned Implementation Start | Enter planned start date and time in YYYY-MM-DD HH:MM format, including time zone if relevant. |
+| Planned Implementation End | Enter planned end date and time in YYYY-MM-DD HH:MM format, including time zone if relevant. |
+| Expected Service Impact | Describe expected downtime, degradation, customer/user impact, security impact, or state No Impact if none is expected. |
+| User/Stakeholder Communication Required | Select Yes or No; if Yes, ensure the communication evidence or reference is included in Evidence/Attachment Links. |
+| Approver Name | Enter the full name of the authorised approver or change advisory board chair who made the decision. |
+| Approver Role | Enter the approver's role, e.g. Change Manager, Service Owner, System Owner, Information Security Manager, CAB Chair. |
+| Approval Decision | Select one allowed value: Approved, Rejected, Approved with Conditions, Deferred, Cancelled. |
+| Approval/Rejection Date | Enter the date the approval decision was made in YYYY-MM-DD format. |
+| Approval/Rejection Rationale | Record the reason for the approval, conditional approval, rejection, deferral, or cancellation, including key risk, testing, business, or security considerations. |
+| Emergency Change | Select Yes or No; Yes means the change followed the emergency change process due to urgent business, operational, or security need. |
+| Emergency Approval Details | For emergency changes, record who authorised the emergency change, when, and why; enter Not Applicable for non-emergency changes. |
+| Implemented By | Enter the full name, team, or supplier responsible for implementing the change. |
+| Actual Implementation Start | Enter the actual start date and time in YYYY-MM-DD HH:MM format, including time zone if relevant; leave blank until implemented. |
+| Actual Implementation End | Enter the actual end date and time in YYYY-MM-DD HH:MM format, including time zone if relevant; leave blank until implemented. |
+| Implementation Status | Select one allowed value: Not Started, In Progress, Implemented Successfully, Implemented with Issues, Rolled Back, Failed, Cancelled. |
+| Post-Implementation Review Completed | Select Yes, No, or Not Required; Yes confirms the implemented change was reviewed for success, issues, and unintended security impact. |
+| Post-Implementation Review Date | Enter the date the post-implementation review was completed in YYYY-MM-DD format; leave blank until completed. |
+| Post-Implementation Review Outcome | Summarise whether objectives were met, whether there were incidents or deviations, whether rollback was needed, and whether further actions are required. |
+| Incidents/Issues Linked | Enter linked incident, problem, defect, vulnerability, or issue IDs related to the change; enter None if no related issues. |
+| Change Closure Date | Enter the date the ticket was formally closed in YYYY-MM-DD format; leave blank until closed. |
+| Record Owner | Enter the role or named person accountable for maintaining the accuracy of this change record. |
+| Evidence/Attachment Links | Provide links or references to supporting evidence, such as approvals, CAB minutes, test results, security assessment, risk assessment, implementation plan, rollback plan, communications, and post-implementation review. |
 
-## Sample Entries
+### Maintenance
 
-| Change ID | Requestor       | Date Submitted | Change Description            | Impact Assessment  | Approval Status | Approver           | Approval Date | Implementation Date | Comments               |
-|-----------|-----------------|----------------|-------------------------------|--------------------|-----------------|--------------------|---------------|---------------------|------------------------|
-| 2023-001  | [John Doe]      | 2023-10-01     | Update firewall rules         | Moderate           | Approved        | [Jane Smith]       | 2023-10-02    | 2023-10-05          | Implemented successfully. |
-| 2023-002  | [Alice Brown]   | 2023-10-03     | Upgrade database server       | High               | Rejected        | [Mark Johnson]     | 2023-10-04    | N/A                 | Insufficient testing.  |
-| 2023-003  | [Bob White]     | 2023-10-05     | Patch operating system        | Low                | Approved        | [Jane Smith]       | 2023-10-06    | 2023-10-07          | No issues encountered. |
-
-## Retention & Access
-Change management records shall be retained for a minimum of five years to comply with regulatory and audit requirements. Access to these records is restricted to authorized personnel only, including the Change Manager, IT Security Manager, and auditors. Records are stored securely in the organization's change management system.
-
-## Review
-This document and the associated change management records shall be reviewed annually by the Change Manager to ensure accuracy, completeness, and compliance with ISO/IEC 27001:2022. Any updates or amendments to this document must be approved by the Information Security Steering Committee.
+Owned by the Change Manager or Service Management Lead, with Information Security oversight; updated for every submitted change ticket and reviewed at least monthly for completeness and audit readiness. The authoritative source should be the organisation's ITSM/change management system, with supporting evidence drawn from CAB records, risk assessments, testing repositories, deployment tools, and security review records.

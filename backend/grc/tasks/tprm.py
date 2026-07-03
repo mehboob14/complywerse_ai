@@ -49,6 +49,15 @@ def write_tprm_snapshot_for_tenant(self, tenant_slug: str, db: Session = None) -
         except Exception:
             logger.exception("tprm snapshot failed for vendor=%s", getattr(v, "id", "?"))
     db.commit()
+
+    # Dashboard history layer (DASH-001): also capture today's reconciled portfolio
+    # KPI snapshot here so it runs daily on the same per-tenant fan-out.
+    try:
+        from ..services.metric_snapshots import write_daily
+        write_daily(db, tenant_id)
+    except Exception:
+        logger.exception("metric snapshot failed for tenant=%s", tenant_slug)
+
     logger.info("write_tprm_snapshot_for_tenant tenant=%s vendors=%d", tenant_slug, len(vendors))
     return {"status": "ok", "tenant_slug": tenant_slug, "vendors": len(vendors)}
 

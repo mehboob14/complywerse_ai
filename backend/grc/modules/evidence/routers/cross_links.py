@@ -131,6 +131,10 @@ def serialize_incident(incident: RiskIncident) -> dict:
 
 
 def serialize_policy_statement(statement: PolicyStatement) -> dict:
+    # Surface the parent policy (document) name + code and the source
+    # section/clause so cross-module links read as "<Policy> · <section> · <code>"
+    # instead of a bare statement code.
+    doc = getattr(statement, "document", None)
     return {
         "id": statement.id,
         "statement_code": statement.statement_code,
@@ -140,6 +144,10 @@ def serialize_policy_statement(statement: PolicyStatement) -> dict:
         "priority": statement.priority,
         "status": statement.status,
         "document_id": statement.document_id,
+        "document_title": getattr(doc, "title", None) if doc else None,
+        "document_code": getattr(doc, "document_code", None) if doc else None,
+        "source_section": statement.source_section,
+        "source_page": statement.source_page,
         "tenant_id": statement.tenant_id
     }
 
@@ -562,7 +570,7 @@ def get_evidence_policy_statement_links(
     evidence = get_evidence_with_tenant_check(evidence_id, current_user, db)
     
     links = db.query(EvidencePolicyLink).options(
-        joinedload(EvidencePolicyLink.policy_statement)
+        joinedload(EvidencePolicyLink.policy_statement).joinedload(PolicyStatement.document)
     ).filter(
         EvidencePolicyLink.evidence_id == evidence_id
     ).all()

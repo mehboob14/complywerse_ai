@@ -9,15 +9,17 @@ import { InlineLinkPicker, PageLoader } from '@/components/ui';
 import EvidenceViewer from '@/components/evidence/EvidenceViewer';
 import {
   ArrowLeft, Loader2, AlertCircle, FileCheck, Calendar, Clock,
-  CheckCircle, XCircle, FileText, Edit, ScanText, Brain, Link2,
-  AlertTriangle, Eye, Trash2, Send, ThumbsUp, ThumbsDown, RefreshCw,
+  CheckCircle, FileText, Edit, ScanText, Brain, Link2,
+  AlertTriangle, Eye, Trash2, Send, RefreshCw,
   History, FileSpreadsheet, Shield, Building2, Info, Image, Settings,
-  ShieldCheck, ClipboardList, ExternalLink, Plus, X, Lock, Unlock,
-  ChevronDown, ChevronRight, Hash, Cpu, FileCode, Quote, Search, ChevronLeft
+  ShieldCheck, ClipboardList, ExternalLink, Plus, X,
+  ChevronDown, ChevronRight, Search, ChevronLeft
 } from 'lucide-react';
 import Link from 'next/link';
-
-type TabType = 'overview' | 'ocr' | 'assessment' | 'controls' | 'cross-links';
+import EvidenceTimeline from './_EvidenceTimeline';
+import AuditReadinessCard from './_AuditReadinessCard';
+import ReviewerActionPanel from './_ReviewerActionPanel';
+import EvidenceCrossMap from './_EvidenceCrossMap';
 
 interface EvidenceVersion {
   id: number;
@@ -164,7 +166,7 @@ interface AllLinksResponse {
   risks: { total: number; links: Array<{ id: number; risk_id: number; risk: { id: number; title: string; status: string; inherent_score: number | null; residual_score: number | null } | null }> };
   assets: { total: number; links: Array<{ id: number; asset_id: number; link_type: string; asset: { id: number; name: string; asset_type: string; criticality: string; status: string } | null }> };
   incidents: { total: number; links: Array<{ id: number; incident_id: number; link_type: string | null; incident: { id: number; title: string; severity: string; status: string } | null }> };
-  policy_statements: { total: number; links: Array<{ id: number; policy_statement_id: number; link_type: string | null; policy_statement: { id: number; statement_code: string; statement_summary: string | null; status: string } | null }> };
+  policy_statements: { total: number; links: Array<{ id: number; policy_statement_id: number; link_type: string | null; policy_statement: { id: number; statement_code: string; statement_summary: string | null; status: string; document_id?: number | null; document_title?: string | null; document_code?: string | null; source_section?: string | null; source_page?: number | null } | null }> };
   assessments?: { total: number; links: Array<{ id: number; assessment_item_id: number; assessment_id: number | null; assessment_name: string | null; assessment_type: string | null; assessment_status: string | null; item_number: string | null; area_domain: string | null; control_description: string | null; link_status: string; created_at: string | null }> };
   total_links: number;
 }
@@ -178,20 +180,20 @@ interface ControlsResponse {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Draft' },
-  pending_review: { bg: 'bg-yellow-50', text: 'text-yellow-700', label: 'Pending Review' },
-  approved: { bg: 'bg-green-50', text: 'text-green-700', label: 'Approved' },
-  rejected: { bg: 'bg-red-50', text: 'text-red-700', label: 'Rejected' },
+  draft: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Draft' },
+  pending_review: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Pending Review' },
+  approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Approved' },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
   expired: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Expired' },
-  archived: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Archived' },
+  archived: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Archived' },
 };
 
 const OCR_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Pending' },
-  processing: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Processing' },
-  completed: { bg: 'bg-green-50', text: 'text-green-700', label: 'Completed' },
-  failed: { bg: 'bg-red-50', text: 'text-red-700', label: 'Failed' },
-  not_applicable: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'N/A' },
+  pending: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Pending' },
+  processing: { bg: 'bg-primary-50', text: 'text-primary-700', label: 'Processing' },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Completed' },
+  failed: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Failed' },
+  not_applicable: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'N/A' },
 };
 
 const TYPE_ICONS: Record<string, typeof FileText> = {
@@ -221,7 +223,6 @@ export default function EvidenceDetailPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('evidence:evidence_library:edit');
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [reviewAction, setReviewAction] = useState<'approve' | 'reject' | null>(null);
   const [rejectComments, setRejectComments] = useState('');
   const [ocrProcessMessage, setOcrProcessMessage] = useState<string | null>(null);
@@ -239,6 +240,9 @@ export default function EvidenceDetailPage() {
   const [selectedPolicyStatementId, setSelectedPolicyStatementId] = useState<number | null>(null);
   const [linkingClauseIndex, setLinkingClauseIndex] = useState<number | null>(null);
   const [linkFeedback, setLinkFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [showQualityOverlay, setShowQualityOverlay] = useState(false);
+  const [showOcrOverlay, setShowOcrOverlay] = useState(false);
+  const [showDetailsOverlay, setShowDetailsOverlay] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     name: '',
@@ -269,7 +273,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get(`/evidence-mgmt/ocr/${evidenceId}/ocr-content`);
       return response.data;
     },
-    enabled: activeTab === 'ocr',
+    enabled: true,
     refetchInterval: (query) => {
       const currentContent = query.state.data as OCRContent | undefined;
       const hasActiveOCR = currentContent?.ocr_status === 'pending' || currentContent?.ocr_status === 'processing';
@@ -284,7 +288,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get(`/evidence-mgmt/ai/${evidenceId}/latest-assessment`);
       return response.data;
     },
-    enabled: activeTab === 'assessment',
+    enabled: true,
     retry: false,
   });
 
@@ -294,7 +298,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get(`/evidence-mgmt/cross-links/${evidenceId}/all-links`);
       return response.data;
     },
-    enabled: activeTab === 'cross-links' || activeTab === 'assessment' || activeTab === 'controls',
+    enabled: true,
   });
 
   const { data: controlsData } = useQuery<ControlsResponse>({
@@ -303,7 +307,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get(`/evidence-mgmt/links/${evidenceId}/controls`);
       return response.data;
     },
-    enabled: activeTab === 'controls' || activeTab === 'assessment',
+    enabled: true,
   });
 
   const { data: availableControls } = useQuery<{
@@ -315,7 +319,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get('/evidence-mgmt/links/available-controls');
       return response.data;
     },
-    enabled: activeTab === 'controls' || showLinkModal,
+    enabled: true,
   });
 
   const { data: risksList } = useQuery<Array<{ id: number; title: string }>>({
@@ -324,7 +328,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get('/risks');
       return response.data;
     },
-    enabled: activeTab === 'cross-links' || showRiskModal,
+    enabled: true,
   });
 
   const { data: assetsList } = useQuery<Array<{ id: number; name: string }>>({
@@ -333,7 +337,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get('/assets');
       return response.data;
     },
-    enabled: activeTab === 'cross-links' || showAssetModal,
+    enabled: true,
   });
 
   const { data: incidentsList } = useQuery<Array<{ id: number; title: string; severity?: string | null }>>({
@@ -342,7 +346,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get('/erm/incidents');
       return response.data;
     },
-    enabled: activeTab === 'cross-links' || showIncidentModal,
+    enabled: true,
   });
 
   // The previous wiring fetched a flat `/compliance/statements` list which
@@ -359,7 +363,7 @@ export default function EvidenceDetailPage() {
       const docs = Array.isArray(data) ? data : (data?.items || data?.documents || []);
       return { documents: docs };
     },
-    enabled: activeTab === 'cross-links' || showPolicyModal,
+    enabled: true,
   });
 
   const { data: clauseMappings } = useQuery<ClauseMapping[]>({
@@ -368,7 +372,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get(`/evidence-mgmt/ai/${evidenceId}/clause-mappings`);
       return response.data;
     },
-    enabled: activeTab === 'assessment',
+    enabled: true,
     retry: false,
   });
 
@@ -382,7 +386,7 @@ export default function EvidenceDetailPage() {
       const response = await apiClient.get(`/evidence-mgmt/links/${evidenceId}/ai-link-status`);
       return response.data;
     },
-    enabled: activeTab === 'assessment',
+    enabled: true,
     retry: false,
   });
 
@@ -639,19 +643,19 @@ export default function EvidenceDetailPage() {
   };
 
   const getQualityScoreColor = (score: number | null) => {
-    if (score === null) return 'bg-gray-400';
-    if (score >= 80) return 'bg-green-500';
-    if (score >= 60) return 'bg-yellow-500';
+    if (score === null) return 'bg-slate-400';
+    if (score >= 80) return 'bg-emerald-500';
+    if (score >= 60) return 'bg-amber-500';
     if (score >= 40) return 'bg-orange-500';
-    return 'bg-red-500';
+    return 'bg-rose-500';
   };
 
   const getQualityScoreTextColor = (score: number | null) => {
-    if (score === null) return 'text-gray-600';
-    if (score >= 80) return 'text-green-600';
-    if (score >= 60) return 'text-yellow-600';
+    if (score === null) return 'text-slate-600';
+    if (score >= 80) return 'text-emerald-600';
+    if (score >= 60) return 'text-amber-600';
     if (score >= 40) return 'text-orange-600';
-    return 'text-red-600';
+    return 'text-rose-600';
   };
 
   const getStatusStyle = (status: string) => {
@@ -677,10 +681,10 @@ export default function EvidenceDetailPage() {
 
   if (error || !evidence) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center text-rose-600">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load evidence details</p>
-        <Link href="/evidence" className="mt-4 text-blue-600 hover:underline">
+        <Link href="/evidence" className="mt-4 text-primary-600 hover:underline">
           Back to Evidence Library
         </Link>
       </div>
@@ -691,14 +695,6 @@ export default function EvidenceDetailPage() {
   const statusStyle = getStatusStyle(evidence.status);
   const ocrStatusStyle = getOCRStatusStyle(evidence.ocr_status);
   const TypeIcon = getTypeIcon(evidence.evidence_type);
-
-  const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
-    { id: 'overview', label: 'Overview', icon: Info },
-    { id: 'ocr', label: 'OCR Content', icon: ScanText },
-    { id: 'assessment', label: 'AI Assessment', icon: Brain },
-    { id: 'controls', label: 'Linked Controls', icon: Shield },
-    { id: 'cross-links', label: 'Cross-Module Links', icon: Link2 },
-  ];
 
   return (
     <div className="risk-workspace -m-4 space-y-4 lg:-m-5">
@@ -714,34 +710,38 @@ export default function EvidenceDetailPage() {
                   router.push('/evidence');
                 }
               }}
-              className="mt-0.5 rounded-md p-1.5 text-gray-600 hover:bg-gray-50 hover:text-black"
+              className="mt-0.5 rounded-md p-1.5 text-slate-600 hover:bg-slate-50 hover:text-slate-800"
               title="Go back"
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
               <TypeIcon className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-black">{evidence.name}</h1>
-              <p className="text-xs text-gray-600">{evidence.description || 'No description'}</p>
+              <h1 className="text-lg font-semibold text-slate-800">{evidence.name}</h1>
+              <p className="text-xs text-slate-600">{evidence.description || 'No description'}</p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 xl:justify-end">
             {evidence.evidence_type && (
-              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs text-blue-600">
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
                 {evidence.evidence_type.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
               </span>
             )}
             <span className={`rounded-full ${statusStyle.bg} px-2.5 py-1 text-xs ${statusStyle.text}`}>
               {statusStyle.label}
             </span>
-            {evidence.quality_score !== null && (
-              <span className={`rounded-full ${getQualityScoreColor(evidence.quality_score)} px-2.5 py-1 text-xs text-white`}>
-                Quality: {Math.round(evidence.quality_score)}%
-              </span>
-            )}
+            <button
+              type="button"
+              onClick={() => setShowDetailsOverlay(true)}
+              className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50"
+              title="Basic info & version history"
+            >
+              <Info className="h-3.5 w-3.5" />
+              Details
+            </button>
             {canEdit && (
             <button
               onClick={() => {
@@ -755,7 +755,7 @@ export default function EvidenceDetailPage() {
                 });
                 setIsEditModalOpen(true);
               }}
-              className="flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-black hover:bg-gray-50"
+              className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50"
               title="Edit Evidence"
             >
               <Edit className="h-3.5 w-3.5" />
@@ -766,7 +766,7 @@ export default function EvidenceDetailPage() {
               <button
                 onClick={() => submitForReviewMutation.mutate()}
                 disabled={submitForReviewMutation.isPending}
-                className="flex items-center gap-1.5 rounded-md bg-yellow-600 px-3 py-1.5 text-sm text-white hover:bg-yellow-700 disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
                 title="Submit for Review"
               >
                 {submitForReviewMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
@@ -777,7 +777,7 @@ export default function EvidenceDetailPage() {
               <button
                 onClick={() => processOCRMutation.mutate()}
                 disabled={processOCRMutation.isPending}
-                className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
                 title="Process OCR"
               >
                 {processOCRMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanText className="h-3.5 w-3.5" />}
@@ -797,147 +797,21 @@ export default function EvidenceDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 px-4 sm:px-6 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-gray-700">
-            <Calendar className="h-4 w-4" />
-            <span className="text-sm font-medium">Collection & Expiry</span>
-          </div>
-          <div className="space-y-2">
-            <div>
-              <span className="text-xs text-gray-500">Collected</span>
-              <p className="text-black">{formatDate(evidence.collection_date)}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Expires</span>
-              <p className={`${evidence.is_stale ? 'text-red-600' : daysRemaining !== null && daysRemaining <= 30 ? 'text-yellow-600' : 'text-black'}`}>
-                {formatDate(evidence.expiry_date)}
-              </p>
-            </div>
-            {daysRemaining !== null && (
-              <div className={`text-sm ${daysRemaining <= 0 ? 'text-red-600' : daysRemaining <= 30 ? 'text-yellow-600' : 'text-green-600'}`}>
-                {daysRemaining <= 0 ? 'Expired' : `${daysRemaining} days remaining`}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-gray-700">
-            <ScanText className="h-4 w-4" />
-            <span className="text-sm font-medium">OCR Status</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className={`rounded-full ${ocrStatusStyle.bg} px-3 py-1 text-sm ${ocrStatusStyle.text}`}>
-              {ocrStatusStyle.label}
-            </span>
-          </div>
-          {evidence.ocr_processed_at && (
-            <p className="mt-2 text-xs text-gray-500">
-              Processed: {formatDateTime(evidence.ocr_processed_at)}
-            </p>
-          )}
-          {evidence.ocr_status === 'pending' && (
-            <button
-              onClick={() => processOCRMutation.mutate()}
-              disabled={processOCRMutation.isPending}
-              className="mt-3 flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
-            >
-              {processOCRMutation.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <ScanText className="h-3 w-3" />
-              )}
-              Process Now
-            </button>
-          )}
-        </div>
-
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-gray-700">
-            <Brain className="h-4 w-4" />
-            <span className="text-sm font-medium">Quality Score</span>
-          </div>
-          {evidence.quality_score !== null ? (
-            <>
-              <div className={`text-3xl font-bold ${getQualityScoreTextColor(evidence.quality_score)}`}>
-                {Math.round(evidence.quality_score)}%
-              </div>
-              <div className="mt-2">
-                <div className="h-2 w-full rounded-full bg-gray-200">
-                  <div 
-                    className={`h-2 rounded-full transition-all ${getQualityScoreColor(evidence.quality_score)}`}
-                    style={{ width: `${evidence.quality_score}%` }}
-                  />
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="text-3xl font-bold text-gray-500">-</div>
-              <button
-                onClick={() => runAssessmentMutation.mutate()}
-                disabled={runAssessmentMutation.isPending || evidence.ocr_status !== 'completed'}
-                className="mt-3 flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 disabled:text-gray-400"
-              >
-                {runAssessmentMutation.isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Brain className="h-3 w-3" />
-                )}
-                Run Assessment
-              </button>
-            </>
-          )}
-        </div>
-
-        <div className="rounded-lg border border-gray-200 bg-white p-4">
-          <div className="mb-3 flex items-center gap-2 text-gray-700">
-            <FileText className="h-4 w-4" />
-            <span className="text-sm font-medium">File Info</span>
-          </div>
-          <div className="space-y-2">
-            <div>
-              <span className="text-xs text-gray-500">Filename</span>
-              <p className="truncate text-sm text-black">{evidence.file_name || 'No file'}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Type</span>
-              <p className="text-sm text-black">{evidence.file_type || 'Unknown'}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Version</span>
-              <p className="text-sm text-black">v{evidence.version}</p>
-            </div>
-            {evidence.file_path && (
-              <button
-                onClick={() => setShowFilePreview(true)}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
-                title="Open the file in an in-browser preview"
-              >
-                <Eye className="h-3.5 w-3.5" />
-                Preview file
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
       {evidence.status === 'pending_review' && (
-        <div className="rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3">
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-yellow-600" />
+              <Clock className="h-4 w-4 text-amber-600" />
               <div>
-                <p className="text-sm font-medium text-yellow-700">This evidence is awaiting approval</p>
-                <p className="text-xs text-gray-600">
+                <p className="text-sm font-medium text-amber-700">This evidence is awaiting approval</p>
+                <p className="text-xs text-slate-600">
                   Submitted by {evidence.uploader_name || 'Unknown'} on {formatDateTime(evidence.submitted_at)}
                 </p>
               </div>
             </div>
             <Link
               href="/compliance/assessments/approvals"
-              className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm text-black border border-yellow-300 hover:bg-yellow-100"
+              className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-sm text-slate-800 border border-amber-300 hover:bg-amber-100"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               Open Pending Approvals
@@ -949,25 +823,25 @@ export default function EvidenceDetailPage() {
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4">
           <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-              <h2 className="text-sm font-semibold text-black">Edit Evidence</h2>
-              <button onClick={() => setIsEditModalOpen(false)} className="text-gray-500 hover:text-black">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <h2 className="text-sm font-semibold text-slate-800">Edit Evidence</h2>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-slate-500 hover:text-slate-800">
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="space-y-3 p-4">
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Name</label>
-                <input value={editForm.name} onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                <label className="mb-1 block text-xs font-medium text-slate-700">Name</label>
+                <input value={editForm.name} onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-700">Description</label>
-                <textarea value={editForm.description} onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))} rows={3} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                <label className="mb-1 block text-xs font-medium text-slate-700">Description</label>
+                <textarea value={editForm.description} onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))} rows={3} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-700">Evidence Type</label>
-                  <select value={editForm.evidence_type} onChange={(e) => setEditForm((prev) => ({ ...prev, evidence_type: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Evidence Type</label>
+                  <select value={editForm.evidence_type} onChange={(e) => setEditForm((prev) => ({ ...prev, evidence_type: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none">
                     <option value="">Select type...</option>
                     {['screenshot','document','certificate','audit_report','log','policy','procedure','configuration','attestation','training_record','access_review','vulnerability_scan','penetration_test','backup_log','change_record','incident_report','other'].map((type) => (
                       <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
@@ -975,20 +849,20 @@ export default function EvidenceDetailPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-700">Collection Date</label>
-                  <input type="date" value={editForm.collection_date} onChange={(e) => setEditForm((prev) => ({ ...prev, collection_date: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Collection Date</label>
+                  <input type="date" value={editForm.collection_date} onChange={(e) => setEditForm((prev) => ({ ...prev, collection_date: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-700">Validity Days</label>
-                  <input type="number" min="1" value={editForm.validity_period_days} onChange={(e) => setEditForm((prev) => ({ ...prev, validity_period_days: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Validity Days</label>
+                  <input type="number" min="1" value={editForm.validity_period_days} onChange={(e) => setEditForm((prev) => ({ ...prev, validity_period_days: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-700">Source System</label>
-                  <input value={editForm.source_system} onChange={(e) => setEditForm((prev) => ({ ...prev, source_system: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none" />
+                  <label className="mb-1 block text-xs font-medium text-slate-700">Source System</label>
+                  <input value={editForm.source_system} onChange={(e) => setEditForm((prev) => ({ ...prev, source_system: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
                 </div>
               </div>
-              <div className="flex justify-end gap-2 border-t border-gray-200 pt-3">
-                <button onClick={() => setIsEditModalOpen(false)} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-black hover:bg-gray-50">Cancel</button>
+              <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
+                <button onClick={() => setIsEditModalOpen(false)} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50">Cancel</button>
                 <button onClick={() => updateEvidenceMutation.mutate()} disabled={updateEvidenceMutation.isPending || !editForm.name.trim()} className="rounded-md bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-700 disabled:opacity-50">
                   {updateEvidenceMutation.isPending ? 'Saving...' : 'Save Changes'}
                 </button>
@@ -998,142 +872,369 @@ export default function EvidenceDetailPage() {
         </div>
       )}
 
+      {/* Quality breakdown overlay — surfaces the AI sub-scores without leaving the page */}
+      {showQualityOverlay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowQualityOverlay(false)}>
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Brain className="h-4 w-4 text-primary-600" /> Quality breakdown</h3>
+              <button onClick={() => setShowQualityOverlay(false)} className="text-slate-400 hover:text-slate-800"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="p-5">
+              {evidence.quality_score !== null ? (
+                <>
+                  <div className="mb-4 flex items-center gap-4">
+                    <div className={`text-4xl font-bold ${getQualityScoreTextColor(evidence.quality_score)}`}>{Math.round(evidence.quality_score)}%</div>
+                    <div className="flex-1">
+                      <div className="h-2 w-full rounded-full bg-slate-200"><div className={`h-2 rounded-full ${getQualityScoreColor(evidence.quality_score)}`} style={{ width: `${evidence.quality_score}%` }} /></div>
+                      <p className="mt-1 text-xs text-slate-500">Overall quality score</p>
+                    </div>
+                  </div>
+                  {evidence.latest_assessment ? (
+                    <div className="space-y-3">
+                      {([
+                        { label: 'Relevance', v: evidence.latest_assessment.relevance_score },
+                        { label: 'Adequacy', v: evidence.latest_assessment.adequacy_score },
+                        { label: 'Confidence', v: evidence.latest_assessment.confidence_score },
+                        { label: 'Audit readiness', v: evidence.latest_assessment.audit_readiness },
+                      ]).map(({ label, v }) => {
+                        const pct = v == null ? null : v <= 1 ? Math.round(v * 100) : Math.round(v);
+                        return (
+                          <div key={label}>
+                            <div className="mb-1 flex items-center justify-between text-xs">
+                              <span className="text-slate-600">{label}</span>
+                              <span className="font-medium text-slate-800">{pct == null ? '—' : `${pct}%`}</span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-slate-100"><div className="h-1.5 rounded-full bg-primary-500" style={{ width: `${pct ?? 0}%` }} /></div>
+                          </div>
+                        );
+                      })}
+                      {evidence.latest_assessment.content_summary && (
+                        <div className="mt-4 rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-600"><span className="font-medium text-slate-700">Summary: </span>{evidence.latest_assessment.content_summary}</div>
+                      )}
+                      <p className="mt-2 text-[11px] text-slate-400">Assessed {formatDateTime(evidence.latest_assessment.assessed_at)}</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">Detailed sub-scores aren&apos;t available — run an AI assessment for the full breakdown.</p>
+                  )}
+                </>
+              ) : (
+                <div className="py-6 text-center">
+                  <Brain className="mx-auto mb-2 h-8 w-8 text-slate-300" />
+                  <p className="text-sm text-slate-500">No quality score yet.</p>
+                  <button
+                    onClick={() => { setShowQualityOverlay(false); runAssessmentMutation.mutate(); }}
+                    disabled={runAssessmentMutation.isPending || evidence.ocr_status !== 'completed'}
+                    className="btn-primary btn-sm mt-3 inline-flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Brain className="h-3.5 w-3.5" /> Run assessment
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-      <div className="border-b border-gray-200 px-4 sm:px-6">
-        <nav className="flex flex-wrap gap-1 overflow-x-auto py-1">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
+      {/* OCR content overlay */}
+      {showOcrOverlay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowOcrOverlay(false)}>
+          <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800"><ScanText className="h-4 w-4 text-primary-600" /> OCR content</h3>
+              <div className="flex items-center gap-2">
+                <span className={`rounded-full ${ocrStatusStyle.bg} px-2 py-0.5 text-xs ${ocrStatusStyle.text}`}>{ocrStatusStyle.label}</span>
+                <button onClick={() => setShowOcrOverlay(false)} className="text-slate-400 hover:text-slate-800"><X className="h-4 w-4" /></button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              {evidence.ocr_processed_at && <p className="mb-3 text-xs text-slate-500">Processed {formatDateTime(evidence.ocr_processed_at)}</p>}
+              {ocrProcessMessage && <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">{ocrProcessMessage}</p>}
+              {ocrContent?.ocr_content ? (
+                <pre className="whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-700">{ocrContent.ocr_content}</pre>
+              ) : evidence.ocr_status === 'completed' ? (
+                <p className="text-sm text-slate-500">No text was extracted from this file.</p>
+              ) : (
+                <div className="py-6 text-center">
+                  <ScanText className="mx-auto mb-2 h-8 w-8 text-slate-300" />
+                  <p className="text-sm text-slate-500">OCR {ocrStatusStyle.label.toLowerCase()}.</p>
+                  {evidence.ocr_status !== 'completed' && evidence.ocr_status !== 'not_applicable' && (
+                    <button
+                      onClick={() => processOCRMutation.mutate()}
+                      disabled={processOCRMutation.isPending}
+                      className="btn-primary btn-sm mt-3 inline-flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {processOCRMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanText className="h-3.5 w-3.5" />} Process OCR
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-3">
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-600 hover:text-black'
-                }`}
+                onClick={() => processOCRMutation.mutate()}
+                disabled={processOCRMutation.isPending}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50 disabled:opacity-50"
               >
-                <Icon className="h-4 w-4" />
-                {tab.label}
+                {processOCRMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Re-process OCR
               </button>
-            );
-          })}
-        </nav>
-      </div>
+            </div>
+          </div>
+        </div>
+      )}
 
-      <div className="mx-4 rounded-lg border border-gray-200 bg-white p-3 sm:mx-6 sm:p-4">
-        {activeTab === 'overview' && (
-          <OverviewTab evidence={evidence} formatDate={formatDate} formatDateTime={formatDateTime} />
-        )}
-        {activeTab === 'ocr' && (
-          <OCRTab 
-            evidence={evidence}
-            ocrContent={ocrContent}
-            onProcessOCR={() => processOCRMutation.mutate()}
-            isProcessing={processOCRMutation.isPending}
-            ocrProcessMessage={ocrProcessMessage}
-            formatDateTime={formatDateTime}
+      {showDetailsOverlay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowDetailsOverlay(false)}>
+          <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Info className="h-4 w-4 text-primary-600" /> Details</h3>
+              <button onClick={() => setShowDetailsOverlay(false)} className="text-slate-400 hover:text-slate-800"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              <OverviewTab evidence={evidence} formatDate={formatDate} formatDateTime={formatDateTime} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* D1 split: pinned left context column + scrolling right work column.
+          All sub-components (Assessment/Controls/CrossLinks/RecommendTargets)
+          are reused unchanged — only their placement changed. */}
+      <div className="mx-4 grid grid-cols-1 gap-4 pb-4 sm:mx-6 lg:grid-cols-12">
+        {/* ── LEFT: context stays on screen ───────────────────────────── */}
+        <div className="lg:col-span-5">
+          <div className="space-y-3 lg:sticky lg:top-4">
+            {/* Quality — click for the score breakdown overlay */}
+            <button
+              type="button"
+              onClick={() => setShowQualityOverlay(true)}
+              className="group w-full rounded-lg border border-slate-200 bg-white p-3 text-left transition-colors hover:border-primary-300 hover:bg-slate-50"
+            >
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><Brain className="h-3.5 w-3.5" /> Quality Score</div>
+              {evidence.quality_score !== null ? (
+                <>
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span className={`text-2xl font-bold ${getQualityScoreTextColor(evidence.quality_score)}`}>{Math.round(evidence.quality_score)}%</span>
+                    <span className="text-[11px] text-primary-600 group-hover:underline">breakdown →</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-200">
+                    <div className={`h-1.5 rounded-full ${getQualityScoreColor(evidence.quality_score)}`} style={{ width: `${evidence.quality_score}%` }} />
+                  </div>
+                </>
+              ) : (
+                <div className="mt-1 text-sm text-slate-400">Not assessed yet</div>
+              )}
+            </button>
+
+            {/* OCR — click for the extracted-text overlay */}
+            <button
+              type="button"
+              onClick={() => setShowOcrOverlay(true)}
+              className="group w-full rounded-lg border border-slate-200 bg-white p-3 text-left transition-colors hover:border-primary-300 hover:bg-slate-50"
+            >
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><ScanText className="h-3.5 w-3.5" /> OCR</div>
+              <div className="mt-1 flex items-center gap-2">
+                <span className={`rounded-full ${ocrStatusStyle.bg} px-2 py-0.5 text-xs ${ocrStatusStyle.text}`}>{ocrStatusStyle.label}</span>
+                <span className="text-[11px] text-primary-600 group-hover:underline">view →</span>
+              </div>
+              <p className="mt-1 truncate text-[11px] text-slate-400">{evidence.ocr_processed_at ? `Processed ${formatDateTime(evidence.ocr_processed_at)}` : 'Not processed'}</p>
+            </button>
+
+            {/* Validity */}
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><Calendar className="h-3.5 w-3.5" /> Validity</div>
+              {(evidence.collection_date || evidence.expiry_date) ? (
+                <>
+                  <p className="mt-1 text-sm text-slate-800">{formatDate(evidence.collection_date)} → {formatDate(evidence.expiry_date)}</p>
+                  {daysRemaining !== null && (
+                    <p className={`mt-0.5 text-[11px] ${daysRemaining <= 0 ? 'text-rose-600' : daysRemaining <= 30 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                      {daysRemaining <= 0 ? 'Expired' : `${daysRemaining} days remaining`}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-slate-400">Not set</p>
+              )}
+            </div>
+
+            {/* File — compact card with name + Open file (reuses EvidenceViewer) */}
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><FileText className="h-3.5 w-3.5" /> File</div>
+              <p className="mt-1 truncate text-sm text-slate-800" title={evidence.file_name || ''}>{evidence.file_name || 'No file'}</p>
+              <p className="text-[11px] text-slate-400">{evidence.file_type || 'Unknown'} · v{evidence.version}</p>
+              {evidence.file_path && (
+                <button
+                  onClick={() => setShowFilePreview(true)}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  title="Open file"
+                >
+                  <Eye className="h-3.5 w-3.5" strokeWidth={1.75} /> Open file
+                </button>
+              )}
+            </div>
+
+            {/* Lifecycle timeline — derived client-side from evidence fields */}
+            <EvidenceTimeline evidence={evidence} fmtDateTime={formatDateTime} />
+          </div>
+        </div>
+
+        {/* ── RIGHT: scrolling work column ────────────────────────────── */}
+        <div className="space-y-4 lg:col-span-7">
+          {/* Linkage snapshot — at-a-glance relationship counts (was spread across tabs) */}
+          <div className="cw-card flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl px-4 py-3 text-sm text-slate-500">
+            <span className="flex items-center gap-1.5 font-medium text-slate-700">
+              <Link2 className="h-4 w-4 text-primary-600" /> Linkage
+            </span>
+            <span className="text-slate-300">·</span>
+            <span><span className="font-semibold text-slate-900">{controlsData?.total_mappings ?? 0}</span> Controls</span>
+            <span className="text-slate-300">·</span>
+            <span><span className="font-semibold text-slate-900">{controlsData?.by_framework?.length ?? 0}</span> Frameworks</span>
+            <span className="text-slate-300">·</span>
+            <span><span className="font-semibold text-slate-900">{allLinks?.risks?.total ?? 0}</span> Risks</span>
+            <span className="text-slate-300">·</span>
+            <span><span className="font-semibold text-slate-900">{allLinks?.assets?.total ?? 0}</span> Assets</span>
+            <span className="text-slate-300">·</span>
+            <span><span className="font-semibold text-slate-900">{allLinks?.incidents?.total ?? 0}</span> Incidents</span>
+            <span className="text-slate-300">·</span>
+            <span><span className="font-semibold text-slate-900">{allLinks?.policy_statements?.total ?? 0}</span> Policy Statements</span>
+            <span className="ml-auto inline-flex items-center rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-700">
+              {allLinks?.total_links ?? 0} total links
+            </span>
+          </div>
+
+          {/* AI Assessment — reused unchanged; Applicable Frameworks surfaced at the top */}
+          <div className="cw-card rounded-xl p-4 sm:p-5">
+            <AssessmentTab
+              evidence={evidence}
+              assessment={latestAssessment}
+              controlsData={controlsData}
+              assetsData={allLinks?.assets}
+              clauseMappings={clauseMappings}
+              onRunAssessment={() => runAssessmentMutation.mutate()}
+              onLock={() => lockAssessmentMutation.mutate()}
+              onUnlock={() => unlockAssessmentMutation.mutate()}
+              isRunning={runAssessmentMutation.isPending}
+              isLocking={lockAssessmentMutation.isPending}
+              isUnlocking={unlockAssessmentMutation.isPending}
+              formatDateTime={formatDateTime}
+              isClauseLinked={isClauseLinked}
+              onLinkFromAI={(clause: ClauseMapping) => {
+                linkFromAIMutation.mutate(clause);
+              }}
+              linkingClauseIndex={linkingClauseIndex}
+              setLinkingClauseIndex={setLinkingClauseIndex}
+              isLinkingPending={linkFromAIMutation.isPending}
+              linkFeedback={linkFeedback}
+            />
+            <div className="mt-6 border-t border-slate-100 pt-6">
+              <RecommendTargetsPanel evidenceId={evidenceId} />
+            </div>
+          </div>
+
+          {/* D4 — Audit readiness (score + satisfies-for-audit clauses) */}
+          <AuditReadinessCard
+            auditReadiness={latestAssessment?.audit_readiness ?? evidence.latest_assessment?.audit_readiness ?? null}
+            summary={latestAssessment?.content_summary ?? evidence.latest_assessment?.content_summary ?? null}
+            clauseMappings={latestAssessment?.clause_mappings ?? clauseMappings}
           />
-        )}
-        {activeTab === 'assessment' && (
-          <AssessmentTab 
-            evidence={evidence}
-            assessment={latestAssessment}
-            controlsData={controlsData}
-            assetsData={allLinks?.assets}
-            clauseMappings={clauseMappings}
-            onRunAssessment={() => runAssessmentMutation.mutate()}
-            onLock={() => lockAssessmentMutation.mutate()}
-            onUnlock={() => unlockAssessmentMutation.mutate()}
-            isRunning={runAssessmentMutation.isPending}
-            isLocking={lockAssessmentMutation.isPending}
-            isUnlocking={unlockAssessmentMutation.isPending}
-            formatDateTime={formatDateTime}
-            isClauseLinked={isClauseLinked}
-            onLinkFromAI={(clause: ClauseMapping) => {
-              linkFromAIMutation.mutate(clause);
-            }}
-            linkingClauseIndex={linkingClauseIndex}
-            setLinkingClauseIndex={setLinkingClauseIndex}
-            isLinkingPending={linkFromAIMutation.isPending}
-            linkFeedback={linkFeedback}
+
+          {/* D4 — Reviewer decision (surfaces the existing reviewMutation) */}
+          {canEdit && evidence.status === 'pending_review' && (
+            <ReviewerActionPanel
+              note={rejectComments}
+              onNoteChange={setRejectComments}
+              onApprove={() => reviewMutation.mutate({ action: 'approve', comments: rejectComments || undefined })}
+              onReject={() => reviewMutation.mutate({ action: 'reject', comments: rejectComments || undefined })}
+              isPending={reviewMutation.isPending}
+            />
+          )}
+
+          {/* Linked Controls — reused unchanged */}
+          <div id="linked-controls" className="cw-card scroll-mt-4 rounded-xl p-4 sm:p-5">
+            <ControlsTab
+              evidenceId={evidenceId}
+              controlsData={controlsData}
+              usageData={allLinks}
+              onUnlink={(mappingId) => unlinkControlMutation.mutate(mappingId)}
+              isUnlinking={unlinkControlMutation.isPending}
+              onOpenLinkModal={() => setShowLinkModal(true)}
+              availableControls={availableControls}
+              onLinkControl={(fwId, ctrlId) => {
+                setSelectedFrameworkId(fwId);
+                setSelectedControlId(ctrlId);
+                // Trigger via a small async hop so state updates land before mutate runs.
+                setTimeout(() => linkControlMutation.mutate(), 0);
+              }}
+              isLinkingControl={linkControlMutation.isPending}
+            />
+          </div>
+
+          {/* D5 — Cross-module map: compact chip summary + full CrossLinks detail */}
+          <EvidenceCrossMap
+            controls={controlsData?.total_mappings ?? 0}
+            risks={allLinks?.risks?.total ?? 0}
+            assets={allLinks?.assets?.total ?? 0}
+            incidents={allLinks?.incidents?.total ?? 0}
+            policyStatements={allLinks?.policy_statements?.total ?? 0}
           />
-        )}
-        {activeTab === 'assessment' && (
-          <RecommendTargetsPanel evidenceId={evidenceId} />
-        )}
-        {activeTab === 'controls' && (
-          <ControlsTab
-            controlsData={controlsData}
-            usageData={allLinks}
-            onUnlink={(mappingId) => unlinkControlMutation.mutate(mappingId)}
-            isUnlinking={unlinkControlMutation.isPending}
-            onOpenLinkModal={() => setShowLinkModal(true)}
-            availableControls={availableControls}
-            onLinkControl={(fwId, ctrlId) => {
-              setSelectedFrameworkId(fwId);
-              setSelectedControlId(ctrlId);
-              // Trigger via a small async hop so state updates land before mutate runs.
-              setTimeout(() => linkControlMutation.mutate(), 0);
-            }}
-            isLinkingControl={linkControlMutation.isPending}
-          />
-        )}
-        {activeTab === 'cross-links' && (
-          <CrossLinksTab
-            links={allLinks}
-            evidenceId={evidenceId}
-            onUnlinkRisk={(linkId) => unlinkRiskMutation.mutate(linkId)}
-            onUnlinkAsset={(linkId) => unlinkAssetMutation.mutate(linkId)}
-            onUnlinkIncident={(linkId) => unlinkIncidentMutation.mutate(linkId)}
-            onUnlinkPolicy={(linkId) => unlinkPolicyMutation.mutate(linkId)}
-            isUnlinking={
-              unlinkRiskMutation.isPending ||
-              unlinkAssetMutation.isPending ||
-              unlinkIncidentMutation.isPending ||
-              unlinkPolicyMutation.isPending
-            }
-            onOpenRiskModal={() => setShowRiskModal(true)}
-            onOpenAssetModal={() => setShowAssetModal(true)}
-            onOpenIncidentModal={() => setShowIncidentModal(true)}
-            onOpenPolicyModal={() => setShowPolicyModal(true)}
-            risksList={risksList}
-            assetsList={assetsList}
-            incidentsList={incidentsList}
-            governanceDocsList={governanceDocsList}
-            onLinkRisk={(id) => {
-              setSelectedRiskId(id);
-              setTimeout(() => linkRiskMutation.mutate(), 0);
-            }}
-            onLinkAsset={(id) => {
-              setSelectedAssetId(id);
-              setTimeout(() => linkAssetMutation.mutate(), 0);
-            }}
-            onLinkIncident={(id) => {
-              setSelectedIncidentId(id);
-              setTimeout(() => linkIncidentMutation.mutate(), 0);
-            }}
-            onLinkPolicies={(ids) => linkPolicyMutation.mutate(ids)}
-            isLinkingRisk={linkRiskMutation.isPending}
-            isLinkingAsset={linkAssetMutation.isPending}
-            isLinkingIncident={linkIncidentMutation.isPending}
-            isLinkingPolicy={linkPolicyMutation.isPending}
-          />
-        )}
+
+          <div id="cross-module" className="cw-card scroll-mt-4 rounded-xl p-4 sm:p-5">
+            <CrossLinksTab
+              links={allLinks}
+              evidenceId={evidenceId}
+              onUnlinkRisk={(linkId) => unlinkRiskMutation.mutate(linkId)}
+              onUnlinkAsset={(linkId) => unlinkAssetMutation.mutate(linkId)}
+              onUnlinkIncident={(linkId) => unlinkIncidentMutation.mutate(linkId)}
+              onUnlinkPolicy={(linkId) => unlinkPolicyMutation.mutate(linkId)}
+              isUnlinking={
+                unlinkRiskMutation.isPending ||
+                unlinkAssetMutation.isPending ||
+                unlinkIncidentMutation.isPending ||
+                unlinkPolicyMutation.isPending
+              }
+              onOpenRiskModal={() => setShowRiskModal(true)}
+              onOpenAssetModal={() => setShowAssetModal(true)}
+              onOpenIncidentModal={() => setShowIncidentModal(true)}
+              onOpenPolicyModal={() => setShowPolicyModal(true)}
+              risksList={risksList}
+              assetsList={assetsList}
+              incidentsList={incidentsList}
+              governanceDocsList={governanceDocsList}
+              onLinkRisk={(id) => {
+                setSelectedRiskId(id);
+                setTimeout(() => linkRiskMutation.mutate(), 0);
+              }}
+              onLinkAsset={(id) => {
+                setSelectedAssetId(id);
+                setTimeout(() => linkAssetMutation.mutate(), 0);
+              }}
+              onLinkIncident={(id) => {
+                setSelectedIncidentId(id);
+                setTimeout(() => linkIncidentMutation.mutate(), 0);
+              }}
+              onLinkPolicies={(ids) => linkPolicyMutation.mutate(ids)}
+              isLinkingRisk={linkRiskMutation.isPending}
+              isLinkingAsset={linkAssetMutation.isPending}
+              isLinkingIncident={linkIncidentMutation.isPending}
+              isLinkingPolicy={linkPolicyMutation.isPending}
+            />
+          </div>
+        </div>
       </div>
         {showLinkModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
             <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-lg">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-black">Link Control</h3>
-                <button onClick={() => setShowLinkModal(false)} className="text-gray-500 hover:text-black"><X className="h-5 w-5" /></button>
+                <h3 className="text-lg font-semibold text-slate-800">Link Control</h3>
+                <button onClick={() => setShowLinkModal(false)} className="text-slate-500 hover:text-slate-800"><X className="h-5 w-5" /></button>
               </div>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Framework</label>
+                    <label className="text-sm font-medium text-slate-700">Framework</label>
                     <select
-                      className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                       value={selectedFrameworkId ?? ''}
                       onChange={(e) => {
                         const val = e.target.value ? Number(e.target.value) : null;
@@ -1148,9 +1249,9 @@ export default function EvidenceDetailPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Control</label>
+                    <label className="text-sm font-medium text-slate-700">Control</label>
                     <select
-                      className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                       value={selectedControlId ?? ''}
                       onChange={(e) => setSelectedControlId(e.target.value ? Number(e.target.value) : null)}
                     >
@@ -1167,7 +1268,7 @@ export default function EvidenceDetailPage() {
                 <div className="flex justify-end gap-3 pt-2">
                   <button
                     onClick={() => setShowLinkModal(false)}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                   >
                     Cancel
                   </button>
@@ -1188,11 +1289,11 @@ export default function EvidenceDetailPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
             <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-black">Link Risk</h3>
-                <button onClick={() => setShowRiskModal(false)} className="text-gray-500 hover:text-black"><X className="h-5 w-5" /></button>
+                <h3 className="text-lg font-semibold text-slate-800">Link Risk</h3>
+                <button onClick={() => setShowRiskModal(false)} className="text-slate-500 hover:text-slate-800"><X className="h-5 w-5" /></button>
               </div>
               <select
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                 value={selectedRiskId ?? ''}
                 onChange={(e) => setSelectedRiskId(e.target.value ? Number(e.target.value) : null)}
               >
@@ -1202,7 +1303,7 @@ export default function EvidenceDetailPage() {
                 ))}
               </select>
               <div className="mt-4 flex justify-end gap-3">
-                <button onClick={() => setShowRiskModal(false)} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button onClick={() => setShowRiskModal(false)} className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
                 <button
                   onClick={() => linkRiskMutation.mutate()}
                   disabled={!selectedRiskId || linkRiskMutation.isPending}
@@ -1219,11 +1320,11 @@ export default function EvidenceDetailPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
             <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-black">Link Asset</h3>
-                <button onClick={() => setShowAssetModal(false)} className="text-gray-500 hover:text-black"><X className="h-5 w-5" /></button>
+                <h3 className="text-lg font-semibold text-slate-800">Link Asset</h3>
+                <button onClick={() => setShowAssetModal(false)} className="text-slate-500 hover:text-slate-800"><X className="h-5 w-5" /></button>
               </div>
               <select
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                 value={selectedAssetId ?? ''}
                 onChange={(e) => setSelectedAssetId(e.target.value ? Number(e.target.value) : null)}
               >
@@ -1233,7 +1334,7 @@ export default function EvidenceDetailPage() {
                 ))}
               </select>
               <div className="mt-4 flex justify-end gap-3">
-                <button onClick={() => setShowAssetModal(false)} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button onClick={() => setShowAssetModal(false)} className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
                 <button
                   onClick={() => linkAssetMutation.mutate()}
                   disabled={!selectedAssetId || linkAssetMutation.isPending}
@@ -1250,11 +1351,11 @@ export default function EvidenceDetailPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
             <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-black">Link Incident</h3>
-                <button onClick={() => setShowIncidentModal(false)} className="text-gray-500 hover:text-black"><X className="h-5 w-5" /></button>
+                <h3 className="text-lg font-semibold text-slate-800">Link Incident</h3>
+                <button onClick={() => setShowIncidentModal(false)} className="text-slate-500 hover:text-slate-800"><X className="h-5 w-5" /></button>
               </div>
               <select
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                 value={selectedIncidentId ?? ''}
                 onChange={(e) => setSelectedIncidentId(e.target.value ? Number(e.target.value) : null)}
               >
@@ -1266,7 +1367,7 @@ export default function EvidenceDetailPage() {
                 ))}
               </select>
               <div className="mt-4 flex justify-end gap-3">
-                <button onClick={() => setShowIncidentModal(false)} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button onClick={() => setShowIncidentModal(false)} className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
                 <button
                   onClick={() => linkIncidentMutation.mutate()}
                   disabled={!selectedIncidentId || linkIncidentMutation.isPending}
@@ -1283,14 +1384,14 @@ export default function EvidenceDetailPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
             <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-black">Link Policy Statement</h3>
-                <button onClick={() => setShowPolicyModal(false)} className="text-gray-500 hover:text-black"><X className="h-5 w-5" /></button>
+                <h3 className="text-lg font-semibold text-slate-800">Link Policy Statement</h3>
+                <button onClick={() => setShowPolicyModal(false)} className="text-slate-500 hover:text-slate-800"><X className="h-5 w-5" /></button>
               </div>
-              <p className="mb-3 text-sm text-gray-600">
+              <p className="mb-3 text-sm text-slate-600">
                 Use the inline picker on the Cross-links tab to choose a document and pick statements.
               </p>
               <div className="mt-4 flex justify-end gap-3">
-                <button onClick={() => setShowPolicyModal(false)} className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Close</button>
+                <button onClick={() => setShowPolicyModal(false)} className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Close</button>
                 <button
                   onClick={() => selectedPolicyStatementId && linkPolicyMutation.mutate([selectedPolicyStatementId])}
                   disabled={!selectedPolicyStatementId || linkPolicyMutation.isPending}
@@ -1334,31 +1435,31 @@ function OverviewTab({
     <div className="grid gap-6 md:grid-cols-2">
       <div className="space-y-6">
         <div>
-          <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-black">
-            <Info className="h-5 w-5 text-blue-600" />
+          <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-800">
+            <Info className="h-5 w-5 text-primary-600" />
             Basic Information
           </h3>
-          <div className="space-y-3 rounded-lg bg-gray-50 p-4">
+          <div className="space-y-3 rounded-lg bg-slate-50 p-4">
             <div>
-              <span className="text-sm text-gray-600">Description</span>
-              <p className="text-black">{evidence.description || 'No description provided'}</p>
+              <span className="text-sm text-slate-600">Description</span>
+              <p className="text-slate-800">{evidence.description || 'No description provided'}</p>
             </div>
             <div>
-              <span className="text-sm text-gray-600">Source System</span>
-              <p className="text-black">{evidence.source_system || 'Not specified'}</p>
+              <span className="text-sm text-slate-600">Source System</span>
+              <p className="text-slate-800">{evidence.source_system || 'Not specified'}</p>
             </div>
             <div>
-              <span className="text-sm text-gray-600">Uploaded By</span>
-              <p className="text-black">{evidence.uploader_name || 'Unknown'}</p>
+              <span className="text-sm text-slate-600">Uploaded By</span>
+              <p className="text-slate-800">{evidence.uploader_name || 'Unknown'}</p>
             </div>
             <div>
-              <span className="text-sm text-gray-600">Uploaded At</span>
-              <p className="text-black">{formatDateTime(evidence.uploaded_at)}</p>
+              <span className="text-sm text-slate-600">Uploaded At</span>
+              <p className="text-slate-800">{formatDateTime(evidence.uploaded_at)}</p>
             </div>
             {evidence.content_summary && (
               <div>
-                <span className="text-sm text-gray-600">Content Summary</span>
-                <p className="text-black">{evidence.content_summary}</p>
+                <span className="text-sm text-slate-600">Content Summary</span>
+                <p className="text-slate-800">{evidence.content_summary}</p>
               </div>
             )}
           </div>
@@ -1366,14 +1467,14 @@ function OverviewTab({
 
         {evidence.review_comments && (
           <div>
-            <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-black">
-              <AlertCircle className="h-5 w-5 text-yellow-400" />
+            <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-800">
+              <AlertCircle className="h-5 w-5 text-amber-600" />
               Review Comments
             </h3>
-            <div className="rounded-lg bg-yellow-900/20 border border-yellow-600/30 p-4">
-              <p className="text-yellow-200">{evidence.review_comments}</p>
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
+              <p className="text-amber-800">{evidence.review_comments}</p>
               {evidence.reviewed_at && (
-                <p className="mt-2 text-xs text-gray-600">Reviewed on {formatDateTime(evidence.reviewed_at)}</p>
+                <p className="mt-2 text-xs text-slate-600">Reviewed on {formatDateTime(evidence.reviewed_at)}</p>
               )}
             </div>
           </div>
@@ -1381,128 +1482,31 @@ function OverviewTab({
       </div>
 
       <div>
-        <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-black">
-          <History className="h-5 w-5 text-blue-600" />
+        <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-800">
+          <History className="h-5 w-5 text-primary-600" />
           Version History
         </h3>
         {evidence.versions && evidence.versions.length > 0 ? (
           <div className="space-y-2">
             {evidence.versions.map((version) => (
-              <div key={version.id} className="rounded-lg bg-gray-50 p-3">
+              <div key={version.id} className="rounded-lg bg-slate-50 p-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-black">Version {version.version_number}</span>
-                  <span className="text-sm text-gray-600">{formatDateTime(version.created_at)}</span>
+                  <span className="font-medium text-slate-800">Version {version.version_number}</span>
+                  <span className="text-sm text-slate-600">{formatDateTime(version.created_at)}</span>
                 </div>
                 {version.changes && (
-                  <p className="mt-1 text-sm text-gray-600">{version.changes}</p>
+                  <p className="mt-1 text-sm text-slate-600">{version.changes}</p>
                 )}
               </div>
             ))}
           </div>
         ) : (
-          <div className="rounded-lg bg-gray-50 p-4 text-center text-gray-600">
-            <History className="mx-auto mb-2 h-8 w-8 text-gray-400" />
+          <div className="rounded-lg bg-slate-50 p-4 text-center text-slate-600">
+            <History className="mx-auto mb-2 h-8 w-8 text-slate-400" />
             <p>No version history available</p>
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function OCRTab({ 
-  evidence, 
-  ocrContent,
-  onProcessOCR,
-  isProcessing,
-  ocrProcessMessage,
-  formatDateTime
-}: { 
-  evidence: EvidenceDetail;
-  ocrContent?: OCRContent;
-  onProcessOCR: () => void;
-  isProcessing: boolean;
-  ocrProcessMessage?: string | null;
-  formatDateTime: (d?: string | null) => string;
-}) {
-  const content = ocrContent?.ocr_content;
-  
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
-          <ScanText className="h-5 w-5 text-blue-600" />
-          OCR Extracted Content
-        </h3>
-        <div className="flex items-center gap-3">
-          {ocrContent?.ocr_processed_at && (
-            <span className="text-sm text-gray-600">
-              Processed: {formatDateTime(ocrContent.ocr_processed_at)}
-            </span>
-          )}
-          <button
-            onClick={onProcessOCR}
-            disabled={isProcessing}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
-          >
-            {isProcessing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Re-process OCR
-          </button>
-        </div>
-      </div>
-
-      {evidence.ocr_status === 'completed' && content ? (
-        <div className="max-h-[600px] overflow-auto rounded-lg bg-gray-50 p-4">
-          <pre className="whitespace-pre-wrap font-mono text-sm text-gray-700">{content}</pre>
-        </div>
-      ) : evidence.ocr_status === 'processing' ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Loader2 className="mb-4 h-12 w-12 animate-spin text-blue-400" />
-          <p className="text-lg font-medium text-black">Processing OCR...</p>
-          <p className="text-gray-600">This may take a moment</p>
-        </div>
-      ) : evidence.ocr_status === 'failed' ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <XCircle className="mb-4 h-12 w-12 text-red-400" />
-          <p className="text-lg font-medium text-black">OCR Processing Failed</p>
-          <p className="text-gray-600">Try re-processing the document</p>
-          {ocrProcessMessage && (
-            <p className="mt-2 max-w-xl text-sm text-red-600">{ocrProcessMessage}</p>
-          )}
-          <button
-            onClick={onProcessOCR}
-            disabled={isProcessing}
-            className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
-          >
-            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            Retry OCR
-          </button>
-        </div>
-      ) : evidence.ocr_status === 'not_applicable' ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <FileText className="mb-4 h-12 w-12 text-gray-400" />
-          <p className="text-lg font-medium text-black">OCR Not Applicable</p>
-          <p className="text-gray-600">This file type does not support OCR extraction</p>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <ScanText className="mb-4 h-12 w-12 text-gray-400" />
-          <p className="text-lg font-medium text-black">No OCR Content Yet</p>
-          <p className="text-gray-600">Process the document to extract text content</p>
-          <button
-            onClick={onProcessOCR}
-            disabled={isProcessing}
-            className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
-          >
-            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanText className="h-4 w-4" />}
-            Process OCR
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -1573,49 +1577,24 @@ function AssessmentTab({
   const getCoverageTypeStyle = (coverageType: string) => {
     switch (coverageType.toLowerCase()) {
       case 'full':
-        return 'bg-green-500/20 text-green-400 border-green-500/30';
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       case 'partial':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+        return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'minimal':
-        return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
+        return 'bg-orange-50 text-orange-700 border-orange-200';
       case 'none':
-        return 'bg-red-500/20 text-red-400 border-red-500/30';
+        return 'bg-rose-50 text-rose-700 border-rose-200';
       default:
-        return 'bg-gray-100 text-gray-600 border-gray-300';
+        return 'bg-slate-100 text-slate-600 border-slate-300';
     }
-  };
-
-  const truncateHash = (hash: string | null) => {
-    if (!hash) return '-';
-    return `${hash.substring(0, 8)}...${hash.substring(hash.length - 8)}`;
-  };
-
-  const ScoreBar = ({ label, score, color }: { label: string; score: number | null; color: string }) => {
-    const value = score || 0;
-    return (
-      <div className="space-y-1">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-600">{label}</span>
-          <span className={`font-bold ${value >= 70 ? 'text-green-400' : value >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
-            {value.toFixed(0)}%
-          </span>
-        </div>
-        <div className="h-3 w-full rounded-full bg-gray-100">
-          <div 
-            className={`h-3 rounded-full transition-all ${color}`}
-            style={{ width: `${value}%` }}
-          />
-        </div>
-      </div>
-    );
   };
 
   if (!assessment && !evidence.latest_assessment) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <Brain className="mb-4 h-12 w-12 text-gray-400" />
-        <p className="text-lg font-medium text-black">No AI Assessment Yet</p>
-        <p className="text-gray-600">
+      <div className="flex flex-col items-center justify-center py-8 text-center">
+        <Brain className="mb-4 h-12 w-12 text-slate-400" />
+        <p className="text-lg font-medium text-slate-800">No AI Assessment Yet</p>
+        <p className="text-slate-600">
           {evidence.ocr_status !== 'completed' 
             ? 'Process OCR first, then run the AI assessment'
             : 'Run an AI assessment to analyze evidence quality'}
@@ -1635,16 +1614,36 @@ function AssessmentTab({
   const data = assessment || evidence.latest_assessment;
   if (!data) return null;
 
+  // Applicable frameworks — one clean, deduped, human-readable set merged from the
+  // most reliable sources first: (1) frameworks of actually-linked controls,
+  // (2) DB-verified AI clause suggestions, (3) the raw AI free-text list (stripped
+  // of its ':clause' suffix). This replaces the noisy/often-empty AI-string list as
+  // the primary signal auditors care about.
+  const linkedFrameworkNames = new Set(
+    (controlsData?.by_framework || []).map((f) => f.framework_name).filter(Boolean)
+  );
+  const applicableFrameworks = Array.from(
+    new Set(
+      [
+        ...(controlsData?.by_framework || []).map((f) => f.framework_name),
+        ...(clauseMappings || []).map((c) => c.framework_name),
+        ...(((assessment?.compliance_frameworks || (data as AIAssessment)?.gap_analysis?.compliance_frameworks) || []).map(
+          (s) => (s || '').split(':')[0].trim()
+        )),
+      ].filter(Boolean)
+    )
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
-          <Brain className="h-5 w-5 text-blue-600" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
+          <Brain className="h-5 w-5 text-primary-600" />
           AI Quality Assessment
         </h3>
         <div className="flex items-center gap-3">
           {assessment?.assessed_at && (
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-slate-600">
               Assessed: {formatDateTime(assessment.assessed_at)}
             </span>
           )}
@@ -1660,47 +1659,75 @@ function AssessmentTab({
       </div>
 
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="space-y-4 rounded-lg bg-gray-50 p-4">
-          <h4 className="font-medium text-black">Quality Scores</h4>
-          <ScoreBar label="Relevance" score={data.relevance_score} color="bg-blue-500" />
-          <ScoreBar label="Adequacy" score={data.adequacy_score} color="bg-green-500" />
-          <ScoreBar label="Audit Readiness" score={data.audit_readiness} color="bg-purple-500" />
-          <ScoreBar label="Confidence" score={data.confidence_score} color="bg-cyan-500" />
-        </div>
-
-        <div className="space-y-4 rounded-lg bg-gray-50 p-4">
-          <h4 className="font-medium text-black">Content Summary</h4>
-          <p className="text-gray-700">{data.content_summary || 'No summary available'}</p>
-        </div>
+      <div className="space-y-4 rounded-lg bg-slate-50 p-4">
+        <h4 className="font-medium text-slate-800">Content Summary</h4>
+        <p className="text-slate-700">{data.content_summary || 'No summary available'}</p>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h4 className="mb-3 flex items-center gap-2 font-medium text-black">
-          <ShieldCheck className="h-5 w-5 text-blue-600" />
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-800">
+          <ShieldCheck className="h-5 w-5 text-primary-600" />
           Applicable Compliance Frameworks
         </h4>
-        <p className="mb-3 text-xs text-gray-600">This evidence can be used to demonstrate compliance with the following requirements:</p>
-        
+        <p className="mb-3 text-xs text-slate-600">This evidence can be used to demonstrate compliance with the following requirements:</p>
+
+        {/* Primary, clean applicable-frameworks set — the most useful at-a-glance signal */}
+        <div className="mb-4">
+          {applicableFrameworks.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {applicableFrameworks.map((name) => {
+                const linked = linkedFrameworkNames.has(name);
+                const count = controlsData?.by_framework?.find((f) => f.framework_name === name)?.controls.length;
+                return (
+                  <span
+                    key={name}
+                    className="inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-sm font-medium text-primary-700"
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    {name}
+                    {typeof count === 'number' && count > 0 && (
+                      <span className="text-[11px] font-normal text-slate-500">{count} control{count === 1 ? '' : 's'}</span>
+                    )}
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                        linked ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {linked ? 'Linked' : 'Suggested'}
+                    </span>
+                  </span>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-500">
+              <ShieldCheck className="h-4 w-4 text-slate-400" />
+              Run the AI assessment or link a control to identify applicable frameworks.
+            </div>
+          )}
+        </div>
+
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">Coverage breakdown</p>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-gray-300/50">
-                <th className="pb-3 pr-4 font-medium text-gray-700 w-1/3">
+              <tr className="border-b border-slate-200">
+                <th className="pb-3 pr-4 font-medium text-slate-700 w-1/3">
                   <div className="flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-blue-600" />
+                    <Shield className="h-4 w-4 text-primary-600" />
                     AI-Detected Frameworks
                   </div>
                 </th>
-                <th className="pb-3 px-4 font-medium text-gray-700 w-1/3">
+                <th className="pb-3 px-4 font-medium text-slate-700 w-1/3">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-blue-400" />
+                    <ShieldCheck className="h-4 w-4 text-primary-600" />
                     Linked Controls
                   </div>
                 </th>
-                <th className="pb-3 pl-4 font-medium text-gray-700 w-1/3">
+                <th className="pb-3 pl-4 font-medium text-slate-700 w-1/3">
                   <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-green-400" />
+                    <Building2 className="h-4 w-4 text-emerald-600" />
                     Associated Assets
                   </div>
                 </th>
@@ -1714,46 +1741,46 @@ function AssessmentTab({
                     return frameworks.length > 0 ? (
                       <div className="flex flex-wrap gap-2">
                         {frameworks.map((framework, i) => (
-                          <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-primary-500/20 px-3 py-1 text-sm font-medium text-blue-700 border border-primary-500/30">
+                          <span key={i} className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1 text-sm font-medium text-primary-700 border border-primary-200">
                             <Shield className="h-3 w-3" />
                             {framework}
                           </span>
                         ))}
                       </div>
                     ) : (
-                      <span className="text-gray-500 text-sm">Run AI assessment to identify</span>
+                      <span className="text-slate-500 text-sm">Run AI assessment to identify</span>
                     );
                   })()}
                 </td>
-                <td className="py-3 px-4 align-top border-l border-gray-200/30">
+                <td className="py-3 px-4 align-top border-l border-slate-100">
                   {controlsData?.by_framework && controlsData.by_framework.length > 0 ? (
                     <div className="space-y-3">
                       {controlsData.by_framework.map((framework) => (
                         <div key={framework.framework_id}>
-                          <div className="text-xs font-medium text-gray-600 mb-1.5">{framework.framework_name}</div>
+                          <div className="text-xs font-medium text-slate-600 mb-1.5">{framework.framework_name}</div>
                           <div className="flex flex-wrap gap-1.5">
                             {framework.controls.slice(0, 5).map((mapping) => (
                               <Link 
                                 key={mapping.id}
                                 href={`/frameworks`}
-                                className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-medium text-blue-300 border border-blue-500/30 hover:bg-blue-500/30 transition-colors"
+                                className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-700 border border-primary-200 hover:bg-primary-100 transition-colors"
                               >
                                 <ShieldCheck className="h-2.5 w-2.5" />
                                 {mapping.framework_control?.code}
                               </Link>
                             ))}
                             {framework.controls.length > 5 && (
-                              <span className="text-xs text-gray-500">+{framework.controls.length - 5} more</span>
+                              <span className="text-xs text-slate-500">+{framework.controls.length - 5} more</span>
                             )}
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <span className="text-gray-500 text-sm">No linked controls</span>
+                    <span className="text-slate-500 text-sm">No linked controls</span>
                   )}
                 </td>
-                <td className="py-3 pl-4 align-top border-l border-gray-200/30">
+                <td className="py-3 pl-4 align-top border-l border-slate-100">
                   {assetsData?.links && assetsData.links.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {assetsData.links.slice(0, 6).map((link) => (
@@ -1761,7 +1788,7 @@ function AssessmentTab({
                           <Link 
                             key={link.id}
                             href={`/assets/${link.asset_id}`}
-                            className="inline-flex items-center gap-1.5 rounded-full bg-green-500/20 px-3 py-1 text-sm font-medium text-green-300 border border-green-500/30 hover:bg-green-500/30 transition-colors"
+                            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
                           >
                             <Building2 className="h-3 w-3" />
                             {link.asset.name}
@@ -1769,11 +1796,11 @@ function AssessmentTab({
                         )
                       ))}
                       {assetsData.links.length > 6 && (
-                        <span className="text-xs text-gray-500 self-center">+{assetsData.links.length - 6} more</span>
+                        <span className="text-xs text-slate-500 self-center">+{assetsData.links.length - 6} more</span>
                       )}
                     </div>
                   ) : (
-                    <span className="text-gray-500 text-sm">No linked assets</span>
+                    <span className="text-slate-500 text-sm">No linked assets</span>
                   )}
                 </td>
               </tr>
@@ -1782,40 +1809,40 @@ function AssessmentTab({
         </div>
 
         {clauseMappings && clauseMappings.length > 0 && (
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <h4 className="mb-3 font-medium text-black">AI Suggested Clause Mappings</h4>
-            <p className="text-sm text-gray-600 mb-2">Click "Link to Requirement" to create actual links.</p>
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <h4 className="mb-3 font-medium text-slate-800">AI Suggested Clause Mappings</h4>
+            <p className="text-sm text-slate-600 mb-2">Click "Link to Requirement" to create actual links.</p>
             <ul className="space-y-2">
               {clauseMappings.map((clause, idx) => (
-                <li key={idx} className="rounded-lg border border-gray-200">
+                <li key={idx} className="rounded-lg border border-slate-200">
                   <div
                     className="flex items-center justify-between p-3 cursor-pointer"
                     onClick={() => toggleClause(idx)}
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-black">{clause.framework_name}</span>
-                        <span className="text-sm text-gray-500">{clause.control_id}</span>
+                        <span className="text-sm font-medium text-slate-800">{clause.framework_name}</span>
+                        <span className="text-sm text-slate-500">{clause.control_id}</span>
                       </div>
-                      <p className="text-sm text-gray-700">{clause.control_title}</p>
+                      <p className="text-sm text-slate-700">{clause.control_title}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`text-xs font-semibold ${getCoverageTypeStyle(clause.coverage_type)}`}>{clause.coverage_type}</span>
+                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold capitalize ${getCoverageTypeStyle(clause.coverage_type)}`}>{clause.coverage_type}</span>
                       <ChevronDown className={`h-4 w-4 transform transition-transform ${expandedClauses.has(idx) ? 'rotate-180' : ''}`} />
                     </div>
                   </div>
                   {expandedClauses.has(idx) && (
-                    <div className="border-t border-gray-200 bg-gray-50 p-3">
-                      <p className="text-sm text-gray-600">Clause: {clause.clause_reference}</p>
-                      <p className="text-sm italic text-gray-600">{clause.matching_rationale}</p>
-                      <p className="text-sm text-gray-600">Confidence: {clause.confidence}%</p>
+                    <div className="border-t border-slate-200 bg-slate-50 p-3">
+                      <p className="text-sm text-slate-600">Clause: {clause.clause_reference}</p>
+                      <p className="text-sm italic text-slate-600">{clause.matching_rationale}</p>
+                      <p className="text-sm text-slate-600">Confidence: {clause.confidence}%</p>
                       <div className="mt-2 flex items-center justify-between">
                         <button
                           onClick={() => { setLinkingClauseIndex(idx); onLinkFromAI(clause); }}
                           disabled={isLinkingPending || isClauseLinked(clause)}
                           className={`rounded-lg px-3 py-1 text-sm font-medium ${
                             isClauseLinked(clause)
-                              ? 'bg-gray-200 text-gray-500'
+                              ? 'bg-slate-200 text-slate-500'
                               : 'bg-primary-600 text-white hover:bg-primary-700'
                           }`}
                         >
@@ -1826,7 +1853,7 @@ function AssessmentTab({
                             : 'Link to Requirement'}
                         </button>
                         {linkFeedback && linkingClauseIndex === idx && (
-                          <p className={`text-xs ${linkFeedback.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                          <p className={`text-xs ${linkFeedback.type === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
                             {linkFeedback.message}
                           </p>
                         )}
@@ -1839,77 +1866,77 @@ function AssessmentTab({
           </div>
         )}
 
-        <div className="mt-4 pt-3 border-t border-gray-200/30 flex items-center gap-6 text-xs text-gray-600">
+        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-6 text-xs text-slate-600">
           <span className="flex items-center gap-1.5">
-            <Shield className="h-3.5 w-3.5 text-blue-600" />
-            <span className="font-medium text-gray-700">{(assessment?.compliance_frameworks || (data as AIAssessment)?.gap_analysis?.compliance_frameworks)?.length || 0}</span> frameworks detected
+            <Shield className="h-3.5 w-3.5 text-primary-600" />
+            <span className="font-medium text-slate-700">{(assessment?.compliance_frameworks || (data as AIAssessment)?.gap_analysis?.compliance_frameworks)?.length || 0}</span> frameworks detected
           </span>
           <span className="flex items-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-blue-400" />
-            <span className="font-medium text-gray-700">{controlsData?.total_mappings || 0}</span> controls linked
+            <ShieldCheck className="h-3.5 w-3.5 text-primary-600" />
+            <span className="font-medium text-slate-700">{controlsData?.total_mappings || 0}</span> controls linked
           </span>
           <span className="flex items-center gap-1.5">
-            <Building2 className="h-3.5 w-3.5 text-green-400" />
-            <span className="font-medium text-gray-700">{assetsData?.total || 0}</span> assets associated
+            <Building2 className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="font-medium text-slate-700">{assetsData?.total || 0}</span> assets associated
           </span>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
-        <div className="rounded-lg bg-gray-50 p-4">
-          <h4 className="mb-3 flex items-center gap-2 font-medium text-black">
-            <Shield className="h-4 w-4 text-blue-400" />
+        <div className="rounded-lg bg-slate-50 p-4">
+          <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-800">
+            <Shield className="h-4 w-4 text-primary-600" />
             Detected Controls
           </h4>
           {(assessment?.detected_controls || (data as AIAssessment)?.gap_analysis?.detected_controls)?.length ? (
             <ul className="space-y-1">
               {((assessment?.detected_controls || (data as AIAssessment)?.gap_analysis?.detected_controls) || []).map((control, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                  <CheckCircle className="mt-0.5 h-3 w-3 shrink-0 text-green-400" />
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                  <CheckCircle className="mt-0.5 h-3 w-3 shrink-0 text-emerald-600" />
                   {control}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-500">No controls detected</p>
+            <p className="text-sm text-slate-500">No controls detected</p>
           )}
         </div>
 
-        <div className="rounded-lg bg-gray-50 p-4">
-          <h4 className="mb-3 flex items-center gap-2 font-medium text-black">
-            <AlertTriangle className="h-4 w-4 text-yellow-400" />
+        <div className="rounded-lg bg-slate-50 p-4">
+          <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-800">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
             Compliance Gaps
           </h4>
           {(assessment?.compliance_gaps || (data as AIAssessment)?.gap_analysis?.gaps)?.length ? (
             <ul className="space-y-1">
               {((assessment?.compliance_gaps || (data as AIAssessment)?.gap_analysis?.gaps) || []).map((gap, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-yellow-400" />
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600" />
                   {gap}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-500">No gaps identified</p>
+            <p className="text-sm text-slate-500">No gaps identified</p>
           )}
         </div>
 
-        <div className="rounded-lg bg-gray-50 p-4">
-          <h4 className="mb-3 flex items-center gap-2 font-medium text-black">
-            <Info className="h-4 w-4 text-blue-600" />
+        <div className="rounded-lg bg-slate-50 p-4">
+          <h4 className="mb-3 flex items-center gap-2 font-medium text-slate-800">
+            <Info className="h-4 w-4 text-primary-600" />
             Recommendations
           </h4>
           {(assessment?.recommendations || (data as AIAssessment)?.gap_analysis?.recommendations)?.length ? (
             <ul className="space-y-1">
               {((assessment?.recommendations || (data as AIAssessment)?.gap_analysis?.recommendations) || []).map((rec, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                  <Info className="mt-0.5 h-3 w-3 shrink-0 text-blue-600" />
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                  <Info className="mt-0.5 h-3 w-3 shrink-0 text-primary-600" />
                   {rec}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-gray-500">No recommendations</p>
+            <p className="text-sm text-slate-500">No recommendations</p>
           )}
         </div>
       </div>
@@ -1918,6 +1945,7 @@ function AssessmentTab({
 }
 
 function ControlsTab({
+  evidenceId,
   controlsData,
   usageData,
   onUnlink,
@@ -1927,6 +1955,7 @@ function ControlsTab({
   onLinkControl,
   isLinkingControl,
 }: {
+  evidenceId: number;
   controlsData?: ControlsResponse;
   usageData?: AllLinksResponse;
   onUnlink: (mappingId: number) => void;
@@ -1938,7 +1967,7 @@ function ControlsTab({
 }) {
   if (!controlsData) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-8">
         <PageLoader size="md" />
       </div>
     );
@@ -1963,11 +1992,20 @@ function ControlsTab({
     }))
   );
 
+  // Already-linked parsed-control ids, so AI suggestions hide what's linked.
+  const linkedParsedControlIds = new Set<number>(
+    (controlsData.by_framework || []).flatMap((fw) =>
+      fw.controls
+        .map((m) => m.parsed_control?.id)
+        .filter((x): x is number => typeof x === 'number')
+    )
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="flex items-center gap-2 text-base sm:text-lg font-semibold text-black">
-          <Shield className="h-5 w-5 text-blue-600" />
+        <h3 className="flex items-center gap-2 text-base sm:text-lg font-semibold text-slate-800">
+          <Shield className="h-5 w-5 text-primary-600" />
           Linked Controls ({totalControls})
         </h3>
         <InlineLinkPicker
@@ -1985,33 +2023,45 @@ function ControlsTab({
         />
       </div>
 
+      <AiLinkRecommendations
+        evidenceId={evidenceId}
+        target="controls"
+        linkedIds={linkedParsedControlIds}
+        busy={isLinkingControl}
+        onLinkRec={(r) => {
+          if (r.meta?.framework_id) onLinkControl(r.meta.framework_id, r.id);
+        }}
+      />
+
       <div className="grid gap-6 xl:grid-cols-[2fr,1fr]">
         <div>
           {totalControls === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50 py-12 text-center">
-              <Shield className="mb-4 h-12 w-12 text-gray-400" />
-              <p className="text-lg font-medium text-black">No Linked Controls</p>
-              <p className="text-gray-600">Link this evidence to compliance controls</p>
+            <div className="flex flex-col items-center justify-center rounded-lg border border-slate-200 bg-slate-50 py-8 text-center">
+              <div className="mb-3 inline-flex rounded-lg bg-slate-100 p-2.5 text-slate-400">
+                <Shield className="h-6 w-6" />
+              </div>
+              <p className="text-sm font-medium text-slate-900">No Linked Controls</p>
+              <p className="mt-1 text-xs text-slate-500">Link this evidence to compliance controls</p>
             </div>
           ) : (
             <div className="space-y-4">
               {controlsData.normalized_controls.length > 0 && (
                 <div>
-                  <h4 className="mb-3 text-sm font-medium text-gray-600">Normalized Controls</h4>
+                  <h4 className="mb-3 text-sm font-medium text-slate-600">Normalized Controls</h4>
                   <div className="space-y-2">
                     {controlsData.normalized_controls.map((mapping) => (
-                      <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
+                      <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
                         <div className="flex items-center gap-3">
-                          <ShieldCheck className="h-5 w-5 text-blue-600" />
+                          <ShieldCheck className="h-5 w-5 text-primary-600" />
                           <div>
-                            <span className="text-sm font-medium text-blue-600">{mapping.normalized_control?.code}</span>
-                            <p className="text-black">{mapping.normalized_control?.name}</p>
+                            <span className="text-sm font-medium text-primary-600">{mapping.normalized_control?.code}</span>
+                            <p className="text-slate-800">{mapping.normalized_control?.name}</p>
                           </div>
                         </div>
                         <button
                           onClick={() => onUnlink(mapping.id)}
                           disabled={isUnlinking}
-                          className="rounded p-2 text-gray-600 hover:bg-gray-100 hover:text-red-400"
+                          className="rounded p-2 text-slate-600 hover:bg-slate-100 hover:text-rose-600"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -2023,19 +2073,19 @@ function ControlsTab({
 
               {controlsData.by_framework.map((framework) => (
                 <div key={framework.framework_id}>
-                  <h4 className="mb-3 text-sm font-medium text-gray-600">
+                  <h4 className="mb-3 text-sm font-medium text-slate-600">
                     {framework.framework_name} ({framework.framework_code})
                   </h4>
                   <div className="space-y-2">
                     {framework.controls.map((mapping) => (
-                      <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-gray-50 p-3">
+                      <div key={mapping.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-3">
                         <div className="flex items-center gap-3">
-                          <Shield className="h-5 w-5 text-blue-400" />
+                          <Shield className="h-5 w-5 text-primary-600" />
                           <div>
-                            <span className="text-sm font-medium text-blue-400">
+                            <span className="text-sm font-medium text-primary-600">
                               {mapping.framework_control?.code || mapping.parsed_control?.control_id}
                             </span>
-                            <p className="text-black">
+                            <p className="text-slate-800">
                               {mapping.framework_control?.name || mapping.parsed_control?.title}
                             </p>
                           </div>
@@ -2043,7 +2093,7 @@ function ControlsTab({
                         <button
                           onClick={() => onUnlink(mapping.id)}
                           disabled={isUnlinking}
-                          className="rounded p-2 text-gray-600 hover:bg-gray-100 hover:text-red-400"
+                          className="rounded p-2 text-slate-600 hover:bg-slate-100 hover:text-rose-600"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -2056,66 +2106,166 @@ function ControlsTab({
           )}
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-          <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-700">
-            <Link2 className="h-4 w-4 text-blue-600" />
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700">
+            <Link2 className="h-4 w-4 text-primary-600" />
             Linked In ({totalUsage})
           </h4>
           {!usageData ? (
             <div className="flex items-center justify-center py-6">
-              <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+              <Loader2 className="h-5 w-5 animate-spin text-primary-600" />
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm text-gray-700">
+              <div className="flex items-center justify-between text-sm text-slate-700">
                 <span>Assessments</span>
-                <span className="font-medium text-black">{assessmentUsageTotal}</span>
+                <span className="font-medium text-slate-800">{assessmentUsageTotal}</span>
               </div>
-              <div className="flex items-center justify-between text-sm text-gray-700">
+              <div className="flex items-center justify-between text-sm text-slate-700">
                 <span>Assets</span>
-                <span className="font-medium text-black">{usageData.assets.total}</span>
+                <span className="font-medium text-slate-800">{usageData.assets.total}</span>
               </div>
-              <div className="flex items-center justify-between text-sm text-gray-700">
+              <div className="flex items-center justify-between text-sm text-slate-700">
                 <span>Risks</span>
-                <span className="font-medium text-black">{usageData.risks.total}</span>
+                <span className="font-medium text-slate-800">{usageData.risks.total}</span>
               </div>
-              <div className="flex items-center justify-between text-sm text-gray-700">
+              <div className="flex items-center justify-between text-sm text-slate-700">
                 <span>Incidents</span>
-                <span className="font-medium text-black">{usageData.incidents.total}</span>
+                <span className="font-medium text-slate-800">{usageData.incidents.total}</span>
               </div>
-              <div className="flex items-center justify-between text-sm text-gray-700">
+              <div className="flex items-center justify-between text-sm text-slate-700">
                 <span>Policy Statements</span>
-                <span className="font-medium text-black">{usageData.policy_statements.total}</span>
+                <span className="font-medium text-slate-800">{usageData.policy_statements.total}</span>
               </div>
 
               {assessmentUsageLinks.length > 0 && (
-                <div className="pt-2 border-t border-gray-200">
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Assessment Usage</p>
+                <div className="pt-2 border-t border-slate-200">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">Assessment Usage</p>
                   <div className="space-y-1.5">
                     {assessmentUsageLinks.slice(0, 5).map((link) => (
                       <Link
                         key={link.id}
                         href={link.assessment_id ? `/compliance/assessments/${link.assessment_id}` : '#'}
-                        className={`block rounded bg-white px-2 py-1.5 text-xs ${link.assessment_id ? 'text-blue-600 hover:text-blue-700' : 'text-gray-600'}`}
+                        className={`block rounded bg-white px-2 py-1.5 text-xs ${link.assessment_id ? 'text-primary-600 hover:text-primary-700' : 'text-slate-600'}`}
                       >
                         {link.assessment_name || `Assessment Item #${link.assessment_item_id}`}
                         {link.item_number ? ` • Item ${link.item_number}` : ''}
                       </Link>
                     ))}
                     {assessmentUsageLinks.length > 5 && (
-                      <p className="text-xs text-gray-500">+{assessmentUsageLinks.length - 5} more assessment links</p>
+                      <p className="text-xs text-slate-500">+{assessmentUsageLinks.length - 5} more assessment links</p>
                     )}
                   </div>
                 </div>
               )}
 
               {totalUsage === 0 && (
-                <p className="text-sm text-gray-500">This evidence is not linked to other modules yet.</p>
+                <p className="text-sm text-slate-500">This evidence is not linked to other modules yet.</p>
               )}
             </div>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── AI link recommendations for one cross-module section ────────────────────
+type AiLinkRec = {
+  id: number;
+  code?: string | null;
+  title?: string | null;
+  subtitle?: string | null;
+  confidence?: number | null;
+  coverage_type?: string | null;
+  rationale?: string | null;
+  link_source?: string | null;
+  meta?: { framework_id?: number } | null;
+};
+
+function AiLinkRecommendations({
+  evidenceId, target, onLink, onLinkRec, linkedIds, busy,
+}: {
+  evidenceId: number;
+  target: 'risks' | 'assets' | 'incidents' | 'policy_statements' | 'controls';
+  onLink?: (id: number) => void;
+  onLinkRec?: (rec: AiLinkRec) => void;
+  linkedIds: Set<number>;
+  busy?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const r = await apiClient.post(`/evidence-mgmt/ai/${evidenceId}/recommend-links`, null, { params: { target } });
+      return r.data as { recommendations: AiLinkRec[]; ai_available: boolean; candidate_count: number };
+    },
+  });
+  const recs = (mutation.data?.recommendations || []).filter((r) => !linkedIds.has(r.id));
+  const link = (r: AiLinkRec) => { if (onLinkRec) onLinkRec(r); else onLink?.(r.id); };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => { setOpen(true); mutation.mutate(); }}
+        className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-primary-50 px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-50"
+      >
+        <Brain className="h-3.5 w-3.5" /> Recommend with AI
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border border-primary-100 bg-primary-50 p-2.5">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700">
+          <Brain className="h-3.5 w-3.5" /> AI suggestions
+          {mutation.data && !mutation.data.ai_available && (
+            <span className="font-normal text-slate-500">(keyword match)</span>
+          )}
+        </span>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => mutation.mutate()} disabled={mutation.isPending}
+            className="text-[11px] text-slate-500 hover:text-slate-700 disabled:opacity-50">
+            {mutation.isPending ? 'Analyzing…' : 'Re-run'}
+          </button>
+          <button type="button" onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-600">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      {mutation.isPending ? (
+        <div className="flex items-center gap-2 py-2 text-xs text-slate-500">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analyzing evidence…
+        </div>
+      ) : mutation.isError ? (
+        <p className="py-1 text-xs text-rose-500">Could not get recommendations.</p>
+      ) : recs.length === 0 ? (
+        <p className="py-1 text-xs text-slate-400">No strong matches found.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {recs.map((r) => (
+            <div key={r.id} className="flex items-start justify-between gap-2 rounded-md border border-primary-100 bg-white px-2.5 py-1.5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  {r.code && <span className="font-mono text-[10px] text-slate-500">{r.code}</span>}
+                  <span className="truncate text-xs font-medium text-slate-800">{r.title || `#${r.id}`}</span>
+                  {typeof r.confidence === 'number' && (
+                    <span className="rounded-full border border-primary-200 bg-primary-50 px-1.5 text-[10px] text-primary-600">
+                      {Math.round(r.confidence * 100)}%
+                    </span>
+                  )}
+                </div>
+                {r.rationale && <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-500">{r.rationale}</p>}
+              </div>
+              <button type="button" onClick={() => link(r)} disabled={busy}
+                className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+                <Plus className="h-3 w-3" /> Link
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -2204,7 +2354,7 @@ function CrossLinksTab({
   void onOpenRiskModal; void onOpenAssetModal; void onOpenIncidentModal; void onOpenPolicyModal;
   if (!links) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-8">
         <PageLoader size="md" />
       </div>
     );
@@ -2225,9 +2375,9 @@ function CrossLinksTab({
     children: React.ReactNode;
     addButton?: React.ReactNode;
   }) => (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h4 className="flex items-center gap-2 font-medium text-black">
+        <h4 className="flex items-center gap-2 font-medium text-slate-800">
           <Icon className={`h-5 w-5 ${iconColor}`} />
           {title} ({count})
         </h4>
@@ -2240,8 +2390,8 @@ function CrossLinksTab({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-black">
-          <Link2 className="h-5 w-5 text-blue-600" />
+        <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-800">
+          <Link2 className="h-5 w-5 text-primary-600" />
           Cross-Module Links ({links.total_links})
         </h3>
       </div>
@@ -2250,7 +2400,7 @@ function CrossLinksTab({
         <LinkSection
           title="Linked Assessments"
           icon={ClipboardList}
-          iconColor="text-emerald-500"
+          iconColor="text-slate-400"
           count={linkedAssessments?.total ?? 0}
         >
           {(linkedAssessments?.controls?.length ?? 0) > 0 ? (
@@ -2259,31 +2409,31 @@ function CrossLinksTab({
                 <div key={c.link_id} className="flex items-start justify-between gap-2 rounded bg-white p-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 text-sm">
-                      <span className="font-mono font-semibold text-gray-700">{c.control_id}</span>
-                      <span className="truncate text-gray-500">· {c.domain}</span>
+                      <span className="font-mono font-semibold text-slate-700">{c.control_id}</span>
+                      <span className="truncate text-slate-500">· {c.domain}</span>
                     </div>
-                    <p className="truncate text-xs text-gray-500">{c.assessment_name}</p>
+                    <p className="truncate text-xs text-slate-500">{c.assessment_name}</p>
                   </div>
-                  <Link href="/compliance/assessments" className="shrink-0 text-gray-500 hover:text-black" title="Open PDPL Assessment">
+                  <Link href="/compliance/assessments" className="shrink-0 text-slate-500 hover:text-slate-800" title="Open PDPL Assessment">
                     <ExternalLink className="h-4 w-4" />
                   </Link>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-500">No linked assessment controls — this updates automatically when evidence is attached to a control.</p>
+            <p className="text-sm text-slate-500">No linked assessment controls — this updates automatically when evidence is attached to a control.</p>
           )}
         </LinkSection>
 
         <LinkSection
           title="Linked Risks"
           icon={AlertTriangle}
-          iconColor="text-red-400"
+          iconColor="text-rose-600"
           count={links.risks.total}
           addButton={
             <InlineLinkPicker
               triggerLabel="Add"
-              triggerClassName="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+              triggerClassName="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-primary-600 hover:bg-primary-50 transition-colors disabled:opacity-50"
               triggerIcon={<Plus className="h-4 w-4" />}
               items={riskItems}
               isLoading={isLinkingRisk}
@@ -2299,19 +2449,19 @@ function CrossLinksTab({
               {links.risks.links.map((link) => (
                 <div key={link.id} className="flex items-center justify-between rounded bg-white p-2">
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-red-400" />
-                    <Link href={`/risks/${link.risk_id}`} className="text-sm text-black hover:text-blue-600">
+                    <AlertTriangle className="h-4 w-4 text-rose-600" />
+                    <Link href={`/risks/${link.risk_id}`} className="text-sm text-slate-800 hover:text-primary-600">
                       {link.risk?.title || `Risk #${link.risk_id}`}
                     </Link>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Link href={`/risks/${link.risk_id}`} className="text-gray-600 hover:text-black">
+                    <Link href={`/risks/${link.risk_id}`} className="text-slate-600 hover:text-slate-800">
                       <ExternalLink className="h-4 w-4" />
                     </Link>
                     <button
                       onClick={() => onUnlinkRisk(link.id)}
                       disabled={isUnlinking}
-                      className="text-gray-600 hover:text-red-400"
+                      className="text-slate-600 hover:text-rose-600"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -2320,19 +2470,21 @@ function CrossLinksTab({
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-500">No linked risks</p>
+            <p className="text-sm text-slate-500">No linked risks</p>
           )}
+          <AiLinkRecommendations evidenceId={evidenceId} target="risks"
+            onLink={onLinkRisk} linkedIds={linkedRiskIds} busy={isLinkingRisk} />
         </LinkSection>
 
         <LinkSection 
           title="Linked Assets" 
           icon={Building2} 
-          iconColor="text-blue-400"
+          iconColor="text-primary-600"
           count={links.assets.total}
           addButton={
             <InlineLinkPicker
               triggerLabel="Add"
-              triggerClassName="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+              triggerClassName="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-primary-600 hover:bg-primary-50 transition-colors disabled:opacity-50"
               triggerIcon={<Plus className="h-4 w-4" />}
               items={assetItems}
               isLoading={isLinkingAsset}
@@ -2348,19 +2500,19 @@ function CrossLinksTab({
               {links.assets.links.map((link) => (
                 <div key={link.id} className="flex items-center justify-between rounded bg-white p-2">
                   <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-blue-400" />
-                    <Link href={`/assets/${link.asset_id}`} className="text-sm text-black hover:text-blue-600">
+                    <Building2 className="h-4 w-4 text-primary-600" />
+                    <Link href={`/assets/${link.asset_id}`} className="text-sm text-slate-800 hover:text-primary-600">
                       {link.asset?.name || `Asset #${link.asset_id}`}
                     </Link>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Link href={`/assets/${link.asset_id}`} className="text-gray-600 hover:text-black">
+                    <Link href={`/assets/${link.asset_id}`} className="text-slate-600 hover:text-slate-800">
                       <ExternalLink className="h-4 w-4" />
                     </Link>
                     <button
                       onClick={() => onUnlinkAsset(link.id)}
                       disabled={isUnlinking}
-                      className="text-gray-600 hover:text-red-400"
+                      className="text-slate-600 hover:text-rose-600"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -2369,19 +2521,21 @@ function CrossLinksTab({
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-500">No linked assets</p>
+            <p className="text-sm text-slate-500">No linked assets</p>
           )}
+          <AiLinkRecommendations evidenceId={evidenceId} target="assets"
+            onLink={onLinkAsset} linkedIds={linkedAssetIds} busy={isLinkingAsset} />
         </LinkSection>
 
         <LinkSection 
           title="Linked Incidents" 
           icon={AlertCircle} 
-          iconColor="text-orange-400"
+          iconColor="text-orange-600"
           count={links.incidents.total}
           addButton={
             <InlineLinkPicker
               triggerLabel="Add"
-              triggerClassName="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+              triggerClassName="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-primary-600 hover:bg-primary-50 transition-colors disabled:opacity-50"
               triggerIcon={<Plus className="h-4 w-4" />}
               items={incidentItems}
               isLoading={isLinkingIncident}
@@ -2397,18 +2551,18 @@ function CrossLinksTab({
               {links.incidents.links.map((link) => (
                 <div key={link.id} className="flex items-center justify-between rounded bg-white p-2">
                   <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-orange-400" />
-                    <span className="text-sm text-black">
+                    <AlertCircle className="h-4 w-4 text-orange-600" />
+                    <span className="text-sm text-slate-800">
                       {link.incident?.title || `Incident #${link.incident_id}`}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     {link.incident && (
                       <span className={`rounded px-2 py-0.5 text-xs ${
-                        link.incident.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
-                        link.incident.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
-                        link.incident.severity === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                        'bg-green-500/20 text-green-400'
+                        link.incident.severity === 'critical' ? 'bg-rose-50 text-rose-600' :
+                        link.incident.severity === 'high' ? 'bg-orange-50 text-orange-600' :
+                        link.incident.severity === 'medium' ? 'bg-amber-50 text-amber-600' :
+                        'bg-emerald-50 text-emerald-600'
                       }`}>
                         {link.incident.severity}
                       </span>
@@ -2416,7 +2570,7 @@ function CrossLinksTab({
                     <button
                       onClick={() => onUnlinkIncident(link.id)}
                       disabled={isUnlinking}
-                      className="text-gray-600 hover:text-red-400"
+                      className="text-slate-600 hover:text-rose-600"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -2425,14 +2579,16 @@ function CrossLinksTab({
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-500">No linked incidents</p>
+            <p className="text-sm text-slate-500">No linked incidents</p>
           )}
+          <AiLinkRecommendations evidenceId={evidenceId} target="incidents"
+            onLink={onLinkIncident} linkedIds={linkedIncidentIds} busy={isLinkingIncident} />
         </LinkSection>
 
         <LinkSection
           title="Policy Statements"
           icon={FileText}
-          iconColor="text-purple-400"
+          iconColor="text-primary-600"
           count={links.policy_statements.total}
           addButton={
             <PolicyStatementPicker
@@ -2445,28 +2601,49 @@ function CrossLinksTab({
         >
           {links.policy_statements.links.length > 0 ? (
             <div className="space-y-2">
-              {links.policy_statements.links.map((link) => (
-                <div key={link.id} className="flex items-center justify-between rounded bg-white p-2">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-purple-400" />
-                    <div>
-                      <span className="text-xs text-purple-500">{link.policy_statement?.statement_code}</span>
-                      <p className="text-sm text-black">{link.policy_statement?.statement_summary || 'Policy Statement'}</p>
+              {links.policy_statements.links.map((link) => {
+                const ps = link.policy_statement;
+                const policyName = ps?.document_title || 'Policy';
+                const locusParts = [
+                  ps?.source_section ? `§ ${ps.source_section}` : null,
+                  ps?.source_page ? `p.${ps.source_page}` : null,
+                  ps?.statement_code || null,
+                ].filter(Boolean);
+                return (
+                  <div key={link.id} className="flex items-start justify-between rounded bg-white p-2">
+                    <div className="flex items-start gap-2 min-w-0">
+                      <FileText className="h-4 w-4 text-primary-600 mt-0.5 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-medium text-slate-800 truncate">{policyName}</span>
+                          {ps?.document_code && (
+                            <span className="text-[10px] text-slate-400">{ps.document_code}</span>
+                          )}
+                        </div>
+                        {locusParts.length > 0 && (
+                          <p className="text-xs text-slate-500">{locusParts.join(' · ')}</p>
+                        )}
+                        {ps?.statement_summary && (
+                          <p className="text-xs text-slate-600 mt-0.5 line-clamp-2">{ps.statement_summary}</p>
+                        )}
+                      </div>
                     </div>
+                    <button
+                      onClick={() => onUnlinkPolicy(link.id)}
+                      disabled={isUnlinking}
+                      className="text-slate-600 hover:text-rose-600 flex-shrink-0 ml-2"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => onUnlinkPolicy(link.id)}
-                    disabled={isUnlinking}
-                    className="text-gray-600 hover:text-red-400"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
-            <p className="text-sm text-gray-500">No linked policy statements</p>
+            <p className="text-sm text-slate-500">No linked policy statements</p>
           )}
+          <AiLinkRecommendations evidenceId={evidenceId} target="policy_statements"
+            onLink={(id) => onLinkPolicies([id])} linkedIds={linkedPolicyIds} busy={isLinkingPolicy} />
         </LinkSection>
       </div>
     </div>
@@ -2585,7 +2762,7 @@ function PolicyStatementPicker({
         type="button"
         onClick={() => setOpen(true)}
         disabled={isLinking}
-        className="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+        className="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-primary-600 hover:bg-primary-50 transition-colors disabled:opacity-50"
       >
         {isLinking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
         Add
@@ -2597,16 +2774,16 @@ function PolicyStatementPicker({
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-xl border border-gray-200 bg-white shadow-2xl"
+            className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-xl border border-slate-200 bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
               <div className="min-w-0">
                 <h3 className="text-sm font-semibold text-slate-900">
                   {selectedDocId ? 'Pick statements to link' : 'Pick a governance document'}
                 </h3>
-                <p className="mt-0.5 text-xs text-gray-500">
+                <p className="mt-0.5 text-xs text-slate-500">
                   {selectedDocId
                     ? `From "${selectedDocTitle?.title || 'Document'}"`
                     : 'Choose a document to see its policy statements'}
@@ -2615,7 +2792,7 @@ function PolicyStatementPicker({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-slate-900"
+                className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                 aria-label="Close"
               >
                 <X className="h-4 w-4" />
@@ -2625,42 +2802,42 @@ function PolicyStatementPicker({
             {/* Stage 1: pick a document */}
             {!selectedDocId && (
               <>
-                <div className="border-b border-gray-100 p-3">
+                <div className="border-b border-slate-100 p-3">
                   <div className="relative">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                       autoFocus
                       type="text"
                       value={docSearch}
                       onChange={(e) => setDocSearch(e.target.value)}
                       placeholder="Search documents by title, code, or type..."
-                      className="w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      className="w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                     />
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto">
                   {filteredDocs.length === 0 ? (
-                    <p className="px-4 py-12 text-center text-sm text-gray-500">
+                    <p className="px-4 py-8 text-center text-sm text-slate-500">
                       {documents.length === 0
                         ? 'No governance documents found in this tenant.'
                         : 'No documents match your search.'}
                     </p>
                   ) : (
-                    <ul className="divide-y divide-gray-100">
+                    <ul className="divide-y divide-slate-100">
                       {filteredDocs.map((d) => (
                         <li key={d.id}>
                           <button
                             type="button"
                             onClick={() => setSelectedDocId(d.id)}
-                            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50"
+                            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50"
                           >
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium text-slate-900">{d.title}</p>
-                              <p className="truncate text-xs text-gray-500">
+                              <p className="truncate text-xs text-slate-500">
                                 {[d.code, d.docType].filter(Boolean).join(' · ') || 'Document'}
                               </p>
                             </div>
-                            <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                            <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-400" />
                           </button>
                         </li>
                       ))}
@@ -2673,45 +2850,45 @@ function PolicyStatementPicker({
             {/* Stage 2: pick statements within that document */}
             {selectedDocId && (
               <>
-                <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2">
+                <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
                   <button
                     type="button"
                     onClick={() => setSelectedDocId(null)}
-                    className="flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 hover:text-slate-900"
+                    className="flex items-center gap-1 rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                     title="Back to documents"
                   >
                     <ChevronLeft className="h-3.5 w-3.5" /> Back to documents
                   </button>
-                  <div className="ml-auto text-xs text-gray-500">
+                  <div className="ml-auto text-xs text-slate-500">
                     {selectedStatementIds.size > 0 ? `${selectedStatementIds.size} selected` : 'Tick to link'}
                   </div>
                 </div>
-                <div className="border-b border-gray-100 p-3">
+                <div className="border-b border-slate-100 p-3">
                   <div className="relative">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                       autoFocus
                       type="text"
                       value={statementSearch}
                       onChange={(e) => setStatementSearch(e.target.value)}
                       placeholder="Search statements by code or text..."
-                      className="w-full rounded-md border border-gray-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      className="w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                     />
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto">
                   {statementsLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
                     </div>
                   ) : filteredStatements.length === 0 ? (
-                    <p className="px-4 py-12 text-center text-sm text-gray-500">
+                    <p className="px-4 py-8 text-center text-sm text-slate-500">
                       {(statementsForDoc?.statements || []).length === 0
                         ? 'This document has no parsed policy statements yet. Run the policy parser on the document first.'
                         : 'No statements match your search.'}
                     </p>
                   ) : (
-                    <ul className="divide-y divide-gray-100">
+                    <ul className="divide-y divide-slate-100">
                       {filteredStatements.map((s) => {
                         const alreadyLinked = alreadyLinkedStatementIds.has(s.id);
                         const isSelected = selectedStatementIds.has(s.id);
@@ -2719,21 +2896,21 @@ function PolicyStatementPicker({
                           <li key={s.id}>
                             <label
                               className={`flex items-start gap-3 px-4 py-3 text-sm ${
-                                alreadyLinked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-50'
+                                alreadyLinked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-slate-50'
                               }`}
                             >
                               <input
                                 type="checkbox"
-                                className="mt-1 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                className="mt-1 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                                 checked={isSelected || alreadyLinked}
                                 disabled={alreadyLinked}
                                 onChange={() => !alreadyLinked && toggleStatement(s.id)}
                               />
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-xs font-medium text-purple-600">
+                                <p className="truncate text-xs font-medium text-primary-600">
                                   {s.statement_code || `Statement #${s.id}`}
                                   {alreadyLinked && (
-                                    <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">
+                                    <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">
                                       already linked
                                     </span>
                                   )}
@@ -2753,11 +2930,11 @@ function PolicyStatementPicker({
             )}
 
             {/* Footer — only meaningful in stage 2 */}
-            <div className="flex items-center justify-between gap-2 border-t border-gray-100 px-4 py-3">
+            <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-4 py-3">
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
               >
                 Cancel
               </button>
@@ -2828,13 +3005,13 @@ function RecommendTargetsPanel({ evidenceId }: { evidenceId: number }) {
     : 0;
 
   return (
-    <div className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+    <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Brain className="h-4 w-4 text-indigo-600" />
+          <Brain className="h-4 w-4 text-primary-600" />
           <h3 className="text-sm font-semibold text-slate-900">Documents, controls &amp; assessments to map</h3>
           {data && (
-            <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-700">{total}</span>
+            <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700">{total}</span>
           )}
         </div>
         <button
@@ -2846,12 +3023,12 @@ function RecommendTargetsPanel({ evidenceId }: { evidenceId: number }) {
           {data ? 'Re-run recommendations' : 'Recommend with AI'}
         </button>
       </div>
-      <p className="mt-1 text-[11px] text-gray-500">
+      <p className="mt-1 text-[11px] text-slate-500">
         AI scans the governance documents, internal controls and active compliance assessments in this tenant and suggests where this evidence can be mapped or reused.
       </p>
 
       {mutation.isError && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
           <AlertCircle className="h-3.5 w-3.5" />
           {((mutation.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail) || 'Could not generate recommendations. Try again.'}
         </div>
@@ -2859,7 +3036,7 @@ function RecommendTargetsPanel({ evidenceId }: { evidenceId: number }) {
 
       {!data ? (
         !mutation.isPending && (
-          <div className="mt-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-center text-xs text-gray-500">
+          <div className="mt-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-xs text-slate-500">
             Click “Recommend with AI” to find related documents, internal controls and assessments for this evidence.
           </div>
         )
@@ -2875,11 +3052,11 @@ function RecommendTargetsPanel({ evidenceId }: { evidenceId: number }) {
             const Icon = section.icon;
             return (
               <div key={section.key}>
-                <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                  <Icon className="h-3.5 w-3.5" /> {section.label} <span className="text-gray-400">({items.length})</span>
+                <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <Icon className="h-3.5 w-3.5" /> {section.label} <span className="text-slate-400">({items.length})</span>
                 </p>
                 {items.length === 0 ? (
-                  <p className="text-[11px] text-gray-400">{section.emptyHint}</p>
+                  <p className="text-[11px] text-slate-400">{section.emptyHint}</p>
                 ) : (
                   <div className="space-y-1.5">
                     {items.map((item) => {
@@ -2889,19 +3066,19 @@ function RecommendTargetsPanel({ evidenceId }: { evidenceId: number }) {
                         <Link
                           key={`${section.key}-${item.id}`}
                           href={section.href(item)}
-                          className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 hover:border-primary-300 hover:bg-primary-50/30"
+                          className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 hover:border-primary-300 hover:bg-primary-50"
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
                               {item.code && <span className="text-xs font-semibold text-slate-800">{item.code}</span>}
                               <span className="truncate text-sm text-slate-700">{item.title || 'Untitled'}</span>
-                              {pct && <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600">{pct} match</span>}
+                              {pct && <span className="rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-medium text-primary-600">{pct} match</span>}
                               {item.coverage_type && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{item.coverage_type}</span>}
                             </div>
-                            {item.rationale && <p className="mt-0.5 text-[11px] text-gray-500">{item.rationale}</p>}
-                            {item.subtitle && <p className="mt-0.5 truncate text-[10px] text-gray-400">{item.subtitle}</p>}
+                            {item.rationale && <p className="mt-0.5 text-[11px] text-slate-500">{item.rationale}</p>}
+                            {item.subtitle && <p className="mt-0.5 truncate text-[10px] text-slate-400">{item.subtitle}</p>}
                           </div>
-                          <ExternalLink className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-gray-400" />
+                          <ExternalLink className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
                         </Link>
                       );
                     })}

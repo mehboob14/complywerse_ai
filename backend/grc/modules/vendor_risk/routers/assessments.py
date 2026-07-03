@@ -50,6 +50,8 @@ class ScoreRequest(BaseModel):
 
 
 class ApproveRequest(BaseModel):
+    # Deprecated & IGNORED — risk_rating is recomputed server-side from the score
+    # (TPRM-005). Kept only so older clients that still send it don't 422.
     risk_rating: Optional[str] = None
     recommendations: Optional[list] = None
 
@@ -438,16 +440,24 @@ def approve_assessment(
     assessment.completed_at = datetime.utcnow()
     assessment.updated_at = datetime.utcnow()
 
-    if payload.risk_rating:
-        assessment.risk_rating = payload.risk_rating
+    # TPRM-005: NEVER trust a client-supplied risk_rating — always recompute it
+    # server-side from the (server-computed) score. payload.risk_rating is ignored.
+    _basis = assessment.residual_score if assessment.residual_score is not None else assessment.inherent_score
+    if _basis is not None:
+        assessment.risk_rating = _calculate_risk_rating(_basis)
     if payload.recommendations:
         assessment.recommendations = payload.recommendations
 
-    # Update vendor risk scores from assessment
+    # Update vendor risk scores from assessment. Residual is clamped ≤ inherent
+    # (TPRM-004): controls can only reduce risk.
     vendor = db.query(Vendor).filter(Vendor.id == assessment.vendor_id).first()
     if vendor and assessment.inherent_score is not None:
         vendor.inherent_risk_score = assessment.inherent_score
-        vendor.residual_risk_score = assessment.residual_score
+        _res = assessment.residual_score
+        if _res is not None:
+            _res = min(_res, assessment.inherent_score)
+            assessment.residual_score = _res
+        vendor.residual_risk_score = _res
         vendor.risk_rating = assessment.risk_rating
         vendor.updated_at = datetime.utcnow()
 

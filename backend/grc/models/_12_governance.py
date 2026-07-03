@@ -68,6 +68,14 @@ class PolicyException(Base):
     expiry_date = Column(DateTime, nullable=True)
     review_date = Column(DateTime, nullable=True)
     is_expired = Column(Boolean, default=False)
+    # Linked IT assets (ids) — their CIA + criticality weight the exception's risk
+    # posture score. When the exception was actually closed/revoked (for the
+    # "closed on the date it had to be" timeliness metric).
+    linked_asset_ids = Column(JSON, default=list)
+    closed_at = Column(DateTime, nullable=True)
+    # When this exception's "potential risks" were promoted into the ERM risk
+    # register, the created risk's id (so we link out instead of re-promoting).
+    promoted_risk_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     metadata_ = Column("metadata", JSON, default={})

@@ -57,7 +57,9 @@ ADDED_COLUMNS = [
     ("grc_vendor_assessments", "row_version"),
     ("grc_vendor_assessments", "deleted_at"),
     ("grc_vendor_assessments", "rating_grade"),
+    ("grc_vendor_assessments", "team_roster"),
     ("grc_tpra_findings", "linked_risk_id"),
+    ("grc_tpra_findings", "linked_issue_id"),
 ]
 
 # Demo-only cleanup: tables that reference the demo vendor by vendor_id.

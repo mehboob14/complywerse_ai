@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { committeeApi, apiClient, frameworkUploadApi } from '@/lib/api';
@@ -14,12 +14,10 @@ import {
   UserPlus,
   UserMinus,
   X,
-  Clock,
   AlertCircle,
   ArrowLeft,
   Eye,
   Edit2,
-  Building2,
   Upload,
   Download,
   Paperclip,
@@ -180,34 +178,33 @@ interface AIComparisonResult {
 }
 
 const COMMITTEE_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  board: { label: 'Board', bg: 'bg-purple-500/20', text: 'text-purple-400' },
-  risk_committee: { label: 'Risk Committee', bg: 'bg-rose-500/20', text: 'text-rose-400' },
-  audit_committee: { label: 'Audit Committee', bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  compliance_committee: { label: 'Compliance Committee', bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  it_steering: { label: 'IT Steering', bg: 'bg-cyan-500/20', text: 'text-cyan-400' },
-  custom: { label: 'Custom', bg: 'bg-slate-500/20', text: 'text-slate-400' },
+  board: { label: 'Board', bg: 'bg-primary-50', text: 'text-primary-700' },
+  risk_committee: { label: 'Risk Committee', bg: 'bg-rose-50', text: 'text-rose-700' },
+  audit_committee: { label: 'Audit Committee', bg: 'bg-blue-50', text: 'text-blue-700' },
+  compliance_committee: { label: 'Compliance Committee', bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  it_steering: { label: 'IT Steering', bg: 'bg-slate-100', text: 'text-slate-600' },
+  custom: { label: 'Custom', bg: 'bg-slate-100', text: 'text-slate-600' },
 };
 
 const MEETING_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  regular: { label: 'Regular', bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  special: { label: 'Special', bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  emergency: { label: 'Emergency', bg: 'bg-rose-500/20', text: 'text-rose-400' },
+  regular: { label: 'Regular', bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  special: { label: 'Special', bg: 'bg-amber-50', text: 'text-amber-700' },
+  emergency: { label: 'Emergency', bg: 'bg-rose-50', text: 'text-rose-700' },
 };
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  scheduled: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  in_progress: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  cancelled: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  open: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  overdue: { bg: 'bg-rose-500/20', text: 'text-rose-400' },
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  superseded: { bg: 'bg-gray-500/20', text: 'text-gray-400' },
+  scheduled: { bg: 'bg-blue-50', text: 'text-blue-700' },
+  in_progress: { bg: 'bg-amber-50', text: 'text-amber-700' },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  cancelled: { bg: 'bg-slate-100', text: 'text-slate-600' },
+  open: { bg: 'bg-amber-50', text: 'text-amber-700' },
+  overdue: { bg: 'bg-rose-50', text: 'text-rose-700' },
+  draft: { bg: 'bg-slate-100', text: 'text-slate-600' },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  superseded: { bg: 'bg-slate-100', text: 'text-slate-500' },
 };
 
 const TABS = [
-  { id: 'overview', label: 'Overview', icon: Building2 },
   { id: 'members', label: 'Members', icon: Users },
   { id: 'charters', label: 'Charters', icon: FileText },
   { id: 'meetings', label: 'Meetings', icon: Calendar },
@@ -215,26 +212,26 @@ const TABS = [
 ];
 
 function getStatusIcon(s: string) {
-  if (s === 'covered') return <CheckCircle className="h-4 w-4 text-emerald-400" />;
-  if (s === 'partial') return <AlertTriangle className="h-4 w-4 text-amber-400" />;
-  if (s === 'missing') return <XCircle className="h-4 w-4 text-red-400" />;
-  if (s === 'exceeds') return <Star className="h-4 w-4 text-blue-400" />;
+  if (s === 'covered') return <CheckCircle className="h-4 w-4 text-emerald-600" />;
+  if (s === 'partial') return <AlertTriangle className="h-4 w-4 text-amber-600" />;
+  if (s === 'missing') return <XCircle className="h-4 w-4 text-rose-600" />;
+  if (s === 'exceeds') return <Star className="h-4 w-4 text-blue-600" />;
   return null;
 }
 
 function getStatusColor(s: string) {
-  if (s === 'covered') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
-  if (s === 'partial') return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
-  if (s === 'missing') return 'text-red-400 bg-red-500/10 border-red-500/30';
-  if (s === 'exceeds') return 'text-blue-400 bg-blue-500/10 border-blue-500/30';
-  return 'text-slate-400 bg-slate-500/10 border-slate-500/30';
+  if (s === 'covered') return 'text-emerald-700 bg-emerald-50 border-emerald-200';
+  if (s === 'partial') return 'text-amber-700 bg-amber-50 border-amber-200';
+  if (s === 'missing') return 'text-rose-700 bg-rose-50 border-rose-200';
+  if (s === 'exceeds') return 'text-blue-700 bg-blue-50 border-blue-200';
+  return 'text-slate-600 bg-slate-50 border-slate-200';
 }
 
 function getScoreColor(score: number) {
-  if (score >= 80) return 'text-emerald-400';
-  if (score >= 60) return 'text-amber-400';
-  if (score >= 40) return 'text-orange-400';
-  return 'text-red-400';
+  if (score >= 80) return 'text-emerald-600';
+  if (score >= 60) return 'text-amber-600';
+  if (score >= 40) return 'text-orange-600';
+  return 'text-rose-600';
 }
 
 function getScoreRingColor(score: number) {
@@ -250,10 +247,12 @@ export default function CommitteeDetailPage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('governance:committees:create');
   const canDelete = hasPermission('governance:committees:delete');
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('meetings');
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [isScheduleMeetingModalOpen, setIsScheduleMeetingModalOpen] = useState(false);
   const [isCreateActionModalOpen, setIsCreateActionModalOpen] = useState(false);
+  // Master-detail: which meeting's inline detail shows in the Meetings tab.
+  const [selectedMeetingId, setSelectedMeetingId] = useState<number | null>(null);
   const [newMember, setNewMember] = useState({ user_id: '', role: 'member' });
   const [newMeeting, setNewMeeting] = useState({
     title: '',
@@ -311,7 +310,7 @@ export default function CommitteeDetailPage() {
       const response = await committeeApi.getMembers(committeeId);
       return response.data as Member[];
     },
-    enabled: !!committee && (activeTab === 'members' || activeTab === 'overview' || isAddMemberModalOpen),
+    enabled: !!committee && (activeTab === 'members' || isAddMemberModalOpen),
     placeholderData: keepPreviousData,
   });
 
@@ -334,7 +333,7 @@ export default function CommitteeDetailPage() {
       const data = payload as { items?: Meeting[] };
       return data.items || [];
     },
-    enabled: !!committee && (activeTab === 'meetings' || activeTab === 'actions' || activeTab === 'overview' || isScheduleMeetingModalOpen || isCreateActionModalOpen),
+    enabled: !!committee,
     placeholderData: keepPreviousData,
   });
 
@@ -351,9 +350,31 @@ export default function CommitteeDetailPage() {
         assigned_to_name: item.assigned_to_name || item.assignee_name || '',
       })) as Action[];
     },
-    enabled: !!committee && (activeTab === 'actions' || activeTab === 'overview' || isCreateActionModalOpen),
+    enabled: !!committee,
     placeholderData: keepPreviousData,
   });
+
+  // Selected meeting's agenda + detail (minutes) for the master-detail panel.
+  const { data: selectedMeetingAgenda = [] } = useQuery({
+    queryKey: ['committee-meeting-agenda', selectedMeetingId],
+    enabled: !!selectedMeetingId,
+    queryFn: async () => {
+      const res = await committeeApi.getAgenda(selectedMeetingId as number);
+      return (Array.isArray(res.data) ? res.data : []) as any[];
+    },
+  });
+  const { data: selectedMeetingDetail } = useQuery({
+    queryKey: ['committee-meeting-detail', selectedMeetingId],
+    enabled: !!selectedMeetingId,
+    queryFn: async () => (await committeeApi.getMeeting(selectedMeetingId as number)).data as any,
+  });
+
+  // Default the Meetings tab to the first meeting; reset if the selected one vanishes.
+  useEffect(() => {
+    if (activeTab === 'meetings' && meetings && meetings.length > 0) {
+      setSelectedMeetingId((cur) => (cur && meetings.some((m) => m.id === cur) ? cur : meetings[0].id));
+    }
+  }, [activeTab, meetings]);
 
   const { data: currentUser } = useQuery({
     queryKey: ['current-user'],
@@ -691,7 +712,7 @@ export default function CommitteeDetailPage() {
           Back to Committees
         </Link>
         <div className="card p-12 text-center">
-          <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
+          <AlertCircle className="h-12 w-12 text-rose-600 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-slate-900 mb-2">Committee Not Found</h2>
           <p className="text-slate-600 mb-6">The committee you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.</p>
           <Link href="/governance/committees" className="btn-primary inline-flex items-center gap-2">
@@ -705,6 +726,9 @@ export default function CommitteeDetailPage() {
 
   const typeStyle = COMMITTEE_TYPE_LABELS[committee.committee_type] || COMMITTEE_TYPE_LABELS.custom;
   const activeCharter = charters?.find(c => c.status === 'active');
+  const selectedMeeting = (meetings || []).find((m) => m.id === selectedMeetingId) || null;
+  const meetingActions = (actions || []).filter((a) => a.meeting_id === selectedMeetingId);
+  const openActionCount = (actions || []).filter((a) => a.status === 'open' || a.status === 'in_progress').length;
   const normalizedTenantUsers = Array.from(
     new Map(
       ((tenantUsers || []) as TenantUser[])
@@ -733,8 +757,8 @@ export default function CommitteeDetailPage() {
 
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary-500/20">
-              <Users className="h-7 w-7 text-primary-400" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary-50">
+              <Users className="h-7 w-7 text-primary-600" />
             </div>
             <div>
               <div className="flex items-center gap-3">
@@ -772,6 +796,21 @@ export default function CommitteeDetailPage() {
         </div>
       </div>
 
+      {/* Compact single-line snapshot (replaces the old Overview tab + heavy stat cards). */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
+        <span><span className="font-semibold text-slate-900">{committee.member_count}</span> Members</span>
+        <span className="text-slate-300">·</span>
+        <span><span className="font-semibold text-slate-900">{meetings?.length || 0}</span> Meetings</span>
+        <span className="text-slate-300">·</span>
+        <span><span className="font-semibold text-slate-900">{openActionCount}</span> Open actions</span>
+        <span className="text-slate-300">·</span>
+        <span><span className="font-semibold text-slate-900">{charters?.length || 0}</span> Charters{activeCharter ? ' (1 active)' : ''}</span>
+        <span className="text-slate-300">·</span>
+        <span>Chair: <span className="font-medium text-slate-800">{committee.chair_name || '—'}</span></span>
+        <span>Secretary: <span className="font-medium text-slate-800">{committee.secretary_name || '—'}</span></span>
+        <span>Frequency: <span className="font-medium capitalize text-slate-800">{committee.meeting_frequency || '—'}</span></span>
+      </div>
+
       <div className="flex gap-1 border-b border-slate-200 overflow-x-auto">
         {TABS.map((tab) => (
           <button
@@ -779,8 +818,8 @@ export default function CommitteeDetailPage() {
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === tab.id
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
             }`}
           >
             <tab.icon className="h-4 w-4" />
@@ -789,136 +828,63 @@ export default function CommitteeDetailPage() {
         ))}
       </div>
 
-      {activeTab === 'overview' && (
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="card p-6 lg:col-span-2">
-            <h2 className="text-lg font-semibold text-black mb-4">Committee Details</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-black">Chair</p>
-                <p className="text-black font-medium">{committee.chair_name || '-'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-black">Secretary</p>
-                <p className="text-black font-medium">{committee.secretary_name || '-'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-black">Members</p>
-                <p className="text-black font-medium">{committee.member_count}</p>
-              </div>
-              <div>
-                <p className="text-sm text-black">Meeting Frequency</p>
-                <p className="text-black font-medium capitalize">{committee.meeting_frequency || '-'}</p>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-4">
-            {activeCharter && (
-              <div className="card p-4 border-emerald-500/30">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs text-emerald-400 font-medium uppercase tracking-wider mb-2">
-                      Active Charter
-                    </p>
-                    <p className="text-black font-medium">{activeCharter.title}</p>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-black">
-                      <span>v{activeCharter.version}</span>
-                      <span>{new Date(activeCharter.effective_date).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                  {activeCharter.file_name ? (
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadFile(activeCharter.id, activeCharter.file_name!)}
-                      className="flex items-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-500/30"
-                      title={`Download ${activeCharter.file_name}`}
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      Download
-                    </button>
-                  ) : activeCharter.content ? (
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadCharterContent(activeCharter)}
-                      className="flex items-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-500/30"
-                      title="Download AI-drafted charter as Markdown"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      Download Draft
-                    </button>
-                  ) : null}
-                </div>
-                {activeCharter.file_name && (
-                  <p className="text-xs text-slate-500 mt-3 truncate">{activeCharter.file_name}</p>
-                )}
-              </div>
-            )}
-            <div className="card p-4">
-              <p className="text-xs text-black font-medium uppercase tracking-wider mb-2">Quick Stats</p>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-black">Total Charters</span>
-                  <span className="text-black font-medium">{charters?.length || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-black">Meetings</span>
-                  <span className="text-black font-medium">{meetings?.length || 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-black">Open Actions</span>
-                  <span className="text-black font-medium">{actions?.filter(a => a.status === 'open' || a.status === 'in_progress').length || 0}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {activeTab === 'members' && (
         <div className="space-y-4">
           <div className="flex justify-end">
             {canCreate && (
-            <button onClick={() => setIsAddMemberModalOpen(true)} className="btn-primary flex items-center gap-2">
-              <UserPlus className="h-4 w-4" />
-              Add Member
-            </button>
+              <button onClick={() => setIsAddMemberModalOpen(true)} className="btn-primary flex items-center gap-2">
+                <UserPlus className="h-4 w-4" />
+                Add Member
+              </button>
             )}
           </div>
-          <div className="card overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-black">Name</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-black">Email</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-black">Role</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-black">Joined</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-black">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(members || []).map((member) => (
-                  <tr key={member.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 px-4 text-black">{member.user_name}</td>
-                    <td className="py-3 px-4 text-black">{member.user_email}</td>
-                    <td className="py-3 px-4">
-                      <span className="capitalize text-black">{member.role}</span>
-                    </td>
-                    <td className="py-3 px-4 text-black">{new Date(member.joined_at).toLocaleDateString()}</td>
-                    <td className="py-3 px-4">
-                      <button
-                        onClick={() => removeMemberMutation.mutate(member.user_id)}
-                        className="text-rose-400 hover:text-rose-300"
-                        title="Remove member"
-                        style={{ display: canDelete ? undefined : 'none' }}
-                      >
-                        <UserMinus className="h-4 w-4" />
-                      </button>
-                    </td>
+          {(!members || members.length === 0) ? (
+            <div className="card flex flex-col items-center py-8 text-center">
+              <Users className="mb-2 h-10 w-10 text-slate-300" />
+              <p className="mb-3 text-sm text-slate-500">No members yet.</p>
+              {canCreate && (
+                <button onClick={() => setIsAddMemberModalOpen(true)} className="btn-primary btn-sm inline-flex items-center gap-1.5">
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Add the first member
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Joined</th>
+                    <th className="text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {members.map((member) => (
+                    <tr key={member.id}>
+                      <td className="font-medium text-slate-800">{member.user_name}</td>
+                      <td>{member.user_email}</td>
+                      <td className="capitalize">{member.role}</td>
+                      <td>{new Date(member.joined_at).toLocaleDateString()}</td>
+                      <td className="text-right">
+                        {canDelete && (
+                          <button
+                            onClick={() => removeMemberMutation.mutate(member.user_id)}
+                            className="text-rose-600 hover:text-rose-700"
+                            title="Remove member"
+                          >
+                            <UserMinus className="h-4 w-4" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -975,24 +941,24 @@ export default function CommitteeDetailPage() {
           </div>
 
           {aiError && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-red-400">AI Error</p>
-                <p className="text-xs text-red-300 mt-1">{aiError}</p>
+                <p className="text-sm font-medium text-rose-600">AI Error</p>
+                <p className="text-xs text-rose-600 mt-1">{aiError}</p>
               </div>
-              <button onClick={() => setAiError(null)} className="ml-auto text-red-400 hover:text-red-300">
+              <button onClick={() => setAiError(null)} className="ml-auto text-rose-600 hover:text-rose-700">
                 <X className="h-4 w-4" />
               </button>
             </div>
           )}
 
           {showAiCharterPanel && aiCharterResult && (
-            <div className="rounded-xl border border-purple-500/30 bg-white p-6">
+            <div className="rounded-xl border border-primary-200 bg-white p-6">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-purple-500/20 p-2">
-                    <Sparkles className="h-5 w-5 text-purple-400" />
+                  <div className="rounded-lg bg-primary-50 p-2">
+                    <Sparkles className="h-5 w-5 text-primary-600" />
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-black">{aiCharterResult.charter.charter_title}</h3>
@@ -1028,14 +994,14 @@ export default function CommitteeDetailPage() {
 
               <div className="flex flex-wrap gap-1.5 mb-4">
                 {aiCharterResult.frameworks_analyzed.map((fw, i) => (
-                  <span key={i} className="rounded-full bg-indigo-500/20 px-2.5 py-0.5 text-[10px] font-medium text-indigo-700">
+                  <span key={i} className="rounded-full bg-primary-50 px-2.5 py-0.5 text-[10px] font-medium text-primary-700">
                     {fw}
                   </span>
                 ))}
               </div>
 
               {aiCharterResult.charter.summary && (
-                <p className="text-sm text-black mb-4 italic border-l-2 border-purple-500/50 pl-3">
+                <p className="text-sm text-black mb-4 italic border-l-2 border-primary-500 pl-3">
                   {aiCharterResult.charter.summary}
                 </p>
               )}
@@ -1048,7 +1014,7 @@ export default function CommitteeDetailPage() {
                       className="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition-colors"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="flex items-center justify-center h-6 w-6 rounded-full bg-purple-100 text-purple-600 text-xs font-bold">
+                        <span className="flex items-center justify-center h-6 w-6 rounded-full bg-primary-50 text-primary-600 text-xs font-bold">
                           {idx + 1}
                         </span>
                         <span className="text-sm font-medium text-black">{section.title}</span>
@@ -1085,7 +1051,7 @@ export default function CommitteeDetailPage() {
           )}
 
           {(charters || []).map((charter) => (
-            <div key={charter.id} className={`card p-6 ${charter.status === 'active' ? 'border-emerald-500/30' : ''}`}>
+            <div key={charter.id} className={`card p-6 ${charter.status === 'active' ? 'border-emerald-200' : ''}`}>
               {editingCharterId === charter.id ? (
                 <div className="space-y-4">
                   <div>
@@ -1160,7 +1126,7 @@ export default function CommitteeDetailPage() {
                           aiCompareMutation.mutate({ charter_id: charter.id });
                         }}
                         disabled={aiCompareMutation.isPending}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-purple-500 text-purple-600 rounded-lg hover:bg-purple-50 transition-all text-sm disabled:opacity-50"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-primary-500 text-primary-600 rounded-lg hover:bg-primary-50 transition-all text-sm disabled:opacity-50"
                       >
                         {aiCompareMutation.isPending ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1172,7 +1138,7 @@ export default function CommitteeDetailPage() {
                       {charter.file_name ? (
                         <button
                           onClick={() => handleDownloadFile(charter.id, charter.file_name!)}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors text-sm"
+                          className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors text-sm"
                           title={`Download ${charter.file_name}`}
                         >
                           <Download className="h-4 w-4" />
@@ -1181,7 +1147,7 @@ export default function CommitteeDetailPage() {
                       ) : charter.content ? (
                         <button
                           onClick={() => handleDownloadCharterContent(charter)}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors text-sm"
+                          className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors text-sm"
                           title="Download draft as Markdown"
                         >
                           <Download className="h-4 w-4" />
@@ -1218,7 +1184,7 @@ export default function CommitteeDetailPage() {
                           }
                         }}
                         disabled={deleteCharterMutation.isPending}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors text-sm disabled:opacity-50"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors text-sm disabled:opacity-50"
                         title="Delete charter"
                       >
                         {deleteCharterMutation.isPending ? (
@@ -1243,7 +1209,7 @@ export default function CommitteeDetailPage() {
 
                   {charter.file_name && (
                     <div className="flex items-center gap-3 mt-4 p-3 bg-slate-100 rounded-lg">
-                      <Paperclip className="h-4 w-4 text-primary-400" />
+                      <Paperclip className="h-4 w-4 text-primary-600" />
                       <div className="flex-1">
                         <p className="text-sm text-black">{charter.file_name}</p>
                         <p className="text-xs text-black">
@@ -1268,8 +1234,8 @@ export default function CommitteeDetailPage() {
           ))}
 
           {(!charters || charters.length === 0) && !showAiCharterPanel && (
-            <div className="card p-12 text-center">
-              <FileText className="h-12 w-12 text-slate-600 mx-auto mb-4" />
+            <div className="card p-8 text-center">
+              <FileText className="h-10 w-10 text-slate-300 mx-auto mb-3" />
               <h3 className="text-lg font-medium text-black mb-2">No Charters Yet</h3>
               <p className="text-black mb-4">Generate a charter using AI based on your uploaded frameworks, or create one manually.</p>
               <button
@@ -1292,47 +1258,141 @@ export default function CommitteeDetailPage() {
         <div className="space-y-4">
           <div className="flex justify-end">
             {canCreate && (
-            <button onClick={() => setIsScheduleMeetingModalOpen(true)} className="btn-primary flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Schedule Meeting
-            </button>
+              <button onClick={() => setIsScheduleMeetingModalOpen(true)} className="btn-primary flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                Schedule Meeting
+              </button>
             )}
           </div>
-          {(meetings || []).map((meeting) => (
-            <Link key={meeting.id} href={`/governance/committees/meetings/${meeting.id}`} className="card p-6 block hover:border-primary-500/50 transition-all">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-medium text-black">{meeting.title}</h3>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${MEETING_TYPE_LABELS[meeting.meeting_type]?.bg} ${MEETING_TYPE_LABELS[meeting.meeting_type]?.text}`}>
-                      {MEETING_TYPE_LABELS[meeting.meeting_type]?.label}
-                    </span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[meeting.status]?.bg} ${STATUS_COLORS[meeting.status]?.text}`}>
-                      {meeting.status.replace('_', ' ')}
-                    </span>
+
+          {(!meetings || meetings.length === 0) ? (
+            <div className="card p-10 text-center">
+              <Calendar className="mx-auto mb-3 h-12 w-12 text-slate-300" />
+              <h3 className="mb-1 text-base font-semibold text-slate-800">No meetings yet</h3>
+              <p className="mb-4 text-sm text-slate-500">Schedule the committee&apos;s first meeting to plan its agenda and track actions.</p>
+              {canCreate && (
+                <button onClick={() => setIsScheduleMeetingModalOpen(true)} className="btn-primary inline-flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Schedule Meeting
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              {/* Left: meeting list — select to view (no page hop) */}
+              <div className="lg:col-span-1">
+                <div className="card overflow-hidden p-0">
+                  <div className="border-b border-slate-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Meetings ({meetings.length})
+                  </div>
+                  <div className="max-h-[70vh] divide-y divide-slate-100 overflow-y-auto">
+                    {meetings.map((m) => {
+                      const sel = m.id === selectedMeetingId;
+                      return (
+                        <button
+                          key={m.id}
+                          onClick={() => setSelectedMeetingId(m.id)}
+                          className={`w-full px-4 py-3 text-left transition-colors ${sel ? 'bg-primary-50' : 'hover:bg-slate-50'}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={`truncate text-sm font-medium ${sel ? 'text-primary-700' : 'text-slate-800'}`}>{m.title}</span>
+                            <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_COLORS[m.status]?.bg} ${STATUS_COLORS[m.status]?.text}`}>
+                              {m.status.replace('_', ' ')}
+                            </span>
+                          </div>
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(m.scheduled_date).toLocaleDateString()}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-                <Eye className="h-5 w-5 text-black" />
               </div>
-              <div className="flex items-center gap-6 mt-3 text-sm text-black">
-                <span className="flex items-center gap-1.5">
-                  <Calendar className="h-4 w-4" />
-                  {new Date(meeting.scheduled_date).toLocaleDateString()}
-                </span>
-                {meeting.start_time && (
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="h-4 w-4" />
-                    {meeting.start_time} - {meeting.end_time}
-                  </span>
-                )}
-                {meeting.location && <span>{meeting.location}</span>}
-                <span className="flex items-center gap-1.5">
-                  <Users className="h-4 w-4" />
-                  {meeting.attendee_count} attendees
-                </span>
+
+              {/* Right: selected meeting detail — inline & sticky (the anti-drill-down) */}
+              <div className="lg:col-span-2">
+                <div className="lg:sticky lg:top-4">
+                  {selectedMeeting ? (
+                    <div className="card p-0">
+                      <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="truncate text-base font-semibold text-slate-900">{selectedMeeting.title}</h3>
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${MEETING_TYPE_LABELS[selectedMeeting.meeting_type]?.bg} ${MEETING_TYPE_LABELS[selectedMeeting.meeting_type]?.text}`}>
+                              {MEETING_TYPE_LABELS[selectedMeeting.meeting_type]?.label}
+                            </span>
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_COLORS[selectedMeeting.status]?.bg} ${STATUS_COLORS[selectedMeeting.status]?.text}`}>
+                              {selectedMeeting.status.replace('_', ' ')}
+                            </span>
+                          </div>
+                          <p className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                            <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{new Date(selectedMeeting.scheduled_date).toLocaleDateString()}</span>
+                            {selectedMeeting.location && <span>{selectedMeeting.location}</span>}
+                          </p>
+                        </div>
+                        <Link href={`/governance/committees/meetings/${selectedMeeting.id}`} className="btn-secondary btn-sm flex-shrink-0 gap-1.5">
+                          <Eye className="h-4 w-4" />
+                          Open full
+                        </Link>
+                      </div>
+
+                      {/* Agenda */}
+                      <div className="border-b border-slate-100 px-5 py-4">
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Agenda ({selectedMeetingAgenda.length})</p>
+                        {selectedMeetingAgenda.length === 0 ? (
+                          <p className="text-xs text-slate-400">No agenda items yet.</p>
+                        ) : (
+                          <ul className="space-y-1.5">
+                            {[...selectedMeetingAgenda].sort((a, b) => (a.item_number || 0) - (b.item_number || 0)).map((it) => (
+                              <li key={it.id} className="flex items-start gap-2 text-sm">
+                                <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-medium text-slate-500">{it.item_number}</span>
+                                <span className="min-w-0 flex-1"><span className="text-slate-800">{it.title}</span>{it.item_type && <span className="ml-2 text-[11px] capitalize text-slate-400">{String(it.item_type).replace('_', ' ')}</span>}</span>
+                                {it.status && <span className="flex-shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium capitalize text-slate-500">{it.status}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="border-b border-slate-100 px-5 py-4">
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Actions ({meetingActions.length})</p>
+                        {meetingActions.length === 0 ? (
+                          <p className="text-xs text-slate-400">No actions from this meeting.</p>
+                        ) : (
+                          <ul className="space-y-2">
+                            {meetingActions.map((a) => (
+                              <li key={a.id} className="flex items-start justify-between gap-2">
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm text-slate-800">{a.title}</span>
+                                  <span className="text-[11px] text-slate-400">{a.assigned_to_name || 'Unassigned'}{a.due_date ? ` · ${new Date(a.due_date).toLocaleDateString()}` : ''}</span>
+                                </span>
+                                <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_COLORS[a.status]?.bg} ${STATUS_COLORS[a.status]?.text}`}>{a.status.replace('_', ' ')}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      {/* Minutes */}
+                      <div className="px-5 py-4">
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Minutes</p>
+                        {selectedMeetingDetail?.minutes?.content ? (
+                          <p className="line-clamp-4 whitespace-pre-wrap text-sm text-slate-600">{selectedMeetingDetail.minutes.content}</p>
+                        ) : (
+                          <p className="text-xs text-slate-400">No minutes recorded yet.</p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="card p-10 text-center text-sm text-slate-400">Select a meeting to see its agenda, actions and minutes.</div>
+                  )}
+                </div>
               </div>
-            </Link>
-          ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1349,7 +1409,7 @@ export default function CommitteeDetailPage() {
 
           {(!actions || actions.length === 0) && (
             <div className="card p-10 text-center">
-              <CheckSquare className="h-12 w-12 text-slate-500 mx-auto mb-3" />
+              <CheckSquare className="h-12 w-12 text-slate-300 mx-auto mb-3" />
               <h3 className="text-lg font-medium text-black mb-1">No Action Items Yet</h3>
               <p className="text-slate-600 mb-4">Create manual action items and use AI to reword or summarize action text.</p>
               {canCreate && (
@@ -1524,7 +1584,7 @@ export default function CommitteeDetailPage() {
                 type="button"
                 onClick={() => aiRewordActionMutation.mutate()}
                 disabled={aiRewordActionMutation.isPending || (!newAction.description.trim() && !actionUploadFile)}
-                className="inline-flex items-center gap-2 rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-primary-300 bg-white px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-50 disabled:opacity-50"
               >
                 {aiRewordActionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 AI Reword
@@ -1533,7 +1593,7 @@ export default function CommitteeDetailPage() {
                 type="button"
                 onClick={() => aiSummarizeActionMutation.mutate()}
                 disabled={aiSummarizeActionMutation.isPending || (!newAction.description.trim() && !actionUploadFile)}
-                className="inline-flex items-center gap-2 rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-primary-300 bg-white px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-50 disabled:opacity-50"
               >
                 {aiSummarizeActionMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 Generate Summary
@@ -1545,13 +1605,13 @@ export default function CommitteeDetailPage() {
 
       {/* AI Comparison Modal */}
       {showComparisonModal && comparisonResult && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-slate-200">
             <div className="sticky top-0 bg-white border-b border-slate-200 p-6 z-10">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-gradient-to-br from-purple-500/20 to-indigo-500/20 p-2.5">
-                    <ShieldCheck className="h-6 w-6 text-purple-400" />
+                  <div className="rounded-lg bg-primary-50 p-2.5">
+                    <ShieldCheck className="h-6 w-6 text-primary-600" />
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-black">Charter Compliance Analysis</h2>
@@ -1560,7 +1620,7 @@ export default function CommitteeDetailPage() {
                     </p>
                   </div>
                 </div>
-                <button onClick={() => setShowComparisonModal(false)} className="text-black hover:text-black">
+                <button onClick={() => setShowComparisonModal(false)} className="text-slate-400 hover:text-slate-900">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -1571,7 +1631,7 @@ export default function CommitteeDetailPage() {
               <div className="flex items-center gap-8 p-6 rounded-xl border border-slate-200 bg-slate-50">
                 <div className="relative h-28 w-28 shrink-0">
                   <svg className="h-28 w-28 -rotate-90" viewBox="0 0 120 120">
-                    <circle cx="60" cy="60" r="50" fill="none" stroke="#334155" strokeWidth="10" />
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="#e2e8f0" strokeWidth="10" />
                     <circle
                       cx="60" cy="60" r="50" fill="none"
                       stroke={getScoreRingColor(comparisonResult.comparison.overall_score)}
@@ -1614,7 +1674,7 @@ export default function CommitteeDetailPage() {
                       <p className="text-xs text-black mb-2">{section.existing_content_summary}</p>
                       {section.recommendation && (
                         <div className="mt-2 p-2 rounded bg-slate-100 border border-slate-300">
-                          <p className="text-[10px] text-purple-600 font-medium uppercase tracking-wider mb-1">Recommendation</p>
+                          <p className="text-[10px] text-primary-600 font-medium uppercase tracking-wider mb-1">Recommendation</p>
                           <p className="text-xs text-black">{section.recommendation}</p>
                         </div>
                       )}
@@ -1636,16 +1696,16 @@ export default function CommitteeDetailPage() {
               {comparisonResult.comparison.gaps.length > 0 && (
                 <div>
                   <h3 className="text-base font-semibold text-black mb-3 flex items-center gap-2">
-                    <XCircle className="h-4 w-4 text-red-400" />
+                    <XCircle className="h-4 w-4 text-rose-600" />
                     Identified Gaps ({comparisonResult.comparison.gaps.length})
                   </h3>
                   <div className="space-y-2">
                     {comparisonResult.comparison.gaps.map((gap, idx) => (
-                      <div key={idx} className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 flex items-start gap-3">
+                      <div key={idx} className="rounded-lg border border-rose-200 bg-rose-50 p-3 flex items-start gap-3">
                         <span className={`shrink-0 mt-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${
-                          gap.severity === 'high' ? 'bg-red-500/20 text-red-400' :
-                          gap.severity === 'medium' ? 'bg-amber-500/20 text-amber-400' :
-                          'bg-slate-500/20 text-slate-400'
+                          gap.severity === 'high' ? 'bg-rose-100 text-rose-600' :
+                          gap.severity === 'medium' ? 'bg-amber-100 text-amber-600' :
+                          'bg-slate-100 text-slate-400'
                         }`}>
                           {gap.severity}
                         </span>
@@ -1668,13 +1728,13 @@ export default function CommitteeDetailPage() {
                 {comparisonResult.comparison.strengths.length > 0 && (
                   <div>
                     <h3 className="text-base font-semibold text-black mb-3 flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-emerald-400" />
+                      <CheckCircle className="h-4 w-4 text-emerald-600" />
                       Strengths
                     </h3>
                     <div className="space-y-1.5">
                       {comparisonResult.comparison.strengths.map((s, idx) => (
                         <div key={idx} className="flex items-start gap-2 text-sm text-black">
-                          <CheckCircle className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                          <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />
                           {s}
                         </div>
                       ))}
@@ -1686,13 +1746,13 @@ export default function CommitteeDetailPage() {
                 {comparisonResult.comparison.recommendations.length > 0 && (
                   <div>
                     <h3 className="text-base font-semibold text-black mb-3 flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-purple-400" />
+                      <Sparkles className="h-4 w-4 text-primary-600" />
                       Recommendations
                     </h3>
                     <div className="space-y-1.5">
                       {comparisonResult.comparison.recommendations.map((r, idx) => (
                         <div key={idx} className="flex items-start gap-2 text-sm text-black">
-                          <span className="text-purple-400 shrink-0">•</span>
+                          <span className="text-primary-600 shrink-0">•</span>
                           {r}
                         </div>
                       ))}
@@ -1704,36 +1764,36 @@ export default function CommitteeDetailPage() {
               {/* Framework Coverage */}
               {comparisonResult.comparison.framework_coverage && (
                 <div>
-                  <h3 className="text-base font-semibold text-white mb-3">Framework Coverage</h3>
+                  <h3 className="text-base font-semibold text-slate-900 mb-3">Framework Coverage</h3>
                   <div className="grid gap-3 md:grid-cols-3">
                     {comparisonResult.comparison.framework_coverage.addressed?.length > 0 && (
-                      <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
-                        <p className="text-[10px] text-emerald-400 font-medium uppercase tracking-wider mb-2">Addressed</p>
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                        <p className="text-[10px] text-emerald-600 font-medium uppercase tracking-wider mb-2">Addressed</p>
                         {comparisonResult.comparison.framework_coverage.addressed.map((fw, i) => (
-                          <p key={i} className="text-xs text-slate-300 flex items-center gap-1.5 mb-1">
-                            <CheckCircle className="h-3 w-3 text-emerald-400" />
+                          <p key={i} className="text-xs text-slate-700 flex items-center gap-1.5 mb-1">
+                            <CheckCircle className="h-3 w-3 text-emerald-600" />
                             {fw}
                           </p>
                         ))}
                       </div>
                     )}
                     {comparisonResult.comparison.framework_coverage.partially_addressed?.length > 0 && (
-                      <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-                        <p className="text-[10px] text-amber-400 font-medium uppercase tracking-wider mb-2">Partially Addressed</p>
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                        <p className="text-[10px] text-amber-600 font-medium uppercase tracking-wider mb-2">Partially Addressed</p>
                         {comparisonResult.comparison.framework_coverage.partially_addressed.map((fw, i) => (
-                          <p key={i} className="text-xs text-slate-300 flex items-center gap-1.5 mb-1">
-                            <AlertTriangle className="h-3 w-3 text-amber-400" />
+                          <p key={i} className="text-xs text-slate-700 flex items-center gap-1.5 mb-1">
+                            <AlertTriangle className="h-3 w-3 text-amber-600" />
                             {fw}
                           </p>
                         ))}
                       </div>
                     )}
                     {comparisonResult.comparison.framework_coverage.not_addressed?.length > 0 && (
-                      <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">
-                        <p className="text-[10px] text-red-400 font-medium uppercase tracking-wider mb-2">Not Addressed</p>
+                      <div className="rounded-lg border border-rose-200 bg-rose-50 p-3">
+                        <p className="text-[10px] text-rose-600 font-medium uppercase tracking-wider mb-2">Not Addressed</p>
                         {comparisonResult.comparison.framework_coverage.not_addressed.map((fw, i) => (
                           <p key={i} className="text-xs text-black flex items-center gap-1.5 mb-1">
-                            <XCircle className="h-3 w-3 text-red-400" />
+                            <XCircle className="h-3 w-3 text-rose-600" />
                             {fw}
                           </p>
                         ))}
@@ -1965,12 +2025,12 @@ export default function CommitteeDetailPage() {
           className="space-y-4"
         >
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Name <span className="text-red-500">*</span></label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Name <span className="text-rose-500">*</span></label>
             <input
               type="text"
               value={editCommitteeDraft.name}
               onChange={(e) => setEditCommitteeDraft({ ...editCommitteeDraft, name: e.target.value })}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               required
             />
           </div>
@@ -1981,7 +2041,7 @@ export default function CommitteeDetailPage() {
               value={editCommitteeDraft.description}
               onChange={(e) => setEditCommitteeDraft({ ...editCommitteeDraft, description: e.target.value })}
               rows={3}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
             />
           </div>
 

@@ -6,20 +6,26 @@
 // taxonomy and live open-findings concentration. Per-vendor residual radar lives
 // on each vendor's profile.
 
+import { Fragment, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Shield, AlertCircle, ExternalLink, Layers, ArrowUpRight } from 'lucide-react';
+import { Shield, AlertCircle, ExternalLink, Layers, ArrowUpRight, ChevronDown, ChevronRight } from 'lucide-react';
 import { tpraApi } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
 import { DOMAIN_HEX, sevBadgeCls, scoreColor, fmtDate, titleCase } from '../_lib/tprmShared';
 
+type DomainScore = { residual?: number; inherent?: number; rating?: string; posture?: number; answered?: number; total?: number };
 interface RegisterRisk {
   id: number; title: string | null; vendor_id: number | null; vendor_name: string | null;
   tier: string | null; inherent_score: number | null; residual_score: number | null;
   status: string | null; register_type: string | null; updated_at: string | null;
+  domain_scores?: Record<string, DomainScore> | null;
 }
 interface RegisterResp { items: RegisterRisk[]; total: number; open: number; avg_residual: number | null }
+
+interface CoverageItem { framework: string; questions: number; controls: number; domains: string[]; templates: string[]; evidence_required: number }
+interface CoverageResp { items: CoverageItem[]; frameworks: number; templates: number; total_questions: number; mapped_questions: number; mapping_coverage: number }
 
 interface DomainDef { key: string; label: string; purpose: string; evidence: string[]; }
 const DOMAINS: DomainDef[] = [
@@ -37,6 +43,7 @@ const DOMAINS: DomainDef[] = [
 
 export default function Risk360Page() {
   const router = useRouter();
+  const [expanded, setExpanded] = useState<number | null>(null);
   const { data: reg, isLoading, error, refetch } = useQuery({
     queryKey: ['tprm-risk-register'],
     queryFn: async () => (await tpraApi.riskRegister()).data as RegisterResp,
@@ -44,6 +51,10 @@ export default function Risk360Page() {
   const { data: dash } = useQuery({
     queryKey: ['tprm-dashboard', 'portfolio'],
     queryFn: async () => (await tpraApi.dashboard('portfolio')).data as { findings_by_domain: Record<string, number> },
+  });
+  const { data: coverage } = useQuery({
+    queryKey: ['tprm-coverage'],
+    queryFn: async () => (await tpraApi.getCoverage()).data as CoverageResp,
   });
 
   const byDomain = dash?.findings_by_domain || {};
@@ -107,31 +118,72 @@ export default function Risk360Page() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {risks.map((r) => (
-                  <tr key={r.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2.5 font-medium text-slate-800">{r.title || `Risk #${r.id}`}</td>
-                    <td className="px-4 py-2.5">
-                      {r.vendor_id ? (
-                        <button onClick={() => router.push(`/vendor-risk/vendors/${r.vendor_id}`)}
-                          className="inline-flex items-center gap-1 text-primary-600 hover:underline">
-                          {r.vendor_name || `Vendor ${r.vendor_id}`} <ArrowUpRight className="h-3 w-3" />
-                        </button>
-                      ) : <span className="text-gray-400">—</span>}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {r.tier ? <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${sevBadgeCls(r.tier)}`}>{titleCase(r.tier)}</span> : '—'}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-gray-600">{r.inherent_score ?? '—'}</td>
-                    <td className="px-4 py-2.5">
-                      <span className="font-mono font-semibold" style={{ color: scoreColor(r.residual_score) }}>{r.residual_score ?? '—'}</span>
-                    </td>
-                    <td className="px-4 py-2.5"><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{titleCase(r.status || 'open')}</span></td>
-                    <td className="px-4 py-2.5 text-[11px] text-gray-500">{fmtDate(r.updated_at)}</td>
-                    <td className="px-4 py-2.5 text-right">
-                      <Link href="/erm/risks/list" className="text-[11px] font-medium text-primary-600 hover:underline">Register →</Link>
-                    </td>
-                  </tr>
-                ))}
+                {risks.map((r) => {
+                  const hasDomains = !!r.domain_scores && Object.keys(r.domain_scores).length > 0;
+                  const isOpen = expanded === r.id;
+                  return (
+                    <Fragment key={r.id}>
+                      <tr className="hover:bg-gray-50">
+                        <td className="px-4 py-2.5 font-medium text-slate-800">
+                          <button onClick={() => hasDomains && setExpanded(isOpen ? null : r.id)}
+                            disabled={!hasDomains}
+                            title={hasDomains ? 'Show the ten-domain residual breakdown' : 'No domain scores yet — run scoring'}
+                            className={`inline-flex items-center gap-1.5 text-left ${hasDomains ? 'hover:text-primary-600' : 'cursor-default'}`}>
+                            {hasDomains
+                              ? (isOpen ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />)
+                              : <span className="inline-block w-3.5" />}
+                            {r.title || `Risk #${r.id}`}
+                          </button>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {r.vendor_id ? (
+                            <button onClick={() => router.push(`/vendor-risk/vendors/${r.vendor_id}`)}
+                              className="inline-flex items-center gap-1 text-primary-600 hover:underline">
+                              {r.vendor_name || `Vendor ${r.vendor_id}`} <ArrowUpRight className="h-3 w-3" />
+                            </button>
+                          ) : <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {r.tier ? <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${sevBadgeCls(r.tier)}`}>{titleCase(r.tier)}</span> : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-gray-600">{r.inherent_score ?? '—'}</td>
+                        <td className="px-4 py-2.5">
+                          <span className="font-mono font-semibold" style={{ color: scoreColor(r.residual_score) }}>{r.residual_score ?? '—'}</span>
+                        </td>
+                        <td className="px-4 py-2.5"><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{titleCase(r.status || 'open')}</span></td>
+                        <td className="px-4 py-2.5 text-[11px] text-gray-500">{fmtDate(r.updated_at)}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <Link href="/erm/risks/list" className="text-[11px] font-medium text-primary-600 hover:underline">Register →</Link>
+                        </td>
+                      </tr>
+                      {isOpen && hasDomains && (
+                        <tr className="bg-slate-50/60">
+                          <td colSpan={8} className="px-4 py-3">
+                            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Residual by domain</p>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-5">
+                              {DOMAINS.map((d) => {
+                                const ds = r.domain_scores?.[d.key];
+                                const res = ds?.residual;
+                                const hex = DOMAIN_HEX[d.key] || '#64748b';
+                                return (
+                                  <div key={d.key} className="min-w-0">
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="truncate text-[11px] text-slate-600">{d.label}</span>
+                                      <span className="font-mono text-[11px] font-semibold" style={{ color: res != null ? scoreColor(res) : '#94a3b8' }}>{res != null ? res : '—'}</span>
+                                    </div>
+                                    <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-gray-100" role="img" aria-label={`${d.label} residual ${res ?? 'not scored'}`}>
+                                      <div className="h-full rounded-full" style={{ width: `${res != null ? Math.min(100, res) : 0}%`, background: hex }} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -173,6 +225,52 @@ export default function Risk360Page() {
           })}
         </div>
       </div>
+
+      {/* ── Compliance framework coverage (from the question→control mapping) ── */}
+      {coverage && coverage.items.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 p-4">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Compliance framework coverage</h3>
+              <p className="text-[11px] text-gray-500">What the questionnaire library assesses — derived from each question&apos;s framework &amp; control mapping.</p>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-gray-500">
+              <span>Frameworks <b className="text-slate-800">{coverage.frameworks}</b></span>
+              <span>Mapped questions <b className="text-slate-800">{coverage.mapped_questions}/{coverage.total_questions}</b></span>
+              <span>Templates <b className="text-slate-800">{coverage.templates}</b></span>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50">
+                <tr className="text-left text-[10px] uppercase tracking-wide text-gray-500">
+                  <th className="px-4 py-2.5">Framework</th>
+                  <th className="px-4 py-2.5">Questions</th>
+                  <th className="px-4 py-2.5">Controls</th>
+                  <th className="px-4 py-2.5">Evidence req.</th>
+                  <th className="px-4 py-2.5">Domains</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {coverage.items.map((c) => (
+                  <tr key={c.framework} className="hover:bg-gray-50">
+                    <td className="px-4 py-2.5 font-medium text-slate-800">{c.framework}</td>
+                    <td className="px-4 py-2.5 font-mono text-gray-600">{c.questions}</td>
+                    <td className="px-4 py-2.5 font-mono text-gray-600">{c.controls}</td>
+                    <td className="px-4 py-2.5 font-mono text-gray-600">{c.evidence_required}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex flex-wrap gap-1">
+                        {c.domains.slice(0, 4).map((d) => <span key={d} className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] capitalize text-slate-600">{d.replace('_', ' ')}</span>)}
+                        {c.domains.length > 4 && <span className="text-[10px] text-gray-400">+{c.domains.length - 4}</span>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

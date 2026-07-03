@@ -1,10 +1,11 @@
 from fastapi import APIRouter
-from .routers import documents_router, versions_router, workflows_router, workflow_templates_router, reviews_router, mappings_router, dashboard_router, policy_parser_router, document_workflow_router, attestations_router, attestation_campaigns_router, regulatory_changes_router, committees_router, regulatory_feeds_router, gap_analysis_router, applicability_router, reports_router
+from .routers import documents_router, versions_router, workflows_router, workflow_templates_router, reviews_router, mappings_router, dashboard_router, policy_parser_router, document_workflow_router, attestations_router, attestation_campaigns_router, regulatory_changes_router, committees_router, regulatory_feeds_router, gap_analysis_router, applicability_router, reports_router, document_signoff_router
 from ...routers import policy_exception_router
 
 router = APIRouter(prefix="/governance", tags=["Governance Module"])
 
 router.include_router(documents_router, tags=["Governance Documents"])
+router.include_router(document_signoff_router, tags=["Governance Sign-off"])
 router.include_router(versions_router, tags=["Governance Document Versions"])
 router.include_router(workflows_router, tags=["Governance Workflows"])
 router.include_router(workflow_templates_router, tags=["Governance Workflow Templates"])

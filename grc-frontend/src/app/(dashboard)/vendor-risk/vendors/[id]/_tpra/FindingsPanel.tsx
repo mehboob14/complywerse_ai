@@ -227,6 +227,13 @@ function FindingCard({
                 <ArrowUpRight className="h-3 w-3" /> In Risk Register
               </Link>
             )}
+            {finding.linked_issue_id && (
+              <Link href={`/issues/${finding.linked_issue_id}`}
+                title="Tracked as a shared Issue — unified owner / SLA / workflow"
+                className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 hover:bg-blue-100">
+                <ArrowUpRight className="h-3 w-3" /> Issue #{finding.linked_issue_id}
+              </Link>
+            )}
           </div>
           <p className="mt-1 text-sm font-medium text-slate-900">{finding.title || 'Untitled finding'}</p>
           {finding.description && <p className="mt-0.5 text-xs text-gray-500">{finding.description}</p>}

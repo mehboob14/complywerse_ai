@@ -1,45 +1,44 @@
-<!-- iso_27001_2022 / ISO27-003 | type=Register | model=gpt-4o | 4038 chars -->
+<!-- iso_27001_2022 / ISO27-003 | type=Register | mode=table | model=gpt-5.5 | 8876 chars -->
 
-| Document ID        | Version | Owner                  | Effective Date | Framework         | Control Reference | Classification |
-|--------------------|---------|------------------------|----------------|-------------------|-------------------|----------------|
-| [Document ID]      | 1.0     | [Owner Name/Title]     | [Effective Date] | ISO/IEC 27001:2022 | Clause 4.2        | Confidential   |
+## Interested Parties Register (XLSX template)
 
-## Purpose
+_Editable template — add your own rows. The example row(s) below are placeholders to replace._
 
-The purpose of this Interested Parties Register is to identify and document all relevant interested parties and their information security expectations as part of the Information Security Management System (ISMS) in accordance with ISO/IEC 27001:2022, Clause 4.2. This register serves as a foundational element for understanding and addressing the needs and expectations of stakeholders that could affect the ISMS.
+| Interested Party ID | Interested Party Name | Interested Party Type | Internal or External | Relationship to Organisation | Business Area or ISMS Scope Relevance | Information Security Interest or Concern | Security Requirement or Expectation | Requirement Type | Source of Requirement | Legal Regulatory Contractual or Other Reference | Confidentiality Requirement | Integrity Requirement | Availability Requirement | Privacy or Personal Data Requirement | Requirement Addressed by ISMS | How Requirement Is Addressed | Linked ISMS Control or Process | Responsible Owner | Engagement or Communication Method | Review Frequency | Last Reviewed Date | Next Review Date | Status | Notes or Change History |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [EXAMPLE: IP-001] | [EXAMPLE: Enterprise Customers] | [EXAMPLE: Customer] | [EXAMPLE: External] | [EXAMPLE: Receive managed services within the ISMS scope] | [EXAMPLE: Managed cloud service operations] | [EXAMPLE: Expect confidentiality of customer data and timely notification of security incidents] | [EXAMPLE: Customer data must be protected from unauthorised access and material incidents must be notified within contractual timelines] | [EXAMPLE: Contractual] | [EXAMPLE: Master Services Agreement and customer security schedule] | [EXAMPLE: MSA section 12; Security Schedule] | [EXAMPLE: High] | [EXAMPLE: Medium] | [EXAMPLE: High] | [EXAMPLE: Yes] | [EXAMPLE: Yes] | [EXAMPLE: Addressed through access control, incident management, encryption, supplier controls, and monitoring processes] | [EXAMPLE: Annex A 5.24, 5.25, 5.26, 8.2, 8.3; Incident Management Procedure; SoA control AC-01] | [EXAMPLE: Service Owner] | [EXAMPLE: Quarterly business review and contract review] | [EXAMPLE: Quarterly] | [EXAMPLE: 2025-03-31] | [EXAMPLE: 2025-06-30] | [EXAMPLE: Active] | [EXAMPLE: 2025-03-31 AB - reviewed against latest customer security schedule] |
+| [EXAMPLE: IP-002] | [EXAMPLE: Data Protection Regulator] | [EXAMPLE: Regulator] | [EXAMPLE: External] | [EXAMPLE: Supervises compliance with applicable personal data protection law] | [EXAMPLE: All processing of personal data within the ISMS scope] | [EXAMPLE: Requires appropriate security of personal data and breach notification where legally required] | [EXAMPLE: Personal data must be processed securely using appropriate technical and organisational measures] | [EXAMPLE: Regulatory] | [EXAMPLE: Applicable data protection legislation and regulatory guidance] | [EXAMPLE: GDPR Article 32 and Article 33] | [EXAMPLE: High] | [EXAMPLE: High] | [EXAMPLE: Medium] | [EXAMPLE: Yes] | [EXAMPLE: Yes] | [EXAMPLE: Addressed through privacy governance, access controls, encryption, incident response, risk assessment, and records of processing] | [EXAMPLE: Annex A 5.34, 5.31, 8.24; Privacy Procedure; Incident Response Plan] | [EXAMPLE: Data Protection Officer] | [EXAMPLE: Regulatory monitoring and compliance review] | [EXAMPLE: On Regulatory Change] | [EXAMPLE: 2025-01-15] | [EXAMPLE: 2025-07-15] | [EXAMPLE: Active] | [EXAMPLE: 2025-01-15 CD - updated following annual privacy compliance review] |
 
-## Scope
+### Column Guidance
 
-This register applies to all interested parties relevant to the ISMS of [Organization Name]. It includes internal and external stakeholders whose requirements and expectations influence the organization's information security objectives and operations.
+| Column | What to enter |
+|---|---|
+| Interested Party ID | Enter a unique identifier for the interested party record, using a consistent format such as IP-001, IP-002. |
+| Interested Party Name | Enter the name of the stakeholder or stakeholder group, such as a regulator, customer segment, supplier, employee group, shareholder, or certification body. |
+| Interested Party Type | Enter the category of interested party. Allowed values: Customer, Employee, Supplier, Regulator, Certification Body, Shareholder, Board, Partner, Outsourcer, Public Authority, Data Subject, Community, Other. |
+| Internal or External | Enter whether the interested party is Internal or External to the organisation. |
+| Relationship to Organisation | Briefly describe the relationship, such as receives services, provides hosting, audits the ISMS, regulates operations, works within scope, or owns business risk. |
+| Business Area or ISMS Scope Relevance | Identify the business unit, service, location, system, process, or ISMS scope boundary to which this interested party is relevant. |
+| Information Security Interest or Concern | Describe why this party is relevant to information security, such as protection of confidential data, service availability, regulatory compliance, secure supplier access, incident notification, or access control. |
+| Security Requirement or Expectation | Record the specific information security requirement, need, or expectation this party has of the organisation. Write one clear requirement per row where possible. |
+| Requirement Type | Classify the requirement. Allowed values: Legal, Regulatory, Contractual, Customer, Internal Governance, Risk Based, Standard or Certification, Supplier, Privacy, Operational, Other. |
+| Source of Requirement | Enter where the requirement was identified from, such as contract, law, regulation, policy, SLA, DPIA, risk assessment, customer security schedule, supplier agreement, audit report, or management review. |
+| Legal Regulatory Contractual or Other Reference | Enter the exact reference where applicable, such as contract clause, regulation name and article, policy ID, SLA section, purchase order condition, or N/A if not applicable. |
+| Confidentiality Requirement | Enter the confidentiality relevance. Allowed values: High, Medium, Low, Not Applicable. Base this on the sensitivity of information expected to be protected for this interested party. |
+| Integrity Requirement | Enter the integrity relevance. Allowed values: High, Medium, Low, Not Applicable. Base this on the need for information or processing to remain accurate, complete, and protected from unauthorised change. |
+| Availability Requirement | Enter the availability relevance. Allowed values: High, Medium, Low, Not Applicable. Base this on uptime, continuity, recovery, or service access expectations. |
+| Privacy or Personal Data Requirement | State whether the requirement involves personal data or privacy obligations. Allowed values: Yes, No, Not Known. If Yes, include the relevant privacy expectation in the requirement fields. |
+| Requirement Addressed by ISMS | State whether the organisation has determined this requirement will be addressed through the ISMS. Allowed values: Yes, Partially, No, To Be Assessed. |
+| How Requirement Is Addressed | Briefly describe the ISMS mechanism used to address the requirement, such as risk treatment, policy, procedure, control, supplier management, incident process, audit programme, awareness training, or business continuity arrangements. |
+| Linked ISMS Control or Process | Enter the relevant ISO/IEC 27001 clause, Annex A control, internal control ID, policy, procedure, risk ID, SoA reference, or process name that addresses the requirement. |
+| Responsible Owner | Enter the role accountable for maintaining understanding of this party and its requirements, such as CISO, Compliance Manager, DPO, Procurement Lead, Service Owner, HR Manager, or Legal Counsel. |
+| Engagement or Communication Method | Record how the organisation monitors or engages with this party, such as contract review, supplier review meeting, regulatory monitoring, customer QBR, employee forum, audit, ticketing system, or management review. |
+| Review Frequency | Enter how often this party and its requirements are reviewed. Allowed values: Monthly, Quarterly, Semi-Annually, Annually, On Contract Change, On Regulatory Change, On Major Business Change, Event Driven. |
+| Last Reviewed Date | Enter the date this record was last reviewed in YYYY-MM-DD format. Leave blank only for new records not yet reviewed. |
+| Next Review Date | Enter the planned next review date in YYYY-MM-DD format, based on the review frequency or triggering event. |
+| Status | Enter the current status of the record. Allowed values: Draft, Active, Under Review, Retired. |
+| Notes or Change History | Record brief notes about changes, assumptions, review outcomes, or decisions, including date and initials where useful. |
 
-## Register Fields
+### Maintenance
 
-| Field                | Description                                                                 | Example                              |
-|----------------------|-----------------------------------------------------------------------------|--------------------------------------|
-| Interested Party     | The name or category of the stakeholder.                                    | Customers                            |
-| Type                 | The classification of the interested party (internal or external).          | External                             |
-| Information Security Expectations | Specific security requirements or expectations of the interested party. | Protection of personal data          |
-| Impact on ISMS       | How the expectations of the interested party affect the ISMS.               | Data breach could lead to reputational damage |
-| Communication Method | How the organization communicates with the interested party.                | Quarterly meetings, email updates    |
-
-## Sample Entries
-
-| Interested Party | Type     | Information Security Expectations | Impact on ISMS                              | Communication Method          |
-|------------------|----------|----------------------------------|---------------------------------------------|-------------------------------|
-| Customers        | External | Protection of personal data      | Data breach could lead to reputational damage | Quarterly meetings, email updates |
-| Regulatory Bodies| External | Compliance with data protection laws | Non-compliance could result in fines        | Annual compliance reports      |
-| Employees        | Internal | Secure access to information     | Unauthorized access could lead to data loss | Intranet, training sessions   |
-
-## Maintenance Process & Cadence
-
-The Interested Parties Register will be reviewed and updated at least annually or whenever there is a significant change in the organization’s operations, structure, or external environment that may affect the ISMS. Updates may also occur following audits, incidents, or changes in legal or regulatory requirements.
-
-## Roles & Responsibilities
-
-- **ISMS Manager**: Responsible for maintaining the Interested Parties Register, ensuring it is up-to-date and reflective of the current stakeholder landscape.
-- **Information Security Officer**: Assists in identifying new interested parties and updating their expectations and impacts on the ISMS.
-- **Department Heads**: Provide input regarding departmental stakeholders and their specific information security expectations.
-
-## Review
-
-This Interested Parties Register will be reviewed by the ISMS Manager and approved by the Information Security Steering Committee. The review process will ensure that all relevant interested parties are identified and that their expectations are adequately addressed within the ISMS. The next scheduled review date is [Next Review Date].
+The template is owned by the ISMS Manager or Compliance Manager, with input from Legal, Risk, Procurement, HR, Service Owners, and the Data Protection Officer where applicable. It should be reviewed at least annually and whenever contracts, regulations, services, suppliers, organisational context, or ISMS scope change, drawing from contract repositories, legal/regulatory trackers, risk assessments, supplier records, customer requirements, management review outputs, and policy/process repositories.

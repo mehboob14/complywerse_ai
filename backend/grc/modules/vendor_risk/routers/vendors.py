@@ -19,6 +19,8 @@ router = APIRouter(tags=["Vendors"])
 # ── Pydantic schemas ──────────────────────────────────────────────
 
 class VendorCreate(BaseModel):
+    # Deprecated & IGNORED — tenant is always derived from the auth context (TPRM-008).
+    # Kept only so older clients that still send it don't 422.
     tenant_id: Optional[int] = None
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
@@ -190,7 +192,9 @@ def create_vendor(
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
 
-    tenant_id = payload.tenant_id if payload.tenant_id and payload.tenant_id in tenant_ids else tenant_ids[0]
+    # TPRM-008: the tenant is ALWAYS derived from the authenticated context — the
+    # request body's tenant_id is never trusted (it can't target another tenant).
+    tenant_id = tenant_ids[0]
 
     # Intake (Stage 01): check for an existing / duplicate relationship before
     # committing. Matches on case-insensitive name, or on website host when given.

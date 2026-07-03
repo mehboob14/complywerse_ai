@@ -208,14 +208,16 @@ def _execute_drafting(
         framework_ids = request_payload.get("framework_ids") or []
         parent_document_id = request_payload.get("parent_document_id")
 
-        # Resolve journey ids the same way the sync endpoint did.
+        # When the user explicitly selects frameworks in the draft modal, scope the
+        # citation pool STRICTLY to those uploaded frameworks (via
+        # uploaded_framework_ids), pulling their clauses directly. This stops the
+        # old journey-resolution leak — an empty/failed journey match used to fall
+        # back to ALL the tenant's journeys, so an ISO-only draft cited PCI/SDAIA
+        # clauses. No selection → journey_ids=None (best-effort tenant-wide).
         journey_ids: Optional[list] = None
+        uploaded_framework_ids: Optional[list] = None
         if framework_ids:
-            rows = db.query(CertificationJourney.id).filter(
-                CertificationJourney.tenant_id == tenant_id,
-                CertificationJourney.uploaded_framework_id.in_(framework_ids),
-            ).all()
-            journey_ids = [r[0] for r in rows] or None
+            uploaded_framework_ids = [int(f) for f in framework_ids]
 
         parent_document_context: Optional[str] = None
         # NCA path passes a raw blob; governance path passes an ID we resolve.
@@ -327,7 +329,10 @@ def _execute_drafting(
         })
 
         tenant_context = build_tenant_context(tenant_id, db)
-        framework_index = build_framework_index(tenant_id, db, journey_ids=journey_ids)
+        framework_index = build_framework_index(
+            tenant_id, db, journey_ids=journey_ids,
+            uploaded_framework_ids=uploaded_framework_ids,
+        )
 
         result = run_drafting_pipeline(
             doc_type=doc_type,

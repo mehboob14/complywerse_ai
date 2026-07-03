@@ -75,13 +75,20 @@ _OPENAI_MODEL = os.environ.get("OPENAI_DRAFT_MODEL", "gpt-5")
 # OPENAI_DRAFT_FALLBACK_MODEL to override or to "" to disable.
 _OPENAI_FALLBACK_MODEL = os.environ.get("OPENAI_DRAFT_FALLBACK_MODEL", get_openai_model())
 
-_STAGE_B_PARALLELISM = int(os.environ.get("AI_DRAFT_PARALLELISM", "4"))
+# Section-expansion concurrency. Raised from 4 → 8 so a typical scaffold's
+# ~8 expandable sections issue in a single wave instead of 2-3, and so the
+# clause-engine's per-area sub-calls (now also parallel) fan out concurrently.
+# Lower via AI_DRAFT_PARALLELISM if the OpenAI tier hits rate limits.
+_STAGE_B_PARALLELISM = int(os.environ.get("AI_DRAFT_PARALLELISM", "8"))
 
 # Breadth / parent-slicing caps. A broad policy fans the clause engine across at
 # most this many areas; each section injects at most this many parent clauses
 # (and this many characters of parent text) so a 200-statement parent never
 # blows the prompt budget.
-_MAX_CLAUSE_AREAS = int(os.environ.get("AI_DRAFT_MAX_AREAS", "6"))
+# Cap the clause engine's breadth fan-out. Lowered 6 → 3: a focused, few-page
+# document covers one area deeply, not six shallowly — and fewer areas means
+# fewer LLM calls (faster). Broad policies still span multiple areas (>1).
+_MAX_CLAUSE_AREAS = int(os.environ.get("AI_DRAFT_MAX_AREAS", "3"))
 _MAX_PARENT_CLAUSES_PER_SECTION = int(os.environ.get("AI_DRAFT_MAX_PARENT_CLAUSES", "12"))
 _PARENT_CLAUSE_CHAR_CAP = int(os.environ.get("AI_DRAFT_PARENT_CHAR_CAP", "4000"))
 # A parent with more in-scope-able clauses than this, drafted into a single
@@ -302,7 +309,13 @@ def _password_policy_block(ctx: TenantContextBundle) -> str:
 def _citations_block(citations: List[FrameworkCitation]) -> str:
     if not citations:
         return "FRAMEWORK CITATIONS — no specific clauses supplied for this topic; cite only frameworks in the active list and only where you are certain of the clause."
-    lines = ["FRAMEWORK CITATIONS — cite these clauses inline when relevant. Use the bracketed format `[<Code> <Version>, clause <Ref>]`:"]
+    lines = [
+        "FRAMEWORK CITATIONS — these are the specific clauses of the SELECTED framework(s) "
+        "this document is drafted and audited against. You MUST cite the applicable clause "
+        "inline on every normative (shall/must) statement it supports, using the bracketed "
+        "format `[<Code> <Version>, clause <Ref>]`. Do not invent clause numbers — cite only "
+        "from this list. An auditor will trace each requirement back to its cited clause:",
+    ]
     for c in citations:
         lines.append(f"- {c.as_prompt_line()}")
     return "\n".join(lines)
@@ -638,12 +651,20 @@ def _build_section_prompt(
     parts.append("")
     parts.append("SECTION INSTRUCTIONS:")
     parts.append(section.expansion_focus)
-    parts.append(f"Target depth: at least {min_words} words for this {'sub-section' if is_sub else 'section'}.")
+    # Target BAND, not a floor. This is a focused, audit-ready document covering a
+    # single area — concise beats comprehensive. Keep to the band; do not pad.
+    _ceiling = int(min_words * 1.5)
+    parts.append(
+        f"Target length: about {min_words}–{_ceiling} words for this "
+        f"{'sub-section' if is_sub else 'section'}. Be concise and specific; do NOT "
+        f"exceed {_ceiling} words or restate content from other sections. Depth means "
+        f"precise, auditable requirements — not length."
+    )
     if min_clauses:
         parts.append(
-            f"Produce at least {min_clauses} numbered sub-clauses "
+            f"Produce {min_clauses}–{min_clauses + 3} numbered sub-clauses "
             f"({heading_number}.1, {heading_number}.2 … and where useful "
-            f"{heading_number}.1.1)."
+            f"{heading_number}.1.1). Each clause must be a single, testable requirement."
         )
 
     if exemplar:
@@ -766,8 +787,9 @@ def _stage_expand_section(
         profile=profile,
     )
     eff_min_clauses = min_clauses_override if min_clauses_override is not None else (section.min_clauses or 0)
-    # Larger sections (statements, procedure steps) deserve more token budget.
-    max_tokens = 4000 if eff_min_clauses >= 10 else 2200
+    # Medium, audit-focused sections. Lowered from 4000/2200 → 2800/1600: output
+    # tokens dominate latency, and shorter targets keep drafts to a few pages.
+    max_tokens = 2800 if eff_min_clauses >= 10 else 1600
     # System prompt = the scaffold's per-doc-type voice + the universal SME
     # addendum, re-skinned to the tenant's industry (no-op for banks).
     raw = _chat_json(
@@ -821,9 +843,10 @@ def _stage_expand_clause_engine(
         )
     per_area_clauses = max((section.min_clauses or 0) // len(areas), 4)
     per_area_words = max((section.min_words or 0) // len(areas), 150)
-    blocks: List[str] = [f"## {section.full_heading}\n"]
-    for i, area in enumerate(areas, start=1):
-        body = _stage_expand_section(
+
+    def _expand_area(item: Tuple[int, dict]) -> Tuple[int, str]:
+        i, area = item
+        return i, _stage_expand_section(
             section=section, scaffold=scaffold, ctx=ctx, idx=idx,
             resolved_topic=area.get("topic"), user_title=user_title,
             user_description=user_description,
@@ -838,7 +861,18 @@ def _stage_expand_clause_engine(
             min_words_override=per_area_words,
             profile=profile,
         )
-        blocks.append(body)
+
+    # Fan the per-area calls out concurrently (this loop was the single biggest
+    # latency spine — up to 6 back-to-back LLM calls serialized on one thread).
+    # Results are reassembled by index so sub-section order (7.1, 7.2, …) holds.
+    indexed = list(enumerate(areas, start=1))
+    bodies: Dict[int, str] = {}
+    with ThreadPoolExecutor(max_workers=min(len(indexed), _STAGE_B_PARALLELISM)) as pool:
+        for i, body in pool.map(_expand_area, indexed):
+            bodies[i] = body
+    blocks: List[str] = [f"## {section.full_heading}\n"]
+    for i in sorted(bodies):
+        blocks.append(bodies[i])
     return "\n\n".join(blocks)
 
 
@@ -1199,7 +1233,8 @@ def run_drafting_pipeline(
         telemetry["stages"][-1]["regenerating"] = [s.number for s in failed_sections]
         _emit("qa", status="regenerating", failing_sections=len(failed_sections))
         known_refs = framework_index.known_clause_refs()
-        for s in failed_sections:
+
+        def _regen_one(s: SectionSpec) -> Tuple[int, str]:
             hint = regeneration_hint(qa_results[s.number])
             new_content = _expand_one(s) if not hint else _regenerate_section(
                 section=s, hint=hint, scaffold=scaffold, ctx=tenant_context,
@@ -1209,7 +1244,16 @@ def run_drafting_pipeline(
                 target_clauses=target_clauses, enforce_full_parent=enforce_full_parent,
                 profile=profile,
             )
-            sections_payload[s.number] = {"heading": s.full_heading, "content": new_content}
+            return s.number, new_content
+
+        # Regenerate failing sections concurrently instead of one-at-a-time.
+        with ThreadPoolExecutor(max_workers=min(len(failed_sections), _STAGE_B_PARALLELISM)) as pool:
+            for num, new_content in pool.map(_regen_one, failed_sections):
+                spec = next((s for s in failed_sections if s.number == num), None)
+                sections_payload[num] = {
+                    "heading": spec.full_heading if spec else f"{num}.",
+                    "content": new_content,
+                }
         for s in failed_sections:
             qa_results[s.number] = validate_section(
                 s, sections_payload[s.number]["content"],

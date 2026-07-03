@@ -11,9 +11,71 @@ from sqlalchemy.orm import Session
 
 from ..models import PolicyException, PolicyExceptionComment, GovernanceDocument, GRCUser, get_db
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ..services import exception_posture
 
 router = APIRouter(prefix="/policy-exceptions", tags=["Policy Exceptions"])
 logger = logging.getLogger(__name__)
+
+# Self-heal the additive columns (linked_asset_ids, closed_at) for tenants
+# provisioned before they existed — create_all only runs at provisioning, and the
+# ORM now SELECTs these columns so they must exist. Memoized per engine.
+_COLS_ENSURED: set = set()
+
+
+def _ensure_columns(db: Session) -> None:
+    try:
+        bind = db.get_bind()
+        key = str(getattr(bind, "url", bind))
+    except Exception:
+        key = "default"
+    if key in _COLS_ENSURED:
+        return
+    try:
+        from sqlalchemy import text
+        db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS linked_asset_ids JSON"))
+        db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS closed_at TIMESTAMP"))
+        db.execute(text("ALTER TABLE grc_policy_exceptions ADD COLUMN IF NOT EXISTS promoted_risk_id INTEGER"))
+        db.commit()
+        _COLS_ENSURED.add(key)
+    except Exception:
+        db.rollback()
+
+
+def _clean_asset_ids(data: dict, db: Session, tenant_ids):
+    """Validate/scope asset ids from a request. Returns None if not provided (so
+    an update doesn't wipe existing links), else the cleaned tenant-owned id list."""
+    raw = data.get("asset_ids")
+    if raw is None:
+        raw = data.get("linked_asset_ids")
+    if raw is None:
+        return None
+    ids = []
+    for x in raw:
+        try:
+            ids.append(int(x))
+        except (TypeError, ValueError):
+            pass
+    if not ids:
+        return []
+    from ..models import ITAsset
+    valid = {row.id for row in db.query(ITAsset.id).filter(
+        ITAsset.id.in_(ids), ITAsset.tenant_id.in_(tenant_ids)).all()}
+    return [i for i in ids if i in valid]
+
+
+def _linked_assets(exc: PolicyException, db: Session):
+    """Resolve linked assets to compact dicts (name + criticality + CIA) for display."""
+    ids = getattr(exc, "linked_asset_ids", None) or []
+    if not ids:
+        return []
+    from ..models import ITAsset
+    rows = db.query(ITAsset).filter(ITAsset.id.in_(ids)).all()
+    return [{
+        "id": a.id, "name": a.name, "asset_type": a.asset_type,
+        "criticality": a.criticality,
+        "confidentiality": a.confidentiality_rating, "integrity": a.integrity_rating,
+        "availability": a.availability_rating,
+    } for a in rows]
 
 
 def _check_ai_available() -> bool:
@@ -264,6 +326,7 @@ def get_expiring_soon(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    _ensure_columns(db)
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return []
@@ -286,6 +349,7 @@ def get_summary(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    _ensure_columns(db)
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return {"total": 0, "by_status": {}, "by_priority": {}}
@@ -313,6 +377,89 @@ def get_summary(
     }
 
 
+@router.get("/analytics")
+def get_exception_analytics(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Asset-weighted exception risk posture + aging + closure-timeliness (for the
+    exceptions-page graphs). The trend series comes from /enriched-dashboard/
+    metric-trend?metric=exception_risk_posture (snapshotted into the history layer)."""
+    _ensure_columns(db)
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"avg_posture": None, "open": 0, "overdue": 0, "aging_buckets": {}, "by_status": {}, "by_priority": {}, "total": 0}
+    return exception_posture.analytics(db, user_tenants)
+
+
+@router.post("/{exception_id}/promote-to-risk")
+def promote_exception_to_risk(
+    exception_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Move an exception's "potential risks" into the ERM risk register so the
+    likelihood/impact assessment can be completed in the risk module. Idempotent:
+    if already promoted, returns the existing risk instead of creating a duplicate.
+    Linked assets carry across so the risk inherits the same exposure."""
+    _ensure_columns(db)
+    user_tenants = get_user_tenants(current_user, db)
+    exception = db.query(PolicyException).filter(
+        PolicyException.id == exception_id,
+        PolicyException.tenant_id.in_(user_tenants),
+    ).first()
+    if not exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+
+    from ..models import Risk, RiskAssetLink
+
+    existing_id = getattr(exception, "promoted_risk_id", None)
+    if existing_id:
+        existing = db.query(Risk).filter(
+            Risk.id == existing_id, Risk.tenant_id == exception.tenant_id
+        ).first()
+        if existing:
+            return {"risk_id": existing.id, "created": False,
+                    "message": "This exception is already in the risk register"}
+
+    parts = []
+    if exception.risk_assessment:
+        parts.append(f"Potential risks:\n{exception.risk_assessment}")
+    if exception.justification:
+        parts.append(f"Exception justification:\n{exception.justification}")
+    if exception.compensating_controls:
+        parts.append(f"Compensating controls:\n{exception.compensating_controls}")
+    doc = (db.query(GovernanceDocument).filter(GovernanceDocument.id == exception.document_id).first()
+           if exception.document_id else None)
+    if doc:
+        parts.append(f"Source policy: {doc.title}")
+    description = "\n\n".join(parts) or None
+
+    risk = Risk(
+        tenant_id=exception.tenant_id,
+        title=f"Policy exception: {exception.title}"[:255],
+        description=description,
+        category="compliance",
+        risk_category="compliance",
+        status="open",
+        owner_id=exception.requested_by,
+        source_type="policy_exception",
+        source_reference=f"policy_exception:{exception.id}",
+    )
+    db.add(risk)
+    db.flush()  # need risk.id before creating asset links
+
+    for aid in (getattr(exception, "linked_asset_ids", None) or []):
+        db.add(RiskAssetLink(risk_id=risk.id, asset_id=aid))
+
+    exception.promoted_risk_id = risk.id
+    exception.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(risk)
+    return {"risk_id": risk.id, "created": True,
+            "message": "Risk created in the register — complete the assessment there"}
+
+
 @router.get("")
 def list_exceptions(
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -323,6 +470,7 @@ def list_exceptions(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    _ensure_columns(db)
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return []
@@ -348,12 +496,13 @@ def create_exception(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    _ensure_columns(db)
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is not assigned to any tenant")
 
     user_tenants = get_user_tenants(current_user, db)
-    
+
     if data.get("document_id"):
         doc = db.query(GovernanceDocument).filter(
             GovernanceDocument.id == data["document_id"],
@@ -376,6 +525,7 @@ def create_exception(
         effective_date=datetime.fromisoformat(data["effective_date"]) if data.get("effective_date") else None,
         expiry_date=datetime.fromisoformat(data["expiry_date"]) if data.get("expiry_date") else None,
         review_date=datetime.fromisoformat(data["review_date"]) if data.get("review_date") else None,
+        linked_asset_ids=(_clean_asset_ids(data, db, user_tenants) or []),
         metadata_=data.get("metadata", {})
     )
     db.add(exception)
@@ -563,6 +713,7 @@ def get_exception(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    _ensure_columns(db)
     user_tenants = get_user_tenants(current_user, db)
     exception = db.query(PolicyException).filter(
         PolicyException.id == exception_id,
@@ -580,6 +731,7 @@ def update_exception(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    _ensure_columns(db)
     user_tenants = get_user_tenants(current_user, db)
     exception = db.query(PolicyException).filter(
         PolicyException.id == exception_id,
@@ -587,6 +739,10 @@ def update_exception(
     ).first()
     if not exception:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exception not found")
+
+    _aids = _clean_asset_ids(data, db, user_tenants)
+    if _aids is not None:
+        exception.linked_asset_ids = _aids
 
     # Validate document_id if provided
     if "document_id" in data and data["document_id"]:
@@ -782,6 +938,7 @@ def revoke_exception(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only approved exceptions can be revoked")
 
     exception.status = "revoked"
+    exception.closed_at = datetime.utcnow()   # closure time for the "closed on time" metric
     exception.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(exception)
@@ -859,6 +1016,18 @@ def _exception_to_dict(exc: PolicyException, db: Session) -> dict:
     approver = db.query(GRCUser).filter(GRCUser.id == exc.approved_by).first() if exc.approved_by else None
     doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == exc.document_id).first() if exc.document_id else None
 
+    # Linked assets: objects (for the posture score) + compact dicts (for display).
+    _ids = getattr(exc, "linked_asset_ids", None) or []
+    _asset_rows = []
+    if _ids:
+        from ..models import ITAsset
+        _asset_rows = db.query(ITAsset).filter(ITAsset.id.in_(_ids)).all()
+    _assets = [{
+        "id": a.id, "name": a.name, "asset_type": a.asset_type, "criticality": a.criticality,
+        "confidentiality": a.confidentiality_rating, "integrity": a.integrity_rating,
+        "availability": a.availability_rating,
+    } for a in _asset_rows]
+
     return {
         "id": exc.id,
         "tenant_id": exc.tenant_id,
@@ -884,8 +1053,14 @@ def _exception_to_dict(exc: PolicyException, db: Session) -> dict:
         "expiry_date": exc.expiry_date.isoformat() if exc.expiry_date else None,
         "review_date": exc.review_date.isoformat() if exc.review_date else None,
         "is_expired": exc.is_expired,
+        "closed_at": exc.closed_at.isoformat() if getattr(exc, "closed_at", None) else None,
         "created_at": exc.created_at.isoformat() if exc.created_at else None,
         "updated_at": exc.updated_at.isoformat() if exc.updated_at else None,
         "metadata": exc.metadata_,
+        "linked_asset_ids": getattr(exc, "linked_asset_ids", None) or [],
+        "linked_assets": _assets,
+        "posture": exception_posture.posture_for(exc, _asset_rows),
+        "closed_on_time": exception_posture.closed_on_time(exc),
+        "promoted_risk_id": getattr(exc, "promoted_risk_id", None),
         "comments_count": len(exc.comments) if exc.comments else 0
     }

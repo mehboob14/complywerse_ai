@@ -610,6 +610,10 @@ _COLUMN_ADDS = [
     # Finding → ERM Risk Register promotion link (vendor-sourced risk).
     ("grc_tpra_findings", "linked_risk_id", "INTEGER",
      "ix_grc_tpra_findings_linked_risk_id"),
+    # Governance doc → frameworks it's declared applicable to / audited against.
+    # Drives the control-coverage panel (mapped / recommended / missing controls).
+    ("grc_governance_documents", "applicable_framework_ids",
+     "JSON DEFAULT '[]'::json", None),
 ]
 
 

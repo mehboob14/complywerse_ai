@@ -135,6 +135,118 @@ def count_open_critical(db: Session, assessment_id: int) -> int:
     return open_count
 
 
+# ── TPRM-003: mirror findings into the shared Issue/Action module ────────────
+# A TPRA finding becomes a first-class Issue (unified owner / SLA / workflow) so
+# remediation isn't tracked in two disconnected places. Best-effort — a linkage
+# failure never blocks the finding mutation. Caller owns commit.
+
+def _severity_to_impact_urgency(sev: str) -> tuple:
+    s = (sev or "medium").lower()
+    if s == "critical":
+        return "high", "high"
+    if s == "high":
+        return "high", "medium"
+    if s == "low":
+        return "low", "low"
+    return "medium", "medium"
+
+
+def ensure_finding_issue(db: Session, finding, actor_id: Optional[int] = None) -> Optional[int]:
+    """Create (once) a linked Issue for a finding via the shared issue-management
+    auto-create service, and back-link it. Idempotent (from_event dedupes by
+    source_type+source_id; we also short-circuit if already linked)."""
+    if getattr(finding, "linked_issue_id", None):
+        return finding.linked_issue_id
+    try:
+        from ...issue_management.services.auto_create import from_event
+        impact, urgency = _severity_to_impact_urgency(finding.severity)
+        issue = from_event(
+            db=db, tenant_id=finding.tenant_id,
+            source_type="tpra_finding", source_id=finding.id,
+            title=f"Vendor finding: {finding.title or 'Untitled'}",
+            description=finding.description,
+            impact=impact, urgency=urgency,
+            issue_type="vendor_breach", category="security", reporter_id=actor_id,
+        )
+        if issue is not None:
+            finding.linked_issue_id = issue.id
+            return issue.id
+    except Exception:  # noqa: BLE001 — linkage is best-effort
+        logger.warning("finding → issue sync skipped for finding %s", getattr(finding, "id", "?"), exc_info=True)
+    return None
+
+
+def close_finding_issue(db: Session, finding, actor_id: Optional[int] = None,
+                        reason: str = "Resolved via the TPRA finding.") -> None:
+    """Close the finding's linked Issue when the finding is closed/accepted."""
+    iid = getattr(finding, "linked_issue_id", None)
+    if not iid:
+        return
+    try:
+        from ....models import Issue
+        issue = db.query(Issue).filter(Issue.id == iid, Issue.tenant_id == finding.tenant_id).first()
+        if not issue or issue.workflow_state in ("closed", "cancelled"):
+            return
+        issue.workflow_state = "closed"
+        issue.status = "closed"
+        issue.closed_at = datetime.utcnow()
+        issue.closure_notes = reason
+        if actor_id:
+            issue.approved_by_id = actor_id
+            issue.approved_at = datetime.utcnow()
+        try:
+            from ....models import IssueActivity
+            db.add(IssueActivity(issue_id=issue.id, user_id=actor_id, type="approved",
+                                 payload={"source": "tpra", "finding_id": finding.id}))
+        except Exception:  # noqa: BLE001 — activity log is optional
+            pass
+    except Exception:  # noqa: BLE001 — best-effort
+        logger.warning("finding issue close skipped for finding %s", getattr(finding, "id", "?"), exc_info=True)
+
+
+# Stages that mean the vendor has already cleared the approval gate.
+_POST_APPROVAL_STAGES = {"onboarding", "monitoring", "reassessment"}
+
+
+def enforce_critical_invariant(
+    db: Session, vendor: Vendor, assessment: VendorAssessment, actor_id: Optional[int] = None,
+) -> None:
+    """TPRM-002: an open, unmitigated critical-control failure must NOT silently
+    persist on a vendor that has already passed the approval gate. Suspend such a
+    vendor (auditable); auto-reactivate once the critical is remediated/accepted/
+    closed. Best-effort — never blocks the calling mutation. Caller owns commit."""
+    try:
+        past_approval = (assessment.current_stage in _POST_APPROVAL_STAGES) or bool(
+            db.query(TPRAStageInstance.id).filter(
+                TPRAStageInstance.assessment_id == assessment.id,
+                TPRAStageInstance.stage_key == "approval",
+                TPRAStageInstance.status.in_(("complete", "skipped")),
+            ).first()
+        )
+        if not past_approval:
+            return
+        open_crit = count_open_critical(db, assessment.id)
+        status = (vendor.status or "").lower()
+        if open_crit > 0 and status not in ("suspended", "terminated", "offboarded"):
+            prev = vendor.status
+            vendor.status = "suspended"
+            vendor.updated_at = datetime.utcnow()
+            write_audit(db, vendor.tenant_id, entity="vendor", action="suspend",
+                        vendor_id=vendor.id, assessment_id=assessment.id, actor_id=actor_id,
+                        from_value=prev, to_value="suspended",
+                        reason="Open critical control failure on an onboarded vendor (TPRM-002).")
+        elif open_crit == 0 and status == "suspended":
+            vendor.status = "active"
+            vendor.updated_at = datetime.utcnow()
+            write_audit(db, vendor.tenant_id, entity="vendor", action="reactivate",
+                        vendor_id=vendor.id, assessment_id=assessment.id, actor_id=actor_id,
+                        from_value="suspended", to_value="active",
+                        reason="Critical control failure resolved — vendor reactivated (TPRM-002).")
+    except Exception:  # noqa: BLE001 — enforcement must never break the mutation
+        logger.warning("critical-invariant enforcement skipped for vendor %s",
+                       getattr(vendor, "id", "?"), exc_info=True)
+
+
 def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessment, stage_key: str) -> dict:
     """Gather the plain facts the pure gate engine needs for one stage."""
     tier = assessment.inherent_tier or vendor.tier or "medium"
@@ -458,11 +570,16 @@ def sync_risk_register(db: Session, vendor: Vendor, assessment: VendorAssessment
             f"residual rating: {assessment.residual_rating or 'n/a'}, "
             f"grade: {getattr(assessment, 'rating_grade', None) or 'n/a'}."
         )
+        # Invariant (TPRM-004): never publish residual > inherent to the register.
+        inh = assessment.inherent_score
+        res = assessment.residual_score
+        if inh is not None and res is not None:
+            res = min(res, inh)
         if risk:
             risk.title = f"Third-party risk: {vendor.name}"
             risk.description = desc
-            risk.inherent_score = assessment.inherent_score
-            risk.residual_score = assessment.residual_score
+            risk.inherent_score = inh
+            risk.residual_score = res
             risk.risk_sub_category = vendor.tier
             risk.updated_at = datetime.utcnow()
         else:
@@ -471,8 +588,8 @@ def sync_risk_register(db: Session, vendor: Vendor, assessment: VendorAssessment
                 title=f"Third-party risk: {vendor.name}", description=desc,
                 category="third_party", risk_category="third_party",
                 register_type="Third-Party Risk", risk_sub_category=vendor.tier,
-                owner_id=vendor.owner_id, inherent_score=assessment.inherent_score,
-                residual_score=assessment.residual_score, status="open",
+                owner_id=vendor.owner_id, inherent_score=inh,
+                residual_score=res, status="open",
                 source_type="assessment",
                 source_reference=f"{ref}/vendor_assessment:{assessment.id}",
             )

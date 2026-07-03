@@ -1,563 +1,670 @@
-<!-- iso_27001_2022 / ISO27-039 | type=Report | model=gpt-5.5 | 32610 chars -->
+<!-- iso_27001_2022 / ISO27-039 | type=Report | mode=markdown | model=gpt-5.5 | 40704 chars -->
 
 | Document ID | Version | Owner | Effective Date | Framework | Control Reference | Classification |
 |---|---:|---|---|---|---|---|
-| ISMS-RPT-IA-001 | 1.0 | ISMS Manager | [Effective Date] | ISO/IEC 27001:2022 | Clause 9.2 — Internal Audit | Confidential |
+| ISMS-RPT-IA-001 | 1.0 | Internal Audit Function / ISMS Manager | [Effective Date] | ISO/IEC 27001:2022 | — Internal Audit | Confidential |
 
 ## Purpose
 
-This Internal Audit Report documents the results of the internal audit performed to evaluate whether the organisation’s Information Security Management System (ISMS):
+This Internal Audit Report documents the results of the internal audit performed to assess whether the organisation’s Information Security Management System (ISMS):
 
-- Conforms to the organisation’s own requirements for its ISMS;
-- Conforms to the requirements of ISO/IEC 27001:2022;
-- Is effectively implemented and maintained;
-- Provides reliable evidence to support management review and continual improvement;
-- Identifies nonconformities, improvement opportunities, and required corrective actions in accordance with ISO/IEC 27001:2022 Clause 9.2.
+1. Conforms to:
+ - The organisation’s own requirements for its ISMS;
+ - The requirements of ISO/IEC 27001:2022, including — Internal Audit;
+ - Applicable policies, procedures, risk treatment plans, and Statement of Applicability requirements.
+2. Is effectively implemented and maintained.
+3. Provides reliable evidence of continual improvement and management oversight.
+4. Identifies nonconformities, opportunities for improvement, and corrective actions requiring management attention.
 
-This report is intended to provide senior management, the ISMS owner, control owners, process owners, and relevant governance stakeholders with an objective summary of audit results, evidence reviewed, conclusions reached, and actions required.
+This report is intended to support management review, corrective action planning, certification readiness, and ongoing ISMS performance evaluation.
 
 ## Reporting Period & Scope
 
 ### Reporting Period
 
-| Item | Detail |
+| Item | Details |
 |---|---|
 | Audit reporting period | [Start Date] to [End Date] |
-| Audit fieldwork dates | [Fieldwork Start Date] to [Fieldwork End Date] |
+| Audit fieldwork dates | [Audit Fieldwork Dates] |
 | Report issue date | [Report Issue Date] |
-| Audit cycle reference | Annual ISMS Internal Audit Programme [Year] |
-| Previous internal audit reference | ISMS-RPT-IA-[Previous Reference] |
+| Audit cycle / programme reference | ISMS Internal Audit Programme [Year] |
+| Previous internal audit report reference | [Previous Report Reference, if applicable] |
 
 ### Audit Scope
 
-The internal audit covered the ISMS scope defined in the current ISMS Scope Statement and assessed selected ISO/IEC 27001:2022 clauses and Annex A controls based on the approved internal audit programme, risk profile, prior audit results, and management priorities.
+The audit covered selected ISMS processes, controls, and evidence relevant to ISO/IEC 27001:2022 implementation and operation.
 
-The audit scope included:
+| Scope Area | Included in Audit | Notes |
+|---|---:|---|
+| ISMS governance and context | Yes | Review of ISMS scope, interested parties, internal/external issues, and leadership responsibilities |
+| Risk assessment and risk treatment | Yes | Review of risk methodology, risk register, treatment plans, and risk acceptance |
+| Statement of Applicability | Yes | Review of control applicability, justification, implementation status, and linkage to risks |
+| Information security policies and procedures | Yes | Review of approval, communication, currency, and operational alignment |
+| Internal audit programme and execution | Yes | Specific review against ISO/IEC 27001:2022 |
+| Management review | Yes | Review of agenda coverage, inputs, outputs, decisions, and actions |
+| Corrective action and continual improvement | Yes | Review of nonconformity handling, root cause analysis, action closure, and effectiveness review |
+| Selected Annex A controls | Yes | Sampling of implemented controls based on risk and SoA coverage |
+| In-scope departments/functions | Yes | [Departments / Functions] |
+| In-scope locations | Yes | [Locations / Remote Operations] |
+| In-scope systems/services | Yes | [Systems / Services / Platforms] |
+| Outsourced processes relevant to ISMS | Partial | Reviewed through contract, supplier assurance, and monitoring evidence |
 
-- Governance and operation of the ISMS;
-- Information security risk assessment and risk treatment activities;
-- Statement of Applicability maintenance;
-- Information security objectives and monitoring;
-- Documented information and record control;
-- Operational planning and control;
-- Performance evaluation, including monitoring, measurement, internal audit, and management review;
-- Corrective action and continual improvement;
-- Selected Annex A controls applicable to the organisation’s risk treatment plan.
+### Exclusions and Limitations
 
-### Organisational Areas Reviewed
-
-| Area / Process | Scope of Review | Primary Contact |
+| Exclusion / Limitation | Rationale | Impact |
 |---|---|---|
-| ISMS Governance | ISMS scope, policies, objectives, governance records, management review inputs | [ISMS Manager] |
-| Risk Management | Risk assessment methodology, risk register, treatment plans, residual risk approvals | [Risk Owner] |
-| IT Operations | Access control, vulnerability management, backup, logging, incident response evidence | [IT Operations Manager] |
-
-### Systems, Locations, and Functions Included
-
-| Category | Included in Audit |
-|---|---|
-| Locations | [Head Office], [Cloud Environment], [Remote Workforce] |
-| Systems / Services | [Core Business Application], [Identity Provider], [Ticketing System], [Cloud Platform] |
-| Business Functions | Information Technology, Security Governance, Human Resources, Operations, Compliance |
-| Exclusions | None, except where documented in the approved audit plan and justified by scope limitations |
-
-### Audit Criteria
-
-The audit was conducted against the following criteria:
-
-- ISO/IEC 27001:2022 Clauses 4 through 10, as applicable to the ISMS scope;
-- ISO/IEC 27001:2022 Clause 9.2 requirements for internal audit;
-- Applicable controls in ISO/IEC 27001:2022 Annex A, as defined in the approved Statement of Applicability;
-- Organisation information security policies, standards, procedures, and control requirements;
-- Risk treatment plan commitments and assigned control responsibilities;
-- Legal, regulatory, contractual, and stakeholder information security requirements identified by the organisation.
-
-### Scope Limitations
-
-The following limitations applied:
-
-| Limitation | Impact | Mitigation |
-|---|---|---|
-| Sample-based testing | Audit conclusions are based on evidence sampled and may not identify every control weakness | Samples selected based on risk, materiality, and audit judgement |
-| Pending evidence for selected records | Some records were not available during fieldwork | Evidence requests were tracked and followed up before report finalisation |
-| Reliance on system-generated reports | Accuracy depends on system configuration and reporting integrity | Where practical, reports were reconciled with source records or corroborated through interviews |
+| [Excluded location/system/process, if any] | [Reason] | [Impact on audit conclusion] |
+| Sampling-based evidence review | Internal audit is conducted using representative samples | Findings reflect evidence sampled and may not identify all issues |
+| Reliance on staff interviews | Interviews were used to corroborate documented evidence | Interview evidence was validated where possible against records |
 
 ## Executive Summary
 
-The internal audit found that the ISMS is generally established and operating, with evidence of defined governance, documented policies, risk management activities, and management oversight. The organisation has implemented many of the core requirements of ISO/IEC 27001:2022 and has maintained key ISMS records, including the ISMS scope, risk assessment outputs, Statement of Applicability, and selected control evidence.
+The internal audit found that the organisation has established an ISMS aligned in structure with ISO/IEC 27001:2022 and has implemented key governance components, including an ISMS scope, risk assessment process, Statement of Applicability, security policies, and management review arrangements.
 
-However, the audit identified nonconformities requiring corrective action, particularly in relation to consistent execution of the internal audit programme, documented evidence of control operation, and timely completion of risk treatment activities. These issues may affect the organisation’s ability to demonstrate full conformity and effective maintenance of the ISMS if not addressed before external certification or surveillance activity.
+However, the audit identified weaknesses in the maturity and consistency of internal audit planning, evidence retention, corrective action tracking, and linkage between audit results, risk treatment, and management review. These issues affect the organisation’s ability to fully demonstrate conformity with ISO/IEC 27001:2022 and related continual improvement requirements.
 
-### Overall Audit Opinion
+### Overall Audit Conclusion
 
-| Audit Opinion | Rating |
+| Conclusion Area | Assessment |
 |---|---|
-| Overall ISMS conformity | Partially conforming |
-| Implementation effectiveness | Generally effective, with corrective actions required |
-| Maintenance of documented information | Adequate, with evidence gaps in selected areas |
-| Readiness for external audit | Conditional readiness, subject to closure of major and minor nonconformities |
+| ISMS conformity to ISO/IEC 27001:2022 | Partially conforming |
+| ISMS implementation effectiveness | Generally implemented, with control and evidence gaps |
+| internal audit conformity | Partially conforming |
+| Certification readiness impact | Moderate impact; corrective action required before external audit |
+| Overall opinion | The ISMS is operational but requires targeted corrective action to improve audit programme discipline, objective evidence, and closure effectiveness |
 
-### Summary of Results
+### Summary of Findings
 
-| Result Category | Count | Summary |
-|---|---:|---|
-| Major nonconformities | 1 | Significant failure to fully implement and maintain the approved internal audit programme in accordance with Clause 9.2 requirements |
-| Minor nonconformities | 2 | Isolated or limited failures relating to risk treatment evidence and control monitoring records |
-| Opportunities for improvement | 3 | Improvements identified for audit planning, metrics traceability, and corrective action trend analysis |
-| Conforming areas | 5 | ISMS scope, policy framework, risk methodology, management review, and access control governance were generally supported by evidence |
+| Finding ID | Finding Type | Severity | Area | Summary |
+|---|---|---:|---|---|
+| IA-2022-01 | Nonconformity | Major | Internal audit programme | The internal audit programme does not fully demonstrate planned intervals, scope coverage, audit criteria, impartiality, and risk-based prioritisation required by |
+| IA-2022-02 | Nonconformity | Minor | Audit evidence and reporting | Audit records do not consistently evidence audit criteria, sampled evidence, conclusions, and traceability to ISO/IEC 27001:2022 requirements |
+| IA-2022-03 | Nonconformity | Minor | Corrective action | Corrective actions from prior audits are not consistently tracked through root cause, owner assignment, due date, closure evidence, and effectiveness review |
+| IA-2022-04 | Observation | Medium | Management review linkage | Internal audit results are presented to management, but trend analysis and decision outputs are limited |
+| IA-2022-05 | Opportunity for Improvement | Low | Auditor competence | Auditor competence criteria exist informally but are not fully documented or periodically reviewed |
+| IA-2022-06 | Positive Practice | N/A | ISMS documentation | The ISMS maintains a structured document set with version control, ownership, and access restrictions |
 
-### Key Strengths Observed
+### Severity Definitions
 
-- The ISMS scope is documented, approved, and aligned to business services and supporting technology environments.
-- The information security policy framework is established and available to relevant personnel.
-- A documented risk assessment methodology exists and has been applied to in-scope assets and processes.
-- The Statement of Applicability identifies included and excluded Annex A controls with justification.
-- Management review meetings are occurring and include discussion of ISMS performance, risk posture, audit results, and improvement activities.
-
-### Key Concerns
-
-- The internal audit programme did not fully demonstrate coverage of all required ISMS areas over the planned audit cycle.
-- Some control effectiveness evidence was incomplete, inconsistent, or not retained in a manner that supports auditability.
-- Certain risk treatment actions remained overdue without documented risk owner acceptance or revised target dates.
-- Corrective action records did not consistently include root cause analysis or effectiveness verification.
+| Severity | Definition |
+|---|---|
+| Major Nonconformity | Absence, breakdown, or systemic failure of a required ISMS process, or a condition that significantly affects the organisation’s ability to meet ISO/IEC 27001:2022 requirements |
+| Minor Nonconformity | Isolated or limited failure to meet a requirement where the ISMS process is substantially established but not consistently implemented or evidenced |
+| Observation | A condition that is currently conforming or not clearly nonconforming but could develop into a nonconformity if not addressed |
+| Opportunity for Improvement | A recommendation to improve effectiveness, efficiency, maturity, or auditability, without indicating nonconformity |
+| Positive Practice | Evidence of effective implementation, maturity, or good practice that supports ISMS objectives |
 
 ## Methodology
 
 ### Audit Approach
 
-The audit was performed using a risk-based and evidence-based approach consistent with ISO/IEC 27001:2022 Clause 9.2 and recognised internal audit practice. The audit assessed both conformity and effectiveness by examining whether requirements were defined, implemented, maintained, monitored, and supported by objective evidence.
+The audit was conducted using a risk-based and evidence-based approach aligned with ISO/IEC 27001:2022. The audit assessed whether internal audit processes are planned, implemented, documented, and maintained to provide objective assurance regarding ISMS conformity and effectiveness.
 
-Audit activities included:
+The audit included:
 
-- Review of documented ISMS requirements, policies, procedures, records, and governance artefacts;
-- Interviews with personnel responsible for ISMS governance, risk management, IT operations, and control execution;
-- Sampling of records to test operation of selected processes and controls;
-- Walkthroughs of key ISMS processes, including risk assessment, risk treatment, management review, corrective action, and selected Annex A controls;
-- Review of prior audit findings and status of corrective actions;
-- Evaluation of evidence against ISO/IEC 27001:2022 requirements and the organisation’s own defined requirements.
+- Review of documented ISMS requirements, policies, procedures, and records;
+- Interviews with process owners and relevant personnel;
+- Sampling of audit records, risk records, control evidence, corrective actions, and management review outputs;
+- Walkthroughs of selected ISMS processes;
+- Verification of audit programme planning and execution;
+- Evaluation of conformity against ISO/IEC 27001:2022 clauses and selected Annex A controls;
+- Assessment of previous audit findings and closure effectiveness.
 
-### Audit Sampling
+### Audit Criteria
 
-Sampling was judgemental and risk-based. Samples were selected using the following considerations:
+The following criteria were used to evaluate conformity:
 
-- Relevance to ISMS scope and certification boundary;
-- Materiality to information security risk;
-- Changes since the prior audit period;
-- Previous audit results or known control weaknesses;
-- Control criticality and reliance by other processes;
-- Availability and reliability of evidence.
-
-### Evidence Sources Reviewed
-
-| Evidence Type | Examples Reviewed |
+| Criteria Source | Criteria Applied |
 |---|---|
-| Governance documents | ISMS Scope Statement, Information Security Policy, ISMS Objectives, Management Review Minutes |
-| Risk records | Risk Assessment Methodology, Risk Register, Risk Treatment Plan, Residual Risk Acceptance Records |
-| Control evidence | Access review records, vulnerability scan reports, backup test records, incident tickets |
-| Audit records | Internal Audit Programme, Audit Plan, Audit Checklist, Previous Audit Report, Corrective Action Register |
-| Operational records | Change tickets, monitoring alerts, supplier review records, training completion reports |
+| ISO/IEC 27001:2022 | through 10, with specific emphasis on |
+| ISO/IEC 27001:2022 | Requirement to conduct internal audits at planned intervals to determine ISMS conformity and effective implementation/maintenance |
+| ISO/IEC 27001:2022 | Requirement to plan, establish, implement, and maintain audit programme(s), define audit criteria and scope, select auditors objectively and impartially, report results to relevant management, and retain documented information |
+| Organisation ISMS policies | [Information Security Policy], [Risk Management Procedure], [Internal Audit Procedure], [Corrective Action Procedure] |
+| Statement of Applicability | Control applicability, justification, implementation status, and control ownership |
+| Risk treatment plan | Risk treatment actions, residual risk acceptance, and control implementation evidence |
+| Legal, regulatory, and contractual requirements | [Applicable Requirements Register] |
 
-### Interview Participants
+### Audit Team
 
-| Role | Interview Focus |
+| Role | Name / Function | Independence Confirmation |
+|---|---|---|
+| Lead Internal Auditor | [Name / Function] | Confirmed not responsible for audited activities |
+| Supporting Auditor | [Name / Function] | Confirmed not responsible for audited activities |
+| Technical Subject Matter Expert | [Name / Function] | Provided technical advice only; no audit decision authority |
+| Auditee Representative | [Name / Function] | Coordinated evidence and interviews |
+
+### Interviewed Personnel
+
+| Function / Role | Interview Date | Topics Covered |
+|---|---|---|
+| ISMS Manager | [Date] | ISMS governance, audit programme, corrective actions, management review |
+| Risk Owner(s) | [Date] | Risk assessment, treatment plans, control ownership |
+| IT Operations Lead | [Date] | Asset management, access control, operational controls |
+| HR Representative | [Date] | Security awareness, onboarding/offboarding, competence |
+| Supplier Manager | [Date] | Supplier security, monitoring, contractual controls |
+| Senior Management Representative | [Date] | Leadership commitment, ISMS objectives, management review decisions |
+
+### Evidence Reviewed
+
+| Evidence Category | Examples Reviewed |
 |---|---|
-| [ISMS Manager] | ISMS governance, audit programme, management review, corrective action |
-| [IT Operations Manager] | Operational control implementation, vulnerability management, backup, logging |
-| [HR Representative] | Security awareness, onboarding and offboarding process evidence |
+| ISMS governance documents | ISMS scope, information security policy, ISMS objectives, interested parties register |
+| Risk documentation | Risk assessment methodology, risk register, risk treatment plan, risk acceptance records |
+| Statement of Applicability | Current SoA, control justifications, implementation status, control owner mapping |
+| Internal audit records | Audit programme, audit plan, audit checklist, audit working papers, audit reports |
+| Corrective action records | Nonconformity register, root cause analysis, corrective action plans, closure evidence |
+| Management review records | Management review agenda, minutes, action logs, decisions, resource allocation |
+| Operational control evidence | Access reviews, backup logs, vulnerability reports, incident records, supplier reviews |
+| Competence and awareness records | Training completion logs, role competence records, awareness communications |
 
-### Finding Classification
+### Sampling
 
-Findings were classified using the following criteria:
+The audit used judgmental sampling based on ISMS risk, previous audit results, materiality, and process criticality.
 
-| Classification | Definition |
-|---|---|
-| Major Nonconformity | A systemic failure, absence, or significant breakdown of a required ISMS process or control; or a condition that creates significant doubt regarding the capability of the ISMS to achieve intended outcomes |
-| Minor Nonconformity | An isolated or limited failure to meet a requirement that does not indicate systemic breakdown but requires correction and corrective action |
-| Opportunity for Improvement | A situation where conformity exists, but effectiveness, efficiency, consistency, or resilience could be improved |
-| Conformity | Objective evidence demonstrates that the requirement is implemented and maintained |
+| Sample Area | Sample Size / Period | Basis for Selection |
+|---|---|---|
+| Internal audit records | [Number] audits from current audit cycle | relevance and certification readiness |
+| Corrective actions | [Number] open and closed actions | Prior audit findings and closure quality |
+| Risk treatment items | [Number] risks and treatments | High and medium residual risks |
+| Annex A controls | [Number] controls | Applicability, risk linkage, and operational importance |
+| Access reviews | [Number] user access review records | Identity and access management risk |
+| Supplier reviews | [Number] suppliers | Criticality and outsourced ISMS dependencies |
 
 ## Detailed Findings / Results (with structure)
 
-### Findings Summary Table
-
-| ID | Requirement / Area | Classification | Finding Title | Owner | Target Date | Status |
-|---|---|---|---|---|---|---|
-| IA-2022-01 | ISO/IEC 27001:2022 Cl. 9.2 | Major Nonconformity | Internal audit programme does not demonstrate complete planned coverage | [ISMS Manager] | [Target Date] | Open |
-| IA-2022-02 | ISO/IEC 27001:2022 Cl. 6.1.3 / 8.1 | Minor Nonconformity | Risk treatment actions overdue without documented approval | [Risk Owner] | [Target Date] | Open |
-| IA-2022-03 | ISO/IEC 27001:2022 Cl. 9.1 / Annex A monitoring controls | Minor Nonconformity | Control monitoring evidence not consistently retained | [Control Owner] | [Target Date] | Open |
-| IA-2022-04 | ISO/IEC 27001:2022 Cl. 10.1 | Opportunity for Improvement | Corrective action root cause analysis can be strengthened | [ISMS Manager] | [Target Date] | Open |
-
----
-
-### Finding IA-2022-01: Internal Audit Programme Does Not Demonstrate Complete Planned Coverage
+### IA-2022-01 — Internal Audit Programme Does Not Fully Demonstrate Requirements
 
 | Field | Detail |
 |---|---|
 | Finding ID | IA-2022-01 |
-| Classification | Major Nonconformity |
-| ISO/IEC 27001:2022 Reference | Clause 9.2 — Internal Audit |
-| Related Requirement | The organisation shall conduct internal audits at planned intervals to provide information on whether the ISMS conforms to the organisation’s own requirements and ISO/IEC 27001 requirements, and is effectively implemented and maintained. The organisation shall plan, establish, implement, and maintain an audit programme considering the importance of processes and results of previous audits. |
-| Process / Area | ISMS Internal Audit Programme |
-| Finding Owner | [ISMS Manager] |
+| Finding Type | Nonconformity |
+| Severity | Major |
+| ISO/IEC 27001:2022 Reference | and |
+| Process / Area | Internal audit programme |
+| Owner | ISMS Manager / Internal Audit Function |
 | Status | Open |
 
-#### Condition
+#### Requirement
 
-The approved internal audit programme for the current audit cycle does not demonstrate that all relevant ISMS requirements, processes, and applicable controls are scheduled for audit at planned intervals. The audit programme identifies selected audit activities but does not provide sufficient evidence that audit scope, criteria, frequency, methods, responsibilities, planning requirements, and reporting arrangements were fully established and maintained.
+ISO/IEC 27001:2022 requires the organisation to conduct internal audits at planned intervals to determine whether the ISMS conforms to the organisation’s own requirements and ISO/IEC 27001 requirements, and is effectively implemented and maintained. further requires the organisation to plan, establish, implement, and maintain audit programme(s), including frequency, methods, responsibilities, planning requirements, and reporting. The programme must consider the importance of the processes concerned and results of previous audits. The organisation must define audit criteria and scope for each audit, select auditors to ensure objectivity and impartiality, report audit results to relevant management, and retain documented information.
 
 #### Evidence Reviewed
 
-- Internal Audit Programme [Year];
-- Internal Audit Plan dated [Date];
-- Internal audit checklist for selected clauses;
-- Previous internal audit report ISMS-RPT-IA-[Reference];
-- Corrective action register;
-- Management review minutes dated [Date].
+| Evidence | Result |
+|---|---|
+| Internal Audit Programme [Year] | Exists but does not define complete coverage of ISMS processes across the audit cycle |
+| Internal Audit Plan for [Audit Name] | Includes audit dates and participants but does not consistently define audit criteria and scope boundaries |
+| Prior audit reports | Previous results are available but not demonstrably used to prioritise current audit activities |
+| Auditor assignment records | Auditors identified, but independence and impartiality are not consistently documented |
+| ISMS scope and SoA | Not fully mapped to the audit programme to demonstrate coverage of applicable ISMS requirements and controls |
 
-#### Evidence Observed
+#### Finding Statement
 
-- Audit coverage was documented for selected ISO/IEC 27001:2022 clauses, including Clause 6 and Clause 9.
-- Several key areas within the ISMS scope, including supplier security management, secure change control, and logging/monitoring, were not clearly mapped to planned internal audit activities.
-- The programme did not clearly demonstrate how audit frequency was determined based on process importance, risk, and previous audit results.
-- Records did not consistently identify auditor independence and impartiality for each audited area.
-- Reporting arrangements were documented at a high level but did not include required escalation or target timeframes for nonconformity response.
+The internal audit programme is established but does not fully demonstrate that audits are planned at intervals based on the importance of ISMS processes, changes affecting the organisation, and results of previous audits. The audit programme also lacks sufficient documented linkage between audit scope, audit criteria, auditor impartiality, ISMS process coverage, and Annex A control coverage.
 
-#### Criteria
+#### Objective Evidence
 
-ISO/IEC 27001:2022 Clause 9.2 requires the organisation to:
-
-- Conduct internal audits at planned intervals;
-- Determine whether the ISMS conforms to the organisation’s own requirements and ISO/IEC 27001;
-- Determine whether the ISMS is effectively implemented and maintained;
-- Plan, establish, implement, and maintain an audit programme;
-- Consider the importance of processes and results of previous audits;
-- Define audit criteria and scope for each audit;
-- Select auditors and conduct audits ensuring objectivity and impartiality;
-- Ensure results are reported to relevant management;
-- Retain documented information as evidence of the audit programme and audit results.
+- The Internal Audit Programme [Year] lists audit activities but does not include a complete audit cycle map showing when all relevant ISO/IEC 27001:2022 clauses and applicable Annex A controls will be audited.
+- The audit programme does not document a risk-based rationale for audit frequency.
+- Previous audit findings were not referenced in the current audit planning records.
+- Auditor independence declarations were not available for all assigned auditors.
+- Some audit plans reviewed did not define explicit audit criteria, such as specific ISO/IEC 27001 clauses, internal policies, or procedures being tested.
 
 #### Impact / Risk
 
-Incomplete audit programme planning reduces assurance that all material ISMS requirements and applicable controls are independently assessed. This may result in undetected nonconformities, weak control performance, incomplete management review inputs, and reduced readiness for certification or surveillance audits.
+Failure to maintain a complete and risk-based internal audit programme may result in:
+
+- Insufficient assurance that the ISMS conforms to ISO/IEC 27001:2022;
+- Critical ISMS processes or controls not being audited within appropriate intervals;
+- Reduced ability to identify systemic control weaknesses;
+- Challenge from certification auditors regarding conformity;
+- Weak linkage between internal audit, management review, corrective action, and continual improvement.
 
 #### Root Cause Assessment
 
-Preliminary root cause indicates that the internal audit programme was developed as a schedule of audit events rather than a comprehensive programme aligned to ISMS scope, risk, process importance, prior audit results, and applicable Annex A control coverage.
-
-#### Required Correction
-
-Update the current internal audit programme to include complete scope, criteria, frequency, methods, responsibilities, auditor impartiality requirements, reporting arrangements, and coverage mapping across applicable ISO/IEC 27001:2022 clauses and selected Annex A controls.
+Preliminary root cause indicates that the internal audit programme was developed as a calendar of audit events rather than as a structured audit programme that defines frequency, methods, responsibilities, scope, criteria, risk basis, and reporting requirements.
 
 #### Required Corrective Action
 
-Perform root cause analysis and revise the internal audit programme process to ensure future audit cycles are planned using documented risk-based criteria, previous audit results, ISMS process importance, and management priorities. Retain evidence of programme approval and ongoing maintenance.
+| Action | Owner | Due Date | Evidence Required |
+|---|---|---:|---|
+| Revise the Internal Audit Programme to include frequency, methods, responsibilities, planning requirements, reporting, and full ISMS coverage | ISMS Manager | [Date] | Approved Internal Audit Programme |
+| Map the audit programme to ISO/IEC 27001:2022 clauses, applicable Annex A controls, ISMS processes, and prior audit results | Internal Audit Lead | [Date] | Audit coverage matrix |
+| Define documented audit criteria and scope for each planned audit | Internal Audit Lead | [Date] | Updated audit plans |
+| Implement auditor independence and impartiality declarations | Internal Audit Function | [Date] | Signed declarations or equivalent records |
+| Review updated programme with relevant management | ISMS Manager | [Date] | Meeting minutes / approval record |
 
 ---
 
-### Finding IA-2022-02: Risk Treatment Actions Overdue Without Documented Approval
+### IA-2022-02 — Audit Records Do Not Consistently Evidence Criteria, Sampling, and Conclusions
 
 | Field | Detail |
 |---|---|
 | Finding ID | IA-2022-02 |
-| Classification | Minor Nonconformity |
-| ISO/IEC 27001:2022 Reference | Clauses 6.1.3 and 8.1 |
-| Related Requirement | The organisation shall define and implement an information security risk treatment process and retain documented information on the results. It shall plan, implement, and control processes needed to meet information security requirements. |
-| Process / Area | Information Security Risk Treatment |
-| Finding Owner | [Risk Owner] |
+| Finding Type | Nonconformity |
+| Severity | Minor |
+| ISO/IEC 27001:2022 Reference | |
+| Process / Area | Internal audit execution and reporting |
+| Owner | Internal Audit Lead |
 | Status | Open |
 
-#### Condition
+#### Requirement
 
-A sample of risk treatment actions showed overdue actions without documented approval of revised due dates, residual risk acceptance, or management escalation.
+ISO/IEC 27001:2022 requires the organisation to retain documented information as evidence of the implementation of the audit programme and audit results. Audit records should be sufficient to demonstrate that audits were performed objectively against defined criteria and that conclusions are supported by evidence.
 
 #### Evidence Reviewed
 
-- Risk Register export dated [Date];
-- Risk Treatment Plan version [Version];
-- Risk acceptance records;
-- Management review minutes dated [Date];
-- Jira / ticketing records for treatment tasks [Ticket IDs].
+| Evidence | Result |
+|---|---|
+| Audit checklists | Available for some audits but not consistently completed |
+| Audit working papers | Limited evidence of sampling rationale and test results |
+| Audit reports | Findings reported, but traceability to specific criteria is inconsistent |
+| Interview notes | Maintained informally in some cases |
+| Evidence logs | Not used consistently |
 
-#### Evidence Observed
+#### Finding Statement
 
-- Two sampled risk treatment actions had target completion dates more than 60 days overdue.
-- One overdue action related to privileged access review automation and one related to supplier security reassessment.
-- No documented approval was available for extending the target dates.
-- Residual risk acceptance records were not updated to reflect delay in treatment completion.
-- Overdue treatment actions were mentioned informally in status reporting but not formally escalated to management review.
+Audit records do not consistently demonstrate the audit criteria applied, evidence sampled, test results, and basis for audit conclusions. While audit reports exist, the supporting working papers are not always sufficiently detailed to enable independent verification of how conclusions were reached.
 
-#### Criteria
+#### Objective Evidence
 
-ISO/IEC 27001:2022 requires that information security risk treatment plans are determined, approved, implemented, and retained as documented information. Operational planning and control require that planned actions are controlled and changes are reviewed.
+- Two sampled audit files did not identify the specific ISO/IEC 27001:2022 clauses or internal procedures assessed.
+- Evidence logs were not consistently maintained to show the records reviewed.
+- Some audit conclusions were stated as “satisfactory” without documented test steps or supporting evidence.
+- Sampling rationale was not documented for selected operational control testing.
 
 #### Impact / Risk
 
-Unapproved delays in risk treatment may result in management being unaware of continued exposure and may undermine the reliability of the organisation’s risk management and treatment process.
+Insufficient audit evidence may:
+
+- Reduce the reliability and repeatability of audit conclusions;
+- Limit the organisation’s ability to defend audit results during external assessment;
+- Impair trend analysis and continual improvement;
+- Create ambiguity over whether findings are isolated or systemic.
 
 #### Root Cause Assessment
 
-Preliminary root cause indicates insufficient procedural requirements for escalation, re-approval, and residual risk review when treatment actions exceed planned target dates.
-
-#### Required Correction
-
-Review all overdue risk treatment actions, update target dates where justified, obtain risk owner approval, and document residual risk acceptance or escalation decisions.
+Audit execution templates do not require auditors to document criteria, sample details, test results, and evidence references in a consistent format.
 
 #### Required Corrective Action
 
-Update the risk treatment procedure to define escalation thresholds, approval requirements, and management reporting expectations for overdue or materially changed risk treatment actions.
+| Action | Owner | Due Date | Evidence Required |
+|---|---|---:|---|
+| Update internal audit templates to include audit criteria, scope, samples, evidence references, test results, and conclusions | Internal Audit Lead | [Date] | Approved audit template |
+| Train auditors on evidence recording expectations | Internal Audit Lead | [Date] | Training record |
+| Retrospectively update current-cycle audit files where evidence is available | Assigned Auditors | [Date] | Updated audit files |
+| Perform quality review of audit files before report issuance | Internal Audit Lead | [Date] | Audit file review checklist |
 
 ---
 
-### Finding IA-2022-03: Control Monitoring Evidence Not Consistently Retained
+### IA-2022-03 — Corrective Actions from Prior Audits Are Not Consistently Tracked to Effective Closure
 
 | Field | Detail |
 |---|---|
 | Finding ID | IA-2022-03 |
-| Classification | Minor Nonconformity |
-| ISO/IEC 27001:2022 Reference | Clause 9.1 and applicable Annex A controls |
-| Related Requirement | The organisation shall evaluate information security performance and ISMS effectiveness, including what needs to be monitored and measured, methods, responsibilities, timing, and results. |
-| Process / Area | Control Monitoring and Evidence Retention |
-| Finding Owner | [Control Owner] |
+| Finding Type | Nonconformity |
+| Severity | Minor |
+| ISO/IEC 27001:2022 Reference |, |
+| Process / Area | Corrective action and continual improvement |
+| Owner | ISMS Manager / Process Owners |
 | Status | Open |
 
-#### Condition
+#### Requirement
 
-Evidence supporting operation and monitoring of selected information security controls was not consistently retained or readily retrievable.
+ISO/IEC 27001:2022 requires internal audit results to be reported to relevant management and retained as documented information. Where nonconformities are identified, requires the organisation to react to the nonconformity, evaluate the need for action to eliminate causes, implement actions, review effectiveness, and update the ISMS where necessary.
 
 #### Evidence Reviewed
 
-- Monthly access review records;
-- Vulnerability management reports;
-- Backup test results;
-- Security monitoring dashboards;
-- Control owner attestations;
-- ISMS metrics dashboard.
+| Evidence | Result |
+|---|---|
+| Prior internal audit reports | Findings identified |
+| Corrective action register | Maintained, but fields incomplete |
+| Root cause analysis records | Inconsistent |
+| Closure evidence | Available for some actions only |
+| Effectiveness review records | Not consistently documented |
 
-#### Evidence Observed
+#### Finding Statement
 
-- Access review records were available for [Month 1] and [Month 2] but not for [Month 3].
-- Vulnerability scan reports were available, but evidence of remediation validation was incomplete for sampled high-risk findings.
-- Backup monitoring dashboards showed successful jobs, but restoration testing records were not consistently linked to backup policy requirements.
-- Metrics were presented in management review, but source evidence was not always retained in the ISMS evidence repository.
+Corrective actions arising from prior internal audit findings are not consistently managed through documented root cause analysis, owner assignment, target date, closure evidence, and effectiveness review.
 
-#### Criteria
+#### Objective Evidence
 
-ISO/IEC 27001:2022 Clause 9.1 requires the organisation to determine what must be monitored and measured, methods for monitoring, when monitoring is performed, who evaluates results, and to retain appropriate documented information as evidence.
+- Three sampled corrective actions did not include documented root cause analysis.
+- Two closed actions lacked evidence demonstrating implementation.
+- Effectiveness reviews were not documented for several completed actions.
+- One overdue action did not show escalation or revised management-approved due date.
 
 #### Impact / Risk
 
-Inconsistent evidence retention may prevent the organisation from demonstrating control effectiveness, reduce reliability of ISMS performance reporting, and impair management’s ability to make informed decisions.
+Weak corrective action management may result in:
+
+- Recurrence of nonconformities;
+- Inability to demonstrate effective response to audit findings;
+- Reduced ISMS continual improvement;
+- Increased likelihood of repeated findings during certification audit.
 
 #### Root Cause Assessment
 
-Preliminary root cause indicates that evidence retention expectations are not consistently defined for each monitored control, including frequency, repository location, naming convention, owner, and review evidence.
-
-#### Required Correction
-
-Collect and retain missing evidence where available. Where evidence cannot be reconstructed, document the gap and perform compensating validation for the affected control period.
+The corrective action process exists but is not consistently enforced. The corrective action register does not mandate all fields required to demonstrate full lifecycle management and effectiveness review.
 
 #### Required Corrective Action
 
-Define and implement an ISMS evidence retention matrix specifying control evidence type, frequency, owner, retention location, review requirement, and retention period.
+| Action | Owner | Due Date | Evidence Required |
+|---|---|---:|---|
+| Update corrective action register to require root cause, containment, corrective action, owner, due date, closure evidence, and effectiveness review | ISMS Manager | [Date] | Updated corrective action register |
+| Review all open and recently closed audit actions for completeness | ISMS Manager | [Date] | Corrective action review record |
+| Escalate overdue actions to relevant management | ISMS Manager | [Date] | Escalation record |
+| Define effectiveness review criteria and timing | Internal Audit Lead | [Date] | Corrective action procedure update |
+| Report corrective action status to management review | ISMS Manager | [Date] | Management review input pack |
 
 ---
 
-### Finding IA-2022-04: Corrective Action Root Cause Analysis Can Be Strengthened
+### IA-2022-04 — Limited Trend Analysis of Internal Audit Results in Management Review
 
 | Field | Detail |
 |---|---|
 | Finding ID | IA-2022-04 |
-| Classification | Opportunity for Improvement |
-| ISO/IEC 27001:2022 Reference | Clause 10.1 — Continual Improvement; Clause 10.2 — Nonconformity and Corrective Action |
-| Process / Area | Corrective Action Management |
-| Finding Owner | [ISMS Manager] |
+| Finding Type | Observation |
+| Severity | Medium |
+| ISO/IEC 27001:2022 Reference |, |
+| Process / Area | Management review |
+| Owner | Senior Management / ISMS Manager |
 | Status | Open |
 
-#### Observation
+#### Requirement
 
-Corrective action records exist and are tracked; however, root cause analysis is inconsistently documented. Some corrective actions describe the immediate fix but do not clearly identify the underlying cause or define how effectiveness will be verified.
+ISO/IEC 27001:2022 requires internal audit results to be reported to relevant management. Management review under should consider ISMS performance, including audit results, nonconformities, corrective actions, changes in external and internal issues, and opportunities for continual improvement.
 
 #### Evidence Reviewed
 
-- Corrective Action Register;
-- Previous internal audit findings;
-- Management review action log;
-- Corrective action records [CAR IDs].
+| Evidence | Result |
+|---|---|
+| Management review minutes | Internal audit results included |
+| Audit summary reports | Presented at high level |
+| Corrective action status | Included but limited trend analysis |
+| Management decisions | Some decisions recorded, but not always linked to audit results |
 
-#### Evidence Observed
+#### Observation Statement
 
-- Corrective action owners and due dates were assigned.
-- Closure evidence was attached for several completed actions.
-- Root cause fields were brief or absent in some records.
-- Effectiveness verification was not always documented after closure.
+Internal audit results are reported to management; however, reporting is primarily status-based and does not consistently include trend analysis, recurring themes, systemic issues, aging of findings, or effectiveness of corrective actions.
 
-#### Improvement Opportunity
+#### Impact / Risk
 
-The organisation should strengthen corrective action records by requiring clear root cause analysis, corrective action rationale, evidence of implementation, effectiveness criteria, independent verification, and closure approval.
+Limited management analysis may reduce the ability of leadership to:
 
-#### Expected Benefit
+- Identify systemic ISMS weaknesses;
+- Allocate resources based on audit risk;
+- Prioritise recurring control failures;
+- Demonstrate effective oversight of continual improvement.
 
-Improved corrective action discipline will support continual improvement, reduce recurrence of issues, and provide stronger evidence for ISO/IEC 27001 certification and surveillance audits.
+#### Recommended Improvement
+
+| Recommendation | Owner | Target Date | Evidence |
+|---|---|---:|---|
+| Add audit trend analysis to management review inputs | ISMS Manager | [Date] | Updated management review pack |
+| Report findings by severity, clause/control area, business process, age, and recurrence | Internal Audit Lead | [Date] | Audit dashboard |
+| Record management decisions and resource commitments linked to audit results | Senior Management | [Date] | Management review minutes |
 
 ---
 
-### Conforming Results
+### IA-2022-05 — Auditor Competence Criteria Are Not Fully Documented
 
-| Area | Result | Evidence |
-|---|---|---|
-| ISMS Scope | Conforming | Scope statement identifies organisational boundaries, locations, systems, interfaces, and exclusions |
-| Information Security Policy | Conforming | Policy approved by management, communicated to personnel, and available in document repository |
-| Management Review | Conforming with minor improvement potential | Management review minutes include audit results, risk status, objectives, incidents, corrective actions, and improvement opportunities |
+| Field | Detail |
+|---|---|
+| Finding ID | IA-2022-05 |
+| Finding Type | Opportunity for Improvement |
+| Severity | Low |
+| ISO/IEC 27001:2022 Reference |, |
+| Process / Area | Auditor competence and independence |
+| Owner | Internal Audit Function / HR |
+| Status | Open |
+
+#### Requirement
+
+ISO/IEC 27001:2022 requires the organisation to determine necessary competence for persons doing work under its control that affects information security performance. also requires auditors to be selected and audits conducted to ensure objectivity and impartiality.
+
+#### Current Practice
+
+Auditors are selected based on experience and availability. Informal consideration is given to audit experience, information security knowledge, and independence from the audited process.
+
+#### Improvement Opportunity
+
+The organisation would benefit from formally defining internal auditor competence criteria, including:
+
+- Knowledge of ISO/IEC 27001:2022 requirements;
+- Understanding of the organisation’s ISMS scope and risk context;
+- Audit principles and evidence evaluation skills;
+- Technical competence relevant to audited controls;
+- Independence and conflict-of-interest requirements;
+- Continuing competence expectations.
+
+#### Recommended Improvement
+
+| Recommendation | Owner | Target Date | Evidence |
+|---|---|---:|---|
+| Define internal ISMS auditor competence criteria | Internal Audit Lead / HR | [Date] | Competence matrix |
+| Maintain auditor training and qualification records | HR / ISMS Manager | [Date] | Training records |
+| Review auditor competence annually as part of audit programme planning | Internal Audit Lead | [Date] | Annual auditor competence review |
+
+---
+
+### IA-2022-06 — Positive Practice: Structured ISMS Documentation and Version Control
+
+| Field | Detail |
+|---|---|
+| Finding ID | IA-2022-06 |
+| Finding Type | Positive Practice |
+| Severity | N/A |
+| ISO/IEC 27001:2022 Reference | |
+| Process / Area | Documented information |
+| Owner | ISMS Manager |
+| Status | Not applicable |
+
+#### Positive Practice Statement
+
+The organisation maintains a structured ISMS documentation set with assigned document owners, version numbers, classification markings, and controlled access. This supports effective auditability and provides a strong foundation for maintaining required documented information under ISO/IEC 27001:2022.
+
+#### Evidence Reviewed
+
+| Evidence | Result |
+|---|---|
+| ISMS document register | Maintained and current |
+| Document templates | Include owner, version, approval, and classification fields |
+| Access permissions | Restricted to authorised personnel |
+| Policy approval records | Available for sampled policies |
+
+#### Benefit
+
+This practice improves consistency, accountability, and traceability across ISMS documentation and supports evidence readiness for internal and external audits.
 
 ## Analysis
 
-### Conformity Against ISO/IEC 27001:2022 Clause 9.2
+### Conformity Assessment
 
-The organisation has established an internal audit process and has conducted internal audit activity during the reporting period. Audit records exist and results have been communicated to relevant management. This demonstrates partial conformity with Clause 9.2.
-
-However, the audit programme requires improvement to fully demonstrate that internal audits are planned, established, implemented, and maintained in a way that considers:
-
-- Importance of ISMS processes;
-- Results of previous audits;
-- Risk and control criticality;
-- Audit criteria and scope for each audit;
-- Auditor objectivity and impartiality;
-- Reporting arrangements to relevant management;
-- Retention of documented information as evidence of audit programme implementation and audit results.
-
-The major nonconformity identified under Clause 9.2 should be treated as a priority before any external certification or surveillance audit because it directly relates to the organisation’s ability to demonstrate effective performance evaluation of the ISMS.
-
-### Themes Identified
-
-| Theme | Analysis | Related Findings |
+| ISO/IEC 27001:2022 Requirement | Assessment | Supporting Result |
 |---|---|---|
-| Audit programme maturity | Internal audit activity exists, but programme-level planning and coverage mapping require strengthening | IA-2022-01 |
-| Evidence discipline | Several processes are operating, but documented evidence is not always retained consistently | IA-2022-03 |
-| Risk treatment governance | Risk treatment is tracked, but overdue items require stronger escalation and approval discipline | IA-2022-02 |
-| Corrective action quality | Corrective actions are logged, but root cause and effectiveness verification can be improved | IA-2022-04 |
+| Internal audits are conducted at planned intervals | Partially conforming | Audit activities are scheduled, but the programme lacks full documented coverage and risk-based frequency rationale |
+| Audits determine whether the ISMS conforms to organisational requirements | Partially conforming | Some internal requirements are audited, but criteria are not consistently documented |
+| Audits determine whether the ISMS conforms to ISO/IEC 27001:2022 | Partially conforming | ISO clauses are not consistently mapped in audit plans and working papers |
+| Audits determine whether the ISMS is effectively implemented and maintained | Partially conforming | Effectiveness is considered, but evidence and test results are inconsistently recorded |
+| Audit programme considers importance of processes | Partially conforming | No documented rationale demonstrating prioritisation by process importance |
+| Audit programme considers results of previous audits | Partially conforming | Prior findings exist but are not demonstrably used in audit planning |
+| Audit criteria and scope are defined for each audit | Partially conforming | Some audit plans lack explicit criteria and scope boundaries |
+| Auditors are selected to ensure objectivity and impartiality | Partially conforming | Independence is considered but not consistently documented |
+| Audit results are reported to relevant management | Conforming with improvement needed | Results are reported, but management analysis could be strengthened |
+| Documented information is retained as evidence of audit programme and results | Partially conforming | Reports exist, but working papers and evidence traceability are inconsistent |
 
-### ISMS Effectiveness Assessment
+### Thematic Analysis
 
-The ISMS is operating and producing relevant governance outputs, but effectiveness is reduced by weaknesses in assurance planning, evidence retention, and corrective action maturity. These weaknesses do not indicate a complete failure of the ISMS; however, they create risk that management may not receive complete or reliable information on ISMS performance.
+The findings indicate that the ISMS internal audit process is operational but not yet fully mature. The primary weakness is not the absence of internal audit activity, but insufficient programme-level discipline and evidence quality.
 
-### Prior Audit Follow-Up
+Key themes include:
 
-| Prior Finding ID | Description | Current Status | Auditor Comment |
-|---|---|---|---|
-| IA-[Prior]-01 | Improve management review agenda alignment with ISO requirements | Closed | Current management review minutes include required inputs and outputs |
-| IA-[Prior]-02 | Formalise risk acceptance approvals | Partially closed | Risk acceptance template exists, but overdue treatment delays are not consistently re-approved |
-| IA-[Prior]-03 | Improve access review evidence retention | Open / Recurring | Similar evidence retention issue observed in current audit |
+1. **Audit programme maturity**
+ - The audit schedule exists, but it does not yet function as a complete audit programme that clearly demonstrates risk-based prioritisation, full ISMS coverage, methods, responsibilities, and reporting arrangements.
+
+2. **Traceability of audit evidence**
+ - Audit conclusions are documented, but supporting evidence is not consistently traceable to criteria, sampled records, and test results.
+
+3. **Corrective action lifecycle**
+ - Findings are captured, but corrective actions are not consistently supported by root cause analysis, closure evidence, and effectiveness review.
+
+4. **Management oversight**
+ - Internal audit results reach management, but trend-based reporting and decision tracking require strengthening to better support management review and continual improvement.
+
+5. **Certification readiness**
+ - Identified issues are remediable within a reasonable timeframe; however, unresolved weaknesses may be material during certification or surveillance audit.
 
 ### Risk Implications
 
-The findings may affect the following ISMS objectives:
+| Risk Area | Implication |
+|---|---|
+| Certification risk | External auditors may raise nonconformities if internal audit programme evidence remains incomplete |
+| Operational assurance risk | Critical ISMS processes may not receive proportionate audit attention |
+| Continual improvement risk | Weak corrective action effectiveness review may allow recurring nonconformities |
+| Governance risk | Management may lack sufficient insight into systemic audit trends |
+| Evidence risk | Inconsistent records may prevent demonstration of conformity despite actual control operation |
 
-- Maintaining demonstrable conformity with ISO/IEC 27001:2022;
-- Ensuring timely treatment of unacceptable information security risks;
-- Providing reliable information security performance data to management;
-- Maintaining effective auditability and certification readiness;
-- Supporting continual improvement through corrective action.
+### Overall Maturity Assessment
 
-### Certification Readiness Consideration
-
-The organisation should not treat this report as evidence of full readiness until corrective actions for the major nonconformity and associated evidence gaps are completed or formally accepted with documented risk-based justification. In particular, the internal audit programme should be revised and approved before external audit engagement.
+| Capability Area | Maturity Rating | Rationale |
+|---|---:|---|
+| Audit programme planning | Developing | Schedule exists but lacks full risk-based and coverage-based design |
+| Audit execution | Developing | Audits are performed, but evidence documentation is inconsistent |
+| Auditor independence | Developing | Considered informally but not consistently evidenced |
+| Audit reporting | Established | Reports are produced and communicated |
+| Corrective action management | Developing | Register exists but lifecycle controls are inconsistent |
+| Management review integration | Established with improvement needed | Results are reviewed but trend analysis is limited |
+| Document control | Established | Documented information is well structured and controlled |
 
 ## Recommendations & Actions
 
 ### Corrective Action Plan
 
-| Finding ID | Required Action | Owner | Priority | Target Date | Evidence Required |
-|---|---|---|---|---|---|
-| IA-2022-01 | Revise and approve the internal audit programme to include scope, criteria, frequency, methods, responsibilities, impartiality, reporting, and ISO/control coverage mapping | [ISMS Manager] | High | [Target Date] | Approved audit programme, coverage matrix, auditor independence record |
-| IA-2022-02 | Review overdue risk treatment actions, update approvals, document residual risk decisions, and revise escalation requirements | [Risk Owner] | Medium | [Target Date] | Updated risk treatment plan, approvals, revised procedure |
-| IA-2022-03 | Define and implement an ISMS evidence retention matrix for monitored controls | [Control Owner] | Medium | [Target Date] | Evidence matrix, repository samples, control owner attestations |
-| IA-2022-04 | Enhance corrective action records to include root cause analysis and effectiveness verification | [ISMS Manager] | Medium | [Target Date] | Updated corrective action template, completed CAR samples |
+| Finding ID | Required Action Summary | Owner | Priority | Due Date | Status |
+|---|---|---|---:|---:|---|
+| IA-2022-01 | Revise and approve a complete risk-based ISMS internal audit programme | ISMS Manager | High | [Date] | Open |
+| IA-2022-01 | Create audit coverage matrix mapped to ISO/IEC 27001:2022 clauses, ISMS processes, SoA controls, and prior findings | Internal Audit Lead | High | [Date] | Open |
+| IA-2022-01 | Implement auditor independence declarations for each audit | Internal Audit Function | Medium | [Date] | Open |
+| IA-2022-02 | Update audit working paper templates to require criteria, samples, evidence, tests, and conclusions | Internal Audit Lead | High | [Date] | Open |
+| IA-2022-02 | Conduct audit file quality review before final report issuance | Internal Audit Lead | Medium | [Date] | Open |
+| IA-2022-03 | Update corrective action register and procedure to require full lifecycle tracking | ISMS Manager | High | [Date] | Open |
+| IA-2022-03 | Review all open and recently closed audit actions for completeness and effectiveness | ISMS Manager | High | [Date] | Open |
+| IA-2022-04 | Add audit trend analysis to management review reporting | ISMS Manager | Medium | [Date] | Open |
+| IA-2022-05 | Define and maintain internal auditor competence criteria and records | Internal Audit Lead / HR | Low | [Date] | Open |
 
 ### Recommended Internal Audit Programme Enhancements
 
-The internal audit programme should be updated to include, at minimum:
+The internal audit programme should be revised to include the following minimum elements to support ISO/IEC 27001:2022 conformity:
 
-- Full ISMS scope coverage across the audit cycle;
-- Mapping to ISO/IEC 27001:2022 Clauses 4–10;
-- Mapping to applicable Annex A controls from the Statement of Applicability;
-- Risk-based audit frequency;
-- Consideration of previous audit results and recurring issues;
-- Defined audit criteria and scope for each audit;
-- Assignment of auditors with evidence of objectivity and impartiality;
-- Reporting timelines and required recipients;
-- Requirements for nonconformity response and corrective action tracking;
-- Retention requirements for audit programme and audit result records.
+| Programme Element | Required Content |
+|---|---|
+| Audit objectives | Assurance over ISMS conformity, effectiveness, implementation, and maintenance |
+| Audit frequency | Defined intervals based on risk, process importance, change, prior results, and certification cycle |
+| Audit methods | Interviews, document review, sampling, walkthroughs, observation, technical evidence review |
+| Responsibilities | Audit programme owner, lead auditor, auditors, auditees, management reviewers |
+| Audit scope | Processes, locations, systems, services, clauses, and controls included |
+| Audit criteria | ISO/IEC 27001:2022 clauses, internal ISMS requirements, SoA, policies, procedures, legal/contractual obligations |
+| Auditor impartiality | Independence confirmation and conflict-of-interest declaration |
+| Reporting | Report recipients, timelines, severity model, management escalation |
+| Records | Programme, plans, checklists, working papers, evidence logs, findings, reports, corrective actions |
+| Follow-up | Corrective action verification, closure evidence, and effectiveness review |
 
-### Example Audit Coverage Matrix
+### Suggested Audit Coverage Matrix
 
-| ISMS Area | ISO/IEC 27001:2022 Reference | Audit Frequency | Risk Basis | Next Planned Audit |
-|---|---|---:|---|---|
-| ISMS Governance and Scope | Clauses 4, 5 | Annual | Foundational ISMS governance requirements | [Date] |
-| Risk Assessment and Treatment | Clauses 6.1.2, 6.1.3, 8.1 | Semi-annual | High dependency for control selection and treatment decisions | [Date] |
-| Access Control and Identity Management | Annex A 5.15, 5.16, 5.18, 8.2, 8.3 | Annual | High-risk control area and prior evidence gaps | [Date] |
+| ISMS Area | ISO/IEC 27001:2022 Reference | Audit Frequency | Priority Basis | Next Planned Audit |
+|---|---|---:|---|---:|
+| ISMS context and scope |–4.4 | Annual | Foundation of ISMS applicability | [Date] |
+| Leadership and policy |–5.3 | Annual | Governance and accountability | [Date] |
+| Risk assessment and treatment |–6.1.3 | Semi-annual | Core ISMS process and high assurance dependency | [Date] |
+| ISMS objectives | | Annual | Performance and continual improvement | [Date] |
+| Competence and awareness |–7.3 | Annual | Human factor risk | [Date] |
+| Documented information | | Annual | Evidence and auditability | [Date] |
+| Operational planning and control | | Annual | Control implementation | [Date] |
+| Risk assessment updates | | Semi-annual | Change and threat landscape | [Date] |
+| Risk treatment implementation | | Semi-annual | Residual risk management | [Date] |
+| Monitoring and measurement | | Annual | ISMS performance evidence | [Date] |
+| Internal audit | | Annual | Required assurance process | [Date] |
+| Management review | | Annual | Leadership oversight | [Date] |
+| Nonconformity and corrective action | | Quarterly | Finding closure and recurrence prevention | [Date] |
+| Continual improvement | | Annual | ISMS maturity | [Date] |
+| Selected Annex A controls | Annex A | Risk-based | Based on SoA, risk treatment, and prior findings | [Date] |
 
-### Management Response
+### Management Action Tracking
 
-| Finding ID | Management Response | Accepted By | Acceptance Date |
-|---|---|---|---|
-| IA-2022-01 | [Management response to be completed] | [Approver] | [Date] |
-| IA-2022-02 | [Management response to be completed] | [Approver] | [Date] |
-| IA-2022-03 | [Management response to be completed] | [Approver] | [Date] |
+| Action Ref | Action Description | Assigned Owner | Due Date | Success Criteria | Verification Method |
+|---|---|---|---:|---|---|
+| ACT-001 | Approve revised internal audit programme | ISMS Manager | [Date] | Programme includes all required elements | Document review |
+| ACT-002 | Establish audit coverage matrix | Internal Audit Lead | [Date] | Matrix maps clauses, controls, scope areas, and audit cycle | Document review |
+| ACT-003 | Implement enhanced audit working papers | Internal Audit Lead | [Date] | Audit files show criteria, samples, evidence, tests, conclusions | Sample file review |
+| ACT-004 | Complete corrective action register remediation | ISMS Manager | [Date] | All open actions include owner, due date, root cause, status, evidence | Register review |
+| ACT-005 | Conduct effectiveness review of closed prior findings | Internal Audit Lead | [Date] | Closed findings verified as effective or reopened | Effectiveness review record |
+| ACT-006 | Present audit trend dashboard to management review | ISMS Manager | [Date] | Management review records include trends, decisions, and actions | Minutes review |
+| ACT-007 | Define auditor competence and independence process | HR / Internal Audit Lead | [Date] | Competence criteria and independence records maintained | Record review |
 
-### Action Tracking and Verification
+### Follow-Up Audit Requirements
 
-Corrective actions shall be tracked in the ISMS Corrective Action Register. Closure shall require evidence review by the ISMS Manager or an independent reviewer who was not responsible for implementing the action.
+A follow-up audit should be conducted to verify implementation and effectiveness of corrective actions related to IA-2022-01, IA-2022-02, and IA-2022-03.
 
-Closure criteria shall include:
+| Follow-Up Item | Planned Verification Date | Verification Criteria |
+|---|---:|---|
+| Revised audit programme implemented | [Date] | Approved programme meets requirements |
+| Audit records improved | [Date] | Sampled audit file demonstrates complete evidence traceability |
+| Corrective action process effective | [Date] | Sampled actions include root cause, closure evidence, and effectiveness review |
+| Management review integration strengthened | [Date] | Audit trends and management decisions documented |
+| Auditor competence documented | [Date] | Auditor competence and impartiality records available |
 
-- Correction completed, where applicable;
-- Root cause analysis documented;
-- Corrective action implemented;
-- Evidence uploaded to the ISMS evidence repository;
-- Effectiveness verification completed;
-- Residual risk reviewed, where applicable;
-- Closure approved by the authorised reviewer.
+### Acceptance Criteria for Closure
 
-### Target Closure Expectations
+Findings should not be closed until objective evidence demonstrates that:
 
-| Classification | Expected Response Time | Expected Closure Time |
-|---|---:|---:|
-| Major Nonconformity | Within 10 business days | Within 30–60 calendar days |
-| Minor Nonconformity | Within 15 business days | Within 60–90 calendar days |
-| Opportunity for Improvement | As agreed by management | Based on improvement roadmap |
+- Corrective actions have been implemented as planned;
+- Root causes have been addressed, not only symptoms;
+- Required documented information has been updated and approved;
+- Relevant personnel have been informed or trained where applicable;
+- Effectiveness has been reviewed after a suitable period of operation;
+- Residual risk has been considered and accepted where relevant;
+- Management has been informed of closure status.
 
 ## Distribution & Confidentiality
 
-### Distribution
+### Distribution List
 
-This report is distributed to the following authorised recipients:
-
-| Recipient / Role | Purpose |
+| Recipient / Role | Purpose of Distribution |
 |---|---|
-| [Chief Information Security Officer / Security Lead] | Oversight of ISMS performance and corrective actions |
-| [ISMS Manager] | Ownership of audit response and corrective action coordination |
-| [Senior Management Representative] | Management review and resource decision-making |
-| [Risk Owners / Control Owners] | Remediation of assigned findings |
-| [External Auditor, if applicable] | Evidence of internal audit results, subject to approval |
+| Senior Management | Oversight, resource allocation, and management review input |
+| ISMS Manager | Corrective action coordination and ISMS maintenance |
+| Internal Audit Function | Audit programme improvement and follow-up planning |
+| Process Owners | Remediation of assigned findings |
+| Risk Owners | Consideration of risk treatment and residual risk implications |
+| Compliance / Governance Function | Evidence retention and certification readiness |
+| External Certification Auditor | Provided upon request during certification or surveillance audit, subject to approval |
 
-### Confidentiality Requirements
+### Confidentiality Classification
 
-This report is classified as **Confidential** and contains sensitive information regarding ISMS performance, control weaknesses, risk treatment status, and audit results. It shall be handled in accordance with the organisation’s information classification and handling requirements.
+This report is classified as **Confidential**. It contains information regarding ISMS weaknesses, audit findings, control performance, and corrective action priorities. Unauthorised disclosure may increase organisational risk or compromise the integrity of security improvement activities.
 
-The report shall not be distributed outside authorised recipients without approval from [Authorised Approver]. Where disclosure to external parties is required, such as certification auditors, regulators, customers, or contractual stakeholders, distribution shall be limited to the minimum necessary content and governed by applicable confidentiality obligations.
+### Handling Requirements
 
-### Retention
+| Requirement | Instruction |
+|---|---|
+| Access | Restricted to authorised personnel with a legitimate governance, risk, compliance, audit, or management need |
+| Storage | Store in the approved document repository: [Repository / Location] |
+| Transmission | Transmit using approved secure communication channels only |
+| External sharing | Requires approval from [Authorising Role] |
+| Retention period | Retain in accordance with the ISMS documented information retention requirements, minimum [Retention Period] |
+| Disposal | Dispose securely in accordance with information classification and records management requirements |
 
-| Record | Retention Requirement | Repository |
-|---|---|---|
-| Internal Audit Report | Retain for [Retention Period] or longer if required by legal, regulatory, contractual, or certification obligations | [ISMS Repository] |
-| Audit evidence | Retain for [Retention Period] in controlled repository | [Evidence Repository] |
-| Corrective action records | Retain for [Retention Period] after closure | [Corrective Action Register] |
+### Report Approval
 
-### Approval
+| Role | Name | Signature / Approval Method | Date |
+|---|---|---|---:|
+| Lead Internal Auditor | [Name] | [Signature / Electronic Approval] | [Date] |
+| ISMS Manager | [Name] | [Signature / Electronic Approval] | [Date] |
+| Senior Management Representative | [Name] | [Signature / Electronic Approval] | [Date] |
 
-| Role | Name | Signature / Approval | Date |
-|---|---|---|---|
-| Lead Internal Auditor | [Name] | [Approval] | [Date] |
-| ISMS Manager | [Name] | [Approval] | [Date] |
-| Senior Management Representative | [Name] | [Approval] | [Date] |
+### Change History
+
+| Version | Date | Description of Change | Author / Owner |
+|---:|---:|---|---|
+| 1.0 | [Date] | Initial issue of Internal Audit Report | Internal Audit Function |

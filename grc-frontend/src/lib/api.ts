@@ -207,10 +207,17 @@ export const controlsApi = {
       }>('/controls/ai-recommendations', data),
   promoteControlRisk: (data: {
     control_id: number; framework_name?: string; title: string; description?: string;
-    category?: string; inherent_likelihood?: number; inherent_impact?: number;
-    owner_id?: number; treatment_plan?: string; due_date?: string;
+    register_type?: string; category?: string; risk_sub_category?: string;
+    inherent_likelihood?: number; inherent_impact?: number;
+    residual_likelihood?: number; residual_impact?: number;
+    owner_id?: number; business_owner_id?: number;
+    treatment_plan?: string; root_cause?: string; recommendations?: string; due_date?: string;
   }) => apiClient.post('/controls/ai-recommendations/promote-risk', data),
   getFrameworkControlsSummary: () => apiClient.get('/controls/framework-controls/summary'),
+  getFrameworkControlsStatusSummary: (frameworkId?: number) =>
+    apiClient.get('/controls/framework-controls/status-summary', {
+      params: frameworkId ? { framework_id: frameworkId } : undefined,
+    }),
   getFrameworkControls: (params?: {
     framework_id?: number;
     domain?: string;
@@ -303,6 +310,37 @@ export const governanceApi = {
   getRecentlyPublished: (limit: number = 10) => apiClient.get(`/governance/dashboard/recently-published?limit=${limit}`),
   getDocumentVersions: (documentId: number) =>
     apiClient.get<GovernanceDocumentVersion[]>(`/governance/versions/document/${documentId}`),
+  // Diff two content versions (version ROW ids) + restore a prior version.
+  compareDocumentVersions: (versionAId: number, versionBId: number) =>
+    apiClient.get(`/governance/versions/compare/${versionAId}/${versionBId}`),
+  rollbackDocumentVersion: (documentId: number, versionId: number) =>
+    apiClient.post(`/governance/versions/document/${documentId}/rollback/${versionId}`, {}),
+  // Edit document body content with a version snapshot + audit ("why").
+  editDocumentContent: (documentId: number, data: { content: string; change_reason?: string }) =>
+    apiClient.put(`/governance/documents/${documentId}`, data),
+  // Fill the Approval Signoff + Document Description tables (sign / fill
+  // placeholders later); snapshots a version + audits.
+  signoffDocument: (documentId: number, data: {
+    signoffs?: Array<{ role: string; name?: string; designation?: string; date?: string }>;
+    effective_date?: string; version?: string; next_review_date?: string;
+    classification?: string; approval_authority?: string; mark_approved?: boolean;
+  }) => apiClient.post(`/governance/documents/${documentId}/signoff`, data),
+  // ── Production Sign-off & Document Control (participants + send + sign) ──
+  getDocumentSignoff: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/signoff`),
+  setSignoffParticipants: (documentId: number, data: {
+    prepared_by?: Array<{ target_type: string; target_id: number }>;
+    reviewers?: Array<{ target_type: string; target_id: number }>;
+    approvers?: Array<{ target_type: string; target_id: number }>;
+  }) => apiClient.put(`/governance/documents/${documentId}/signoff/participants`, data),
+  sendDocumentForReview: (documentId: number) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/send-for-review`, {}),
+  signDocumentOff: (documentId: number, data: { comment?: string; signature_text?: string }) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/sign`, data),
+  rejectDocumentSignoff: (documentId: number, data: { comment: string }) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/reject`, data),
+  getMySignoffPending: () =>
+    apiClient.get('/governance/documents/signoff/my-pending'),
   getPendingApprovals: (params?: { include_delegated?: boolean; skip?: number; limit?: number }) =>
     apiClient.get('/governance/workflows/pending', { params }),
   getWorkflowDashboard: () => apiClient.get('/governance/workflows/dashboard'),
@@ -408,6 +446,12 @@ export const governanceApi = {
     apiClient.post('/governance/workflows/templates/seed-defaults', null, { params: { tenant_id: tenantId } }),
   getDocumentMappings: (documentId: number) =>
     apiClient.get(`/governance/mappings/document/${documentId}`),
+  // Control coverage of a document vs its applicable frameworks: per-framework
+  // mapped / recommended / missing (gap) controls.
+  getDocumentCoverage: (documentId: number, frameworkIds?: number[]) =>
+    apiClient.get(`/governance/mappings/document/${documentId}/coverage`, {
+      params: frameworkIds && frameworkIds.length ? { framework_ids: frameworkIds.join(',') } : {},
+    }),
   getFrameworkApplicability: (frameworkId: number) =>
     apiClient.get(`/governance/applicability/framework/${frameworkId}`),
   getApplicabilityAuditLog: (frameworkId: number) =>
@@ -545,6 +589,14 @@ export const policyExceptionApi = {
   getComments: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/comments`),
   addComment: (id: number, data: { comment: string }) =>
     apiClient.post(`/governance/policy-exceptions/${id}/comments`, data),
+  // Create an ERM risk-register entry from an exception's potential risks so the
+  // likelihood/impact assessment can be completed in the risk module.
+  promoteToRisk: (id: number) => apiClient.post(`/governance/policy-exceptions/${id}/promote-to-risk`),
+  // Asset-weighted risk posture + aging + closure-timeliness for the charts.
+  getAnalytics: () => apiClient.get('/governance/policy-exceptions/analytics'),
+  // Real posture-over-time trend from the snapshot history layer.
+  getTrend: (metric = 'exception_risk_posture', days = 180) =>
+    apiClient.get('/enriched-dashboard/metric-trend', { params: { metric, days } }),
 };
 
 export const documentsApi = {
@@ -940,8 +992,9 @@ export const ermApi = {
       apiClient.get('/erm/risks/template/download', {
         responseType: 'blob',
       }),
-    closeRisk: (riskId: number, notes: string) => 
-      apiClient.post<Risk>(`/erm/risks/${riskId}/close`, { notes }),
+    closeRisk: (riskId: number, notes?: string) =>
+      // Backend expects closure_notes as a query param (not a body).
+      apiClient.post<Risk>(`/erm/risks/${riskId}/close`, null, notes ? { params: { closure_notes: notes } } : undefined),
     reopenRisk: (riskId: number) => 
       apiClient.post<Risk>(`/erm/risks/${riskId}/reopen`),
     getRiskAging: () => 
@@ -2047,6 +2100,25 @@ export const tpraApi = {
   createApproval: (assessmentId: number, data: { decision: string; conditions?: string[]; rationale?: string }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`, data),
 
+  // Per-stage task checklist + DD-planning
+  saveChecklist: (
+    assessmentId: number, stageKey: string,
+    items: Array<{ text: string; done: boolean; note?: string | null; owner_id?: number | null; due_date?: string | null }>,
+  ) => apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/stages/${stageKey}/checklist`, { items }),
+  savePlan: (assessmentId: number, data: { template_id?: number; reviewed_by?: number; due_date?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/plan`, data),
+  saveRoles: (assessmentId: number, stageKey: string, assigned_roles: Array<{ role: string; user_id: number }>) =>
+    apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/stages/${stageKey}/roles`, { assigned_roles }),
+  saveTeam: (assessmentId: number, roster: Record<string, number>) =>
+    apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/team`, { roster }),
+  // Admin / Settings — program config (tiering weights, thresholds, cadence)
+  getConfig: () => apiClient.get('/vendor-risk/tpra/config'),
+  saveConfig: (data: { weights?: Record<string, number>; thresholds?: Record<string, number>; cadence_days?: Record<string, number> }) =>
+    apiClient.put('/vendor-risk/tpra/config', data),
+  getVendorAudit: (vendorId: number, limit = 100) =>
+    apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/audit`, { params: { limit } }),
+  getCoverage: () => apiClient.get('/vendor-risk/tpra/coverage'),
+
   // Monitoring signals
   listSignals: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/signals`),
   createSignal: (vendorId: number, data: Record<string, unknown>) =>
@@ -2054,6 +2126,20 @@ export const tpraApi = {
   updateSignal: (signalId: number, data: Record<string, unknown>) =>
     apiClient.put(`/vendor-risk/tpra/signals/${signalId}`, data),
   deleteSignal: (signalId: number) => apiClient.delete(`/vendor-risk/tpra/signals/${signalId}`),
+};
+
+// ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.
+// Reused by the TPRA lifecycle by namespacing framework_key = `tpra-vendor-{id}`.
+export const artifactsApi = {
+  list: (params: { framework_key?: string; assessment_id?: number; assessment_type?: string; status?: string }) =>
+    apiClient.get('/artifacts', { params }),
+  get: (id: number) => apiClient.get(`/artifacts/${id}`),
+  create: (data: Record<string, unknown>) => apiClient.post('/artifacts', data),
+  update: (id: number, data: Record<string, unknown>) => apiClient.put(`/artifacts/${id}`, data),
+  remove: (id: number) => apiClient.delete(`/artifacts/${id}`),
+  export: (id: number, fmt: string) => apiClient.get(`/artifacts/${id}/export`, { params: { fmt }, responseType: 'blob' }),
+  catalogContent: (artifactId: string, frameworkKey: string) =>
+    apiClient.get('/artifacts/catalog/content', { params: { artifact_id: artifactId, framework_key: frameworkKey } }),
 };
 
 // Generic AI-recommendation store — save a reviewed AI output so it persists
@@ -3298,6 +3384,7 @@ export const committeeApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   getDashboard: () => apiClient.get('/governance/committees/dashboard'),
+  getOverview: () => apiClient.get('/governance/committees/overview'),
   getSuggestedAgendaItems: (meetingId: number) => 
     apiClient.get(`/governance/committees/meetings/${meetingId}/suggested-agenda-items`),
   autoPopulateAgenda: (meetingId: number, data: { include_documents?: boolean; include_exceptions?: boolean; include_regulatory_changes?: boolean }) => 

@@ -11,7 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Lock, CheckCircle2, Circle, SkipForward, ArrowRight, RotateCcw, AlertTriangle,
   Loader2, Sparkles, Gauge, Calculator, RefreshCw, Users, ListChecks, Shield,
-  ArrowDownToLine, FileText, Flag,
+  ArrowDownToLine, FileText, Flag, History,
 } from 'lucide-react';
 import { tpraApi } from '@/lib/api';
 import { RightSlidePanel, ProgressRing } from '@/components/ui';
@@ -20,24 +20,28 @@ import { usePermissions } from '@/hooks/usePermissions';
 import type { LifecycleResponse, StageInstance, AdvanceResult } from './types';
 import { STAGE_META, PHASES, DOMAIN_LABELS, tierBadge, stageStatusStyle } from './constants';
 
-// RACI legend rows + their soft-tone badge colors (R responsible, A accountable,
-// C consulted, I informed) — rendered in the stage definition panel.
-const RACI_ROWS: Array<{ k: 'R' | 'A' | 'C' | 'I'; label: string; cls: string }> = [
-  { k: 'R', label: 'Responsible', cls: 'bg-blue-100 text-blue-700' },
-  { k: 'A', label: 'Accountable', cls: 'bg-red-100 text-red-700' },
-  { k: 'C', label: 'Consulted', cls: 'bg-amber-100 text-amber-700' },
-  { k: 'I', label: 'Informed', cls: 'bg-gray-100 text-gray-600' },
-];
 import FindingsPanel from './FindingsPanel';
 import ContractsPanel from './ContractsPanel';
 import ApprovalPanel from './ApprovalPanel';
 import SignalsPanel from './SignalsPanel';
 import DomainRiskView from './DomainRiskView';
 import EvidencePanel from './EvidencePanel';
+import IntakePanel from './IntakePanel';
+import PlanningPanel from './PlanningPanel';
+import QuestionnaireReviewPanel from './QuestionnaireReviewPanel';
+import OffboardingPanel from './OffboardingPanel';
+import StageWorkspace from './StageWorkspace';
 import { useUnsavedGuard } from './useUnsavedGuard';
 
 function errMsg(e: unknown, fallback: string): string {
   return (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || fallback;
+}
+
+interface AuditEntry {
+  id: number; entity: string; entity_id: number | null; action: string;
+  actor_id: number | null; actor_name: string | null;
+  from_value: string | null; to_value: string | null; reason: string | null;
+  assessment_id: number | null; created_at: string;
 }
 
 export default function TpraLifecycle({ vendorId, onChanged }: { vendorId: number; onChanged?: () => void }) {
@@ -55,6 +59,14 @@ export default function TpraLifecycle({ vendorId, onChanged }: { vendorId: numbe
   const [selected, setSelected] = useState<string | null>(null);
   const [sendBackOpen, setSendBackOpen] = useState(false);
   const [skipOpen, setSkipOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
+
+  // Per-vendor audit timeline (TPRM-010) — loaded on demand.
+  const { data: audit } = useQuery({
+    queryKey: ['tpra-vendor-audit', vendorId],
+    queryFn: async () => (await tpraApi.getVendorAudit(vendorId)).data as { items: AuditEntry[] },
+    enabled: activityOpen,
+  });
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['tpra-lifecycle', vendorId],
@@ -214,6 +226,10 @@ export default function TpraLifecycle({ vendorId, onChanged }: { vendorId: numbe
             <RefreshCw className="h-3.5 w-3.5" /> New reassessment
           </button>
         )}
+        <button onClick={() => setActivityOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+          <History className="h-3.5 w-3.5" /> Activity
+        </button>
       </div>
 
       {/* Stage rail — grouped by phase */}
@@ -237,137 +253,24 @@ export default function TpraLifecycle({ vendorId, onChanged }: { vendorId: numbe
         })}
       </div>
 
-      {/* Active stage panel */}
+      {/* Active stage — command center (compact header + tiles + drawers) */}
       {selMeta && (
-        <div className="rounded-xl border border-gray-200 bg-white">
-          <div className="border-b border-gray-100 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold text-gray-400">Stage {String(selMeta.order).padStart(2, '0')}</span>
-                  {selMeta.gate && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                      <Lock className="h-3 w-3" /> gate
-                    </span>
-                  )}
-                  {selStage && (
-                    <span className={`text-[11px] font-medium ${stageStatusStyle(selStage.status).text}`}>{selStage.status.replace('_', ' ')}</span>
-                  )}
-                </div>
-                <h3 className="mt-0.5 text-base font-semibold text-slate-900">{selMeta.label}</h3>
-                <p className="mt-0.5 max-w-2xl text-xs text-gray-500">{selMeta.objective}</p>
-              </div>
-              {/* Stage actions */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                {isCurrent && skippableNow && canSkip && (
-                  <button onClick={() => setSkipOpen(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
-                    <SkipForward className="h-3.5 w-3.5" /> Skip
-                  </button>
-                )}
-                {!isCurrent && selMeta.order < (currentMeta?.order || 1) && canSendBack && (
-                  <button onClick={() => setSendBackOpen(true)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100">
-                    <RotateCcw className="h-3.5 w-3.5" /> Send back here
-                  </button>
-                )}
-                {isCurrent && canAdvance && (
-                  <button onClick={() => advanceMut.mutate()} disabled={advanceMut.isPending || (gate ? !gate.passed : false)}
-                    title={gate && !gate.passed ? 'Resolve the blockers below first' : 'Advance to the next stage'}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">
-                    {advanceMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
-                    Advance
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Gate blockers for the current stage */}
-            {isCurrent && gate && !gate.passed && gate.blockers.length > 0 && (
-              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-800">
-                  <AlertTriangle className="h-3.5 w-3.5" /> {selMeta.gate ? 'Gate blocked' : 'Exit criteria not met'}
-                </p>
-                <ul className="mt-1 list-inside list-disc space-y-0.5 text-[11px] text-amber-700">
-                  {gate.blockers.map((b, i) => <li key={i}>{b}</li>)}
-                </ul>
-              </div>
-            )}
-
-            {/* Stage definition: inputs · activities · RACI · artifacts · domains */}
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-4">
-                {selMeta.inputs.length > 0 && (
-                  <div>
-                    <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400"><ArrowDownToLine className="h-3.5 w-3.5" /> Inputs</p>
-                    <ul className="space-y-0.5 text-xs text-gray-600">
-                      {selMeta.inputs.map((a, i) => <li key={i} className="flex items-start gap-1.5"><Circle className="mt-1 h-2 w-2 flex-shrink-0 fill-gray-300 text-gray-300" />{a}</li>)}
-                    </ul>
-                  </div>
-                )}
-                <div>
-                  <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400"><ListChecks className="h-3.5 w-3.5" /> Key activities</p>
-                  <ul className="space-y-0.5 text-xs text-gray-600">
-                    {selMeta.activities.map((a, i) => <li key={i} className="flex items-start gap-1.5"><Circle className="mt-1 h-2 w-2 flex-shrink-0 fill-gray-300 text-gray-300" />{a}</li>)}
-                  </ul>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400"><Users className="h-3.5 w-3.5" /> Accountability (RACI)</p>
-                  <div className="space-y-1">
-                    {RACI_ROWS.map(({ k, label, cls }) => {
-                      const people = selMeta.raci[k];
-                      if (!people || people.length === 0) return null;
-                      return (
-                        <div key={k} className="flex items-start gap-2">
-                          <span className={`mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-[10px] font-bold ${cls}`} title={label}>{k}</span>
-                          <span className="text-xs text-gray-600">{people.join(', ')}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div>
-                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400"><FileText className="h-3.5 w-3.5" /> Artifacts produced</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {selMeta.artifacts.map((a) => <span key={a} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] text-gray-600">{a}</span>)}
-                  </div>
-                </div>
-                {selMeta.domains.length > 0 && (
-                  <div>
-                    <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400"><Shield className="h-3.5 w-3.5" /> Risk domains</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {selMeta.domains.map((d) => <span key={d} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{DOMAIN_LABELS[d] || d}</span>)}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Exit gate — the definition text always; the live met/not-met state when current */}
-            <div className={`mt-4 rounded-lg border p-3 ${selMeta.gate ? 'border-amber-200 bg-amber-50/60' : 'border-emerald-200 bg-emerald-50/50'}`}>
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                <Flag className={`h-3.5 w-3.5 ${selMeta.gate ? 'text-amber-600' : 'text-emerald-600'}`} />
-                {selMeta.gate ? 'Decision gate — exit criteria' : 'Exit criteria'}
-                {isCurrent && gate && (
-                  <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${gate.passed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {gate.passed ? <><CheckCircle2 className="h-3 w-3" /> met</> : <><AlertTriangle className="h-3 w-3" /> not yet met</>}
-                  </span>
-                )}
-              </p>
-              <p className="mt-1.5 text-xs text-gray-600">{selMeta.exitCriteria}</p>
-            </div>
-          </div>
-
-          {/* Per-stage CRUD surface */}
-          <div className="p-4">
-            <StageBody stageKey={selectedKey} vendorId={vendorId} assessmentId={assessment.id}
-              assessment={assessment} canRunEngines={canRunEngines}
-              onRunTiering={() => tieringMut.mutate()} tieringBusy={tieringMut.isPending}
-              onRunScoring={() => scoringMut.mutate()} scoringBusy={scoringMut.isPending} />
-          </div>
-        </div>
+        <StageWorkspace
+          vendorId={vendorId} assessmentId={assessment.id} stageKey={selectedKey}
+          meta={selMeta} stage={selStage} assessment={assessment}
+          isCurrent={isCurrent} gate={gate}
+          showAdvance={isCurrent && canAdvance} advanceBusy={advanceMut.isPending}
+          advanceDisabled={gate ? !gate.passed : false} onAdvance={() => advanceMut.mutate()}
+          showSendBack={!isCurrent && selMeta.order < (currentMeta?.order || 1) && canSendBack}
+          onOpenSendBack={() => setSendBackOpen(true)}
+          showSkip={isCurrent && !!skippableNow && canSkip}
+          onOpenSkip={() => setSkipOpen(true)}
+        >
+          <StageBody stageKey={selectedKey} vendorId={vendorId} assessmentId={assessment.id}
+            assessment={assessment} canRunEngines={canRunEngines} onChanged={refresh}
+            onRunTiering={() => tieringMut.mutate()} tieringBusy={tieringMut.isPending}
+            onRunScoring={() => scoringMut.mutate()} scoringBusy={scoringMut.isPending} />
+        </StageWorkspace>
       )}
 
       {/* Send-back modal */}
@@ -383,6 +286,36 @@ export default function TpraLifecycle({ vendorId, onChanged }: { vendorId: numbe
         cta="Skip stage" busy={skipMut.isPending}
         note="Allowed for this tier. The skip is recorded with your name and reason."
         onSubmit={(reason) => skipMut.mutate({ stage: selectedKey, reason })} />
+
+      {/* Per-vendor activity timeline (TPRM-010) */}
+      <RightSlidePanel isOpen={activityOpen} onClose={() => setActivityOpen(false)} title="Activity" width="w-full max-w-lg">
+        <div className="space-y-2">
+          <p className="text-[11px] text-gray-500">Every recorded change for this vendor, newest first — from the module&apos;s tamper-evident audit trail.</p>
+          {!audit ? (
+            <div className="flex items-center gap-2 py-6 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+          ) : audit.items.length === 0 ? (
+            <p className="py-6 text-sm text-gray-400">No recorded activity yet.</p>
+          ) : (
+            <ol className="relative space-y-3 border-l border-gray-200 pl-4">
+              {audit.items.map((a) => (
+                <li key={a.id} className="relative">
+                  <span className="absolute -left-[21px] top-1 h-2 w-2 rounded-full bg-primary-400 ring-2 ring-white" />
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium capitalize text-slate-600">{a.action}</span>
+                    <span className="text-xs font-medium text-slate-800 capitalize">{a.entity.replace('_', ' ')}{a.entity_id ? ` #${a.entity_id}` : ''}</span>
+                  </div>
+                  {(a.to_value || a.reason) && (
+                    <p className="mt-0.5 text-[11px] text-gray-500">{a.to_value ? `→ ${a.to_value}` : ''}{a.to_value && a.reason ? ' · ' : ''}{a.reason || ''}</p>
+                  )}
+                  <p className="mt-0.5 text-[10px] text-gray-400">
+                    {a.actor_name || (a.actor_id ? `User ${a.actor_id}` : 'System')} · {a.created_at ? new Date(a.created_at).toLocaleString() : ''}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </RightSlidePanel>
     </div>
   );
 }
@@ -415,13 +348,15 @@ function StageChip({ stage, active, isCurrent, onClick }: { stage: StageInstance
 }
 
 function StageBody({
-  stageKey, vendorId, assessmentId, assessment, canRunEngines, onRunTiering, tieringBusy, onRunScoring, scoringBusy,
+  stageKey, vendorId, assessmentId, assessment, canRunEngines, onChanged, onRunTiering, tieringBusy, onRunScoring, scoringBusy,
 }: {
   stageKey: string; vendorId: number; assessmentId: number;
-  assessment: LifecycleResponse['assessment']; canRunEngines: boolean;
+  assessment: LifecycleResponse['assessment']; canRunEngines: boolean; onChanged?: () => void;
   onRunTiering: () => void; tieringBusy: boolean; onRunScoring: () => void; scoringBusy: boolean;
 }) {
   switch (stageKey) {
+    case 'intake':
+      return <IntakePanel vendorId={vendorId} onChanged={onChanged} />;
     case 'tiering':
       return (
         <div className="space-y-3">
@@ -460,30 +395,38 @@ function StageBody({
         </div>
       );
     case 'dd_planning':
+      return assessment
+        ? <PlanningPanel vendorId={vendorId} assessmentId={assessmentId} assessment={assessment} />
+        : null;
     case 'questionnaire':
-      return (
-        <div className="space-y-3">
-          <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">
-            <Shield className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
-            <p>Issue the questionnaire and collect responses from the Questionnaires tab. Attach the vendor&apos;s supporting proof here — <span className="font-medium text-slate-700">upload a file</span> or <span className="font-medium text-slate-700">link an existing</span> evidence record.</p>
-          </div>
-          <EvidencePanel assessmentId={assessmentId} title="Evidence pack" />
-        </div>
-      );
+      return <QuestionnaireReviewPanel vendorId={vendorId} assessmentId={assessmentId} />;
     case 'findings':
       return <FindingsPanel assessmentId={assessmentId} />;
     case 'contracting':
       return <ContractsPanel vendorId={vendorId} assessmentId={assessmentId} />;
     case 'approval':
       return <ApprovalPanel assessmentId={assessmentId} />;
+    case 'onboarding':
+      return (
+        <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 text-xs text-emerald-800">
+          <Shield className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-600" />
+          <p>Provision least-privilege access and stand up monitoring. Work the onboarding steps below; contractual obligations carry over from <span className="font-medium">Contracting &amp; Controls</span>, and monitoring feeds are managed from the <span className="font-medium">Monitoring</span> stage.</p>
+        </div>
+      );
     case 'monitoring':
-    case 'reassessment':
       return <SignalsPanel vendorId={vendorId} />;
+    case 'reassessment':
+      return (
+        <div className="space-y-4">
+          <SignalsPanel vendorId={vendorId} />
+          <OffboardingPanel vendorId={vendorId} assessmentId={assessmentId} />
+        </div>
+      );
     default:
       return (
         <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">
           <Shield className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
-          <p>Work this stage's activities, then advance. Vendor record, questionnaire and evidence are managed from the vendor Overview, Assessments and Questionnaires tabs.</p>
+          <p>Work this stage's activities in the checklist below, then advance.</p>
         </div>
       );
   }

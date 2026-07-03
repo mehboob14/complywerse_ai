@@ -64,6 +64,7 @@ import {
   GovernanceQueueWidget,
   GovernanceRecentPublicationsWidget,
   GovernanceActivityWidget,
+  ExceptionPostureWidget,
   RiskSummaryWidget,
   RiskDistributionWidget,
   RiskCategoryWidget,
@@ -2367,6 +2368,7 @@ function buildWidgetsForTab(tab: MainTab): WorkspaceWidgetConfig[] {
       return [
         { id: 'gov-dashboard', title: 'Governance Dashboard',          icon: <Building2 className="h-3.5 w-3.5" />,  content: <GovernanceDashboardWidget />,         defaultW: 7, defaultH: 4, minW: 4, minH: 3 },
         { id: 'gov-activity',  title: 'Approvals & Reviews',           icon: <ClipboardList className="h-3.5 w-3.5" />, content: <GovernanceActivityWidget />,          defaultW: 5, defaultH: 4, minW: 3, minH: 2 },
+        { id: 'gov-exceptions', title: 'Exception Risk Posture',       icon: <Gauge className="h-3.5 w-3.5" />,      content: <ExceptionPostureWidget />,            defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
         { id: 'gov-coverage',  title: 'Framework Compliance Coverage', icon: <Shield className="h-3.5 w-3.5" />,     content: <GovernanceFrameworkCoverageWidget />, defaultW: 6, defaultH: 4, minW: 4, minH: 3 },
       ];
     case 'risk':

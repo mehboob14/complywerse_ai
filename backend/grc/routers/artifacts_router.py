@@ -632,6 +632,10 @@ def _derive_catalog_from_framework(
             "owner": None,
             "is_platform_native": False,
             "platform_data_type": None,
+            # Virtual (requirement-derived) artifacts have no pre-generated
+            # content bucket — readiness is always false here.
+            "has_content": False,
+            "content_format": None,
         })
 
     stages = sorted({i["stage"] for i in items}, key=lambda s: int(s.split(" ")[1].rstrip(":")) if s.startswith("Stage ") else 999)
@@ -757,6 +761,97 @@ def export_catalog_artifact(
     )
 
 
+def _content_lookup(content_map: dict, framework_key: Optional[str], artifact_id: str) -> Optional[dict]:
+    """Find a non-empty content entry for an artifact, preferring its own framework
+    bucket then falling back across buckets (ids are framework-prefixed)."""
+    if framework_key:
+        e = content_map.get(framework_key, {}).get(artifact_id)
+        if e and e.get("content"):
+            return e
+    for bucket in content_map.values():
+        e = bucket.get(artifact_id)
+        if e and e.get("content"):
+            return e
+    return None
+
+
+@router.get("/catalog/all")
+def get_all_catalogs(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Every seeded framework's artifact catalog in ONE call, each item tagged with
+    readiness (has_content) from the mtime-hot-reloading content map. Powers the
+    "all frameworks" artifact-template browser so generated artifacts surface
+    regardless of the tenant's active certification journeys. Frameworks are ordered
+    ready-first so the ones with generated content float to the top."""
+    _ensure_catalog_seeded(db)
+    rows = (
+        db.query(ArtifactCatalogItem)
+        .order_by(
+            ArtifactCatalogItem.framework_name,
+            ArtifactCatalogItem.stage_number,
+            ArtifactCatalogItem.artifact_id,
+        )
+        .all()
+    )
+    content_map = _load_artifact_content()
+
+    groups: dict = {}
+    for i in rows:
+        g = groups.get(i.framework_key)
+        if g is None:
+            g = groups[i.framework_key] = {
+                "framework_key": i.framework_key,
+                "framework_name": i.framework_name,
+                "items": [],
+                "stages": set(),
+            }
+        entry = _content_lookup(content_map, i.framework_key, i.artifact_id)
+        g["items"].append({
+            "id": i.id,
+            "artifact_id": i.artifact_id,
+            "stage": i.stage,
+            "stage_number": i.stage_number,
+            "name": i.name,
+            "artifact_type": i.artifact_type,
+            "control_ref": i.control_ref,
+            "mandatory": i.mandatory,
+            "description": i.description,
+            "format": i.format,
+            "owner": i.owner,
+            "is_platform_native": i.is_platform_native,
+            "platform_data_type": i.platform_data_type,
+            "has_content": entry is not None,
+            "content_format": (entry.get("content_format") or "markdown") if entry else None,
+        })
+        if i.stage:
+            g["stages"].add(i.stage)
+
+    frameworks = []
+    for g in groups.values():
+        ready = sum(1 for it in g["items"] if it["has_content"])
+        frameworks.append({
+            "framework_key": g["framework_key"],
+            "framework_name": g["framework_name"],
+            "total": len(g["items"]),
+            "ready": ready,
+            "stages": sorted(
+                g["stages"],
+                key=lambda s: (s.split(" ")[1] if s.startswith("Stage ") else s),
+            ),
+            "items": g["items"],
+        })
+    # Ready-first, then alphabetical — frameworks with generated artifacts on top.
+    frameworks.sort(key=lambda f: (-f["ready"], (f["framework_name"] or "").lower()))
+    return {
+        "frameworks": frameworks,
+        "total_frameworks": len(frameworks),
+        "total_artifacts": sum(f["total"] for f in frameworks),
+        "total_ready": sum(f["ready"] for f in frameworks),
+    }
+
+
 @router.get("/catalog")
 def get_catalog(
     framework_key: Optional[str] = Query(None),
@@ -808,27 +903,53 @@ def get_catalog(
         fw_name = assessment_type
     else:
         fw_name = resolved_key
+
+    # Per-item readiness: does this artifact have pre-generated, non-empty
+    # content yet? Sourced from the mtime-hot-reloading content map so the list
+    # auto-reflects the generator/exporter as it runs — no restart. `has_content`
+    # lets both the governance template browser and the compliance Artifacts tab
+    # surface "Ready" state directly from the list (additive, purely optional).
+    content_map = _load_artifact_content()
+    fw_content = content_map.get(resolved_key, {}) if resolved_key else {}
+
+    def _content_entry(aid: str) -> Optional[dict]:
+        e = fw_content.get(aid)
+        if e and e.get("content"):
+            return e
+        # Rare cross-framework fallback (ids are framework-prefixed, so collisions
+        # are unlikely) — mirrors the /catalog/content lookup behaviour.
+        for bucket in content_map.values():
+            e = bucket.get(aid)
+            if e and e.get("content"):
+                return e
+        return None
+
+    def _item_out(i: "ArtifactCatalogItem") -> dict:
+        entry = _content_entry(i.artifact_id)
+        return {
+            "id": i.id,
+            "artifact_id": i.artifact_id,
+            "stage": i.stage,
+            "stage_number": i.stage_number,
+            "name": i.name,
+            "artifact_type": i.artifact_type,
+            "control_ref": i.control_ref,
+            "mandatory": i.mandatory,
+            "description": i.description,
+            "format": i.format,
+            "owner": i.owner,
+            "is_platform_native": i.is_platform_native,
+            "platform_data_type": i.platform_data_type,
+            # Ready = pre-generated content exists. content_format tells the UI
+            # whether it's a document (markdown), a table template, or a guide.
+            "has_content": entry is not None,
+            "content_format": (entry.get("content_format") or "markdown") if entry else None,
+        }
+
     return {
         "framework_key": resolved_key,
         "framework_name": fw_name,
-        "items": [
-            {
-                "id": i.id,
-                "artifact_id": i.artifact_id,
-                "stage": i.stage,
-                "stage_number": i.stage_number,
-                "name": i.name,
-                "artifact_type": i.artifact_type,
-                "control_ref": i.control_ref,
-                "mandatory": i.mandatory,
-                "description": i.description,
-                "format": i.format,
-                "owner": i.owner,
-                "is_platform_native": i.is_platform_native,
-                "platform_data_type": i.platform_data_type,
-            }
-            for i in items
-        ],
+        "items": [_item_out(i) for i in items],
         "stages": stages,
     }
 

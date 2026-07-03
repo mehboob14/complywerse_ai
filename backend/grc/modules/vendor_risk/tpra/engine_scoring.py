@@ -126,17 +126,27 @@ def score_assessment(
         overall_residual = round(overall_residual_num / overall_weight, 2)
     else:
         overall_residual = round(inherent, 2)
+    # Invariant (TPRM-004): controls can only REDUCE risk — residual must never
+    # exceed inherent. The formula is already capped, but clamp defensively so no
+    # rounding / config / upstream path can ever produce residual > inherent.
+    overall_residual = min(overall_residual, round(inherent, 2))
 
-    # Any failed critical control floors the residual rating at "high" minimum,
-    # and is always blocking.
+    # TPRM-015 — the overall residual_rating is RESIDUAL-DRIVEN: it is the tier of
+    # the weighted-average residual score (score_to_tier), NOT the inherent tier.
+    # The only exception is that a failed CRITICAL control floors the rating at
+    # "high" (and is always blocking) regardless of the numeric score. `rating_basis`
+    # makes that derivation explicit so the UI can show WHY a rating is what it is.
     residual_rating = score_to_tier(overall_residual, thresholds)
+    rating_basis = "residual_score"
     if critical_failures and residual_rating in ("low", "medium"):
         residual_rating = "high"
+        rating_basis = "critical_control_floor"
 
     return {
         "overall_inherent": round(inherent, 2),
         "overall_residual": overall_residual,
         "residual_rating": residual_rating,
+        "rating_basis": rating_basis,
         "rating_grade": residual_to_grade(overall_residual, cfg.get("grade_bands")),
         "domain_scores": domain_scores,
         "critical_failures": critical_failures,

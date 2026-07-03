@@ -24,7 +24,7 @@ from ....models import (
     GovernanceObjective, Issue, GRCUser, Tenant, get_db,
     ParsedFrameworkControl, UploadedFramework, RiskMitigationAction,
     Vulnerability, VulnerabilityAssetLink, RiskAssessmentRisk,
-    Team, BusinessUnit,
+    Team, BusinessUnit, Vendor,
     InternalControl, CertificationJourney, ControlObjective, FrameworkDomain,
 )
 from ....schemas import (
@@ -952,6 +952,37 @@ def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
         )
 
 
+def _attach_source_labels(db: Session, risks: List[Risk]) -> None:
+    """Resolve vendor-sourced risks whose source_reference is `vendor:{id}/...` to the
+    real vendor name, so the UI shows e.g. 'Pixel Studio' instead of raw ids. Sets a
+    transient `source_label` attribute read by RiskResponse. Batched (one query)."""
+    vendor_ids = set()
+    for r in risks:
+        r.source_label = None
+        ref = getattr(r, "source_reference", None) or ""
+        if ref.startswith("vendor:"):
+            try:
+                vendor_ids.add(int(ref.split("/")[0].split(":", 1)[1]))
+            except (IndexError, ValueError):
+                pass
+    if not vendor_ids:
+        return
+    names = dict(db.query(Vendor.id, Vendor.name).filter(Vendor.id.in_(vendor_ids)).all())
+    for r in risks:
+        ref = getattr(r, "source_reference", None) or ""
+        if not ref.startswith("vendor:"):
+            continue
+        try:
+            vid = int(ref.split("/")[0].split(":", 1)[1])
+        except (IndexError, ValueError):
+            continue
+        name = names.get(vid)
+        if not name:
+            continue
+        tail = ref.split("/", 1)[1] if "/" in ref else ""
+        r.source_label = f"{name} · finding" if tail.startswith("tpra_finding") else name
+
+
 @router.get("", response_model=List[RiskResponse])
 def list_risks(
     tenant_id: Optional[int] = None,
@@ -1024,6 +1055,7 @@ def list_risks(
         query = query.filter(Risk.inherent_score <= max_score)
     
     risks = query.order_by(Risk.created_at.desc()).offset(skip).limit(limit).all()
+    _attach_source_labels(db, risks)
     return risks
 
 

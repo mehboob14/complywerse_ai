@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import logging
 import os
+import re
 import uuid
 import json
 import html
@@ -112,6 +113,7 @@ class GovernanceDocumentCreate(BaseModel):
     next_review_date: Optional[datetime] = None
     regulatory_scope: Optional[List[str]] = []
     framework_ids: Optional[List[int]] = []
+    applicable_framework_ids: Optional[List[int]] = []
     tags: Optional[List[str]] = []
 
 
@@ -134,6 +136,10 @@ class GovernanceDocumentUpdate(BaseModel):
     next_review_date: Optional[datetime] = None
     regulatory_scope: Optional[List[str]] = None
     framework_ids: Optional[List[int]] = None
+    applicable_framework_ids: Optional[List[int]] = None
+    # Edit metadata (not a document column) — the "why" for a content edit,
+    # captured into the version snapshot + audit trail.
+    change_reason: Optional[str] = None
     tags: Optional[List[str]] = None
 
 
@@ -143,6 +149,21 @@ class BulkStatusUpdate(BaseModel):
 
 
 class BulkArchive(BaseModel):
+    document_ids: List[int]
+
+
+class BulkAssignOwner(BaseModel):
+    document_ids: List[int]
+    owner_id: int
+
+
+class BulkSetReviewDate(BaseModel):
+    document_ids: List[int]
+    next_review_date: datetime
+    review_cycle_months: Optional[int] = None
+
+
+class BulkPublish(BaseModel):
     document_ids: List[int]
 
 
@@ -212,6 +233,7 @@ def serialize_document(doc: GovernanceDocument, db: Session = None) -> dict:
         "last_reviewed_by": doc.last_reviewed_by,
         "regulatory_scope": doc.regulatory_scope or [],
         "framework_ids": doc.framework_ids or [],
+        "applicable_framework_ids": getattr(doc, "applicable_framework_ids", None) or [],
         "tags": doc.tags or [],
         "approved_by": doc.approved_by,
         "approved_at": doc.approved_at.isoformat() if doc.approved_at else None,
@@ -378,6 +400,9 @@ def create_document(
         next_review_date=document.next_review_date,
         regulatory_scope=document.regulatory_scope or [],
         framework_ids=document.framework_ids or [],
+        # Default the audited-against frameworks to the referenced/drafting
+        # frameworks when the user didn't pick a separate applicable set.
+        applicable_framework_ids=(document.applicable_framework_ids or document.framework_ids or []),
         tags=document.tags or [],
         status="draft",
         current_version="1.0"
@@ -713,6 +738,108 @@ def get_document(
     return result
 
 
+def _snapshot_content_version(
+    db: Session, document: GovernanceDocument, *, old_content, old_title, old_version,
+    change_type: str, change_reason, user_id: int,
+) -> str:
+    """Snapshot document content into version history. Assumes document.content
+    already holds the NEW content. Preserves the original as a baseline on the
+    first edit, supersedes the prior current, inserts a new current, and bumps
+    document.current_version. Returns the new version number."""
+    from .versions import increment_version
+    existing = db.query(GovernanceDocumentVersion).filter(
+        GovernanceDocumentVersion.document_id == document.id
+    ).count()
+    if existing == 0:
+        db.add(GovernanceDocumentVersion(
+            document_id=document.id, version_number=old_version, change_type="baseline",
+            title=old_title, content=old_content, change_summary="Baseline snapshot (before first edit)",
+            status="superseded", created_by=user_id, created_at=datetime.utcnow(),
+        ))
+    else:
+        db.query(GovernanceDocumentVersion).filter(
+            GovernanceDocumentVersion.document_id == document.id,
+            GovernanceDocumentVersion.status == "current",
+        ).update({"status": "superseded"})
+    new_version_number = increment_version(old_version, "minor")
+    db.add(GovernanceDocumentVersion(
+        document_id=document.id, version_number=new_version_number, change_type=change_type,
+        title=document.title, content=document.content, change_summary=f"{change_type} update".strip(),
+        change_reason=change_reason, status="current", created_by=user_id, created_at=datetime.utcnow(),
+    ))
+    document.current_version = new_version_number
+    return new_version_number
+
+
+# Friendly Document-Description row labels we know how to refresh on sign-off.
+_DOC_CONTROL_LABELS = {
+    "effective_date": "effective date",
+    "version": "version",
+    "next_review_date": "next review date",
+    "classification": "document classification",
+    "approval_authority": "approval authority",
+}
+
+
+def _patch_signoff_content(content: Optional[str], signoffs: list, control_fields: dict) -> str:
+    """Fill the Approval Signoff table (by Role) and refresh the Document
+    Description table (by label) inside the markdown content. Parses table rows
+    structurally (matching cells), NOT by blind underscore replacement, so it is
+    unambiguous across the identical `___________________` placeholder cells."""
+    if not content:
+        return content or ""
+    value_by_label = {
+        _DOC_CONTROL_LABELS.get(k, k).lower(): str(v)
+        for k, v in (control_fields or {}).items() if v
+    }
+    sign_by_role = {}
+    for s in (signoffs or []):
+        role = (s.get("role") or "").strip().lower()
+        if role:
+            sign_by_role[role] = s
+
+    def _is_sep(cells):
+        return all(re.fullmatch(r":?-{2,}:?", (c or "").strip() or "") for c in cells if (c or "").strip())
+
+    out = []
+    for line in content.split("\n"):
+        stripped = line.strip()
+        if not (stripped.startswith("|") and stripped.endswith("|")):
+            out.append(line)
+            continue
+        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        if _is_sep(cells):
+            out.append(line)
+            continue
+        # Document Description: 2-col "| Label | Value |".
+        if len(cells) == 2:
+            label = cells[0].strip("*").strip().lower()
+            if label in value_by_label:
+                out.append("| " + cells[0] + " | " + value_by_label[label] + " |")
+                continue
+        # Approval Signoff: "| Role | Name | Designation | Signature / Date |".
+        if len(cells) >= 3:
+            role = cells[0].strip("*").strip().lower()
+            match = None
+            for r, s in sign_by_role.items():
+                if r and (r in role or role in r):
+                    match = s
+                    break
+            if match:
+                name = (match.get("name") or "").strip()
+                date = (match.get("date") or "").strip()
+                if name:
+                    cells[1] = name
+                if match.get("designation"):
+                    cells[2] = match["designation"].strip()
+                sig = " — ".join([p for p in (name, date) if p]) or cells[-1]
+                cells[-1] = sig
+                out.append("| " + " | ".join(cells) + " |")
+                continue
+        out.append(line)
+    return "\n".join(out)
+
+
 @router.put("/{document_id}")
 def update_document(
     document_id: int,
@@ -734,33 +861,151 @@ def update_document(
         )
     
     update_data = document_update.model_dump(exclude_unset=True)
+    # change_reason is edit metadata, not a document column — pull it out so the
+    # field loop doesn't try to setattr/getattr a non-existent attribute.
+    change_reason = update_data.pop("change_reason", None)
+
+    # Capture prior state BEFORE mutating so we can snapshot + audit it.
+    old_content = document.content
+    old_title = document.title
+    old_version = document.current_version or "1.0"
+    content_changing = (
+        "content" in update_data
+        and (update_data.get("content") or "") != (old_content or "")
+    )
+
     changed_fields = []
-    
     for field, new_value in update_data.items():
         old_value = getattr(document, field)
         if old_value != new_value:
-            changed_fields.append({
-                "field": field,
-                "old_value": str(old_value) if old_value else None,
-                "new_value": str(new_value) if new_value else None
-            })
+            changed_fields.append({"field": field, "old_value": old_value, "new_value": new_value})
             setattr(document, field, new_value)
-    
+
     document.updated_at = datetime.utcnow()
-    
-    if changed_fields:
-        create_audit_log(
-            db=db,
-            document_id=document_id,
-            tenant_id=document.tenant_id,
+
+    # Content edit → version snapshot (mirrors the statement edit→snapshot→history
+    # pattern) so document body is fully versioned + restorable with who/when/why.
+    if content_changing:
+        _snapshot_content_version(
+            db, document, old_content=old_content, old_title=old_title,
+            old_version=old_version, change_type="minor", change_reason=change_reason,
             user_id=current_user.id,
-            action="updated",
-            action_details=f"Updated fields: {', '.join([c['field'] for c in changed_fields])}"
         )
-    
+
+    def _preview(v):
+        s = "" if v is None else str(v)
+        return (s[:2000] + "…") if len(s) > 2000 else s
+
+    # Rich audit: content edits capture old/new (+ reason); metadata edits log names.
+    if content_changing:
+        create_audit_log(
+            db=db, document_id=document_id, tenant_id=document.tenant_id,
+            user_id=current_user.id, action="content_edited", field_changed="content",
+            old_value=_preview(old_content), new_value=_preview(document.content),
+            action_details=change_reason or "Document content edited",
+        )
+    non_content = [c for c in changed_fields if c["field"] != "content"]
+    if non_content:
+        create_audit_log(
+            db=db, document_id=document_id, tenant_id=document.tenant_id,
+            user_id=current_user.id, action="updated",
+            action_details=f"Updated fields: {', '.join(c['field'] for c in non_content)}",
+        )
+
     db.commit()
     db.refresh(document)
-    
+
+    return serialize_document(document, db)
+
+
+class SignoffEntry(BaseModel):
+    role: str                       # matches the Approval Signoff row's Role label
+    name: Optional[str] = None
+    designation: Optional[str] = None
+    date: Optional[str] = None
+
+
+class DocumentSignoffRequest(BaseModel):
+    signoffs: List[SignoffEntry] = []
+    # Document-control header fields to refresh (all optional).
+    effective_date: Optional[str] = None
+    version: Optional[str] = None
+    next_review_date: Optional[str] = None
+    classification: Optional[str] = None
+    approval_authority: Optional[str] = None
+    # Also stamp the structured approval columns (approved_by/at).
+    mark_approved: bool = False
+
+
+@router.post("/{document_id}/signoff")
+def signoff_document(
+    document_id: int,
+    body: DocumentSignoffRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Fill the Approval Signoff table (approver name/designation/date) and the
+    Document Description header (version/effective/next-review/classification) in
+    the document content — the 'sign / fill placeholders later' flow. Snapshots a
+    version (change_type=signoff) + writes an audit row, and optionally stamps the
+    structured approved_by/approved_at columns. Non-destructive: only matched
+    table cells change."""
+    user_tenants = get_user_tenants(current_user, db)
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants),
+    ).first()
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    old_content = document.content
+    old_title = document.title
+    old_version = document.current_version or "1.0"
+
+    control_fields = {
+        "effective_date": body.effective_date, "version": body.version,
+        "next_review_date": body.next_review_date, "classification": body.classification,
+        "approval_authority": body.approval_authority,
+    }
+    signoffs = [s.model_dump() for s in body.signoffs]
+    new_content = _patch_signoff_content(old_content, signoffs, control_fields)
+    content_changed = new_content != (old_content or "")
+
+    # Mirror structured document-control columns from the header edits.
+    if body.classification:
+        document.classification = body.classification
+    if body.effective_date:
+        try:
+            document.effective_date = datetime.fromisoformat(body.effective_date)
+        except (ValueError, TypeError):
+            pass
+    if body.next_review_date:
+        try:
+            document.next_review_date = datetime.fromisoformat(body.next_review_date)
+        except (ValueError, TypeError):
+            pass
+    if body.mark_approved:
+        document.approved_by = current_user.id
+        document.approved_at = datetime.utcnow()
+
+    reason = "Sign-off: " + ", ".join(
+        [f"{s['role']}={s.get('name') or '—'}" for s in signoffs] or ["document-control fields"]
+    )
+    if content_changed:
+        document.content = new_content
+        _snapshot_content_version(
+            db, document, old_content=old_content, old_title=old_title,
+            old_version=old_version, change_type="signoff", change_reason=reason,
+            user_id=current_user.id,
+        )
+    document.updated_at = datetime.utcnow()
+    create_audit_log(
+        db=db, document_id=document_id, tenant_id=document.tenant_id,
+        user_id=current_user.id, action="signed", field_changed="signoff",
+        old_value=None, new_value=reason, action_details=reason,
+    )
+    db.commit()
+    db.refresh(document)
     return serialize_document(document, db)
 
 
@@ -1057,6 +1302,154 @@ def bulk_archive(
     return {
         "message": f"Successfully archived {archived_count} documents",
         "archived_count": archived_count
+    }
+
+
+@router.post("/bulk-assign-owner")
+def bulk_assign_owner(
+    bulk_request: BulkAssignOwner,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    documents = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id.in_(bulk_request.document_ids),
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).all()
+
+    if not documents:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No documents found"
+        )
+
+    updated_count = 0
+    for doc in documents:
+        old_owner = doc.owner_id
+        doc.owner_id = bulk_request.owner_id
+        doc.updated_at = datetime.utcnow()
+
+        create_audit_log(
+            db=db,
+            document_id=doc.id,
+            tenant_id=doc.tenant_id,
+            user_id=current_user.id,
+            action="owner_assigned",
+            action_details=f"Owner changed from '{old_owner}' to '{bulk_request.owner_id}'",
+            field_changed="owner_id",
+            old_value=str(old_owner) if old_owner is not None else None,
+            new_value=str(bulk_request.owner_id)
+        )
+        updated_count += 1
+
+    db.commit()
+
+    return {
+        "message": f"Successfully assigned owner to {updated_count} documents",
+        "updated_count": updated_count
+    }
+
+
+@router.post("/bulk-set-review-date")
+def bulk_set_review_date(
+    bulk_request: BulkSetReviewDate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    documents = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id.in_(bulk_request.document_ids),
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).all()
+
+    if not documents:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No documents found"
+        )
+
+    updated_count = 0
+    for doc in documents:
+        old_review_date = doc.next_review_date
+        doc.next_review_date = bulk_request.next_review_date
+        if bulk_request.review_cycle_months is not None:
+            doc.review_cycle_months = bulk_request.review_cycle_months
+        doc.updated_at = datetime.utcnow()
+
+        create_audit_log(
+            db=db,
+            document_id=doc.id,
+            tenant_id=doc.tenant_id,
+            user_id=current_user.id,
+            action="review_date_updated",
+            action_details=f"Next review date set to '{bulk_request.next_review_date.isoformat()}'",
+            field_changed="next_review_date",
+            old_value=old_review_date.isoformat() if old_review_date else None,
+            new_value=bulk_request.next_review_date.isoformat()
+        )
+        updated_count += 1
+
+    db.commit()
+
+    return {
+        "message": f"Successfully updated review date for {updated_count} documents",
+        "updated_count": updated_count
+    }
+
+
+@router.post("/bulk-publish")
+def bulk_publish(
+    bulk_request: BulkPublish,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    documents = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id.in_(bulk_request.document_ids),
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).all()
+
+    if not documents:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No documents found"
+        )
+
+    published_count = 0
+    skipped_count = 0
+    for doc in documents:
+        if doc.status != "approved":
+            skipped_count += 1
+            continue
+
+        old_status = doc.status
+        doc.status = "published"
+        doc.published_by = current_user.id
+        doc.published_at = datetime.utcnow()
+        doc.updated_at = datetime.utcnow()
+
+        create_audit_log(
+            db=db,
+            document_id=doc.id,
+            tenant_id=doc.tenant_id,
+            user_id=current_user.id,
+            action="published",
+            action_details=f"Document published by {current_user.display_name}",
+            field_changed="status",
+            old_value=old_status,
+            new_value="published"
+        )
+        published_count += 1
+
+    db.commit()
+
+    return {
+        "message": f"Published {published_count} documents, skipped {skipped_count}",
+        "published_count": published_count,
+        "skipped_count": skipped_count
     }
 
 

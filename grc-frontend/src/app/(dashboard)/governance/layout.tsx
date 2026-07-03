@@ -9,6 +9,7 @@ import {
   CheckSquare,
   Link2,
   AlertTriangle,
+  Users,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -16,9 +17,10 @@ const governanceNavigation = [
   { name: 'Overview', href: '/governance', icon: LayoutDashboard },
   { name: 'Documents', href: '/governance/documents', icon: FileText },
   { name: 'Mappings', href: '/governance/mappings', icon: Link2 },
-  { name: 'Approvals', href: '/governance/approvals', icon: CheckSquare },
   { name: 'Exceptions', href: '/governance/exceptions', icon: AlertTriangle },
   { name: 'Reviews', href: '/governance/reviews', icon: Calendar },
+  { name: 'Attestations', href: '/governance/attestations', icon: CheckSquare },
+  { name: 'Committees', href: '/governance/committees', icon: Users },
 ];
 
 export default function GovernanceLayout({

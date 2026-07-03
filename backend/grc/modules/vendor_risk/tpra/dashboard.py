@@ -16,7 +16,7 @@ from sqlalchemy import asc, desc, or_
 from sqlalchemy.orm import Session
 
 from ....models import (
-    get_db, GRCUser, Vendor, TPRAFinding, TPRARemediation,
+    get_db, GRCUser, Vendor, VendorAssessment, TPRAFinding, TPRARemediation,
     TPRAMonitoringSignal, TPRARiskSnapshot,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
@@ -315,6 +315,14 @@ def third_party_risk_register(
         ),
     ).all()
     vname = dict(db.query(Vendor.id, Vendor.name).filter(Vendor.tenant_id.in_(tids)).all())
+    # Per-vendor 10-domain residual breakdown from the active assessment (TPRM-014).
+    dmap = {}
+    for vid_, ds in db.query(VendorAssessment.vendor_id, VendorAssessment.domain_scores).filter(
+        VendorAssessment.tenant_id.in_(tids),
+        VendorAssessment.lifecycle_status == "active",
+    ).all():
+        if ds:
+            dmap[vid_] = ds
 
     items = []
     for r in risks:
@@ -330,6 +338,7 @@ def third_party_risk_register(
             "residual_score": r.residual_score, "status": r.status,
             "register_type": r.register_type, "owner_id": r.owner_id,
             "source_type": r.source_type, "source_reference": r.source_reference,
+            "domain_scores": dmap.get(vid),
             "updated_at": r.updated_at.isoformat() if r.updated_at else None,
         })
     items.sort(key=lambda x: (x["residual_score"] is not None, x["residual_score"] or 0), reverse=True)

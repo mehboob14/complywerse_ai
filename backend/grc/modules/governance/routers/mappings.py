@@ -10,7 +10,7 @@ from ....models import (
     DocumentRegulatoryLink, DocumentAssetLink, InternalControl,
     Risk, ITAsset, Framework, FrameworkControl, GRCUser, get_db,
     PolicyStatement, StatementControlMapping,
-    ParsedFrameworkControl, NormalizedControl,
+    ParsedFrameworkControl, NormalizedControl, UploadedFramework,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -258,6 +258,105 @@ def get_document_mappings(
         # AI control recommendations rolled up from the document's statements
         # (internal ERM + framework controls). Populated by the post-parse auto-map.
         "recommended_controls": _recommended_controls_for_document(db, document_id, user_tenants),
+    }
+
+
+@router.get("/document/{document_id}/coverage")
+def get_document_control_coverage(
+    document_id: int,
+    framework_ids: Optional[str] = Query(
+        None, description="Comma-separated UploadedFramework ids; defaults to the document's applicable_framework_ids"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Control-coverage of a document against its applicable frameworks (feature #6).
+
+    For each applicable framework returns how many of its controls are covered by
+    this document's statements and, crucially, WHICH controls are NOT covered (the
+    gap). Plus the document-level rolled-up mapped (confirmed) and recommended
+    (AI-suggested, unconfirmed) controls. Reads persisted statement→control
+    mappings — no AI call — so it's cheap and safe to poll."""
+    user_tenants = get_user_tenants(current_user, db)
+    document = get_document_or_404(document_id, user_tenants, db)
+
+    # Frameworks to audit against: explicit override, else the document's declared set.
+    if framework_ids:
+        fw_ids = [int(x) for x in framework_ids.split(",") if x.strip().lstrip("-").isdigit()]
+    else:
+        # Default to the document's declared applicable frameworks, falling back
+        # to the drafting/citation frameworks when none were explicitly set.
+        fw_ids = [int(x) for x in (
+            getattr(document, "applicable_framework_ids", None)
+            or getattr(document, "framework_ids", None) or []
+        )]
+
+    recommended = _recommended_controls_for_document(db, document_id, user_tenants)
+    mapped_all = [r for r in recommended if r.get("is_linked")]
+    suggested_all = [r for r in recommended if not r.get("is_linked")]
+
+    # Identifiers that count as "covered" when diffing a framework's catalog:
+    # direct parsed-control ids, plus denormalized control codes (auto-map's
+    # candidate pool is NormalizedControl, so a framework control may be covered
+    # via a normalized/framework-kind mapping that shares the same code).
+    mapped_parsed_ids = {
+        r["control_ref_id"] for r in recommended
+        if r.get("control_kind") == "parsed" and r.get("control_ref_id")
+    }
+    mapped_codes = {
+        (r.get("control_code") or "").strip().lower()
+        for r in recommended if r.get("control_code")
+    }
+    mapped_codes.discard("")
+
+    frameworks_out: List[dict] = []
+    if fw_ids:
+        ufs = db.query(UploadedFramework).filter(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.id.in_(fw_ids),
+        ).all()
+        for uf in ufs:
+            catalog = db.query(ParsedFrameworkControl).filter(
+                ParsedFrameworkControl.uploaded_framework_id == uf.id
+            ).order_by(ParsedFrameworkControl.control_id.asc()).all()
+            missing: List[dict] = []
+            mapped_count = 0
+            for c in catalog:
+                code = (c.original_reference or c.control_id or "").strip().lower()
+                covered = (c.id in mapped_parsed_ids) or (code and code in mapped_codes)
+                if covered:
+                    mapped_count += 1
+                else:
+                    missing.append({
+                        "id": c.id,
+                        "control_id": c.control_id,
+                        "reference": c.original_reference or c.control_id,
+                        "title": c.title,
+                        "domain": c.domain,
+                    })
+            total = len(catalog)
+            frameworks_out.append({
+                "framework_id": uf.id,
+                "framework_name": uf.name,
+                "total_controls": total,
+                "mapped_count": mapped_count,
+                "missing_count": len(missing),
+                "coverage_pct": round(100 * mapped_count / total, 1) if total else 0.0,
+                "missing_controls": missing,
+            })
+
+    return {
+        "document_id": document_id,
+        "document_title": document.title,
+        "applicable_framework_ids": fw_ids,
+        "frameworks": frameworks_out,
+        "mapped_controls": mapped_all,
+        "recommended_controls": suggested_all,
+        "totals": {
+            "mapped": len(mapped_all),
+            "recommended": len(suggested_all),
+            "missing": sum(f["missing_count"] for f in frameworks_out),
+            "frameworks": len(frameworks_out),
+        },
     }
 
 

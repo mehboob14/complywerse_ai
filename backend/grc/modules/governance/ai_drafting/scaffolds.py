@@ -191,7 +191,7 @@ _POLICY_BACK_MATTER = [
 POLICY_SCAFFOLD = DocScaffold(
     doc_type="policy",
     label="Policy",
-    minimum_words=2400,
+    minimum_words=1500,
     prompt_voice=(
         "You are a senior governance and compliance consultant with twenty years "
         "of authoring information security policies for regulated banks. Write "
@@ -271,8 +271,8 @@ POLICY_SCAFFOLD = DocScaffold(
                 "    (do not invent numbers);\n"
                 "  • avoid cross-referencing other unspecified policies."
             ),
-            min_clauses=20,
-            min_words=900,
+            min_clauses=10,
+            min_words=500,
             inject_password_policy=True,
             is_clause_engine=True,
         ),
@@ -363,7 +363,7 @@ POLICY_SCAFFOLD = DocScaffold(
 STANDARD_SCAFFOLD = DocScaffold(
     doc_type="standard",
     label="Standard",
-    minimum_words=2200,
+    minimum_words=1400,
     prompt_voice=(
         "You are a senior security architect authoring a mandatory technical "
         "standard. Express every requirement as a measurable, testable, "
@@ -414,9 +414,9 @@ STANDARD_SCAFFOLD = DocScaffold(
                 "numeric thresholds from the supplied configuration where "
                 "available. Cite the source framework clause inline."
             ),
-            min_clauses=22,
+            min_clauses=10,
             is_clause_engine=True,
-            min_words=900,
+            min_words=500,
             inject_password_policy=True,
         ),
         SectionSpec(
@@ -498,7 +498,7 @@ STANDARD_SCAFFOLD = DocScaffold(
 PROCEDURE_SCAFFOLD = DocScaffold(
     doc_type="procedure",
     label="Procedure",
-    minimum_words=2400,
+    minimum_words=1600,
     prompt_voice=(
         "You are a senior IT operations lead authoring a procedure that "
         "engineers will follow step-by-step under audit observation. Be "
@@ -563,9 +563,9 @@ PROCEDURE_SCAFFOLD = DocScaffold(
                 "  • Tool / system used\n"
                 "  • Expected duration\n"
             ),
-            min_clauses=14,
+            min_clauses=10,
             is_clause_engine=True,
-            min_words=900,
+            min_words=500,
         ),
         SectionSpec(
             number="8",
@@ -638,7 +638,7 @@ PROCEDURE_SCAFFOLD = DocScaffold(
 GUIDELINE_SCAFFOLD = DocScaffold(
     doc_type="guideline",
     label="Guideline",
-    minimum_words=1800,
+    minimum_words=1300,
     prompt_voice=(
         "You are a senior governance practitioner authoring a guideline. "
         "Unlike a standard, a guideline is recommended rather than "
@@ -753,7 +753,7 @@ GUIDELINE_SCAFFOLD = DocScaffold(
 CHARTER_SCAFFOLD = DocScaffold(
     doc_type="charter",
     label="Charter",
-    minimum_words=1800,
+    minimum_words=1500,
     prompt_voice=(
         "You are a senior corporate governance and board-advisory professional "
         "authoring a formal Charter for a governance body, committee, or function "

@@ -1,4 +1,4 @@
-<!-- dora / DORA-001 | type=Policy | model=gpt-5.5 | 21484 chars -->
+<!-- dora / DORA-001 | type=Policy | mode=? | model=gpt-5.5 | 21373 chars -->
 
 | Field | Value |
 |---|---|
@@ -7,7 +7,6 @@
 | Owner | [Chief Risk Officer] |
 | Effective Date | [YYYY-MM-DD] |
 | Framework | Regulation (EU) 2022/2554 — Digital Operational Resilience Act (DORA) |
-| Control Reference | Article 2 — Scope |
 | Classification | Internal |
 
 ## Purpose
@@ -95,22 +94,22 @@ This Policy does not define detailed procedures for implementing all DORA obliga
 11. The organisation’s proportionality classification shall not be used to avoid DORA obligations where the organisation is in scope; it shall only inform the depth, complexity, frequency, and formality of implementation measures where DORA permits proportional application.
 
 12. The proportionality classification shall consider, at a minimum:
-    - Regulatory status and financial entity type;
-    - Number and jurisdictions of regulated entities;
-    - Criticality of services provided to customers and markets;
-    - ICT dependency and digital service delivery model;
-    - Use of ICT third-party service providers;
-    - Volume and sensitivity of data processed;
-    - Operational complexity;
-    - Cross-border activity;
-    - Impact of disruption on clients, counterparties, markets, or financial stability;
-    - Prior ICT incidents, control deficiencies, or supervisory findings.
+ - Regulatory status and financial entity type;
+ - Number and jurisdictions of regulated entities;
+ - Criticality of services provided to customers and markets;
+ - ICT dependency and digital service delivery model;
+ - Use of ICT third-party service providers;
+ - Volume and sensitivity of data processed;
+ - Operational complexity;
+ - Cross-border activity;
+ - Impact of disruption on clients, counterparties, markets, or financial stability;
+ - Prior ICT incidents, control deficiencies, or supervisory findings.
 
 13. The organisation shall assign one of the following proportionality classifications for DORA governance and implementation planning:
-    - **Low Complexity / Limited Impact**;
-    - **Moderate Complexity / Standard Impact**;
-    - **High Complexity / Significant Impact**;
-    - **Systemic, Critical, or Market-Impacting**.
+ - **Low Complexity / Limited Impact**;
+ - **Moderate Complexity / Standard Impact**;
+ - **High Complexity / Significant Impact**;
+ - **Systemic, Critical, or Market-Impacting**.
 
 14. The organisation shall maintain an auditable DORA Applicability Assessment Record containing the scope conclusion, rationale, evidence reviewed, proportionality classification, approval, and review date.
 
@@ -132,15 +131,15 @@ This Policy does not define detailed procedures for implementing all DORA obliga
 17. The organisation shall reassess DORA applicability at least annually.
 
 18. The organisation shall conduct a trigger-based reassessment without undue delay when any of the following events occur:
-    - New regulated activity, product, or service is launched;
-    - Regulatory licence, authorisation, permission, or registration is obtained, varied, suspended, or withdrawn;
-    - New legal entity, branch, acquisition, merger, divestment, or restructuring occurs;
-    - Entry into a new EU Member State or cross-border regulated activity occurs;
-    - Business model materially changes, including digital platform expansion;
-    - ICT operations become materially more critical to regulated services;
-    - Competent authority guidance, legislation, or supervisory expectation changes;
-    - The organisation becomes a critical or important provider to another financial entity;
-    - Material change occurs in the scale, complexity, or risk profile of operations.
+ - New regulated activity, product, or service is launched;
+ - Regulatory licence, authorisation, permission, or registration is obtained, varied, suspended, or withdrawn;
+ - New legal entity, branch, acquisition, merger, divestment, or restructuring occurs;
+ - Entry into a new EU Member State or cross-border regulated activity occurs;
+ - Business model materially changes, including digital platform expansion;
+ - ICT operations become materially more critical to regulated services;
+ - Competent authority guidance, legislation, or supervisory expectation changes;
+ - The organisation becomes a critical or important provider to another financial entity;
+ - Material change occurs in the scale, complexity, or risk profile of operations.
 
 19. Where the organisation is determined to be in scope of DORA, the organisation shall establish and maintain a DORA compliance programme covering applicable obligations including ICT risk management, incident reporting, digital operational resilience testing, ICT third-party risk management, and information sharing where relevant.
 

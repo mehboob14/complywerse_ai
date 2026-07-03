@@ -7,8 +7,11 @@ import apiClient from '@/lib/api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useToast } from '@/components/ui/ToastProvider';
-import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
-import { useParams, useRouter } from 'next/navigation';
+import { SearchInput, MultiSelectDropdown, PageLoader, RightSlidePanel } from '@/components/ui';
+import RichTextEditor from '../_RichTextEditor';
+import { SignOffControlTab } from '../_SignoffControl';
+import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPanel';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   FileText,
@@ -55,6 +58,9 @@ import {
   GitCompare,
   Sparkles,
   Search,
+  Info,
+  MessageSquare,
+  Maximize2,
 } from 'lucide-react';
 import NcaCompareModal from '@/components/governance/NcaCompareModal';
 import { GovernanceDocumentMarkdown } from '@/components/governance/GovernanceDocumentMarkdown';
@@ -285,7 +291,7 @@ const childrenToText = (node: React.ReactNode): string => {
   return '';
 };
 
-type TabKey = 'viewer' | 'statements' | 'controls' | 'gap-analysis' | 'review-history';
+type TabKey = 'viewer' | 'statements' | 'controls' | 'gap-analysis' | 'sign-off' | 'discussion' | 'review-history';
 
 export default function PolicyDetailPage() {
   const params = useParams();
@@ -318,7 +324,12 @@ export default function PolicyDetailPage() {
     }
   }, [id]);
 
-  const [activeTab, setActiveTab] = useState<TabKey>('viewer');
+  const searchParams = useSearchParams();
+  const _VALID_TABS = ['viewer', 'statements', 'controls', 'gap-analysis', 'sign-off', 'discussion', 'review-history'];
+  const _paramTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    (_paramTab && _VALID_TABS.includes(_paramTab) ? _paramTab : 'viewer') as TabKey,
+  );
   const [showGapModal, setShowGapModal] = useState(false);
   const [showNcaCompareModal, setShowNcaCompareModal] = useState(false);
   const [selectedFrameworkIds, setSelectedFrameworkIds] = useState<number[]>([]);
@@ -889,6 +900,8 @@ export default function PolicyDetailPage() {
     { key: 'statements', label: 'Statements', icon: ClipboardList },
     { key: 'controls', label: 'Controls', icon: Shield },
     { key: 'gap-analysis', label: 'Gap Analysis', icon: BarChart3 },
+    { key: 'sign-off', label: 'Sign-off & Control', icon: ShieldCheck },
+    { key: 'discussion', label: 'Discussion', icon: MessageSquare },
     { key: 'review-history', label: 'Review History', icon: Clock },
   ];
 
@@ -1381,6 +1394,18 @@ export default function PolicyDetailPage() {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'sign-off' && (
+        <SignOffControlTab documentId={id} doc={document} />
+      )}
+
+      {activeTab === 'discussion' && (
+        <div className="rounded-xl border border-gray-300 bg-white p-4">
+          <h3 className="text-sm font-semibold text-black mb-1">Discussion</h3>
+          <p className="text-xs text-gray-500 mb-3">All participants (preparer, reviewers, approvers) can comment here.</p>
+          <DocumentAnnotationPanel documentId={id} />
         </div>
       )}
 
@@ -2010,6 +2035,253 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
   );
 }
 
+// Document CONTENT version history — timeline + diff + restore, mirroring the
+// statement version modal but for the whole document body (item #3a).
+function DocumentVersionHistoryPanel({
+  documentId, isOpen, onClose, onRestored,
+}: { documentId: number; isOpen: boolean; onClose: () => void; onRestored: () => void }) {
+  const [compareId, setCompareId] = useState<number | null>(null);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['document-versions', documentId],
+    enabled: isOpen,
+    queryFn: async () => {
+      const res = await governanceApi.getDocumentVersions(documentId);
+      const d: any = res.data;
+      return (Array.isArray(d) ? d : d?.items || []) as any[];
+    },
+  });
+  const versions = data || [];
+  const currentRow = versions.find((v) => v.status === 'current') || versions[0];
+
+  const diffQuery = useQuery({
+    queryKey: ['document-version-diff', documentId, compareId, currentRow?.id],
+    enabled: isOpen && !!compareId && !!currentRow?.id && compareId !== currentRow?.id,
+    queryFn: async () => (await governanceApi.compareDocumentVersions(compareId as number, currentRow.id)).data as any,
+  });
+
+  const rollbackMutation = useMutation({
+    mutationFn: async (versionId: number) => governanceApi.rollbackDocumentVersion(documentId, versionId),
+    onSuccess: () => { refetch(); onRestored(); },
+  });
+
+  const changeColors: Record<string, string> = {
+    baseline: 'bg-gray-100 text-gray-600',
+    major: 'bg-rose-100 text-rose-700',
+    minor: 'bg-blue-100 text-blue-700',
+    patch: 'bg-emerald-100 text-emerald-700',
+    signoff: 'bg-violet-100 text-violet-700',
+  };
+
+  return (
+    <RightSlidePanel isOpen={isOpen} onClose={onClose} title="Version History" widthClassName="w-[560px]">
+      {isLoading ? (
+        <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary-400" /></div>
+      ) : versions.length === 0 ? (
+        <p className="text-sm text-gray-500 py-6 text-center">No version history yet. Edits to the document content will appear here.</p>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-gray-500">{versions.length} version{versions.length !== 1 ? 's' : ''} · newest first. Restore reverts the content to that version (creating a new version, so nothing is lost).</p>
+          {versions.map((v) => {
+            const isCurrent = v.id === currentRow?.id;
+            return (
+              <div key={v.id} className="rounded-lg border border-gray-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-black">v{v.version_number}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${changeColors[v.change_type] || 'bg-gray-100 text-gray-600'}`}>{v.change_type}</span>
+                    {isCurrent && <span className="rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-medium text-primary-700">current</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {!isCurrent && currentRow && (
+                      <button onClick={() => setCompareId(compareId === v.id ? null : v.id)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-50">
+                        <GitCompare className="h-3 w-3" /> {compareId === v.id ? 'Hide diff' : 'Diff'}
+                      </button>
+                    )}
+                    {!isCurrent && (
+                      <button onClick={() => rollbackMutation.mutate(v.id)} disabled={rollbackMutation.isPending} className="inline-flex items-center gap-1 rounded-md border border-amber-300 px-2 py-1 text-[11px] text-amber-700 hover:bg-amber-50 disabled:opacity-50">
+                        <RotateCcw className="h-3 w-3" /> Restore
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-1.5 flex items-center gap-2 text-[11px] text-gray-500">
+                  <User className="h-3 w-3" />{v.creator_name || 'Unknown'}
+                  <Clock className="h-3 w-3 ml-1" />{v.created_at ? new Date(v.created_at).toLocaleString() : ''}
+                </div>
+                {v.change_reason && <p className="mt-1 text-xs text-gray-600 italic">“{v.change_reason}”</p>}
+                {compareId === v.id && (
+                  <div className="mt-2 rounded-md bg-gray-50 border border-gray-200 p-2">
+                    {diffQuery.isLoading ? (
+                      <p className="text-[11px] text-gray-400">Computing diff…</p>
+                    ) : diffQuery.data ? (
+                      <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-[11px] font-mono text-gray-700">
+                        {(diffQuery.data.diff || diffQuery.data.text_diff || `+${diffQuery.data.additions ?? 0} additions · -${diffQuery.data.deletions ?? 0} deletions`)}
+                      </pre>
+                    ) : (
+                      <p className="text-[11px] text-gray-400">No differences.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </RightSlidePanel>
+  );
+}
+
+// Sign-off / fill-placeholders panel (item #3b): fill approver name/designation/
+// date into the Approval Signoff table and refresh the document-control header,
+// applied to the content as a versioned, audited edit.
+function DocumentSignoffPanel({
+  documentId, isOpen, onClose, onDone,
+}: { documentId: number; isOpen: boolean; onClose: () => void; onDone: () => void }) {
+  const { toast } = useToast();
+  const [rows, setRows] = useState<Array<{ role: string; name: string; designation: string; date: string }>>([
+    { role: 'Prepared by', name: '', designation: '', date: '' },
+    { role: 'Reviewed by', name: '', designation: '', date: '' },
+    { role: 'Approved by', name: '', designation: '', date: '' },
+  ]);
+  const [effectiveDate, setEffectiveDate] = useState('');
+  const [version, setVersion] = useState('');
+  const [nextReview, setNextReview] = useState('');
+  const [markApproved, setMarkApproved] = useState(false);
+
+  const setRow = (i: number, patch: Partial<{ role: string; name: string; designation: string; date: string }>) =>
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+
+  const mutation = useMutation({
+    mutationFn: async () => governanceApi.signoffDocument(documentId, {
+      signoffs: rows.filter((r) => r.role.trim() && (r.name.trim() || r.date.trim() || r.designation.trim())),
+      effective_date: effectiveDate || undefined,
+      version: version || undefined,
+      next_review_date: nextReview || undefined,
+      mark_approved: markApproved,
+    }),
+    onSuccess: () => {
+      toast({ type: 'success', title: 'Signed off', message: 'Approval details applied to the document (versioned + audited).' });
+      onDone();
+      onClose();
+    },
+    onError: () => toast({ type: 'error', title: 'Sign-off failed', message: 'Could not apply the sign-off.' }),
+  });
+
+  return (
+    <RightSlidePanel isOpen={isOpen} onClose={onClose} title="Sign-off & Document Control" widthClassName="w-[560px]">
+      <div className="space-y-5">
+        <p className="text-xs text-gray-500">
+          Fill in approver details and document-control fields. These replace the placeholders in the
+          Approval Signoff and Document Description tables — recorded as a new version in the audit trail.
+        </p>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Approval Signoff</p>
+          <div className="space-y-3">
+            {rows.map((r, i) => (
+              <div key={i} className="rounded-lg border border-gray-200 p-3 space-y-2">
+                <input
+                  value={r.role}
+                  onChange={(e) => setRow(i, { role: e.target.value })}
+                  placeholder="Role (e.g. Approved by)"
+                  className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm font-medium"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="Name" className="rounded-md border border-gray-300 px-2.5 py-1.5 text-sm" />
+                  <input value={r.designation} onChange={(e) => setRow(i, { designation: e.target.value })} placeholder="Designation" className="rounded-md border border-gray-300 px-2.5 py-1.5 text-sm" />
+                </div>
+                <input type="date" value={r.date} onChange={(e) => setRow(i, { date: e.target.value })} className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm" />
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setRows((prev) => [...prev, { role: '', name: '', designation: '', date: '' }])}
+              className="text-xs font-medium text-primary-600 hover:text-primary-700"
+            >
+              + Add approver row
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Document Control</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div>
+              <label className="block text-[11px] text-gray-500 mb-0.5">Effective date</label>
+              <input type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label className="block text-[11px] text-gray-500 mb-0.5">Version</label>
+              <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="1.1" className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label className="block text-[11px] text-gray-500 mb-0.5">Next review</label>
+              <input type="date" value={nextReview} onChange={(e) => setNextReview(e.target.value)} className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm" />
+            </div>
+          </div>
+          <label className="mt-3 flex items-center gap-2 text-xs text-gray-700">
+            <input type="checkbox" checked={markApproved} onChange={(e) => setMarkApproved(e.target.checked)} className="rounded border-gray-300" />
+            Also mark the document as approved (records approver + timestamp)
+          </label>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
+          <button onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+          <button
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+          >
+            {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Apply Sign-off
+          </button>
+        </div>
+      </div>
+    </RightSlidePanel>
+  );
+}
+
+// Document metadata / description / tags — moved off the page into a slide
+// panel so the document itself gets the full width. Opened via the "Details"
+// button in the content header.
+function DocumentDetailsPanel({ doc, docType, isOpen, onClose }: any) {
+  return (
+    <RightSlidePanel isOpen={isOpen} onClose={onClose} title="Document Details" widthClassName="w-[420px]">
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Metadata</h3>
+          <div className="space-y-2.5">
+            <MetadataRow label="Type" value={docType.label} />
+            <MetadataRow label="Classification" value={doc.classification || '-'} />
+            <MetadataRow label="Version" value={doc.current_version || '1.0'} />
+            <MetadataRow label="Owner" value={doc.owner_name || '-'} />
+            <MetadataRow label="Effective Date" value={formatDate(doc.effective_date)} />
+            <MetadataRow label="Next Review" value={formatDate(doc.next_review_date)} />
+            <MetadataRow label="Review Cycle" value={`${doc.review_cycle_months || 12} months`} />
+            {doc.file_name && <MetadataRow label="File" value={doc.file_name} />}
+            {doc.file_size && <MetadataRow label="File Size" value={`${(doc.file_size / 1024).toFixed(1)} KB`} />}
+          </div>
+        </div>
+        {doc.description && (
+          <div className="border-t border-gray-100 pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Description</h3>
+            <p className="text-sm text-gray-800">{doc.description}</p>
+          </div>
+        )}
+        {doc.tags?.length > 0 && (
+          <div className="border-t border-gray-100 pt-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Tags</h3>
+            <div className="flex flex-wrap gap-2">
+              {doc.tags.map((tag: string) => (
+                <span key={tag} className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs text-black">{tag}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </RightSlidePanel>
+  );
+}
+
 function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }: any) {
   // Detect if doc.content is markdown (AI-generated docs always are).
   // Markdown rendering + normalization is delegated to
@@ -2022,6 +2294,36 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
   const renderedHtml = useMemo(() => sanitizeDocumentHtml(htmlContent?.html), [htmlContent?.html]);
   const router = useRouter();
   const { toast } = useToast();
+
+  // Inline content editing + version history (item #3a). Editing is gated to
+  // markdown, non-file-backed docs so we never corrupt an HTML/uploaded doc.
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [editReason, setEditReason] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
+  const [showSignoff, setShowSignoff] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [showFullViewer, setShowFullViewer] = useState(false);
+  const canEdit = isMarkdown && !doc?.has_file;
+
+  const openEditor = () => { startEdit(); setShowFullViewer(true); };
+  const closeFullViewer = () => { setShowFullViewer(false); if (editing) setEditing(false); };
+
+  const saveContentMutation = useMutation({
+    mutationFn: async () =>
+      governanceApi.editDocumentContent(doc.id, { content: editContent, change_reason: editReason || undefined }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['governance-document', doc.id] });
+      queryClient.invalidateQueries({ queryKey: ['document-versions', doc.id] });
+      setEditing(false);
+      setEditReason('');
+      toast({ type: 'success', title: 'Saved', message: 'Content updated — a new version was recorded in the audit trail.' });
+    },
+    onError: () => toast({ type: 'error', title: 'Save failed', message: 'Could not save the document content.' }),
+  });
+
+  const startEdit = () => { setEditContent(rawContent); setEditReason(''); setEditing(true); };
 
   // Pre-compute the set of bullet items that live inside any
   // "Related Documents and References" / "Normative References" / "References"
@@ -2082,104 +2384,157 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
     router.push(`/governance/documents?${params.toString()}`);
   };
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 rounded-xl border border-gray-300 bg-white overflow-hidden">
-        <div className="border-b border-gray-300 bg-white/50 px-6 py-3">
-          <h3 className="font-medium text-black">Document Content</h3>
-        </div>
-        <div className="p-6">
-          {htmlLoading ? (
-            <div className="flex h-48 items-center justify-center">
-              <PageLoader size="md" />
-            </div>
-          ) : isMarkdown ? (
-            <GovernanceDocumentMarkdown
-              content={rawContent}
-              references={referenceItems}
-              onDraftReference={handleDraftReference}
-              parentTitle={doc?.title || ''}
-              cleanReferenceLine={cleanReferenceLine}
-            />
-          ) : renderedHtml ? (
-            <>
-              <style dangerouslySetInnerHTML={{ __html: `
-                .document-viewer-html,
-                .document-viewer-html * {
-                  color: #111827 !important;
-                  -webkit-text-fill-color: #111827 !important;
-                  opacity: 1 !important;
-                  filter: none !important;
-                  mix-blend-mode: normal !important;
-                  text-shadow: none !important;
-                  background: transparent !important;
-                }
-                .document-viewer-html h1,
-                .document-viewer-html h2,
-                .document-viewer-html h3,
-                .document-viewer-html h4,
-                .document-viewer-html h5,
-                .document-viewer-html h6,
-                .document-viewer-html strong,
-                .document-viewer-html b {
-                  color: #000000 !important;
-                  -webkit-text-fill-color: #000000 !important;
-                  font-weight: 700 !important;
-                }
-                .document-viewer-html a,
-                .document-viewer-html a * {
-                  color: #2563eb !important;
-                  -webkit-text-fill-color: #2563eb !important;
-                }
-              `}} />
-              <div
-                className="document-viewer-html text-[15px] leading-7 text-gray-900"
-                dangerouslySetInnerHTML={{ __html: renderedHtml }}
-              />
-            </>
-          ) : (
-            <div className="flex h-48 flex-col items-center justify-center gap-3 text-gray-600">
-              <FileText className="h-12 w-12" />
-              <p>No viewable content available</p>
-              {doc.has_file && <p className="text-sm">Download the file to view its contents</p>}
-            </div>
-          )}
-        </div>
+  // The read-only document body (markdown / sanitized HTML / empty), rendered
+  // both as the collapsed inline preview and inside the full-view popup.
+  const renderReadBody = () => (
+    htmlLoading ? (
+      <div className="flex h-48 items-center justify-center"><PageLoader size="md" /></div>
+    ) : isMarkdown ? (
+      <GovernanceDocumentMarkdown
+        content={rawContent}
+        references={referenceItems}
+        onDraftReference={handleDraftReference}
+        parentTitle={doc?.title || ''}
+        cleanReferenceLine={cleanReferenceLine}
+      />
+    ) : renderedHtml ? (
+      <>
+        <style dangerouslySetInnerHTML={{ __html: `
+          .document-viewer-html, .document-viewer-html * {
+            color: #111827 !important; -webkit-text-fill-color: #111827 !important;
+            opacity: 1 !important; filter: none !important; mix-blend-mode: normal !important;
+            text-shadow: none !important; background: transparent !important;
+          }
+          .document-viewer-html h1, .document-viewer-html h2, .document-viewer-html h3,
+          .document-viewer-html h4, .document-viewer-html h5, .document-viewer-html h6,
+          .document-viewer-html strong, .document-viewer-html b {
+            color: #000000 !important; -webkit-text-fill-color: #000000 !important; font-weight: 700 !important;
+          }
+          .document-viewer-html a, .document-viewer-html a * {
+            color: #2563eb !important; -webkit-text-fill-color: #2563eb !important;
+          }
+        `}} />
+        <div className="document-viewer-html text-[15px] leading-7 text-gray-900" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+      </>
+    ) : (
+      <div className="flex h-48 flex-col items-center justify-center gap-3 text-gray-600">
+        <FileText className="h-12 w-12" />
+        <p>No viewable content available</p>
+        {doc.has_file && <p className="text-sm">Download the file to view its contents</p>}
       </div>
+    )
+  );
 
-      <div className="space-y-4">
-        <div className="rounded-xl border border-gray-300 bg-white p-5">
-          <h3 className="font-medium text-black mb-4">Document Metadata</h3>
-          <div className="space-y-3">
-            <MetadataRow label="Type" value={docType.label} />
-            <MetadataRow label="Classification" value={doc.classification || '-'} />
-            <MetadataRow label="Version" value={doc.current_version || '1.0'} />
-            <MetadataRow label="Owner" value={doc.owner_name || '-'} />
-            <MetadataRow label="Effective Date" value={formatDate(doc.effective_date)} />
-            <MetadataRow label="Next Review" value={formatDate(doc.next_review_date)} />
-            <MetadataRow label="Review Cycle" value={`${doc.review_cycle_months || 12} months`} />
-            {doc.file_name && <MetadataRow label="File" value={doc.file_name} />}
-            {doc.file_size && <MetadataRow label="File Size" value={`${(doc.file_size / 1024).toFixed(1)} KB`} />}
-          </div>
-        </div>
+  const editorBody = (
+    <div className="space-y-3">
+      <RichTextEditor value={editContent} onChange={setEditContent} minHeight={460} />
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Change reason <span className="font-normal text-gray-400">(recorded in the audit trail)</span></label>
+        <input
+          value={editReason}
+          onChange={(e) => setEditReason(e.target.value)}
+          placeholder="What did you change and why…"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+        />
+      </div>
+      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-gray-100 bg-white pt-3">
+        <button onClick={() => setEditing(false)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+        <button
+          onClick={() => saveContentMutation.mutate()}
+          disabled={saveContentMutation.isPending || editContent === rawContent}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+        >
+          {saveContentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Version
+        </button>
+      </div>
+    </div>
+  );
 
-        {doc.description && (
-          <div className="rounded-xl border border-gray-300 bg-white p-5">
-            <h3 className="font-medium text-black mb-2">Description</h3>
-            <p className="text-sm text-black">{doc.description}</p>
-          </div>
-        )}
-
-        {doc.tags?.length > 0 && (
-          <div className="rounded-xl border border-gray-300 bg-white p-5">
-            <h3 className="font-medium text-black mb-2">Tags</h3>
-            <div className="flex flex-wrap gap-2">
-              {doc.tags.map((tag: string) => (
-                <span key={tag} className="rounded-full bg-gray-200 px-2.5 py-0.5 text-xs text-black">{tag}</span>
-              ))}
+  return (
+    <div className="space-y-6">
+      {/* Full-document popup — scrollable read/edit surface */}
+      {showFullViewer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="flex h-[90vh] w-full max-w-5xl flex-col rounded-xl border border-gray-300 bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-5 py-3">
+              <h3 className="min-w-0 truncate font-semibold text-black">{doc?.title || 'Document'}</h3>
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setShowDetails(true)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"><Info className="h-3.5 w-3.5" /> Details</button>
+                <button onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"><History className="h-3.5 w-3.5" /> History</button>
+                {canEdit && <button onClick={() => setShowSignoff(true)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"><CheckCircle className="h-3.5 w-3.5" /> Sign-off</button>}
+                {canEdit && !editing && <button onClick={startEdit} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50"><Pencil className="h-3.5 w-3.5" /> Edit</button>}
+                <button onClick={closeFullViewer} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"><X className="h-5 w-5" /></button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              {editing ? editorBody : renderReadBody()}
             </div>
           </div>
-        )}
+        </div>
+      )}
+      {doc?.id && (
+        <DocumentVersionHistoryPanel
+          documentId={doc.id}
+          isOpen={showHistory}
+          onClose={() => setShowHistory(false)}
+          onRestored={() => {
+            queryClient.invalidateQueries({ queryKey: ['governance-document', doc.id] });
+            toast({ type: 'success', title: 'Restored', message: 'Document content restored to the selected version.' });
+          }}
+        />
+      )}
+      {doc?.id && (
+        <DocumentSignoffPanel
+          documentId={doc.id}
+          isOpen={showSignoff}
+          onClose={() => setShowSignoff(false)}
+          onDone={() => {
+            queryClient.invalidateQueries({ queryKey: ['governance-document', doc.id] });
+            queryClient.invalidateQueries({ queryKey: ['document-versions', doc.id] });
+          }}
+        />
+      )}
+      <DocumentDetailsPanel doc={doc} docType={docType} isOpen={showDetails} onClose={() => setShowDetails(false)} />
+      <div className="rounded-xl border border-gray-300 bg-white overflow-hidden">
+        <div className="border-b border-gray-300 bg-white/50 px-6 py-3 flex items-center justify-between gap-2">
+          <h3 className="font-medium text-black">Document Content</h3>
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setShowDetails(true)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
+              <Info className="h-3.5 w-3.5" /> Details
+            </button>
+            <button onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
+              <History className="h-3.5 w-3.5" /> History
+            </button>
+            {canEdit && (
+              <button onClick={() => setShowSignoff(true)} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                <CheckCircle className="h-3.5 w-3.5" /> Sign-off
+              </button>
+            )}
+            {canEdit && (
+              <button onClick={openEditor} className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:bg-gray-50">
+                <Pencil className="h-3.5 w-3.5" /> Edit
+              </button>
+            )}
+            <button onClick={() => setShowFullViewer(true)} className="inline-flex items-center gap-1 rounded-md border border-primary-300 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100">
+              <Maximize2 className="h-3.5 w-3.5" /> Open full
+            </button>
+          </div>
+        </div>
+        {/* Collapsed, non-scrollable preview — click "Open full" for the whole doc. */}
+        <div className="p-6">
+          <div className="relative max-h-[360px] overflow-hidden">
+            {renderReadBody()}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white to-transparent" />
+          </div>
+          <div className="mt-2 flex justify-center border-t border-gray-100 pt-3">
+            <button
+              onClick={() => setShowFullViewer(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <Maximize2 className="h-4 w-4" /> Read full document
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -3064,7 +3419,7 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                               )}
                             </div>
                           </div>
-                          <p className="text-sm text-gray-800 line-clamp-2">{v.statement_text}</p>
+                          <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{v.statement_text}</p>
                           <div className="flex items-center gap-3 mt-2 text-xs text-gray-700">
                             {v.changed_by_name && <span className="flex items-center gap-1"><User className="h-3 w-3" /> {v.changed_by_name}</span>}
                             {v.changed_at && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {new Date(v.changed_at).toLocaleString()}</span>}
@@ -3088,11 +3443,11 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                               <div className="grid grid-cols-2 gap-3 mt-1">
                                 <div className="rounded bg-red-500/10 border border-red-500/20 p-2">
                                   <span className="text-xs text-red-400">v{diffData.version_a.version_number}</span>
-                                  <p className="text-sm text-gray-800 mt-1">{change.version_a_value || '(empty)'}</p>
+                                  <p className="text-sm text-gray-800 mt-1 whitespace-pre-wrap break-words">{change.version_a_value || '(empty)'}</p>
                                 </div>
                                 <div className="rounded bg-green-500/10 border border-green-500/20 p-2">
                                   <span className="text-xs text-green-400">v{diffData.version_b.version_number}</span>
-                                  <p className="text-sm text-gray-800 mt-1">{change.version_b_value || '(empty)'}</p>
+                                  <p className="text-sm text-gray-800 mt-1 whitespace-pre-wrap break-words">{change.version_b_value || '(empty)'}</p>
                                 </div>
                               </div>
                             </div>
@@ -3115,6 +3470,122 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
   );
 }
 
+// Control coverage of the document against its applicable frameworks —
+// mapped / recommended / MISSING (gap) controls per framework (feature #6).
+function ControlCoveragePanel({ documentId }: { documentId: number }) {
+  const [openFw, setOpenFw] = useState<number | null>(null);
+  const { data, isLoading } = useQuery({
+    queryKey: ['doc-coverage', documentId],
+    queryFn: async () => (await governanceApi.getDocumentCoverage(documentId)).data as {
+      frameworks: Array<{
+        framework_id: number; framework_name: string; total_controls: number;
+        mapped_count: number; missing_count: number; coverage_pct: number;
+        missing_controls: Array<{ id: number; reference: string; title: string; domain: string | null }>;
+      }>;
+      recommended_controls: any[];
+      totals: { mapped: number; recommended: number; missing: number; frameworks: number };
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-4 flex items-center gap-2 text-sm text-gray-500">
+        <Loader2 className="h-4 w-4 animate-spin" /> Computing framework control coverage…
+      </div>
+    );
+  }
+  const frameworks = data?.frameworks || [];
+  const recommended = data?.recommended_controls || [];
+  if (frameworks.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+        <p className="font-medium text-gray-700 mb-0.5">No applicable frameworks set</p>
+        Edit this document and pick its <span className="font-medium">Applicable Frameworks</span> to see which
+        of their controls this document covers — and which are missing (the audit gap).
+      </div>
+    );
+  }
+
+  const barColor = (pct: number) => (pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444');
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className="h-4 w-4 text-primary-500" />
+        <h3 className="text-sm font-semibold text-black">Framework Control Coverage</h3>
+        <span className="text-xs text-gray-500">
+          {data?.totals.mapped ?? 0} mapped · {data?.totals.missing ?? 0} missing across {frameworks.length} framework{frameworks.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+      {frameworks.map((fw) => {
+        const isOpen = openFw === fw.framework_id;
+        return (
+          <div key={fw.framework_id} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setOpenFw(isOpen ? null : fw.framework_id)}
+              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50"
+            >
+              <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-black truncate">{fw.framework_name}</p>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <div className="h-1.5 flex-1 max-w-[220px] rounded-full bg-gray-100 overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${fw.coverage_pct}%`, backgroundColor: barColor(fw.coverage_pct) }} />
+                  </div>
+                  <span className="text-xs font-medium" style={{ color: barColor(fw.coverage_pct) }}>{fw.coverage_pct}%</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-emerald-600 font-medium">{fw.mapped_count} mapped</span>
+                <span className={`font-medium ${fw.missing_count > 0 ? 'text-rose-600' : 'text-gray-400'}`}>{fw.missing_count} missing</span>
+              </div>
+            </button>
+            {isOpen && (
+              <div className="border-t border-gray-100 px-4 py-3">
+                {fw.missing_controls.length === 0 ? (
+                  <p className="text-xs text-emerald-700 flex items-center gap-1">
+                    <CheckCircle className="h-3.5 w-3.5" /> Every control of this framework is covered by a statement in this document.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-rose-600 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" /> {fw.missing_count} control{fw.missing_count !== 1 ? 's' : ''} not covered by this document
+                    </p>
+                    <div className="max-h-64 overflow-y-auto space-y-1.5">
+                      {fw.missing_controls.map((c) => (
+                        <div key={c.id} className="flex items-start gap-2 rounded-md bg-rose-50/60 border border-rose-100 px-2.5 py-1.5">
+                          <span className="font-mono text-[10px] text-rose-600 mt-0.5 shrink-0">{c.reference}</span>
+                          <div className="min-w-0">
+                            <p className="text-xs text-gray-800 truncate">{c.title}</p>
+                            {c.domain && <p className="text-[10px] text-gray-400">{c.domain}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {recommended.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+          <p className="text-xs font-semibold text-gray-700 mb-2">{recommended.length} AI-recommended control{recommended.length !== 1 ? 's' : ''} (not yet confirmed)</p>
+          <div className="flex flex-wrap gap-1.5">
+            {recommended.slice(0, 24).map((r: any, i: number) => (
+              <span key={i} className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700" title={r.control_title || ''}>
+                {r.clause_reference || r.control_code}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ControlsTab({ mappings, mappingsLoading, documentId }: any) {
   if (mappingsLoading) {
     return (
@@ -3126,23 +3597,23 @@ function ControlsTab({ mappings, mappingsLoading, documentId }: any) {
 
   const links = mappings?.control_links || [];
 
-  if (links.length === 0) {
-    return (
-      <div className="rounded-xl border border-gray-300 bg-white p-8 text-center">
-        <Shield className="h-12 w-12 text-gray-700 mx-auto mb-3" />
-        <p className="text-gray-600 mb-4">No controls linked to this document</p>
-        <a
-          href="/governance/mappings"
-          className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700 transition-colors"
-        >
-          <Link2 className="h-4 w-4" />
-          Go to Mappings
-        </a>
-      </div>
-    );
-  }
-
   return (
+    <div className="space-y-4">
+      <ControlCoveragePanel documentId={documentId} />
+
+      {links.length === 0 ? (
+        <div className="rounded-xl border border-gray-300 bg-white p-8 text-center">
+          <Shield className="h-12 w-12 text-gray-700 mx-auto mb-3" />
+          <p className="text-gray-600 mb-4">No controls linked to this document</p>
+          <a
+            href="/governance/mappings"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700 transition-colors"
+          >
+            <Link2 className="h-4 w-4" />
+            Go to Mappings
+          </a>
+        </div>
+      ) : (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-black">{links.length} Linked Control{links.length !== 1 ? 's' : ''}</h3>
@@ -3170,6 +3641,8 @@ function ControlsTab({ mappings, mappingsLoading, documentId }: any) {
           </div>
         </div>
       ))}
+    </div>
+      )}
     </div>
   );
 }

@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -138,7 +139,11 @@ def _ai_available() -> bool:
 
 _SYS = ("You are a senior GRC documentation specialist (CISA, CISSP, ISO 27001 Lead Implementer). "
         "You write precise, audit-ready governance documents that follow recognised best practice for each "
-        "document type. Output GitHub-flavoured Markdown only — no preamble, no code fences.")
+        "document type. Output GitHub-flavoured Markdown only — no preamble, no code fences. "
+        "CRITICAL: never cite framework clause numbers, control-reference codes, annex numbers or standard "
+        "section numbers anywhere — no 'Clause 5.1', no 'A.5.9', no 'Control Reference' row, no 'per ISO/IEC "
+        "27001:2022 §...'. Write each document on its own merits in plain business language; the reader does "
+        "not want regulatory citations or clause tags cluttering the text. Use a normal en-dash '-' character.")
 _SYS_TABLE = ("You are a senior GRC analyst designing the register/log/matrix an auditor expects. "
               "Return STRICT JSON only — no prose, no markdown, no code fences.")
 
@@ -181,21 +186,24 @@ def _prompt(framework_name: str, name: str, artifact_type: str, control_ref: str
         f"**{framework_name}**.\n\n"
         f"Document title: {name}\n"
         f"Artifact type: {artifact_type}\n"
-        f"Mapped control reference: {control_ref or 'general framework obligation'}\n"
+        f"(Internal scope hint — do NOT print this or any clause number: {control_ref or 'general obligation'})\n"
         f"Intent / description: {description or 'Not provided.'}\n\n"
         "Requirements:\n"
         f"1. Follow best practice for a **{artifact_type}** specifically — its structure, tone and level of "
         "detail must match this document type (a Charter is not a Procedure; a Report has findings; a Policy "
         "states mandatory requirements).\n"
-        "2. Make the substance SPECIFIC to the control reference and the framework above — not generic. "
-        "Reflect what that control actually requires.\n"
+        "2. Make the substance SPECIFIC and practical — cover what this document type genuinely needs for this "
+        "framework, in plain language — not generic filler. Do NOT cite clause numbers or the control reference; "
+        "express the requirements in your own words.\n"
         "3. Use exactly these top-level sections (## headings), in order:\n"
         + "\n".join(f"   - {s}" for s in sections) + "\n"
         "4. Start with a short metadata block (Document ID, Version, Owner, Effective Date, Framework, "
-        "Control Reference, Classification) as a markdown table.\n"
+        "Classification) as a markdown table. Do NOT include a 'Control Reference' row.\n"
         "5. Where the type calls for inline tables (forms, timelines), include realistic markdown tables.\n"
         "6. Use [bracketed placeholders] only for genuinely org-specific values (names, dates, systems).\n"
-        "7. Be thorough and ready-to-use; aim for a document an auditor would accept as a strong first draft."
+        "7. Do NOT include any framework clause numbers, control-reference codes, annex numbers, or citations "
+        "anywhere (no 'Clause X', no '(A.5.9)', no 'Control Reference' row).\n"
+        "8. Be thorough and ready-to-use; aim for a document an auditor would accept as a strong first draft."
     )
 
 
@@ -292,6 +300,28 @@ def _render_table_md(title: str, columns: list, example_rows: list, field_guidan
     return "\n".join(out).strip()
 
 
+# ── Sanitizer — strip clause/control-reference citations the model sometimes adds
+# despite the prompt, and repair mangled dashes. Conservative + best-effort so it
+# never mangles real prose. Applied to every generated body, and available as a
+# one-time `--sanitize` cleanup for already-generated content.
+_CLAUSE_RE = re.compile(r"\s*\bClauses?\s+\d+(?:\.\d+)*(?:\s*(?:,|and|&|to|-)\s*\d+(?:\.\d+)*)*", re.IGNORECASE)
+_ANNEX_BRACKET_RE = re.compile(r"\s*[\(\[]\s*(?:Annex\s*)?[A-Z]?\.?\d+(?:\.\d+)+\s*[\)\]]")
+_CTRLREF_ROW_RE = re.compile(r"(?im)^\|\s*Control Reference\s*\|.*\|[ \t]*\r?\n")
+
+
+def _sanitize(content: str) -> str:
+    if not content:
+        return content
+    s = content.replace("�", "-")            # repair mangled dash/char
+    s = _CTRLREF_ROW_RE.sub("", s)                # drop 'Control Reference' metadata rows
+    s = _CLAUSE_RE.sub("", s)                     # 'Clause 5.1', 'Clauses 6.1 and 6.2' → removed
+    s = _ANNEX_BRACKET_RE.sub("", s)              # '(A.5.9)', '[5.1.2]' → removed
+    s = re.sub(r"\(\s*\)", "", s)                 # empty parens left behind
+    s = re.sub(r"[ \t]{2,}", " ", s)              # collapse doubled spaces
+    s = re.sub(r"[ \t]+([.,;:])", r"\1", s)       # space before punctuation
+    return s
+
+
 def generate_one(client, fw_name: str, art: dict, model: str) -> dict:
     """Generate one artifact in the mode that suits its catalog `format`.
 
@@ -326,7 +356,7 @@ def generate_one(client, fw_name: str, art: dict, model: str) -> dict:
             fr = getattr(resp.choices[0], "finish_reason", "?")
             raise RuntimeError(f"empty/invalid template JSON — no columns (finish_reason={fr})")
         return {
-            "content": _render_table_md(name, cols, example_rows, fg, maint, fmt),
+            "content": _sanitize(_render_table_md(name, cols, example_rows, fg, maint, fmt)),
             "content_format": "table",
             "table": {"columns": cols, "field_guidance": fg, "example_rows": example_rows,
                       "maintenance": maint, "format": fmt},
@@ -334,12 +364,12 @@ def generate_one(client, fw_name: str, art: dict, model: str) -> dict:
 
     if mode == "guide":
         prompt = _prompt_guide(fw_name, name, atype, cref, desc, fmt)
-        return {"content": _call_md(client, model, _SYS, prompt, max_toks), "content_format": "guide", "table": None}
+        return {"content": _sanitize(_call_md(client, model, _SYS, prompt, max_toks)), "content_format": "guide", "table": None}
 
     # markdown (authored document)
     _key, sections = _skeleton(atype)
     prompt = _prompt(fw_name, name, atype, cref, desc, sections)
-    return {"content": _call_md(client, model, _SYS, prompt, max_toks), "content_format": "markdown", "table": None}
+    return {"content": _sanitize(_call_md(client, model, _SYS, prompt, max_toks)), "content_format": "markdown", "table": None}
 
 
 def _is_current(existing: dict, art: dict) -> bool:
@@ -358,6 +388,8 @@ def main() -> None:
     ap.add_argument("--type", help="Only this artifact type (e.g. Charter)")
     ap.add_argument("--limit", type=int, default=0, help="Cap generations this run (0 = all)")
     ap.add_argument("--force", action="store_true", help="Regenerate even if already present")
+    ap.add_argument("--sanitize", action="store_true",
+                    help="Clean clause/control-reference citations from EXISTING content in place (no AI, no regeneration)")
     # Default to the platform's latest model (gpt-5.5 via get_openai_model()).
     # NOTE: gpt-5.x reasoning models are far slower here (~2-3 min/doc vs ~12s for
     # gpt-4o) because reasoning tokens count against the budget — we give them a
@@ -365,6 +397,28 @@ def main() -> None:
     # `--model gpt-4o` or the ARTIFACT_GEN_MODEL env var.
     ap.add_argument("--model", default=os.environ.get("ARTIFACT_GEN_MODEL") or get_openai_model())
     args = ap.parse_args()
+
+    # ── --sanitize: clean existing content in place, no AI needed ──────────────
+    if args.sanitize:
+        if not _CONTENT.exists():
+            raise SystemExit(f"No content file at {_CONTENT} — nothing to sanitize.")
+        content = json.loads(_CONTENT.read_text(encoding="utf-8"))
+        changed = 0
+        for fw_key, arts in content.items():
+            if args.framework and fw_key != args.framework:
+                continue
+            for aid, e in arts.items():
+                if not isinstance(e, dict):
+                    continue
+                c = e.get("content") or ""
+                nc = _sanitize(c)
+                if nc != c:
+                    e["content"] = nc
+                    changed += 1
+        _CONTENT.write_text(json.dumps(content, ensure_ascii=False, indent=1), encoding="utf-8")
+        print(f"[sanitize] cleaned {changed} of {sum(len(v) for v in content.values())} entr"
+              f"{'y' if changed == 1 else 'ies'} in {_CONTENT}", flush=True)
+        return
 
     if not _ai_available():
         raise SystemExit("No usable OpenAI key — set AI_INTEGRATIONS_OPENAI_API_KEY / OPENAI_API_KEY in backend/.env")

@@ -139,6 +139,9 @@ class VendorAssessment(Base):
     rating_grade = Column(String(2), nullable=True)       # A–F at-a-glance grade
     # Per-domain residual breakdown: {domain_key: {inherent, residual, score}}.
     domain_scores = Column(JSON, default=dict)
+    # Assessment-level RACI team roster (assign once, reused across all stages):
+    # {role_key: user_id} e.g. {"business_owner": 4, "tprm_lead": 7, ...}.
+    team_roster = Column(JSON, default=dict)
     # Optimistic-concurrency token for edits.
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)

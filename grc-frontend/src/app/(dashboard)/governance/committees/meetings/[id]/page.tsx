@@ -137,35 +137,35 @@ function formatFileSize(bytes?: number | null) {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const MEETING_TYPE_STYLES: Record<string, { label: string; bg: string; text: string }> = {
-  regular:   { label: 'Regular',   bg: 'bg-emerald-100', text: 'text-emerald-700' },
-  special:   { label: 'Special',   bg: 'bg-amber-100',   text: 'text-amber-700'   },
-  emergency: { label: 'Emergency', bg: 'bg-red-100',     text: 'text-red-700'     },
+  regular:   { label: 'Regular',   bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  special:   { label: 'Special',   bg: 'bg-amber-50',   text: 'text-amber-700'   },
+  emergency: { label: 'Emergency', bg: 'bg-rose-50',     text: 'text-rose-700'     },
 };
 
 const MEETING_STATUS_STYLES: Record<string, { label: string; bg: string; text: string }> = {
-  scheduled:   { label: 'Scheduled',   bg: 'bg-blue-100',   text: 'text-blue-700'   },
-  in_progress: { label: 'In Progress', bg: 'bg-amber-100',  text: 'text-amber-700'  },
-  completed:   { label: 'Completed',   bg: 'bg-emerald-100',text: 'text-emerald-700'},
+  scheduled:   { label: 'Scheduled',   bg: 'bg-blue-50',   text: 'text-blue-700'   },
+  in_progress: { label: 'In Progress', bg: 'bg-amber-50',  text: 'text-amber-700'  },
+  completed:   { label: 'Completed',   bg: 'bg-emerald-50',text: 'text-emerald-700'},
   cancelled:   { label: 'Cancelled',   bg: 'bg-gray-100',   text: 'text-gray-600'   },
 };
 
 const AGENDA_STATUS_STYLES: Record<string, { label: string; bg: string; text: string }> = {
   pending:   { label: 'Pending',   bg: 'bg-gray-100',   text: 'text-gray-600'   },
-  discussed: { label: 'Discussed', bg: 'bg-emerald-100',text: 'text-emerald-700'},
-  deferred:  { label: 'Deferred',  bg: 'bg-amber-100',  text: 'text-amber-700'  },
+  discussed: { label: 'Discussed', bg: 'bg-emerald-50',text: 'text-emerald-700'},
+  deferred:  { label: 'Deferred',  bg: 'bg-amber-50',  text: 'text-amber-700'  },
 };
 
 const ACTION_STATUS_STYLES: Record<string, { label: string; bg: string; text: string }> = {
-  open:        { label: 'Open',        bg: 'bg-amber-100',  text: 'text-amber-700'  },
-  in_progress: { label: 'In Progress', bg: 'bg-blue-100',   text: 'text-blue-700'   },
-  completed:   { label: 'Completed',   bg: 'bg-emerald-100',text: 'text-emerald-700'},
-  overdue:     { label: 'Overdue',     bg: 'bg-red-100',    text: 'text-red-700'    },
+  open:        { label: 'Open',        bg: 'bg-amber-50',  text: 'text-amber-700'  },
+  in_progress: { label: 'In Progress', bg: 'bg-blue-50',   text: 'text-blue-700'   },
+  completed:   { label: 'Completed',   bg: 'bg-emerald-50',text: 'text-emerald-700'},
+  overdue:     { label: 'Overdue',     bg: 'bg-rose-50',    text: 'text-rose-700'    },
 };
 
 const SOURCE_TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; bg: string; text: string; border: string }> = {
   document:          { label: 'Document',           icon: FileCheck, bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-200'   },
   exception:         { label: 'Exception',          icon: Shield,    bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200'  },
-  regulatory_change: { label: 'Regulatory Change',  icon: Scale,     bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+  regulatory_change: { label: 'Regulatory Change',  icon: Scale,     bg: 'bg-primary-50', text: 'text-slate-600', border: 'border-slate-200' },
   manual:            { label: 'Manual',             icon: FileText,  bg: 'bg-gray-50',   text: 'text-gray-600',   border: 'border-gray-200'   },
 };
 
@@ -548,9 +548,9 @@ export default function MeetingDetailPage() {
   if (meetingError || !meeting) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
-        <AlertCircle className="h-10 w-10 text-red-400 mb-3" />
+        <AlertCircle className="h-10 w-10 text-rose-500 mb-3" />
         <p className="text-gray-700 font-medium">Meeting not found</p>
-        <Link href="/governance/committees" className="mt-4 text-blue-600 hover:underline text-sm">
+        <Link href="/governance/committees" className="mt-4 text-primary-600 hover:underline text-sm">
           Back to committees
         </Link>
       </div>
@@ -577,8 +577,8 @@ export default function MeetingDetailPage() {
         </Link>
 
         <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-cyan-100 border border-cyan-200">
-            <Calendar className="h-6 w-6 text-cyan-600" />
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-50 border border-primary-100">
+            <Calendar className="h-6 w-6 text-primary-600" />
           </div>
           <div>
             <h1 className="text-2xl font-semibold text-black">{meeting.title}</h1>
@@ -611,7 +611,7 @@ export default function MeetingDetailPage() {
           )}
           {meeting.virtual_link && (
             <a href={meeting.virtual_link} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-blue-600 hover:underline">
+              className="flex items-center gap-1.5 text-primary-600 hover:underline">
               <LinkIcon className="h-4 w-4" />
               Virtual Link
             </a>
@@ -622,9 +622,9 @@ export default function MeetingDetailPage() {
       {/* ── Summary Cards ── */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Agenda Items',    value: sortedAgenda.length,    icon: ListOrdered, color: 'text-blue-600',   bg: 'bg-blue-50'   },
+          { label: 'Agenda Items',    value: sortedAgenda.length,    icon: ListOrdered, color: 'text-primary-600',   bg: 'bg-blue-50'   },
           { label: 'Actions',         value: actions.length,          icon: CheckSquare, color: 'text-amber-600',  bg: 'bg-amber-50'  },
-          { label: 'Suggested Items', value: suggestedItems.length,   icon: Lightbulb,   color: 'text-purple-600', bg: 'bg-purple-50' },
+          { label: 'Suggested Items', value: suggestedItems.length,   icon: Lightbulb,   color: 'text-primary-600', bg: 'bg-primary-50' },
         ].map(({ label, value, icon: Icon, color, bg }) => (
           <div key={label} className="rounded-xl border border-gray-200 bg-white p-4 flex items-center gap-4">
             <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${bg}`}>
@@ -646,7 +646,7 @@ export default function MeetingDetailPage() {
           <div className="rounded-xl border border-gray-200 bg-white">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <h3 className="font-medium text-black flex items-center gap-2">
-                <ListOrdered className="h-5 w-5 text-blue-500" />
+                <ListOrdered className="h-5 w-5 text-slate-400" />
                 Agenda
               </h3>
               {canCreate && (
@@ -659,10 +659,20 @@ export default function MeetingDetailPage() {
                     onChange={onPickAgendaUploadFile}
                     className="hidden"
                   />
+                  {suggestedItems.length > 0 && (
+                    <button
+                      onClick={() => setIsAutoPopulateOpen(true)}
+                      className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                      title="Add pending approvals, exceptions and regulatory changes to the agenda"
+                    >
+                      <Sparkles className="h-4 w-4 text-primary-600" />
+                      Auto-populate ({suggestedItems.length})
+                    </button>
+                  )}
                   <button
                     onClick={() => uploadAgendaInputRef.current?.click()}
                     disabled={uploadAgendaMutation.isPending}
-                    className="flex items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                    className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     title="Upload a PDF / DOCX agenda — we'll parse it into items via heuristic + AI"
                   >
                     {uploadAgendaMutation.isPending ? (
@@ -690,7 +700,7 @@ export default function MeetingDetailPage() {
                   <p className="text-gray-600 font-medium">No agenda items yet</p>
                   <button
                     onClick={() => setIsAddAgendaOpen(true)}
-                    className="mt-2 text-sm text-blue-600 hover:underline"
+                    className="mt-2 text-sm text-primary-600 hover:underline"
                   >
                     Add the first item
                   </button>
@@ -795,7 +805,7 @@ export default function MeetingDetailPage() {
           <div className="rounded-xl border border-gray-200 bg-white">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <h3 className="font-medium text-black flex items-center gap-2">
-                <FileText className="h-5 w-5 text-emerald-500" />
+                <FileText className="h-5 w-5 text-slate-400" />
                 Meeting Minutes
               </h3>
               {!isEditMinutesOpen && (
@@ -861,7 +871,7 @@ export default function MeetingDetailPage() {
                     onChange={(e) => setMinutesContent(e.target.value)}
                     rows={8}
                     placeholder="Record meeting minutes here…"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
                   />
                   <div className="flex justify-end gap-3">
                     <button
@@ -873,7 +883,7 @@ export default function MeetingDetailPage() {
                     <button
                       onClick={() => saveMinutesMutation.mutate({ content: minutesContent })}
                       disabled={!minutesContent.trim() || saveMinutesMutation.isPending}
-                      className="flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                      className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
                     >
                       <Save className="h-4 w-4" />
                       {saveMinutesMutation.isPending ? 'Saving…' : 'Save Draft'}
@@ -887,7 +897,7 @@ export default function MeetingDetailPage() {
                     {meeting.minutes.drafted_at && <span>· {formatDate(meeting.minutes.drafted_at)}</span>}
                     {meeting.minutes.status && (
                       <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${
-                        meeting.minutes.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
+                        meeting.minutes.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'
                       }`}>
                         {meeting.minutes.status === 'draft' ? 'Draft' : meeting.minutes.status === 'approved' ? 'Approved' : meeting.minutes.status}
                       </span>
@@ -909,7 +919,7 @@ export default function MeetingDetailPage() {
                   <p className="text-gray-600 font-medium">No minutes yet</p>
                   <button
                     onClick={() => setIsEditMinutesOpen(true)}
-                    className="mt-2 text-sm text-blue-600 hover:underline"
+                    className="mt-2 text-sm text-primary-600 hover:underline"
                   >
                     Draft minutes
                   </button>
@@ -922,7 +932,7 @@ export default function MeetingDetailPage() {
           <div className="rounded-xl border border-gray-200 bg-white">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
               <h3 className="font-medium text-black flex items-center gap-2">
-                <Paperclip className="h-5 w-5 text-purple-500" />
+                <Paperclip className="h-5 w-5 text-slate-400" />
                 Documents
                 <span className="text-xs font-normal text-gray-500">({attachments.length})</span>
               </h3>
@@ -946,7 +956,7 @@ export default function MeetingDetailPage() {
                   {canCreate && (
                     <button
                       onClick={() => setIsUploadAttachmentOpen(true)}
-                      className="mt-2 text-sm text-blue-600 hover:underline"
+                      className="mt-2 text-sm text-primary-600 hover:underline"
                     >
                       Upload the first document
                     </button>
@@ -955,8 +965,8 @@ export default function MeetingDetailPage() {
               ) : attachments.map((att) => (
                 <div key={att.id} className="px-6 py-4 hover:bg-gray-50 transition-colors group">
                   <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50">
-                      <FileText className="h-5 w-5 text-purple-500" />
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50">
+                      <FileText className="h-5 w-5 text-slate-400" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3">
@@ -976,7 +986,7 @@ export default function MeetingDetailPage() {
                           <button
                             type="button"
                             onClick={() => handleDownloadAttachment(att.id, att.file_name)}
-                            className="rounded p-1.5 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
+                            className="rounded p-1.5 text-gray-500 hover:bg-blue-50 hover:text-primary-600"
                             title="Download"
                           >
                             <Download className="h-4 w-4" />
@@ -1013,7 +1023,7 @@ export default function MeetingDetailPage() {
           <div className="rounded-xl border border-gray-200 bg-white">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <h3 className="font-medium text-black flex items-center gap-2">
-                <CheckSquare className="h-5 w-5 text-amber-500" />
+                <CheckSquare className="h-5 w-5 text-slate-400" />
                 Actions
               </h3>
               {canCreate && (
@@ -1034,7 +1044,7 @@ export default function MeetingDetailPage() {
                   <p className="text-gray-600 text-sm font-medium">No actions yet</p>
                   <button
                     onClick={() => setIsAddActionOpen(true)}
-                    className="mt-2 text-xs text-blue-600 hover:underline"
+                    className="mt-2 text-xs text-primary-600 hover:underline"
                   >
                     Create first action
                   </button>
@@ -1101,7 +1111,7 @@ export default function MeetingDetailPage() {
         onClose={() => setIsAutoPopulateOpen(false)}
         title={
           <span className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-amber-500" />
+            <Sparkles className="h-5 w-5 text-slate-400" />
             Auto-Populate Agenda
           </span>
         }
@@ -1119,7 +1129,7 @@ export default function MeetingDetailPage() {
                 autoPopulateMutation.isPending ||
                 (!autoPopulateOptions.include_documents && !autoPopulateOptions.include_exceptions && !autoPopulateOptions.include_regulatory_changes)
               }
-              className="flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
             >
               <Sparkles className="h-4 w-4" />
               {autoPopulateMutation.isPending ? 'Populating…' : 'Populate Agenda'}
@@ -1133,9 +1143,9 @@ export default function MeetingDetailPage() {
           </p>
 
           {([
-            { key: 'include_documents'          as const, label: 'Pending Document Approvals', desc: 'Documents awaiting committee approval', Icon: FileCheck, color: 'text-blue-600',   bg: 'bg-blue-50'   },
+            { key: 'include_documents'          as const, label: 'Pending Document Approvals', desc: 'Documents awaiting committee approval', Icon: FileCheck, color: 'text-primary-600',   bg: 'bg-blue-50'   },
             { key: 'include_exceptions'         as const, label: 'Risk Exceptions',             desc: 'Exceptions pending review',             Icon: Shield,    color: 'text-amber-600',  bg: 'bg-amber-50'  },
-            { key: 'include_regulatory_changes' as const, label: 'Regulatory Changes',          desc: 'Updates under assessment',              Icon: Scale,     color: 'text-purple-600', bg: 'bg-purple-50' },
+            { key: 'include_regulatory_changes' as const, label: 'Regulatory Changes',          desc: 'Updates under assessment',              Icon: Scale,     color: 'text-primary-600', bg: 'bg-primary-50' },
           ] as const).map(({ key, label, desc, Icon, color, bg }) => (
             <label key={key}
               className="flex items-center gap-4 cursor-pointer rounded-xl border border-gray-200 p-4 hover:border-gray-300 transition-colors">
@@ -1143,7 +1153,7 @@ export default function MeetingDetailPage() {
                 type="checkbox"
                 checked={autoPopulateOptions[key]}
                 onChange={(e) => setAutoPopulateOptions({ ...autoPopulateOptions, [key]: e.target.checked })}
-                className="h-4 w-4 rounded border-gray-300 text-black focus:ring-black"
+                className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
               />
               <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${bg}`}>
                 <Icon className={`h-5 w-5 ${color}`} />
@@ -1175,7 +1185,7 @@ export default function MeetingDetailPage() {
               type="submit"
               form="add-agenda-form"
               disabled={!newAgendaItem.title.trim() || addAgendaMutation.isPending}
-              className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
             >
               {addAgendaMutation.isPending ? 'Adding…' : 'Add Item'}
             </button>
@@ -1201,7 +1211,7 @@ export default function MeetingDetailPage() {
               type="text"
               value={newAgendaItem.title}
               onChange={(e) => setNewAgendaItem({ ...newAgendaItem, title: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Agenda item title"
               required
             />
@@ -1212,7 +1222,7 @@ export default function MeetingDetailPage() {
               value={newAgendaItem.description}
               onChange={(e) => setNewAgendaItem({ ...newAgendaItem, description: e.target.value })}
               rows={3}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
               placeholder="Optional description"
             />
           </div>
@@ -1235,7 +1245,7 @@ export default function MeetingDetailPage() {
                 min={1}
                 value={newAgendaItem.duration_minutes}
                 onChange={(e) => setNewAgendaItem({ ...newAgendaItem, duration_minutes: parseInt(e.target.value) || 15 })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </div>
           </div>
@@ -1260,7 +1270,7 @@ export default function MeetingDetailPage() {
               type="submit"
               form="create-action-form"
               disabled={!newAction.title.trim() || !newAction.due_date || createActionMutation.isPending}
-              className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
             >
               {createActionMutation.isPending ? 'Creating…' : 'Create Action'}
             </button>
@@ -1287,7 +1297,7 @@ export default function MeetingDetailPage() {
               type="text"
               value={newAction.title}
               onChange={(e) => setNewAction({ ...newAction, title: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               placeholder="Action title"
               required
             />
@@ -1298,7 +1308,7 @@ export default function MeetingDetailPage() {
               value={newAction.description}
               onChange={(e) => setNewAction({ ...newAction, description: e.target.value })}
               rows={2}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
             />
           </div>
           <div>
@@ -1319,7 +1329,7 @@ export default function MeetingDetailPage() {
                 type="date"
                 value={newAction.due_date}
                 onChange={(e) => setNewAction({ ...newAction, due_date: e.target.value })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 required
               />
             </div>
@@ -1358,7 +1368,7 @@ export default function MeetingDetailPage() {
               type="submit"
               form="edit-agenda-form"
               disabled={!editAgendaDraft.title.trim() || updateAgendaMutation.isPending}
-              className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
             >
               {updateAgendaMutation.isPending ? 'Saving…' : 'Save Changes'}
             </button>
@@ -1388,7 +1398,7 @@ export default function MeetingDetailPage() {
               type="text"
               value={editAgendaDraft.title}
               onChange={(e) => setEditAgendaDraft({ ...editAgendaDraft, title: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               required
             />
           </div>
@@ -1398,7 +1408,7 @@ export default function MeetingDetailPage() {
               value={editAgendaDraft.description}
               onChange={(e) => setEditAgendaDraft({ ...editAgendaDraft, description: e.target.value })}
               rows={3}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -1420,7 +1430,7 @@ export default function MeetingDetailPage() {
                 min={1}
                 value={editAgendaDraft.time_allocated_minutes}
                 onChange={(e) => setEditAgendaDraft({ ...editAgendaDraft, time_allocated_minutes: parseInt(e.target.value) || 15 })}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </div>
           </div>
@@ -1437,7 +1447,7 @@ export default function MeetingDetailPage() {
         }}
         title={
           <span className="flex items-center gap-2">
-            <Upload className="h-5 w-5 text-purple-500" />
+            <Upload className="h-5 w-5 text-slate-400" />
             Upload Document
           </span>
         }
@@ -1458,7 +1468,7 @@ export default function MeetingDetailPage() {
               type="button"
               onClick={() => uploadAttachmentMutation.mutate()}
               disabled={!pendingAttachment || uploadAttachmentMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
             >
               {uploadAttachmentMutation.isPending ? (
                 <>
@@ -1480,7 +1490,7 @@ export default function MeetingDetailPage() {
             Attach agenda packets, briefing decks, supporting spreadsheets, or any meeting documents (PDF, DOCX, XLSX, PPTX, images, etc.).
           </p>
 
-          <label className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 px-6 py-10 cursor-pointer hover:border-purple-400 hover:bg-purple-50/40 transition-colors">
+          <label className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 px-6 py-8 cursor-pointer hover:border-primary-400 hover:bg-primary-50 transition-colors">
             <Upload className="h-8 w-8 text-gray-400 mb-2" />
             {pendingAttachment ? (
               <>
@@ -1506,7 +1516,7 @@ export default function MeetingDetailPage() {
               value={attachmentDescription}
               onChange={(e) => setAttachmentDescription(e.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black placeholder-gray-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
               placeholder="Short note about what this document contains…"
             />
           </div>

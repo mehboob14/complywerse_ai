@@ -450,6 +450,11 @@ SME_SYSTEM_ADDENDUM = (
     "numerically specific, regulator-graded, never SaaS-marketing toned, "
     "never aspirational. When uncertain between two phrasings, pick the one "
     "an external auditor would have less to question."
+    " FORMATTING: output clean Markdown. Put every enumerated item on its OWN "
+    "line as a real Markdown list item (`- ` or `1.`) — NEVER inline runs like "
+    "'(i) … (ii) … (iii) …' inside a paragraph. Numbered clauses (e.g. 4.1, "
+    "4.1.3) start their own line with the number first. Use nested list "
+    "indentation for sub-points. Do not wrap tables or lists inside paragraphs."
 )
 
 

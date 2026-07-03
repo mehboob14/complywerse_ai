@@ -125,21 +125,26 @@ function renderSourceIcon(key: SourceStyle['iconKey']) {
 function SourceBadge({
   sourceType,
   sourceReference,
+  sourceLabel,
 }: {
   sourceType: string;
   sourceReference: string | null;
+  sourceLabel?: string | null;
 }) {
   const style = getSourceStyle(sourceType);
+  // Prefer the human-readable label (e.g. the vendor name) over the raw
+  // `vendor:15/vendor_assessment:15` reference.
+  const display = sourceLabel || sourceReference;
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${style.badgeBg} ${style.badgeText} ${style.badgeRing}`}
-      title={`Originated from: ${style.label}${sourceReference ? ` (${sourceReference})` : ''}`}
+      title={`Originated from: ${style.label}${display ? ` (${display})` : ''}`}
     >
       {renderSourceIcon(style.iconKey)}
       <span>{style.label}</span>
-      {sourceReference && (
-        <span className="ml-1 rounded-full bg-white/70 px-1.5 font-mono text-[10px] text-gray-700">
-          {sourceReference}
+      {display && (
+        <span className={`ml-1 rounded-full bg-white/70 px-1.5 text-[10px] text-gray-700 ${sourceLabel ? 'font-medium' : 'font-mono'}`}>
+          {display}
         </span>
       )}
     </span>
@@ -1683,6 +1688,7 @@ export default function ERMRisksPage() {
                             <SourceBadge
                               sourceType={risk.source_type}
                               sourceReference={risk.source_reference || null}
+                              sourceLabel={risk.source_label || null}
                             />
                           )}
                           {(risk.mitigation_actions?.length || 0) > 0 && (

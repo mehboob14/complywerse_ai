@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
+import { GovernanceDocumentMarkdown } from '@/components/governance/GovernanceDocumentMarkdown';
 import {
   X, Search, FileText, Sparkles, Loader2, ArrowRight, Wand2, Copy, BookOpen,
 } from 'lucide-react';
@@ -259,8 +260,10 @@ export default function NcaTemplateModal({ isOpen, onClose, onDocumentCreated }:
               {loadingContent ? (
                 <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-blue-500" /></div>
               ) : (
-                <div className="bg-white rounded-lg border border-gray-200 p-6 prose prose-sm max-w-none whitespace-pre-wrap text-sm text-gray-800">
-                  {contentData?.content || '(empty)'}
+                <div className="bg-white rounded-lg border border-gray-200 p-6">
+                  {contentData?.content
+                    ? <GovernanceDocumentMarkdown content={contentData.content} />
+                    : <p className="text-sm text-gray-400 italic">(empty)</p>}
                 </div>
               )}
             </div>
@@ -359,8 +362,8 @@ export default function NcaTemplateModal({ isOpen, onClose, onDocumentCreated }:
                     Regenerate
                   </button>
                 </div>
-                <div className="bg-white rounded p-3 max-h-72 overflow-y-auto whitespace-pre-wrap text-xs text-gray-800">
-                  {draftPreview}
+                <div className="bg-white rounded p-3 max-h-72 overflow-y-auto text-gray-800">
+                  <GovernanceDocumentMarkdown content={draftPreview} />
                 </div>
               </div>
             )}

@@ -10,8 +10,8 @@ Usage (from backend/):
     py -3 scripts/view_artifact_content.py --framework dora # list one framework
     py -3 scripts/view_artifact_content.py DORA-001         # print ONE doc as markdown
     py -3 scripts/view_artifact_content.py --export         # write each doc to a .md file
-                                                            #   -> backend/_artifact_preview/<fw>/<id>.md
-                                                            #   open those in the IDE's markdown preview.
+ #   -> backend/_artifact_preview/<fw>/<id>.md
+ #   open those in the IDE's markdown preview.
     py -3 scripts/view_artifact_content.py --export --framework dora
 """
 from __future__ import annotations
@@ -25,8 +25,6 @@ from pathlib import Path
 _BACKEND = Path(__file__).resolve().parent.parent
 _CONTENT = _BACKEND / "grc" / "seed_data" / "artifact_content.json"
 _PREVIEW = _BACKEND / "_artifact_preview"   # gitignore-able; safe to delete
-
-
 def _load() -> dict:
     if not _CONTENT.exists():
         raise SystemExit(f"No content file yet at {_CONTENT} — nothing generated.")
@@ -68,7 +66,6 @@ def main() -> None:
         print(body)
         return
 
-    # 2) export each doc as .md for IDE markdown preview
     if args.export:
         n = 0
         for fw, aid, typ, cf, model, title, body in rows:

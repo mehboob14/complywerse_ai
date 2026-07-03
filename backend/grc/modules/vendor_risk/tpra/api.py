@@ -19,12 +19,13 @@ from ....models import (
     get_db, GRCUser, Vendor, VendorAssessment,
     TPRAStageInstance, TPRAFinding, TPRARemediation, TPRARiskAcceptance,
     TPRAContract, TPRAControlObligation, TPRAApproval, TPRAMonitoringSignal,
-    TPRAEvidenceLink, Evidence,
+    TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from . import service, rbac
 from .stages import stages_payload, is_valid_stage
 from .engine_monitoring import should_trigger_reassessment
+from .schema_migrations import ensure_tpra_columns
 
 router = APIRouter(prefix="/tpra", tags=["TPRA Lifecycle"])
 
@@ -86,6 +87,7 @@ def s_stage(s: TPRAStageInstance) -> dict:
         "started_at": s.started_at, "completed_at": s.completed_at,
         "assigned_roles": s.assigned_roles or [], "exit_criteria_result": s.exit_criteria_result or {},
         "gate_decision": s.gate_decision or {}, "skipped_reason": s.skipped_reason,
+        "checklist": getattr(s, "checklist", None) or [],
         "row_version": s.row_version,
     }
 
@@ -97,6 +99,7 @@ def s_finding(f: TPRAFinding) -> dict:
         "status": f.status, "is_critical_control_fail": f.is_critical_control_fail,
         "source_response_id": f.source_response_id, "row_version": f.row_version,
         "linked_risk_id": getattr(f, "linked_risk_id", None),
+        "linked_issue_id": getattr(f, "linked_issue_id", None),
         "deleted_at": f.deleted_at,
         "created_at": f.created_at, "updated_at": f.updated_at,
     }
@@ -163,6 +166,8 @@ def s_assessment(a: VendorAssessment) -> dict:
         "inherent_score": a.inherent_score, "residual_rating": a.residual_rating,
         "residual_score": a.residual_score, "domain_scores": a.domain_scores or {},
         "status": a.status, "row_version": a.row_version,
+        "template_id": a.template_id, "reviewed_by": a.reviewed_by, "due_date": a.due_date,
+        "team_roster": getattr(a, "team_roster", None) or {},
         "created_at": a.created_at, "updated_at": a.updated_at,
     }
 
@@ -269,6 +274,41 @@ class SignalUpdate(BaseModel):
     title: Optional[str] = None
     detail: Optional[str] = None
     acknowledged: Optional[bool] = None
+
+class ChecklistItemIn(BaseModel):
+    text: str
+    done: bool = False
+    note: Optional[str] = None
+    owner_id: Optional[int] = None
+    due_date: Optional[str] = None
+
+class ChecklistIn(BaseModel):
+    items: List[ChecklistItemIn]
+
+class RoleAssignmentIn(BaseModel):
+    role: str          # R | A | C | I
+    user_id: int
+
+class RolesIn(BaseModel):
+    assigned_roles: List[RoleAssignmentIn]
+
+class TeamIn(BaseModel):
+    # Assessment-level RACI team roster: {role_key: user_id}. Assigned once.
+    roster: dict
+
+class ConfigIn(BaseModel):
+    """TPRM program config (Admin/Settings): inherent-risk factor weights, tier
+    thresholds and reassessment cadence. Partial — only supplied sections change."""
+    weights: Optional[dict] = None        # {factor_key: float} — normalized to sum 1.0
+    thresholds: Optional[dict] = None     # {critical, high, medium} on 0..100, descending
+    cadence_days: Optional[dict] = None   # {critical, high, medium, low} in days
+
+class PlanIn(BaseModel):
+    """Persist the Due-Diligence Planning selections onto the assessment so the
+    dd_planning exit gate (template selected + reviewer assigned) can pass."""
+    template_id: Optional[int] = None
+    reviewed_by: Optional[int] = None
+    due_date: Optional[datetime] = None
     row_version: Optional[int] = None
 
 
@@ -355,6 +395,7 @@ def lifecycle_board(db: Session = Depends(get_db), user: GRCUser = Depends(requi
 @router.get("/vendors/{vendor_id}/lifecycle")
 def get_lifecycle(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     tids = _tids(user, db)
+    ensure_tpra_columns(db)
     v = _vendor(db, vendor_id, tids)
     a = service.get_active_assessment(db, v)
     if not a:
@@ -525,6 +566,13 @@ def create_finding(assessment_id: int, body: FindingIn, db: Session = Depends(ge
     service.write_audit(db, a.tenant_id, entity="finding", action="create",
                         vendor_id=a.vendor_id, assessment_id=a.id, entity_id=f.id, actor_id=user.id,
                         to_value=body.title)
+    # TPRM-003: mirror the finding into the shared Issue/Action module.
+    service.ensure_finding_issue(db, f, user.id)
+    # TPRM-002: a new critical finding on an already-onboarded vendor suspends it.
+    if f.severity == "critical":
+        v = db.query(Vendor).filter(Vendor.id == a.vendor_id).first()
+        if v:
+            service.enforce_critical_invariant(db, v, a, user.id)
     db.commit()
     return s_finding(f)
 
@@ -558,6 +606,18 @@ def update_finding(finding_id: int, body: FindingUpdate, db: Session = Depends(g
     if f.status in _closed and prev_status not in _closed:
         db.flush()
         service.snapshot_after_finding_change(db, f)
+    # TPRM-003: keep the linked Issue in sync — close it when the finding closes/
+    # accepts; (re)create it when the finding is (re)opened.
+    if f.status in _closed:
+        service.close_finding_issue(db, f, user.id)
+    elif f.status == "open":
+        service.ensure_finding_issue(db, f, user.id)
+    # TPRM-002: re-evaluate the critical invariant on any status change (reopen →
+    # suspend the onboarded vendor; resolve → auto-reactivate).
+    v = db.query(Vendor).filter(Vendor.id == f.vendor_id).first()
+    a = db.query(VendorAssessment).filter(VendorAssessment.id == f.assessment_id).first()
+    if v and a:
+        service.enforce_critical_invariant(db, v, a, user.id)
     db.commit()
     return s_finding(f)
 
@@ -809,6 +869,13 @@ def create_acceptance(finding_id: int, body: AcceptanceIn, db: Session = Depends
     service.write_audit(db, f.tenant_id, entity="risk_acceptance", action="create",
                         vendor_id=f.vendor_id, assessment_id=f.assessment_id, entity_id=a.id, actor_id=user.id,
                         reason=body.rationale)
+    # TPRM-003: accepting the risk resolves the finding → close the linked issue.
+    service.close_finding_issue(db, f, user.id, reason="Risk formally accepted on the TPRA finding.")
+    # TPRM-002: accepting the risk resolves the critical → maybe reactivate vendor.
+    v = db.query(Vendor).filter(Vendor.id == f.vendor_id).first()
+    asmt = db.query(VendorAssessment).filter(VendorAssessment.id == f.assessment_id).first()
+    if v and asmt:
+        service.enforce_critical_invariant(db, v, asmt, user.id)
     db.commit()
     return s_acceptance(a)
 
@@ -825,6 +892,14 @@ def revoke_acceptance(acc_id: int, db: Session = Depends(get_db), user: GRCUser 
     if f and f.status == "accepted":
         f.status = "open"
     service.write_audit(db, a.tenant_id, entity="risk_acceptance", action="delete", entity_id=a.id, actor_id=user.id)
+    # TPRM-002/003: revoking acceptance reopens the finding → reopen/recreate its
+    # issue and re-suspend the onboarded vendor if the critical is unmitigated.
+    if f:
+        service.ensure_finding_issue(db, f, user.id)
+        v = db.query(Vendor).filter(Vendor.id == f.vendor_id).first()
+        asmt = db.query(VendorAssessment).filter(VendorAssessment.id == f.assessment_id).first()
+        if v and asmt:
+            service.enforce_critical_invariant(db, v, asmt, user.id)
     db.commit()
     return {"revoked": True, "id": a.id}
 
@@ -1044,3 +1119,306 @@ def delete_signal(signal_id: int, db: Session = Depends(get_db), user: GRCUser =
     service.write_audit(db, s.tenant_id, entity="signal", action="delete", vendor_id=s.vendor_id, entity_id=s.id, actor_id=user.id)
     db.commit()
     return {"deleted": True, "id": s.id}
+
+
+# ── Per-stage task checklist ─────────────────────────────────────────────────
+# Every stage gets an interactive, trackable checklist (seeded in the UI from the
+# stage's activities). Replaces the whole array on save — single-analyst editing,
+# same shape as the legacy offboarding checklist.
+
+@router.put("/assessments/{assessment_id}/stages/{stage_key}/checklist")
+def save_stage_checklist(
+    assessment_id: int, stage_key: str, body: ChecklistIn,
+    db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
+):
+    tids = _tids(user, db)
+    ensure_tpra_columns(db)
+    a = _assessment(db, assessment_id, tids)
+    rbac.require_write(db, user, "assessments", "edit")
+    if not is_valid_stage(stage_key):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown stage")
+    row = db.query(TPRAStageInstance).filter(
+        TPRAStageInstance.assessment_id == a.id,
+        TPRAStageInstance.stage_key == stage_key,
+        TPRAStageInstance.tenant_id.in_(tids),
+    ).first()
+    if not row:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Stage not found")
+    row.checklist = [it.model_dump() for it in body.items]
+    _bump(row)
+    service.write_audit(
+        db, a.tenant_id, entity="stage", action="update", vendor_id=a.vendor_id,
+        assessment_id=a.id, entity_id=row.id, actor_id=user.id,
+        extra={"stage": stage_key, "checklist_items": len(row.checklist)},
+    )
+    db.commit()
+    return s_stage(row)
+
+
+# ── Assign duties (RACI) — who is Responsible/Accountable/Consulted/Informed ──
+
+@router.put("/assessments/{assessment_id}/stages/{stage_key}/roles")
+def save_stage_roles(
+    assessment_id: int, stage_key: str, body: RolesIn,
+    db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
+):
+    tids = _tids(user, db)
+    a = _assessment(db, assessment_id, tids)
+    rbac.require_write(db, user, "assessments", "edit")
+    if not is_valid_stage(stage_key):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown stage")
+    row = db.query(TPRAStageInstance).filter(
+        TPRAStageInstance.assessment_id == a.id,
+        TPRAStageInstance.stage_key == stage_key,
+        TPRAStageInstance.tenant_id.in_(tids),
+    ).first()
+    if not row:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Stage not found")
+    row.assigned_roles = [
+        {"role": r.role, "user_id": r.user_id}
+        for r in body.assigned_roles if r.role in ("R", "A", "C", "I")
+    ]
+    _bump(row)
+    service.write_audit(
+        db, a.tenant_id, entity="stage", action="update", vendor_id=a.vendor_id,
+        assessment_id=a.id, entity_id=row.id, actor_id=user.id,
+        extra={"stage": stage_key, "roles": len(row.assigned_roles)},
+    )
+    db.commit()
+    return s_stage(row)
+
+
+# ── Assessment team roster (RACI, assigned once) ─────────────────────────────
+# Duties are assigned once at the assessment level and reused across every stage,
+# rather than re-entered per stage. {role_key: user_id}.
+
+@router.put("/assessments/{assessment_id}/team")
+def save_team(
+    assessment_id: int, body: TeamIn,
+    db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
+):
+    tids = _tids(user, db)
+    ensure_tpra_columns(db)
+    a = _assessment(db, assessment_id, tids)
+    rbac.require_write(db, user, "assessments", "edit")
+    clean = {}
+    for k, v in (body.roster or {}).items():
+        try:
+            uid = int(v)
+        except (TypeError, ValueError):
+            continue
+        if uid:
+            clean[str(k)] = uid
+    a.team_roster = clean
+    service.write_audit(
+        db, a.tenant_id, entity="assessment", action="update", vendor_id=a.vendor_id,
+        assessment_id=a.id, entity_id=a.id, actor_id=user.id, reason="team roster updated",
+        extra={"roles": len(clean)},
+    )
+    db.commit()
+    return {"assessment_id": a.id, "team_roster": a.team_roster}
+
+
+# ── Due-Diligence Planning: persist the assessment plan ──────────────────────
+# Sets the questionnaire template + reviewer (+ due date) on the assessment so the
+# dd_planning exit criteria (template selected, reviewer assigned) can be met.
+
+@router.post("/assessments/{assessment_id}/plan")
+def save_plan(
+    assessment_id: int, body: PlanIn,
+    db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
+):
+    tids = _tids(user, db)
+    a = _assessment(db, assessment_id, tids)
+    rbac.require_write(db, user, "assessments", "edit")
+    if body.template_id is not None:
+        a.template_id = body.template_id
+    if body.reviewed_by is not None:
+        a.reviewed_by = body.reviewed_by
+    if body.due_date is not None:
+        a.due_date = body.due_date
+    service.write_audit(
+        db, a.tenant_id, entity="assessment", action="update", vendor_id=a.vendor_id,
+        assessment_id=a.id, entity_id=a.id, actor_id=user.id, reason="dd_planning plan saved",
+    )
+    db.commit()
+    return {
+        "assessment_id": a.id, "template_id": a.template_id,
+        "reviewed_by": a.reviewed_by, "due_date": a.due_date,
+    }
+
+
+# ── Per-vendor audit timeline (TPRM-010) ─────────────────────────────────────
+# Surfaces the module's own mutation audit (grc_tpra_audit_log) filtered to one
+# vendor, so a per-vendor change history is visible in-context (not only the
+# admin-wide unified log).
+
+@router.get("/vendors/{vendor_id}/audit")
+def vendor_audit(
+    vendor_id: int, limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
+):
+    tids = _tids(user, db)
+    _vendor(db, vendor_id, tids)
+    rows = db.query(TPRAAuditLog).filter(
+        TPRAAuditLog.vendor_id == vendor_id, TPRAAuditLog.tenant_id.in_(tids),
+    ).order_by(TPRAAuditLog.created_at.desc()).limit(limit).all()
+
+    ids = {r.actor_id for r in rows if r.actor_id}
+    names: dict = {}
+    if ids:
+        for u in db.query(GRCUser).filter(GRCUser.id.in_(ids)).all():
+            names[u.id] = (
+                getattr(u, "full_name", None) or getattr(u, "name", None)
+                or " ".join(filter(None, [getattr(u, "first_name", None), getattr(u, "last_name", None)])).strip()
+                or getattr(u, "email", None) or f"User {u.id}"
+            )
+    return {
+        "items": [{
+            "id": r.id, "entity": r.entity, "entity_id": r.entity_id, "action": r.action,
+            "actor_id": r.actor_id, "actor_name": names.get(r.actor_id),
+            "from_value": r.from_value, "to_value": r.to_value, "reason": r.reason,
+            "assessment_id": r.assessment_id, "created_at": r.created_at,
+        } for r in rows],
+        "total": len(rows),
+    }
+
+
+# ── Admin / Settings — program config (TPRM-006) ─────────────────────────────
+# Per-tenant tiering factor weights, tier thresholds and reassessment cadence.
+# The engines already read TPRATieringConfig; this exposes read + edit.
+
+_FACTOR_KEYS = ["data_sensitivity", "business_criticality", "system_access", "regulatory_scope", "fourth_party"]
+_FACTOR_LABELS = {
+    "data_sensitivity": "Data sensitivity", "business_criticality": "Business criticality",
+    "system_access": "System access", "regulatory_scope": "Regulatory & geographic scope",
+    "fourth_party": "Fourth-party reliance",
+}
+_TIER_KEYS = ["critical", "high", "medium"]
+_CADENCE_KEYS = ["critical", "high", "medium", "low"]
+
+
+@router.get("/config")
+def get_config(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """The tenant's TPRM program config (tiering weights, thresholds, cadence)."""
+    from .bootstrap import ensure_tpra_tenant_defaults, get_tiering_config, DEFAULT_TIERING_CONFIG
+    tids = _tids(user, db)
+    tenant_id = tids[0]
+    ensure_tpra_tenant_defaults(db, tenant_id)
+    cfg = get_tiering_config(db, tenant_id)
+    return {
+        "weights": cfg["weights"], "thresholds": cfg["thresholds"], "cadence_days": cfg["cadence_days"],
+        "defaults": DEFAULT_TIERING_CONFIG,
+        "meta": {
+            "factor_keys": _FACTOR_KEYS, "factor_labels": _FACTOR_LABELS,
+            "tier_keys": _TIER_KEYS, "cadence_keys": _CADENCE_KEYS,
+        },
+    }
+
+
+@router.put("/config")
+def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Update the tenant's tiering config. Weights are normalized to sum 1.0;
+    thresholds are clamped to 0..100 and forced descending; cadence ≥ 1 day."""
+    from .bootstrap import DEFAULT_TIERING_CONFIG
+    tids = _tids(user, db)
+    tenant_id = tids[0]
+    rbac.require_write(db, user, "config", "edit")
+
+    row = db.query(TPRATieringConfig).filter(
+        TPRATieringConfig.tenant_id == tenant_id, TPRATieringConfig.config_key == "default",
+    ).first()
+    if not row:
+        row = TPRATieringConfig(
+            tenant_id=tenant_id, config_key="default",
+            weights=dict(DEFAULT_TIERING_CONFIG["weights"]),
+            thresholds=dict(DEFAULT_TIERING_CONFIG["thresholds"]),
+            cadence_days=dict(DEFAULT_TIERING_CONFIG["cadence_days"]), is_active=True,
+        )
+        db.add(row)
+        db.flush()
+
+    def _num(d, k, fallback):
+        try:
+            return float((d or {}).get(k, fallback))
+        except (TypeError, ValueError):
+            return float(fallback)
+
+    if body.weights is not None:
+        cur = row.weights or DEFAULT_TIERING_CONFIG["weights"]
+        w = {k: max(0.0, _num(body.weights, k, cur.get(k, 0))) for k in _FACTOR_KEYS}
+        s = sum(w.values()) or 1.0
+        row.weights = {k: round(v / s, 4) for k, v in w.items()}   # normalize → sum 1.0
+
+    if body.thresholds is not None:
+        cur = row.thresholds or DEFAULT_TIERING_CONFIG["thresholds"]
+        crit = min(100.0, max(0.0, _num(body.thresholds, "critical", cur.get("critical", 75))))
+        high = min(crit, max(0.0, _num(body.thresholds, "high", cur.get("high", 50))))
+        med = min(high, max(0.0, _num(body.thresholds, "medium", cur.get("medium", 25))))
+        row.thresholds = {"critical": round(crit, 2), "high": round(high, 2), "medium": round(med, 2)}
+
+    if body.cadence_days is not None:
+        cur = row.cadence_days or DEFAULT_TIERING_CONFIG["cadence_days"]
+        row.cadence_days = {k: max(1, int(_num(body.cadence_days, k, cur.get(k, 365)))) for k in _CADENCE_KEYS}
+
+    row.row_version = (row.row_version or 1) + 1
+    service.write_audit(db, tenant_id, entity="config", action="update", actor_id=user.id,
+                        reason="TPRM program config updated")
+    db.commit()
+    return {"weights": row.weights, "thresholds": row.thresholds, "cadence_days": row.cadence_days}
+
+
+# ── Compliance framework coverage (TPRM-007b) ────────────────────────────────
+# Aggregates the question→framework/control mapping across the questionnaire
+# library so compliance-coverage reporting is possible: which frameworks and
+# controls the assessment questions actually exercise.
+
+@router.get("/coverage")
+def framework_coverage(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    from ....models import VendorQuestionnaireTemplate
+    tids = _tids(user, db)
+    templates = db.query(VendorQuestionnaireTemplate).filter(
+        VendorQuestionnaireTemplate.tenant_id.in_(tids)
+    ).all()
+
+    fw: dict = {}
+    total_q = mapped_q = 0
+    for t in templates:
+        for q in (t.questions or []):
+            if not isinstance(q, dict):
+                continue
+            total_q += 1
+            framework = (q.get("framework") or "").strip()
+            cref = (q.get("control_ref") or "").strip()
+            dom = (q.get("domain") or "").strip()
+            if not framework:
+                continue
+            mapped_q += 1
+            e = fw.setdefault(framework, {
+                "framework": framework, "questions": 0,
+                "controls": set(), "domains": set(), "templates": set(), "evidence_required": 0,
+            })
+            e["questions"] += 1
+            if cref:
+                e["controls"].add(cref)
+            if dom:
+                e["domains"].add(dom)
+            e["templates"].add(t.name)
+            if q.get("evidence_required"):
+                e["evidence_required"] += 1
+
+    items = [{
+        "framework": e["framework"], "questions": e["questions"],
+        "controls": len(e["controls"]), "control_refs": sorted(e["controls"]),
+        "domains": sorted(e["domains"]), "templates": sorted(e["templates"]),
+        "evidence_required": e["evidence_required"],
+    } for e in fw.values()]
+    items.sort(key=lambda x: x["questions"], reverse=True)
+    return {
+        "items": items,
+        "frameworks": len(items),
+        "templates": len(templates),
+        "total_questions": total_q,
+        "mapped_questions": mapped_q,
+        "mapping_coverage": round(100 * mapped_q / total_q, 1) if total_q else 0.0,
+    }

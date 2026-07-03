@@ -15,6 +15,7 @@ from .regulatory_feeds import router as regulatory_feeds_router
 from .gap_analysis import router as gap_analysis_router
 from .applicability import router as applicability_router
 from .reports import router as reports_router
+from .document_signoff import router as document_signoff_router
 
 __all__ = [
     "documents_router",
@@ -34,4 +35,5 @@ __all__ = [
     "gap_analysis_router",
     "applicability_router",
     "reports_router",
+    "document_signoff_router",
 ]

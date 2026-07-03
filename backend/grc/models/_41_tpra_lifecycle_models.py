@@ -67,6 +67,9 @@ class TPRAStageInstance(Base):
     assigned_roles = Column(JSON, default=list)         # [{role, user_id?}]
     exit_criteria_result = Column(JSON, default=dict)   # {passed: bool, blockers: [str]}
     gate_decision = Column(JSON, default=dict)          # {decision, by, at, rationale}
+    # Interactive per-stage task checklist (the "steps I can do" surface). Seeded
+    # from the stage's activities in the UI; [{text, done, note?, owner_id?, due_date?}].
+    checklist = Column(JSON, default=list)
     skipped_reason = Column(Text, nullable=True)
     skipped_by = Column(Integer, nullable=True)
     row_version = Column(Integer, default=1)
@@ -156,6 +159,9 @@ class TPRAFinding(Base):
     # Loose ref to grc_risks.id once this finding is promoted into the ERM Risk
     # Register as a vendor-sourced risk (set by service.promote_finding_to_register).
     linked_risk_id = Column(Integer, nullable=True, index=True)
+    # Loose ref to grc_issues.id — the shared Issue/Action item this finding mirrors
+    # into (unified owner/SLA/workflow). Set by service.ensure_finding_issue (TPRM-003).
+    linked_issue_id = Column(Integer, nullable=True, index=True)
     created_by = Column(Integer, nullable=True)
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)

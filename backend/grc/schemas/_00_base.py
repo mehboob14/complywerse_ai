@@ -547,6 +547,8 @@ class RiskResponse(BaseModel):
     source_incident_id: Optional[int] = None
     source_rcsa_finding_id: Optional[int] = None
     source_reference: Optional[str] = None
+    # Human-readable provenance (e.g. the vendor name) resolved from source_reference.
+    source_label: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
