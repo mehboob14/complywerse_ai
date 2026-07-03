@@ -417,6 +417,8 @@ export const governanceApi = {
     apiClient.get('/governance/mappings/coverage'),
   getComplianceCoverage: () =>
     apiClient.get('/governance/dashboard/compliance-coverage'),
+  getDocumentsOverview: () =>
+    apiClient.get('/governance/dashboard/documents-overview'),
   getComplianceByFramework: () =>
     apiClient.get('/governance/dashboard/compliance-by-framework'),
   getOpenGapsSummary: () =>

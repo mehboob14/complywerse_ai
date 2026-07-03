@@ -222,6 +222,12 @@ _COLUMN_ADDS = [
     ("grc_compliance_assessment_document_items", "target_date", "TIMESTAMP",
      "ix_assessment_item_target_date"),
     ("grc_compliance_assessment_document_items", "closed_at", "TIMESTAMP", None),
+    # Per-asset verification status {asset_id: status} for multi-asset assessments (ASVS).
+    ("grc_compliance_assessment_document_items", "asset_status", "JSON DEFAULT '{}'::json", None),
+    # Assessment ↔ IT Assets scope (application(s) the assessment verifies).
+    ("grc_compliance_assessment_documents", "linked_asset_ids", "JSON DEFAULT '[]'::json", None),
+    # Per-asset target ASVS level {asset_id: level} for level-scoped assessments.
+    ("grc_compliance_assessment_documents", "asset_levels", "JSON DEFAULT '{}'::json", None),
     # Point-score weights on the tenant SLA policy (grc_compliance_sla_policy is
     # a new table via create_all; these ALTERs cover tenants whose table was
     # created before the weight columns existed).

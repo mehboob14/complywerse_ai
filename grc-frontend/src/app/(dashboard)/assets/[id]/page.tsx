@@ -13,7 +13,7 @@ import { SearchInput, InlineLinkPicker, PageLoader } from '@/components/ui';
 import {
   ArrowLeft, Loader2, AlertCircle, Shield, DollarSign,
   Target, TrendingUp, FileCheck, AlertTriangle,
-  ClipboardList, Plus, X, Trash2, Edit, RefreshCw,
+  ClipboardList, ClipboardCheck, Plus, X, Trash2, Edit, RefreshCw,
   AppWindow, HardDrive, Database, Cloud, Building2,
   Lock, ShieldCheck, MapPin, User, Bug, Network,
   Gauge, PackageSearch, Sparkles, Layers, Filter,
@@ -58,7 +58,75 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
   third_party: 'Third-Party System',
 };
 
-type TabType = 'details' | 'compliance' | 'controls' | 'evidence' | 'risks' | 'vulnerabilities' | 'criticality' | 'trajectory' | 'mapping-recommendations';
+type TabType = 'details' | 'compliance' | 'controls' | 'evidence' | 'assessments' | 'risks' | 'vulnerabilities' | 'criticality' | 'trajectory' | 'mapping-recommendations';
+
+// Map an assessment_format to its /assessments/<framework> route key.
+function assetAssessmentFramework(fmt: string): string {
+  const m: Record<string, string> = {
+    asvs_checklist: 'asvs',
+    mobile_app_security: 'cs_mobile',
+    owasp_v4_testing_checklist: 'owasp_testing',
+    pdpl_assessment_toolkit: 'pdpl',
+    nca_container: 'nca',
+    digital_ops_maturity: 'digital_ops_maturity',
+    ubl_audit_master_tracking: 'internal_audit',
+    xlsx_maturity: 'maturity',
+  };
+  if (m[fmt]) return m[fmt];
+  if (fmt?.startsWith('cis')) return 'cis';
+  return 'standard';
+}
+
+interface AssetAssessmentRow {
+  id: number; name: string; assessment_format: string; status: string;
+  total_items: number; complied_count: number; not_complied_count: number; validity_pct: number;
+}
+
+// Reverse view: the assessments scoped to this asset (from linked_asset_ids),
+// with their validity/status. Rendered in the asset detail 'Assessments' tab.
+function AssetAssessments({ assetId, onOpen }: { assetId: number; onOpen: (fmt: string) => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['asset-assessments', assetId],
+    queryFn: async () => (await apiClient.get(`/compliance/assessments/by-asset/${assetId}`)).data as { assessments: AssetAssessmentRow[] },
+  });
+  const items = data?.assessments ?? [];
+  const color = (p: number) => (p >= 80 ? '#059669' : p >= 50 ? '#d97706' : '#dc2626');
+
+  return (
+    <div className="space-y-4">
+      {/* Assessments scoped to this asset */}
+      {isLoading ? (
+        <div className="py-8 text-center text-sm text-slate-400">Loading…</div>
+      ) : items.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-200 py-10 text-center">
+          <ClipboardCheck className="mx-auto mb-2 h-8 w-8 text-slate-300" />
+          <p className="text-sm font-medium text-slate-600">No assessments scoped to this asset yet.</p>
+          <p className="mt-1 text-xs text-slate-400">Add this asset under an assessment&apos;s &quot;Assets in scope&quot; and it will appear here.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <h3 className="mb-1 text-sm font-semibold text-slate-700">Assessments covering this asset</h3>
+          {items.map((a) => (
+            <button key={a.id} onClick={() => onOpen(a.assessment_format)} className="flex w-full items-center gap-4 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-slate-300 hover:bg-slate-50">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-slate-800">{a.name}</div>
+                <div className="text-xs text-slate-400">{a.assessment_format} · {a.total_items} items · {a.status}</div>
+              </div>
+              <div className="w-44 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${a.validity_pct}%`, background: color(a.validity_pct) }} /></div>
+                  <span className="w-9 text-right text-xs font-bold" style={{ color: color(a.validity_pct) }}>{a.validity_pct}%</span>
+                </div>
+                <div className="mt-0.5 text-right text-[10px] text-slate-400">{a.complied_count} pass · {a.not_complied_count} fail</div>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface LinkedControl {
   id: number;
@@ -499,6 +567,7 @@ export default function AssetDetailPage() {
     { id: 'compliance', label: 'Compliance', icon: Cpu },
     { id: 'controls', label: 'Controls', icon: Shield },
     { id: 'evidence', label: 'Evidence', icon: FileCheck },
+    { id: 'assessments', label: 'Assessments', icon: ClipboardCheck },
     { id: 'vulnerabilities', label: 'Vulnerabilities', icon: Bug },
     { id: 'risks', label: 'Risks', icon: AlertTriangle },
     { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
@@ -776,6 +845,9 @@ export default function AssetDetailPage() {
             isUnlinkingInternal={unlinkInternalControlMutation.isPending}
             isUnlinkingFramework={unlinkFrameworkControlMutation.isPending}
           />
+        )}
+        {activeTab === 'assessments' && (
+          <AssetAssessments assetId={assetId} onOpen={(fmt) => router.push(`/assessments/${assetAssessmentFramework(fmt)}`)} />
         )}
         {activeTab === 'evidence' && (
           <EvidenceTab

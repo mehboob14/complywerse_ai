@@ -822,12 +822,16 @@ export default function PDPLAssessmentTab() {
         // No PDPL assessment yet → create one from the toolkit (PDPL template).
         fd.append('name', file.name.replace(/\.[^.]+$/, ''));
         fd.append('assessment_type', 'gap_assessment');
+        // Bind this upload button to its own template — the backend rejects any
+        // other workbook so the wrong Excel can't land on this tab.
+        fd.append('expected_format', PDPL_FORMAT);
         await apiClient.post('/compliance/assessments/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       }
       qc.invalidateQueries({ queryKey: ['pdpl-assessments'] });
       if (activeId) qc.invalidateQueries({ queryKey: ['pdpl-detail', activeId] });
-    } catch {
-      alert('Upload failed — make sure it is a Saudi PDPL Assessment Toolkit workbook.');
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      alert(detail || 'Upload failed — make sure it is a Saudi PDPL Assessment Toolkit workbook.');
     } finally {
       setReuploading(false);
       if (reuploadRef.current) reuploadRef.current.value = '';
@@ -980,7 +984,7 @@ export default function PDPLAssessmentTab() {
         {SUBTABS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setView(id)} className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition ${view === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
             <Icon className="h-3.5 w-3.5" /> {label}
-            {id === 'controls' && metrics.total > 0 && <span className={`ml-1 rounded-full px-1.5 text-[10px] font-bold ${view === id ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'}`}>{metrics.total}</span>}
+            {id === 'controls' && metrics.total > 0 && <span style={view === id ? { background: 'var(--color-base, #14b8a6)', color: '#fff' } : undefined} className={`ml-1 rounded-full px-1.5 text-[10px] font-bold ${view === id ? '' : 'bg-slate-200 text-slate-600'}`}>{metrics.total}</span>}
             {id === 'remediation' && metrics.gaps > 0 && <span className="ml-1 rounded-full bg-red-100 px-1.5 text-[10px] font-bold text-red-700">{metrics.gaps}</span>}
           </button>
         ))}

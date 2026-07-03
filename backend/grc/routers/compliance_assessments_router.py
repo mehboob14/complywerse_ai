@@ -693,6 +693,25 @@ def _normalized_header(value: object) -> str:
     return ''.join(ch.lower() for ch in str(value or "").strip() if ch.isalnum())
 
 
+# Friendly names for the workbook templates, used in upload/reupload guard
+# messages so a mismatch reads "This is a Mobile App Security assessment …".
+_FORMAT_LABELS = {
+    "asvs_checklist": "OWASP ASVS",
+    "mobile_app_security": "Mobile App Security (OWASP MASVS)",
+    "owasp_v4_testing_checklist": "OWASP Testing",
+    "pdpl_assessment_toolkit": "Saudi PDPL",
+    "nca_container": "NCA",
+    "digital_ops_maturity": "Digital Operations Maturity",
+    "ubl_audit_master_tracking": "Internal Audit",
+    "xlsx_maturity": "Maturity Model",
+    "standard": "generic / unrecognised",
+}
+
+
+def _format_label(fmt: str | None) -> str:
+    return _FORMAT_LABELS.get((fmt or "").strip(), (fmt or "unknown").replace("_", " ").title())
+
+
 def _status_from_asvs_valid(value: object) -> str:
     if value is None:
         return "in_progress"
@@ -818,7 +837,10 @@ def parse_asvs_checklist_workbook(wb) -> tuple[List[dict], dict]:
             status_val = _status_from_asvs_valid(valid_raw)
             items.append({
                 "item_number": control_id or str(len(items) + 1),
-                "area_domain": current_area or sheet_name,
+                # Group by ASVS category (the sheet) so the dashboard matches the
+                # "ASVS Results" summary; keep the finer "Area" as the subdomain.
+                "area_domain": sheet_name,
+                "subdomain_name": current_area if current_area and current_area != sheet_name else None,
                 "control_description": requirement,
                 "compliance_status": status_val,
                 "evidence_reference": source_ref or None,
@@ -836,6 +858,169 @@ def parse_asvs_checklist_workbook(wb) -> tuple[List[dict], dict]:
             "control_description",
             "compliance_status",
             "evidence_reference",
+            "remarks",
+            "priority",
+        ],
+    }
+    return items, metadata
+
+
+# --------------------------------------------------------------------------- #
+# OWASP MASVS – Mobile Application Security Checklist
+# Two platforms (Android + iOS), each with a "Security Requirements" sheet
+# (Level 1 / Level 2 columns) and an "Anti-RE" sheet (Resilience "R" column).
+# The natural scope dimension is the platform, so platform is tagged per item
+# and the dedicated dashboard toggles Android vs iOS.
+# --------------------------------------------------------------------------- #
+
+def _norm_mstg_id(value: object) -> str:
+    """MSTG-IDs use non-breaking / figure hyphens (U+2011, U+2010, en/em dash)
+    inconsistently; normalise them all to a plain ASCII hyphen."""
+    text = str(value or "").strip()
+    for ch in ("‐", "‑", "‒", "–", "—", "−"):
+        text = text.replace(ch, "-")
+    return text
+
+
+def _masvs_header_row(ws) -> tuple[int, list]:
+    """Locate the header row of a MASVS sheet (the row that carries 'MSTG-ID').
+    Returns (row_index_0based, normalized_headers) or (-1, [])."""
+    for i, row in enumerate(ws.iter_rows(min_row=1, max_row=8, values_only=True)):
+        norm = [_normalized_header(v) for v in row]
+        if "mstgid" in norm and "status" in norm:
+            return i, norm
+    return -1, []
+
+
+def detect_mobile_app_security_format(wb) -> bool:
+    names = wb.sheetnames
+    has_summary = any(n.strip().lower() == "management summary" for n in names)
+    has_req_sheet = any(n.strip().lower().startswith("security requirements") for n in names)
+    if not (has_summary and has_req_sheet):
+        return False
+    # Confirm the MASVS column shape on at least one requirements sheet.
+    for n in names:
+        if n.strip().lower().startswith("security requirements"):
+            idx, norm = _masvs_header_row(wb[n])
+            if idx >= 0 and ("level1" in norm or "level2" in norm):
+                return True
+    return False
+
+
+def parse_mobile_app_security_workbook(wb) -> tuple[List[dict], dict]:
+    items: List[dict] = []
+    parsed_sheets: List[str] = []
+    _LEGEND = {"legend", "symbol", "pass", "fail", "n/a", "na", "definition"}
+
+    for sheet_name in wb.sheetnames:
+        low = sheet_name.strip().lower()
+        is_security = low.startswith("security requirements")
+        is_antire = low.startswith("anti-re")
+        if not (is_security or is_antire):
+            continue
+
+        platform = "iOS" if "ios" in low else ("Android" if "android" in low else "General")
+        ws = wb[sheet_name]
+        header_idx, norm = _masvs_header_row(ws)
+        if header_idx < 0:
+            continue
+
+        def col(name: str) -> int:
+            return norm.index(name) if name in norm else -1
+
+        c_id = col("id")
+        c_mstg = col("mstgid")
+        c_req = col("detailedverificationrequirement")
+        if c_req < 0:
+            c_req = col("resiliencyagainstreverseengineeringrequirements")
+        c_l1 = col("level1")
+        c_l2 = col("level2")
+        c_r = col("r")
+        c_status = col("status")
+        c_test = col("testingprocedures")
+        if c_test < 0:
+            c_test = col("testingprocedure")
+        c_comment = col("comment")
+
+        parsed_sheets.append(sheet_name)
+        # Anti-RE sheets are all one MASVS category (V8 Resilience).
+        current_category = "V8: Resiliency Against Reverse Engineering" if is_antire else None
+        current_subgroup = None
+
+        def cell(row, idx):
+            return str(row[idx] or "").strip() if 0 <= idx < len(row) else ""
+
+        for row in ws.iter_rows(min_row=header_idx + 2, values_only=True):
+            if not row or not any(v not in (None, "") for v in row):
+                continue
+            id_val = cell(row, c_id)
+            mstg_val = _norm_mstg_id(cell(row, c_mstg))
+            req_val = cell(row, c_req)
+
+            if id_val.lower() in _LEGEND or req_val.lower() in _LEGEND:
+                break  # legend block sits below the data
+
+            # Category header (security sheets): "V1" ... "V7" with no MSTG-ID.
+            if id_val and id_val.upper().startswith("V") and not mstg_val:
+                current_category = f"{id_val}: {req_val}" if req_val else id_val
+                current_subgroup = None
+                continue
+            # Sub-group header (Anti-RE): no ID, no MSTG-ID, just a heading.
+            if not id_val and not mstg_val and req_val:
+                current_subgroup = req_val
+                continue
+            # Requirement row.
+            if not mstg_val or not req_val:
+                continue
+
+            has_l1 = cell(row, c_l1) not in ("", "0")
+            has_l2 = cell(row, c_l2) not in ("", "0")
+            has_r = cell(row, c_r) not in ("", "0")
+            levels = []
+            if has_l1:
+                levels.append("L1")
+            if has_l2:
+                levels.append("L2")
+            if has_r:
+                levels.append("R")
+
+            status_val = _status_from_asvs_valid(cell(row, c_status))
+            test_proc = cell(row, c_test)
+            comment_val = cell(row, c_comment)
+
+            remark_parts = [f"Platform: {platform}"]
+            if levels:
+                remark_parts.append("MASVS: " + ",".join(levels))
+            if mstg_val:
+                remark_parts.append(f"MSTG: {mstg_val}")
+            if test_proc and test_proc != "-":
+                remark_parts.append(f"Testing: {test_proc}")
+            if comment_val:
+                remark_parts.append(f"Ref: {comment_val}")
+
+            priority = "high" if has_l1 else ("medium" if has_l2 else "low")
+
+            items.append({
+                "item_number": f"{platform[:3].upper()}-{id_val}" if id_val else f"{platform[:3].upper()}-{len(items) + 1}",
+                "area_domain": current_category or "General",
+                "subdomain_name": current_subgroup,
+                "control_description": req_val,
+                "compliance_status": status_val,
+                "remarks": " | ".join(remark_parts),
+                "priority": priority,
+            })
+
+    metadata = {
+        "assessment_format": "mobile_app_security",
+        "detected_format": "mobile_app_security",
+        "sheets_parsed": parsed_sheets,
+        "platforms": sorted({("iOS" if "ios" in s.lower() else "Android") for s in parsed_sheets if ("ios" in s.lower() or "android" in s.lower())}),
+        "columns_detected": [
+            "item_number",
+            "area_domain",
+            "subdomain_name",
+            "control_description",
+            "compliance_status",
             "remarks",
             "priority",
         ],
@@ -2081,11 +2266,12 @@ async def upload_assessment(
     assessor: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     tenant_id: Optional[int] = Form(None),
+    expected_format: Optional[str] = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    logger.info(f"Assessment upload started: name={name}, file={file.filename}")
+    logger.info(f"Assessment upload started: name={name}, file={file.filename}, expected_format={expected_format}")
     file_path = None
     
     try:
@@ -2134,18 +2320,24 @@ async def upload_assessment(
         is_owasp_checklist = False
         is_ubl_audit_master = False
         is_pdpl = False
+        is_doma = False
+        is_mobile_app_security = False
         if lower_file_name.endswith(('.xlsx', '.xls')):
             _wb_check = None
             try:
                 _wb_check = openpyxl.load_workbook(io.BytesIO(file_content), read_only=True, data_only=True)
-                is_maturity_format = detect_xlsx_maturity_format(_wb_check)
-                if not is_maturity_format:
+                is_doma = detect_doma_format(_wb_check)
+                if not is_doma:
+                    is_maturity_format = detect_xlsx_maturity_format(_wb_check)
+                if not is_doma and not is_maturity_format:
                     is_pdpl = detect_pdpl_assessment_format(_wb_check)
-                if not is_maturity_format and not is_pdpl:
+                if not is_doma and not is_maturity_format and not is_pdpl:
                     is_ubl_audit_master = detect_ubl_audit_master_tracking_format(_wb_check)
-                if not is_maturity_format and not is_pdpl and not is_ubl_audit_master:
+                if not is_doma and not is_maturity_format and not is_pdpl and not is_ubl_audit_master:
+                    is_mobile_app_security = detect_mobile_app_security_format(_wb_check)
+                if not is_doma and not is_maturity_format and not is_pdpl and not is_ubl_audit_master and not is_mobile_app_security:
                     is_asvs_checklist = detect_asvs_checklist_format(_wb_check)
-                if not is_maturity_format and not is_pdpl and not is_asvs_checklist and not is_ubl_audit_master:
+                if not is_doma and not is_maturity_format and not is_pdpl and not is_asvs_checklist and not is_ubl_audit_master and not is_mobile_app_security:
                     is_owasp_checklist = detect_owasp_v4_checklist_format(_wb_check)
             except Exception:
                 pass
@@ -2155,6 +2347,31 @@ async def upload_assessment(
                         _wb_check.close()
                 except Exception:
                     pass
+
+        # Guard: when a dedicated tab (ASVS, Mobile App Security, PDPL, …) opens
+        # its own "Upload" button it passes expected_format. Reject a workbook
+        # that doesn't match that tab so the wrong Excel can't land there.
+        if expected_format and expected_format != "standard":
+            detected = (
+                "digital_ops_maturity" if is_doma else
+                "xlsx_maturity" if is_maturity_format else
+                "pdpl_assessment_toolkit" if is_pdpl else
+                "ubl_audit_master_tracking" if is_ubl_audit_master else
+                "mobile_app_security" if is_mobile_app_security else
+                "asvs_checklist" if is_asvs_checklist else
+                "owasp_v4_testing_checklist" if is_owasp_checklist else
+                "standard"
+            )
+            if detected != expected_format:
+                if file_path and os.path.exists(file_path):
+                    os.remove(file_path)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Please upload the {_format_label(expected_format)} workbook here. "
+                        f"The file you selected was recognised as {_format_label(detected)}."
+                    ),
+                )
 
         if is_maturity_format:
             logger.info("Detected XLSX Maturity Tool format – using maturity parser")
@@ -2251,7 +2468,10 @@ async def upload_assessment(
             }
         
         parser_metadata = {"assessment_format": "standard", "columns_detected": []}
-        if lower_file_name.endswith('.pdf'):
+        if is_doma:
+            logger.info("Detected Digital Operations Maturity (DOMA) format")
+            items_data, parser_metadata = parse_doma_workbook(file_content)
+        elif lower_file_name.endswith('.pdf'):
             logger.info("Detected PDF upload format")
             items_data, parser_metadata = parse_cis_windows_server_2012_r2_pdf(file_content, file.filename or "")
         elif is_pdpl:
@@ -2266,6 +2486,13 @@ async def upload_assessment(
             wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
             try:
                 items_data, parser_metadata = parse_ubl_audit_master_tracking_workbook(wb)
+            finally:
+                wb.close()
+        elif is_mobile_app_security:
+            logger.info("Detected OWASP MASVS Mobile App Security checklist format")
+            wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+            try:
+                items_data, parser_metadata = parse_mobile_app_security_workbook(wb)
             finally:
                 wb.close()
         elif is_asvs_checklist:
@@ -2347,9 +2574,10 @@ async def upload_assessment(
                 remarks=item_data.get("remarks"),
                 maturity_score=item_data.get("maturity_score"),
                 risk_rating=item_data.get("risk_rating"),
+                subdomain_name=item_data.get("subdomain_name"),
             )
             db.add(db_item)
-        
+
         db.flush()
         logger.info("Assessment items created, calculating stats...")
         
@@ -2406,24 +2634,103 @@ async def upload_assessment(
         )
 
 
+# ── Digital Operations Maturity (DOMA) ───────────────────────────────────────
+# A multi-module maturity questionnaire: 9 capability modules (sheets), each row
+# a Question grouped by a Capability, scored across 5 named maturity levels
+# (Basic → Emerging → Advanced → Differentiated → Best-in-Class). We map each
+# question to an assessment item: area_domain = module, subdomain_name =
+# capability, control_description = question, and preserve the 5 level
+# descriptions in `remarks` so nothing is lost. Assessors set maturity_score
+# 1-5 (= the chosen level). Vendor branding is intentionally not stored.
+_DOMA_MODULES = [
+    'Data Analytics & Prescriptive', 'Digital Ops Strategy', 'Digital PD & PLM',
+    'Integrated Planning', 'IT Architecture and Systems', 'Procurement 4.0',
+    'Smart Factory', 'Smart Logistics', 'Smart Warehousing',
+]
+_DOMA_LEVELS = ['Basic', 'Emerging', 'Advanced', 'Differentiated', 'Best In Class']
+
+
+def detect_doma_format(wb) -> bool:
+    try:
+        sheets = set(wb.sheetnames)
+    except Exception:
+        return False
+    return len(set(_DOMA_MODULES) & sheets) >= 4
+
+
+def parse_doma_workbook(file_content: bytes):
+    wb = openpyxl.load_workbook(io.BytesIO(file_content), read_only=True, data_only=True)
+    items = []
+    gseq = 0
+    try:
+        for name in _DOMA_MODULES:
+            if name not in wb.sheetnames:
+                continue
+            ws = wb[name]
+            it = ws.iter_rows(values_only=True)
+            hi = None
+            for row in it:
+                vals = [('' if x is None else str(x)).strip() for x in row]
+                if 'Question' in vals and 'Basic' in vals:
+                    hi = {v: i for i, v in enumerate(vals) if v}
+                    break
+            if not hi:
+                continue
+            qi = hi.get('Question'); capi = hi.get('Capability'); rapi = hi.get('Rapid DOMA')
+            empties = 0
+            for row in it:
+                vals = [('' if x is None else str(x)).strip() for x in row]
+                q = vals[qi] if (qi is not None and qi < len(vals)) else ''
+                if not q:
+                    empties += 1
+                    if empties > 40:
+                        break
+                    continue
+                empties = 0
+                gseq += 1
+                cap = vals[capi] if (capi is not None and capi < len(vals)) else ''
+                rubric = []
+                for lv in _DOMA_LEVELS:
+                    idx = hi.get(lv)
+                    if idx is not None and idx < len(vals) and vals[idx]:
+                        rubric.append(f"{lv}: {vals[idx]}")
+                rapid = bool(vals[rapi]) if (rapi is not None and rapi < len(vals) and vals[rapi]) else False
+                remarks = ("[Rapid DOMA] " if rapid else "") + "  ||  ".join(rubric)
+                items.append({
+                    "item_number": str(gseq),
+                    "area_domain": name,
+                    "subdomain_name": cap or None,
+                    "control_description": q,
+                    "compliance_status": "in_progress",
+                    "remarks": remarks or None,
+                })
+    finally:
+        wb.close()
+    return items, {"assessment_format": "digital_ops_maturity"}
+
+
 def _parse_assessment_file(file_content: bytes, filename: str):
     """Detect the workbook template and parse it into (items_data, format,
     xlsx_data) — the same detection/parsers used by /upload, reused by the
     re-upload endpoint so an updated workbook refreshes an existing assessment."""
     lower = (filename or "").lower()
-    is_maturity = is_pdpl = is_ubl = is_asvs = is_owasp = False
+    is_maturity = is_pdpl = is_ubl = is_asvs = is_owasp = is_doma = is_mobile = False
     if lower.endswith(('.xlsx', '.xls')):
         _wb = None
         try:
             _wb = openpyxl.load_workbook(io.BytesIO(file_content), read_only=True, data_only=True)
-            is_maturity = detect_xlsx_maturity_format(_wb)
-            if not is_maturity:
+            is_doma = detect_doma_format(_wb)
+            if not is_doma:
+                is_maturity = detect_xlsx_maturity_format(_wb)
+            if not (is_doma or is_maturity):
                 is_pdpl = detect_pdpl_assessment_format(_wb)
-            if not is_maturity and not is_pdpl:
+            if not (is_doma or is_maturity or is_pdpl):
                 is_ubl = detect_ubl_audit_master_tracking_format(_wb)
-            if not (is_maturity or is_pdpl or is_ubl):
+            if not (is_doma or is_maturity or is_pdpl or is_ubl):
+                is_mobile = detect_mobile_app_security_format(_wb)
+            if not (is_doma or is_maturity or is_pdpl or is_ubl or is_mobile):
                 is_asvs = detect_asvs_checklist_format(_wb)
-            if not (is_maturity or is_pdpl or is_ubl or is_asvs):
+            if not (is_doma or is_maturity or is_pdpl or is_ubl or is_asvs or is_mobile):
                 is_owasp = detect_owasp_v4_checklist_format(_wb)
         except Exception:
             pass
@@ -2433,6 +2740,10 @@ def _parse_assessment_file(file_content: bytes, filename: str):
                     _wb.close()
             except Exception:
                 pass
+
+    if is_doma:
+        items_data, meta = parse_doma_workbook(file_content)
+        return items_data, meta.get("assessment_format", "digital_ops_maturity"), None
 
     if is_maturity:
         xlsx_data = parse_xlsx_maturity_tool(file_content)
@@ -2469,6 +2780,13 @@ def _parse_assessment_file(file_content: bytes, filename: str):
         finally:
             wb.close()
         return items_data, meta.get("assessment_format", "ubl_audit_master_tracking"), None
+    if is_mobile:
+        wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+        try:
+            items_data, meta = parse_mobile_app_security_workbook(wb)
+        finally:
+            wb.close()
+        return items_data, meta.get("assessment_format", "mobile_app_security"), None
     if is_asvs:
         wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
         try:
@@ -2525,12 +2843,29 @@ async def reupload_assessment(
                 os.remove(file_path)
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid assessment items found in the file. Please check the column headers.")
 
+        # Guard: an assessment may only be refreshed with ITS OWN kind of
+        # workbook. Each dedicated tab (ASVS, Mobile App Security, PDPL, …) has
+        # its own upload button; this stops the wrong template overwriting a
+        # typed assessment. A "standard" assessment accepts any file.
+        current_fmt = (assessment.assessment_format or "").strip()
+        if current_fmt and current_fmt != "standard" and detected_format != current_fmt:
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"This is a {_format_label(current_fmt)} assessment — please upload the matching "
+                    f"{_format_label(current_fmt)} workbook. The file you uploaded was recognised as "
+                    f"{_format_label(detected_format)}."
+                ),
+            )
+
         existing = db.query(ComplianceAssessmentDocumentItem).filter(
             ComplianceAssessmentDocumentItem.assessment_id == assessment.id
         ).all()
         by_number = {(it.item_number or "").strip(): it for it in existing}
         FIELDS = [
-            "area_domain", "control_description", "compliance_status", "gaps_identified",
+            "area_domain", "subdomain_name", "control_description", "compliance_status", "gaps_identified",
             "proposed_solution", "responsible_party", "timeline", "priority",
             "evidence_reference", "remarks", "maturity_score", "risk_rating",
         ]
@@ -3697,6 +4032,48 @@ def list_all_points(
     return {"points": points}
 
 
+@router.get("/by-asset/{asset_id}")
+def assessments_for_asset(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Reverse view: every assessment scoped to this IT asset (i.e. whose
+    linked_asset_ids contains it), with a compact status/validity summary. Feeds
+    the 'Assessments' section on the asset detail page."""
+    user_tenants = get_user_tenants(current_user, db)
+    rows = db.query(ComplianceAssessmentDocument).filter(
+        ComplianceAssessmentDocument.tenant_id.in_(user_tenants)
+    ).all()
+    out = []
+    for a in rows:
+        ids = getattr(a, "linked_asset_ids", None) or []
+        try:
+            linked = int(asset_id) in [int(x) for x in ids]
+        except Exception:
+            linked = False
+        if not linked:
+            continue
+        total = a.total_items or 0
+        complied = a.complied_count or 0
+        na = a.na_count or 0
+        denom = max(1, total - na)
+        out.append({
+            "id": a.id,
+            "name": a.name,
+            "assessment_type": a.assessment_type,
+            "assessment_format": getattr(a, "assessment_format", "standard") or "standard",
+            "status": a.status,
+            "total_items": total,
+            "complied_count": complied,
+            "not_complied_count": a.not_complied_count or 0,
+            "in_progress_count": a.in_progress_count or 0,
+            "validity_pct": round((complied / denom) * 100),
+            "updated_at": a.updated_at.isoformat() if a.updated_at else None,
+        })
+    return {"asset_id": asset_id, "assessments": out}
+
+
 @router.get("/{assessment_id}")
 def get_assessment(
     assessment_id: int,
@@ -3757,6 +4134,7 @@ def get_assessment(
             "evidence_reference": item.evidence_reference,
             "remarks": item.remarks,
             "remediation_status": item.remediation_status,
+            "asset_status": getattr(item, "asset_status", None) or {},
             "ai_evidence_recommendation": item.ai_evidence_recommendation,
             "ai_recommendation_generated_at": item.ai_recommendation_generated_at.isoformat() if item.ai_recommendation_generated_at else None,
             "target_date": item.target_date.isoformat() if getattr(item, "target_date", None) else None,
@@ -3784,6 +4162,8 @@ def get_assessment(
         "in_progress_count": assessment.in_progress_count,
         "na_count": assessment.na_count,
         "notes": assessment.notes,
+        "linked_asset_ids": getattr(assessment, "linked_asset_ids", None) or [],
+        "asset_levels": getattr(assessment, "asset_levels", None) or {},
         "created_at": assessment.created_at.isoformat(),
         "updated_at": assessment.updated_at.isoformat() if assessment.updated_at else None,
         "items": [
@@ -3804,6 +4184,7 @@ def get_assessment(
                 "evidence_reference": item.evidence_reference,
                 "remarks": item.remarks,
                 "remediation_status": item.remediation_status,
+                "asset_status": getattr(item, "asset_status", None) or {},
                 "ai_evidence_recommendation": item.ai_evidence_recommendation,
                 "ai_recommendation_generated_at": item.ai_recommendation_generated_at.isoformat() if item.ai_recommendation_generated_at else None,
                 "target_date": item.target_date.isoformat() if getattr(item, "target_date", None) else None,
@@ -3815,6 +4196,60 @@ def get_assessment(
         ],
         "items_by_domain": items_by_domain
     }
+
+
+class _AssetScopeRequest(BaseModel):
+    asset_ids: List[int] = []
+
+
+class _AssetLevelRequest(BaseModel):
+    asset_id: int
+    level: int
+
+
+@router.put("/{assessment_id}/asset-level")
+def set_assessment_asset_level(
+    assessment_id: int,
+    payload: _AssetLevelRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Set the target ASVS level for one in-scope asset (user override)."""
+    user_tenants = get_user_tenants(current_user, db)
+    assessment = db.query(ComplianceAssessmentDocument).filter(
+        ComplianceAssessmentDocument.id == assessment_id,
+        ComplianceAssessmentDocument.tenant_id.in_(user_tenants),
+    ).first()
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
+    lvl = payload.level if payload.level in (1, 2, 3) else 1
+    levels = dict(getattr(assessment, "asset_levels", None) or {})
+    levels[str(payload.asset_id)] = lvl
+    assessment.asset_levels = levels
+    assessment.updated_at = datetime.utcnow()
+    db.commit()
+    return {"asset_levels": assessment.asset_levels}
+
+
+@router.put("/{assessment_id}/assets")
+def set_assessment_assets(
+    assessment_id: int,
+    payload: _AssetScopeRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Set the IT Assets an assessment is scoped to (the app(s) it verifies)."""
+    user_tenants = get_user_tenants(current_user, db)
+    assessment = db.query(ComplianceAssessmentDocument).filter(
+        ComplianceAssessmentDocument.id == assessment_id,
+        ComplianceAssessmentDocument.tenant_id.in_(user_tenants),
+    ).first()
+    if not assessment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
+    assessment.linked_asset_ids = [int(a) for a in (payload.asset_ids or [])]
+    assessment.updated_at = datetime.utcnow()
+    db.commit()
+    return {"linked_asset_ids": assessment.linked_asset_ids}
 
 
 @router.put("/{assessment_id}")
@@ -3895,6 +4330,7 @@ def update_assessment_item(
     risk_rating: Optional[str] = None,
     remediation_status: Optional[str] = None,
     target_date: Optional[str] = None,
+    asset_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -3912,7 +4348,15 @@ def update_assessment_item(
         )
     
     if compliance_status is not None:
-        item.compliance_status = normalize_status(compliance_status)
+        if asset_id is not None:
+            # Per-asset verification: write into asset_status[asset_id], leave the
+            # global compliance_status untouched. Reassign the dict so SQLAlchemy
+            # sees the JSON mutation.
+            statuses = dict(getattr(item, "asset_status", None) or {})
+            statuses[str(asset_id)] = normalize_status(compliance_status)
+            item.asset_status = statuses
+        else:
+            item.compliance_status = normalize_status(compliance_status)
     if control_description is not None:
         item.control_description = control_description
     if remediation_status is not None:

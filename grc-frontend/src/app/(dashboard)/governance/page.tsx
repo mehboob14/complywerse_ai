@@ -524,11 +524,91 @@ export default function GovernanceDashboardPage() {
     },
   });
 
-  const { data: complianceCoverage, isLoading: complianceLoading } = useQuery({
-    queryKey: ['governance-compliance-coverage'],
+  const { data: docsOverview, isLoading: docsOverviewLoading } = useQuery({
+    queryKey: ['governance-documents-overview'],
     queryFn: async () => {
-      const response = await governanceApi.getComplianceCoverage();
-      return response.data;
+      try {
+        const response = await governanceApi.getDocumentsOverview();
+        return response.data as {
+          as_of: string;
+          documents: {
+            total: number;
+            active: number;
+            published: number;
+            publishing_rate_percent: number;
+            by_status: Record<string, number>;
+            by_type: Record<string, number>;
+            by_classification: Record<string, number>;
+          };
+          mappings: {
+            controls: { links: number; documents: number };
+            risks: { links: number; documents: number };
+            frameworks: { links: number; documents: number };
+            assets: { links: number; documents: number };
+            documents_mapped: number;
+            coverage_percent: number;
+          };
+          approvals: {
+            pending_steps: number;
+            overdue_steps: number;
+            documents_awaiting: number;
+            approved_90d: number;
+            rejected_90d: number;
+            approval_rate_percent: number | null;
+            avg_decision_days: number | null;
+            health_percent: number;
+          };
+          reviews: {
+            scheduled_documents: number;
+            overdue: number;
+            due_30d: number;
+            due_60d: number;
+            due_90d: number;
+            completed_365d: number;
+            on_time_rate_percent: number | null;
+            health_percent: number;
+          };
+          exceptions: {
+            total: number;
+            pending_approval: number;
+            active: number;
+            expiring_30d: number;
+            expired: number;
+            attention: number;
+            health_percent: number;
+          };
+          freshness: {
+            published: number;
+            stale: number;
+            expiring_documents_30d: number;
+            percent: number;
+          };
+          attention_queue: {
+            documents_awaiting_approval: number;
+            overdue_reviews: number;
+            expiring_documents_30d: number;
+            exceptions_attention: number;
+            open_gaps: number;
+            total: number;
+          };
+          performance: {
+            score: number | null;
+            grade: string | null;
+            components: Array<{
+              key: string;
+              label: string;
+              score: number | null;
+              weight: number;
+              target: number;
+              numerator: number;
+              denominator: number;
+              formula: string;
+            }>;
+          };
+        };
+      } catch {
+        return null;
+      }
     },
   });
 
@@ -669,7 +749,7 @@ export default function GovernanceDashboardPage() {
     overdueLoading ||
     recentLoading ||
     reviewStatsLoading ||
-    complianceLoading ||
+    docsOverviewLoading ||
     trendsLoading ||
     exceptionLoading ||
     workflowStatsLoading ||
@@ -707,7 +787,7 @@ export default function GovernanceDashboardPage() {
   const expiringCount = expiringSoon?.by_timeframe?.['30_days'] || 0;
   const overdueCount = overdueReviews?.count || 0;
   const reviewsDueThisMonth = reviewStats?.due_this_month || 0;
-  const complianceRate = complianceCoverage?.overall_coverage_percent || 0;
+  const complianceRate = docsOverview?.mappings?.coverage_percent ?? 0;
 
   const mainKpis = [
     {
@@ -744,23 +824,33 @@ export default function GovernanceDashboardPage() {
     },
   ];
 
-  const publishedPct = totalDocuments > 0 ? Math.round((publishedCount / totalDocuments) * 100) : 0;
-  const reviewLoadPct = totalDocuments > 0 ? Math.round((reviewsDueThisMonth / totalDocuments) * 100) : 0;
-  const exceptionTotal = exceptionSummary?.total || 0;
-  const exceptionAttentionCount = (exceptionSummary?.pending_approval || 0) + (exceptionSummary?.expiring_soon || 0);
-  const exceptionAttentionPct = exceptionTotal > 0 ? Math.round((exceptionAttentionCount / exceptionTotal) * 100) : 0;
-  const reviewHealthScore = reviewsDueThisMonth > 0 ? Math.max(0, 100 - Math.round((overdueCount / reviewsDueThisMonth) * 100)) : overdueCount > 0 ? 0 : 100;
-  const approvalHealthScore = totalDocuments > 0 ? Math.max(0, 100 - Math.round((pendingCount / totalDocuments) * 100)) : 100;
-  const freshnessScore = totalDocuments > 0 ? Math.max(0, 100 - Math.round((expiringCount / totalDocuments) * 100)) : 100;
+  // Scores, targets, and weights are computed server-side by
+  // /governance/dashboard/documents-overview (each with numerator,
+  // denominator, and formula). Client fallbacks only cover endpoint failure.
+  const perfComponents = docsOverview?.performance?.components || [];
+  const publishedPct = Math.round(
+    docsOverview?.documents?.publishing_rate_percent ??
+    (totalDocuments > 0 ? (publishedCount / totalDocuments) * 100 : 0)
+  );
+  const exceptionTotal = docsOverview?.exceptions?.total ?? exceptionSummary?.total ?? 0;
+  const exceptionAttentionCount =
+    docsOverview?.exceptions?.attention ??
+    ((exceptionSummary?.pending_approval || 0) + (exceptionSummary?.expiring_soon || 0));
+  const reviewHealthScore = Math.round(docsOverview?.reviews?.health_percent ?? 100);
+  const approvalHealthScore = Math.round(docsOverview?.approvals?.health_percent ?? 100);
+  const freshnessScore = Math.round(docsOverview?.freshness?.percent ?? 100);
+  const exceptionHealthScore = Math.round(docsOverview?.exceptions?.health_percent ?? 100);
 
-  const healthRadarData = [
-    { metric: 'Publishing', score: publishedPct, target: 85 },
-    { metric: 'Coverage', score: Math.round(complianceRate), target: 85 },
-    { metric: 'Reviews', score: reviewHealthScore, target: 85 },
-    { metric: 'Approvals', score: approvalHealthScore, target: 85 },
-    { metric: 'Freshness', score: freshnessScore, target: 85 },
-    { metric: 'Exceptions', score: exceptionTotal > 0 ? Math.max(0, 100 - exceptionAttentionPct) : 100, target: 85 },
-  ];
+  const healthRadarData = perfComponents.length > 0
+    ? perfComponents.map((c) => ({ metric: c.label, score: Math.round(c.score ?? 0), target: c.target }))
+    : [
+        { metric: 'Publishing', score: publishedPct, target: 85 },
+        { metric: 'Coverage', score: Math.round(complianceRate), target: 85 },
+        { metric: 'Reviews', score: reviewHealthScore, target: 85 },
+        { metric: 'Approvals', score: approvalHealthScore, target: 85 },
+        { metric: 'Freshness', score: freshnessScore, target: 85 },
+        { metric: 'Exceptions', score: exceptionHealthScore, target: 85 },
+      ];
 
   const exceptionChartData = [
     { label: 'Pending Approval', value: exceptionSummary?.pending_approval || 0, color: '#f59e0b' },
@@ -790,11 +880,13 @@ export default function GovernanceDashboardPage() {
     { label: 'Expired', value: byStatus['expired'] || 0, color: STATUS_COLORS.expired },
   ];
 
+  const attentionQueue = docsOverview?.attention_queue;
   const attentionChartData = [
-    { label: 'Pending', value: pendingCount, color: '#f59e0b' },
-    { label: 'Overdue', value: overdueCount, color: '#ef4444' },
-    { label: 'Expiring', value: expiringCount, color: '#f97316' },
-    { label: 'Exceptions', value: exceptionAttentionCount, color: '#8b5cf6' },
+    { label: 'Approvals', value: attentionQueue?.documents_awaiting_approval ?? pendingCount, color: '#f59e0b' },
+    { label: 'Overdue', value: attentionQueue?.overdue_reviews ?? overdueCount, color: '#ef4444' },
+    { label: 'Expiring', value: attentionQueue?.expiring_documents_30d ?? expiringCount, color: '#f97316' },
+    { label: 'Exceptions', value: attentionQueue?.exceptions_attention ?? exceptionAttentionCount, color: '#8b5cf6' },
+    { label: 'Open Gaps', value: attentionQueue?.open_gaps ?? 0, color: '#64748b' },
   ];
 
   const trendData = (trends?.created || []).map((item: { month: string; count: number }, idx: number) => ({
@@ -803,8 +895,8 @@ export default function GovernanceDashboardPage() {
     published: trends?.published?.[idx]?.count || 0,
   }));
 
-  const createdTotal = trendData.reduce((sum, item) => sum + item.created, 0);
-  const publishedTotalInPeriod = trendData.reduce((sum, item) => sum + item.published, 0);
+  const createdTotal = trendData.reduce((sum: number, item: { created: number }) => sum + item.created, 0);
+  const publishedTotalInPeriod = trendData.reduce((sum: number, item: { published: number }) => sum + item.published, 0);
   const publishRate = createdTotal > 0 ? Math.round((publishedTotalInPeriod / createdTotal) * 100) : 0;
 
   const workflowPendingAll = workflowDashboard?.pending_all || pendingCount;
@@ -821,17 +913,19 @@ export default function GovernanceDashboardPage() {
   const attestationOverdue = attestationDashboard?.overdue_attestations || 0;
   const openGapsTotal = openGapsSummary?.total_open_gaps || 0;
 
-  const governanceHealthScore = Math.round(
-    publishedPct * 0.22 +
-    Math.round(complianceRate) * 0.24 +
-    reviewHealthScore * 0.18 +
-    approvalHealthScore * 0.14 +
-    attestationCompletion * 0.12 +
-    (exceptionTotal > 0 ? Math.max(0, 100 - exceptionAttentionPct) : 100) * 0.05 +
-    (regulatoryChanges > 0
-      ? Math.max(0, 100 - Math.round(((regulatoryPendingAssessments + regulatoryGaps) / Math.max(1, regulatoryChanges)) * 100))
-      : 100) * 0.05
-  );
+  const governanceHealthScore = Math.round(docsOverview?.performance?.score ?? 0);
+  const governanceHealthGrade = docsOverview?.performance?.grade ?? null;
+
+  const mappingStats = docsOverview?.mappings;
+  const linkageItems = [
+    { label: 'Controls', value: mappingStats?.controls?.documents ?? 0, color: '#2563eb', meta: `${mappingStats?.controls?.links ?? 0} links` },
+    { label: 'Risks', value: mappingStats?.risks?.documents ?? 0, color: '#ef4444', meta: `${mappingStats?.risks?.links ?? 0} links` },
+    { label: 'Frameworks', value: mappingStats?.frameworks?.documents ?? 0, color: '#8b5cf6', meta: `${mappingStats?.frameworks?.links ?? 0} links` },
+    { label: 'Assets', value: mappingStats?.assets?.documents ?? 0, color: '#0ea5e9', meta: `${mappingStats?.assets?.links ?? 0} links` },
+  ];
+
+  const approvalStats = docsOverview?.approvals;
+  const reviewStatsOverview = docsOverview?.reviews;
 
   const lifecycleItems = [
     { label: 'Published', value: byStatus['published'] || 0, color: '#10b981', meta: 'live' },
@@ -986,6 +1080,69 @@ export default function GovernanceDashboardPage() {
         </div>
       </div>
 
+      <div className="grid gap-3 xl:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">Document Linkage</h2>
+              <p className="text-[11px] text-slate-500">
+                {mappingStats?.documents_mapped ?? 0}/{docsOverview?.documents?.active ?? 0} active documents mapped ({Math.round(complianceRate)}%)
+              </p>
+            </div>
+            <Layers className="h-4 w-4 text-blue-600" />
+          </div>
+          <LollipopChart items={linkageItems} />
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">Workflow Performance</h2>
+              <p className="text-[11px] text-slate-500">Approval decisions and review throughput</p>
+            </div>
+            <Clock className="h-4 w-4 text-emerald-600" />
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-center">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Avg Approval Time</p>
+              <p className="text-sm font-semibold text-slate-900">
+                {approvalStats?.avg_decision_days != null ? `${approvalStats.avg_decision_days}d` : '—'}
+              </p>
+              <p className="text-[10px] text-slate-400">last 90 days</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-center">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Approval Rate</p>
+              <p className="text-sm font-semibold text-emerald-600">
+                {approvalStats?.approval_rate_percent != null ? `${approvalStats.approval_rate_percent}%` : '—'}
+              </p>
+              <p className="text-[10px] text-slate-400">{approvalStats?.approved_90d ?? 0} approved · {approvalStats?.rejected_90d ?? 0} rejected</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-center">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Pending Steps</p>
+              <p className="text-sm font-semibold text-amber-600">{approvalStats?.pending_steps ?? 0}</p>
+              <p className="text-[10px] text-slate-400">{approvalStats?.overdue_steps ?? 0} overdue</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-center">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">On-Time Reviews</p>
+              <p className="text-sm font-semibold text-slate-900">
+                {reviewStatsOverview?.on_time_rate_percent != null ? `${reviewStatsOverview.on_time_rate_percent}%` : '—'}
+              </p>
+              <p className="text-[10px] text-slate-400">last 12 months</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-center">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Reviews Due 30d</p>
+              <p className="text-sm font-semibold text-blue-600">{reviewStatsOverview?.due_30d ?? 0}</p>
+              <p className="text-[10px] text-slate-400">{reviewStatsOverview?.overdue ?? 0} overdue</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-center">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Reviews Done</p>
+              <p className="text-sm font-semibold text-slate-900">{reviewStatsOverview?.completed_365d ?? 0}</p>
+              <p className="text-[10px] text-slate-400">last 12 months</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="rounded-xl border border-slate-200 bg-white p-3">
           <div className="mb-2 flex items-center justify-between">
@@ -1010,7 +1167,7 @@ export default function GovernanceDashboardPage() {
             <MiniMetricRing label="Live docs" percent={publishedPct} valueLabel={`${publishedCount}`} color="#10b981" subtitle="published" />
             <MiniMetricRing label="Coverage" percent={Math.round(complianceRate)} valueLabel={`${Math.round(complianceRate)}%`} color="#2563eb" subtitle="mapped" />
             <MiniMetricRing label="Attestations" percent={Math.round(attestationCompletion)} valueLabel={`${attestationPending}`} color="#0ea5e9" subtitle="pending" />
-            <MiniMetricRing label="Health" percent={governanceHealthScore} valueLabel={`${openGapsTotal}`} color="#8b5cf6" subtitle="open gaps" />
+            <MiniMetricRing label="Health" percent={governanceHealthScore} valueLabel={`${governanceHealthScore}`} color="#8b5cf6" subtitle={governanceHealthGrade ?? `${openGapsTotal} open gaps`} />
           </div>
         </div>
       </div>

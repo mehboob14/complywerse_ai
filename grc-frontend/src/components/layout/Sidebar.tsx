@@ -58,7 +58,7 @@ interface NavItem {
 interface NavGroup {
   name: string;
   icon?: LucideIcon;
-  items: NavItem[];
+  items: NavEntry[];   // may contain nested groups (folder → sub-dropdown)
   defaultOpen?: boolean;
   requiredModules?: string[];
   adminOnly?: boolean;
@@ -132,17 +132,55 @@ const navigation: NavEntry[] = [
       { name: 'Frameworks', href: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Controls', href: '/controls', icon: Shield, requiredPermissions: ['controls:control_library:*'] },
       // { name: 'Evidence Requirements', href: '/evidence-requirements', icon: ClipboardList, requiredPermissions: ['evidence:evidence_requirements:*'] },
-      { name: 'Assessments', href: '/compliance/assessments', icon: ClipboardCheck, requiredPermissions: ['compliance:assessments:*'] },
+      // Assessments lifted out into its own top-level section (below Compliance).
       { name: 'Evidence', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
       { name: 'Control Library', href: '/control-library', icon: Library, requiredPermissions: ['controls:control_library:*'] },
     ],
   },
   {
+    name: 'Assessments',
+    icon: ClipboardCheck,
+    requiredModules: ['compliance'],
+    items: [
+      { name: 'Overview', href: '/assessments', icon: LayoutDashboard, requiredPermissions: ['compliance:assessments:*'] },
+      // "cyber security" folder → nested dropdown holding its templates.
+      {
+        name: 'Cyber Security',
+        icon: ShieldAlert,
+        items: [
+          { name: 'OWASP ASVS', href: '/assessments/asvs', icon: Shield, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'OWASP Testing', href: '/assessments/owasp_testing', icon: Bug, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'Mobile App Security', href: '/assessments/cs_mobile', icon: Shield, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'CSIR Maturity', href: '/assessments/cs_csir', icon: BarChart3, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'CTI Maturity', href: '/assessments/cs_cti', icon: BarChart3, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'Incident Management', href: '/assessments/cs_incident', icon: AlertTriangle, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'IT Security Operations', href: '/assessments/cs_itsecops', icon: Activity, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'KPI Report', href: '/assessments/cs_kpi', icon: BarChart3, requiredPermissions: ['compliance:assessments:*'] },
+        ],
+      },
+      // "NCA" folder → nested dropdown holding its templates.
+      {
+        name: 'NCA',
+        icon: ShieldCheck,
+        items: [
+          { name: 'DCC Assessment', href: '/assessments/nca', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'Vulnerability Register', href: '/assessments/nca_vuln', icon: Bug, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'Audit Plan', href: '/assessments/nca_audit', icon: ClipboardList, requiredPermissions: ['compliance:assessments:*'] },
+          { name: 'Risk Management', href: '/assessments/nca_risk', icon: AlertTriangle, requiredPermissions: ['compliance:assessments:*'] },
+        ],
+      },
+      { name: 'Digital Operations Maturity', href: '/assessments/digital_ops_maturity', icon: Target, requiredPermissions: ['compliance:assessments:*'] },
+      { name: 'DPIA / PIA', href: '/assessments/dpia', icon: ClipboardList, requiredPermissions: ['compliance:assessments:*'] },
+    ],
+  },
+  {
     name: 'Auditor Portal',
-    href: '/auditor-portal',
     icon: Gavel,
     requiredModules: ['frameworks', 'compliance'],
-    requiredPermissions: ['compliance:frameworks:*'],
+    items: [
+      { name: 'Portal', href: '/auditor-portal', icon: Gavel, requiredPermissions: ['compliance:frameworks:*'] },
+      { name: 'Internal Audit', href: '/auditor-portal/internal-audit', icon: ClipboardCheck, requiredPermissions: ['compliance:assessments:*'] },
+    ],
   },
   // IT ASSETS collapsible group — Inventory + the consolidated
   // "Compliance & Scans" entry (which mounts Compliance Overview /
@@ -196,6 +234,70 @@ function isGroup(item: NavEntry): item is NavGroup {
   return 'items' in item;
 }
 
+// Nested-nav helpers: a group may contain sub-groups (folder → sub-dropdown).
+function leafHrefs(entries: NavEntry[]): string[] {
+  const out: string[] = [];
+  for (const e of entries) { if (isGroup(e)) out.push(...leafHrefs(e.items)); else out.push(e.href); }
+  return out;
+}
+function bestActiveHref(pathname: string, hrefs: string[]): string | undefined {
+  return hrefs
+    .filter((h) => pathname === h || (h !== '/dashboard' && pathname.startsWith(h + '/')))
+    .sort((a, b) => b.length - a.length)[0];
+}
+function flattenLeaves(entries: NavEntry[]): NavItem[] {
+  const out: NavItem[] = [];
+  for (const e of entries) { if (isGroup(e)) out.push(...flattenLeaves(e.items)); else out.push(e); }
+  return out;
+}
+
+// A nested collapsible (Assessments → Cyber Security → templates). Indented one
+// level under its parent group; auto-opens when a descendant route is active.
+function NavSubGroup({ group, activeHref }: { group: NavGroup; activeHref?: string }) {
+  const hrefs = leafHrefs(group.items);
+  const hasActive = activeHref ? hrefs.includes(activeHref) : false;
+  const [open, setOpen] = useState(hasActive);
+  const Icon = group.icon;
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={clsx(
+          'group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
+          hasActive ? 'font-medium text-[var(--color-text)]' : 'font-normal text-[var(--sidebar-text-subitem)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
+        )}
+      >
+        {Icon && <Icon size={16} strokeWidth={1.75} className={clsx('flex-shrink-0', hasActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')} />}
+        <span className="flex-1 truncate text-left">{group.name}</span>
+        <ChevronDown size={13} className={clsx('flex-shrink-0 text-[var(--sidebar-icon)] transition-transform duration-200', !open && '-rotate-90')} />
+      </button>
+      <div className={clsx('grid transition-[grid-template-rows] duration-300 ease-out', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
+        <div className="overflow-hidden">
+          <div className="ml-3 mt-0.5 space-y-px border-l border-[var(--sidebar-hover-bg)] pl-2.5">
+            {(group.items as NavItem[]).map((item) => {
+              const childActive = activeHref === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  tabIndex={open ? 0 : -1}
+                  className={clsx(
+                    'group flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors',
+                    childActive ? 'bg-[var(--sidebar-active-bg)] font-medium text-[var(--color-text)]' : 'font-normal text-[var(--sidebar-text-subitem)] hover:bg-[var(--sidebar-hover-bg)] hover:text-[var(--color-text)]'
+                  )}
+                >
+                  <item.icon size={15} strokeWidth={1.75} className={clsx('flex-shrink-0', childActive ? 'text-[var(--color-base)]' : 'text-[var(--sidebar-icon)]')} />
+                  <span className="truncate">{item.name}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean }) {
   const pathname = usePathname();
   const isActive = pathname === item.href ||
@@ -227,10 +329,7 @@ function NavItemLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
 
 function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boolean }) {
   const pathname = usePathname();
-  const activeChild = group.items
-    .filter((item) => pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/')))
-    .sort((a, b) => b.href.length - a.href.length)[0];
-  const activeChildHref = activeChild?.href;
+  const activeChildHref = bestActiveHref(pathname, leafHrefs(group.items));
   const hasActiveChild = Boolean(activeChildHref);
   // Closed by default — only auto-open the section whose page is currently
   // active (so a deep-link still reveals its context) or one explicitly marked
@@ -259,7 +358,7 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
             <div className="px-2.5 py-1.5 text-[11px] font-semibold text-[var(--color-text)]">
               {group.name}
             </div>
-            {group.items.map(item => (
+            {flattenLeaves(group.items).map(item => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -317,6 +416,9 @@ function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boo
         <div className="overflow-hidden">
           <div className="mt-0.5 ml-[1.6rem] space-y-px border-l border-[var(--sidebar-hover-bg)] pl-2.5">
             {group.items.map((item, idx) => {
+              if (isGroup(item)) {
+                return <NavSubGroup key={item.name} group={item} activeHref={activeChildHref} />;
+              }
               const childActive = activeChildHref === item.href;
               return (
                 <Link
@@ -577,25 +679,21 @@ export default function Sidebar() {
     return hasPermission(item.requiredPermissions);
   };
 
-  const filteredNavigation: NavEntry[] = loaded
-    ? navigation.reduce<NavEntry[]>((acc, item) => {
-        if (isGroup(item)) {
-          if (item.adminOnly && !isAdmin) return acc;
-          if (!hasModuleAccess(item.requiredModules)) return acc;
-
-          const filteredItems = item.items.filter((child) => canAccessItem(child));
-          if (filteredItems.length === 0) return acc;
-
-          acc.push({ ...item, items: filteredItems });
-          return acc;
-        }
-
-        if (canAccessItem(item)) {
-          acc.push(item);
-        }
+  // Recursive: groups may now contain nested groups (folder → sub-dropdown).
+  const filterEntries = (entries: NavEntry[]): NavEntry[] =>
+    entries.reduce<NavEntry[]>((acc, item) => {
+      if (isGroup(item)) {
+        if (item.adminOnly && !isAdmin) return acc;
+        if (!hasModuleAccess(item.requiredModules)) return acc;
+        const kids = filterEntries(item.items);
+        if (kids.length === 0) return acc;
+        acc.push({ ...item, items: kids });
         return acc;
-      }, [])
-    : [];
+      }
+      if (canAccessItem(item)) acc.push(item);
+      return acc;
+    }, []);
+  const filteredNavigation: NavEntry[] = loaded ? filterEntries(navigation) : [];
 
   return (
     <aside

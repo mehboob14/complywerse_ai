@@ -675,6 +675,276 @@ def get_accepted_risks(
     }
 
 
+@router.get("/documents-overview")
+def get_documents_overview(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Single source of truth for the Documents dashboard.
+
+    Every ratio is returned with its numerator, denominator, and formula
+    string so the UI renders backend-computed numbers instead of inventing
+    math client-side. Sections: documents (portfolio), mappings (linkage),
+    approvals, reviews, exceptions, freshness, attention_queue, performance.
+    """
+    from ....models import (
+        DocumentRiskLink, DocumentAssetLink, PolicyException,
+        PolicyReviewHistory, PolicyGapFinding
+    )
+
+    user_tenants = get_user_tenants(current_user, db)
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        scoped = [tenant_id]
+    else:
+        scoped = user_tenants
+
+    now = datetime.utcnow()
+
+    if not scoped:
+        return {"as_of": now.isoformat(), "documents": {"total": 0}, "performance": {"score": None, "components": []}}
+
+    docs = db.query(
+        GovernanceDocument.id, GovernanceDocument.status, GovernanceDocument.doc_type,
+        GovernanceDocument.classification, GovernanceDocument.next_review_date,
+        GovernanceDocument.expiry_date, GovernanceDocument.framework_ids
+    ).filter(GovernanceDocument.tenant_id.in_(scoped)).all()
+
+    # ---- portfolio -------------------------------------------------------
+    by_status, by_type, by_classification = {}, {}, {}
+    for d in docs:
+        by_status[d.status or "draft"] = by_status.get(d.status or "draft", 0) + 1
+        by_type[d.doc_type or "other"] = by_type.get(d.doc_type or "other", 0) + 1
+        by_classification[d.classification or "internal"] = by_classification.get(d.classification or "internal", 0) + 1
+
+    total_docs = len(docs)
+    active_docs = [d for d in docs if (d.status or "draft") != "archived"]
+    active_count = len(active_docs)
+    active_ids = {d.id for d in active_docs}
+    published_docs = [d for d in docs if d.status == "published"]
+    published_count = len(published_docs)
+    publishing_rate = round((published_count / active_count) * 100, 1) if active_count else 0.0
+
+    # ---- mappings / linkage ---------------------------------------------
+    def link_stats(model):
+        rows = db.query(model.document_id).join(
+            GovernanceDocument, model.document_id == GovernanceDocument.id
+        ).filter(GovernanceDocument.tenant_id.in_(scoped)).all()
+        ids = [r.document_id for r in rows]
+        return len(ids), set(ids)
+
+    control_links, control_doc_ids = link_stats(DocumentControlLink)
+    risk_links, risk_doc_ids = link_stats(DocumentRiskLink)
+    framework_links, framework_doc_ids = link_stats(DocumentRegulatoryLink)
+    asset_links, asset_doc_ids = link_stats(DocumentAssetLink)
+
+    fw_ids_doc_ids = {d.id for d in docs if d.framework_ids and len(d.framework_ids) > 0}
+    framework_doc_ids = framework_doc_ids | fw_ids_doc_ids
+
+    any_link_ids = (control_doc_ids | risk_doc_ids | framework_doc_ids | asset_doc_ids) & active_ids
+    mapped_count = len(any_link_ids)
+    mapping_coverage = round((mapped_count / active_count) * 100, 1) if active_count else 0.0
+
+    # ---- approvals -------------------------------------------------------
+    steps = db.query(
+        DocumentApprovalStep.status, DocumentApprovalStep.due_date,
+        DocumentApprovalStep.requested_at, DocumentApprovalStep.completed_at,
+        DocumentApprovalStep.document_id
+    ).join(
+        GovernanceDocument, DocumentApprovalStep.document_id == GovernanceDocument.id
+    ).filter(GovernanceDocument.tenant_id.in_(scoped)).all()
+
+    pending_steps = [s for s in steps if s.status == "pending"]
+    overdue_steps = [s for s in pending_steps if s.due_date and s.due_date < now]
+    docs_awaiting_approval = len({s.document_id for s in pending_steps})
+
+    window_90 = now - timedelta(days=90)
+    decided_90 = [s for s in steps if s.status in ("approved", "rejected") and s.completed_at and s.completed_at >= window_90]
+    approved_90 = sum(1 for s in decided_90 if s.status == "approved")
+    rejected_90 = sum(1 for s in decided_90 if s.status == "rejected")
+    approval_rate = round((approved_90 / len(decided_90)) * 100, 1) if decided_90 else None
+
+    cycle_days = [
+        (s.completed_at - s.requested_at).total_seconds() / 86400
+        for s in decided_90 if s.requested_at and s.completed_at >= s.requested_at
+    ]
+    avg_decision_days = round(sum(cycle_days) / len(cycle_days), 1) if cycle_days else None
+
+    approval_health = round((1 - len(overdue_steps) / len(pending_steps)) * 100, 1) if pending_steps else 100.0
+
+    # ---- reviews ---------------------------------------------------------
+    review_universe = [d for d in docs if d.status in ("approved", "published") and d.next_review_date]
+    overdue_reviews = sum(1 for d in review_universe if d.next_review_date < now)
+    due_30 = sum(1 for d in review_universe if now <= d.next_review_date <= now + timedelta(days=30))
+    due_60 = sum(1 for d in review_universe if now <= d.next_review_date <= now + timedelta(days=60))
+    due_90 = sum(1 for d in review_universe if now <= d.next_review_date <= now + timedelta(days=90))
+    review_health = round((1 - overdue_reviews / len(review_universe)) * 100, 1) if review_universe else 100.0
+
+    window_365 = now - timedelta(days=365)
+    completed_reviews = db.query(
+        PolicyReviewHistory.scheduled_date, PolicyReviewHistory.completed_at
+    ).filter(
+        PolicyReviewHistory.tenant_id.in_(scoped),
+        PolicyReviewHistory.review_status == "completed",
+        PolicyReviewHistory.completed_at.isnot(None),
+        PolicyReviewHistory.completed_at >= window_365
+    ).all()
+    with_schedule = [r for r in completed_reviews if r.scheduled_date]
+    on_time = sum(1 for r in with_schedule if r.completed_at <= r.scheduled_date)
+    on_time_review_rate = round((on_time / len(with_schedule)) * 100, 1) if with_schedule else None
+
+    # ---- exceptions ------------------------------------------------------
+    exceptions = db.query(
+        PolicyException.status, PolicyException.expiry_date, PolicyException.document_id
+    ).filter(PolicyException.tenant_id.in_(scoped)).all()
+
+    exc_total = len(exceptions)
+    exc_pending = sum(1 for e in exceptions if e.status == "pending_approval")
+    exc_active = sum(1 for e in exceptions if e.status == "approved" and (not e.expiry_date or e.expiry_date >= now))
+    exc_expiring_30 = sum(
+        1 for e in exceptions
+        if e.status == "approved" and e.expiry_date and now <= e.expiry_date <= now + timedelta(days=30)
+    )
+    exc_expired = sum(
+        1 for e in exceptions
+        if e.status == "expired" or (e.status == "approved" and e.expiry_date and e.expiry_date < now)
+    )
+    exc_attention = exc_pending + exc_expiring_30
+    exception_health = round((1 - exc_attention / exc_total) * 100, 1) if exc_total else 100.0
+
+    # ---- freshness -------------------------------------------------------
+    stale_published = sum(
+        1 for d in published_docs
+        if (d.expiry_date and d.expiry_date < now) or (d.next_review_date and d.next_review_date < now)
+    )
+    freshness = round((1 - stale_published / published_count) * 100, 1) if published_count else 100.0
+    expiring_docs_30 = sum(
+        1 for d in docs
+        if d.status in ("approved", "published") and d.expiry_date and now <= d.expiry_date <= now + timedelta(days=30)
+    )
+
+    # ---- open gaps (document-driven findings) ----------------------------
+    open_gaps = db.query(func.count(PolicyGapFinding.id)).filter(
+        PolicyGapFinding.tenant_id.in_(scoped),
+        PolicyGapFinding.remediation_status == "open"
+    ).scalar() or 0
+
+    # ---- performance composite ------------------------------------------
+    components = [
+        {
+            "key": "publishing", "label": "Publishing", "weight": 0.20, "target": 85,
+            "score": publishing_rate, "numerator": published_count, "denominator": active_count,
+            "formula": "published documents / active (non-archived) documents"
+        },
+        {
+            "key": "mapping_coverage", "label": "Coverage", "weight": 0.20, "target": 85,
+            "score": mapping_coverage, "numerator": mapped_count, "denominator": active_count,
+            "formula": "documents linked to >=1 control/risk/framework/asset / active documents"
+        },
+        {
+            "key": "review_health", "label": "Reviews", "weight": 0.20, "target": 85,
+            "score": review_health, "numerator": overdue_reviews, "denominator": len(review_universe),
+            "formula": "1 - (overdue reviews / documents with a review schedule)"
+        },
+        {
+            "key": "approval_health", "label": "Approvals", "weight": 0.15, "target": 85,
+            "score": approval_health, "numerator": len(overdue_steps), "denominator": len(pending_steps),
+            "formula": "1 - (overdue approval steps / pending approval steps)"
+        },
+        {
+            "key": "freshness", "label": "Freshness", "weight": 0.15, "target": 85,
+            "score": freshness, "numerator": stale_published, "denominator": published_count,
+            "formula": "1 - (published documents expired or review-overdue / published documents)"
+        },
+        {
+            "key": "exception_health", "label": "Exceptions", "weight": 0.10, "target": 85,
+            "score": exception_health, "numerator": exc_attention, "denominator": exc_total,
+            "formula": "1 - ((pending + expiring exceptions) / total exceptions)"
+        },
+    ]
+    performance_score = round(sum(c["score"] * c["weight"] for c in components), 1) if total_docs else None
+    if performance_score is None:
+        grade = None
+    elif performance_score >= 85:
+        grade = "excellent"
+    elif performance_score >= 70:
+        grade = "good"
+    elif performance_score >= 50:
+        grade = "fair"
+    else:
+        grade = "poor"
+
+    return {
+        "as_of": now.isoformat(),
+        "documents": {
+            "total": total_docs,
+            "active": active_count,
+            "published": published_count,
+            "publishing_rate_percent": publishing_rate,
+            "by_status": by_status,
+            "by_type": by_type,
+            "by_classification": by_classification,
+        },
+        "mappings": {
+            "controls": {"links": control_links, "documents": len(control_doc_ids)},
+            "risks": {"links": risk_links, "documents": len(risk_doc_ids)},
+            "frameworks": {"links": framework_links, "documents": len(framework_doc_ids)},
+            "assets": {"links": asset_links, "documents": len(asset_doc_ids)},
+            "documents_mapped": mapped_count,
+            "coverage_percent": mapping_coverage,
+        },
+        "approvals": {
+            "pending_steps": len(pending_steps),
+            "overdue_steps": len(overdue_steps),
+            "documents_awaiting": docs_awaiting_approval,
+            "approved_90d": approved_90,
+            "rejected_90d": rejected_90,
+            "approval_rate_percent": approval_rate,
+            "avg_decision_days": avg_decision_days,
+            "health_percent": approval_health,
+        },
+        "reviews": {
+            "scheduled_documents": len(review_universe),
+            "overdue": overdue_reviews,
+            "due_30d": due_30,
+            "due_60d": due_60,
+            "due_90d": due_90,
+            "completed_365d": len(completed_reviews),
+            "on_time_rate_percent": on_time_review_rate,
+            "health_percent": review_health,
+        },
+        "exceptions": {
+            "total": exc_total,
+            "pending_approval": exc_pending,
+            "active": exc_active,
+            "expiring_30d": exc_expiring_30,
+            "expired": exc_expired,
+            "attention": exc_attention,
+            "health_percent": exception_health,
+        },
+        "freshness": {
+            "published": published_count,
+            "stale": stale_published,
+            "expiring_documents_30d": expiring_docs_30,
+            "percent": freshness,
+        },
+        "attention_queue": {
+            "documents_awaiting_approval": docs_awaiting_approval,
+            "overdue_reviews": overdue_reviews,
+            "expiring_documents_30d": expiring_docs_30,
+            "exceptions_attention": exc_attention,
+            "open_gaps": open_gaps,
+            "total": docs_awaiting_approval + overdue_reviews + expiring_docs_30 + exc_attention + open_gaps,
+        },
+        "performance": {
+            "score": performance_score,
+            "grade": grade,
+            "components": components,
+        },
+    }
+
+
 @router.get("/owner-statistics")
 def get_owner_statistics(
     tenant_id: Optional[int] = None,

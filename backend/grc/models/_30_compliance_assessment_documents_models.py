@@ -29,6 +29,13 @@ class ComplianceAssessmentDocument(Base):
     notes = Column(Text, nullable=True)
     assessment_format = Column(String(50), default="standard")  # standard, xlsx_maturity
     xlsx_data = Column(JSON, nullable=True)  # Parsed multi-sheet data for maturity tool uploads
+    # IT Assets this assessment is scoped to (e.g. the application ASVS verifies).
+    # List of grc_it_assets.id; auditors set it from the assessment page.
+    linked_asset_ids = Column(JSON, default=list)
+    # Per-asset target level for level-scoped assessments (ASVS): {asset_id: 1|2|3}.
+    # AI suggests it from the asset profile; user can override. Filters which
+    # requirements apply to that asset.
+    asset_levels = Column(JSON, default=dict)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
@@ -79,6 +86,11 @@ class ComplianceAssessmentDocumentItem(Base):
     # then tracked open -> in_progress -> closed independently of the
     # control's assessed compliance_status.
     remediation_status = Column(String(30), nullable=True)  # open, in_progress, closed
+    # Per-asset verification status: {asset_id: compliance_status}. Used when an
+    # assessment (e.g. ASVS) is verified separately against each in-scope asset —
+    # the same requirement can Pass on one asset and Fail on another. The plain
+    # compliance_status stays as the default / single-asset value.
+    asset_status = Column(JSON, default=dict)
     # SLA / closure tracking. `target_date` is each point's own deadline (an
     # audit point carries its own timeline, independent of other points). When
     # NULL, the frontend SLA engine derives it as created_at + policy[priority].
