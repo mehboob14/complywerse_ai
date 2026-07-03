@@ -19,6 +19,8 @@ router = APIRouter(tags=["Vendors"])
 # ── Pydantic schemas ──────────────────────────────────────────────
 
 class VendorCreate(BaseModel):
+    # Deprecated & IGNORED — tenant is always derived from the auth context (TPRM-008).
+    # Kept only so older clients that still send it don't 422.
     tenant_id: Optional[int] = None
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
@@ -40,6 +42,8 @@ class VendorCreate(BaseModel):
     owner_id: Optional[int] = None
     business_unit_id: Optional[int] = None
     notes: Optional[str] = None
+    # Intake duplicate-relationship check: set True to create despite a name/website match.
+    allow_duplicate: Optional[bool] = False
 
 
 class VendorUpdate(BaseModel):
@@ -66,6 +70,9 @@ class VendorUpdate(BaseModel):
     owner_id: Optional[int] = None
     business_unit_id: Optional[int] = None
     notes: Optional[str] = None
+    # TPRA additive fields (lifecycle_stage / trackers managed via dedicated endpoints)
+    reassessment_cadence_days: Optional[int] = None
+    contract_document_id: Optional[int] = None
 
 
 # ── Serializers ───────────────────────────────────────────────────
@@ -97,6 +104,16 @@ def serialize_vendor(v: Vendor, include_counts: bool = False) -> dict:
         "owner_id": v.owner_id,
         "business_unit_id": v.business_unit_id,
         "notes": v.notes,
+        # ── TPRA lifecycle (additive) ──
+        "lifecycle_stage": getattr(v, "lifecycle_stage", None) or "intake",
+        "lifecycle_history": getattr(v, "lifecycle_history", None) or [],
+        "reassessment_cadence_days": getattr(v, "reassessment_cadence_days", None),
+        "next_reassessment_date": (
+            v.next_reassessment_date.isoformat() if getattr(v, "next_reassessment_date", None) else None
+        ),
+        "contract_document_id": getattr(v, "contract_document_id", None),
+        "offboarding_checklist": getattr(v, "offboarding_checklist", None) or [],
+        "remediation_actions": getattr(v, "remediation_actions", None) or [],
         "created_at": v.created_at.isoformat() if v.created_at else None,
         "updated_at": v.updated_at.isoformat() if v.updated_at else None,
     }
@@ -175,7 +192,32 @@ def create_vendor(
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
 
-    tenant_id = payload.tenant_id if payload.tenant_id and payload.tenant_id in tenant_ids else tenant_ids[0]
+    # TPRM-008: the tenant is ALWAYS derived from the authenticated context — the
+    # request body's tenant_id is never trusted (it can't target another tenant).
+    tenant_id = tenant_ids[0]
+
+    # Intake (Stage 01): check for an existing / duplicate relationship before
+    # committing. Matches on case-insensitive name, or on website host when given.
+    # Caller can override with allow_duplicate=True (e.g. a genuine second contract).
+    if not payload.allow_duplicate:
+        dup_q = db.query(Vendor).filter(
+            Vendor.tenant_id == tenant_id,
+            func.lower(Vendor.name) == (payload.name or "").strip().lower(),
+        )
+        existing = dup_q.first()
+        if not existing and payload.website:
+            host = payload.website.strip().lower().replace("https://", "").replace("http://", "").strip("/")
+            if host:
+                existing = (
+                    db.query(Vendor)
+                    .filter(Vendor.tenant_id == tenant_id, func.lower(Vendor.website).contains(host))
+                    .first()
+                )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A vendor named “{existing.name}” already exists (ID {existing.id}). It may be the same relationship.",
+            )
 
     vendor = Vendor(
         tenant_id=tenant_id,

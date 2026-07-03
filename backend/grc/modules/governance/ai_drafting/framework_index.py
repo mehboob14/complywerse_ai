@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -162,6 +163,44 @@ class FrameworkIndex:
     def all_topics_with_hits(self) -> List[str]:
         return [t for t, citations in self.topics.items() if citations]
 
+    def all_citations(self) -> List["FrameworkCitation"]:
+        """Deduplicated flat list of every citation across all topics."""
+        seen: set = set()
+        out: List[FrameworkCitation] = []
+        for citations in self.topics.values():
+            for c in citations:
+                key = (c.framework_code, c.control_ref)
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(c)
+        return out
+
+    def known_clause_refs(self) -> Dict[str, set]:
+        """Map framework_code → set of valid control_refs, for QA citation checks."""
+        refs: Dict[str, set] = {}
+        for c in self.all_citations():
+            if c.control_ref:
+                refs.setdefault(c.framework_code, set()).add(c.control_ref)
+        return refs
+
+    def slice_by_refs(self, refs: List[str], limit: int = 12) -> List["FrameworkCitation"]:
+        """Return citations whose control_ref matches one of `refs` (order preserved).
+
+        Used when the user pins specific clauses (`target_clauses`) so those
+        exact clauses drive the citation slice rather than a topic bucket.
+        """
+        wanted = {re.sub(r"\s+", "", str(r)).lower() for r in (refs or []) if r}
+        if not wanted:
+            return []
+        out: List[FrameworkCitation] = []
+        for c in self.all_citations():
+            if re.sub(r"\s+", "", str(c.control_ref)).lower() in wanted:
+                out.append(c)
+                if len(out) >= limit:
+                    break
+        return out
+
 
 def _classify_topics(haystack: str) -> List[str]:
     """Score a control's text against the topic taxonomy. Returns ordered list."""
@@ -175,6 +214,28 @@ def _classify_topics(haystack: str) -> List[str]:
             scored.append((score, topic))
     scored.sort(reverse=True)
     return [t for _, t in scored]
+
+
+def classify_topics(text: str) -> List[str]:
+    """Public wrapper: classify free text (a focus area, a parent statement) into
+    governance topics, most-relevant first. Empty when nothing matches."""
+    return _classify_topics(text or "")
+
+
+def resolve_area_to_topic(area: str) -> Optional[str]:
+    """Resolve a user-supplied focus area to a topic key.
+
+    Accepts an exact topic key (`access_control`) or free text ("password
+    rotation") which is classified to its best topic. Returns None if nothing
+    matches — the caller then falls back to the section's own topic.
+    """
+    if not area:
+        return None
+    key = area.strip().lower().replace(" ", "_").replace("-", "_")
+    if key in TOPIC_KEYWORDS:
+        return key
+    topics = _classify_topics(area)
+    return topics[0] if topics else None
 
 
 def _resolve_framework_meta(journey: CertificationJourney, db: Session) -> Optional[dict]:
@@ -191,17 +252,51 @@ def _resolve_framework_meta(journey: CertificationJourney, db: Session) -> Optio
         }
     uf = journey.uploaded_framework
     if uf is not None:
-        # Uploaded frameworks expose more granular regulatory metadata.
-        code = (uf.source_organization or uf.regulatory_authority or uf.name or "UNKNOWN")
-        return {
-            "code": code,
-            "name": uf.name,
-            "version": uf.version,
-            "regulator": uf.regulatory_authority or uf.certification_body,
-            "uploaded_framework_id": uf.id,
-            "framework_id": None,
-        }
+        return _meta_from_uploaded(uf)
     return None
+
+
+def _meta_from_uploaded(uf: UploadedFramework) -> dict:
+    """Framework display meta from an UploadedFramework row directly (used when the
+    draft modal selects specific frameworks, bypassing the journey indirection)."""
+    code = (uf.source_organization or uf.regulatory_authority or uf.name or "UNKNOWN")
+    return {
+        "code": code,
+        "name": uf.name,
+        "version": uf.version,
+        "regulator": uf.regulatory_authority or uf.certification_body,
+        "uploaded_framework_id": uf.id,
+        "framework_id": None,
+    }
+
+
+def _index_framework_controls(idx: "FrameworkIndex", meta: dict, controls: list) -> None:
+    """Classify a framework's controls into the index's topic buckets."""
+    idx.framework_summaries.append({
+        "code": meta["code"],
+        "name": meta["name"],
+        "version": meta["version"],
+        "regulator": meta["regulator"],
+        "control_count": len(controls),
+    })
+    for ctrl in controls:
+        text_bits = [ctrl.title, ctrl.description, ctrl.full_text, ctrl.parent_section, ctrl.domain]
+        haystack = " ".join(b for b in text_bits if b)
+        topics = _classify_topics(haystack) or ["governance_oversight"]
+        ref = ctrl.original_reference or ctrl.control_id
+        excerpt = (ctrl.description or ctrl.full_text or "").strip()
+        if len(excerpt) > 220:
+            excerpt = excerpt[:220].rsplit(" ", 1)[0] + "…"
+        citation = FrameworkCitation(
+            framework_code=meta["code"],
+            framework_name=meta["name"],
+            framework_version=meta["version"],
+            control_ref=ref,
+            title=ctrl.title or "",
+            excerpt=excerpt,
+        )
+        for topic in topics[:3]:  # primary + 2 secondary buckets
+            idx.topics.setdefault(topic, []).append(citation)
 
 
 def _cache_key(tenant_id: int, journey_ids: List[int]) -> str:
@@ -248,15 +343,50 @@ def build_framework_index(
     db: Session,
     *,
     journey_ids: Optional[List[int]] = None,
+    uploaded_framework_ids: Optional[List[int]] = None,
     max_clauses_per_framework: int = 200,
 ) -> FrameworkIndex:
     """Build (or load from cache) the topic-bucketed citation pool.
 
-    Pass `journey_ids` to restrict the pool to specific journeys the user
-    selected in the draft modal. None → use every journey row for the
-    tenant regardless of status (a completed/certified framework is still
-    a valid citation source).
+    Scoping precedence:
+      • `uploaded_framework_ids` (the draft modal's explicit framework picks) —
+        scope STRICTLY to those uploaded frameworks, pulling clause text directly
+        from their ParsedFrameworkControl rows. This never falls back to other
+        frameworks, so an ISO-only draft can only cite ISO clauses (fixes the
+        cross-framework leak) and the selected framework's clauses are always
+        loaded so they can actually be cited. An empty list → empty index.
+      • `journey_ids` — restrict to specific journeys (legacy path).
+      • both None → every journey row for the tenant (best-effort citations when
+        the user made no explicit selection).
     """
+    # Explicit framework selection — strict, journey-independent scoping.
+    if uploaded_framework_ids is not None:
+        idx = FrameworkIndex(tenant_id=tenant_id)
+        ids = [int(i) for i in uploaded_framework_ids]
+        if not ids:
+            return idx
+        cache_key = _cache_key(tenant_id, [-i for i in ids])  # namespace apart from journeys
+        cached = _load_from_cache(cache_key)
+        if cached is not None:
+            return cached
+        ufs = (
+            db.query(UploadedFramework)
+            .filter(UploadedFramework.tenant_id == tenant_id, UploadedFramework.id.in_(ids))
+            .all()
+        )
+        for uf in ufs:
+            meta = _meta_from_uploaded(uf)
+            controls = (
+                db.query(ParsedFrameworkControl)
+                .filter(ParsedFrameworkControl.uploaded_framework_id == uf.id)
+                .order_by(ParsedFrameworkControl.original_reference.asc())
+                .limit(max_clauses_per_framework)
+                .all()
+            )
+            _index_framework_controls(idx, meta, controls)
+        _write_to_cache(cache_key, idx)
+        return idx
+
     query = db.query(CertificationJourney).filter(
         CertificationJourney.tenant_id == tenant_id,
     )
@@ -298,37 +428,7 @@ def build_framework_index(
                 .all()
             )
 
-        idx.framework_summaries.append({
-            "code": meta["code"],
-            "name": meta["name"],
-            "version": meta["version"],
-            "regulator": meta["regulator"],
-            "control_count": len(controls),
-        })
-
-        # Classify each control into topic buckets.
-        for ctrl in controls:
-            text_bits = [ctrl.title, ctrl.description, ctrl.full_text, ctrl.parent_section, ctrl.domain]
-            haystack = " ".join(b for b in text_bits if b)
-            topics = _classify_topics(haystack)
-            if not topics:
-                topics = ["governance_oversight"]
-
-            ref = ctrl.original_reference or ctrl.control_id
-            excerpt = (ctrl.description or ctrl.full_text or "").strip()
-            if len(excerpt) > 220:
-                excerpt = excerpt[:220].rsplit(" ", 1)[0] + "…"
-
-            citation = FrameworkCitation(
-                framework_code=meta["code"],
-                framework_name=meta["name"],
-                framework_version=meta["version"],
-                control_ref=ref,
-                title=ctrl.title or "",
-                excerpt=excerpt,
-            )
-            for topic in topics[:3]:  # primary + 2 secondary buckets
-                idx.topics.setdefault(topic, []).append(citation)
+        _index_framework_controls(idx, meta, controls)
 
     _write_to_cache(cache_key, idx)
     return idx

@@ -17,6 +17,7 @@ import {
   Calendar,
   User,
   ChevronRight,
+  ShieldCheck,
 } from 'lucide-react';
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
@@ -306,6 +307,14 @@ export default function ApprovalsPage() {
     placeholderData: keepPreviousData,
   });
 
+  // Documents awaiting the current user's sign-off (new production flow).
+  const { data: signoffPending } = useQuery({
+    queryKey: ['my-signoff-pending'],
+    queryFn: async () => (await governanceApi.getMySignoffPending()).data as {
+      total: number; items: Array<{ document_id: number; title: string; doc_type: string; status: string; stage_label: string }>;
+    },
+  });
+
   const approveMutation = useMutation({
     mutationFn: async ({ reviewId, comments }: { reviewId: number; comments: string }) => {
       return governanceApi.updateGovernanceAction(reviewId, {
@@ -409,6 +418,31 @@ export default function ApprovalsPage() {
           </span>
         </div>
       </div>
+
+      {signoffPending && signoffPending.total > 0 && (
+        <div className="rounded-xl border border-primary-200 bg-primary-50/40 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldCheck size={16} className="text-primary-600" />
+            <h3 className="text-sm font-semibold text-black">Documents awaiting your signature</h3>
+            <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">{signoffPending.total}</span>
+          </div>
+          <div className="space-y-1.5">
+            {signoffPending.items.map((it) => (
+              <a
+                key={it.document_id}
+                href={`/governance/documents/${it.document_id}?tab=sign-off`}
+                className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 hover:border-primary-300 hover:bg-primary-50/30 transition-colors"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-black truncate">{it.title}</p>
+                  <p className="text-[11px] text-gray-500 capitalize">{it.doc_type} · {it.stage_label}</p>
+                </div>
+                <span className="text-xs font-medium text-primary-600 shrink-0">Review &amp; sign →</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="flex-1">

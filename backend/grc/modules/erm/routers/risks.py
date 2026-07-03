@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 from typing import Any, Dict, List, Optional
 from datetime import datetime, date
 from io import BytesIO
@@ -23,7 +24,8 @@ from ....models import (
     GovernanceObjective, Issue, GRCUser, Tenant, get_db,
     ParsedFrameworkControl, UploadedFramework, RiskMitigationAction,
     Vulnerability, VulnerabilityAssetLink, RiskAssessmentRisk,
-    Team, BusinessUnit,
+    Team, BusinessUnit, Vendor,
+    InternalControl, CertificationJourney, ControlObjective, FrameworkDomain,
 )
 from ....schemas import (
     RiskCreate, RiskUpdate, RiskResponse,
@@ -950,6 +952,37 @@ def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
         )
 
 
+def _attach_source_labels(db: Session, risks: List[Risk]) -> None:
+    """Resolve vendor-sourced risks whose source_reference is `vendor:{id}/...` to the
+    real vendor name, so the UI shows e.g. 'Pixel Studio' instead of raw ids. Sets a
+    transient `source_label` attribute read by RiskResponse. Batched (one query)."""
+    vendor_ids = set()
+    for r in risks:
+        r.source_label = None
+        ref = getattr(r, "source_reference", None) or ""
+        if ref.startswith("vendor:"):
+            try:
+                vendor_ids.add(int(ref.split("/")[0].split(":", 1)[1]))
+            except (IndexError, ValueError):
+                pass
+    if not vendor_ids:
+        return
+    names = dict(db.query(Vendor.id, Vendor.name).filter(Vendor.id.in_(vendor_ids)).all())
+    for r in risks:
+        ref = getattr(r, "source_reference", None) or ""
+        if not ref.startswith("vendor:"):
+            continue
+        try:
+            vid = int(ref.split("/")[0].split(":", 1)[1])
+        except (IndexError, ValueError):
+            continue
+        name = names.get(vid)
+        if not name:
+            continue
+        tail = ref.split("/", 1)[1] if "/" in ref else ""
+        r.source_label = f"{name} · finding" if tail.startswith("tpra_finding") else name
+
+
 @router.get("", response_model=List[RiskResponse])
 def list_risks(
     tenant_id: Optional[int] = None,
@@ -1022,6 +1055,7 @@ def list_risks(
         query = query.filter(Risk.inherent_score <= max_score)
     
     risks = query.order_by(Risk.created_at.desc()).offset(skip).limit(limit).all()
+    _attach_source_labels(db, risks)
     return risks
 
 
@@ -1109,6 +1143,8 @@ def create_risk(
         risk_appetite=risk.risk_appetite,
         status=risk.status or "open",
         treatment_plan=risk.treatment_plan,
+        root_cause=getattr(risk, "root_cause", None),
+        recommendations=getattr(risk, "recommendations", None),
         closure_status=risk.closure_status,
     )
     db.add(db_risk)
@@ -2621,12 +2657,17 @@ class RecommendedControl(BaseModel):
     control_code: Optional[str] = None
     relevance: str
     rationale: str
+    # Which real platform table the control came from: internal | parsed | framework
+    control_source: Optional[str] = None
 
 
 class RiskAISuggestionResponse(BaseModel):
     suggested_description: str
     suggested_causes: List[str]
     suggested_consequences: List[str]
+    # Actionable recommendations the user can review + save into the
+    # "Recommendations" field (distinct from controls and treatment options).
+    suggested_recommendations: List[str] = []
     recommended_controls: List[RecommendedControl]
     suggested_likelihood: int
     suggested_impact: int
@@ -2674,27 +2715,83 @@ def parse_ai_response(response_text: str) -> dict:
         }
 
 
-def get_available_controls_for_matching(db: Session, user_tenants: List[int]) -> str:
-    controls_info = []
-    
-    normalized_controls = db.query(NormalizedControl).limit(100).all()
-    for ctrl in normalized_controls:
-        controls_info.append(f"- ID:{ctrl.id} | Code:{ctrl.code} | Name:{ctrl.name}")
-    
-    for tenant_id in user_tenants:
-        parsed_controls = db.query(ParsedFrameworkControl).join(
-            UploadedFramework
-        ).filter(
-            (UploadedFramework.tenant_id == tenant_id) | 
-            (UploadedFramework.is_shared == True),
-            UploadedFramework.is_active == True
-        ).limit(50).all()
-        
-        for ctrl in parsed_controls:
-            ctrl_code = ctrl.original_reference or ctrl.control_id
-            controls_info.append(f"- ID:{ctrl.id} | Code:{ctrl_code} | Title:{ctrl.title[:80] if ctrl.title else 'N/A'}")
-    
-    return "\n".join(controls_info[:100])
+def build_control_registry(db: Session, user_tenants: List[int]):
+    """Build the catalogue of REAL platform controls the AI may recommend, and a
+    registry to map its picks back to the actual rows.
+
+    Sources (per the product spec):
+      1. The tenant's **internal controls** (grc_internal_controls).
+      2. **Framework controls under the tenant's active certification journeys
+         ONLY** — both uploaded-framework controls (ParsedFrameworkControl) and
+         pre-seeded framework controls (FrameworkControl). Frameworks NOT on a
+         journey are intentionally excluded.
+
+    Returns ``(prompt_text, registry)`` where registry maps a synthetic integer
+    id (shown to the AI) → {source, id, name, code} so int-id collisions across
+    the three tables are impossible.
+    """
+    registry: dict = {}
+    lines: List[str] = []
+    sid = 1
+
+    # 1) Internal controls (tenant-scoped)
+    try:
+        internal = (
+            db.query(InternalControl)
+            .filter(InternalControl.tenant_id.in_(user_tenants))
+            .limit(120)
+            .all()
+        )
+        for c in internal:
+            registry[sid] = {"source": "internal", "id": c.id, "name": c.name or "Control", "code": c.control_id}
+            lines.append(f"- ID:{sid} | [Internal] {c.control_id or ''} | {(c.name or '')[:90]}")
+            sid += 1
+    except Exception:
+        logger.warning("internal control catalogue skipped", exc_info=True)
+
+    # Journey frameworks only.
+    journeys = db.query(CertificationJourney).filter(
+        CertificationJourney.tenant_id.in_(user_tenants)
+    ).all()
+    journey_uploaded_ids = sorted({j.uploaded_framework_id for j in journeys if j.uploaded_framework_id})
+    journey_framework_ids = sorted({j.framework_id for j in journeys if j.framework_id})
+
+    # 2a) Uploaded-framework controls under journeys
+    if journey_uploaded_ids:
+        try:
+            parsed = (
+                db.query(ParsedFrameworkControl)
+                .filter(ParsedFrameworkControl.uploaded_framework_id.in_(journey_uploaded_ids))
+                .limit(180)
+                .all()
+            )
+            for c in parsed:
+                code = c.original_reference or c.control_id
+                registry[sid] = {"source": "parsed", "id": c.id, "name": (c.title or "Control"), "code": code}
+                lines.append(f"- ID:{sid} | [Framework] {code or ''} | {(c.title or '')[:90]}")
+                sid += 1
+        except Exception:
+            logger.warning("journey uploaded-framework controls skipped", exc_info=True)
+
+    # 2b) Pre-seeded framework controls under journeys (FrameworkControl → ControlObjective → FrameworkDomain.framework_id)
+    if journey_framework_ids:
+        try:
+            preseeded = (
+                db.query(FrameworkControl)
+                .join(ControlObjective, FrameworkControl.objective_id == ControlObjective.id)
+                .join(FrameworkDomain, ControlObjective.domain_id == FrameworkDomain.id)
+                .filter(FrameworkDomain.framework_id.in_(journey_framework_ids))
+                .limit(180)
+                .all()
+            )
+            for c in preseeded:
+                registry[sid] = {"source": "framework", "id": c.id, "name": (c.name or "Control"), "code": c.code}
+                lines.append(f"- ID:{sid} | [Framework] {c.code or ''} | {(c.name or '')[:90]}")
+                sid += 1
+        except Exception:
+            logger.warning("journey pre-seeded framework controls skipped", exc_info=True)
+
+    return "\n".join(lines[:220]), registry
 
 
 RISK_AI_SUGGESTION_PROMPT = """You are an expert Enterprise Risk Management (ERM) consultant with 20+ years of experience. Analyze the risk information provided and generate comprehensive suggestions.
@@ -2723,7 +2820,13 @@ Based on this risk, provide suggestions in the following JSON format:
         "<Business consequence 2 - specific impact>",
         "<Business consequence 3 - specific impact>"
     ],
-    
+
+    "suggested_recommendations": [
+        "<Actionable recommendation 1 - a concrete step to reduce this risk>",
+        "<Actionable recommendation 2>",
+        "<Actionable recommendation 3>"
+    ],
+
     "recommended_control_ids": [
         {{
             "control_id": <ID number from the available controls list>,
@@ -2819,14 +2922,19 @@ def get_risk_ai_suggestions(
             suggested_description=f"Risk related to {request.name} in the {request.category or 'operational'} category.",
             suggested_causes=["Process failure", "Human error", "Inadequate controls"],
             suggested_consequences=["Operational disruption", "Financial loss", "Reputational damage"],
+            suggested_recommendations=[
+                "Document and assign ownership for the relevant controls",
+                "Define monitoring and a periodic review cadence",
+                "Validate control effectiveness with evidence",
+            ],
             recommended_controls=[],
             suggested_likelihood=3,
             suggested_impact=3,
             risk_treatment_options=["Mitigate", "Accept", "Transfer"]
         )
-    
-    available_controls = get_available_controls_for_matching(db, user_tenants)
-    
+
+    available_controls, control_registry = build_control_registry(db, user_tenants)
+
     prompt = RISK_AI_SUGGESTION_PROMPT.format(
         name=request.name,
         category=request.category or "Not specified",
@@ -2837,7 +2945,7 @@ def get_risk_ai_suggestions(
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are an expert ERM consultant. Return only valid JSON."},
                 {"role": "user", "content": prompt}
@@ -2850,42 +2958,30 @@ def get_risk_ai_suggestions(
         
         recommended_controls = []
         ai_control_recs = ai_response.get("recommended_control_ids", [])
-        
-        for rec in ai_control_recs[:5]:
-            control_id = rec.get("control_id")
-            if not control_id:
+
+        for rec in ai_control_recs[:6]:
+            synth = rec.get("control_id")
+            try:
+                synth = int(synth)
+            except (TypeError, ValueError):
                 continue
-            
-            normalized_ctrl = db.query(NormalizedControl).filter(
-                NormalizedControl.id == control_id
-            ).first()
-            
-            if normalized_ctrl:
-                recommended_controls.append(RecommendedControl(
-                    control_id=normalized_ctrl.id,
-                    control_name=normalized_ctrl.name,
-                    control_code=normalized_ctrl.code,
-                    relevance=rec.get("relevance", "medium"),
-                    rationale=rec.get("rationale", "Relevant to this risk category")
-                ))
-            else:
-                parsed_ctrl = db.query(ParsedFrameworkControl).filter(
-                    ParsedFrameworkControl.id == control_id
-                ).first()
-                
-                if parsed_ctrl:
-                    recommended_controls.append(RecommendedControl(
-                        control_id=parsed_ctrl.id,
-                        control_name=parsed_ctrl.title or "Control",
-                        control_code=parsed_ctrl.original_reference or parsed_ctrl.control_id,
-                        relevance=rec.get("relevance", "medium"),
-                        rationale=rec.get("rationale", "Relevant to this risk category")
-                    ))
-        
+            meta = control_registry.get(synth)
+            if not meta:
+                continue  # AI picked an id not in the real catalogue — drop it
+            recommended_controls.append(RecommendedControl(
+                control_id=meta["id"],
+                control_name=meta["name"],
+                control_code=meta.get("code"),
+                control_source=meta.get("source"),
+                relevance=rec.get("relevance", "medium"),
+                rationale=rec.get("rationale", "Relevant to this risk category"),
+            ))
+
         return RiskAISuggestionResponse(
             suggested_description=ai_response.get("suggested_description", f"Risk related to {request.name}"),
             suggested_causes=ai_response.get("suggested_causes", [])[:5],
             suggested_consequences=ai_response.get("suggested_consequences", [])[:5],
+            suggested_recommendations=ai_response.get("suggested_recommendations", [])[:5],
             recommended_controls=recommended_controls,
             suggested_likelihood=min(5, max(1, ai_response.get("suggested_likelihood", 3))),
             suggested_impact=min(5, max(1, ai_response.get("suggested_impact", 3))),

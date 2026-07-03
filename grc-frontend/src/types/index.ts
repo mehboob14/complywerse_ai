@@ -264,6 +264,8 @@ export interface Risk {
   source_incident_id?: number;
   source_rcsa_finding_id?: number;
   source_reference?: string;
+  // Human-readable provenance resolved from source_reference (e.g. the vendor name).
+  source_label?: string | null;
   created_at: string;
   updated_at: string;
 }

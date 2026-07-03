@@ -30,6 +30,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
+import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 
 const SEVERITIES: { value: IncidentSeverity; label: string; color: string }[] = [
   { value: 'low', label: 'Low', color: 'bg-green-500/20 text-green-400' },
@@ -645,6 +646,15 @@ function AIAnalysisModal({
           </div>
         ) : analysis ? (
           <div className="mt-6 space-y-6">
+            <AiRecommendationSaver
+              module="erm_incident"
+              recommendationType="ai_analysis"
+              entityType="incident"
+              entityId={incident.id}
+              title={`AI analysis · ${incident.title}`}
+              output={analysis as unknown as Record<string, unknown>}
+              model="gpt-4o"
+            />
             <div className="rounded-xl border border-purple-500/20 bg-gradient-to-br from-purple-900/20 to-blue-900/20 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Target className="h-5 w-5 text-purple-400" />

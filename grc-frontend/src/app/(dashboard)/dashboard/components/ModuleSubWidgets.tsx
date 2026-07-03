@@ -14,6 +14,7 @@ import {
   ermApi,
   governanceApi,
   issuesApi,
+  policyExceptionApi,
   vulnManagementApi,
 } from '@/lib/api';
 import {
@@ -445,6 +446,69 @@ export function GovernanceFrameworkCoverageWidget() {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+// Asset-weighted exception risk posture + 180-day snapshot trend. Mirrors the
+// Governance -> Exceptions page graphs on the main dashboard (item 17).
+export function ExceptionPostureWidget() {
+  const analyticsQ = useQuery({
+    queryKey: ['widget-exception-analytics'],
+    queryFn: async () => (await policyExceptionApi.getAnalytics()).data as AnyRecord,
+  });
+  const trendQ = useQuery({
+    queryKey: ['widget-exception-trend'],
+    queryFn: async () => {
+      const res = await policyExceptionApi.getTrend('exception_risk_posture', 180);
+      return arr<{ date: string; value: number | null }>((res.data as AnyRecord)?.series);
+    },
+  });
+  if (analyticsQ.isLoading) return <MiniLoading />;
+  const a = (analyticsQ.data || {}) as AnyRecord;
+  const score = a.avg_posture != null ? Math.round(num(a.avg_posture)) : null;
+  const color = score == null ? '#94a3b8' : score >= 75 ? '#ef4444' : score >= 50 ? '#f59e0b' : score >= 25 ? '#3b82f6' : '#10b981';
+  const trend = arr<{ date: string; value: number | null }>(trendQ.data).map((p) => ({
+    date: String(p.date).slice(5), value: num(p.value),
+  }));
+  const overdue = num(a.overdue);
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-4 gap-2">
+        <div className="rounded-md border border-slate-200 bg-white p-2">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">Posture</p>
+          <p className="mt-1 text-lg font-semibold" style={{ color }}>{score != null ? score : '—'}</p>
+        </div>
+        <div className="rounded-md border border-slate-200 bg-white p-2">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">Open</p>
+          <p className="mt-1 text-lg font-semibold text-slate-900">{num(a.open)}</p>
+        </div>
+        <div className="rounded-md border border-slate-200 bg-white p-2">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">Overdue</p>
+          <p className={`mt-1 text-lg font-semibold ${overdue > 0 ? 'text-rose-700' : 'text-slate-900'}`}>{overdue}</p>
+        </div>
+        <div className="rounded-md border border-slate-200 bg-white p-2">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">On-time</p>
+          <p className="mt-1 text-lg font-semibold text-slate-900">{a.closed_on_time_pct != null ? `${num(a.closed_on_time_pct)}%` : '—'}</p>
+        </div>
+      </div>
+      {trend.length > 1 ? (
+        <div className="h-[170px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={trend} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
+              <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} minTickGap={24} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
+              <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(v: number | undefined) => [num(v), 'Posture']} />
+              <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="flex h-[170px] items-center justify-center text-center text-xs text-slate-400">
+          Posture trend builds daily as snapshots accumulate.
+        </div>
+      )}
     </div>
   );
 }

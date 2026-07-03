@@ -172,6 +172,9 @@ def serialize_evidence(evidence: Evidence, include_counts: bool = True, db: Sess
         "version": evidence.version,
         "uploaded_by": evidence.uploaded_by,
         "uploader_name": evidence.uploader.display_name if evidence.uploader else None,
+        "owner_id": getattr(evidence, "owner_id", None),
+        "owner_name": (evidence.owner.display_name if getattr(evidence, "owner", None) else None),
+        "department": (evidence.uploader.department if evidence.uploader else None),
         "uploaded_at": evidence.uploaded_at.isoformat() if evidence.uploaded_at else None,
         "status": evidence.status,
         "ocr_status": evidence.ocr_status,
@@ -191,8 +194,12 @@ def serialize_evidence(evidence: Evidence, include_counts: bool = True, db: Sess
         "review_comments": evidence.review_comments,
         "approved_by": evidence.approved_by,
         "approved_at": evidence.approved_at.isoformat() if evidence.approved_at else None,
+        "risk_links_count": len(evidence.risk_links or []) if hasattr(evidence, "risk_links") else 0,
+        "asset_links_count": len(evidence.asset_links or []) if hasattr(evidence, "asset_links") else 0,
+        "incident_links_count": len(evidence.incident_links or []) if hasattr(evidence, "incident_links") else 0,
+        "policy_links_count": len(evidence.policy_links or []) if hasattr(evidence, "policy_links") else 0,
     }
-    
+
     if include_counts and db:
         control_mappings_count = db.query(EvidenceControlMapping).filter(
             EvidenceControlMapping.evidence_id == evidence.id
@@ -204,7 +211,11 @@ def serialize_evidence(evidence: Evidence, include_counts: bool = True, db: Sess
 
 def serialize_evidence_detail(evidence: Evidence, db: Session) -> dict:
     result = serialize_evidence(evidence, include_counts=False, db=db)
-    
+
+    if hasattr(evidence, "recertification_date"):
+        rc = getattr(evidence, "recertification_date", None)
+        result["recertification_date"] = rc.isoformat() if rc else None
+
     result["control_mappings"] = [
         {
             "id": m.id,
@@ -395,15 +406,104 @@ def get_evidence_dashboard(
         
         if e.status == "pending_review":
             pending_review_count += 1
-    
+
+    # 6-month trend: evidence uploaded (by uploaded_at) vs approved (by
+    # approved_at) per calendar month, ascending. Built in-memory from the
+    # already-loaded list (no extra DB query). Null dates are skipped.
+    now = datetime.utcnow()
+    months: List[str] = []
+    year, month = now.year, now.month
+    for _ in range(6):
+        months.append(f"{year:04d}-{month:02d}")
+        month -= 1
+        if month == 0:
+            month = 12
+            year -= 1
+    months.reverse()  # oldest -> newest
+    uploaded_by_month = {m: 0 for m in months}
+    approved_by_month = {m: 0 for m in months}
+    for e in evidence_list:
+        if e.uploaded_at:
+            key = f"{e.uploaded_at.year:04d}-{e.uploaded_at.month:02d}"
+            if key in uploaded_by_month:
+                uploaded_by_month[key] += 1
+        if e.approved_at:
+            key = f"{e.approved_at.year:04d}-{e.approved_at.month:02d}"
+            if key in approved_by_month:
+                approved_by_month[key] += 1
+    by_month = [
+        {"month": m, "uploaded": uploaded_by_month[m], "approved": approved_by_month[m]}
+        for m in months
+    ]
+
     return {
         "total_count": len(evidence_list),
         "by_status": by_status,
         "by_type": by_type,
         "stale_count": stale_count,
         "expiring_soon_count": expiring_soon_count,
-        "pending_review_count": pending_review_count
+        "pending_review_count": pending_review_count,
+        "by_month": by_month
     }
+
+
+@router.get("/dashboard/by-owner")
+def get_evidence_by_owner(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Group tenant evidence by designated owner (falls back to uploader
+    when no owner_id is set). Additive read-only dashboard route. Uses only
+    existing columns/relationships; no due_date so no on-time% is returned."""
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return {"owners": []}
+
+    query = db.query(Evidence).options(
+        joinedload(Evidence.uploader)
+    ).filter(Evidence.tenant_id.in_(user_tenants))
+
+    if tenant_id:
+        validate_tenant_access(current_user, tenant_id, db)
+        query = query.filter(Evidence.tenant_id == tenant_id)
+
+    if hasattr(Evidence, "owner"):
+        query = query.options(joinedload(Evidence.owner))
+
+    evidence_list = query.all()
+
+    now = datetime.utcnow()
+    groups: dict = {}
+    for e in evidence_list:
+        owner_id = getattr(e, "owner_id", None) or e.uploaded_by
+        owner_obj = getattr(e, "owner", None) or e.uploader
+        owner_name = owner_obj.display_name if owner_obj else None
+
+        bucket = groups.get(owner_id)
+        if bucket is None:
+            bucket = {
+                "owner_id": owner_id,
+                "owner_name": owner_name,
+                "total": 0,
+                "pending": 0,
+                "approved": 0,
+                "expired": 0,
+            }
+            groups[owner_id] = bucket
+        elif bucket["owner_name"] is None and owner_name:
+            bucket["owner_name"] = owner_name
+
+        bucket["total"] += 1
+        if e.status == "pending_review":
+            bucket["pending"] += 1
+        if e.status == "approved":
+            bucket["approved"] += 1
+        if e.expiry_date and e.expiry_date < now:
+            bucket["expired"] += 1
+
+    owners = sorted(groups.values(), key=lambda g: g["total"], reverse=True)
+    return {"owners": owners}
 
 
 @router.get("/{evidence_id}")

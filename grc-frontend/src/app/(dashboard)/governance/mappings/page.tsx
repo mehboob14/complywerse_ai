@@ -9,6 +9,7 @@ import {
   Link2,
   Unlink,
   ChevronRight,
+  ChevronDown,
   BookOpen,
   FileCheck,
   ClipboardList,
@@ -18,6 +19,7 @@ import {
   Plus,
   AlertCircle,
   Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 
@@ -50,6 +52,28 @@ interface InternalControl {
   source_document_id?: number | null;
 }
 
+interface RecStatement {
+  id: number;
+  statement_code: string | null;
+  snippet: string | null;
+}
+interface RecommendedControl {
+  control_kind: string; // normalized | framework | parsed | internal
+  control_code: string | null;
+  control_title: string | null;
+  framework_name: string | null;
+  domain: string | null;
+  coverage_type: string | null;
+  link_source: string | null; // ai | derived
+  max_confidence: number | null;
+  statement_count: number;
+  control_ref_id: number | null;
+  clause_reference: string | null;
+  description: string | null;
+  is_linked: boolean;
+  statements: RecStatement[];
+}
+
 interface DocumentMappings {
   document_id: number;
   document_title: string;
@@ -57,6 +81,7 @@ interface DocumentMappings {
   risk_links: unknown[];
   regulatory_links: unknown[];
   asset_links: unknown[];
+  recommended_controls?: RecommendedControl[];
 }
 
 const DOCUMENT_TYPES = [
@@ -98,6 +123,147 @@ const getTypeStyle = (type: string) => {
 const getStatusStyle = (status: string) => {
   return STATUS_COLORS[status] || { bg: 'bg-slate-500/20', text: 'text-gray-600' };
 };
+
+const KIND_META: Record<string, { label: string; cls: string }> = {
+  internal: { label: 'Internal', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  normalized: { label: 'Normalized', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
+  framework: { label: 'Framework', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  parsed: { label: 'Framework', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+};
+
+// AI control recommendations for the selected document, rolled up from its
+// statements (internal ERM + framework controls). Read-only review surface —
+// populated automatically by the post-parse auto-map.
+function RecommendedControlsSection({
+  recs, documentId, canLink,
+}: { recs: RecommendedControl[]; documentId: number | null; canLink: boolean }) {
+  const queryClient = useQueryClient();
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+
+  const keyOf = (r: RecommendedControl) => `${r.control_kind}::${r.control_code ?? ''}`;
+  const toggle = (k: string) =>
+    setExpanded((prev) => {
+      const n = new Set(prev);
+      if (n.has(k)) n.delete(k); else n.add(k);
+      return n;
+    });
+
+  const linkMutation = useMutation({
+    mutationFn: ({ r, link }: { r: RecommendedControl; link: boolean }) =>
+      governanceApi.linkRecommendedControl(documentId as number, {
+        control_kind: r.control_kind, control_code: r.control_code, link,
+      }),
+    onMutate: ({ r }) => setPendingKey(keyOf(r)),
+    onSettled: () => {
+      setPendingKey(null);
+      if (documentId) queryClient.invalidateQueries({ queryKey: ['document-mappings', documentId] });
+    },
+  });
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-indigo-600" />
+        <h4 className="text-sm font-semibold text-slate-900">AI-recommended controls</h4>
+        {recs.length > 0 && (
+          <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-700">{recs.length}</span>
+        )}
+      </div>
+      {recs.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-3 text-xs text-gray-500">
+          No control recommendations yet. They populate automatically after the document is parsed into statements.
+        </p>
+      ) : (
+        <>
+          <p className="mb-2 text-[11px] text-gray-500">
+            Matched from this document&apos;s statements across your frameworks and internal controls. Expand to see the exact statements, then link the ones you want.
+          </p>
+          <div className="space-y-1.5 max-h-[28rem] overflow-y-auto pr-1">
+            {recs.map((r, i) => {
+              const meta = KIND_META[r.control_kind] || { label: r.control_kind, cls: 'bg-gray-100 text-gray-600 border-gray-200' };
+              const pct = r.link_source === 'ai' && typeof r.max_confidence === 'number'
+                ? `${Math.round(r.max_confidence * 100)}%` : null;
+              const k = keyOf(r);
+              const isOpen = expanded.has(k);
+              const isPending = pendingKey === k && linkMutation.isPending;
+              const clause = r.clause_reference || r.control_code;
+              const showCode = r.control_code && r.control_code !== clause;
+              return (
+                <div key={`${k}-${i}`} className={`rounded-lg border bg-white px-3 py-2.5 ${r.is_linked ? 'border-emerald-300 bg-emerald-50/30' : 'border-gray-200'}`}>
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-lg bg-indigo-50 p-2">
+                      <Sparkles className="h-4 w-4 text-indigo-500" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-semibold text-black">{clause || '—'}</span>
+                        {showCode && <span className="text-[11px] text-gray-400">({r.control_code})</span>}
+                        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${meta.cls}`}>{meta.label}</span>
+                        {pct && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{pct} match</span>}
+                        {r.coverage_type && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{r.coverage_type}</span>}
+                        {r.link_source === 'derived' && (
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">derived</span>
+                        )}
+                        {r.is_linked && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                            <Link2 className="h-3 w-3" /> Linked
+                          </span>
+                        )}
+                      </div>
+                      {r.control_title && <p className="mt-0.5 text-sm font-medium text-slate-700">{r.control_title}</p>}
+                      {r.description && <p className="mt-0.5 line-clamp-2 text-xs text-gray-500">{r.description}</p>}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        {r.framework_name && <span className="truncate text-[11px] text-gray-400">{r.framework_name}</span>}
+                        <button
+                          onClick={() => toggle(k)}
+                          className="inline-flex items-center gap-1 rounded text-[11px] font-medium text-indigo-600 hover:text-indigo-700"
+                        >
+                          {isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                          {r.statement_count} statement{r.statement_count === 1 ? '' : 's'}
+                        </button>
+                        {canLink && (
+                          <button
+                            onClick={() => linkMutation.mutate({ r, link: !r.is_linked })}
+                            disabled={isPending}
+                            className={`ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium disabled:opacity-50 ${
+                              r.is_linked
+                                ? 'border border-gray-300 text-gray-600 hover:bg-gray-50'
+                                : 'bg-primary-600 text-white hover:bg-primary-700'
+                            }`}
+                          >
+                            {isPending ? <Loader2 className="h-3 w-3 animate-spin" />
+                              : r.is_linked ? <Unlink className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
+                            {r.is_linked ? 'Unlink' : 'Link'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {isOpen && (
+                    <div className="mt-2 space-y-1.5 border-t border-gray-100 pt-2">
+                      {r.statements.length === 0 ? (
+                        <p className="text-[11px] text-gray-400">No statement detail available.</p>
+                      ) : (
+                        r.statements.map((s) => (
+                          <div key={s.id} className="rounded-md bg-gray-50 px-2.5 py-1.5">
+                            {s.statement_code && <span className="text-[10px] font-semibold text-gray-500">{s.statement_code}</span>}
+                            <p className="text-[11px] text-gray-600">{s.snippet}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function GovernanceMappingsPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -411,44 +577,55 @@ export default function GovernanceMappingsPage() {
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
             </div>
-          ) : mappingsData?.control_links?.length === 0 ? (
-            <div className="text-center py-8">
-              <AlertCircle className="h-7 w-7 text-gray-400 mx-auto mb-2" />
-              <p className="text-gray-600">No controls linked</p>
-              <p className="text-sm text-gray-700 mt-1">Click &quot;Link Control&quot; to add mappings</p>
-            </div>
           ) : (
-            <div className="space-y-1.5 max-h-72 overflow-y-auto">
-              {mappingsData?.control_links?.map((link) => (
-                <div
-                  key={link.id}
-                  className="flex items-center gap-3 rounded-lg border border-gray-300/50 bg-white/50 px-3 py-2.5 hover:bg-gray-100/50 transition-all"
-                >
-                  <div className="rounded-lg bg-emerald-500/20 p-2">
-                    <Shield className="h-4 w-4 text-emerald-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-black">{link.control_code}</p>
-                    <p className="text-sm text-gray-600 truncate">{link.control_name}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-primary-500/20 text-primary-400 capitalize">
-                        {link.link_type.replace('_', ' ')}
-                      </span>
-                      {link.notes && (
-                        <span className="text-xs text-gray-700 truncate max-w-32">{link.notes}</span>
-                      )}
-                    </div>
-                  </div>
-                  {canDelete && <button
-                    onClick={() => handleUnlinkControl(link.id)}
-                    disabled={unlinkMutation.isPending}
-                    className="p-2 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                    title="Unlink control"
-                  >
-                    <Unlink className="h-4 w-4" />
-                  </button>}
+            <div className="space-y-4">
+              {/* Manually-linked internal controls */}
+              {(mappingsData?.control_links?.length ?? 0) === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-4 text-center">
+                  <p className="text-sm text-gray-600">No internal controls linked yet</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Use &quot;Link Control&quot; to attach internal (ERM) controls.</p>
                 </div>
-              ))}
+              ) : (
+                <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                  {mappingsData?.control_links?.map((link) => (
+                    <div
+                      key={link.id}
+                      className="flex items-center gap-3 rounded-lg border border-gray-300/50 bg-white/50 px-3 py-2.5 hover:bg-gray-100/50 transition-all"
+                    >
+                      <div className="rounded-lg bg-emerald-500/20 p-2">
+                        <Shield className="h-4 w-4 text-emerald-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-black">{link.control_code}</p>
+                        <p className="text-sm text-gray-600 truncate">{link.control_name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary-500/20 text-primary-400 capitalize">
+                            {link.link_type.replace('_', ' ')}
+                          </span>
+                          {link.notes && (
+                            <span className="text-xs text-gray-700 truncate max-w-32">{link.notes}</span>
+                          )}
+                        </div>
+                      </div>
+                      {canDelete && <button
+                        onClick={() => handleUnlinkControl(link.id)}
+                        disabled={unlinkMutation.isPending}
+                        className="p-2 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                        title="Unlink control"
+                      >
+                        <Unlink className="h-4 w-4" />
+                      </button>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* AI-recommended controls — rolled up from this document's statements */}
+              <RecommendedControlsSection
+                recs={mappingsData?.recommended_controls ?? []}
+                documentId={selectedDocumentId}
+                canLink={canCreate}
+              />
             </div>
           )}
         </div>

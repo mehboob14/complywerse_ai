@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 import os
 import json
 import hashlib
@@ -8,7 +9,7 @@ from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 from pydantic import BaseModel
 from openai import OpenAI
 
@@ -17,7 +18,11 @@ logger = logging.getLogger(__name__)
 from ....models import (
     Evidence, EvidenceAIAssessment, EvidenceControlMapping, EvidenceAssessmentCache,
     GRCUser, get_db, Framework, FrameworkDomain, ControlObjective, FrameworkControl,
-    UploadedFramework, ParsedFrameworkControl
+    UploadedFramework, ParsedFrameworkControl,
+    GovernanceDocument, InternalControl, ComplianceAssessmentDocument,
+    # Cross-module link candidate pools + their link tables (AI recommend-links).
+    Risk, RiskEvidenceLink, ITAsset, AssetEvidenceLink,
+    RiskIncident, EvidenceIncidentLink, PolicyStatement, EvidencePolicyLink,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -34,7 +39,7 @@ AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_UR
 PROMPT_VERSION = "3.0"
 # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
 # Using gpt-4o for compatibility with Replit AI integrations
-MODEL_VERSION = "gpt-4o"
+MODEL_VERSION = get_openai_model()
 
 # Enhanced prompt for intent-based analysis with cross-framework mapping
 # Version 3.0: Intent-based analysis with three-tier matching system
@@ -1388,6 +1393,312 @@ def batch_assess_evidence(
         failed=failed_count,
         results=results
     )
+
+
+# ─── Recommend mappable targets (governance docs / internal controls / assessments) ──
+# Parallel to the framework-control recommendations (clause_mappings): given an
+# uploaded evidence, AI-recommend the governance documents, internal controls and
+# active compliance assessments this evidence supports / can be mapped to or used in.
+
+import re as _re
+
+_WORD_RE = _re.compile(r"[a-z0-9]+")
+
+
+def _kw(s: str) -> set:
+    return set(_WORD_RE.findall((s or "").lower()))
+
+
+RECOMMEND_TARGETS_PROMPT = """You are a Senior GRC analyst. You are given a piece of compliance EVIDENCE and a numbered \
+list of candidate {category}. Select ONLY the candidates that this evidence is genuinely relevant to — i.e. the evidence \
+could be MAPPED to it or USED as evidence for it. Be precise; do not select loosely-related items.
+
+For each selected candidate give: confidence (0.0-1.0), coverage (full|partial|supporting) and a one-sentence rationale.
+Respond with STRICT JSON only: {{"matches":[{{"index":<int>,"confidence":<0-1>,"coverage":"full|partial|supporting","rationale":"<one sentence>"}}]}}.
+Use only indices from the list. If none genuinely match, return an empty matches array.
+
+## EVIDENCE
+{evidence}
+
+## CANDIDATE {category_upper}
+{candidates}"""
+
+
+def _ai_select_targets(client, evidence_excerpt: str, category: str, candidates: List[dict]) -> List[dict]:
+    """Ask the LLM which candidates the evidence maps to. `candidates` is a list of
+    {id, code, title, subtitle, kwtext}. Returns the same dicts enriched with
+    confidence/coverage_type/rationale/link_source (kwtext stripped)."""
+    if not candidates:
+        return []
+    # Narrow to the most lexically-relevant candidates so the prompt stays small.
+    ev_kw = _kw(evidence_excerpt)
+    scored = sorted(candidates, key=lambda c: len(ev_kw & _kw(c.get("kwtext", ""))), reverse=True)
+    narrowed = [c for c in scored if len(ev_kw & _kw(c.get("kwtext", ""))) > 0][:25] or scored[:15]
+
+    def _clean(c: dict, **extra) -> dict:
+        out = {
+            "id": c["id"], "code": c.get("code"), "title": c.get("title"),
+            "subtitle": c.get("subtitle"), **extra,
+        }
+        # Carry an opaque payload (e.g. {framework_id} for controls) through to
+        # the caller so it can issue the right link request.
+        if c.get("meta") is not None:
+            out["meta"] = c["meta"]
+        return out
+
+    if client is None:
+        # Deterministic keyword fallback when AI is unavailable.
+        return [_clean(c, confidence=None, coverage_type="supporting",
+                       rationale="Lexical match to the evidence content", link_source="keyword")
+                for c in narrowed[:8]]
+
+    lines = [f'[{i}] {(c.get("code") or "")} {c.get("title") or ""}: {(c.get("subtitle") or "")[:160]}'
+             for i, c in enumerate(narrowed)]
+    prompt = RECOMMEND_TARGETS_PROMPT.format(
+        category=category, category_upper=category.upper(),
+        evidence=evidence_excerpt[:3500], candidates="\n".join(lines),
+    )
+    try:
+        resp = client.chat.completions.create(
+            model=MODEL_VERSION,
+            messages=[
+                {"role": "system", "content": "You are a precise GRC analyst. Respond with valid JSON only."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=1500,
+        )
+        data = parse_ai_response(resp.choices[0].message.content or "")
+        out = []
+        for m in (data.get("matches") or []):
+            try:
+                idx = int(m.get("index"))
+            except (TypeError, ValueError):
+                continue
+            if not (0 <= idx < len(narrowed)):
+                continue
+            try:
+                conf = max(0.0, min(1.0, float(m.get("confidence"))))
+            except (TypeError, ValueError):
+                conf = 0.6
+            cov = str(m.get("coverage") or "partial").lower()
+            if cov not in ("full", "partial", "supporting"):
+                cov = "partial"
+            out.append(_clean(narrowed[idx], confidence=conf, coverage_type=cov,
+                              rationale=str(m.get("rationale") or "")[:400], link_source="ai"))
+        return out
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("recommend-targets LLM call failed for %s: %s", category, exc)
+        return [_clean(c, confidence=None, coverage_type="supporting",
+                       rationale="Lexical match to the evidence content", link_source="keyword")
+                for c in narrowed[:8]]
+
+
+@router.post("/{evidence_id}/recommend-targets")
+def recommend_targets(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """AI-recommend the governance documents, internal controls and active compliance
+    assessments this evidence can be mapped to / used in. Mirrors the framework-control
+    recommendations. Degrades to lexical matching when AI is unavailable."""
+    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+    validate_evidence_access(current_user, evidence, db)
+
+    user_tenants = get_user_tenants(current_user, db)
+    excerpt = (evidence.content_summary or evidence.ocr_content
+               or f"{evidence.name or ''}. {getattr(evidence, 'description', '') or ''}")[:3500]
+
+    # AI client (None → keyword fallback so the feature still returns results).
+    client = None
+    try:
+        client = get_openai_client()
+    except HTTPException:
+        client = None
+
+    # Candidate pools (tenant-scoped).
+    gov_docs = db.query(GovernanceDocument).filter(
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).order_by(GovernanceDocument.updated_at.desc()).limit(300).all()
+    gov_candidates = [{
+        "id": d.id, "code": getattr(d, "document_code", None), "title": d.title,
+        "subtitle": (d.description or (d.doc_type or "")),
+        "doc_type": d.doc_type,
+        "kwtext": f"{d.title or ''} {d.description or ''} {(d.content or '')[:600]}",
+    } for d in gov_docs]
+
+    internal_controls = db.query(InternalControl).filter(
+        InternalControl.tenant_id.in_(user_tenants)
+    ).order_by(InternalControl.control_id.asc()).limit(500).all()
+    ic_candidates = [{
+        "id": c.id, "code": c.control_id, "title": c.name,
+        "subtitle": (c.description or c.category or ""),
+        "category": c.category,
+        "kwtext": f"{c.control_id or ''} {c.name or ''} {c.description or ''} {c.category or ''}",
+    } for c in internal_controls]
+
+    # "Active" assessments — ongoing (draft / in_progress); fall back to all if none.
+    active_q = db.query(ComplianceAssessmentDocument).filter(
+        ComplianceAssessmentDocument.tenant_id.in_(user_tenants),
+        ComplianceAssessmentDocument.status.in_(["draft", "in_progress"]),
+    ).order_by(ComplianceAssessmentDocument.updated_at.desc())
+    assessments = active_q.limit(200).all()
+    if not assessments:
+        assessments = db.query(ComplianceAssessmentDocument).filter(
+            ComplianceAssessmentDocument.tenant_id.in_(user_tenants)
+        ).order_by(ComplianceAssessmentDocument.updated_at.desc()).limit(200).all()
+    asmt_candidates = [{
+        "id": a.id, "code": (a.source or a.assessment_type), "title": a.name,
+        "subtitle": f"{a.assessment_type or ''} · {a.status or ''}",
+        "status": a.status, "assessment_type": a.assessment_type,
+        "kwtext": f"{a.name or ''} {a.assessment_type or ''} {a.source or ''} {a.notes or ''}",
+    } for a in assessments]
+
+    return {
+        "evidence_id": evidence_id,
+        "ai_available": client is not None,
+        "governance_documents": _ai_select_targets(client, excerpt, "governance documents", gov_candidates),
+        "internal_controls": _ai_select_targets(client, excerpt, "internal controls", ic_candidates),
+        "compliance_assessments": _ai_select_targets(client, excerpt, "active compliance assessments", asmt_candidates),
+    }
+
+
+# ─── Per-section AI link recommendations (cross-module links) ─────────────────
+# The Evidence cross-module link sections (risks / assets / incidents / policy
+# statements) were manual-only. This endpoint AI-recommends, per section, which
+# items the evidence should link to — reusing _ai_select_targets (keyword-narrow
+# → LLM rank → keyword fallback). The frontend links the chosen items via the
+# existing /cross-links endpoints. Already-linked items are excluded.
+
+_LINK_TARGETS = ("risks", "assets", "incidents", "policy_statements", "controls")
+
+
+def _linked_ids(db: Session, model, id_col, evidence_id: int) -> set:
+    return {row[0] for row in db.query(id_col).filter(model.evidence_id == evidence_id).all()}
+
+
+def _link_candidates(db: Session, target: str, evidence_id: int, user_tenants: List[int]) -> List[dict]:
+    if target == "controls":
+        # Pool = parsed framework controls in scope; exclude already-mapped ones.
+        # Each candidate carries meta.framework_id so the caller can link via
+        # POST /links/{id}/controls {parsed_control_id, uploaded_framework_id}.
+        linked = {row[0] for row in db.query(EvidenceControlMapping.parsed_control_id)
+                  .filter(EvidenceControlMapping.evidence_id == evidence_id,
+                          EvidenceControlMapping.parsed_control_id.isnot(None)).all()}
+        scope = or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.is_shared == True,  # noqa: E712
+            UploadedFramework.tenant_id.is_(None),
+        )
+        fw_ids = [fw.id for fw in db.query(UploadedFramework).filter(scope).all()]
+        if not fw_ids:
+            return []
+        rows = (db.query(ParsedFrameworkControl)
+                .filter(ParsedFrameworkControl.uploaded_framework_id.in_(fw_ids))
+                .order_by(ParsedFrameworkControl.control_id.asc()).limit(1200).all())
+        return [{
+            "id": c.id, "code": c.control_id, "title": (c.title or c.control_id),
+            "subtitle": (getattr(c, "description", None) or c.title or ""),
+            "kwtext": f"{c.control_id or ''} {c.original_reference or ''} {c.title or ''} {getattr(c, 'description', '') or ''}",
+            "meta": {"framework_id": c.uploaded_framework_id},
+        } for c in rows if c.id not in linked]
+
+    if target == "risks":
+        linked = _linked_ids(db, RiskEvidenceLink, RiskEvidenceLink.risk_id, evidence_id)
+        rows = (db.query(Risk).filter(Risk.tenant_id.in_(user_tenants))
+                .order_by(desc(Risk.updated_at)).limit(400).all())
+        return [{
+            "id": r.id, "code": r.category, "title": r.title,
+            "subtitle": (r.description or r.category or ""),
+            "kwtext": f"{r.title or ''} {r.description or ''} {r.category or ''} {getattr(r, 'risk_category', '') or ''}",
+        } for r in rows if r.id not in linked]
+
+    if target == "assets":
+        linked = _linked_ids(db, AssetEvidenceLink, AssetEvidenceLink.asset_id, evidence_id)
+        rows = (db.query(ITAsset).filter(ITAsset.tenant_id.in_(user_tenants))
+                .order_by(ITAsset.name.asc()).limit(400).all())
+        return [{
+            "id": a.id, "code": a.asset_type, "title": a.name,
+            "subtitle": (a.description or a.asset_type or ""),
+            "kwtext": f"{a.name or ''} {a.description or ''} {a.asset_type or ''} {getattr(a, 'business_function', '') or ''}",
+        } for a in rows if a.id not in linked]
+
+    if target == "incidents":
+        linked = _linked_ids(db, EvidenceIncidentLink, EvidenceIncidentLink.incident_id, evidence_id)
+        rows = (db.query(RiskIncident).filter(RiskIncident.tenant_id.in_(user_tenants))
+                .order_by(desc(RiskIncident.incident_date)).limit(300).all())
+        return [{
+            "id": i.id, "code": i.severity, "title": i.title,
+            "subtitle": (i.description or ""),
+            "kwtext": f"{i.title or ''} {i.description or ''} {getattr(i, 'root_cause', '') or ''}",
+        } for i in rows if i.id not in linked]
+
+    if target == "policy_statements":
+        linked = _linked_ids(db, EvidencePolicyLink, EvidencePolicyLink.policy_statement_id, evidence_id)
+        rows = (db.query(PolicyStatement).filter(PolicyStatement.tenant_id.in_(user_tenants))
+                .order_by(desc(PolicyStatement.id)).limit(500).all())
+        return [{
+            "id": p.id, "code": p.statement_code,
+            "title": (p.statement_summary or (p.statement_text or "")[:90]),
+            "subtitle": (p.statement_text or ""),
+            "kwtext": f"{p.statement_code or ''} {p.statement_summary or ''} {p.statement_text or ''} {p.category or ''}",
+        } for p in rows if p.id not in linked]
+
+    return []
+
+
+_LINK_CATEGORY_LABEL = {
+    "risks": "enterprise risks",
+    "assets": "IT assets",
+    "incidents": "incidents",
+    "policy_statements": "policy statements",
+    "controls": "compliance framework controls",
+}
+
+
+@router.post("/{evidence_id}/recommend-links")
+def recommend_links(
+    evidence_id: int,
+    target: str = Query(..., description="risks | assets | incidents | policy_statements"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """AI-recommend which items of one cross-link category this evidence should be
+    linked to. Degrades to lexical matching when AI is unavailable. Excludes items
+    already linked. The caller links the chosen ids via the existing /cross-links."""
+    target = (target or "").strip().lower()
+    if target not in _LINK_TARGETS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Unsupported target. Use one of: {', '.join(_LINK_TARGETS)}")
+    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+    validate_evidence_access(current_user, evidence, db)
+
+    user_tenants = get_user_tenants(current_user, db)
+    excerpt = (evidence.content_summary or evidence.ocr_content
+               or f"{evidence.name or ''}. {getattr(evidence, 'description', '') or ''}")[:3500]
+
+    client = None
+    try:
+        client = get_openai_client()
+    except HTTPException:
+        client = None
+
+    candidates = _link_candidates(db, target, evidence_id, user_tenants)
+    recommendations = _ai_select_targets(
+        client, excerpt, _LINK_CATEGORY_LABEL[target], candidates,
+    )
+    return {
+        "evidence_id": evidence_id,
+        "target": target,
+        "ai_available": client is not None,
+        "candidate_count": len(candidates),
+        "recommendations": recommendations,
+    }
 
 
 @router.get("/low-quality", response_model=List[LowQualityEvidenceResponse])

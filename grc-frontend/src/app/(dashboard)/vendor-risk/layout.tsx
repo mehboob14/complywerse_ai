@@ -2,13 +2,18 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, ClipboardList, FileQuestion } from 'lucide-react';
+import { LayoutDashboard, Building2, ClipboardList, AlertTriangle, Radio, FileQuestion, Shield, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 
 const vendorRiskNavigation = [
-  { name: 'Vendor Risk', href: '/vendor-risk', icon: Building2, exact: true },
+  { name: 'Dashboard', href: '/vendor-risk', icon: LayoutDashboard, exact: true },
+  { name: 'Vendors', href: '/vendor-risk/vendors', icon: Building2 },
   { name: 'Assessments', href: '/vendor-risk/assessments', icon: ClipboardList },
+  { name: 'Findings', href: '/vendor-risk/findings', icon: AlertTriangle },
+  { name: 'Monitoring', href: '/vendor-risk/monitoring', icon: Radio },
   { name: 'Questionnaires', href: '/vendor-risk/questionnaires', icon: FileQuestion },
+  { name: 'Risk 360°', href: '/vendor-risk/risk-360', icon: Shield },
+  { name: 'Settings', href: '/vendor-risk/settings', icon: Settings },
 ];
 
 export default function VendorRiskLayout({
@@ -45,7 +50,10 @@ export default function VendorRiskLayout({
         </div>
       </div>
 
-      <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-6">{children}</div>
+      {/* TPRM-013: key by pathname so tab navigation FROM a vendor-detail route
+          always remounts the target screen (App Router otherwise reused the stale
+          detail subtree). */}
+      <div key={pathname} className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-6">{children}</div>
     </div>
   );
 }

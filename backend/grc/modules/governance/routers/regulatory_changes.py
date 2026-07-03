@@ -1,3 +1,4 @@
+from ....config import get_openai_model
 from typing import Any, List, Optional
 from datetime import datetime, timezone
 import json
@@ -1021,7 +1022,7 @@ Focus on regulatory compliance gaps and potential areas of non-compliance."""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a regulatory compliance expert specializing in gap analysis. Provide structured JSON responses."},
                 {"role": "user", "content": prompt}

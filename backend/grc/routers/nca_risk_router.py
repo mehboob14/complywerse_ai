@@ -1,5 +1,6 @@
 """NCA Cybersecurity Risk Management register router."""
-from ..config import get_openai_api_key
+from ..config import get_openai_api_key, get_openai_model
+
 import json
 import logging
 import os
@@ -467,7 +468,7 @@ Return strict JSON with keys:
 """
 
         completion = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0.4,

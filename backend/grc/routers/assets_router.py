@@ -1,3 +1,4 @@
+from ..config import get_openai_model
 import random
 import csv
 import io
@@ -170,7 +171,7 @@ Format: First line with explanation, second line with ratings in format "Recomme
 """
         
         response = openai.ChatCompletion.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are an IT security expert specializing in asset risk assessment and CIA triad ratings."},
                 {"role": "user", "content": prompt}

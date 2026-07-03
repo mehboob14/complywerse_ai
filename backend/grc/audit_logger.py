@@ -232,7 +232,11 @@ def should_audit_request(request: Request) -> bool:
         return False
 
     path = request.url.path or ""
-    if any(path.startswith(prefix) for prefix in AUDIT_EXCLUDED_PATH_PREFIXES):
+    # Match regardless of a mount prefix (e.g. the /grc sub-app) so /grc/openapi.json,
+    # /grc/docs, /grc/health etc. are excluded the same as their root paths. These
+    # are distinctive doc/spec/health paths, so a substring match is safe and kills
+    # the read-audit noise the tamper-evident mutation trail shouldn't carry (TPRM-012).
+    if any(prefix in path for prefix in AUDIT_EXCLUDED_PATH_PREFIXES):
         return False
 
     # Drop high-frequency polling endpoints — they bury the real activity

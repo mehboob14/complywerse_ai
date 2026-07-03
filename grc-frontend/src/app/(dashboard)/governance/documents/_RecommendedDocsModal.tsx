@@ -16,7 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   X, Search, Sparkles, BookMarked, FileText, Layers,
   ChevronRight, Eye, AlertCircle, Loader2, Download, ListChecks,
-  Tag, Hash, Info, Scale, Globe, Building2,
+  Tag, Hash, Info, Scale, Globe, Building2, CheckCircle2,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/ToastProvider';
 import apiClient, { certificationsApi } from '@/lib/api';
@@ -109,6 +109,10 @@ interface ArtifactItem {
   control_ref?: string | null;
   format?: string | null;
   owner?: string | null;
+  // Ready = the pre-generated, type-/control-specific body exists for this
+  // artifact (served from artifact_content.json; hot-reloaded by the backend).
+  has_content?: boolean;
+  content_format?: string | null;
 }
 
 const DOC_TYPE_BADGE: Record<string, string> = {
@@ -176,7 +180,7 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
               </span>
             </h2>
             <p className="mt-0.5 text-xs sm:text-sm text-gray-600 max-w-2xl">
-              Standard pre-curated artefacts, NCA Saudi reference templates, and per-framework artifact catalogues — all wired into the AI Draft flow.
+              Standard, NCA Saudi and per-framework artifact templates open in the editor ready to edit and save; reference laws open the AI Draft flow.
             </p>
           </div>
           <button
@@ -250,7 +254,7 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
         {/* Footer */}
         <div className="border-t border-gray-200 px-6 py-3 bg-gray-50 flex items-center justify-between gap-3">
           <p className="text-[11px] text-gray-500">
-            Picking a template opens the AI Draft modal pre-filled with the source title and a sensible doc-type default.
+            Standard, NCA and artifact templates open in the editor ready to edit and save; reference laws open the AI Draft modal.
           </p>
           <button
             type="button"
@@ -476,15 +480,15 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
                     onClick={() => {
                       toast({
                         type: 'info',
-                        title: 'Opening AI Draft',
-                        message: `Pre-filling "${t.title}" from the NCA template.`,
+                        title: 'Opening template',
+                        message: `Loading "${t.title}" into the editor — edit and save as your own document.`,
                       });
                       onPick(t);
                     }}
                     className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
                   >
-                    <Sparkles className="h-3 w-3" />
-                    Draft
+                    <FileText className="h-3 w-3" />
+                    Use &amp; edit
                   </button>
                 </div>
               ))}
@@ -500,8 +504,8 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
             setPreviewTemplate(null);
             toast({
               type: 'info',
-              title: 'Opening AI Draft',
-              message: `Pre-filling "${t.title}" from the NCA template.`,
+              title: 'Opening template',
+              message: `Loading "${t.title}" into the editor — edit and save as your own document.`,
             });
             onPick(t);
           }}
@@ -571,8 +575,8 @@ function NcaPreviewPopup({
             onClick={() => onDraft(template)}
             className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100 shrink-0"
           >
-            <Sparkles className="h-3 w-3" />
-            Use as draft
+            <FileText className="h-3 w-3" />
+            Use &amp; edit
           </button>
           <button
             onClick={onClose}
@@ -891,7 +895,7 @@ function ArtifactsTab({
   // 1. Load the tenant's certification journeys to know which frameworks to
   //    fetch AND to harvest each framework's uploaded_framework_id, which
   //    the AI Draft modal's multi-select expects.
-  const { data: journeys, isLoading: journeysLoading } = useQuery<CertificationJourney[]>({
+  const { data: journeys } = useQuery<CertificationJourney[]>({
     queryKey: ['certifications-for-artifact-templates'],
     queryFn: async () => {
       const r = await certificationsApi.getAll();
@@ -925,35 +929,70 @@ function ArtifactsTab({
     return Array.from(seen.values());
   }, [journeys]);
 
-  // 2. Per-framework catalogue. Parallel calls — each framework has its own
-  //    /artifacts/catalog?assessment_type=<framework name> call.
-  const catalogQueries = useQuery({
-    queryKey: ['artifact-catalogs-by-framework', distinctFrameworks.map((f) => f.name)],
+  // Name → uploaded_framework_id, so we can auto-link a draft back to the
+  // tenant's framework when they have a journey for it (null otherwise — the
+  // framework still shows, the draft just won't pre-select it).
+  const uploadedByName = useMemo(() => {
+    const m = new Map<string, number | null>();
+    for (const f of distinctFrameworks) m.set(f.name, f.uploadedId);
+    return m;
+  }, [distinctFrameworks]);
+
+  // 2. EVERY framework's catalogue in one call (not just the tenant's active
+  //    journeys), each item tagged with readiness. The backend orders frameworks
+  //    ready-first and hot-reloads generated content by mtime, so newly generated
+  //    artifacts surface here automatically.
+  type CatalogGroup = {
+    framework_key: string;
+    framework_name: string;
+    total: number;
+    ready: number;
+    items: ArtifactItem[];
+  };
+  const allCatalogsQuery = useQuery<CatalogGroup[]>({
+    queryKey: ['artifact-catalog-all', distinctFrameworks.map((f) => f.name)],
     queryFn: async () => {
+      // Preferred: one call for every framework's catalogue (needs the backend
+      // /catalog/all endpoint). If it isn't deployed yet, gracefully fall back to
+      // the legacy per-journey fetch so the tab keeps working until a restart.
+      try {
+        const r = await apiClient.get('/artifacts/catalog/all');
+        const fws = (r.data?.frameworks || []) as CatalogGroup[];
+        if (fws.length) return fws;
+      } catch {
+        /* endpoint not available yet — fall through to legacy per-journey load */
+      }
       const results = await Promise.all(
-        distinctFrameworks.map(async (f) => {
+        distinctFrameworks.map(async (f): Promise<CatalogGroup | null> => {
           try {
-            const r = await apiClient.get('/artifacts/catalog', {
-              params: { assessment_type: f.name },
-            });
+            const r = await apiClient.get('/artifacts/catalog', { params: { assessment_type: f.name } });
+            const items = (r.data?.items || []) as ArtifactItem[];
             return {
-              framework: f.name,
-              frameworkUploadedId: f.uploadedId,
-              items: (r.data?.items || []) as ArtifactItem[],
+              framework_key: r.data?.framework_key || f.name,
+              framework_name: f.name,
+              total: items.length,
+              ready: items.filter((i) => i.has_content).length,
+              items,
             };
           } catch {
-            return { framework: f.name, frameworkUploadedId: f.uploadedId, items: [] as ArtifactItem[] };
+            return null;
           }
         }),
       );
-      return results.filter((r) => r.items.length > 0);
+      return results.filter((g): g is CatalogGroup => !!g && g.items.length > 0);
     },
-    enabled: distinctFrameworks.length > 0,
-    staleTime: 5 * 60_000,
+    staleTime: 60_000,
   });
 
   const filtered = useMemo(() => {
-    const groups = catalogQueries.data || [];
+    const groups = (allCatalogsQuery.data || []).map((g) => ({
+      framework: g.framework_name,
+      frameworkKey: g.framework_key,
+      frameworkUploadedId: uploadedByName.get(g.framework_name) ?? null,
+      ready: g.ready,
+      total: g.total,
+      items: g.items,
+    }));
     const q = search.trim().toLowerCase();
     const matched = !q
       ? groups
@@ -968,11 +1007,17 @@ function ArtifactsTab({
             ),
           }))
           .filter((g) => g.items.length > 0);
-    // Sort alphabetically by framework name so the section order is stable.
-    return [...matched].sort((a, b) => a.framework.localeCompare(b.framework));
-  }, [catalogQueries.data, search]);
+    // Ready-first within each framework; preserve the backend's ready-first
+    // framework order (frameworks with generated artifacts already float to top).
+    return matched.map((g) => ({
+      ...g,
+      items: [...g.items].sort(
+        (a, b) => (b.has_content ? 1 : 0) - (a.has_content ? 1 : 0),
+      ),
+    }));
+  }, [allCatalogsQuery.data, uploadedByName, search]);
 
-  if (journeysLoading || catalogQueries.isLoading) {
+  if (allCatalogsQuery.isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
@@ -980,15 +1025,9 @@ function ArtifactsTab({
     );
   }
 
-  if (distinctFrameworks.length === 0) {
-    return (
-      <EmptyState message="Start a framework journey to see its artifact catalogue here." />
-    );
-  }
-
   if (filtered.length === 0) {
     return (
-      <EmptyState message={search ? 'No artifacts match your search.' : 'No artifact catalogues available for your active frameworks.'} />
+      <EmptyState message={search ? 'No artifacts match your search.' : 'No artifact catalogues available yet.'} />
     );
   }
 
@@ -997,12 +1036,17 @@ function ArtifactsTab({
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-2">
           <p className="text-[11px] text-gray-500">
-            Artifacts catalogued against your active compliance frameworks, grouped by framework.
-            Drafting auto-links the new document back to its source framework.
+            Every compliance framework&apos;s artifacts, grouped by framework and ordered so
+            generated (Ready) ones surface first. Drafting auto-links the new document back
+            to its source framework when you have a journey for it.
           </p>
           <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
             <Layers className="h-3 w-3" />
             {filtered.reduce((s, g) => s + g.items.length, 0)} artifacts · {filtered.length} frameworks
+            {(() => {
+              const ready = filtered.reduce((s, g) => s + g.items.filter((i) => i.has_content).length, 0);
+              return ready > 0 ? ` · ${ready} ready` : '';
+            })()}
           </span>
         </div>
         <div className="space-y-2">
@@ -1034,6 +1078,15 @@ function ArtifactsTab({
                     {group.framework}
                   </span>
                   <span className="text-[11px] text-gray-500">{group.items.length} artifacts</span>
+                  {(() => {
+                    const ready = group.items.filter((i) => i.has_content).length;
+                    return ready > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-700">
+                        <CheckCircle2 className="h-2.5 w-2.5" />
+                        {ready} ready
+                      </span>
+                    ) : null;
+                  })()}
                   {group.frameworkUploadedId && (
                     <span className="ml-auto text-[10px] text-emerald-700 font-medium inline-flex items-center gap-1">
                       <Sparkles className="h-2.5 w-2.5" />
@@ -1061,8 +1114,8 @@ function ArtifactsTab({
                           onDraft={() => {
                             toast({
                               type: 'info',
-                              title: 'Opening AI Draft',
-                              message: `Pre-filling "${item.name}" from the ${group.framework} artifact catalogue.${
+                              title: 'Opening template',
+                              message: `Loading "${item.name}" (${group.framework}) into the editor — edit and save.${
                                 group.frameworkUploadedId ? ' Framework auto-selected.' : ''
                               }`,
                             });
@@ -1088,8 +1141,8 @@ function ArtifactsTab({
             setDetailItem(null);
             toast({
               type: 'info',
-              title: 'Opening AI Draft',
-              message: `Pre-filling "${picked.item.name}" from the ${picked.frameworkName} artifact catalogue.${
+              title: 'Opening template',
+              message: `Loading "${picked.item.name}" (${picked.frameworkName}) into the editor — edit and save.${
                 picked.frameworkUploadedId ? ' Framework auto-selected.' : ''
               }`,
             });
@@ -1188,6 +1241,15 @@ function ArtifactCard({
               Mandatory
             </span>
           )}
+          {item.has_content && (
+            <span
+              title="A ready-to-edit document body has been generated for this artifact"
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide border bg-emerald-50 text-emerald-700 border-emerald-200"
+            >
+              <CheckCircle2 className="h-2.5 w-2.5" />
+              Ready
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           <button
@@ -1196,7 +1258,7 @@ function ArtifactCard({
             className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
           >
             <Eye className="h-3 w-3" />
-            Details
+            View
           </button>
           <button
             type="button"
@@ -1237,6 +1299,46 @@ function ArtifactDetailsPopup({
     { label: 'Suggested doc type', value: docType },
     { label: 'Mandatory', value: item.mandatory ? 'Yes' : 'No' },
   ];
+
+  // Pull the pre-generated, format-aware content so it can be viewed + downloaded
+  // here (documents → Word/PDF, tabular templates → Excel/CSV, guides → PDF/MD).
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const { data: gen, isLoading: genLoading } = useQuery<{
+    found?: boolean; content?: string; content_format?: string;
+  }>({
+    queryKey: ['artifact-content-view', item.artifact_id],
+    queryFn: async () => {
+      const r = await apiClient.get('/artifacts/catalog/content', { params: { artifact_id: item.artifact_id } });
+      return r.data;
+    },
+    staleTime: 5 * 60_000,
+  });
+  const genMode = gen?.content_format || 'markdown';
+  const dlFormats = genMode === 'table' ? ['xlsx', 'csv', 'pdf', 'md'] : ['docx', 'pdf', 'md'];
+  const handleDownload = async (fmt: string) => {
+    setDownloading(fmt);
+    try {
+      const res = await apiClient.get('/artifacts/catalog/export', {
+        params: { artifact_id: item.artifact_id, fmt }, responseType: 'blob',
+      });
+      const cd = (res.headers?.['content-disposition'] as string) || '';
+      const m = /filename="?([^"]+)"?/.exec(cd);
+      const fname = m ? m[1] : `${item.name}.${fmt}`;
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url; a.download = fname;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      alert('Download failed — has this artifact been generated yet?');
+    } finally {
+      setDownloading(null);
+    }
+  };
+  const genBadge =
+    genMode === 'table' ? { t: 'Spreadsheet template', c: 'bg-emerald-50 text-emerald-700' }
+      : genMode === 'guide' ? { t: 'Collection guide', c: 'bg-amber-50 text-amber-700' }
+        : { t: 'Document', c: 'bg-blue-50 text-blue-700' };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-6">
@@ -1279,6 +1381,40 @@ function ArtifactDetailsPopup({
                   </div>
                 ))}
             </dl>
+          </section>
+
+          {/* Generated content — view + native-format download */}
+          <section>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h3 className="text-[10px] uppercase tracking-wider font-semibold text-gray-500">Generated content</h3>
+                {gen?.found && <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${genBadge.c}`}>{genBadge.t}</span>}
+              </div>
+              {gen?.found && (
+                <div className="flex items-center gap-1">
+                  {dlFormats.map((f) => (
+                    <button key={f} type="button" onClick={() => handleDownload(f)} disabled={!!downloading}
+                      className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-0.5 text-[10px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                      {downloading === f ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                      {f.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {genLoading ? (
+              <div className="flex items-center justify-center gap-2 py-6 text-xs text-gray-400">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading generated content…
+              </div>
+            ) : gen?.found && gen.content ? (
+              <div className="max-h-[42vh] overflow-y-auto rounded-lg border border-gray-200 bg-white p-3">
+                <GovernanceDocumentMarkdown content={gen.content} />
+              </div>
+            ) : (
+              <p className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-4 text-center text-xs italic text-gray-400">
+                Not generated yet — run the artifact-content generator for this framework, then it appears here.
+              </p>
+            )}
           </section>
         </div>
 

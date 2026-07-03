@@ -1,4 +1,5 @@
-from ..config import get_openai_api_key
+from ..config import get_openai_api_key, get_openai_model
+
 import os
 import json
 import logging
@@ -15,7 +16,8 @@ logger = logging.getLogger(__name__)
 from ..models import (
     NormalizedControl, ControlMapping, GRCRequiredEvidence,
     FrameworkControl, Framework, GRCUser, get_db,
-    ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping
+    ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping,
+    Risk, RiskFrameworkControlLink,
 )
 from ..schemas import (
     NormalizedControlCreate, NormalizedControlUpdate, NormalizedControlResponse,
@@ -23,7 +25,8 @@ from ..schemas import (
     RequiredEvidenceCreate, RequiredEvidenceResponse,
     MessageResponse
 )
-from .auth_router import require_auth, get_user_tenants
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from datetime import datetime
 
 
 class ControlAIRecommendationRequest(BaseModel):
@@ -31,6 +34,30 @@ class ControlAIRecommendationRequest(BaseModel):
     control_title: str
     control_description: Optional[str] = None
     framework_name: Optional[str] = None
+
+
+class PromoteControlRiskRequest(BaseModel):
+    """Promote an AI-suggested 'risk if this control isn't implemented' into the
+    real ERM Risk Register, linked back to the framework control (source). Mirrors
+    the standard Risk Register create form so the promote panel can show the same
+    template fields."""
+    control_id: int
+    framework_name: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    register_type: Optional[str] = None         # defaults to framework_name
+    category: str = "compliance"        # strategic|operational|financial|compliance|technology|third_party|project_change|internal
+    risk_sub_category: Optional[str] = None
+    inherent_likelihood: Optional[int] = None  # 1–5
+    inherent_impact: Optional[int] = None       # 1–5
+    residual_likelihood: Optional[int] = None  # 1–5 (defaults to inherent)
+    residual_impact: Optional[int] = None       # 1–5 (defaults to inherent)
+    owner_id: Optional[int] = None
+    business_owner_id: Optional[int] = None
+    treatment_plan: Optional[str] = None
+    root_cause: Optional[str] = None
+    recommendations: Optional[str] = None
+    due_date: Optional[str] = None      # ISO date
 
 
 class FrameworkControlEvidenceLinkCreate(BaseModel):
@@ -143,7 +170,18 @@ Generate professional, audit-ready recommendations in the following JSON format:
         }}
     ],
     "key_risks_addressed": ["<risk 1>", "<risk 2>", ...],
-    "audit_focus_areas": ["<focus area 1>", "<focus area 2>", ...]
+    "audit_focus_areas": ["<focus area 1>", "<focus area 2>", ...],
+    "risks_if_not_implemented": [
+        {{
+            "title": "<concise risk title — the risk that materialises if this control is NOT implemented>",
+            "description": "<what happens / the exposure>",
+            "category": "<one of: strategic|operational|financial|compliance|technology|third_party|project_change>",
+            "severity": "<critical|high|medium|low>",
+            "likelihood": <1-5 integer>,
+            "impact": <1-5 integer>,
+            "rationale": "<one-sentence reasoning: WHY not implementing this control creates this risk>"
+        }}
+    ]
 }}
 
 REQUIREMENTS:
@@ -151,8 +189,8 @@ REQUIREMENTS:
 2. Generate 3-7 evidence requirements covering policies, procedures, and actual evidence artifacts
 3. Identify 2-5 key risks that this control addresses
 4. Identify 2-4 audit focus areas that auditors would typically scrutinize
-5. Be specific and actionable - procedures should be executable by an auditor
-6. Evidence requirements should be comprehensive and realistic
+5. For risks_if_not_implemented: identify 2-4 concrete enterprise risks that would arise if this control were absent or failed, each with a likelihood/impact (1-5) and a one-sentence rationale. These feed directly into a risk register, so phrase them as register-ready risk statements.
+6. Be specific and actionable - procedures should be executable by an auditor
 7. Respond ONLY with valid JSON, no additional text"""
 
 
@@ -174,7 +212,7 @@ def get_control_ai_recommendations(
         )
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a Senior GRC Auditor providing audit test procedures and evidence requirements. Respond only with valid JSON."},
                 {"role": "user", "content": prompt}
@@ -231,12 +269,36 @@ def get_control_ai_recommendations(
                 "audit_focus_areas": ["Evidence of control operation", "Completeness of documentation"]
             }
         
+        # ── Real register linkage: actual ERM risks this control already addresses
+        # (via RiskFrameworkControlLink) — not generic AI text. Best-effort.
+        addressed_risks = []
+        try:
+            tids = get_user_tenants(current_user, db)
+            links = db.query(RiskFrameworkControlLink).options(
+                joinedload(RiskFrameworkControlLink.risk)
+            ).filter(RiskFrameworkControlLink.framework_control_id == request.control_id).all()
+            for ln in links:
+                r = ln.risk
+                if r and r.tenant_id in tids:
+                    addressed_risks.append({
+                        "id": r.id, "title": r.title, "category": r.category,
+                        "status": r.status, "inherent_score": r.inherent_score,
+                        "residual_score": r.residual_score,
+                        "mitigation_effectiveness": ln.mitigation_effectiveness,
+                    })
+        except Exception:  # noqa: BLE001 — linkage is best-effort
+            logger.warning("addressed-risks lookup failed for control %s", request.control_id, exc_info=True)
+
         return {
             "control_id": request.control_id,
             "test_procedures": result.get("test_procedures", []),
             "evidence_requirements": result.get("evidence_requirements", []),
             "key_risks_addressed": result.get("key_risks_addressed", []),
-            "audit_focus_areas": result.get("audit_focus_areas", [])
+            "audit_focus_areas": result.get("audit_focus_areas", []),
+            # Real risks already linked in the register that this control mitigates.
+            "addressed_risks": addressed_risks,
+            # AI-reasoned risks that arise WITHOUT this control — promotable to the register.
+            "risks_if_not_implemented": result.get("risks_if_not_implemented", []),
         }
         
     except HTTPException:
@@ -247,6 +309,89 @@ def get_control_ai_recommendations(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate AI recommendations: {str(e)}"
         )
+
+
+_RISK_CATEGORIES = {"strategic", "operational", "financial", "compliance", "technology",
+                    "third_party", "project_change", "internal", "isms", "process", "other"}
+
+
+@router.post("/ai-recommendations/promote-risk", status_code=status.HTTP_201_CREATED)
+def promote_control_risk(
+    request: PromoteControlRiskRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Create a real ERM Risk from an AI-suggested 'risk if this control isn't
+    implemented', and link it to the framework control (the control is the
+    mitigating control; the framework is the source). The risk lands in the actual
+    Risk Register under /erm/risks."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="User is not assigned to any tenant")
+
+    control = db.query(FrameworkControl).filter(FrameworkControl.id == request.control_id).first()
+    if not control:
+        raise HTTPException(status_code=404, detail="Framework control not found")
+
+    category = request.category if request.category in _RISK_CATEGORIES else "compliance"
+    likelihood = request.inherent_likelihood if request.inherent_likelihood in (1, 2, 3, 4, 5) else None
+    impact = request.inherent_impact if request.inherent_impact in (1, 2, 3, 4, 5) else None
+    score = float(likelihood * impact) if (likelihood and impact) else None
+
+    # Residual defaults to inherent (control not yet implemented), but the user can
+    # override it in the register form — honour an explicit residual when given.
+    res_likelihood = request.residual_likelihood if request.residual_likelihood in (1, 2, 3, 4, 5) else likelihood
+    res_impact = request.residual_impact if request.residual_impact in (1, 2, 3, 4, 5) else impact
+    res_score = float(res_likelihood * res_impact) if (res_likelihood and res_impact) else None
+
+    due = None
+    if request.due_date:
+        try:
+            due = datetime.fromisoformat(request.due_date.replace("Z", "+00:00"))
+        except ValueError:
+            due = None
+
+    risk = Risk(
+        tenant_id=tenant_id,
+        title=request.title[:255],
+        description=request.description,
+        category=category,
+        risk_category=category,
+        risk_sub_category=request.risk_sub_category,
+        register_type=request.register_type or request.framework_name or "Control Gap",
+        owner_id=request.owner_id or current_user.id,
+        business_owner_id=request.business_owner_id,
+        inherent_likelihood=likelihood,
+        inherent_impact=impact,
+        inherent_score=score,
+        residual_likelihood=res_likelihood,
+        residual_impact=res_impact,
+        residual_score=res_score,
+        status="open",
+        treatment_plan=request.treatment_plan,
+        root_cause=request.root_cause,
+        recommendations=request.recommendations,
+        due_date=due,
+        source_type="control_gap",
+        source_reference=f"framework_control:{request.control_id}",
+    )
+    db.add(risk)
+    db.flush()
+
+    # Link the control as a mitigating control (idempotent on the unique key).
+    if not db.query(RiskFrameworkControlLink).filter(
+        RiskFrameworkControlLink.risk_id == risk.id,
+        RiskFrameworkControlLink.framework_control_id == request.control_id,
+    ).first():
+        db.add(RiskFrameworkControlLink(
+            risk_id=risk.id, framework_control_id=request.control_id,
+            mitigation_effectiveness="full",
+            notes=f"Promoted from control AI analysis — implementing this control mitigates the risk.",
+        ))
+    db.commit()
+    db.refresh(risk)
+    return {"risk_id": risk.id, "title": risk.title, "category": risk.category,
+            "inherent_score": risk.inherent_score, "status": risk.status}
 
 
 @router.get("", response_model=List[NormalizedControlResponse])
@@ -586,6 +731,214 @@ def list_framework_controls(
         "skip": skip,
         "limit": limit
     }
+
+
+# Rank used to pick the "most-advanced" implementation when a parsed control has
+# multiple ControlImplementation rows (i.e. it belongs to more than one journey).
+_IMPL_STATUS_RANK = {
+    "not_started": 0,
+    "not_applicable": 1,
+    "in_progress": 2,
+    "implemented": 3,
+    "verified": 4,
+}
+
+
+@router.get("/framework-controls/status-summary")
+def get_framework_controls_status_summary(
+    framework_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Aggregate status snapshot for parsed framework controls (tenant-scoped).
+
+    Additive, read-only. JOINs existing tables only (no new columns):
+      - ParsedFrameworkControl (list-derivable counts: total/verified/mandatory/by_priority)
+      - EvidenceControlMapping (distinct parsed_control_id -> with_evidence)
+      - ControlImplementation (certification-journey status; may be absent)
+
+    When a parsed control has multiple ControlImplementation rows (multiple
+    journeys), the most-advanced one wins, ranked by status
+    (verified > implemented > in_progress > not_applicable > not_started) and,
+    within the same status, the most-recent verified_date/implementation_date.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+
+    # Tenant scoping — mirror list_framework_controls exactly.
+    if framework_id:
+        access_filter = or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.tenant_id.is_(None)
+        ) if user_tenants else UploadedFramework.tenant_id.is_(None)
+
+        base_query = db.query(ParsedFrameworkControl).join(
+            UploadedFramework,
+            ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
+        ).filter(
+            access_filter,
+            UploadedFramework.is_active == True,
+            ParsedFrameworkControl.uploaded_framework_id == framework_id
+        )
+    else:
+        tenant_specific_names_sq = db.query(UploadedFramework.name).filter(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            UploadedFramework.is_active == True
+        ) if user_tenants else db.query(UploadedFramework.name).filter(False)
+
+        dedup_filter = or_(
+            UploadedFramework.tenant_id.in_(user_tenants),
+            and_(
+                UploadedFramework.tenant_id.is_(None),
+                ~UploadedFramework.name.in_(tenant_specific_names_sq)
+            )
+        )
+
+        base_query = db.query(ParsedFrameworkControl).join(
+            UploadedFramework,
+            ParsedFrameworkControl.uploaded_framework_id == UploadedFramework.id
+        ).filter(
+            dedup_filter,
+            UploadedFramework.is_active == True
+        )
+
+    controls = base_query.all()
+
+    total = len(controls)
+    verified = 0
+    mandatory = 0
+    by_priority: dict = {}
+    control_ids: List[int] = []
+
+    for c in controls:
+        control_ids.append(c.id)
+        if c.is_verified:
+            verified += 1
+        if c.is_mandatory:
+            mandatory += 1
+        # priority_level when present else priority
+        pkey = c.priority_level if getattr(c, "priority_level", None) not in (None, "") else c.priority
+        if pkey is not None and pkey != "":
+            key = str(pkey)
+            by_priority[key] = by_priority.get(key, 0) + 1
+
+    # with_evidence: distinct parsed_control_id having >=1 EvidenceControlMapping
+    with_evidence = 0
+    if control_ids:
+        ev_rows = db.query(EvidenceControlMapping.parsed_control_id).filter(
+            EvidenceControlMapping.parsed_control_id.in_(control_ids)
+        ).distinct().all()
+        with_evidence = len(ev_rows)
+
+    # Implementation status via ControlImplementation (certification journeys).
+    by_status = {
+        "not_started": 0,
+        "in_progress": 0,
+        "implemented": 0,
+        "verified": 0,
+        "not_applicable": 0,
+    }
+    control_status: dict = {}
+    tracked = False
+
+    if control_ids:
+        impls = db.query(ControlImplementation).filter(
+            ControlImplementation.parsed_control_id.in_(control_ids)
+        ).all()
+
+        # Pick the most-advanced implementation per parsed_control_id.
+        best_by_control: dict = {}
+        for impl in impls:
+            pcid = impl.parsed_control_id
+            if pcid is None:
+                continue
+            tracked = True
+            current = best_by_control.get(pcid)
+            if current is None or _impl_is_more_advanced(impl, current):
+                best_by_control[pcid] = impl
+
+        # Resolve assignee display names in one batch.
+        assignee_ids = set()
+        for impl in best_by_control.values():
+            aid = _impl_assignee_id(impl)
+            if aid:
+                assignee_ids.add(aid)
+        name_by_id: dict = {}
+        if assignee_ids:
+            for u in db.query(GRCUser.id, GRCUser.display_name, GRCUser.username).filter(
+                GRCUser.id.in_(assignee_ids)
+            ).all():
+                name_by_id[u.id] = u.display_name or u.username
+
+        for pcid, impl in best_by_control.items():
+            st = impl.status or "not_started"
+            if st in by_status:
+                by_status[st] += 1
+            aid = _impl_assignee_id(impl)
+            control_status[str(pcid)] = {
+                "status": st,
+                "assignee_name": name_by_id.get(aid) if aid else None,
+                "implementation_date": impl.implementation_date.isoformat() if impl.implementation_date else None,
+                "verified_date": impl.verified_date.isoformat() if impl.verified_date else None,
+            }
+
+    return {
+        "total": total,
+        "verified": verified,
+        "with_evidence": with_evidence,
+        "mandatory": mandatory,
+        "by_priority": by_priority,
+        "implementation": {
+            "tracked": tracked,
+            "by_status": by_status,
+        },
+        "control_status": control_status,
+    }
+
+
+def _impl_assignee_id(impl: "ControlImplementation") -> Optional[int]:
+    """Primary assignee: legacy single FK, else first of the JSON list."""
+    if impl.assigned_to_user_id:
+        return impl.assigned_to_user_id
+    ids = impl.assigned_user_ids
+    if isinstance(ids, list) and ids:
+        first = ids[0]
+        if isinstance(first, int):
+            return first
+        try:
+            return int(first)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _impl_is_more_advanced(candidate: "ControlImplementation",
+                           current: "ControlImplementation") -> bool:
+    """True if `candidate` should replace `current` as the representative impl.
+
+    Ranks by status (verified > implemented > in_progress > not_applicable >
+    not_started); ties broken by the most-recent verified_date then
+    implementation_date."""
+    cand_rank = _IMPL_STATUS_RANK.get(candidate.status or "not_started", 0)
+    cur_rank = _IMPL_STATUS_RANK.get(current.status or "not_started", 0)
+    if cand_rank != cur_rank:
+        return cand_rank > cur_rank
+    cand_v = candidate.verified_date
+    cur_v = current.verified_date
+    if cand_v != cur_v:
+        if cand_v is None:
+            return False
+        if cur_v is None:
+            return True
+        return cand_v > cur_v
+    cand_i = candidate.implementation_date
+    cur_i = current.implementation_date
+    if cand_i != cur_i:
+        if cand_i is None:
+            return False
+        if cur_i is None:
+            return True
+        return cand_i > cur_i
+    return False
 
 
 @router.get("/framework-control/{framework_control_id}", response_model=dict)

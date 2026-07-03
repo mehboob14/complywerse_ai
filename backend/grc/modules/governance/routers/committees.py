@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 from typing import List, Optional
 from datetime import datetime
 import json
@@ -385,7 +386,7 @@ def extract_text_from_uploaded_action_file(upload_file: UploadFile, file_bytes: 
 def generate_action_ai_text(prompt: str) -> str:
     client = get_openai_client()
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=get_openai_model(),
         messages=[
             {
                 "role": "system",
@@ -616,6 +617,234 @@ def get_committee_dashboard(
             }
             for a in overdue_actions_list
         ],
+    }
+
+
+@router.get("/overview")
+def get_committee_overview(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Executive single-snapshot for the Board & Committee dashboard.
+
+    Everything committee-wise, computed from live data and tenant-scoped:
+      • kpis        — headline counts (committees, meetings, actions, attendance)
+      • committees  — per-committee rollup (next/last meeting, open/overdue actions)
+      • upcoming_meetings — the next few scheduled meetings
+      • top_performers — members ranked by action completion + on-time rate
+      • progress_over_time — 6-month trend (meetings held, actions completed, %)
+
+    Returns zeroed/empty structures on a fresh tenant so the UI degrades
+    gracefully ("No meetings recorded yet") rather than erroring. Registered
+    BEFORE the parametric /{committee_id} route so "overview" is never parsed
+    as an id.
+    """
+    from collections import defaultdict
+
+    empty = {
+        "kpis": {
+            "total_committees": 0, "active_committees": 0,
+            "meetings_upcoming": 0, "meetings_completed": 0, "meetings_this_quarter": 0,
+            "actions": {"open": 0, "in_progress": 0, "overdue": 0, "completed": 0, "total": 0, "pct_done": 0.0},
+            "avg_attendance_pct": None, "charters_active": 0,
+        },
+        "committees": [], "upcoming_meetings": [], "top_performers": [], "progress_over_time": [],
+    }
+
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        return empty
+    filter_tenants = [tenant_id] if tenant_id and tenant_id in user_tenants else user_tenants
+    now = datetime.utcnow()
+
+    committees = db.query(GovernanceCommittee).filter(
+        GovernanceCommittee.tenant_id.in_(filter_tenants)
+    ).all()
+    if not committees:
+        return empty
+
+    meetings = db.query(CommitteeMeeting).options(
+        joinedload(CommitteeMeeting.committee)
+    ).filter(CommitteeMeeting.tenant_id.in_(filter_tenants)).all()
+    actions = db.query(OversightAction).filter(
+        OversightAction.tenant_id.in_(filter_tenants)
+    ).all()
+
+    member_rows = db.query(
+        CommitteeMember.committee_id, func.count(CommitteeMember.id)
+    ).filter(
+        CommitteeMember.tenant_id.in_(filter_tenants),
+        CommitteeMember.is_active == True,  # noqa: E712
+    ).group_by(CommitteeMember.committee_id).all()
+    members_by_committee = {cid: cnt for cid, cnt in member_rows}
+
+    charters_active = db.query(CommitteeCharter).filter(
+        CommitteeCharter.tenant_id.in_(filter_tenants),
+        CommitteeCharter.status == "active",
+    ).count()
+
+    def is_overdue(a) -> bool:
+        # "overdue" is both a persistable status (the OversightAction model enum
+        # documents it, and the update endpoint accepts it) AND a derived state
+        # (an open/in-progress action past its due date). Count both, so a row
+        # saved literally as "overdue" is not dropped from every KPI bucket.
+        if a.status == "overdue":
+            return True
+        return a.status in ("open", "in_progress") and a.due_date is not None and a.due_date < now
+
+    def month_key(dt) -> str:
+        return f"{dt.year:04d}-{dt.month:02d}"
+
+    # ── KPI tallies ──
+    a_open = sum(1 for a in actions if a.status == "open")
+    a_prog = sum(1 for a in actions if a.status == "in_progress")
+    a_done = sum(1 for a in actions if a.status == "completed")
+    a_overdue = sum(1 for a in actions if is_overdue(a))
+    a_total = len(actions)
+    pct_done = round((a_done / a_total) * 100, 1) if a_total else 0.0
+
+    m_upcoming = sum(1 for m in meetings if m.status == "scheduled" and m.scheduled_date and m.scheduled_date >= now)
+    m_completed = sum(1 for m in meetings if m.status == "completed")
+    q_start = datetime(now.year, 3 * ((now.month - 1) // 3) + 1, 1)
+    m_quarter = sum(1 for m in meetings if m.scheduled_date and m.scheduled_date >= q_start)
+
+    ratios = [
+        (m.quorum_present / m.quorum_required)
+        for m in meetings
+        if m.quorum_required and m.quorum_present is not None and m.quorum_required > 0
+    ]
+    avg_attendance = round((sum(ratios) / len(ratios)) * 100, 1) if ratios else None
+
+    # ── per-committee rollup ──
+    actions_by_committee = defaultdict(list)
+    for a in actions:
+        actions_by_committee[a.committee_id].append(a)
+    meetings_by_committee = defaultdict(list)
+    for m in meetings:
+        meetings_by_committee[m.committee_id].append(m)
+
+    committee_rows = []
+    for c in committees:
+        c_actions = actions_by_committee.get(c.id, [])
+        c_meetings = meetings_by_committee.get(c.id, [])
+        upcoming = [m for m in c_meetings if m.scheduled_date and m.scheduled_date >= now and m.status != "cancelled"]
+        past = [m for m in c_meetings if m.scheduled_date and m.scheduled_date < now]
+        next_meeting = min(upcoming, key=lambda m: m.scheduled_date) if upcoming else None
+        last_meeting = max(past, key=lambda m: m.scheduled_date) if past else None
+        committee_rows.append({
+            "id": c.id,
+            "name": c.name,
+            "committee_type": c.committee_type,
+            "is_active": c.is_active,
+            "members_count": members_by_committee.get(c.id, 0),
+            "next_meeting_date": next_meeting.scheduled_date.isoformat() if next_meeting else None,
+            "last_meeting": {
+                "date": last_meeting.scheduled_date.isoformat(),
+                "status": last_meeting.status,
+            } if last_meeting else None,
+            "open_actions": sum(1 for a in c_actions if a.status == "open"),
+            "in_progress_actions": sum(1 for a in c_actions if a.status == "in_progress"),
+            "overdue_actions": sum(1 for a in c_actions if is_overdue(a)),
+            "completed_actions": sum(1 for a in c_actions if a.status == "completed"),
+            "total_actions": len(c_actions),
+        })
+    # attention-first ordering: most overdue, then most open
+    committee_rows.sort(key=lambda r: (-r["overdue_actions"], -r["open_actions"], r["name"].lower()))
+
+    # ── upcoming meetings (next 6) ──
+    upcoming_sorted = sorted(
+        [m for m in meetings if m.status == "scheduled" and m.scheduled_date and m.scheduled_date >= now],
+        key=lambda m: m.scheduled_date,
+    )[:6]
+    upcoming_meetings = [
+        {
+            "id": m.id, "title": m.title,
+            "committee_id": m.committee_id,
+            "committee_name": m.committee.name if m.committee else None,
+            "scheduled_date": m.scheduled_date.isoformat() if m.scheduled_date else None,
+            "status": m.status,
+        }
+        for m in upcoming_sorted
+    ]
+
+    # ── top performers (members by completion + on-time rate) ──
+    perf = defaultdict(lambda: {"assigned": 0, "completed": 0, "on_time": 0})
+    for a in actions:
+        if not a.assigned_to:
+            continue
+        p = perf[a.assigned_to]
+        p["assigned"] += 1
+        if a.status == "completed":
+            p["completed"] += 1
+            if a.completed_at and a.due_date and a.completed_at <= a.due_date:
+                p["on_time"] += 1
+    names = {}
+    if perf:
+        for u in db.query(GRCUser).filter(GRCUser.id.in_(list(perf.keys()))).all():
+            names[u.id] = getattr(u, "display_name", None) or getattr(u, "username", None) or getattr(u, "email", None) or f"User {u.id}"
+    top_performers = []
+    for uid, p in perf.items():
+        completion_pct = round((p["completed"] / p["assigned"]) * 100, 1) if p["assigned"] else 0.0
+        on_time_pct = round((p["on_time"] / p["completed"]) * 100, 1) if p["completed"] else 0.0
+        top_performers.append({
+            "user_id": uid, "name": names.get(uid, f"User {uid}"),
+            "assigned": p["assigned"], "completed": p["completed"], "on_time": p["on_time"],
+            "completion_pct": completion_pct, "on_time_pct": on_time_pct,
+        })
+    top_performers.sort(key=lambda r: (-r["completion_pct"], -r["completed"], -r["on_time"]))
+    top_performers = top_performers[:6]
+
+    # ── progress over time (trailing 6 months) ──
+    months = []
+    yy, mm = now.year, now.month
+    for _ in range(6):
+        months.append((yy, mm))
+        mm -= 1
+        if mm == 0:
+            mm = 12
+            yy -= 1
+    months.reverse()
+    progress_over_time = []
+    for (y, m) in months:
+        key = f"{y:04d}-{m:02d}"
+        meetings_held = sum(1 for mt in meetings if mt.status == "completed" and mt.scheduled_date and month_key(mt.scheduled_date) == key)
+        # Bucket completed actions by completion date, falling back to created_at
+        # when completed_at was never stamped — so this monthly sum reconciles
+        # with the KPI/per-committee "completed" counts (which key purely on status).
+        actions_completed = sum(
+            1 for a in actions
+            if a.status == "completed" and (a.completed_at or a.created_at)
+            and month_key(a.completed_at or a.created_at) == key
+        )
+        due_in_month = sum(1 for a in actions if a.due_date and month_key(a.due_date) == key)
+        done_of_due = sum(1 for a in actions if a.due_date and month_key(a.due_date) == key and a.status == "completed")
+        completion_pct = round((done_of_due / due_in_month) * 100, 1) if due_in_month else None
+        progress_over_time.append({
+            "month": key,
+            "meetings_held": meetings_held,
+            "actions_completed": actions_completed,
+            "completion_pct": completion_pct,
+        })
+
+    return {
+        "kpis": {
+            "total_committees": len(committees),
+            "active_committees": sum(1 for c in committees if c.is_active),
+            "meetings_upcoming": m_upcoming,
+            "meetings_completed": m_completed,
+            "meetings_this_quarter": m_quarter,
+            "actions": {
+                "open": a_open, "in_progress": a_prog, "overdue": a_overdue,
+                "completed": a_done, "total": a_total, "pct_done": pct_done,
+            },
+            "avg_attendance_pct": avg_attendance,
+            "charters_active": charters_active,
+        },
+        "committees": committee_rows,
+        "upcoming_meetings": upcoming_meetings,
+        "top_performers": top_performers,
+        "progress_over_time": progress_over_time,
     }
 
 
@@ -2583,7 +2812,7 @@ Make the charter comprehensive, professional, and specific to the committee type
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a governance expert. Return only valid JSON."},
                 {"role": "user", "content": prompt}
@@ -2778,7 +3007,7 @@ Return ONLY valid JSON."""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a governance compliance expert. Return only valid JSON."},
                 {"role": "user", "content": prompt}

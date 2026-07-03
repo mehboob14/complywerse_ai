@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 import os
 import json
 import uuid
@@ -22,7 +23,6 @@ from ....models import (
     FrameworkControl, FrameworkDomain, ControlObjective, Framework,
     GRCUser, get_db, ParsedFrameworkControl, UploadedFramework, NormalizationRun
 )
-from ....config import get_openai_model
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/groups", tags=["Control Library - Groups"])
@@ -120,7 +120,7 @@ Description: {description or 'No description provided'}
 Return JSON: {{"keywords": ["term1", "term2", ...]}}"""
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "Extract compliance keywords. Respond only with valid JSON."},
                 {"role": "user", "content": prompt}
@@ -153,7 +153,7 @@ Return JSON:
 }}"""
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a compliance expert summarizing control groups. Respond only with valid JSON."},
                 {"role": "user", "content": prompt}
@@ -306,7 +306,7 @@ def _ai_group_single_batch(
     framework_summary = _summarize_frameworks(controls_list)
     prompt = _build_grouping_prompt(controls_text, target_groups_hint, framework_summary, existing_themes)
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model=get_openai_model(),
         messages=[
             {"role": "system", "content": (
                 "You are a compliance expert grouping related controls across multiple "

@@ -33,6 +33,27 @@ router = APIRouter(prefix="/artifacts", tags=["Artifacts"])
 # Catalog seed path
 # ---------------------------------------------------------------------------
 _CATALOG_PATH = Path(__file__).parent.parent / "seed_data" / "artifact_catalog.json"
+# Pre-generated, type-/control-specific artifact document bodies (one-time job:
+# scripts/generate_artifact_content.py). Served on create so the governance flow
+# uses ready content instead of re-drafting. Cached in-process by mtime.
+_CONTENT_PATH = Path(__file__).parent.parent / "seed_data" / "artifact_content.json"
+_content_cache: dict = {"mtime": None, "data": {}}
+
+
+def _load_artifact_content() -> dict:
+    """Load (and cache) the pre-generated artifact content map, reloading if the
+    file changed. Returns {} if it hasn't been generated yet."""
+    try:
+        if not _CONTENT_PATH.exists():
+            return {}
+        mtime = _CONTENT_PATH.stat().st_mtime
+        if _content_cache["mtime"] != mtime:
+            _content_cache["data"] = json.loads(_CONTENT_PATH.read_text(encoding="utf-8"))
+            _content_cache["mtime"] = mtime
+        return _content_cache["data"]
+    except Exception:  # noqa: BLE001 — content is an optional enhancement
+        logger.warning("could not load artifact_content.json", exc_info=True)
+        return {}
 
 # Map assessment_type strings → catalog framework_key
 ASSESSMENT_TYPE_MAP: dict[str, str] = {
@@ -611,6 +632,10 @@ def _derive_catalog_from_framework(
             "owner": None,
             "is_platform_native": False,
             "platform_data_type": None,
+            # Virtual (requirement-derived) artifacts have no pre-generated
+            # content bucket — readiness is always false here.
+            "has_content": False,
+            "content_format": None,
         })
 
     stages = sorted({i["stage"] for i in items}, key=lambda s: int(s.split(" ")[1].rstrip(":")) if s.startswith("Stage ") else 999)
@@ -663,6 +688,170 @@ def _artifact_out(artifact: TenantArtifact) -> dict:
 # Routes
 # ---------------------------------------------------------------------------
 
+@router.get("/catalog/content")
+def get_artifact_content(
+    artifact_id: str = Query(..., description="Catalog artifact_id, e.g. ISO27-001"),
+    framework_key: Optional[str] = Query(None, description="Optional — disambiguates if ids ever collide"),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Return the pre-generated, type-/control-specific document body for a catalog
+    artifact (from artifact_content.json). The governance create flow uses this so
+    each artifact gets proper content instead of generic boilerplate. `found=false`
+    signals the caller to fall back to its client-side template."""
+    data = _load_artifact_content()
+    entry = None
+    if framework_key and framework_key in data:
+        entry = data[framework_key].get(artifact_id)
+    if not entry:
+        for fw_bucket in data.values():
+            if artifact_id in fw_bucket:
+                entry = fw_bucket[artifact_id]
+                break
+    if not entry or not entry.get("content"):
+        return {"artifact_id": artifact_id, "found": False, "content": None}
+    return {
+        "artifact_id": artifact_id, "found": True,
+        "title": entry.get("title"), "type": entry.get("type"),
+        "control_ref": entry.get("control_ref"), "content": entry.get("content"),
+        # format-aware extras (additive): the generation mode + the structured
+        # table (tabular artifacts) so the UI can render/download natively.
+        "content_format": entry.get("content_format") or "markdown",
+        "format": entry.get("format"),
+        "table": entry.get("table"),
+    }
+
+
+def _lookup_catalog_entry(data: dict, artifact_id: str, framework_key: Optional[str]) -> Optional[dict]:
+    if framework_key and framework_key in data:
+        entry = data[framework_key].get(artifact_id)
+        if entry:
+            return entry
+    for fw_bucket in data.values():
+        if artifact_id in fw_bucket:
+            return fw_bucket[artifact_id]
+    return None
+
+
+@router.get("/catalog/export")
+def export_catalog_artifact(
+    artifact_id: str = Query(..., description="Catalog artifact_id, e.g. ISO27-001"),
+    framework_key: Optional[str] = Query(None),
+    fmt: str = Query("md", description="md | csv | xlsx | docx | pdf"),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Download a catalog artifact's pre-generated content as a native file
+    (xlsx/csv for templates, docx/pdf/md for documents & guides)."""
+    from ._artifact_export import build_export, SUPPORTED_FORMATS  # local import: heavy libs
+    entry = _lookup_catalog_entry(_load_artifact_content(), artifact_id, framework_key)
+    if not entry or not entry.get("content"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="No generated content for this artifact yet.")
+    if fmt.lower() not in SUPPORTED_FORMATS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Unsupported format. Use one of: {', '.join(SUPPORTED_FORMATS)}")
+    title = entry.get("title") or artifact_id
+    body, media, ext = build_export(
+        fmt, title=title, content=entry.get("content"),
+        content_format=entry.get("content_format"), table=entry.get("table"),
+    )
+    filename = f"{_safe_filename(title)}.{ext}"
+    return StreamingResponse(
+        BytesIO(body), media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _content_lookup(content_map: dict, framework_key: Optional[str], artifact_id: str) -> Optional[dict]:
+    """Find a non-empty content entry for an artifact, preferring its own framework
+    bucket then falling back across buckets (ids are framework-prefixed)."""
+    if framework_key:
+        e = content_map.get(framework_key, {}).get(artifact_id)
+        if e and e.get("content"):
+            return e
+    for bucket in content_map.values():
+        e = bucket.get(artifact_id)
+        if e and e.get("content"):
+            return e
+    return None
+
+
+@router.get("/catalog/all")
+def get_all_catalogs(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Every seeded framework's artifact catalog in ONE call, each item tagged with
+    readiness (has_content) from the mtime-hot-reloading content map. Powers the
+    "all frameworks" artifact-template browser so generated artifacts surface
+    regardless of the tenant's active certification journeys. Frameworks are ordered
+    ready-first so the ones with generated content float to the top."""
+    _ensure_catalog_seeded(db)
+    rows = (
+        db.query(ArtifactCatalogItem)
+        .order_by(
+            ArtifactCatalogItem.framework_name,
+            ArtifactCatalogItem.stage_number,
+            ArtifactCatalogItem.artifact_id,
+        )
+        .all()
+    )
+    content_map = _load_artifact_content()
+
+    groups: dict = {}
+    for i in rows:
+        g = groups.get(i.framework_key)
+        if g is None:
+            g = groups[i.framework_key] = {
+                "framework_key": i.framework_key,
+                "framework_name": i.framework_name,
+                "items": [],
+                "stages": set(),
+            }
+        entry = _content_lookup(content_map, i.framework_key, i.artifact_id)
+        g["items"].append({
+            "id": i.id,
+            "artifact_id": i.artifact_id,
+            "stage": i.stage,
+            "stage_number": i.stage_number,
+            "name": i.name,
+            "artifact_type": i.artifact_type,
+            "control_ref": i.control_ref,
+            "mandatory": i.mandatory,
+            "description": i.description,
+            "format": i.format,
+            "owner": i.owner,
+            "is_platform_native": i.is_platform_native,
+            "platform_data_type": i.platform_data_type,
+            "has_content": entry is not None,
+            "content_format": (entry.get("content_format") or "markdown") if entry else None,
+        })
+        if i.stage:
+            g["stages"].add(i.stage)
+
+    frameworks = []
+    for g in groups.values():
+        ready = sum(1 for it in g["items"] if it["has_content"])
+        frameworks.append({
+            "framework_key": g["framework_key"],
+            "framework_name": g["framework_name"],
+            "total": len(g["items"]),
+            "ready": ready,
+            "stages": sorted(
+                g["stages"],
+                key=lambda s: (s.split(" ")[1] if s.startswith("Stage ") else s),
+            ),
+            "items": g["items"],
+        })
+    # Ready-first, then alphabetical — frameworks with generated artifacts on top.
+    frameworks.sort(key=lambda f: (-f["ready"], (f["framework_name"] or "").lower()))
+    return {
+        "frameworks": frameworks,
+        "total_frameworks": len(frameworks),
+        "total_artifacts": sum(f["total"] for f in frameworks),
+        "total_ready": sum(f["ready"] for f in frameworks),
+    }
+
+
 @router.get("/catalog")
 def get_catalog(
     framework_key: Optional[str] = Query(None),
@@ -714,27 +903,53 @@ def get_catalog(
         fw_name = assessment_type
     else:
         fw_name = resolved_key
+
+    # Per-item readiness: does this artifact have pre-generated, non-empty
+    # content yet? Sourced from the mtime-hot-reloading content map so the list
+    # auto-reflects the generator/exporter as it runs — no restart. `has_content`
+    # lets both the governance template browser and the compliance Artifacts tab
+    # surface "Ready" state directly from the list (additive, purely optional).
+    content_map = _load_artifact_content()
+    fw_content = content_map.get(resolved_key, {}) if resolved_key else {}
+
+    def _content_entry(aid: str) -> Optional[dict]:
+        e = fw_content.get(aid)
+        if e and e.get("content"):
+            return e
+        # Rare cross-framework fallback (ids are framework-prefixed, so collisions
+        # are unlikely) — mirrors the /catalog/content lookup behaviour.
+        for bucket in content_map.values():
+            e = bucket.get(aid)
+            if e and e.get("content"):
+                return e
+        return None
+
+    def _item_out(i: "ArtifactCatalogItem") -> dict:
+        entry = _content_entry(i.artifact_id)
+        return {
+            "id": i.id,
+            "artifact_id": i.artifact_id,
+            "stage": i.stage,
+            "stage_number": i.stage_number,
+            "name": i.name,
+            "artifact_type": i.artifact_type,
+            "control_ref": i.control_ref,
+            "mandatory": i.mandatory,
+            "description": i.description,
+            "format": i.format,
+            "owner": i.owner,
+            "is_platform_native": i.is_platform_native,
+            "platform_data_type": i.platform_data_type,
+            # Ready = pre-generated content exists. content_format tells the UI
+            # whether it's a document (markdown), a table template, or a guide.
+            "has_content": entry is not None,
+            "content_format": (entry.get("content_format") or "markdown") if entry else None,
+        }
+
     return {
         "framework_key": resolved_key,
         "framework_name": fw_name,
-        "items": [
-            {
-                "id": i.id,
-                "artifact_id": i.artifact_id,
-                "stage": i.stage,
-                "stage_number": i.stage_number,
-                "name": i.name,
-                "artifact_type": i.artifact_type,
-                "control_ref": i.control_ref,
-                "mandatory": i.mandatory,
-                "description": i.description,
-                "format": i.format,
-                "owner": i.owner,
-                "is_platform_native": i.is_platform_native,
-                "platform_data_type": i.platform_data_type,
-            }
-            for i in items
-        ],
+        "items": [_item_out(i) for i in items],
         "stages": stages,
     }
 
@@ -1011,22 +1226,27 @@ def _build_asset_inventory_xlsx(db: Session, tenant_id: int, title: str) -> Byte
     return buf
 
 
+def _default_fmt_for(format_str: Optional[str]) -> str:
+    """Pick a sensible download format from the catalog `format` string."""
+    primary = (format_str or "").upper().split("/")[0].split("(")[0].strip()
+    return {"XLSX": "xlsx", "CSV": "csv", "PDF": "pdf", "DOCX": "docx"}.get(primary, "docx")
+
+
 @router.get("/{artifact_id}/export")
 def export_artifact(
     artifact_id: int,
+    fmt: str = Query("auto", description="auto | md | csv | xlsx | docx | pdf"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    """Download a tenant artifact as a file.
+    """Download a tenant artifact as a native file in any supported format.
 
-    For platform-native artifacts (risk register, asset inventory, …) we
-    generate an XLSX from the live tenant data so the exported file always
-    reflects the current state of the source — not a cached snapshot.
-
-    For non-platform artifacts the caller already has the ``content`` field
-    and renders the file client-side; this endpoint returns 400 to make
-    that explicit.
+    Platform-native artifacts (risk register, asset inventory) export a LIVE
+    XLSX from current tenant data. All other artifacts are rendered from their
+    stored ``content`` (+ table) into the requested format (xlsx/csv for
+    tabular templates, docx/pdf/md for documents & guides).
     """
+    from ._artifact_export import build_export, SUPPORTED_FORMATS  # local import: heavy libs
     tenant_id = get_user_primary_tenant(current_user, db)
     artifact = (
         db.query(TenantArtifact)
@@ -1036,33 +1256,30 @@ def export_artifact(
     if not artifact:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found")
 
-    if not artifact.is_platform_native:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "This artifact is not a platform-native data export. The "
-                "frontend renders its content directly via the existing "
-                "download helper — call /artifacts/{id} for the content."
-            ),
-        )
-
-    pdt = (artifact.platform_data_type or "").strip().lower()
     title = artifact.name or "artifact"
+    pdt = (artifact.platform_data_type or "").strip().lower()
 
-    if pdt == "risk_register":
-        buf = _build_risk_register_xlsx(db, tenant_id, title)
-    elif pdt == "asset_inventory":
-        buf = _build_asset_inventory_xlsx(db, tenant_id, title)
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=f"Export not implemented for platform_data_type='{pdt}'",
+    # Platform-native exports stay live-from-data (XLSX of current tenant state).
+    if artifact.is_platform_native and pdt in ("risk_register", "asset_inventory"):
+        buf = _build_risk_register_xlsx(db, tenant_id, title) if pdt == "risk_register" \
+            else _build_asset_inventory_xlsx(db, tenant_id, title)
+        filename = f"{_safe_filename(title)}.xlsx"
+        return StreamingResponse(
+            buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    filename = f"{_safe_filename(title)}.xlsx"
+    if not (artifact.content or "").strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="This artifact has no content to export.")
+    chosen = _default_fmt_for(artifact.format) if (fmt or "auto").lower() == "auto" else fmt.lower()
+    if chosen not in SUPPORTED_FORMATS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Unsupported format. Use one of: {', '.join(SUPPORTED_FORMATS)}")
+    body, media, ext = build_export(chosen, title=title, content=artifact.content)
+    filename = f"{_safe_filename(title)}.{ext}"
     return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        BytesIO(body), media_type=media,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

@@ -470,6 +470,52 @@ PERMISSION_MATRIX = [
                 "actions": ["view", "create", "edit", "delete"]
             }
         ]
+    },
+    {
+        "module": "vendor_risk",
+        "display_name": "Vendor / Third-Party Risk (TPRA)",
+        "submodules": [
+            {
+                "name": "vendors",
+                "display_name": "Vendors",
+                "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                "name": "assessments",
+                "display_name": "TPRA Assessments",
+                "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                "name": "lifecycle",
+                "display_name": "Lifecycle (advance / send-back / skip)",
+                "actions": ["view", "advance", "send_back", "skip"]
+            },
+            {
+                "name": "findings",
+                "display_name": "Findings & Remediation",
+                "actions": ["view", "create", "edit", "delete", "accept_risk"]
+            },
+            {
+                "name": "contracts",
+                "display_name": "Contracts & Control Obligations",
+                "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                "name": "approvals",
+                "display_name": "Approval Decisions",
+                "actions": ["view", "approve"]
+            },
+            {
+                "name": "monitoring",
+                "display_name": "Continuous Monitoring",
+                "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                "name": "templates",
+                "display_name": "Questionnaire Templates",
+                "actions": ["view", "create", "edit", "delete"]
+            }
+        ]
     }
 ]
 

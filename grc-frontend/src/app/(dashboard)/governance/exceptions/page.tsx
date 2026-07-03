@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef, type ChangeEvent } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { policyExceptionApi, governanceApi, documentsApi } from '@/lib/api';
+import { policyExceptionApi, governanceApi, documentsApi, assetsApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Shield,
@@ -21,6 +22,8 @@ import {
   Sparkles,
   Trash2,
   Search,
+  ArrowRightLeft,
+  ExternalLink,
 } from 'lucide-react';
 import {
   PieChart,
@@ -28,8 +31,53 @@ import {
   Cell,
   Tooltip,
   ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  LineChart,
+  Line,
 } from 'recharts';
 import { RightSlidePanel, SearchInput, MultiSelectDropdown } from '@/components/ui';
+
+/**
+ * Textarea that grows to fit its content so long (often AI-generated) field
+ * values are fully visible the moment the panel opens — no manual dragging or
+ * inner scrolling (item 14: "fields should be already expanded based on content").
+ */
+function AutoGrowTextarea({
+  value,
+  onChange,
+  className,
+  placeholder,
+  minRows = 3,
+}: {
+  value: string;
+  onChange: (e: ChangeEvent<HTMLTextAreaElement>) => void;
+  className?: string;
+  placeholder?: string;
+  minRows?: number;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={onChange}
+      className={className}
+      placeholder={placeholder}
+      rows={minRows}
+      style={{ overflow: 'hidden', resize: 'vertical' }}
+    />
+  );
+}
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -87,7 +135,27 @@ interface ExceptionItem {
   approval_comments?: string;
   approved_by_name?: string;
   approved_at?: string;
+  linked_asset_ids?: number[];
+  linked_assets?: Array<{ id: number; name: string; asset_type?: string; criticality?: string; confidentiality?: number | null; integrity?: number | null; availability?: number | null }>;
+  posture?: { score: number; band: string; overdue: boolean; linked_assets: number };
+  closed_on_time?: boolean | null;
+  promoted_risk_id?: number | null;
 }
+
+interface ExceptionAnalytics {
+  avg_posture: number | null;
+  posture_band: string | null;
+  open: number;
+  overdue: number;
+  resolved: number;
+  closed_on_time_pct: number | null;
+  aging_buckets: Record<string, number>;
+  by_status: Record<string, number>;
+  by_priority: Record<string, number>;
+  total: number;
+}
+
+interface AssetOption { id: number; name: string; asset_type?: string; criticality?: string }
 
 interface ExceptionComment {
   id: number;
@@ -154,6 +222,7 @@ export default function PolicyExceptionsPage() {
     priority: 'medium',
     effective_date: '',
     expiry_date: '',
+    asset_ids: [] as number[],
   });
 
   // ── Discover & generate exceptions (policy-content search + AI suggestions) ──
@@ -165,8 +234,12 @@ export default function PolicyExceptionsPage() {
   const [candidates, setCandidates] = useState<ExceptionCandidate[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [candidateSource, setCandidateSource] = useState('');
+  // Which policy drives AI exception suggestions. 'all' = scan across every
+  // policy; a document id = AI proposes exceptions for that exact policy.
+  const [candidatePolicyId, setCandidatePolicyId] = useState<number | 'all'>('all');
 
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const extractItemsArray = (payload: any): any[] => {
     if (Array.isArray(payload)) return payload;
@@ -198,17 +271,39 @@ export default function PolicyExceptionsPage() {
     queryKey: ['governance-documents-list'],
     queryFn: async () => {
       try {
-        const response = await governanceApi.getDocuments({ limit: 200 });
-        const allDocs = extractItemsArray(response.data);
-        const policyDocs = allDocs.filter((doc: any) => {
-          const t = String(doc?.doc_type || '').toLowerCase();
-          return t === 'policy' || t === 'standard' || t === 'procedure' || t === 'guideline' || t === 'charter';
-        });
-        return (policyDocs.length > 0 ? policyDocs : allDocs) as GovernancePolicyOption[];
+        const response = await governanceApi.getDocuments({ limit: 500 });
+        // Exceptions can ONLY be raised against policies — show policy documents
+        // only, never procedures / standards / guidelines / other doc types.
+        return extractItemsArray(response.data).filter(
+          (doc: any) => String(doc?.doc_type || '').toLowerCase() === 'policy'
+        ) as GovernancePolicyOption[];
       } catch {
         const fallback = await documentsApi.getAll();
         return extractItemsArray(fallback.data) as GovernancePolicyOption[];
       }
+    },
+  });
+
+  const { data: assetOptions } = useQuery({
+    queryKey: ['assets-for-exception-link'],
+    queryFn: async () => {
+      try {
+        const res = await assetsApi.getAll({ limit: 500 });
+        return extractItemsArray(res.data) as AssetOption[];
+      } catch { return [] as AssetOption[]; }
+    },
+  });
+
+  const { data: analytics } = useQuery({
+    queryKey: ['policy-exceptions-analytics'],
+    queryFn: async () => (await policyExceptionApi.getAnalytics()).data as ExceptionAnalytics,
+  });
+
+  const { data: postureTrend } = useQuery({
+    queryKey: ['policy-exceptions-trend'],
+    queryFn: async () => {
+      const res = await policyExceptionApi.getTrend('exception_risk_posture', 180);
+      return (res.data?.series || []) as Array<{ date: string; value: number | null }>;
     },
   });
 
@@ -292,6 +387,18 @@ export default function PolicyExceptionsPage() {
     },
   });
 
+  const promoteToRiskMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await policyExceptionApi.promoteToRisk(id);
+      return res.data as { risk_id: number; created: boolean; message?: string };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['policy-exceptions'] });
+      setViewingException(null);
+      if (result?.risk_id) router.push(`/risks/${result.risk_id}`);
+    },
+  });
+
   const addCommentMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: { comment: string } }) => {
       await policyExceptionApi.addComment(id, data);
@@ -341,6 +448,7 @@ export default function PolicyExceptionsPage() {
       priority: 'medium',
       effective_date: '',
       expiry_date: '',
+      asset_ids: [],
     });
   };
 
@@ -354,6 +462,7 @@ export default function PolicyExceptionsPage() {
       priority: exception.priority || 'medium',
       effective_date: exception.effective_date || '',
       expiry_date: exception.expiry_date || '',
+      asset_ids: exception.linked_asset_ids || [],
     });
     setEditingException(exception);
   };
@@ -369,6 +478,7 @@ export default function PolicyExceptionsPage() {
     if (formData.document_id) payload.document_id = Number(formData.document_id);
     if (formData.effective_date) payload.effective_date = formData.effective_date;
     if (formData.expiry_date) payload.expiry_date = formData.expiry_date;
+    payload.asset_ids = formData.asset_ids;
 
     if (editingException) {
       updateMutation.mutate({ id: editingException.id, data: payload });
@@ -392,6 +502,7 @@ export default function PolicyExceptionsPage() {
       priority: opts?.priority || 'medium',
       effective_date: '',
       expiry_date: '',
+      asset_ids: [],
     });
     setEditingException(null);
     setShowCreateModal(true);
@@ -412,10 +523,14 @@ export default function PolicyExceptionsPage() {
     }
   };
 
-  const loadCandidates = async () => {
+  // Load AI exception candidates. With a specific policy selected the backend
+  // focuses on that exact document; with 'all' it scans across every policy.
+  const loadCandidates = async (target: number | 'all' = candidatePolicyId) => {
     setLoadingCandidates(true);
     try {
-      const res = await policyExceptionApi.suggestCandidates({ limit: 8 });
+      const params: { document_id?: number; limit: number } = { limit: 8 };
+      if (target !== 'all') params.document_id = target;
+      const res = await policyExceptionApi.suggestCandidates(params);
       setCandidates((res.data?.candidates || []) as ExceptionCandidate[]);
       setCandidateSource(res.data?.source || '');
     } catch {
@@ -423,6 +538,13 @@ export default function PolicyExceptionsPage() {
     } finally {
       setLoadingCandidates(false);
     }
+  };
+
+  // Selecting a policy immediately surfaces AI exceptions for that exact policy.
+  const onSelectCandidatePolicy = (value: string) => {
+    const target: number | 'all' = value === 'all' ? 'all' : Number(value);
+    setCandidatePolicyId(target);
+    loadCandidates(target);
   };
 
   // Reveal the panel; auto-load AI suggestions the first time it's opened.
@@ -480,6 +602,21 @@ export default function PolicyExceptionsPage() {
     { name: 'rest', value: 100 - priorityScore, fill: '#e5e7eb' },
   ];
 
+  // Asset-weighted risk posture + aging + trend (items 17 & 18) from the analytics endpoint.
+  const postureScore = analytics?.avg_posture != null ? Math.round(analytics.avg_posture) : priorityScore;
+  const postureColor =
+    postureScore >= 75 ? '#ef4444' : postureScore >= 50 ? '#f59e0b' : postureScore >= 25 ? '#3b82f6' : '#10b981';
+  const postureGaugeData = [
+    { name: 'score', value: postureScore, fill: postureColor },
+    { name: 'rest', value: 100 - postureScore, fill: '#e5e7eb' },
+  ];
+  const AGING_LABEL: Record<string, string> = { '0_30': '0–30d', '31_60': '31–60d', '61_90': '61–90d', '90_plus': '90d+', overdue: 'Overdue' };
+  const AGING_COLOR: Record<string, string> = { '0_30': '#3b82f6', '31_60': '#6366f1', '61_90': '#f59e0b', '90_plus': '#f97316', overdue: '#ef4444' };
+  const agingData = ['0_30', '31_60', '61_90', '90_plus', 'overdue'].map((k) => ({
+    name: AGING_LABEL[k], value: (analytics?.aging_buckets?.[k] as number) || 0, fill: AGING_COLOR[k],
+  }));
+  const trendData = (postureTrend || []).map((p) => ({ date: p.date.slice(5), value: p.value ?? 0 }));
+
   return (
     <div className="governance-exceptions space-y-4 sm:space-y-6 p-4 sm:p-5">
       {/* Header row */}
@@ -502,13 +639,13 @@ export default function PolicyExceptionsPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {/* Speedometer — Priority Risk Level */}
           <div className="rounded-lg border border-gray-200 bg-white p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Priority Risk Level</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Risk Posture <span className="normal-case text-gray-400">· asset-weighted (CIA × criticality)</span></p>
             <div className="flex items-center gap-4">
               <div className="relative h-[110px] w-[170px] flex-shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={gaugeData}
+                      data={postureGaugeData}
                       cx="50%"
                       cy="88%"
                       startAngle={180}
@@ -525,8 +662,8 @@ export default function PolicyExceptionsPage() {
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-end pb-1 pointer-events-none">
-                  <span className="text-lg font-bold" style={{ color: gaugeColor }}>{priorityScore}%</span>
-                  <span className="text-[9px] text-gray-500 leading-tight">risk score</span>
+                  <span className="text-lg font-bold" style={{ color: postureColor }}>{postureScore}</span>
+                  <span className="text-[9px] text-gray-500 leading-tight">/100 posture{analytics?.overdue ? ` · ${analytics.overdue} overdue` : ''}</span>
                 </div>
               </div>
               <div className="space-y-1.5 flex-1">
@@ -569,6 +706,66 @@ export default function PolicyExceptionsPage() {
                     <span className="font-semibold text-black">{s.value}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Improved analytics row — aging · posture trend · closure timeliness (items 17 & 18) */}
+      {analytics && analytics.total > 0 && (
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Open Exception Aging</p>
+            <div className="h-[130px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={agingData} margin={{ top: 4, right: 6, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6 }} />
+                  <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+                    {agingData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Risk Posture Trend <span className="normal-case text-gray-400">· 0–100</span></p>
+            {trendData.length > 1 ? (
+              <div className="h-[130px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trendData} margin={{ top: 4, right: 6, left: -18, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="date" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={20} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ fontSize: 11, borderRadius: 6 }} />
+                    <Line type="monotone" dataKey="value" stroke={postureColor} strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="flex h-[130px] items-center justify-center text-center text-[11px] text-gray-400">
+                Trend builds daily as snapshots accumulate.
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-2">Closure Timeliness</p>
+            <div className="flex items-center gap-4">
+              <div className="flex flex-col items-center">
+                <span className="text-2xl font-bold" style={{ color: (analytics.closed_on_time_pct ?? 100) >= 80 ? '#10b981' : (analytics.closed_on_time_pct ?? 0) >= 50 ? '#f59e0b' : '#ef4444' }}>
+                  {analytics.closed_on_time_pct != null ? `${analytics.closed_on_time_pct}%` : '—'}
+                </span>
+                <span className="text-[10px] text-gray-500">closed on time</span>
+              </div>
+              <div className="flex-1 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between"><span className="text-gray-500">Open</span><span className="font-semibold text-black">{analytics.open}</span></div>
+                <div className="flex items-center justify-between"><span className="text-gray-500">Overdue</span><span className={`font-semibold ${analytics.overdue ? 'text-red-600' : 'text-black'}`}>{analytics.overdue}</span></div>
+                <div className="flex items-center justify-between"><span className="text-gray-500">Resolved</span><span className="font-semibold text-black">{analytics.resolved}</span></div>
               </div>
             </div>
           </div>
@@ -683,25 +880,47 @@ export default function PolicyExceptionsPage() {
 
             {/* Feature 2 — AI-suggested candidate exceptions */}
             <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <p className="text-xs font-semibold text-gray-700">AI-suggested exceptions across policies</p>
-                <button
-                  onClick={loadCandidates}
-                  disabled={loadingCandidates}
-                  className="flex items-center gap-1 rounded border border-indigo-200 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+              <div className="mb-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-gray-700">
+                    AI-suggested exceptions {candidatePolicyId === 'all' ? 'across policies' : 'for the selected policy'}
+                  </p>
+                  <button
+                    onClick={() => loadCandidates()}
+                    disabled={loadingCandidates}
+                    className="flex flex-shrink-0 items-center gap-1 rounded border border-indigo-200 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                  >
+                    {loadingCandidates ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    {candidates.length ? 'Refresh' : 'Suggest'}
+                  </button>
+                </div>
+                {/* Pick a policy → AI immediately shows possible exceptions for
+                    that exact document. 'All policies' scans across the board. */}
+                <select
+                  value={String(candidatePolicyId)}
+                  onChange={(e) => onSelectCandidatePolicy(e.target.value)}
+                  className="mt-1.5 w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
                 >
-                  {loadingCandidates ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                  {candidates.length ? 'Refresh' : 'Suggest'}
-                </button>
+                  <option value="all">All policies (scan across every policy)</option>
+                  {(documents || []).map((d: GovernancePolicyOption) => (
+                    <option key={d.id} value={d.id}>
+                      {d.document_code ? `${d.document_code} · ` : ''}{d.title}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="max-h-64 space-y-1.5 overflow-y-auto">
                 {loadingCandidates && (
                   <div className="flex items-center gap-2 px-1 py-3 text-xs text-gray-500">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Analyzing policies…
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> {candidatePolicyId === 'all' ? 'Analyzing your policies…' : 'Analyzing this policy…'}
                   </div>
                 )}
                 {!loadingCandidates && candidates.length === 0 && (
-                  <p className="px-1 py-2 text-xs text-gray-400">No suggestions yet — click “Suggest” to let AI propose exceptions across your policies.</p>
+                  <p className="px-1 py-2 text-xs text-gray-400">
+                    {candidatePolicyId === 'all'
+                      ? 'Select a policy above to see exceptions for that exact policy, or “Suggest” to scan across all policies.'
+                      : 'No AI-suggested exceptions found for this policy — click “Suggest” to retry.'}
+                  </p>
                 )}
                 {candidates.map((c, i) => (
                   <div key={`${c.document_id}-${i}`} className="rounded border border-gray-100 bg-gray-50 p-2">
@@ -940,7 +1159,7 @@ export default function PolicyExceptionsPage() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-blue-900">AI is working...</p>
-          <p className="text-xs text-blue-700 mt-0.5">Generating suggested justification and risk details...</p>
+          <p className="text-xs text-blue-700 mt-0.5">Generating suggested justification and potential risks...</p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <span className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '0ms' }}></span>
@@ -952,7 +1171,7 @@ export default function PolicyExceptionsPage() {
 
     <div>
       <label className="label">Justification *</label>
-      <textarea
+      <AutoGrowTextarea
         value={formData.justification}
         onChange={(e) => setFormData({ ...formData, justification: e.target.value })}
         className="input"
@@ -961,23 +1180,45 @@ export default function PolicyExceptionsPage() {
     </div>
 
     <div>
-      <label className="label">Risk Assessment</label>
-      <textarea
+      <label className="label">Potential Risks</label>
+      <AutoGrowTextarea
         value={formData.risk_assessment}
         onChange={(e) => setFormData({ ...formData, risk_assessment: e.target.value })}
         className="input"
-        placeholder="Describe the risk associated with this exception"
+        placeholder="Describe the potential risks this exception introduces"
       />
     </div>
 
     <div>
       <label className="label">Compensating Controls</label>
-      <textarea
+      <AutoGrowTextarea
         value={formData.compensating_controls}
         onChange={(e) => setFormData({ ...formData, compensating_controls: e.target.value })}
         className="input"
         placeholder="Describe compensating controls in place"
       />
+    </div>
+
+    <div>
+      <label className="label">Link Assets <span className="text-xs font-normal text-gray-400">— their CIA &amp; criticality weight this exception&apos;s risk posture</span></label>
+      <MultiSelectDropdown
+        title="Assets"
+        items={(assetOptions || []).map((a) => ({
+          value: String(a.id),
+          label: a.name,
+          subLabel: [a.criticality, a.asset_type].filter(Boolean).join(' · ') || undefined,
+        }))}
+        selectedValues={formData.asset_ids.map(String)}
+        onApply={(values) => setFormData({ ...formData, asset_ids: values.map(Number) })}
+        multiSelect
+        triggerVariant="input"
+        triggerClassName="w-full"
+        placeholder="Link assets affected by this exception..."
+        forceSearch
+      />
+      {formData.asset_ids.length > 0 && (
+        <p className="mt-1 text-[11px] text-gray-500">{formData.asset_ids.length} asset(s) linked — the most critical drives the posture score.</p>
+      )}
     </div>
 
     <div>
@@ -1105,8 +1346,34 @@ export default function PolicyExceptionsPage() {
       </div>
 
       <div>
-        <label className="text-xs text-gray-600 uppercase tracking-wide">Risk Assessment</label>
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs text-gray-600 uppercase tracking-wide">Potential Risks</label>
+          {viewingException.promoted_risk_id ? (
+            <button
+              type="button"
+              onClick={() => { const id = viewingException.promoted_risk_id; setViewingException(null); if (id) router.push(`/risks/${id}`); }}
+              className="inline-flex items-center gap-1 text-xs font-medium text-green-700 hover:text-green-800"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> In risk register — assess
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => promoteToRiskMutation.mutate(viewingException.id)}
+              disabled={promoteToRiskMutation.isPending}
+              className="inline-flex items-center gap-1 rounded-md border border-primary-300 px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-50 disabled:opacity-50"
+            >
+              {promoteToRiskMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRightLeft className="h-3.5 w-3.5" />}
+              Move to Risk Register
+            </button>
+          )}
+        </div>
         <p className="text-gray-800 mt-1 whitespace-pre-wrap">{viewingException.risk_assessment || '-'}</p>
+        {!viewingException.promoted_risk_id && (
+          <p className="mt-1 text-[11px] text-gray-500">
+            Creates an ERM risk-register entry from these potential risks (carrying the linked assets across) so you can complete the likelihood/impact assessment there.
+          </p>
+        )}
       </div>
 
       <div>

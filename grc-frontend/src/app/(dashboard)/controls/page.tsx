@@ -4,9 +4,11 @@ import { Fragment, useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { controlsApi, evidenceApi } from '@/lib/api';
+import { controlsApi, evidenceApi, ermApi, adminApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { SearchInput, MultiSelectDropdown, InlineLinkPicker, PageLoader } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, InlineLinkPicker, PageLoader, RightSlidePanel, AnimatedModal } from '@/components/ui';
+import { useToast } from '@/components/ui/ToastProvider';
+import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import {
   Shield,
   Loader2,
@@ -33,7 +35,9 @@ import {
   ClipboardList,
   FolderOpen,
   AlertTriangle,
-  Target
+  Target,
+  Plus,
+  ShieldAlert
 } from 'lucide-react';
 
 interface FrameworkControl {
@@ -63,9 +67,13 @@ interface FrameworkControl {
   framework_version: string | null;
   created_at: string | null;
   evidence_count: number;
+  // Saved per-control evidence recommendations (seed shape: name/description/filetype).
+  // Older callers used title/artifact_type, so both are accepted for safety.
   evidence_requirements: Array<{
-    title: string;
+    name?: string;
+    title?: string;
     description?: string;
+    filetype?: string;
     artifact_type?: string;
   }>;
 }
@@ -106,12 +114,54 @@ interface EvidenceRequirement {
   mandatory: boolean;
 }
 
+interface AddressedRisk {
+  id: number; title: string; category: string | null; status: string | null;
+  inherent_score: number | null; residual_score: number | null; mitigation_effectiveness: string | null;
+}
+interface PotentialRisk {
+  title: string; description?: string; category?: string; severity?: string;
+  likelihood?: number; impact?: number; rationale?: string;
+}
 interface AIRecommendations {
   control_id: number;
   test_procedures: TestProcedure[];
   evidence_requirements: EvidenceRequirement[];
   key_risks_addressed: string[];
   audit_focus_areas: string[];
+  addressed_risks: AddressedRisk[];
+  risks_if_not_implemented: PotentialRisk[];
+}
+
+interface ControlImplStatus {
+  status: string;
+  assignee_name: string | null;
+  implementation_date: string | null;
+  verified_date: string | null;
+}
+interface StatusSummary {
+  total: number;
+  verified: number;
+  with_evidence: number;
+  mandatory: number;
+  by_priority: Record<string, number>;
+  implementation: {
+    tracked: boolean;
+    by_status: Record<string, number>;
+  };
+  control_status: Record<string, ControlImplStatus>;
+}
+
+const RISK_CATEGORIES = ['strategic', 'operational', 'financial', 'compliance', 'technology', 'third_party', 'project_change', 'internal'];
+// Mirror the standard ERM Risk Register "Register Type" options (UBL/NCA template
+// import flows are excluded — they don't apply to a control-gap risk).
+const REGISTER_TYPES = ['PCI-DSS', 'ISO 27001', 'SOX', 'GDPR', 'NIST', 'SAMA CSF', 'Internal', 'Project-Based', 'Third-Party', 'Other'];
+const RISK_INPUT_CLS = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
+function riskSevCls(sev?: string): string {
+  const m: Record<string, string> = {
+    critical: 'bg-red-50 text-red-700 border-red-200', high: 'bg-orange-50 text-orange-700 border-orange-200',
+    medium: 'bg-amber-50 text-amber-700 border-amber-200', low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  };
+  return m[(sev || 'medium').toLowerCase()] || m.medium;
 }
 
 type SortField =
@@ -244,7 +294,7 @@ function FrameworkControlEvidenceLinkSection({ controlId }: { controlId: number 
           <InlineLinkPicker
             triggerLabel="Link Existing"
             triggerIcon={<Link2 className="h-3 w-3" />}
-            triggerClassName="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-50"
+            triggerClassName="flex items-center gap-1 rounded border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50"
             items={evidencePickerItems}
             isLoading={evidenceLoading || linkMutation.isPending}
             emptyText="No evidence available"
@@ -324,7 +374,7 @@ function FrameworkControlEvidenceLinkSection({ controlId }: { controlId: number 
               <div className="min-w-0">
                 <Link
                   href={`/evidence/${lnk.evidence_id}`}
-                  className="block truncate text-xs font-medium text-blue-600 hover:underline"
+                  className="block truncate text-xs font-medium text-primary-700 hover:underline"
                 >
                   {lnk.title || lnk.file_name || `Evidence #${lnk.evidence_id}`}
                 </Link>
@@ -335,7 +385,7 @@ function FrameworkControlEvidenceLinkSection({ controlId }: { controlId: number 
               <div className="ml-2 flex flex-shrink-0 items-center gap-1">
                 <Link
                   href={`/evidence/${lnk.evidence_id}`}
-                  className="rounded p-1 text-slate-400 hover:text-blue-600"
+                  className="rounded p-1 text-slate-400 hover:text-primary-600"
                   title="View evidence"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
@@ -395,7 +445,7 @@ function PriorityLevelBadge({ level }: { level: string | null }) {
 function DomainId({ code }: { code: string }) {
   const id = (code || '').split('.')[0] || '?';
   return (
-    <span className="inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-md bg-slate-900 px-1.5 text-[11px] font-bold tracking-wide text-white">
+    <span className="inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-md bg-primary-600 px-1.5 text-[11px] font-bold tracking-wide text-white">
       {id}
     </span>
   );
@@ -507,7 +557,7 @@ function NativeFrameworkTree({ frameworkId }: { frameworkId: number }) {
               onClick={() => setPhase(p.v)}
               className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                 phase === p.v
-                  ? 'border-slate-900 bg-slate-900 text-white'
+                  ? 'border-primary-600 bg-primary-600 text-white'
                   : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
               }`}
             >
@@ -610,7 +660,7 @@ function NativeFrameworkTree({ frameworkId }: { frameworkId: number }) {
                                     </span>
                                     <Link
                                       href={`/evidence?control_id=${spec.id}`}
-                                      className="text-blue-600 hover:underline"
+                                      className="text-primary-700 hover:underline"
                                     >
                                       Manage evidence
                                     </Link>
@@ -750,7 +800,7 @@ function Figure2View({ frameworkId }: { frameworkId: number }) {
           {phaseChips.map((p) => (
             <button key={p.v} type="button" onClick={() => setPhase(p.v)}
               className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                phase === p.v ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
+                phase === p.v ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
               <span>{p.label}</span>
               <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${phase === p.v ? 'bg-white/20' : 'bg-slate-100 text-slate-600'}`}>{p.sub}</span>
             </button>
@@ -782,7 +832,7 @@ function Figure2View({ frameworkId }: { frameworkId: number }) {
             {isOpen && visibleControls.map((ctrl) => (
               <div key={ctrl.code} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
                 {/* Identity block — all Figure-2 header fields, labelled */}
-                <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50/70 to-white px-5 py-4">
+                <div className="border-b border-slate-100 bg-white px-5 py-4">
                   <div className="grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2">
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Domain Name</p>
@@ -790,7 +840,7 @@ function Figure2View({ frameworkId }: { frameworkId: number }) {
                     </div>
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Domain ID</p>
-                      <p className="mt-0.5 font-mono text-sm font-semibold text-blue-700">{domainCode}</p>
+                      <p className="mt-0.5 font-mono text-sm font-semibold text-primary-700">{domainCode}</p>
                     </div>
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control Name</p>
@@ -798,7 +848,7 @@ function Figure2View({ frameworkId }: { frameworkId: number }) {
                     </div>
                     <div>
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control ID</p>
-                      <p className="mt-0.5 font-mono text-sm font-semibold text-blue-700">{ctrl.code}</p>
+                      <p className="mt-0.5 font-mono text-sm font-semibold text-primary-700">{ctrl.code}</p>
                     </div>
                   </div>
                   {ctrl.desc && (
@@ -874,6 +924,88 @@ function Figure2View({ frameworkId }: { frameworkId: number }) {
   );
 }
 
+// Implementation-status pill (certification-journey status). Semantic tints only.
+const IMPL_STATUS_META: Record<string, { label: string; cls: string }> = {
+  not_started: { label: 'Not started', cls: 'bg-slate-100 text-slate-600' },
+  in_progress: { label: 'In progress', cls: 'bg-amber-50 text-amber-700' },
+  implemented: { label: 'Implemented', cls: 'bg-primary-50 text-primary-700' },
+  verified: { label: 'Verified', cls: 'bg-emerald-50 text-emerald-700' },
+  not_applicable: { label: 'N/A', cls: 'bg-slate-100 text-slate-500' },
+};
+function ImplStatusPill({ status }: { status: string }) {
+  const m = IMPL_STATUS_META[status] || { label: status, cls: 'bg-slate-100 text-slate-600' };
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${m.cls}`}>
+      {m.label}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Control-health snapshot — a compact, on-brand tile strip driven by the new
+// status-summary endpoint (guarded to {}). Verified % / evidence coverage % are
+// endpoint-derived (not the paginated list). The implementation mini-bar only
+// renders when the endpoint reports implementation.tracked.
+// ---------------------------------------------------------------------------
+const IMPL_BAR: { key: string; label: string; cls: string }[] = [
+  { key: 'not_started', label: 'Not started', cls: 'bg-slate-300' },
+  { key: 'in_progress', label: 'In progress', cls: 'bg-amber-400' },
+  { key: 'implemented', label: 'Implemented', cls: 'bg-primary-400' },
+  { key: 'verified', label: 'Verified', cls: 'bg-emerald-500' },
+];
+function ControlHealthSnapshot({
+  summary, totalFrameworks, fallbackTotal,
+}: { summary?: Partial<StatusSummary>; totalFrameworks: number; fallbackTotal: number }) {
+  const total = summary?.total ?? fallbackTotal ?? 0;
+  const hasEndpoint = summary?.total != null;
+  const verified = summary?.verified ?? 0;
+  const withEvidence = summary?.with_evidence ?? 0;
+  const mandatory = summary?.mandatory ?? 0;
+  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
+  const impl = summary?.implementation;
+  const tracked = !!impl?.tracked;
+  const byStatus = impl?.by_status ?? {};
+  const implTotal = IMPL_BAR.reduce((s, b) => s + (byStatus[b.key] || 0), 0);
+
+  const Tile = ({ value, label, tone }: { value: React.ReactNode; label: string; tone?: string }) => (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <p className={`text-xl font-bold ${tone || 'text-slate-900'}`}>{value}</p>
+      <p className="mt-0.5 text-xs text-slate-500">{label}</p>
+    </div>
+  );
+
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <Tile value={total} label="Total controls" />
+      <Tile value={totalFrameworks} label={totalFrameworks === 1 ? 'Framework' : 'Frameworks'} />
+      <Tile value={hasEndpoint ? `${pct(verified)}%` : '—'} label="Verified" tone="text-emerald-600" />
+      <Tile value={hasEndpoint ? `${pct(withEvidence)}%` : '—'} label="Evidence coverage" tone="text-primary-600" />
+      <Tile value={hasEndpoint ? mandatory : '—'} label="Mandatory" tone="text-rose-600" />
+      {tracked && implTotal > 0 ? (
+        <div className="col-span-2 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:col-span-3 lg:col-span-1">
+          <p className="mb-1.5 text-xs font-medium text-slate-600">Implementation</p>
+          <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-100">
+            {IMPL_BAR.map((b) => {
+              const n = byStatus[b.key] || 0;
+              if (n === 0) return null;
+              return <div key={b.key} className={b.cls} style={{ width: `${(n / implTotal) * 100}%` }} title={`${b.label}: ${n}`} />;
+            })}
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
+            {IMPL_BAR.map((b) => (
+              <span key={b.key} className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+                <span className={`h-2 w-2 rounded-full ${b.cls}`} />{byStatus[b.key] || 0}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <Tile value={hasEndpoint && total > 0 ? `${pct(withEvidence)}%` : '—'} label="Coverage" tone="text-primary-600" />
+      )}
+    </div>
+  );
+}
+
 export default function ControlsPage() {
   const searchParams = useSearchParams();
   const { hasPermission } = usePermissions();
@@ -888,7 +1020,7 @@ export default function ControlsPage() {
   const [domainFilter, setDomainFilter] = useState('');
   const [sortBy, setSortBy] = useState<SortField>('control_id');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [expandedControl, setExpandedControl] = useState<number | null>(null);
+  const [selectedControlId, setSelectedControlId] = useState<number | null>(null);
   const [page, setPage] = useState(0);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [aiRecommendations, setAiRecommendations] = useState<Record<number, AIRecommendations>>({});
@@ -926,11 +1058,122 @@ export default function ControlsPage() {
     });
   };
 
+  // ── Promote an AI "risk if not implemented" into the real ERM Risk Register ──
+  const { toast } = useToast();
+  const [promoteCtx, setPromoteCtx] = useState<{ control: FrameworkControl; risk: PotentialRisk } | null>(null);
+  const [promoteForm, setPromoteForm] = useState({
+    title: '', description: '', register_type: '', category: 'compliance', risk_sub_category: '',
+    business_owner_id: undefined as number | undefined,
+    likelihood: 3, impact: 3, residual_likelihood: 3, residual_impact: 3,
+    treatment_plan: '', root_cause: '', recommendations: '', due_date: '',
+  });
+
+  // Users for the Business Owner select — fetched only while the panel is open.
+  const { data: usersList } = useQuery({
+    queryKey: ['admin-users-for-control-risk'],
+    queryFn: async () => {
+      try {
+        const r = await adminApi.getUsers();
+        return ((r.data || []) as Array<{ id: number; email?: string; full_name?: string; name?: string; first_name?: string; last_name?: string }>).map((u) => ({
+          id: u.id,
+          name: u.full_name || u.name || [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email || `User ${u.id}`,
+        }));
+      } catch { return []; }
+    },
+    enabled: !!promoteCtx,
+  });
+
+  const openPromote = (control: FrameworkControl, risk: PotentialRisk) => {
+    const lk = risk.likelihood && risk.likelihood >= 1 && risk.likelihood <= 5 ? risk.likelihood : 3;
+    const im = risk.impact && risk.impact >= 1 && risk.impact <= 5 ? risk.impact : 3;
+    setPromoteCtx({ control, risk });
+    setPromoteForm({
+      title: risk.title || '',
+      description: risk.description || '',
+      register_type: control.framework_name || '',
+      category: risk.category && RISK_CATEGORIES.includes(risk.category) ? risk.category : 'compliance',
+      risk_sub_category: '',
+      business_owner_id: undefined,
+      likelihood: lk, impact: im,
+      // Control not yet implemented → residual starts at inherent (user can adjust).
+      residual_likelihood: lk, residual_impact: im,
+      treatment_plan: '', root_cause: risk.rationale || '', recommendations: '', due_date: '',
+    });
+  };
+
+  const promoteRiskMutation = useMutation({
+    mutationFn: () => controlsApi.promoteControlRisk({
+      control_id: promoteCtx!.control.id,
+      framework_name: promoteCtx!.control.framework_name || undefined,
+      title: promoteForm.title,
+      description: promoteForm.description || promoteCtx!.risk.description || undefined,
+      register_type: promoteForm.register_type || undefined,
+      category: promoteForm.category,
+      risk_sub_category: promoteForm.risk_sub_category || undefined,
+      inherent_likelihood: promoteForm.likelihood,
+      inherent_impact: promoteForm.impact,
+      residual_likelihood: promoteForm.residual_likelihood,
+      residual_impact: promoteForm.residual_impact,
+      business_owner_id: promoteForm.business_owner_id,
+      treatment_plan: promoteForm.treatment_plan || undefined,
+      root_cause: promoteForm.root_cause || undefined,
+      recommendations: promoteForm.recommendations || undefined,
+      due_date: promoteForm.due_date || undefined,
+    }),
+    onSuccess: (resp) => {
+      // The new risk is now linked to this control. Reflect it locally so the
+      // section flips to "risks addressed" mode (mutual exclusivity) without a refetch.
+      const data = (resp?.data || {}) as { risk_id?: number; title?: string; category?: string | null; inherent_score?: number | null; status?: string | null };
+      const ctrlId = promoteCtx!.control.id;
+      const promoted = promoteCtx!.risk;
+      if (data.risk_id) {
+        setAiRecommendations((prev) => {
+          const rec = prev[ctrlId];
+          if (!rec) return prev;
+          const added: AddressedRisk = {
+            id: data.risk_id!, title: data.title || promoted.title, category: data.category ?? promoteForm.category,
+            status: data.status ?? 'open', inherent_score: data.inherent_score ?? null,
+            residual_score: data.inherent_score ?? null, mitigation_effectiveness: 'full',
+          };
+          return {
+            ...prev,
+            [ctrlId]: {
+              ...rec,
+              addressed_risks: [...rec.addressed_risks, added],
+              risks_if_not_implemented: rec.risks_if_not_implemented.filter((r) => r !== promoted),
+            },
+          };
+        });
+      }
+      toast({ type: 'success', title: 'Risk added to register', message: 'Created in the ERM Risk Register and linked to this control as a mitigation.' });
+      setPromoteCtx(null);
+    },
+    onError: (e: { response?: { data?: { detail?: string } } }) =>
+      toast({ type: 'error', title: 'Could not add risk', message: e?.response?.data?.detail || 'Try again.' }),
+  });
+
+  // ── Close a linked register risk in one click (control mitigates it) ──
+  const [closingRiskId, setClosingRiskId] = useState<number | null>(null);
+  const [closedRiskIds, setClosedRiskIds] = useState<Set<number>>(new Set());
+  const closeRiskMutation = useMutation({
+    mutationFn: (riskId: number) => ermApi.risks.closeRisk(riskId, 'Closed from Controls — the mitigating control is in place.'),
+    onMutate: (riskId: number) => setClosingRiskId(riskId),
+    onSuccess: (_resp, riskId) => {
+      setClosedRiskIds((prev) => new Set(prev).add(riskId));
+      setClosingRiskId(null);
+      toast({ type: 'success', title: 'Risk closed', message: 'The linked risk was closed in the ERM Risk Register.' });
+    },
+    onError: (e: { response?: { data?: { detail?: string } } }) => {
+      setClosingRiskId(null);
+      toast({ type: 'error', title: 'Could not close risk', message: e?.response?.data?.detail || 'Try again.' });
+    },
+  });
+
   const getProcedureTypeBadge = (type: string) => {
     const colors: Record<string, string> = {
-      walkthrough: 'bg-blue-50 text-blue-700',
+      walkthrough: 'bg-primary-50 text-primary-700',
       inquiry: 'bg-primary-50 text-primary-700',
-      observation: 'bg-cyan-50 text-cyan-700',
+      observation: 'bg-slate-100 text-slate-600',
       inspection: 'bg-amber-50 text-amber-700',
       reperformance: 'bg-emerald-50 text-emerald-700',
     };
@@ -975,6 +1218,20 @@ export default function ControlsPage() {
     queryFn: async () => {
       const response = await controlsApi.getFrameworkControlsSummary();
       return response.data as FrameworkSummaryResponse;
+    },
+  });
+
+  // Control-health snapshot — endpoint-derived, unpaginated. Guarded to {} so a
+  // 404/absent endpoint degrades gracefully (list-only metrics; no impl tile).
+  const { data: statusSummary } = useQuery({
+    queryKey: ['framework-controls-status-summary', frameworkFilter],
+    queryFn: async (): Promise<Partial<StatusSummary>> => {
+      try {
+        const res = await controlsApi.getFrameworkControlsStatusSummary(frameworkFilter ?? undefined);
+        return (res.data ?? {}) as StatusSummary;
+      } catch {
+        return {};
+      }
     },
   });
 
@@ -1055,12 +1312,12 @@ export default function ControlsPage() {
 
   const getPriorityBadge = (priority: string) => {
     const colors: Record<string, string> = {
-      high: 'bg-rose-50 text-black',
-      medium: 'bg-amber-50 text-black',
-      low: 'bg-emerald-50 text-black',
+      high: 'bg-rose-50 text-rose-700',
+      medium: 'bg-amber-50 text-amber-700',
+      low: 'bg-slate-100 text-slate-600',
     };
     return (
-      <span className={`rounded-full px-2 py-0.5 text-xs ${colors[priority] || 'bg-slate-200 text-slate-500'}`}>
+      <span className={`rounded-full px-2 py-0.5 text-xs capitalize ${colors[priority] || 'bg-slate-100 text-slate-500'}`}>
         {priority}
       </span>
     );
@@ -1069,13 +1326,13 @@ export default function ControlsPage() {
   const getVerificationBadge = (isVerified: boolean) => {
     if (isVerified) {
       return (
-        <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-text">
+        <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700">
           <CheckCircle size={12} /> Verified
         </span>
       );
     }
     return (
-      <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-text">
+      <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
         <Clock size={12} /> Pending
       </span>
     );
@@ -1099,6 +1356,11 @@ export default function ControlsPage() {
       </div>
     );
   }
+
+  const selectedControl = data?.controls.find((c) => c.id === selectedControlId) ?? null;
+  const selectedImplStatus = selectedControl
+    ? (statusSummary?.control_status?.[String(selectedControl.id)] ?? null)
+    : null;
 
   const selectedFramework = summaryData?.frameworks.find(f => f.id === frameworkFilter);
 
@@ -1179,7 +1441,7 @@ export default function ControlsPage() {
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-bold">3</div>
+                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary-50 flex items-center justify-center text-primary-600 font-bold">3</div>
                   <div>
                     <h3 className="font-medium text-black">Link Evidence</h3>
                     <p className="text-slate-600">Upload evidence documents to prove compliance. Link evidence to specific controls to demonstrate you meet each requirement.</p>
@@ -1211,45 +1473,11 @@ export default function ControlsPage() {
         </div>
       )}
 
-      {summaryData && summaryData.frameworks.length > 0 && !frameworkFilter && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
-                <Layers className="h-5 w-5 text-primary-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-black">{summaryData.total_frameworks}</p>
-                <p className="text-sm text-slate-600">Frameworks</p>
-              </div>
-            </div>
-          </div>
-          <div className="card p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50">
-                <Shield className="h-5 w-5 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-black">{summaryData.total_controls}</p>
-                <p className="text-sm text-slate-600">Total Controls</p>
-              </div>
-            </div>
-          </div>
-          {summaryData.frameworks.slice(0, 2).map((fw) => (
-            <div key={fw.id} className="card p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
-                  <FileText className="h-5 w-5 text-blue-600" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-lg font-bold text-black truncate">{fw.name}</p>
-                  <p className="text-sm text-slate-600">{fw.control_count} controls</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <ControlHealthSnapshot
+        summary={statusSummary}
+        totalFrameworks={frameworkFilter ? 1 : (summaryData?.total_frameworks ?? 0)}
+        fallbackTotal={frameworkFilter ? (data?.total ?? 0) : (summaryData?.total_controls ?? 0)}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex-1 min-w-[180px] sm:min-w-[280px]">
@@ -1290,7 +1518,7 @@ export default function ControlsPage() {
               type="button"
               onClick={() => { setViewTouched(true); setViewMode('doc'); }}
               className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
-                viewMode === 'doc' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                viewMode === 'doc' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
               }`}
             >
               <FileText className="h-4 w-4" /> Document
@@ -1299,7 +1527,7 @@ export default function ControlsPage() {
               type="button"
               onClick={() => { setViewTouched(true); setViewMode('tree'); }}
               className={`flex items-center gap-1.5 border-l border-slate-200 px-3 py-2 text-sm font-medium transition-colors ${
-                viewMode === 'tree' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                viewMode === 'tree' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
               }`}
             >
               <Layers className="h-4 w-4" /> Tree
@@ -1308,7 +1536,7 @@ export default function ControlsPage() {
               type="button"
               onClick={() => { setViewTouched(true); setViewMode('table'); }}
               className={`flex items-center gap-1.5 border-l border-slate-200 px-3 py-2 text-sm font-medium transition-colors ${
-                viewMode === 'table' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+                viewMode === 'table' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
               }`}
             >
               <ClipboardList className="h-4 w-4" /> Table
@@ -1339,12 +1567,11 @@ export default function ControlsPage() {
           </thead>
           <tbody className="divide-y divide-slate-700">
             {data?.controls.map((control) => {
-              const isExpanded = expandedControl === control.id;
               return (
                 <Fragment key={control.id}>
-                  <tr 
-                    className="bg-white/50 hover:bg-slate-50 cursor-pointer"
-                    onClick={() => setExpandedControl(isExpanded ? null : control.id)}
+                  <tr
+                    className="group bg-white/50 hover:bg-slate-50 cursor-pointer"
+                    onClick={() => setSelectedControlId(control.id)}
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -1358,7 +1585,7 @@ export default function ControlsPage() {
                       <p className="text-sm text-black line-clamp-1">{control.title}</p>
                     </td>
                     <td className="hidden px-4 py-3 md:table-cell">
-                      <span className="rounded-full whitespace-nowrap bg-blue-50 px-2 py-1 text-xs text-blue-900!">
+                      <span className="rounded-full whitespace-nowrap bg-primary-50 px-2 py-1 text-xs text-primary-700">
                         {control.framework_name}
                       </span>
                     </td>
@@ -1388,277 +1615,9 @@ export default function ControlsPage() {
                       {getVerificationBadge(control.is_verified)}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {isExpanded ? (
-                        <ChevronDown className="h-5 w-5 text-slate-600" />
-                      ) : (
-                        <ChevronRight className="h-5 w-5 text-slate-600" />
-                      )}
+                      <ChevronRight className="ml-auto h-5 w-5 text-slate-400 transition-colors group-hover:text-primary-600" />
                     </td>
                   </tr>
-                  {isExpanded && (
-                    <tr className="bg-slate-50">
-                      <td colSpan={8} className="px-4 py-4 border-t border-slate-200">
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <div>
-                              <h4 className="text-sm font-medium text-slate-600">Framework</h4>
-                              <p className="mt-1 text-sm text-black">
-                                {control.framework_name}
-                                {control.framework_version && ` (${control.framework_version})`}
-                              </p>
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-medium text-slate-600">Original Reference</h4>
-                              <p className="mt-1 text-sm font-mono text-black">
-                                {control.original_reference || control.control_id}
-                              </p>
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-medium text-slate-600">Linked Evidence</h4>
-                              <div className="mt-1 flex items-center gap-2">
-                                <span className={`text-sm font-medium ${control.evidence_count > 0 ? 'text-emerald-600' : 'text-slate-600'}`}>
-                                  {control.evidence_count} document{control.evidence_count !== 1 ? 's' : ''}
-                                </span>
-                                <span className="inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-1 text-xs text-text">
-                                  <Paperclip className="h-3 w-3" />
-                                  Manage Below
-                                </span>
-                              </div>
-                            </div>
-                            {control.section_number && (
-                              <div>
-                                <h4 className="text-sm font-medium text-slate-600">Section</h4>
-                                <p className="mt-1 text-sm text-slate-600">{control.section_number}</p>
-                              </div>
-                            )}
-                            {control.parent_section && (
-                              <div>
-                                <h4 className="text-sm font-medium text-slate-600">Parent Control</h4>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSearchInput(control.parent_section || '');
-                                    setSearchTerm(control.parent_section || '');
-                                    setPage(0);
-                                  }}
-                                  className="mt-1 inline-flex items-center gap-1 rounded bg-blue-50 px-2.5 py-1 text-sm text-blue-900! hover:bg-blue-100 transition-colors"
-                                >
-                                  <ChevronRight className="h-4 w-4" />
-                                  {control.parent_section}
-                                </button>
-                              </div>
-                            )}
-                            {control.dependencies && control.dependencies.length > 0 && (
-                              <div>
-                                <h4 className="text-sm font-medium text-slate-600">Dependencies</h4>
-                                <div className="mt-1 flex flex-wrap items-center gap-1">
-                                  {control.dependencies.map((d) => (
-                                    <span key={d} className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600">
-                                      <Link2 className="h-3 w-3" />{d}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {control.description && (
-                            <div>
-                              <h4 className="text-sm font-medium text-slate-600">Description</h4>
-                              <p className="mt-1 text-sm text-slate-600">{control.description}</p>
-                            </div>
-                          )}
-                          
-                          {control.full_text && (
-                            <div>
-                              <h4 className="text-sm font-medium text-slate-600">Full Requirement Text</h4>
-                              <p className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{control.full_text}</p>
-                            </div>
-                          )}
-
-                          <FrameworkControlEvidenceLinkSection controlId={control.id} />
-
-                          {control.evidence_requirements && control.evidence_requirements.length > 0 && (
-                            <div>
-                              {/* <h4 className="text-sm font-medium text-slate-600 mb-3 flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-amber-600" />
-                                Recommended Evidence
-                              </h4> */}
-                              {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {control.evidence_requirements.map((evidence, idx) => (
-                                  <div key={idx} className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
-                                    <div className="flex items-start gap-2">
-                                      <div className="flex-shrink-0 mt-0.5 text-amber-600">
-                                        {getEvidenceTypeIcon(evidence.artifact_type || 'document')}
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <h5 className="text-sm font-medium text-black">{evidence.title}</h5>
-                                        {evidence.description && (
-                                          <p className="text-xs text-slate-600 mt-1">{evidence.description}</p>
-                                        )}
-                                        {evidence.artifact_type && (
-                                          <span className="inline-block rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700 mt-2 capitalize">
-                                            {evidence.artifact_type}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div> */}
-                            </div>
-                          )}
-                          
-                          <div className="flex items-center gap-4 pt-2">
-                            {control.ai_confidence !== null && (
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-slate-500">AI Confidence:</span>
-                                <span className={`text-xs font-medium ${
-                                  control.ai_confidence >= 0.8 ? 'text-emerald-600' :
-                                  control.ai_confidence >= 0.5 ? 'text-amber-600' : 'text-rose-600'
-                                }`}>
-                                  {Math.round(control.ai_confidence * 100)}%
-                                </span>
-                              </div>
-                            )}
-                            <div className="flex items-center gap-2">
-                              {/* <span className="text-xs text-slate-500">Mandatory:</span>
-                              <span className={`text-xs font-medium ${control.is_mandatory ? 'text-rose-600' : 'text-slate-600'}`}>
-                                {control.is_mandatory ? 'Yes' : 'No'}
-                              </span> */}
-                            </div>
-                          </div>
-
-                          <div className="mt-6 border-t border-slate-200 pt-4">
-                            <div className="flex items-center justify-between mb-4">
-                              <div className="flex items-center gap-2">
-                                <Sparkles className="h-5 w-5 text-primary-600" />
-                                <h4 className="text-sm font-semibold text-black">AI Recommendations</h4>
-                              </div>
-                              {!aiRecommendations[control.id] && canCreate && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleGetAIRecommendations(control);
-                                  }}
-                                  disabled={loadingAI === control.id}
-                                  className="flex items-center gap-2 rounded-lg bg-primary-50 px-3 py-1.5 text-sm text-black hover:bg-primary-100 transition-colors disabled:opacity-50"
-                                >
-                                  {loadingAI === control.id ? (
-                                    <>
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                      Generating...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Sparkles className="h-4 w-4" />
-                                      Get AI Recommendations
-                                    </>
-                                  )}
-                                </button>
-                              )}
-                            </div>
-
-                            {aiRecommendations[control.id] && (
-                              <div className="space-y-6">
-                                <div className="rounded-lg border border-primary-200 bg-primary-500/5 p-4">
-                                  <div className="flex items-center gap-2 mb-3">
-                                    <ClipboardList className="h-4 w-4 text-primary-600" />
-                                    <h5 className="text-sm font-medium text-primary-500">Test Procedures</h5>
-                                  </div>
-                                  <div className="space-y-3">
-                                    {aiRecommendations[control.id].test_procedures.map((proc, idx) => (
-                                      <div key={idx} className="flex gap-3">
-                                        <span className="flex-shrink-0 h-6 w-6 rounded-full bg-primary-50 flex items-center justify-center text-xs text-primary-600 font-medium">
-                                          {idx + 1}
-                                        </span>
-                                        <div className="flex-1">
-                                          <div className="flex items-center gap-2 mb-1">
-                                            {getProcedureTypeBadge(proc.procedure_type)}
-                                            <span className="text-xs text-slate-500">{proc.frequency}</span>
-                                            {proc.sample_size !== 'N/A' && proc.sample_size !== 'N/A for inquiry' && (
-                                              <span className="text-xs text-slate-500">| Sample: {proc.sample_size}</span>
-                                            )}
-                                          </div>
-                                          <p className="text-sm text-slate-600">{proc.description}</p>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
-                                  <div className="flex items-center gap-2 mb-3">
-                                    <FolderOpen className="h-4 w-4 text-blue-600" />
-                                    <h5 className="text-sm font-medium text-blue-300">Evidence Requirements</h5>
-                                  </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {aiRecommendations[control.id].evidence_requirements.map((ev, idx) => (
-                                      <div key={idx} className="rounded-lg border border-slate-200 bg-white/50 p-3">
-                                        <div className="flex items-start gap-2">
-                                          <div className="flex-shrink-0 mt-0.5 text-blue-600">
-                                            {getEvidenceTypeIcon(ev.evidence_type)}
-                                          </div>
-                                          <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-sm font-medium text-black">{ev.title}</span>
-                                              {ev.mandatory && (
-                                                <span className="rounded bg-rose-50 px-1.5 py-0.5 text-xs text-rose-600">Required</span>
-                                              )}
-                                            </div>
-                                            <span className="inline-block rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-600 mt-1 capitalize">{ev.evidence_type}</span>
-                                            <p className="text-xs text-slate-600 mt-1">{ev.description}</p>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                      <h5 className="text-sm font-medium text-amber-300">Key Risks Addressed</h5>
-                                    </div>
-                                    <ul className="space-y-1">
-                                      {aiRecommendations[control.id].key_risks_addressed.map((risk, idx) => (
-                                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
-                                          <span className="text-amber-600 mt-1">•</span>
-                                          {risk}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-
-                                  <div className="rounded-lg border border-emerald-200 bg-emerald-500/5 p-4">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <Target className="h-4 w-4 text-emerald-600" />
-                                      <h5 className="text-sm font-medium text-emerald-300">Audit Focus Areas</h5>
-                                    </div>
-                                    <ul className="space-y-1">
-                                      {aiRecommendations[control.id].audit_focus_areas.map((area, idx) => (
-                                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
-                                          <span className="text-emerald-600 mt-1">•</span>
-                                          {area}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-
-                            {!aiRecommendations[control.id] && loadingAI !== control.id && (
-                              <p className="text-sm text-slate-500">
-                                
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
                 </Fragment>
               );
             })}
@@ -1706,6 +1665,462 @@ export default function ControlsPage() {
         </div>
       )}
       </>
+      )}
+
+      {/* Control detail — animated centered popup with side-by-side tiles */}
+      <AnimatedModal
+        isOpen={selectedControl != null}
+        onClose={() => setSelectedControlId(null)}
+        size="3xl"
+        title={selectedControl ? (
+          <span className="flex items-center gap-2">
+            <span className="font-mono text-sm text-primary-700">{selectedControl.original_reference || selectedControl.control_id}</span>
+            <span className="truncate">{selectedControl.title}</span>
+          </span>
+        ) : ''}
+        subtitle={selectedControl ? (
+          `${selectedControl.framework_name}${selectedControl.framework_version ? ` (${selectedControl.framework_version})` : ''}${selectedControl.domain ? ` · ${selectedControl.domain}` : ''}`
+        ) : ''}
+        headerAccessory={selectedControl ? (
+          <div className="flex items-center gap-2">
+            {selectedControl.priority_level
+              ? <PriorityLevelBadge level={selectedControl.priority_level} />
+              : getPriorityBadge(selectedControl.priority)}
+            {selectedImplStatus
+              ? <ImplStatusPill status={selectedImplStatus.status} />
+              : getVerificationBadge(selectedControl.is_verified)}
+          </div>
+        ) : undefined}
+        footer={selectedControl ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Link
+              href={`/evidence?control_id=${selectedControl.id}`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Paperclip className="h-4 w-4" /> Manage evidence
+            </Link>
+            <button
+              onClick={() => setSelectedControlId(null)}
+              className="rounded-lg bg-primary-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
+            >
+              Close
+            </button>
+          </div>
+        ) : undefined}
+      >
+        {selectedControl && (() => {
+          const control = selectedControl;
+          return (
+          <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
+            {/* Requirement */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
+              <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Requirement</h4>
+              <div className="max-h-72 space-y-3 overflow-y-auto scrollbar-thin pr-1">
+                {control.description && (
+                  <p className="text-sm text-slate-700">{control.description}</p>
+                )}
+                {control.full_text && (
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{control.full_text}</p>
+                )}
+                {!control.description && !control.full_text && (
+                  <p className="text-sm text-slate-400">No requirement text provided.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Framework mapping */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Framework mapping</h4>
+              <dl className="space-y-2 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Framework</dt>
+                  <dd className="text-right font-medium text-slate-800">{control.framework_name}{control.framework_version && ` (${control.framework_version})`}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Domain</dt>
+                  <dd className="text-right text-slate-700">{control.domain || '—'}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Category</dt>
+                  <dd className="text-right text-slate-700">{control.category || '—'}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Section</dt>
+                  <dd className="text-right font-mono text-slate-700">{control.section_number || '—'}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">Original reference</dt>
+                  <dd className="text-right font-mono text-slate-700">{control.original_reference || control.control_id}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-slate-500">Parent control</dt>
+                  <dd className="text-right">
+                    {control.parent_section ? (
+                      <button
+                        onClick={() => {
+                          setSearchInput(control.parent_section || '');
+                          setSearchTerm(control.parent_section || '');
+                          setPage(0);
+                          setSelectedControlId(null);
+                        }}
+                        className="inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-0.5 font-mono text-xs text-primary-700 hover:bg-primary-100"
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />{control.parent_section}
+                      </button>
+                    ) : <span className="text-slate-400">—</span>}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            {/* Implementation status */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Implementation status</h4>
+              {selectedImplStatus ? (
+                <div className="space-y-2 text-sm">
+                  <div><ImplStatusPill status={selectedImplStatus.status} /></div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-slate-500">Assignee</span>
+                    <span className="text-right text-slate-700">{selectedImplStatus.assignee_name || 'Unassigned'}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-slate-500">Implemented</span>
+                    <span className="text-right text-slate-700">{selectedImplStatus.implementation_date || '—'}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-slate-500">Verified</span>
+                    <span className="text-right text-slate-700">{selectedImplStatus.verified_date || '—'}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">Not tracked in a certification journey yet.</p>
+              )}
+            </div>
+
+            {/* Linked evidence */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
+              <FrameworkControlEvidenceLinkSection controlId={control.id} />
+            </div>
+
+            {/* Recommended evidence */}
+            {control.evidence_requirements && control.evidence_requirements.length > 0 && (
+              <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
+                <h4 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  <FileText className="h-3.5 w-3.5 text-amber-600" />
+                  Recommended evidence
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">{control.evidence_requirements.length}</span>
+                </h4>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  {control.evidence_requirements.map((evidence, idx) => {
+                    const evTitle = evidence.name || evidence.title || 'Evidence';
+                    const evType = evidence.filetype || evidence.artifact_type;
+                    return (
+                      <div key={idx} className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                        <div className="flex items-start gap-2">
+                          <div className="mt-0.5 flex-shrink-0 text-amber-600">{getEvidenceTypeIcon(evType || 'document')}</div>
+                          <div className="min-w-0 flex-1">
+                            <h5 className="text-sm font-medium text-slate-800">{evTitle}</h5>
+                            {evidence.description && <p className="mt-1 text-xs text-slate-600">{evidence.description}</p>}
+                            {evType && <span className="mt-2 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs uppercase text-amber-700">{evType}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Dependencies + AI confidence */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
+              <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Dependencies &amp; AI confidence</h4>
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {control.dependencies && control.dependencies.length > 0 ? (
+                    control.dependencies.map((d) => (
+                      <span key={d} className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600">
+                        <Link2 className="h-3 w-3" />{d}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-slate-400">No dependencies</span>
+                  )}
+                </div>
+                {control.ai_confidence !== null && (
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className="text-xs text-slate-500">AI confidence</span>
+                    <span className={`text-sm font-semibold ${
+                      control.ai_confidence >= 0.8 ? 'text-emerald-600' :
+                      control.ai_confidence >= 0.5 ? 'text-amber-600' : 'text-rose-600'
+                    }`}>{Math.round(control.ai_confidence * 100)}%</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* AI Recommendations */}
+            <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary-600" />
+                  <h4 className="text-sm font-semibold text-slate-800">AI Recommendations</h4>
+                </div>
+                {!aiRecommendations[control.id] && canCreate && (
+                  <button
+                    onClick={() => handleGetAIRecommendations(control)}
+                    disabled={loadingAI === control.id}
+                    className="flex items-center gap-2 rounded-lg bg-primary-50 px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50"
+                  >
+                    {loadingAI === control.id ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
+                    ) : (
+                      <><Sparkles className="h-4 w-4" /> Get AI Recommendations</>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {aiRecommendations[control.id] && (
+                <div className="space-y-6">
+                  <AiRecommendationSaver
+                    module="control_library"
+                    recommendationType="control_ai_recommendations"
+                    entityType="framework_control"
+                    entityId={control.id}
+                    title={`AI recommendations · ${control.control_id}`}
+                    output={aiRecommendations[control.id] as unknown as Record<string, unknown>}
+                    model="gpt-4o"
+                  />
+                  <div className="rounded-lg border border-primary-200 bg-primary-500/5 p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <ClipboardList className="h-4 w-4 text-primary-600" />
+                      <h5 className="text-sm font-medium text-primary-600">Test Procedures</h5>
+                    </div>
+                    <div className="space-y-3">
+                      {aiRecommendations[control.id].test_procedures.map((proc, idx) => (
+                        <div key={idx} className="flex gap-3">
+                          <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-medium text-primary-600">{idx + 1}</span>
+                          <div className="flex-1">
+                            <div className="mb-1 flex items-center gap-2">
+                              {getProcedureTypeBadge(proc.procedure_type)}
+                              <span className="text-xs text-slate-500">{proc.frequency}</span>
+                              {proc.sample_size !== 'N/A' && proc.sample_size !== 'N/A for inquiry' && (
+                                <span className="text-xs text-slate-500">| Sample: {proc.sample_size}</span>
+                              )}
+                            </div>
+                            <p className="text-sm text-slate-600">{proc.description}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-500/5 p-4">
+                    <div className="mb-2 flex items-center gap-2">
+                      <Target className="h-4 w-4 text-emerald-600" />
+                      <h5 className="text-sm font-medium text-emerald-600">Audit Focus Areas</h5>
+                    </div>
+                    <ul className="space-y-1">
+                      {aiRecommendations[control.id].audit_focus_areas.map((area, idx) => (
+                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
+                          <span className="mt-1 text-emerald-600">•</span>{area}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {aiRecommendations[control.id].addressed_risks.length > 0 ? (
+                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                      <div className="mb-3 flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <h5 className="text-sm font-medium text-amber-600">Risks addressed by this control</h5>
+                        <span className="text-[10px] text-slate-400">linked in the Risk Register · close when mitigated</span>
+                      </div>
+                      <div className="space-y-2">
+                        {aiRecommendations[control.id].addressed_risks.map((r) => {
+                          const isClosed = closedRiskIds.has(r.id) || (r.status || '').toLowerCase() === 'closed';
+                          return (
+                            <div key={r.id} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
+                              <AlertTriangle className={`mt-0.5 h-4 w-4 flex-shrink-0 ${isClosed ? 'text-slate-300' : 'text-amber-500'}`} />
+                              <div className="min-w-0 flex-1">
+                                <Link href="/erm/risks/list" className="text-sm font-medium text-slate-800 hover:text-primary-600">{r.title}</Link>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                                  {r.category && <span className="capitalize">{r.category.replace('_', ' ')}</span>}
+                                  {r.residual_score != null && <span className="font-mono">· res {r.residual_score}</span>}
+                                  {isClosed && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-emerald-600"><CheckCircle className="h-3 w-3" /> Closed</span>}
+                                </div>
+                              </div>
+                              {canCreate && (
+                                isClosed ? (
+                                  <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-600"><CheckCircle className="h-3.5 w-3.5" /> Closed</span>
+                                ) : (
+                                  <button onClick={() => closeRiskMutation.mutate(r.id)}
+                                    disabled={closingRiskId === r.id}
+                                    className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                                    {closingRiskId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />} Close risk
+                                  </button>
+                                )
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : aiRecommendations[control.id].risks_if_not_implemented.length > 0 ? (
+                    <div className="rounded-lg border border-red-200 bg-red-500/5 p-4">
+                      <div className="mb-3 flex items-center gap-2">
+                        <ShieldAlert className="h-4 w-4 text-red-600" />
+                        <h5 className="text-sm font-medium text-red-600">Risks if this control isn’t implemented</h5>
+                        <span className="text-[10px] text-slate-400">AI-reasoned · no risks linked yet · add to Risk Register</span>
+                      </div>
+                      <div className="space-y-2">
+                        {aiRecommendations[control.id].risks_if_not_implemented.map((r, idx) => (
+                          <div key={idx} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
+                            <span className={`mt-0.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize ${riskSevCls(r.severity)}`}>{r.severity || 'medium'}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-slate-800">{r.title}</p>
+                              {r.description && <p className="mt-0.5 text-xs text-slate-500">{r.description}</p>}
+                              {r.rationale && <p className="mt-1 text-[11px] italic text-slate-400">Why: {r.rationale}</p>}
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                                {r.category && <span className="capitalize">{r.category.replace('_', ' ')}</span>}
+                                {!!r.likelihood && !!r.impact && <span>· L{r.likelihood}×I{r.impact} = {r.likelihood * r.impact}</span>}
+                              </div>
+                            </div>
+                            {canCreate && (
+                              <button onClick={() => openPromote(control, r)}
+                                className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-red-700">
+                                <Plus className="h-3.5 w-3.5" /> Add to Risk Register
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs text-slate-500">No register risks are linked to this control, and the AI found no residual risks to add.</p>
+                      {aiRecommendations[control.id].key_risks_addressed.length > 0 && (
+                        <ul className="mt-2 space-y-1">
+                          {aiRecommendations[control.id].key_risks_addressed.map((risk, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-xs text-slate-500"><span className="mt-0.5 text-amber-600">•</span>{risk}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          );
+        })()}
+      </AnimatedModal>
+
+      {/* Promote an AI risk → real ERM Risk Register entry */}
+      {promoteCtx && (
+        <RightSlidePanel
+          isOpen
+          onClose={() => setPromoteCtx(null)}
+          title="Add risk to register"
+          subtitle={`From control ${promoteCtx.control.control_id} — implementing it mitigates this risk`}
+          width="w-full max-w-lg"
+          footer={
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setPromoteCtx(null)} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={() => promoteRiskMutation.mutate()} disabled={promoteRiskMutation.isPending || !promoteForm.title.trim()}
+                className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+                {promoteRiskMutation.isPending ? 'Adding…' : 'Add to Risk Register'}
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <p className="rounded-lg bg-red-50 p-2 text-[11px] text-red-700">
+              Creates a real risk in the ERM Risk Register, linked to this control as a mitigation. These are the same fields as the Risk Register. Residual defaults to inherent until the control is implemented.
+            </p>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Title <span className="text-red-500">*</span></label>
+              <input className={RISK_INPUT_CLS} value={promoteForm.title} onChange={(e) => setPromoteForm({ ...promoteForm, title: e.target.value })} required />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Description</label>
+              <textarea className={RISK_INPUT_CLS} rows={2} value={promoteForm.description} onChange={(e) => setPromoteForm({ ...promoteForm, description: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Register Type</label>
+                <select className={RISK_INPUT_CLS} value={promoteForm.register_type} onChange={(e) => setPromoteForm({ ...promoteForm, register_type: e.target.value })}>
+                  <option value="">Select…</option>
+                  {promoteForm.register_type && !REGISTER_TYPES.includes(promoteForm.register_type) && (
+                    <option value={promoteForm.register_type}>{promoteForm.register_type}</option>
+                  )}
+                  {REGISTER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Category</label>
+                <select className={RISK_INPUT_CLS} value={promoteForm.category} onChange={(e) => setPromoteForm({ ...promoteForm, category: e.target.value })}>
+                  {RISK_CATEGORIES.map((c) => <option key={c} value={c}>{c.replace('_', ' ')}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Sub-Category <span className="text-gray-400">(optional)</span></label>
+                <input className={RISK_INPUT_CLS} value={promoteForm.risk_sub_category} onChange={(e) => setPromoteForm({ ...promoteForm, risk_sub_category: e.target.value })} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Business Owner</label>
+                <select className={RISK_INPUT_CLS} value={promoteForm.business_owner_id ?? ''} onChange={(e) => setPromoteForm({ ...promoteForm, business_owner_id: e.target.value ? Number(e.target.value) : undefined })}>
+                  <option value="">Unassigned</option>
+                  {(usersList || []).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Inherent Likelihood</label>
+                <select className={RISK_INPUT_CLS} value={promoteForm.likelihood} onChange={(e) => setPromoteForm({ ...promoteForm, likelihood: Number(e.target.value) })}>
+                  {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Inherent Impact</label>
+                <select className={RISK_INPUT_CLS} value={promoteForm.impact} onChange={(e) => setPromoteForm({ ...promoteForm, impact: Number(e.target.value) })}>
+                  {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Residual Likelihood</label>
+                <select className={RISK_INPUT_CLS} value={promoteForm.residual_likelihood} onChange={(e) => setPromoteForm({ ...promoteForm, residual_likelihood: Number(e.target.value) })}>
+                  {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-700">Residual Impact</label>
+                <select className={RISK_INPUT_CLS} value={promoteForm.residual_impact} onChange={(e) => setPromoteForm({ ...promoteForm, residual_impact: Number(e.target.value) })}>
+                  {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Treatment Plan <span className="text-gray-400">(optional)</span></label>
+              <textarea className={RISK_INPUT_CLS} rows={2} value={promoteForm.treatment_plan} onChange={(e) => setPromoteForm({ ...promoteForm, treatment_plan: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Root Cause <span className="text-gray-400">(optional)</span></label>
+              <textarea className={RISK_INPUT_CLS} rows={2} value={promoteForm.root_cause} onChange={(e) => setPromoteForm({ ...promoteForm, root_cause: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Recommendations <span className="text-gray-400">(optional)</span></label>
+              <textarea className={RISK_INPUT_CLS} rows={2} value={promoteForm.recommendations} onChange={(e) => setPromoteForm({ ...promoteForm, recommendations: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Due date <span className="text-gray-400">(optional)</span></label>
+              <input type="date" className={RISK_INPUT_CLS} value={promoteForm.due_date} onChange={(e) => setPromoteForm({ ...promoteForm, due_date: e.target.value })} />
+            </div>
+          </div>
+        </RightSlidePanel>
       )}
     </div>
   );

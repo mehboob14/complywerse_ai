@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { ermApi } from '@/lib/api';
+import { ermApi, aiRecommendationsApi } from '@/lib/api';
+import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -164,6 +165,30 @@ export default function ScenarioAnalysisPage() {
       scenario_type: scenarioType,
     });
   };
+
+  // Stable key for the saved AI explanation of this scenario.
+  const scenarioKey = useMemo(
+    () => (selectedPresetId ? `preset-${selectedPresetId}` : `custom-${scenarioName.trim() || 'default'}`),
+    [selectedPresetId, scenarioName],
+  );
+
+  // Restore a previously-saved AI explanation for this scenario so the whole team
+  // sees it without re-running the analysis.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await aiRecommendationsApi.list({
+          module: 'erm_analytics_scenario', recommendation_type: 'ai_explanation',
+          entity_type: 'scenario', entity_id: scenarioKey,
+        });
+        const saved = ((res.data as { items?: Array<{ output?: { explanation?: string } }> })?.items || [])[0];
+        const text = saved?.output?.explanation;
+        if (!cancelled && text) setAiExplanation((prev) => prev ?? String(text));
+      } catch { /* no saved explanation yet */ }
+    })();
+    return () => { cancelled = true; };
+  }, [scenarioKey]);
 
   const handleSelectAll = () => {
     const allIds = new Set(filteredRisks.map((r: any) => r.id));
@@ -601,6 +626,17 @@ export default function ScenarioAnalysisPage() {
               </div>
               <div className="prose prose-invert prose-sm max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap">
                 {aiExplanation}
+              </div>
+              <div className="mt-4">
+                <AiRecommendationSaver
+                  module="erm_analytics_scenario"
+                  recommendationType="ai_explanation"
+                  entityType="scenario"
+                  entityId={scenarioKey}
+                  title={`Scenario explanation · ${scenarioName || selectedPreset?.name || 'Custom'}`}
+                  output={{ explanation: aiExplanation }}
+                  model="gpt-4o"
+                />
               </div>
             </div>
           )}

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { vendorRiskApi, tenantApi } from '@/lib/api';
+import { vendorRiskApi, tenantApi, tpraApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Loader2,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
+import { StageProgress, stageNumberLabel } from '../_lib/lifecycleShared';
 
 interface Vendor {
   id: number;
@@ -31,6 +32,7 @@ interface Vendor {
   primary_contact_phone: string | null;
   description: string | null;
   services_provided: string[] | null;
+  lifecycle_stage?: string | null;
   created_at: string;
 }
 
@@ -97,6 +99,8 @@ export default function VendorListPage() {
     tier: 'medium',
     status: 'active',
     data_access_level: 'internal',
+    data_types_accessed: '',
+    contract_value: '',
     primary_contact_email: '',
     primary_contact_name: '',
     primary_contact_phone: '',
@@ -108,6 +112,8 @@ export default function VendorListPage() {
     industry: '',
     website: '',
   });
+  // Intake (Stage 01) — start the TPRA lifecycle as soon as the vendor record exists.
+  const [startLifecycle, setStartLifecycle] = useState(true);
 
   const { data: vendors, isLoading } = useQuery({
     queryKey: ['vendors'],
@@ -130,14 +136,30 @@ export default function VendorListPage() {
   const createMutation = useMutation({
     mutationFn: async (data: Record<string, unknown>) => {
       const res = await vendorRiskApi.createVendor(data);
-      return res.data;
+      return res.data as { id: number; name: string };
     },
-    onSuccess: () => {
+    onSuccess: async (created) => {
+      // Stage 01 intake complete → optionally start the lifecycle so the vendor
+      // enters the 11-stage TPRA flow immediately. Best-effort; never blocks create.
+      if (startLifecycle && created?.id) {
+        try { await tpraApi.initLifecycle(created.id); } catch { /* lifecycle can be started later from the vendor page */ }
+      }
       queryClient.invalidateQueries({ queryKey: ['vendors'] });
       queryClient.invalidateQueries({ queryKey: ['vendors-select'] });
       queryClient.invalidateQueries({ queryKey: ['vendor-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['vendor-assessments-all'] });
       setShowModal(false);
       resetForm();
+    },
+    onError: (error: unknown, variables) => {
+      // 409 = a possible duplicate relationship. Confirm and re-submit with override.
+      const resp = (error as { response?: { status?: number; data?: { detail?: string } } })?.response;
+      if (resp?.status === 409 && !(variables as { allow_duplicate?: boolean })?.allow_duplicate) {
+        const detail = resp.data?.detail || 'A similar vendor may already exist.';
+        if (window.confirm(`${detail}\n\nCreate this vendor anyway?`)) {
+          createMutation.mutate({ ...(variables as Record<string, unknown>), allow_duplicate: true });
+        }
+      }
     },
   });
 
@@ -162,10 +184,12 @@ export default function VendorListPage() {
   const resetForm = () => {
     setFormData({
       name: '', description: '', tier: 'medium', status: 'active',
-      data_access_level: 'internal', primary_contact_email: '', primary_contact_name: '',
+      data_access_level: 'internal', data_types_accessed: '', contract_value: '',
+      primary_contact_email: '', primary_contact_name: '',
       primary_contact_phone: '', contract_start_date: '', contract_end_date: '',
       owner_id: '', services_provided: '', vendor_type: '', industry: '', website: '',
     });
+    setStartLifecycle(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -175,7 +199,8 @@ export default function VendorListPage() {
       tier: formData.tier,
       status: formData.status,
       data_access_level: formData.data_access_level,
-      services_provided: formData.services_provided ? formData.services_provided.split(',').map((s) => s.trim()) : [],
+      services_provided: formData.services_provided ? formData.services_provided.split(',').map((s) => s.trim()).filter(Boolean) : [],
+      data_types_accessed: formData.data_types_accessed ? formData.data_types_accessed.split(',').map((s) => s.trim()).filter(Boolean) : [],
     };
     if (formData.description) payload.description = formData.description;
     if (formData.primary_contact_name) payload.primary_contact_name = formData.primary_contact_name;
@@ -186,6 +211,7 @@ export default function VendorListPage() {
     if (formData.website) payload.website = formData.website;
     if (formData.contract_start_date) payload.contract_start_date = formData.contract_start_date;
     if (formData.contract_end_date) payload.contract_end_date = formData.contract_end_date;
+    if (formData.contract_value !== '' && !Number.isNaN(Number(formData.contract_value))) payload.contract_value = Number(formData.contract_value);
     if (formData.owner_id) payload.owner_id = Number(formData.owner_id);
 
     createMutation.mutate(payload);
@@ -298,6 +324,7 @@ export default function VendorListPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tier</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Risk Rating</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Lifecycle</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data Access</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contract End</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Owner</th>
@@ -307,7 +334,7 @@ export default function VendorListPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-sm text-gray-500">
                     <AlertCircle className="h-8 w-8 mx-auto mb-2 text-gray-300" />
                     No vendors found
                   </td>
@@ -340,6 +367,12 @@ export default function VendorListPage() {
                       ) : (
                         <span className="text-sm text-gray-400">-</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-1">
+                        <StageProgress currentKey={vendor.lifecycle_stage} size="sm" />
+                        <span className="text-[11px] text-gray-500">{stageNumberLabel(vendor.lifecycle_stage)}</span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-600 capitalize">{vendor.data_access_level?.replace(/_/g, ' ') ?? '-'}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">
@@ -381,7 +414,7 @@ export default function VendorListPage() {
       <RightSlidePanel
         isOpen={showModal}
         onClose={() => setShowModal(false)}
-        title="Add Vendor"
+        title="Add Vendor · Intake & Scoping"
         width="w-full max-w-2xl"
         footer={
           <div className="flex justify-end gap-2">
@@ -411,6 +444,13 @@ export default function VendorListPage() {
         }
       >
         <form id="vendor-form" onSubmit={handleSubmit} className="space-y-4">
+          <div className="rounded-lg border border-primary-100 bg-primary-50/60 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-primary-700">Stage 01 · Intake &amp; Scoping</p>
+            <p className="mt-1 text-xs text-gray-600">
+              Capture the business need and the basic facts about the third party and the service before any work is committed.
+              Exit criteria: a vendor record with a named owner, a defined service &amp; data scope, and a draft data classification.
+            </p>
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-800 mb-1">Vendor Name *</label>
@@ -445,16 +485,26 @@ export default function VendorListPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Data Access Level</label>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Draft data classification</label>
               <MultiSelectDropdown
-                title="Data Access Level"
+                title="Draft data classification"
                 items={dataAccessItems}
                 selectedValues={formData.data_access_level ? [formData.data_access_level] : []}
                 onApply={(v) => setFormData({ ...formData, data_access_level: v[0] || 'internal' })}
                 multiSelect={false}
                 triggerVariant="input"
-                placeholder="Select data access"
+                placeholder="Select classification"
                 size="md"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Data types in scope</label>
+              <input
+                type="text"
+                placeholder="Comma-separated, e.g., PII, PHI, Financial"
+                value={formData.data_types_accessed}
+                onChange={(e) => setFormData({ ...formData, data_types_accessed: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
             <div>
@@ -533,6 +583,18 @@ export default function VendorListPage() {
               />
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-800 mb-1">Annual spend / contract value</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                placeholder="Estimated annual spend"
+                value={formData.contract_value}
+                onChange={(e) => setFormData({ ...formData, contract_value: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-800 mb-1">Owner</label>
               <MultiSelectDropdown
                 title="Owner"
@@ -546,18 +608,30 @@ export default function VendorListPage() {
                 forceSearch
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Services Provided</label>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-800 mb-1">Systems &amp; services in scope</label>
               <input
                 type="text"
-                placeholder="Comma-separated, e.g., Cloud Hosting, Security"
+                placeholder="Comma-separated, e.g., Cloud Hosting, CRM, Payment Gateway"
                 value={formData.services_provided}
                 onChange={(e) => setFormData({ ...formData, services_provided: e.target.value })}
                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
-          {createMutation.isError && (
+          <label className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={startLifecycle}
+              onChange={(e) => setStartLifecycle(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span className="text-xs text-gray-600">
+              <span className="font-medium text-gray-800">Start the TPRA lifecycle now</span> — opens a versioned assessment at
+              Stage 01 so the vendor enters the 11-stage flow immediately. You can also start it later from the vendor page.
+            </span>
+          </label>
+          {createMutation.isError && !((createMutation.error as { response?: { status?: number } })?.response?.status === 409) && (
             <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
               Failed to create vendor. Please check the form and try again.
             </div>

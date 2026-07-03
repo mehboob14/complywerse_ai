@@ -1,3 +1,4 @@
+from ....config import get_openai_model
 import os
 import re
 import json
@@ -296,7 +297,7 @@ Return a JSON object with a "statements" array containing all extracted policy s
 
         try:
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model=get_openai_model(),
                 messages=[
                     {"role": "system", "content": system_message},
                     {"role": "user", "content": prompt}
@@ -663,6 +664,39 @@ def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = No
                     db.add(compliance_record)
 
                 db.commit()
+
+                # ── Recommend & link controls (internal ERM + framework) for every
+                # new statement. Dispatched as its OWN background step now that the
+                # statements are committed above, so the parse reports "completed"
+                # immediately and the recommendation populates afterwards (the job
+                # reads the committed statements through a separate session).
+                # Fully guarded: a dispatch failure must never fail the parse.
+                try:
+                    import logging as _logging
+                    if tenant_slug:
+                        from ....tasks.governance import dispatch_auto_map
+                        _amid = dispatch_auto_map(tenant_slug, document_id)
+                        _logging.getLogger(__name__).info(
+                            "dispatched control recommendation for document %s (job %s)", document_id, _amid
+                        )
+                    else:
+                        # No tenant context (rare direct call) — run inline so the
+                        # linkage is still built.
+                        from ..statement_auto_map import auto_map_document
+                        _logging.getLogger(__name__).info(
+                            "statement auto-map (inline) for document %s: %s",
+                            document_id, auto_map_document(db, document_id)
+                        )
+                except Exception as _map_exc:  # noqa: BLE001
+                    import logging as _logging
+                    _logging.getLogger(__name__).warning(
+                        "control recommendation dispatch skipped for document %s: %s", document_id, _map_exc
+                    )
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+
                 _write_status({
                     "status": "completed",
                     "total_statements": len(parsed_statements_data),

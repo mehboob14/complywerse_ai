@@ -1,18 +1,25 @@
-"""Document-type scaffolds (Policy / Standard / Procedure / Guideline).
+"""Document-type scaffolds (Policy / Standard / Procedure / Guideline / Charter).
 
 Each scaffold defines:
   * `mandatory_sections` — the structural skeleton the document MUST
     contain, in order. Each section names its citation `topic` so the
     pipeline can hand the LLM the relevant slice of framework controls
     for that section (e.g. "Access Control Statements" → access_control).
-  * `metadata_block` — Document Description table fields.
+    Front-matter (Document Description, Approval Signoff) is rendered
+    deterministically by the pipeline; annex sections carry headings that
+    already include "Annex X — …".
   * `approval_matrix` — committee/role types for the Approval Signoff
     page. The pipeline resolves each tier against the tenant's actual
     committees and falls back to a generic role label when no committee
     of that type exists.
-  * `annexures` — required appendices (Exception Form, Revision History,
-    Definitions & Acronyms, etc.).
+  * `annexures` — declarative list of the annex titles this doc type
+    carries (the same annexes also appear as `Annex *` SectionSpecs; this
+    list is the human-readable manifest and is asserted to match in tests).
   * `minimum_words`, `prompt_voice` — call-level tuning.
+  * `clause_engine_breadth` — when True (Policy / Standard), the clause
+    engine fans out across every cited area absent an explicit focus or
+    parent scope; when False (Procedure / Guideline / Charter), it stays
+    on a single dominant topic to preserve focused, single-process output.
 
 The scaffold is consumed by `pipeline.run_drafting_pipeline()` and is
 intentionally pure data — no DB or LLM imports here.
@@ -54,9 +61,18 @@ class SectionSpec:
     min_clauses: Optional[int] = None      # for clause-bearing sections (4.x numbered statements)
     min_words: int = 250                   # per-section floor; LLM is told to exceed this
     inject_password_policy: bool = False   # inline PasswordPolicy numbers when True
+    # When True this is the document's "clause engine" — the section whose
+    # body is the heart of the document and which the pipeline may fan out
+    # across multiple governance areas (one sub-section per planned area).
+    # Replaces the old "topic is None and min_clauses" heuristic.
+    is_clause_engine: bool = False
 
     @property
     def full_heading(self) -> str:
+        # Annex sections already carry "Annex X — …" in their heading; do not
+        # prepend the bare letter (which produced "A. Annex A — …").
+        if self.heading.strip().lower().startswith("annex"):
+            return self.heading.strip()
         return f"{self.number}. {self.heading}".strip()
 
 
@@ -73,8 +89,8 @@ class ApprovalTier:
 
 @dataclass
 class DocScaffold:
-    doc_type: str                           # "policy" | "standard" | "procedure" | "guideline"
-    label: str                              # "Policy" | "Standard" | "Procedure" | "Guideline"
+    doc_type: str                           # "policy" | "standard" | "procedure" | "guideline" | "charter"
+    label: str                              # "Policy" | "Standard" | "Procedure" | "Guideline" | "Charter"
     minimum_words: int
     prompt_voice: str
     mandatory_sections: List[SectionSpec]
@@ -83,6 +99,11 @@ class DocScaffold:
     # Topics the doc most often touches, used to enrich Stage A outline
     # when the user supplied no description.
     default_topic_hints: List[str] = field(default_factory=list)
+    # When True, the clause engine fans out across all cited areas absent an
+    # explicit focus / parent scope (broad requirement docs: Policy, Standard).
+    # When False, it stays on a single dominant topic (Procedure, Guideline,
+    # Charter) — preserving today's focused output.
+    clause_engine_breadth: bool = False
 
 
 # ─── Shared building blocks ──────────────────────────────────────────
@@ -170,7 +191,7 @@ _POLICY_BACK_MATTER = [
 POLICY_SCAFFOLD = DocScaffold(
     doc_type="policy",
     label="Policy",
-    minimum_words=2400,
+    minimum_words=1500,
     prompt_voice=(
         "You are a senior governance and compliance consultant with twenty years "
         "of authoring information security policies for regulated banks. Write "
@@ -248,12 +269,12 @@ POLICY_SCAFFOLD = DocScaffold(
                 "  • where the section's topic concerns access control or "
                 "    passwords, use the configured numeric thresholds verbatim "
                 "    (do not invent numbers);\n"
-                "  • cite the relevant framework clause inline where applicable;\n"
                 "  • avoid cross-referencing other unspecified policies."
             ),
-            min_clauses=20,
-            min_words=900,
+            min_clauses=10,
+            min_words=500,
             inject_password_policy=True,
+            is_clause_engine=True,
         ),
         SectionSpec(
             number="8",
@@ -299,10 +320,8 @@ POLICY_SCAFFOLD = DocScaffold(
             topic=None,
             expansion_focus=(
                 "List supporting standards, procedures, and guidelines this "
-                "policy depends upon (use generic labels — `Information "
+                "policy depends upon (use labels — `Information "
                 "Classification Standard`, `Access Control Standard`, etc.). "
-                "Then list each cited regulatory framework as a separate entry "
-                "with its full name and version."
             ),
             min_words=140,
         ),
@@ -337,18 +356,19 @@ POLICY_SCAFFOLD = DocScaffold(
         "Annex D — Revision History",
     ],
     default_topic_hints=[TOPIC_GOVERNANCE, TOPIC_ACCESS, TOPIC_DATA],
+    clause_engine_breadth=True,
 )
 
 
 STANDARD_SCAFFOLD = DocScaffold(
     doc_type="standard",
     label="Standard",
-    minimum_words=2200,
+    minimum_words=1400,
     prompt_voice=(
         "You are a senior security architect authoring a mandatory technical "
         "standard. Express every requirement as a measurable, testable, "
-        "prescriptive statement. Use numbered clauses. Cite framework "
-        "controls inline. Do not include guidance or examples — those belong "
+        "prescriptive statement. Use numbered clauses. "
+        "Do not include guidance or examples — those belong "
         "in a separate guideline."
     ),
     mandatory_sections=[
@@ -394,8 +414,9 @@ STANDARD_SCAFFOLD = DocScaffold(
                 "numeric thresholds from the supplied configuration where "
                 "available. Cite the source framework clause inline."
             ),
-            min_clauses=22,
-            min_words=900,
+            min_clauses=10,
+            is_clause_engine=True,
+            min_words=500,
             inject_password_policy=True,
         ),
         SectionSpec(
@@ -451,16 +472,6 @@ STANDARD_SCAFFOLD = DocScaffold(
             ),
             min_words=80,
         ),
-        SectionSpec(
-            number="B",
-            heading="Annex B — Definitions and Acronyms",
-            topic=None,
-            expansion_focus=(
-                "Glossary markdown table covering technical and regulatory "
-                "terms used in the body."
-            ),
-            min_words=180,
-        ),
     ],
     approval_matrix=[
         ApprovalTier(label="Prepared by", role_hint="Head of Information Security Architecture"),
@@ -480,13 +491,14 @@ STANDARD_SCAFFOLD = DocScaffold(
         "Annex B — Definitions and Acronyms",
     ],
     default_topic_hints=[TOPIC_ACCESS, TOPIC_PASSWORD, TOPIC_NETWORK, TOPIC_CRYPTO],
+    clause_engine_breadth=True,
 )
 
 
 PROCEDURE_SCAFFOLD = DocScaffold(
     doc_type="procedure",
     label="Procedure",
-    minimum_words=2400,
+    minimum_words=1600,
     prompt_voice=(
         "You are a senior IT operations lead authoring a procedure that "
         "engineers will follow step-by-step under audit observation. Be "
@@ -542,7 +554,7 @@ PROCEDURE_SCAFFOLD = DocScaffold(
             heading="Procedure Steps",
             topic=None,
             expansion_focus=(
-                "Produce numbered procedural steps (7.1, 7.2, 7.2.1 …). For "
+                "Produce numbered procedural steps (1.1, 2.4, 4.4 …). For "
                 "each step:\n"
                 "  • Owner role\n"
                 "  • Action description\n"
@@ -550,11 +562,10 @@ PROCEDURE_SCAFFOLD = DocScaffold(
                 "  • Records / evidence captured\n"
                 "  • Tool / system used\n"
                 "  • Expected duration\n"
-                "Cite the source framework clause where the step implements "
-                "a control."
             ),
-            min_clauses=14,
-            min_words=900,
+            min_clauses=10,
+            is_clause_engine=True,
+            min_words=500,
         ),
         SectionSpec(
             number="8",
@@ -627,13 +638,13 @@ PROCEDURE_SCAFFOLD = DocScaffold(
 GUIDELINE_SCAFFOLD = DocScaffold(
     doc_type="guideline",
     label="Guideline",
-    minimum_words=1800,
+    minimum_words=1300,
     prompt_voice=(
         "You are a senior governance practitioner authoring a guideline. "
         "Unlike a standard, a guideline is recommended rather than "
         "mandatory — use `should` and `recommended` language. Include "
         "worked examples, anti-patterns to avoid, and implementation "
-        "notes. Cite framework clauses where they motivate the guidance."
+        "notes. "
     ),
     mandatory_sections=[
         *_POLICY_FRONT_MATTER,
@@ -668,6 +679,7 @@ GUIDELINE_SCAFFOLD = DocScaffold(
             ),
             min_clauses=5,
             min_words=420,
+            is_clause_engine=True,
         ),
         SectionSpec(
             number="6",
@@ -691,6 +703,7 @@ GUIDELINE_SCAFFOLD = DocScaffold(
             ),
             min_clauses=5,
             min_words=400,
+            is_clause_engine=True,
         ),
         SectionSpec(
             number="8",
@@ -737,11 +750,224 @@ GUIDELINE_SCAFFOLD = DocScaffold(
 )
 
 
+CHARTER_SCAFFOLD = DocScaffold(
+    doc_type="charter",
+    label="Charter",
+    minimum_words=1500,
+    prompt_voice=(
+        "You are a senior corporate governance and board-advisory professional "
+        "authoring a formal Charter for a governance body, committee, or function "
+        "within a regulated bank. A Charter is CONSTITUTIONAL, not operational: it "
+        "establishes the body's mandate, the authority delegated to it, its "
+        "composition and quorum, its decision rights, and its reporting line to the "
+        "Board. Write in formal, board-ready prose — precise about authority and "
+        "accountability, never aspirational and never a how-to. Use the actual "
+        "committee and role names supplied in the tenant context; never fabricate a "
+        "committee. Cite framework clauses inline using the bracketed format "
+        "`[<FrameworkCode> <Version>, clause <Ref>]`, only from the active set."
+    ),
+    mandatory_sections=[
+        *_POLICY_FRONT_MATTER,
+        SectionSpec(
+            number="3",
+            heading="Purpose and Authority",
+            topic=TOPIC_GOVERNANCE,
+            expansion_focus=(
+                "State which body this Charter constitutes, why it exists, and the "
+                "AUTHORISING INSTRUMENT that establishes it (Board resolution, "
+                "regulatory requirement, or parent-committee delegation) — name the "
+                "instrument explicitly. Tie its purpose to the organisation's "
+                "regulatory perimeter and the named active frameworks. Describe what "
+                "the body is accountable for, not how it operates day to day."
+            ),
+            min_words=240,
+        ),
+        SectionSpec(
+            number="4",
+            heading="Scope and Mandate",
+            topic=TOPIC_GOVERNANCE,
+            expansion_focus=(
+                "Define the body's mandate and the boundaries of its remit: the "
+                "entities, business units, and domains in scope, and what is "
+                "explicitly out of scope (to prevent overlap with adjacent "
+                "committees). Where the tenant has named business units, list them "
+                "by name."
+            ),
+            min_words=220,
+        ),
+        SectionSpec(
+            number="5",
+            heading="Composition and Membership",
+            topic=TOPIC_GOVERNANCE,
+            expansion_focus=(
+                "Define composition: the Chair (and how appointed), voting members "
+                "by role/title, standing invitees/advisors, the Secretary, term and "
+                "tenure, appointment and removal, and the QUORUM required for a valid "
+                "meeting. Reference the actual committee chair and roles from the "
+                "tenant context where supplied."
+            ),
+            min_words=240,
+        ),
+        SectionSpec(
+            number="6",
+            heading="Decision Rights and Delegated Authority",
+            topic=TOPIC_GOVERNANCE,
+            expansion_focus=(
+                "Define the decisions this body may take in its own right versus "
+                "those it may only recommend, and the DELEGATED AUTHORITY THRESHOLDS "
+                "that bound them (e.g. risk-acceptance value limits, approval limits, "
+                "the point beyond which a matter is reserved to the Board). State the "
+                "source of the delegation and what remains reserved to the Board."
+            ),
+            min_words=240,
+        ),
+        SectionSpec(
+            number="7",
+            heading="Meeting Cadence and Operating Rules",
+            topic=TOPIC_GOVERNANCE,
+            expansion_focus=(
+                "Specify meeting frequency (use the configured committee frequency "
+                "where supplied), how meetings are convened, agenda-setting, the "
+                "quorum for decisions, the decision/voting mechanism (consensus, "
+                "majority, Chair's casting vote), minute-keeping and retention, and "
+                "conflict-of-interest handling."
+            ),
+            min_words=240,
+        ),
+        SectionSpec(
+            number="8",
+            heading="Reporting Lines and Escalation",
+            topic=TOPIC_GOVERNANCE,
+            expansion_focus=(
+                "State to whom this body reports, the reporting cadence and form "
+                "(minutes, dashboards, exception reports), and the named escalation "
+                "path with the triggers/thresholds that force escalation to the Board "
+                "or a parent committee. Use the actual committee names from the "
+                "tenant context."
+            ),
+            min_words=220,
+        ),
+        SectionSpec(
+            number="9",
+            heading="Interfaces with Other Committees and Functions",
+            topic=TOPIC_GOVERNANCE,
+            expansion_focus=(
+                "Describe how this body interfaces with adjacent committees and "
+                "functions (e.g. Board Risk, Audit Committee, IT Steering, Internal "
+                "Audit, the Information Security Function): what it provides to each, "
+                "what it receives, and how overlapping mandates are de-conflicted."
+            ),
+            min_words=200,
+        ),
+        SectionSpec(
+            number="10",
+            heading="Performance and Self-Assessment",
+            topic=TOPIC_GOVERNANCE,
+            expansion_focus=(
+                "Define how the body's effectiveness is measured and reviewed: the "
+                "self-assessment cadence, the criteria assessed, who reviews the "
+                "outcome, and how findings feed back into the Charter or the body's "
+                "operation."
+            ),
+            min_words=180,
+        ),
+        SectionSpec(
+            number="11",
+            heading="Review and Amendment",
+            topic=TOPIC_GOVERNANCE,
+            expansion_focus=(
+                "State the review cadence for the Charter itself (at least annually, "
+                "plus trigger-based reviews on material organisational or regulatory "
+                "change), who owns the review, the approval authority for amendments "
+                "(the Board or its delegate), and version-control / supersession "
+                "conventions."
+            ),
+            min_words=180,
+        ),
+        SectionSpec(
+            number="A",
+            heading="Annex A — Membership Roster",
+            topic=TOPIC_GOVERNANCE,
+            expansion_focus=(
+                "Render a markdown table of the body's seats (Role/Title | Member "
+                "Name | Voting (Y/N) | Status). Use the actual chair/roles from the "
+                "tenant context where supplied; leave name cells as a placeholder "
+                "rule where unknown. Below the table, state the quorum in one line."
+            ),
+            min_words=140,
+        ),
+        SectionSpec(
+            number="B",
+            heading="Annex B — Roles and Responsibilities (RACI)",
+            topic=TOPIC_GOVERNANCE,
+            expansion_focus=(
+                "Render a RACI-style markdown table mapping the body's roles (Chair, "
+                "Members, Secretary, key invited functions) against its principal "
+                "responsibilities and decisions. Mark each cell R, A, C, or I."
+            ),
+            min_words=180,
+        ),
+        SectionSpec(
+            number="C",
+            heading="Annex C — Revision History",
+            topic=None,
+            expansion_focus=(
+                "Render the Revision History as a markdown table (Version | Date | "
+                "Author | Summary of Changes | Approved By). Seed with version 1.0 "
+                "showing today's date and 'Initial issue' as the change summary."
+            ),
+            min_words=80,
+        ),
+        SectionSpec(
+            number="D",
+            heading="Annex D — Definitions and Acronyms",
+            topic=None,
+            expansion_focus=(
+                "Render a glossary as a markdown table (Term | Definition). Define "
+                "at least 10 governance and regulatory terms used in the body of the "
+                "Charter. Acronyms appear with their expansion alongside."
+            ),
+            min_words=160,
+        ),
+    ],
+    approval_matrix=[
+        ApprovalTier(
+            label="Prepared by",
+            role_hint="Committee Secretary / Head of Governance",
+            committee_types=[],
+        ),
+        ApprovalTier(
+            label="Reviewed by",
+            role_hint="Information Security Steering Committee",
+            committee_types=["it_steering", "compliance_committee"],
+        ),
+        ApprovalTier(
+            label="Endorsed by",
+            role_hint="Risk Management Committee",
+            committee_types=["risk_committee"],
+        ),
+        ApprovalTier(
+            label="Approved by",
+            role_hint="Board of Directors",
+            committee_types=["board", "audit_committee"],
+        ),
+    ],
+    annexures=[
+        "Annex A — Membership Roster",
+        "Annex B — Roles and Responsibilities (RACI)",
+        "Annex C — Revision History",
+        "Annex D — Definitions and Acronyms",
+    ],
+    default_topic_hints=[TOPIC_GOVERNANCE],
+)
+
+
 _SCAFFOLD_REGISTRY = {
     "policy": POLICY_SCAFFOLD,
     "standard": STANDARD_SCAFFOLD,
     "procedure": PROCEDURE_SCAFFOLD,
     "guideline": GUIDELINE_SCAFFOLD,
+    "charter": CHARTER_SCAFFOLD,
 }
 
 

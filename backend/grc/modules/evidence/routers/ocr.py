@@ -1,3 +1,4 @@
+from ....config import get_openai_model
 import os
 import base64
 import re
@@ -271,7 +272,7 @@ def extract_text_with_vision(file_path: str, file_type: str) -> str:
     
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {
                     "role": "user",

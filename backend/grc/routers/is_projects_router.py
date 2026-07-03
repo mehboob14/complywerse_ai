@@ -1,4 +1,5 @@
-from ..config import get_openai_api_key
+from ..config import get_openai_api_key, get_openai_model
+
 import os
 import uuid
 import json
@@ -283,7 +284,7 @@ def _get_openai_client():
 
 
 def _get_openai_model():
-    return os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or "gpt-4o"
+    return os.environ.get("AI_INTEGRATIONS_OPENAI_MODEL") or os.environ.get("OPENAI_MODEL") or get_openai_model()
 
 
 # ─── Projects CRUD ──────────────────────────────────────────────────────────

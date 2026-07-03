@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 import csv
 import io
 import os
@@ -162,7 +163,7 @@ Respond in JSON format:
 }}"""
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a compliance expert comparing control requirements. Respond only with valid JSON."},
                 {"role": "user", "content": prompt}
@@ -213,7 +214,7 @@ Respond in JSON format:
 }}"""
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a compliance expert analyzing control requirements across frameworks. Respond only with valid JSON."},
                 {"role": "user", "content": prompt}
@@ -1318,7 +1319,7 @@ Return JSON:
 Return up to 5 best matches. Only include matches with confidence >= 0.5."""
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a regulatory compliance mapping expert. Respond only with valid JSON."},
                 {"role": "user", "content": prompt}

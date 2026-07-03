@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 from typing import List, Optional
 import os
 import json
@@ -825,7 +826,7 @@ Write in clear, professional language suitable for risk committee presentation. 
         from openai import OpenAI
         client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are an expert enterprise risk management analyst specializing in bow-tie risk analysis. Provide clear, actionable narratives."},
                 {"role": "user", "content": prompt}

@@ -14,6 +14,7 @@ used by auto-grouping.
 """
 from __future__ import annotations
 
+from ....config import get_openai_model
 import json
 import logging
 import re
@@ -32,7 +33,6 @@ from ....models import (
     UploadedFramework,
     NormalizationRun,
 )
-from ....config import get_openai_model
 from ..routers.groups import get_openai_client, AutoGroupCancelled
 
 logger = logging.getLogger(__name__)

@@ -43,6 +43,11 @@ class GovernanceDocument(Base):
     
     regulatory_scope = Column(JSON, default=[])
     framework_ids = Column(JSON, default=[])
+    # UploadedFramework ids this document is declared applicable to / audited
+    # against. Drives the control-coverage panel (mapped / recommended / missing
+    # controls per framework). Distinct from framework_ids (drafting citation
+    # scope) so a doc can be audited against frameworks beyond what it cited.
+    applicable_framework_ids = Column(JSON, default=[])
     tags = Column(JSON, default=[])
     
     approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
@@ -490,3 +495,55 @@ class DocumentAttestation(Base):
         Index("ix_doc_attestation_status", "status"),
     )
 
+
+
+# =============================================================================
+# 10b. Document Sign-off & Document Control (production approval flow)
+# =============================================================================
+
+class DocumentSignoffAssignment(Base):
+    """Per-document participant assignment for the sign-off flow. A participant is
+    a role_type (prepared_by | reviewer | approver) targeting a user, role, or
+    team; role/team targets are expanded to member users when routing a document
+    to each participant's Pending Approvals queue."""
+    __tablename__ = "grc_document_signoff_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=False, index=True)
+    role_type = Column(String(20), nullable=False)    # prepared_by | reviewer | approver
+    target_type = Column(String(10), nullable=False)  # user | role | team
+    target_id = Column(Integer, nullable=False)       # user id / role id / team id
+    added_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    added_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_doc_signoff_assign_doc", "document_id", "role_type"),
+        Index("ix_doc_signoff_assign_tenant", "tenant_id"),
+    )
+
+
+class DocumentSignature(Base):
+    """A recorded sign / approval / rejection by a specific user acting in a
+    role_type. Structured non-repudiation record backing the in-document Approval
+    Signoff table stamp (who signed as what, when, decision, typed signature)."""
+    __tablename__ = "grc_document_signatures"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=False, index=True)
+    version_id = Column(Integer, ForeignKey("grc_governance_document_versions.id"), nullable=True)
+    signer_user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
+    role_type = Column(String(20), nullable=False)    # prepared_by | reviewer | approver
+    role_label = Column(String(100), nullable=True)   # Approval Signoff tier label patched into content
+    decision = Column(String(20), default="signed")   # signed | rejected
+    signature_text = Column(String(255), nullable=True)  # typed name of record
+    comment = Column(Text, nullable=True)
+    signed_at = Column(DateTime, default=datetime.utcnow)
+
+    signer = relationship("GRCUser", foreign_keys=[signer_user_id])
+
+    __table_args__ = (
+        Index("ix_doc_signature_doc", "document_id", "role_type"),
+        Index("ix_doc_signature_signer", "signer_user_id"),
+    )

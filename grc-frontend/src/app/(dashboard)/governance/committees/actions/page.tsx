@@ -50,17 +50,17 @@ interface CommitteeMeeting {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  open: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
-  in_progress: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: Clock },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: CheckCircle },
-  overdue: { bg: 'bg-rose-500/20', text: 'text-rose-400', icon: AlertCircle },
+  open: { bg: 'bg-amber-50', text: 'text-amber-700', icon: Clock },
+  in_progress: { bg: 'bg-blue-50', text: 'text-blue-700', icon: Clock },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: CheckCircle },
+  overdue: { bg: 'bg-rose-50', text: 'text-rose-700', icon: AlertCircle },
 };
 
 const ACTION_TYPE_LABELS: Record<string, { label: string; bg: string; text: string }> = {
-  follow_up: { label: 'Follow Up', bg: 'bg-slate-500/20', text: 'text-slate-400' },
-  policy_approval: { label: 'Policy Approval', bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  risk_review: { label: 'Risk Review', bg: 'bg-rose-500/20', text: 'text-rose-400' },
-  audit_response: { label: 'Audit Response', bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  follow_up: { label: 'Follow Up', bg: 'bg-slate-100', text: 'text-slate-600' },
+  policy_approval: { label: 'Policy Approval', bg: 'bg-blue-50', text: 'text-blue-700' },
+  risk_review: { label: 'Risk Review', bg: 'bg-rose-50', text: 'text-rose-700' },
+  audit_response: { label: 'Audit Response', bg: 'bg-slate-100', text: 'text-slate-600' },
 };
 
 export default function ActionsPage() {
@@ -85,7 +85,14 @@ export default function ActionsPage() {
     queryFn: async () => {
       try {
         const response = await committeeApi.getCommittees();
-        return response.data as Committee[];
+        // The API returns a paginated object ({ items: [...] }) — unwrap it the
+        // same way the actions/meetings queries do, otherwise `committees` is an
+        // object and `.map` throws ("(committees || []).map is not a function").
+        const payload = response.data as unknown;
+        const items = Array.isArray(payload)
+          ? payload
+          : (((payload as { items?: unknown[] })?.items || []) as unknown[]);
+        return items as Committee[];
       } catch {
         return [
           { id: 1, name: 'Board of Directors' },
@@ -234,7 +241,7 @@ export default function ActionsPage() {
   const completedCount = (actions || []).filter(a => a.status === 'completed').length;
 
   const committeeItems = useMemo(
-    () => (committees || []).map((c) => ({ value: String(c.id), label: c.name })),
+    () => (Array.isArray(committees) ? committees : []).map((c) => ({ value: String(c.id), label: c.name })),
     [committees],
   );
   const meetingItems = useMemo(
@@ -312,8 +319,8 @@ export default function ActionsPage() {
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <div className="card p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/20">
-              <Clock className="h-6 w-6 text-amber-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50">
+              <Clock className="h-6 w-6 text-amber-700" />
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">{openCount}</p>
@@ -324,8 +331,8 @@ export default function ActionsPage() {
 
         <div className="card p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/20">
-              <Clock className="h-6 w-6 text-blue-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50">
+              <Clock className="h-6 w-6 text-blue-700" />
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">{inProgressCount}</p>
@@ -336,8 +343,8 @@ export default function ActionsPage() {
 
         <div className="card p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-500/20">
-              <AlertCircle className="h-6 w-6 text-rose-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-50">
+              <AlertCircle className="h-6 w-6 text-rose-700" />
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">{overdueCount}</p>
@@ -348,8 +355,8 @@ export default function ActionsPage() {
 
         <div className="card p-6">
           <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/20">
-              <CheckCircle className="h-6 w-6 text-emerald-400" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50">
+              <CheckCircle className="h-6 w-6 text-emerald-700" />
             </div>
             <div>
               <p className="text-2xl font-bold text-slate-900">{completedCount}</p>
@@ -401,7 +408,7 @@ export default function ActionsPage() {
           const isOverdue = action.status === 'overdue';
 
           return (
-            <div key={action.id} className={`card p-6 ${isOverdue ? 'border-rose-500/30' : ''}`}>
+            <div key={action.id} className={`card p-6 ${isOverdue ? 'border-rose-200' : ''}`}>
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
@@ -466,9 +473,12 @@ export default function ActionsPage() {
       </div>
 
       {filteredActions.length === 0 && (
-        <div className="text-center py-12">
-          <CheckSquare className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-          <p className="text-slate-400">No actions found</p>
+        <div className="card flex flex-col items-center py-8 text-center">
+          <CheckSquare className="mb-2 h-8 w-8 text-slate-300" />
+          <p className="text-sm text-slate-500">No actions found</p>
+          <button onClick={() => setIsCreateModalOpen(true)} className="mt-2 text-sm font-medium text-primary-700 hover:text-primary-800">
+            Add manual action
+          </button>
         </div>
       )}
 
@@ -604,7 +614,7 @@ export default function ActionsPage() {
                 type="button"
                 onClick={() => aiRewordMutation.mutate()}
                 disabled={aiRewordMutation.isPending || (!createFormData.description.trim() && !aiFile)}
-                className="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 {aiRewordMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 AI Reword
@@ -613,7 +623,7 @@ export default function ActionsPage() {
                 type="button"
                 onClick={() => aiSummaryMutation.mutate()}
                 disabled={aiSummaryMutation.isPending || (!createFormData.description.trim() && !aiFile)}
-                className="inline-flex items-center gap-2 rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 {aiSummaryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 Generate Summary

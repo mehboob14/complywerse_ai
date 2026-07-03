@@ -2472,3 +2472,18 @@
     }
   }
 }
+
+/* Accessibility: honour the user's reduced-motion preference app-wide.
+   Neutralises animations/transitions (spinners, slide-ins, progress rings,
+   marquees) for users who have requested reduced motion, while leaving a
+   1ms duration so animation `end`/`iteration` events still fire. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

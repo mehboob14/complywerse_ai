@@ -1,4 +1,5 @@
-from ..config import get_openai_api_key
+from ..config import get_openai_api_key, get_openai_model
+
 import os
 import uuid
 import io
@@ -2236,7 +2237,7 @@ Return strict JSON with keys:
 """
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             temperature=0.3,
             messages=[
                 {"role": "system", "content": "You produce concise, practical GRC guidance as valid JSON."},
@@ -5302,7 +5303,7 @@ def generate_ai_recommendation(
         )
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {
                     "role": "system",
@@ -5390,7 +5391,7 @@ def ai_assess_item(
                 "directly closes THIS gap, and set `risk_rating`/`priority` consistent with it.\n"
             )
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a PDPL compliance expert. Respond ONLY with valid JSON."},
                 {"role": "user", "content": prompt},

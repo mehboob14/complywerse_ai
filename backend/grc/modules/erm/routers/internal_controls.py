@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 from typing import List, Optional
 from datetime import datetime
 import os
@@ -152,7 +153,7 @@ Input items:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a precise GRC assistant. Return valid JSON only."},
                 {"role": "user", "content": prompt}

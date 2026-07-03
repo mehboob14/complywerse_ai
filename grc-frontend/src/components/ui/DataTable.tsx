@@ -56,6 +56,8 @@ export interface DataTableProps<T extends { id: string | number }> {
   pageSizeOptions?: number[];
   className?: string;
   stickyHeader?: boolean;
+  /** 'dark' renders a navy contextual bulk-action bar (teal actions + "Deselect all"). Default 'light'. */
+  bulkBarVariant?: 'light' | 'dark';
 }
 
 function getCellValue<T>(row: T, accessor: keyof T | ((row: T) => React.ReactNode)): React.ReactNode {
@@ -96,6 +98,7 @@ export function DataTable<T extends { id: string | number }>({
   pageSizeOptions = [10, 25, 50, 100],
   className,
   stickyHeader = false,
+  bulkBarVariant = 'light',
 }: DataTableProps<T>) {
   const [internalSearchValue, setInternalSearchValue] = useState('');
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -362,8 +365,11 @@ export function DataTable<T extends { id: string | number }>({
       )}
 
       {selectable && selectedRows.size > 0 && (
-        <div className="flex items-center gap-3 border-b border-primary-200 bg-primary-50 px-3 py-2.5">
-          <span className="text-sm text-primary-600">
+        <div className={clsx(
+          'flex items-center gap-3 px-3 py-2.5',
+          bulkBarVariant === 'dark' ? 'bg-slate-900' : 'border-b border-primary-200 bg-primary-50'
+        )}>
+          <span className={clsx('text-sm', bulkBarVariant === 'dark' ? 'font-medium text-white' : 'text-primary-600')}>
             {selectedRows.size} row{selectedRows.size !== 1 ? 's' : ''} selected
           </span>
           <div className="flex items-center gap-2">
@@ -374,10 +380,10 @@ export function DataTable<T extends { id: string | number }>({
                   key={action.id}
                   onClick={() => action.onClick(selectedRowsData)}
                   className={clsx(
-                    'flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-sm font-medium transition-colors',
-                    action.variant === 'danger'
-                      ? 'bg-rose-50 text-rose-600 hover:bg-rose-100'
-                      : 'bg-primary-50 text-primary-600 hover:bg-primary-100'
+                    'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition-colors',
+                    bulkBarVariant === 'dark'
+                      ? (action.variant === 'danger' ? 'text-rose-400 hover:bg-slate-800' : 'text-primary-400 hover:bg-slate-800')
+                      : (action.variant === 'danger' ? 'bg-rose-50 text-rose-600 hover:bg-rose-100' : 'bg-primary-50 text-primary-600 hover:bg-primary-100')
                   )}
                 >
                   {ActionIcon && <ActionIcon size={14} />}
@@ -388,9 +394,9 @@ export function DataTable<T extends { id: string | number }>({
           </div>
           <button
             onClick={() => setSelectedRows(new Set())}
-            className="ml-auto text-sm text-slate-500 hover:text-slate-900 transition-colors"
+            className={clsx('ml-auto text-sm transition-colors', bulkBarVariant === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900')}
           >
-            Clear selection
+            {bulkBarVariant === 'dark' ? 'Deselect all' : 'Clear selection'}
           </button>
         </div>
       )}

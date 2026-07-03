@@ -1,7 +1,9 @@
+from ....config import get_openai_model
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import logging
 import os
+import re
 import uuid
 import json
 import html
@@ -111,6 +113,7 @@ class GovernanceDocumentCreate(BaseModel):
     next_review_date: Optional[datetime] = None
     regulatory_scope: Optional[List[str]] = []
     framework_ids: Optional[List[int]] = []
+    applicable_framework_ids: Optional[List[int]] = []
     tags: Optional[List[str]] = []
 
 
@@ -133,6 +136,10 @@ class GovernanceDocumentUpdate(BaseModel):
     next_review_date: Optional[datetime] = None
     regulatory_scope: Optional[List[str]] = None
     framework_ids: Optional[List[int]] = None
+    applicable_framework_ids: Optional[List[int]] = None
+    # Edit metadata (not a document column) — the "why" for a content edit,
+    # captured into the version snapshot + audit trail.
+    change_reason: Optional[str] = None
     tags: Optional[List[str]] = None
 
 
@@ -142,6 +149,21 @@ class BulkStatusUpdate(BaseModel):
 
 
 class BulkArchive(BaseModel):
+    document_ids: List[int]
+
+
+class BulkAssignOwner(BaseModel):
+    document_ids: List[int]
+    owner_id: int
+
+
+class BulkSetReviewDate(BaseModel):
+    document_ids: List[int]
+    next_review_date: datetime
+    review_cycle_months: Optional[int] = None
+
+
+class BulkPublish(BaseModel):
     document_ids: List[int]
 
 
@@ -211,6 +233,7 @@ def serialize_document(doc: GovernanceDocument, db: Session = None) -> dict:
         "last_reviewed_by": doc.last_reviewed_by,
         "regulatory_scope": doc.regulatory_scope or [],
         "framework_ids": doc.framework_ids or [],
+        "applicable_framework_ids": getattr(doc, "applicable_framework_ids", None) or [],
         "tags": doc.tags or [],
         "approved_by": doc.approved_by,
         "approved_at": doc.approved_at.isoformat() if doc.approved_at else None,
@@ -377,6 +400,9 @@ def create_document(
         next_review_date=document.next_review_date,
         regulatory_scope=document.regulatory_scope or [],
         framework_ids=document.framework_ids or [],
+        # Default the audited-against frameworks to the referenced/drafting
+        # frameworks when the user didn't pick a separate applicable set.
+        applicable_framework_ids=(document.applicable_framework_ids or document.framework_ids or []),
         tags=document.tags or [],
         status="draft",
         current_version="1.0"
@@ -712,6 +738,108 @@ def get_document(
     return result
 
 
+def _snapshot_content_version(
+    db: Session, document: GovernanceDocument, *, old_content, old_title, old_version,
+    change_type: str, change_reason, user_id: int,
+) -> str:
+    """Snapshot document content into version history. Assumes document.content
+    already holds the NEW content. Preserves the original as a baseline on the
+    first edit, supersedes the prior current, inserts a new current, and bumps
+    document.current_version. Returns the new version number."""
+    from .versions import increment_version
+    existing = db.query(GovernanceDocumentVersion).filter(
+        GovernanceDocumentVersion.document_id == document.id
+    ).count()
+    if existing == 0:
+        db.add(GovernanceDocumentVersion(
+            document_id=document.id, version_number=old_version, change_type="baseline",
+            title=old_title, content=old_content, change_summary="Baseline snapshot (before first edit)",
+            status="superseded", created_by=user_id, created_at=datetime.utcnow(),
+        ))
+    else:
+        db.query(GovernanceDocumentVersion).filter(
+            GovernanceDocumentVersion.document_id == document.id,
+            GovernanceDocumentVersion.status == "current",
+        ).update({"status": "superseded"})
+    new_version_number = increment_version(old_version, "minor")
+    db.add(GovernanceDocumentVersion(
+        document_id=document.id, version_number=new_version_number, change_type=change_type,
+        title=document.title, content=document.content, change_summary=f"{change_type} update".strip(),
+        change_reason=change_reason, status="current", created_by=user_id, created_at=datetime.utcnow(),
+    ))
+    document.current_version = new_version_number
+    return new_version_number
+
+
+# Friendly Document-Description row labels we know how to refresh on sign-off.
+_DOC_CONTROL_LABELS = {
+    "effective_date": "effective date",
+    "version": "version",
+    "next_review_date": "next review date",
+    "classification": "document classification",
+    "approval_authority": "approval authority",
+}
+
+
+def _patch_signoff_content(content: Optional[str], signoffs: list, control_fields: dict) -> str:
+    """Fill the Approval Signoff table (by Role) and refresh the Document
+    Description table (by label) inside the markdown content. Parses table rows
+    structurally (matching cells), NOT by blind underscore replacement, so it is
+    unambiguous across the identical `___________________` placeholder cells."""
+    if not content:
+        return content or ""
+    value_by_label = {
+        _DOC_CONTROL_LABELS.get(k, k).lower(): str(v)
+        for k, v in (control_fields or {}).items() if v
+    }
+    sign_by_role = {}
+    for s in (signoffs or []):
+        role = (s.get("role") or "").strip().lower()
+        if role:
+            sign_by_role[role] = s
+
+    def _is_sep(cells):
+        return all(re.fullmatch(r":?-{2,}:?", (c or "").strip() or "") for c in cells if (c or "").strip())
+
+    out = []
+    for line in content.split("\n"):
+        stripped = line.strip()
+        if not (stripped.startswith("|") and stripped.endswith("|")):
+            out.append(line)
+            continue
+        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        if _is_sep(cells):
+            out.append(line)
+            continue
+        # Document Description: 2-col "| Label | Value |".
+        if len(cells) == 2:
+            label = cells[0].strip("*").strip().lower()
+            if label in value_by_label:
+                out.append("| " + cells[0] + " | " + value_by_label[label] + " |")
+                continue
+        # Approval Signoff: "| Role | Name | Designation | Signature / Date |".
+        if len(cells) >= 3:
+            role = cells[0].strip("*").strip().lower()
+            match = None
+            for r, s in sign_by_role.items():
+                if r and (r in role or role in r):
+                    match = s
+                    break
+            if match:
+                name = (match.get("name") or "").strip()
+                date = (match.get("date") or "").strip()
+                if name:
+                    cells[1] = name
+                if match.get("designation"):
+                    cells[2] = match["designation"].strip()
+                sig = " — ".join([p for p in (name, date) if p]) or cells[-1]
+                cells[-1] = sig
+                out.append("| " + " | ".join(cells) + " |")
+                continue
+        out.append(line)
+    return "\n".join(out)
+
+
 @router.put("/{document_id}")
 def update_document(
     document_id: int,
@@ -733,33 +861,151 @@ def update_document(
         )
     
     update_data = document_update.model_dump(exclude_unset=True)
+    # change_reason is edit metadata, not a document column — pull it out so the
+    # field loop doesn't try to setattr/getattr a non-existent attribute.
+    change_reason = update_data.pop("change_reason", None)
+
+    # Capture prior state BEFORE mutating so we can snapshot + audit it.
+    old_content = document.content
+    old_title = document.title
+    old_version = document.current_version or "1.0"
+    content_changing = (
+        "content" in update_data
+        and (update_data.get("content") or "") != (old_content or "")
+    )
+
     changed_fields = []
-    
     for field, new_value in update_data.items():
         old_value = getattr(document, field)
         if old_value != new_value:
-            changed_fields.append({
-                "field": field,
-                "old_value": str(old_value) if old_value else None,
-                "new_value": str(new_value) if new_value else None
-            })
+            changed_fields.append({"field": field, "old_value": old_value, "new_value": new_value})
             setattr(document, field, new_value)
-    
+
     document.updated_at = datetime.utcnow()
-    
-    if changed_fields:
-        create_audit_log(
-            db=db,
-            document_id=document_id,
-            tenant_id=document.tenant_id,
+
+    # Content edit → version snapshot (mirrors the statement edit→snapshot→history
+    # pattern) so document body is fully versioned + restorable with who/when/why.
+    if content_changing:
+        _snapshot_content_version(
+            db, document, old_content=old_content, old_title=old_title,
+            old_version=old_version, change_type="minor", change_reason=change_reason,
             user_id=current_user.id,
-            action="updated",
-            action_details=f"Updated fields: {', '.join([c['field'] for c in changed_fields])}"
         )
-    
+
+    def _preview(v):
+        s = "" if v is None else str(v)
+        return (s[:2000] + "…") if len(s) > 2000 else s
+
+    # Rich audit: content edits capture old/new (+ reason); metadata edits log names.
+    if content_changing:
+        create_audit_log(
+            db=db, document_id=document_id, tenant_id=document.tenant_id,
+            user_id=current_user.id, action="content_edited", field_changed="content",
+            old_value=_preview(old_content), new_value=_preview(document.content),
+            action_details=change_reason or "Document content edited",
+        )
+    non_content = [c for c in changed_fields if c["field"] != "content"]
+    if non_content:
+        create_audit_log(
+            db=db, document_id=document_id, tenant_id=document.tenant_id,
+            user_id=current_user.id, action="updated",
+            action_details=f"Updated fields: {', '.join(c['field'] for c in non_content)}",
+        )
+
     db.commit()
     db.refresh(document)
-    
+
+    return serialize_document(document, db)
+
+
+class SignoffEntry(BaseModel):
+    role: str                       # matches the Approval Signoff row's Role label
+    name: Optional[str] = None
+    designation: Optional[str] = None
+    date: Optional[str] = None
+
+
+class DocumentSignoffRequest(BaseModel):
+    signoffs: List[SignoffEntry] = []
+    # Document-control header fields to refresh (all optional).
+    effective_date: Optional[str] = None
+    version: Optional[str] = None
+    next_review_date: Optional[str] = None
+    classification: Optional[str] = None
+    approval_authority: Optional[str] = None
+    # Also stamp the structured approval columns (approved_by/at).
+    mark_approved: bool = False
+
+
+@router.post("/{document_id}/signoff")
+def signoff_document(
+    document_id: int,
+    body: DocumentSignoffRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Fill the Approval Signoff table (approver name/designation/date) and the
+    Document Description header (version/effective/next-review/classification) in
+    the document content — the 'sign / fill placeholders later' flow. Snapshots a
+    version (change_type=signoff) + writes an audit row, and optionally stamps the
+    structured approved_by/approved_at columns. Non-destructive: only matched
+    table cells change."""
+    user_tenants = get_user_tenants(current_user, db)
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants),
+    ).first()
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    old_content = document.content
+    old_title = document.title
+    old_version = document.current_version or "1.0"
+
+    control_fields = {
+        "effective_date": body.effective_date, "version": body.version,
+        "next_review_date": body.next_review_date, "classification": body.classification,
+        "approval_authority": body.approval_authority,
+    }
+    signoffs = [s.model_dump() for s in body.signoffs]
+    new_content = _patch_signoff_content(old_content, signoffs, control_fields)
+    content_changed = new_content != (old_content or "")
+
+    # Mirror structured document-control columns from the header edits.
+    if body.classification:
+        document.classification = body.classification
+    if body.effective_date:
+        try:
+            document.effective_date = datetime.fromisoformat(body.effective_date)
+        except (ValueError, TypeError):
+            pass
+    if body.next_review_date:
+        try:
+            document.next_review_date = datetime.fromisoformat(body.next_review_date)
+        except (ValueError, TypeError):
+            pass
+    if body.mark_approved:
+        document.approved_by = current_user.id
+        document.approved_at = datetime.utcnow()
+
+    reason = "Sign-off: " + ", ".join(
+        [f"{s['role']}={s.get('name') or '—'}" for s in signoffs] or ["document-control fields"]
+    )
+    if content_changed:
+        document.content = new_content
+        _snapshot_content_version(
+            db, document, old_content=old_content, old_title=old_title,
+            old_version=old_version, change_type="signoff", change_reason=reason,
+            user_id=current_user.id,
+        )
+    document.updated_at = datetime.utcnow()
+    create_audit_log(
+        db=db, document_id=document_id, tenant_id=document.tenant_id,
+        user_id=current_user.id, action="signed", field_changed="signoff",
+        old_value=None, new_value=reason, action_details=reason,
+    )
+    db.commit()
+    db.refresh(document)
     return serialize_document(document, db)
 
 
@@ -1056,6 +1302,154 @@ def bulk_archive(
     return {
         "message": f"Successfully archived {archived_count} documents",
         "archived_count": archived_count
+    }
+
+
+@router.post("/bulk-assign-owner")
+def bulk_assign_owner(
+    bulk_request: BulkAssignOwner,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    documents = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id.in_(bulk_request.document_ids),
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).all()
+
+    if not documents:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No documents found"
+        )
+
+    updated_count = 0
+    for doc in documents:
+        old_owner = doc.owner_id
+        doc.owner_id = bulk_request.owner_id
+        doc.updated_at = datetime.utcnow()
+
+        create_audit_log(
+            db=db,
+            document_id=doc.id,
+            tenant_id=doc.tenant_id,
+            user_id=current_user.id,
+            action="owner_assigned",
+            action_details=f"Owner changed from '{old_owner}' to '{bulk_request.owner_id}'",
+            field_changed="owner_id",
+            old_value=str(old_owner) if old_owner is not None else None,
+            new_value=str(bulk_request.owner_id)
+        )
+        updated_count += 1
+
+    db.commit()
+
+    return {
+        "message": f"Successfully assigned owner to {updated_count} documents",
+        "updated_count": updated_count
+    }
+
+
+@router.post("/bulk-set-review-date")
+def bulk_set_review_date(
+    bulk_request: BulkSetReviewDate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    documents = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id.in_(bulk_request.document_ids),
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).all()
+
+    if not documents:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No documents found"
+        )
+
+    updated_count = 0
+    for doc in documents:
+        old_review_date = doc.next_review_date
+        doc.next_review_date = bulk_request.next_review_date
+        if bulk_request.review_cycle_months is not None:
+            doc.review_cycle_months = bulk_request.review_cycle_months
+        doc.updated_at = datetime.utcnow()
+
+        create_audit_log(
+            db=db,
+            document_id=doc.id,
+            tenant_id=doc.tenant_id,
+            user_id=current_user.id,
+            action="review_date_updated",
+            action_details=f"Next review date set to '{bulk_request.next_review_date.isoformat()}'",
+            field_changed="next_review_date",
+            old_value=old_review_date.isoformat() if old_review_date else None,
+            new_value=bulk_request.next_review_date.isoformat()
+        )
+        updated_count += 1
+
+    db.commit()
+
+    return {
+        "message": f"Successfully updated review date for {updated_count} documents",
+        "updated_count": updated_count
+    }
+
+
+@router.post("/bulk-publish")
+def bulk_publish(
+    bulk_request: BulkPublish,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    documents = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id.in_(bulk_request.document_ids),
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).all()
+
+    if not documents:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No documents found"
+        )
+
+    published_count = 0
+    skipped_count = 0
+    for doc in documents:
+        if doc.status != "approved":
+            skipped_count += 1
+            continue
+
+        old_status = doc.status
+        doc.status = "published"
+        doc.published_by = current_user.id
+        doc.published_at = datetime.utcnow()
+        doc.updated_at = datetime.utcnow()
+
+        create_audit_log(
+            db=db,
+            document_id=doc.id,
+            tenant_id=doc.tenant_id,
+            user_id=current_user.id,
+            action="published",
+            action_details=f"Document published by {current_user.display_name}",
+            field_changed="status",
+            old_value=old_status,
+            new_value="published"
+        )
+        published_count += 1
+
+    db.commit()
+
+    return {
+        "message": f"Published {published_count} documents, skipped {skipped_count}",
+        "published_count": published_count,
+        "skipped_count": skipped_count
     }
 
 
@@ -1919,7 +2313,7 @@ Return a JSON object with:
         # whole budget on reasoning) or raises. Falls back to gpt-4o so the
         # user still gets a real document instead of an empty-body stub.
         if not result_text:
-            _fallback_model = os.environ.get("OPENAI_DRAFT_FALLBACK_MODEL", "gpt-4o")
+            _fallback_model = os.environ.get("OPENAI_DRAFT_FALLBACK_MODEL", get_openai_model())
             if _fallback_model and _fallback_model != _legacy_model:
                 logger.info(
                     "Legacy generator falling back from %r to %r after empty primary output",
@@ -2119,30 +2513,34 @@ def _semantic_dedup_against_existing(
     ]
 
     system_msg = (
-        "You are a governance librarian. You output ONLY strict JSON. Your "
-        "job is to AGGRESSIVELY identify duplicate document suggestions. "
-        "When in doubt, mark as duplicate — the user is frustrated when the "
-        "system suggests something they already have. False-positive (over-"
-        "deduplicating) is preferable to false-negative (re-suggesting an "
-        "existing doc)."
+        "You are a governance librarian. You output ONLY strict JSON. Your job "
+        "is to flag a NEW suggestion as a duplicate ONLY when it covers the SAME "
+        "SPECIFIC topic as an existing document (an alias, rename, or reordering "
+        "of the same subject). A complete governance library deliberately "
+        "contains many distinct sub-domain policies, standards, and procedures, "
+        "so DO NOT treat a broad parent policy (e.g. 'Information Security "
+        "Policy') as covering its sub-topics — distinct documents like 'Access "
+        "Control Policy' or 'Encryption Policy' are NOT duplicates of it. When "
+        "in doubt, KEEP the suggestion (false-negative is far better than wiping "
+        "out the framework's policy set)."
     )
     user_msg = f"""Two lists below: NEW (suggested documents to potentially add) and EXISTING (documents the organisation already maintains).
 
-For each NEW item, decide whether it COVERS THE SAME PRIMARY TOPIC as ANY EXISTING item. If yes → duplicate, drop it.
+For each NEW item, mark it as a duplicate ONLY when it is the SAME SPECIFIC document as an EXISTING item (an alias / rename / reordering of the same subject). Otherwise KEEP it.
 
-DUPLICATE (drop) when ANY of these is true:
+DUPLICATE (drop) ONLY when ANY of these is true:
 - Same subject, different abbreviation: "Information Security Policy" vs "InfoSec Policy" vs "ISMS Policy" vs "ISMS Manual"
 - Same subject, reordered words: "Access Control Policy" vs "Policy on Access Control" vs "User Access Management Policy"
 - Same subject, different doc_type label: existing "Access Control Procedure" vs new "Access Control Policy" — same scope, drop
-- Sub-topic the parent obviously covers: existing "Information Security Policy" vs new "Password Policy" / "Encryption Policy" / "Acceptable Use Policy" → drop unless the new one is a deeply specialised standard/procedure with operational detail beyond the parent
 - Renamed equivalent: "Disaster Recovery Plan" vs "Business Continuity Plan" when only one of the two would normally be maintained
 - Singular/plural, hyphen, casing, version variants: "Risk Management Policy" vs "Risk Management Policies"
 - Localized variants: "Data Protection Policy" vs "Privacy Policy" vs "GDPR Policy" — same primary topic
 - Standards covering same domain: existing "Cryptographic Controls Standard" vs new "Encryption Standard" — same topic
 
-NOT duplicate (keep):
+NOT duplicate (KEEP — this is the default):
+- A NEW sub-domain document when only a BROAD parent exists: existing "Information Security Policy" vs new "Access Control Policy" / "Encryption Policy" / "Acceptable Use Policy" / "Password Policy" → KEEP all of them. A parent policy does NOT make its sub-domain policies duplicates; the org needs the distinct documents.
 - Genuinely distinct primary topics: "Acceptable Use Policy" vs "Vendor Risk Management Policy"
-- Materially narrower OPERATIONAL document with concrete procedure not in the parent: existing "Information Security Policy" vs new "Vulnerability Scanning Procedure" → keep, the procedure has operational steps the policy doesn't
+- Materially narrower OPERATIONAL document with concrete procedure not in the parent: existing "Information Security Policy" vs new "Vulnerability Scanning Procedure" → keep
 - Different lifecycle phase: existing "Incident Response Policy" vs new "Incident Response Tabletop Exercise Procedure" → keep
 
 Return STRICT JSON ONLY:
@@ -2159,7 +2557,7 @@ NEW:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             response_format={"type": "json_object"},
             temperature=0.0,
             max_tokens=2000,
@@ -2284,18 +2682,24 @@ def suggest_policies_for_framework(
     suggestion whose normalized title collides with an existing title is
     filtered out before the response is returned.
     """
+    logger.info("[ai-suggest] step1 request: framework_ids=%s doc_type=%r user_id=%s",
+                request.framework_ids, request.doc_type, getattr(current_user, "id", None))
     if not request.framework_ids:
         raise HTTPException(status_code=400, detail="At least one framework must be selected")
 
     frameworks = db.query(UploadedFramework).filter(
         UploadedFramework.id.in_(request.framework_ids)
     ).all()
+    logger.info("[ai-suggest] step2 frameworks resolved: requested=%s found=%d names=%s",
+                request.framework_ids, len(frameworks), [f.name for f in frameworks])
 
     if not frameworks:
         raise HTTPException(status_code=404, detail="No frameworks found")
 
     controls_summary, framework_alignment, domain_context = build_framework_control_context(frameworks, db)
-    
+    logger.info("[ai-suggest] step3 control context: controls_summary_len=%d domains=%s",
+                len(controls_summary or ""), domain_context)
+
     if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -2323,6 +2727,9 @@ def suggest_policies_for_framework(
     existing_documents = _fetch_existing_documents_for_frameworks(
         request.framework_ids, user_tenant_ids, requested_doc_type, db
     )
+    logger.info("[ai-suggest] step4 existing docs: requested_doc_type=%r tenant_ids=%s existing=%d titles=%s",
+                requested_doc_type, user_tenant_ids, len(existing_documents),
+                [d.get("title") for d in existing_documents][:20])
     existing_normalized_titles = {
         _normalize_doc_title(d["title"]) for d in existing_documents if d.get("title")
     }
@@ -2368,28 +2775,25 @@ Analysis requirements:
 - Where applicable, distinguish parent policy documents from subordinate standards, procedures, or guidelines.
 - Cover these major inferred domains: {', '.join(domain_context) if domain_context else 'Use the control themes provided.'}
 
-For each suggestion, provide:
-- A clear, professional title
-- A detailed description of what the document should cover
-- The primary governance domain it belongs to
-- The priority level (high, medium, low) based on regulatory importance
-- Which specific control references from the framework it addresses
-- Why this document is needed for the cited control themes
-- The key sections the document should contain, reflecting ISO-style structure and the relevant domain obligations
+For each suggestion, provide ONLY these fields — keep it concise so the list returns fast:
+- doc_type: the document type
+- title: a clear, professional, reusable title
+- description: ONE short sentence (max ~25 words) on what the document covers — do NOT write a paragraph
+- priority: high, medium, or low based on regulatory importance
+- relevant_controls: up to 4 specific control references from the framework
 
-Return a JSON object with this structure:
+Do NOT include key sections, rationale, domain, or any other fields — they are not needed and slow the response.
+
+Return a compact JSON object with EXACTLY this structure:
 {{
   "framework_names": "{framework_names}",
   "suggestions": [
     {{
       "doc_type": "policy",
       "title": "Information Security Policy",
-      "description": "Establishes the organization's approach to information security, defining objectives, principles, and responsibilities for protecting information assets.",
-            "domain": "Information Security Governance",
+      "description": "Defines objectives, principles, and responsibilities for protecting information assets.",
       "priority": "high",
-      "relevant_controls": ["Control-1.1", "Control-1.2"],
-                        "coverage_rationale": "Addresses governance, ownership, and protection requirements in the cited controls.",
-      "key_sections": ["Purpose", "Scope", "Policy Statements", "Roles and Responsibilities", "Compliance", "Review"]
+      "relevant_controls": ["A.5.1", "A.5.2"]
     }}
   ],
   "total_suggestions": 0
@@ -2400,24 +2804,31 @@ Return a JSON object with this structure:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are an expert governance and compliance consultant. Always respond with valid JSON and prioritize domain accuracy, clause coverage, and non-generic titles."},
                 {"role": "user", "content": prompt}
             ],
             response_format={"type": "json_object"},
-            max_completion_tokens=12000
+            max_completion_tokens=5000
         )
-        
+
+        _finish = response.choices[0].finish_reason
         result_text = response.choices[0].message.content or "{}"
+        logger.info("[ai-suggest] step5 AI call: model=%s finish_reason=%s content_len=%d",
+                    get_openai_model(), _finish, len(result_text))
         result = json.loads(result_text)
         if isinstance(result, dict) and isinstance(result.get("suggestions"), list):
+            _raw_count = len(result.get("suggestions", []))
+            _raw_doctypes = sorted({str(s.get("doc_type", "")).strip().lower() for s in result.get("suggestions", [])})
             if requested_doc_type:
                 result["suggestions"] = [
                     suggestion
                     for suggestion in result.get("suggestions", [])
                     if str(suggestion.get("doc_type", "")).strip().lower() == requested_doc_type
                 ]
+            logger.info("[ai-suggest] step6 parsed: raw_suggestions=%d raw_doc_types=%s after_doc_type_filter(%r)=%d",
+                        _raw_count, _raw_doctypes, requested_doc_type, len(result.get("suggestions", [])))
 
             raw_suggestions = result.get("suggestions", [])
 
@@ -2504,6 +2915,23 @@ Return a JSON object with this structure:
                     suggestions=after_stage2,
                     existing_documents=existing_documents,
                 )
+                # Safety backstop: a single broad existing document (e.g. a generic
+                # "Information Security Policy") must not be allowed to invalidate the
+                # entire suggested policy set. One existing doc can legitimately match
+                # only a handful of suggestions, so cap the semantic drops at a small
+                # multiple of the existing-document count. If the model flags more than
+                # that, treat the pass as over-aggressive and discard it (exact + token
+                # title dedup already removed real duplicates). Prevents the "0 results"
+                # failure where the AI collapses every sub-domain policy into a parent.
+                semantic_cap = 3 * max(1, len(existing_documents))
+                if semantic_skip_ids and len(semantic_skip_ids) > semantic_cap:
+                    logger.warning(
+                        "Semantic dedup over-aggressive: flagged %d/%d suggestions as "
+                        "duplicates against %d existing doc(s); discarding the semantic "
+                        "pass to avoid wiping the suggestion set.",
+                        len(semantic_skip_ids), len(after_stage2), len(existing_documents),
+                    )
+                    semantic_skip_ids, semantic_matches = set(), []
                 if semantic_skip_ids:
                     after_stage3 = [s for i, s in enumerate(after_stage2) if i not in semantic_skip_ids]
                     skipped_matches.extend(semantic_matches)
@@ -2532,14 +2960,25 @@ Return a JSON object with this structure:
                 "token_overlap": stage2_count,
                 "semantic": stage3_count,
             }
+            logger.info("[ai-suggest] step7 dedup done: stage1_exact=%d stage2_token=%d stage3_semantic=%d "
+                        "-> FINAL suggestions=%d (already_covered=%d)",
+                        stage1_count, stage2_count, stage3_count, len(result["suggestions"]), len(existing_documents))
+        else:
+            logger.warning("[ai-suggest] step6b UNEXPECTED AI shape: type=%s keys=%s — returning as-is "
+                           "(frontend will see 0 suggestions). Raw preview=%r",
+                           type(result).__name__,
+                           list(result.keys()) if isinstance(result, dict) else None,
+                           result_text[:300])
         return result
-    
+
     except json.JSONDecodeError as e:
+        logger.error("[ai-suggest] FAILED json parse: %s | content preview=%r", e, (result_text[:300] if 'result_text' in dir() else None))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to parse AI response: {str(e)}"
         )
     except Exception as e:
+        logger.exception("[ai-suggest] FAILED with exception: %s", e)
         error_msg = str(e)
         if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
             raise HTTPException(
@@ -2735,7 +3174,7 @@ Return strict JSON with keys:
 """
 
             completion = client.chat.completions.create(
-                model="gpt-4o",
+                model=get_openai_model(),
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0.3,

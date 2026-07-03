@@ -20,9 +20,7 @@ import {
   Trash2,
   Eye,
   ChevronLeft,
-  ChevronDown,
   ChevronRight,
-  ArrowUpDown,
   BookOpen,
   FileCheck,
   ClipboardList,
@@ -51,6 +49,7 @@ import RecommendedDocsModal, { NCA_DOC_TYPE_MAP, ARTIFACT_DOC_TYPE_MAP } from '.
 import type { RecommendedDoc } from './_recommendedDocsCatalog';
 import RichTextEditor from './_RichTextEditor';
 import { buildTemplateContent, buildArtifactContent } from './_templateContent';
+import { DocumentsWorkspace } from './_workspace/DocumentsWorkspace';
 
 interface TenantUser {
   id: number;
@@ -91,6 +90,7 @@ interface DocumentItem {
   last_reviewed_by: number | null;
   regulatory_scope: string[];
   framework_ids: number[];
+  applicable_framework_ids?: number[];
   tags: string[];
   approved_by: number | null;
   approved_at: string | null;
@@ -212,9 +212,6 @@ const dedupeFrameworkOptions = (items: any[] = []) => {
   return Array.from(deduped.values()).sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || '')));
 };
 
-type SortField = 'document_code' | 'title' | 'doc_type' | 'status' | 'owner_name' | 'current_version' | 'next_review_date' | 'created_at';
-type SortOrder = 'asc' | 'desc';
-
 export default function GovernanceDocumentsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -222,16 +219,20 @@ export default function GovernanceDocumentsPage() {
   const canCreate = hasPermission('governance:policies:create');
   const canEdit = hasPermission('governance:policies:edit');
   const canDelete = hasPermission('governance:policies:delete');
+  // Current user's numeric id — feeds the workspace's "My documents" scope.
+  // /auth/me returns { ..., user: { id } }; degrades gracefully to null.
+  const { data: currentUserId } = useQuery({
+    queryKey: ['current-user-id'],
+    queryFn: async () => {
+      const r = await apiClient.get('/auth/me');
+      return (r.data?.user?.id ?? null) as number | null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'hierarchy'>('hierarchy');
-  const [expandedNodeIds, setExpandedNodeIds] = useState<number[]>([]);
-  const [sortField, setSortField] = useState<SortField>('created_at');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const [page, setPage] = useState(0);
-  const [pageSize] = useState(10);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [uploadingToDocumentId, setUploadingToDocumentId] = useState<number | null>(null);
@@ -344,15 +345,13 @@ export default function GovernanceDocumentsPage() {
     queryClient.invalidateQueries({ queryKey: ['governance-documents-parent-options'] });
   };
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['governance-documents', typeFilter, statusFilter, searchTerm, sortField, sortOrder, page, pageSize],
+  // Kept solely so its `error` can drive the load-failure banner below.
+  // The list/hierarchy body that consumed `data` was replaced by
+  // <DocumentsWorkspace/>, so we no longer thread sort/pagination here.
+  const { error } = useQuery({
+    queryKey: ['governance-documents-probe', typeFilter, statusFilter, searchTerm],
     queryFn: async () => {
-      const params: Record<string, string | number> = {
-        skip: page * pageSize,
-        limit: pageSize,
-        sort_by: sortField,
-        sort_order: sortOrder,
-      };
+      const params: Record<string, string | number> = {};
       if (typeFilter) params.doc_type = typeFilter;
       if (statusFilter) params.status = statusFilter;
       if (searchTerm) params.search = searchTerm;
@@ -378,16 +377,6 @@ export default function GovernanceDocumentsPage() {
     staleTime: 60 * 1000,
   });
 
-  const { data: hierarchyDocuments = [], isLoading: isHierarchyLoading } = useQuery({
-    queryKey: ['governance-documents-hierarchy'],
-    queryFn: async () => {
-      const response = await governanceApi.getDocumentHierarchy();
-      return (response.data || []) as DocumentHierarchyItem[];
-    },
-    enabled: viewMode === 'hierarchy',
-    staleTime: 60 * 1000,
-  });
-
   const createMutation = useMutation({
     mutationFn: (data: Partial<DocumentItem>) => {
       const payload = {
@@ -407,6 +396,9 @@ export default function GovernanceDocumentsPage() {
         // cause of "I drafted against SWIFT but the auditor portal
         // documents tab is empty".
         framework_ids: Array.isArray(data.framework_ids) ? data.framework_ids : [],
+        // Frameworks this doc is declared applicable to / audited against —
+        // drives the control-coverage (mapped/recommended/missing) panel.
+        applicable_framework_ids: Array.isArray(data.applicable_framework_ids) ? data.applicable_framework_ids : [],
       };
       return governanceApi.createDocument(payload as any);
     },
@@ -440,6 +432,7 @@ export default function GovernanceDocumentsPage() {
         // Allow editing the framework linkage after creation too —
         // re-tagging a doc must propagate to the auditor portal.
         framework_ids: Array.isArray(data.framework_ids) ? data.framework_ids : undefined,
+        applicable_framework_ids: Array.isArray(data.applicable_framework_ids) ? data.applicable_framework_ids : undefined,
       };
       return governanceApi.updateDocument(id, payload as any);
     },
@@ -695,99 +688,6 @@ export default function GovernanceDocumentsPage() {
     }
   };
 
-  const documents = data?.items || [];
-  const totalItems = data?.total || 0;
-  const totalPages = Math.ceil(totalItems / pageSize);
-
-  const uniqueOwners = useMemo(() => {
-    const owners = new Set<string>();
-    const ownerSource = parentDocumentOptions.length > 0 ? parentDocumentOptions : documents;
-    ownerSource.forEach(doc => {
-      if (doc.owner_name) owners.add(doc.owner_name);
-    });
-    return Array.from(owners);
-  }, [documents, parentDocumentOptions]);
-
-  const filteredDocuments = useMemo(() => {
-    let filtered = documents;
-    
-    if (ownerFilter) {
-      filtered = filtered.filter(doc => doc.owner_name === ownerFilter);
-    }
-    
-    return filtered;
-  }, [documents, ownerFilter]);
-
-  const filteredHierarchyDocuments = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-
-    const applyHierarchyFilters = (nodes: DocumentHierarchyItem[]): DocumentHierarchyItem[] => {
-      return nodes
-        .map((node) => {
-          const children = applyHierarchyFilters(node.children || []);
-          const matchesType = !typeFilter || node.doc_type === typeFilter;
-          const matchesStatus = !statusFilter || node.status === statusFilter;
-          const matchesOwner = !ownerFilter || node.owner_name === ownerFilter;
-          const matchesSearch = !normalizedSearch || [
-            node.title,
-            node.description || '',
-            node.document_code || '',
-            node.owner_name || '',
-          ].some((value) => value.toLowerCase().includes(normalizedSearch));
-          const matchesCurrentNode = matchesType && matchesStatus && matchesOwner && matchesSearch;
-
-          if (matchesCurrentNode || children.length > 0) {
-            return {
-              ...node,
-              children,
-            };
-          }
-          return null;
-        })
-        .filter((node): node is DocumentHierarchyItem => node !== null);
-    };
-
-    return applyHierarchyFilters(hierarchyDocuments);
-  }, [hierarchyDocuments, searchTerm, typeFilter, statusFilter, ownerFilter]);
-
-  const allHierarchyNodeIds = useMemo(() => {
-    const ids: number[] = [];
-    const walk = (nodes: DocumentHierarchyItem[]) => {
-      nodes.forEach((node) => {
-        ids.push(node.id);
-        if (node.children?.length) walk(node.children);
-      });
-    };
-    walk(filteredHierarchyDocuments);
-    return ids;
-  }, [filteredHierarchyDocuments]);
-
-  const toggleNodeExpanded = (documentId: number) => {
-    setExpandedNodeIds((prev) =>
-      prev.includes(documentId)
-        ? prev.filter((id) => id !== documentId)
-        : [...prev, documentId]
-    );
-  };
-
-  const expandAllHierarchyNodes = () => {
-    setExpandedNodeIds(allHierarchyNodeIds);
-  };
-
-  const collapseAllHierarchyNodes = () => {
-    setExpandedNodeIds([]);
-  };
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('asc');
-    }
-    setPage(0);
-  };
-
   const handleDelete = (doc: DocumentItem) => {
     if (confirm(`Are you sure you want to delete "${doc.title}"?`)) {
       deleteMutation.mutate(doc.id);
@@ -809,181 +709,6 @@ export default function GovernanceDocumentsPage() {
     return new Date(dateStr).toLocaleDateString();
   };
 
-  const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
-    <th
-      className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted cursor-pointer hover:cw-text-default transition-colors"
-      onClick={() => handleSort(field)}
-    >
-      <div className="flex items-center gap-1">
-        {children}
-        <ArrowUpDown className={`h-3 w-3 ${sortField === field ? 'text-[var(--color-base)]' : ''}`} />
-      </div>
-    </th>
-  );
-
-  const renderHierarchyNode = (doc: DocumentHierarchyItem, depth = 0): React.ReactNode => {
-    const hasChildren = Boolean(doc.children && doc.children.length > 0);
-    const isExpanded = expandedNodeIds.includes(doc.id);
-    const typeStyle = getTypeStyle(doc.doc_type);
-    const statusStyle = getStatusStyle(doc.status);
-    const FileIcon = getFileIcon(doc.file_type);
-
-    return (
-      <React.Fragment key={doc.id}>
-        <tr className="hover:bg-[var(--color-hover)] transition-colors">
-          <td className="px-4 py-4">
-            <div className="flex items-center gap-1" style={{ paddingLeft: `${depth * 24}px` }}>
-              {hasChildren ? (
-                <button
-                  onClick={() => toggleNodeExpanded(doc.id)}
-                  className="rounded p-1 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors flex-shrink-0"
-                  title={isExpanded ? 'Collapse' : 'Expand'}
-                >
-                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                </button>
-              ) : (
-                <span className="inline-block h-6 w-6 flex-shrink-0" />
-              )}
-              <div className="min-w-0 max-w-xs">
-                <button
-                  onClick={() => router.push(`/governance/documents/${doc.id}`)}
-                  className="max-w-full truncate text-left font-medium cw-text-default hover:text-[var(--color-base)]"
-                  title={doc.title}
-                >
-                  {doc.title}
-                </button>
-                {doc.description && (
-                  <p className="text-sm cw-text-muted truncate">{doc.description}</p>
-                )}
-              </div>
-            </div>
-          </td>
-          <td className="whitespace-nowrap px-4 py-4">
-            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${typeStyle.bgColor} text-gray-800`}>
-              {typeStyle.label}
-            </span>
-          </td>
-          <td className="whitespace-nowrap px-4 py-4">
-            {doc.file_name ? (
-              <div className="flex items-center gap-2">
-                <FileIcon className={`h-4 w-4 ${getFileTypeColor(doc.file_type)}`} />
-                <div className="max-w-[140px]">
-                  <p className="text-sm cw-text-default truncate" title={doc.file_name}>{doc.file_name}</p>
-                </div>
-              </div>
-            ) : (
-              <span className="text-sm cw-text-muted">No file</span>
-            )}
-          </td>
-          <td className="whitespace-nowrap px-4 py-4">
-            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusStyle.bgColor} text-gray-800`}>
-              {statusStyle.label}
-            </span>
-          </td>
-          <td className="whitespace-nowrap px-4 py-4 text-sm cw-text-default">
-            {doc.owner_name || '-'}
-          </td>
-          <td className="whitespace-nowrap px-4 py-4 text-sm cw-text-default">
-            {doc.current_version || '1.0'}
-          </td>
-          <td className="whitespace-nowrap px-4 py-4">
-            <div className="flex items-center gap-1">
-            <button
-              onClick={() => router.push(`/governance/documents/${doc.id}`)}
-              className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
-              title="View Details"
-            >
-              <Eye className="h-4 w-4" />
-            </button>
-            {canEdit && (
-              <button
-                onClick={() => handleEdit(doc)}
-                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
-                title="Edit"
-              >
-                <Edit2 className="h-4 w-4" />
-              </button>
-            )}
-            <button
-              onClick={() => handleDownload(doc)}
-              className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
-              title={doc.file_name ? 'Download File' : 'Download Draft as HTML'}
-            >
-              <Download className="h-4 w-4" />
-            </button>
-            {doc.file_name ? (
-              <button
-                onClick={() => parsePolicyMutation.mutate(doc.id)}
-                className={`rounded p-1.5 transition-colors ${
-                  doc.policy_statement_count && doc.policy_statement_count > 0
-                    ? 'text-[var(--color-success)] hover:bg-[var(--color-success-soft)]'
-                    : 'text-[var(--color-base)] hover:bg-[var(--color-base-soft)]'
-                }`}
-                title={doc.policy_statement_count && doc.policy_statement_count > 0
-                  ? `${doc.policy_statement_count} statements extracted - Click to re-parse`
-                  : 'Parse Policy Statements'
-                }
-                disabled={parsingDocumentId === doc.id}
-              >
-                {parsingDocumentId === doc.id ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Wand2 className="h-4 w-4" />
-                )}
-              </button>
-            ) : (
-              <button
-                onClick={() => setUploadingToDocumentId(doc.id)}
-                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-base-soft)] hover:text-[var(--color-base)] transition-colors"
-                title="Upload File"
-              >
-                <Upload className="h-4 w-4" />
-              </button>
-            )}
-            {doc.status === 'approved' && (
-              <button
-                onClick={() => publishMutation.mutate(doc.id)}
-                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
-                title="Publish Document"
-                disabled={publishMutation.isPending}
-              >
-                {publishMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Globe className="h-4 w-4" />
-                )}
-              </button>
-            )}
-            {doc.status === 'published' && (
-              <button
-                onClick={() => setAttestationTargetDocument(doc)}
-                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-base-soft)] hover:text-[var(--color-base)] transition-colors"
-                title="Request Attestation"
-              >
-                <Send className="h-4 w-4" />
-              </button>
-            )}
-            {canDelete && (
-              <button
-                onClick={() => handleDelete(doc)}
-                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] transition-colors"
-                title="Delete"
-                disabled={deleteMutation.isPending}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            )}
-            </div>
-          </td>
-        </tr>
-
-        {hasChildren && isExpanded &&
-          (doc.children || []).map((child) => renderHierarchyNode(child, depth + 1))
-        }
-      </React.Fragment>
-    );
-  };
-
   if (error) {
     return (
       <div className="flex h-64 flex-col items-center justify-center gap-4 text-[var(--color-danger)]">
@@ -995,52 +720,6 @@ export default function GovernanceDocumentsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-lg sm:text-xl font-semibold cw-text-default">Document Library</h1>
-          <p className="page-description">Manage governance documents, policies, and procedures</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {canCreate && (
-            <button
-              onClick={() => setIsRecommendedOpen(true)}
-              title="Browse standard, NCA, reference-law, and per-framework artifact templates"
-              className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-gradient-to-r from-indigo-50 to-violet-50 px-3 sm:px-4 py-2 text-sm font-medium text-indigo-700 hover:from-indigo-100 hover:to-violet-100 transition-colors whitespace-nowrap"
-            >
-              <BookMarked size={16} />
-              Document Templates
-            </button>
-          )}
-          {canCreate && (
-            <button
-              onClick={() => setIsAIDraftModalOpen(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap"
-            >
-              <Wand2 size={16} />
-              AI Draft Document
-            </button>
-          )}
-          {canCreate && (
-            <button
-              onClick={() => setIsUploadModalOpen(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap"
-            >
-              <Upload size={16} />
-              New Document with File
-            </button>
-          )}
-          {canCreate && (
-            <button
-              onClick={handleCreate}
-              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-3 sm:px-4 py-2 text-sm font-medium whitespace-nowrap"
-            >
-              <Plus size={16} />
-              New Document
-            </button>
-          )}
-        </div>
-      </div>
-
       {parseResult && (
         <div className="flex items-center justify-between rounded-xl border border-[var(--color-success)] bg-[var(--color-success-soft)] p-4">
           <div className="flex items-center gap-3">
@@ -1074,491 +753,15 @@ export default function GovernanceDocumentsPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-2 flex-1">
-          <div className="flex-1 min-w-[180px] sm:min-w-[260px] max-w-md">
-            <SearchInput
-              value={searchTerm}
-              onChange={(v) => { setSearchTerm(v); setPage(0); }}
-              placeholder="Search documents..."
-              size="md"
-            />
-          </div>
+      <DocumentsWorkspace
+        canCreate={canCreate}
+        canEdit={canEdit}
+        currentUserId={currentUserId}
+        onNewDocument={() => setIsUploadModalOpen(true)}
+        onAIDraft={() => setIsAIDraftModalOpen(true)}
+        onTemplates={() => setIsRecommendedOpen(true)}
+      />
 
-          <div className="flex flex-wrap items-center gap-2">
-            <MultiSelectDropdown
-              title="Type"
-              items={DOCUMENT_TYPES.filter(t => t.value).map(t => ({ value: t.value, label: t.label }))}
-              selectedValues={typeFilter ? [typeFilter] : []}
-              onApply={(v) => { setTypeFilter(v[0] || ''); setPage(0); }}
-              multiSelect={false}
-              autoApply
-              placeholder="All Types"
-              size="md"
-            />
-
-            <MultiSelectDropdown
-              title="Status"
-              items={DOCUMENT_STATUSES.filter(s => s.value).map(s => ({ value: s.value, label: s.label }))}
-              selectedValues={statusFilter ? [statusFilter] : []}
-              onApply={(v) => { setStatusFilter(v[0] || ''); setPage(0); }}
-              multiSelect={false}
-              autoApply
-              placeholder="All Statuses"
-              size="md"
-            />
-
-            <MultiSelectDropdown
-              title="Owner"
-              items={uniqueOwners.map(owner => ({ value: owner, label: owner }))}
-              selectedValues={ownerFilter ? [ownerFilter] : []}
-              onApply={(v) => { setOwnerFilter(v[0] || ''); setPage(0); }}
-              multiSelect={false}
-              autoApply
-              forceSearch
-              placeholder="All Owners"
-              searchPlaceholder="Search owners"
-              size="md"
-            />
-
-            <div className="inline-flex overflow-hidden rounded-lg border border-[var(--color-border)]">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-2 text-sm font-medium transition-colors ${viewMode === 'list' ? 'bg-[var(--color-base-soft)] text-[var(--color-base)]' : 'bg-[var(--color-subtle)] cw-text-muted hover:bg-[var(--color-hover)]'}`}
-                type="button"
-              >
-                List
-              </button>
-              <button
-                onClick={() => setViewMode('hierarchy')}
-                className={`border-l border-[var(--color-border)] px-3 py-2 text-sm font-medium transition-colors ${viewMode === 'hierarchy' ? 'bg-[var(--color-base-soft)] text-[var(--color-base)]' : 'bg-[var(--color-subtle)] cw-text-muted hover:bg-[var(--color-hover)]'}`}
-                type="button"
-              >
-                Hierarchy
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="cw-card overflow-hidden">
-        {viewMode === 'hierarchy' ? (
-          isHierarchyLoading ? (
-            <PageLoader className="h-64" />
-          ) : filteredHierarchyDocuments.length === 0 ? (
-            <div className="empty-state h-64">
-              <div className="empty-state-icon">
-                <FileText className="h-12 w-12 cw-text-muted" />
-              </div>
-              <p className="empty-state-title">No documents found in hierarchy</p>
-              <p className="text-sm cw-text-muted">Create documents or adjust filters to view parent-child structure.</p>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-                <p className="text-sm cw-text-muted">
-                  Showing {allHierarchyNodeIds.length} document{allHierarchyNodeIds.length !== 1 ? 's' : ''} in hierarchy view
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={expandAllHierarchyNodes}
-                    type="button"
-                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] px-3 py-1.5 text-xs font-medium cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
-                  >
-                    Expand All
-                  </button>
-                  <button
-                    onClick={collapseAllHierarchyNodes}
-                    type="button"
-                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] px-3 py-1.5 text-xs font-medium cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
-                  >
-                    Collapse All
-                  </button>
-                </div>
-              </div>
-              <div className="hidden lg:block overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-[var(--color-surface)]">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Title</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Type</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">File</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Owner</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Version</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--color-border)]">
-                    {filteredHierarchyDocuments.map((doc) => renderHierarchyNode(doc))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="lg:hidden">
-                {filteredHierarchyDocuments.map((doc) => {
-                  const typeStyle = getTypeStyle(doc.doc_type);
-                  const statusStyle = getStatusStyle(doc.status);
-                  return (
-                    <div key={doc.id} className="space-y-2 border-b border-[var(--color-border)] px-4 py-3">
-                      <button
-                        onClick={() => router.push(`/governance/documents/${doc.id}`)}
-                        className="block max-w-full truncate text-left text-sm font-semibold cw-text-default hover:text-[var(--color-base)]"
-                      >
-                        {doc.title}
-                      </button>
-                      <div className="flex flex-wrap items-center gap-2 text-xs cw-text-muted">
-                        <span className="rounded-full bg-[var(--color-surface)] px-2 py-0.5">{typeStyle.label}</span>
-                        <span className="rounded-full bg-[var(--color-surface)] px-2 py-0.5">{statusStyle.label}</span>
-                        <span className="rounded-full bg-[var(--color-surface)] px-2 py-0.5">v{doc.current_version || '1.0'}</span>
-                        <span className="rounded-full bg-[var(--color-surface)] px-2 py-0.5">{doc.owner_name || '-'}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )
-        ) : isLoading ? (
-          <PageLoader className="h-64" />
-        ) : filteredDocuments.length === 0 ? (
-          <div className="empty-state h-64">
-            <div className="empty-state-icon">
-              <FileText className="h-12 w-12 cw-text-muted" />
-            </div>
-            <p className="empty-state-title">No documents found</p>
-            {canCreate && (
-              <button
-                onClick={handleCreate}
-                className="cw-btn-primary flex items-center gap-2"
-              >
-                <Plus size={18} />
-                Create First Document
-              </button>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="lg:hidden divide-y divide-[var(--color-border)]">
-              {filteredDocuments.map((doc) => {
-                const typeStyle = getTypeStyle(doc.doc_type);
-                const statusStyle = getStatusStyle(doc.status);
-                const FileIcon = getFileIcon(doc.file_type);
-
-                return (
-                  <div key={doc.id} className="space-y-3 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <button
-                          onClick={() => router.push(`/governance/documents/${doc.id}`)}
-                          className="max-w-full truncate text-left font-semibold cw-text-default hover:text-[var(--color-base)]"
-                          title={doc.title}
-                        >
-                          {doc.title}
-                        </button>
-                        {doc.description && (
-                          <p className="mt-1 text-sm cw-text-muted line-clamp-2">{doc.description}</p>
-                        )}
-                      </div>
-                      <span className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusStyle.bgColor} text-gray-800`}>
-                        {statusStyle.label}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 font-medium ${typeStyle.bgColor} text-gray-800`}>
-                        {typeStyle.label}
-                      </span>
-                      <span className="rounded-full bg-[var(--color-surface)] px-2.5 py-1 cw-text-muted">
-                        Owner: {doc.owner_name || '-'}
-                      </span>
-                      <span className="rounded-full bg-[var(--color-surface)] px-2.5 py-1 cw-text-muted">
-                        Version: {doc.current_version || '1.0'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm cw-text-muted">
-                      <FileIcon className={`h-4 w-4 ${getFileTypeColor(doc.file_type)}`} />
-                      <span className="truncate">{doc.file_name || 'No file attached'}</span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <button
-                        onClick={() => router.push(`/governance/documents/${doc.id}`)}
-                        className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
-                        title="View Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      {canEdit && (
-                        <button
-                          onClick={() => handleEdit(doc)}
-                          className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
-                          title="Edit"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDownload(doc)}
-                        className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
-                        title={doc.file_name ? 'Download File' : 'Download Draft as HTML'}
-                      >
-                        <Download className="h-4 w-4" />
-                      </button>
-                      {doc.file_name ? (
-                        <button
-                          onClick={() => parsePolicyMutation.mutate(doc.id)}
-                          className={`rounded p-1.5 transition-colors ${
-                            doc.policy_statement_count && doc.policy_statement_count > 0
-                              ? 'text-[var(--color-success)] hover:bg-[var(--color-success-soft)]'
-                              : 'text-[var(--color-base)] hover:bg-[var(--color-base-soft)]'
-                          }`}
-                          title={doc.policy_statement_count && doc.policy_statement_count > 0
-                            ? `${doc.policy_statement_count} statements extracted - Click to re-parse`
-                            : 'Parse Policy Statements'
-                          }
-                          disabled={parsingDocumentId === doc.id}
-                        >
-                          {parsingDocumentId === doc.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Wand2 className="h-4 w-4" />
-                          )}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setUploadingToDocumentId(doc.id)}
-                          className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-base-soft)] hover:text-[var(--color-base)] transition-colors"
-                          title="Upload File"
-                        >
-                          <Upload className="h-4 w-4" />
-                        </button>
-                      )}
-                      {doc.status === 'approved' && (
-                        <button
-                          onClick={() => publishMutation.mutate(doc.id)}
-                          className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
-                          title="Publish Document"
-                          disabled={publishMutation.isPending}
-                        >
-                          {publishMutation.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Globe className="h-4 w-4" />
-                          )}
-                        </button>
-                      )}
-                      {doc.status === 'published' && (
-                        <button
-                          onClick={() => setAttestationTargetDocument(doc)}
-                          className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-base-soft)] hover:text-[var(--color-base)] transition-colors"
-                          title="Request Attestation"
-                        >
-                          <Send className="h-4 w-4" />
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button
-                          onClick={() => handleDelete(doc)}
-                          className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] transition-colors"
-                          title="Delete"
-                          disabled={deleteMutation.isPending}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="hidden lg:block overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-[var(--color-surface)]">
-                  <tr>
-                    <SortableHeader field="title">Title</SortableHeader>
-                    <SortableHeader field="doc_type">Type</SortableHeader>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">File</th>
-                    <SortableHeader field="status">Status</SortableHeader>
-                    <SortableHeader field="owner_name">Owner</SortableHeader>
-                    <SortableHeader field="current_version">Version</SortableHeader>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider cw-text-muted">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--color-border)]">
-                  {filteredDocuments.map((doc) => {
-                    const typeStyle = getTypeStyle(doc.doc_type);
-                    const statusStyle = getStatusStyle(doc.status);
-                    const FileIcon = getFileIcon(doc.file_type);
-
-                    return (
-                      <tr key={doc.id} className="hover:bg-[var(--color-hover)] transition-colors">
-                        <td className="px-4 py-4">
-                          <div className="max-w-xs">
-                            <button
-                              onClick={() => router.push(`/governance/documents/${doc.id}`)}
-                              className="max-w-full truncate text-left font-medium cw-text-default hover:text-[var(--color-base)]"
-                              title={doc.title}
-                            >
-                              {doc.title}
-                            </button>
-                            {doc.description && (
-                              <p className="text-sm cw-text-muted truncate">{doc.description}</p>
-                            )}
-                          </div>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-4">
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${typeStyle.bgColor} text-gray-800`}>
-                            {typeStyle.label}
-                          </span>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-4">
-                          {doc.file_name ? (
-                            <div className="flex items-center gap-2">
-                              <FileIcon className={`h-4 w-4 ${getFileTypeColor(doc.file_type)}`} />
-                              <div className="max-w-[140px]">
-                                <p className="text-sm cw-text-default truncate" title={doc.file_name}>{doc.file_name}</p>
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-sm cw-text-muted">No file</span>
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-4">
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusStyle.bgColor} text-gray-800`}>
-                            {statusStyle.label}
-                          </span>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm cw-text-default">
-                          {doc.owner_name || '-'}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-sm cw-text-default">
-                          {doc.current_version || '1.0'}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-4">
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => router.push(`/governance/documents/${doc.id}`)}
-                              className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
-                              title="View Details"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </button>
-                            {canEdit && (
-                              <button
-                                onClick={() => handleEdit(doc)}
-                                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default transition-colors"
-                                title="Edit"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleDownload(doc)}
-                              className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
-                              title={doc.file_name ? 'Download File' : 'Download Draft as HTML'}
-                            >
-                              <Download className="h-4 w-4" />
-                            </button>
-                            {doc.file_name ? (
-                              <button
-                                onClick={() => parsePolicyMutation.mutate(doc.id)}
-                                className={`rounded p-1.5 transition-colors ${
-                                  doc.policy_statement_count && doc.policy_statement_count > 0
-                                      ? 'text-[var(--color-success)] hover:bg-[var(--color-success-soft)]'
-                                      : 'text-[var(--color-base)] hover:bg-[var(--color-base-soft)]'
-                                }`}
-                                title={doc.policy_statement_count && doc.policy_statement_count > 0 
-                                  ? `${doc.policy_statement_count} statements extracted - Click to re-parse`
-                                  : 'Parse Policy Statements'
-                                }
-                                disabled={parsingDocumentId === doc.id}
-                              >
-                                {parsingDocumentId === doc.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Wand2 className="h-4 w-4" />
-                                )}
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => setUploadingToDocumentId(doc.id)}
-                                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-base-soft)] hover:text-[var(--color-base)] transition-colors"
-                                title="Upload File"
-                              >
-                                <Upload className="h-4 w-4" />
-                              </button>
-                            )}
-                            {doc.status === 'approved' && (
-                              <button
-                                onClick={() => publishMutation.mutate(doc.id)}
-                                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-success-soft)] hover:text-[var(--color-success)] transition-colors"
-                                title="Publish Document"
-                                disabled={publishMutation.isPending}
-                              >
-                                {publishMutation.isPending ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Globe className="h-4 w-4" />
-                                )}
-                              </button>
-                            )}
-                            {doc.status === 'published' && (
-                              <button
-                                onClick={() => setAttestationTargetDocument(doc)}
-                                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-base-soft)] hover:text-[var(--color-base)] transition-colors"
-                                title="Request Attestation"
-                              >
-                                <Send className="h-4 w-4" />
-                              </button>
-                            )}
-                            {canDelete && (
-                              <button
-                                onClick={() => handleDelete(doc)}
-                                className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] transition-colors"
-                                title="Delete"
-                                disabled={deleteMutation.isPending}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex items-center justify-between border-t border-[var(--color-border)] px-4 py-3">
-              <div className="text-sm cw-text-muted">
-                Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, totalItems)} of {totalItems} documents
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPage(p => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-2 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <span className="text-sm cw-text-muted">
-                  Page {page + 1} of {totalPages || 1}
-                </span>
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                  disabled={page >= totalPages - 1}
-                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-2 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text-default disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
 
       {isModalOpen && (
         <DocumentModal
@@ -1641,30 +844,84 @@ export default function GovernanceDocumentsPage() {
             // AI-draft sources (handled below). This reuses the SAME create
             // path the AI flow uses (editingDocument → modal), so nothing else
             // changes.
-            if (pick.kind === 'recommended' || pick.kind === 'artifact') {
-              const isRec = pick.kind === 'recommended';
-              const content = isRec
-                ? buildTemplateContent(pick.doc)
-                : buildArtifactContent({
-                    name: pick.item.name,
-                    artifact_type: pick.item.artifact_type,
-                    description: pick.item.description || undefined,
-                    framework_key: pick.frameworkName,
-                    control_ref: pick.item.control_ref || undefined,
-                  });
+            // Standard Templates ship "already generated" client-side.
+            if (pick.kind === 'recommended') {
               setEditingDocument({
-                title: isRec ? pick.doc.title : pick.item.name,
-                content,
-                doc_type: isRec ? pick.doc.doc_type : ARTIFACT_DOC_TYPE_MAP(pick.item.artifact_type),
-                description: isRec ? pick.doc.blurb : (pick.item.description || ''),
-                // Auto-link the source framework for artifact templates.
-                framework_ids: (!isRec && pick.frameworkUploadedId) ? [pick.frameworkUploadedId] : [],
+                title: pick.doc.title,
+                content: buildTemplateContent(pick.doc),
+                doc_type: pick.doc.doc_type,
+                description: pick.doc.blurb,
+                framework_ids: [],
               } as any);
-              // Templates carry bracketed placeholders — don't auto-extract
-              // policy statements until the user has filled them in.
               setAutoParseAfterCreate(false);
               setIsRecommendedOpen(false);
               setIsModalOpen(true);
+              return;
+            }
+
+            // Artifact Templates: prefer the pre-generated, type-/control-specific
+            // document body (artifact_content.json via the backend); fall back to
+            // the client-side template if it hasn't been generated yet.
+            if (pick.kind === 'artifact') {
+              const item = pick.item;
+              const fallback = buildArtifactContent({
+                name: item.name,
+                artifact_type: item.artifact_type,
+                description: item.description || undefined,
+                framework_key: pick.frameworkName,
+                control_ref: item.control_ref || undefined,
+              });
+              setIsRecommendedOpen(false);
+              (async () => {
+                let content = fallback;
+                try {
+                  const res = await apiClient.get('/artifacts/catalog/content', {
+                    params: { artifact_id: item.artifact_id },
+                  });
+                  const d = res.data as { found?: boolean; content?: string };
+                  if (d?.found && d.content) content = d.content;
+                } catch {
+                  // keep the client-side fallback
+                }
+                setEditingDocument({
+                  title: item.name,
+                  content,
+                  doc_type: ARTIFACT_DOC_TYPE_MAP(item.artifact_type),
+                  description: item.description || '',
+                  framework_ids: pick.frameworkUploadedId ? [pick.frameworkUploadedId] : [],
+                } as any);
+                setAutoParseAfterCreate(false);
+                setIsModalOpen(true);
+              })();
+              return;
+            }
+
+            // NCA templates ship as ready, EDITABLE documents: fetch the exact
+            // template content and open the create modal pre-filled (WYSIWYG), so
+            // the user edits the real document instead of regenerating it from
+            // scratch — same behaviour as Standard / Artifact templates.
+            if (pick.kind === 'nca') {
+              const docType = NCA_DOC_TYPE_MAP[pick.template.category] ?? 'policy';
+              const tpl = pick.template;
+              setIsRecommendedOpen(false);
+              (async () => {
+                let content = '';
+                try {
+                  const res = await apiClient.get(`/governance/nca-templates/${tpl.id}/content`);
+                  content = ((res.data as { content?: string })?.content) || '';
+                } catch {
+                  // Fall back to an empty editor the user can fill in.
+                }
+                setEditingDocument({
+                  title: tpl.title,
+                  content,
+                  doc_type: docType,
+                  description: `Based on the NCA template "${tpl.title}" (${tpl.category}).`,
+                  framework_ids: [],
+                } as any);
+                setAutoParseAfterCreate(false);
+                setIsModalOpen(true);
+              })();
               return;
             }
 
@@ -1672,15 +929,7 @@ export default function GovernanceDocumentsPage() {
             // from whichever payload the picker emitted. Closing the templates
             // modal and opening AI Draft happens once at the bottom.
             let prefill: typeof aiDraftPrefill = null;
-            if (pick.kind === 'nca') {
-              const docType = NCA_DOC_TYPE_MAP[pick.template.category] ?? 'policy';
-              prefill = {
-                title: pick.template.title,
-                description: `Seeded from NCA template "${pick.template.title}" (${pick.template.category}).`,
-                doc_type: docType,
-                nca_template_id: pick.template.id,
-              };
-            } else if (pick.kind === 'reference-law') {
+            if (pick.kind === 'reference-law') {
               // The law isn't a single document — it's a source of
               // obligations. Seed a sensible title + doc type the user can
               // change in the AI Draft modal, and carry the law id so the
@@ -1732,7 +981,7 @@ export default function GovernanceDocumentsPage() {
             }
           }}
           onGenerate={(data) => aiDraftMutation.mutate(data)}
-          onUseContent={(content: string, title: string, docType?: string, description?: string, parentDocumentId?: number, frameworkIds?: number[]) => {
+          onUseContent={(content: string, title: string, docType?: string, description?: string, parentDocumentId?: number, frameworkIds?: number[], applicableFrameworkIds?: number[]) => {
             setIsAIDraftModalOpen(false);
             setAIDraftResult(null);
             setAutoParseAfterCreate(true);
@@ -1749,6 +998,7 @@ export default function GovernanceDocumentsPage() {
               // Carry the AI-draft framework selection through to the
               // Document modal so the user doesn't have to reselect.
               framework_ids: Array.isArray(frameworkIds) ? frameworkIds : [],
+              applicable_framework_ids: Array.isArray(applicableFrameworkIds) ? applicableFrameworkIds : [],
             } as any);
             setIsModalOpen(true);
           }}
@@ -1870,7 +1120,8 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
     <RightSlidePanel
       isOpen={true}
       onClose={onClose}
-      title="New Document with File"
+      title="New Document"
+      width="w-full max-w-4xl"
       footer={
         <div className="flex justify-end gap-2">
           <button
@@ -1997,6 +1248,7 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
                 onApply={(vals) => setFormData(prev => ({ ...prev, doc_type: vals[0] || '' }))}
                 multiSelect={false}
                 triggerVariant="input"
+                triggerClassName="w-full"
                 placeholder="Select Document Type"
                 size="md"
               />
@@ -2011,6 +1263,7 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
                 onApply={(vals) => setFormData(prev => ({ ...prev, classification: vals[0] || '' }))}
                 multiSelect={false}
                 triggerVariant="input"
+                triggerClassName="w-full"
                 placeholder="Select Classification"
                 size="md"
               />
@@ -2039,6 +1292,7 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
               }
               multiSelect={true}
               triggerVariant="input"
+              triggerClassName="w-full"
               placeholder="Link to one or more frameworks…"
               size="md"
               forceSearch
@@ -2269,6 +1523,8 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
     // from `framework_ids` to display the doc under each framework. Empty
     // by default; user can pick zero, one, or many.
     framework_ids: (document?.framework_ids || []) as number[],
+    // Frameworks the doc is audited against — drives the control-coverage panel.
+    applicable_framework_ids: (document?.applicable_framework_ids || []) as number[],
   });
 
   // Frameworks available for linkage — same source the AI-draft modal uses,
@@ -2351,6 +1607,7 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
       isOpen={true}
       onClose={onClose}
       title={document?.id ? 'Edit Document' : 'New Document'}
+      width="w-full max-w-4xl"
       footer={
         <div className="flex justify-end gap-2">
           <button
@@ -2431,6 +1688,7 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
                 onApply={(vals) => setFormData(prev => ({ ...prev, doc_type: vals[0] || '' }))}
                 multiSelect={false}
                 triggerVariant="input"
+                triggerClassName="w-full"
                 placeholder="Select Document Type"
                 size="md"
               />
@@ -2445,6 +1703,7 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
                 onApply={(vals) => setFormData(prev => ({ ...prev, classification: vals[0] || '' }))}
                 multiSelect={false}
                 triggerVariant="input"
+                triggerClassName="w-full"
                 placeholder="Select Classification"
                 size="md"
               />
@@ -2468,6 +1727,7 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
               }
               multiSelect={false}
               triggerVariant="input"
+              triggerClassName="w-full"
               placeholder="Select Parent Document"
               size="md"
               forceSearch
@@ -2498,12 +1758,42 @@ function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading
               }
               multiSelect={true}
               triggerVariant="input"
+              triggerClassName="w-full"
               placeholder="Link to one or more frameworks…"
               size="md"
               forceSearch
             />
             <p className="mt-1 text-xs text-gray-500">
               Linked documents appear under each framework&apos;s Documents tab in the auditor portal.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">
+              Applicable Frameworks <span className="text-xs font-normal text-gray-500">— audited against (drives control coverage &amp; gaps)</span>
+            </label>
+            <MultiSelectDropdown
+              title="Applicable Frameworks"
+              items={(frameworkOptions || []).map((f: any) => ({
+                value: String(f.id),
+                label: f.name || `Framework ${f.id}`,
+              }))}
+              selectedValues={formData.applicable_framework_ids.map(String)}
+              onApply={(vals) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  applicable_framework_ids: vals.map((v) => Number(v)).filter((n) => !Number.isNaN(n)),
+                }))
+              }
+              multiSelect={true}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              placeholder="Frameworks this document must comply with…"
+              size="md"
+              forceSearch
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              The Controls tab shows which of these frameworks&apos; controls this document covers — and which are missing.
             </p>
           </div>
 
@@ -2997,6 +2287,9 @@ interface AIDraftPolicyModalProps {
     // propagate through to the document-create call so the doc shows
     // up in the auditor portal under each linked framework.
     frameworkIds?: number[],
+    // Frameworks the doc is declared applicable to / audited against —
+    // persisted so the control-coverage (gap) panel can be computed.
+    applicableFrameworkIds?: number[],
   ) => void;
   isLoading: boolean;
   jobState?: DraftingJobState | null;
@@ -3022,6 +2315,12 @@ function AIDraftPolicyModal({ parentDocuments, prefill, onClose, onGenerate, onU
     description: prefill?.description ?? '',
   });
   const [selectedFrameworkIds, setSelectedFrameworkIds] = useState<number[]>(
+    Array.isArray(prefill?.framework_ids) ? (prefill!.framework_ids as number[]) : [],
+  );
+  // Frameworks the document is declared applicable to / audited against. Defaults
+  // to the citation frameworks (a sensible starting point) but is independent —
+  // drives the control-coverage (mapped/recommended/missing) panel on the doc.
+  const [selectedApplicableFrameworkIds, setSelectedApplicableFrameworkIds] = useState<number[]>(
     Array.isArray(prefill?.framework_ids) ? (prefill!.framework_ids as number[]) : [],
   );
   const [selectedParentDocumentId, setSelectedParentDocumentId] = useState<number | null>(
@@ -3181,6 +2480,7 @@ function AIDraftPolicyModal({ parentDocuments, prefill, onClose, onGenerate, onU
       onClose={onClose}
       title="AI Draft Document"
       subtitle="Generate professional policy documents with AI"
+      width="w-full max-w-4xl"
       footer={
         !result ? (
           <div className="flex justify-end gap-2">
@@ -3238,6 +2538,7 @@ function AIDraftPolicyModal({ parentDocuments, prefill, onClose, onGenerate, onU
                 formData.description,
                 selectedParentDocumentId || undefined,
                 selectedFrameworkIds,
+                selectedApplicableFrameworkIds,
               )}
               className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
             >
@@ -3307,6 +2608,7 @@ function AIDraftPolicyModal({ parentDocuments, prefill, onClose, onGenerate, onU
                       }}
                       multiSelect={false}
                       triggerVariant="input"
+                      triggerClassName="w-full"
                       placeholder="Select"
                       size="md"
                     />
@@ -3337,46 +2639,66 @@ function AIDraftPolicyModal({ parentDocuments, prefill, onClose, onGenerate, onU
                     — citations will come from the frameworks you pick
                   </span>
                 </div>
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Regulatory frameworks</label>
-                    <MultiSelectDropdown
-                      title="Frameworks"
-                      items={(frameworks || []).map((fw: any) => ({ value: String(fw.id), label: fw.name }))}
-                      selectedValues={selectedFrameworkIds.map(String)}
-                      onApply={(vals) => {
-                        setSelectedFrameworkIds(vals.map(Number));
-                        setSuggestions(null);
-                        setShowSuggestions(false);
-                      }}
-                      multiSelect={true}
-                      triggerVariant="input"
-                      placeholder="Select frameworks to cite..."
-                      size="md"
-                      forceSearch
-                    />
-                    {selectedFrameworks.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {selectedFrameworks.map((fw: any) => (
-                          <span
-                            key={fw.id}
-                            className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700"
-                          >
-                            <Shield className="h-2.5 w-2.5" />
-                            {fw.name}
-                            <button
-                              type="button"
-                              onClick={() => toggleFramework(fw.id)}
-                              className="ml-0.5 rounded-full hover:bg-purple-500/30 p-0.5"
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">In-scope frameworks</label>
+                      <MultiSelectDropdown
+                        title="Frameworks"
+                        items={(frameworks || []).map((fw: any) => ({ value: String(fw.id), label: fw.name }))}
+                        selectedValues={selectedFrameworkIds.map(String)}
+                        onApply={(vals) => {
+                          setSelectedFrameworkIds(vals.map(Number));
+                          setSuggestions(null);
+                          setShowSuggestions(false);
+                        }}
+                        multiSelect={true}
+                        triggerVariant="input"
+                        triggerClassName="w-full"
+                        placeholder="Select frameworks to cite..."
+                        size="md"
+                        forceSearch
+                      />
+                      <p className="mt-1 text-[11px] text-gray-400">Cited in the drafted document.</p>
+                      {selectedFrameworks.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {selectedFrameworks.map((fw: any) => (
+                            <span
+                              key={fw.id}
+                              className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700"
                             >
-                              <X className="h-2.5 w-2.5" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                              <Shield className="h-2.5 w-2.5" />
+                              {fw.name}
+                              <button
+                                type="button"
+                                onClick={() => toggleFramework(fw.id)}
+                                className="ml-0.5 rounded-full hover:bg-purple-500/30 p-0.5"
+                              >
+                                <X className="h-2.5 w-2.5" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Applicable frameworks</label>
+                      <MultiSelectDropdown
+                        title="Applicable frameworks"
+                        items={(frameworks || []).map((fw: any) => ({ value: String(fw.id), label: fw.name }))}
+                        selectedValues={selectedApplicableFrameworkIds.map(String)}
+                        onApply={(vals) => setSelectedApplicableFrameworkIds(vals.map(Number))}
+                        multiSelect={true}
+                        triggerVariant="input"
+                        triggerClassName="w-full"
+                        placeholder="Frameworks this document must comply with..."
+                        size="md"
+                        forceSearch
+                      />
+                      <p className="mt-1 text-[11px] text-gray-400">Audited against — drives the control-coverage &amp; gap panel.</p>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Reference template</label>
                       <NcaTemplateSelect
@@ -3397,6 +2719,7 @@ function AIDraftPolicyModal({ parentDocuments, prefill, onClose, onGenerate, onU
                         onApply={(vals) => setSelectedParentDocumentId(vals[0] ? Number(vals[0]) : null)}
                         multiSelect={false}
                         triggerVariant="input"
+                        triggerClassName="w-full"
                         placeholder="Choose a parent..."
                         size="md"
                         forceSearch

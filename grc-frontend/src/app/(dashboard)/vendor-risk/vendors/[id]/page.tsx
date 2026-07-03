@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
+import TpraLifecycle from './_tpra/TpraLifecycle';
 
 interface Vendor {
   id: number;
@@ -52,6 +53,11 @@ interface Vendor {
   sla_records_count: number;
   created_at: string;
   updated_at: string;
+  // TPRA lifecycle (additive)
+  lifecycle_stage?: string;
+  reassessment_cadence_days?: number | null;
+  next_reassessment_date?: string | null;
+  contract_document_id?: number | null;
 }
 
 interface Assessment {
@@ -139,7 +145,7 @@ const getSeverityBadge = (severity: string) => {
   return styles[severity?.toLowerCase()] || 'bg-gray-50 text-gray-700 border border-gray-200';
 };
 
-type TabType = 'overview' | 'assessments' | 'sla' | 'incidents';
+type TabType = 'lifecycle' | 'overview' | 'assessments' | 'sla' | 'incidents';
 
 const TIER_OPTIONS = ['critical', 'high', 'medium', 'low'];
 const STATUS_OPTIONS = ['active', 'under_review', 'onboarding', 'offboarded', 'suspended'];
@@ -162,7 +168,7 @@ export default function VendorDetailPage() {
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:vendors:edit');
   const canCreate = hasPermission('vendor_risk:vendors:create');
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<TabType>('lifecycle');
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
@@ -276,6 +282,7 @@ export default function VendorDetailPage() {
   const ownerName = vendor.owner ? (typeof vendor.owner === 'object' ? vendor.owner.full_name : String(vendor.owner)) : null;
 
   const tabs: { key: TabType; label: string; count?: number }[] = [
+    { key: 'lifecycle', label: 'Lifecycle' },
     { key: 'overview', label: 'Overview' },
     { key: 'assessments', label: 'Assessments', count: vendor.assessments_count },
     { key: 'sla', label: 'SLA Tracking', count: vendor.sla_records_count },
@@ -372,6 +379,14 @@ export default function VendorDetailPage() {
           ))}
         </nav>
       </div>
+
+      {/* Lifecycle Tab — productionized 11-stage TPRA lifecycle */}
+      {activeTab === 'lifecycle' && (
+        <TpraLifecycle
+          vendorId={vendorId}
+          onChanged={() => queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] })}
+        />
+      )}
 
       {/* Overview Tab */}
       {activeTab === 'overview' && (

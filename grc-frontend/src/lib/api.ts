@@ -196,8 +196,28 @@ export const controlsApi = {
       }>;
       key_risks_addressed: string[];
       audit_focus_areas: string[];
+      addressed_risks: Array<{
+        id: number; title: string; category: string | null; status: string | null;
+        inherent_score: number | null; residual_score: number | null; mitigation_effectiveness: string | null;
+      }>;
+      risks_if_not_implemented: Array<{
+        title: string; description?: string; category?: string; severity?: string;
+        likelihood?: number; impact?: number; rationale?: string;
+      }>;
       }>('/controls/ai-recommendations', data),
+  promoteControlRisk: (data: {
+    control_id: number; framework_name?: string; title: string; description?: string;
+    register_type?: string; category?: string; risk_sub_category?: string;
+    inherent_likelihood?: number; inherent_impact?: number;
+    residual_likelihood?: number; residual_impact?: number;
+    owner_id?: number; business_owner_id?: number;
+    treatment_plan?: string; root_cause?: string; recommendations?: string; due_date?: string;
+  }) => apiClient.post('/controls/ai-recommendations/promote-risk', data),
   getFrameworkControlsSummary: () => apiClient.get('/controls/framework-controls/summary'),
+  getFrameworkControlsStatusSummary: (frameworkId?: number) =>
+    apiClient.get('/controls/framework-controls/status-summary', {
+      params: frameworkId ? { framework_id: frameworkId } : undefined,
+    }),
   getFrameworkControls: (params?: {
     framework_id?: number;
     domain?: string;
@@ -290,6 +310,37 @@ export const governanceApi = {
   getRecentlyPublished: (limit: number = 10) => apiClient.get(`/governance/dashboard/recently-published?limit=${limit}`),
   getDocumentVersions: (documentId: number) =>
     apiClient.get<GovernanceDocumentVersion[]>(`/governance/versions/document/${documentId}`),
+  // Diff two content versions (version ROW ids) + restore a prior version.
+  compareDocumentVersions: (versionAId: number, versionBId: number) =>
+    apiClient.get(`/governance/versions/compare/${versionAId}/${versionBId}`),
+  rollbackDocumentVersion: (documentId: number, versionId: number) =>
+    apiClient.post(`/governance/versions/document/${documentId}/rollback/${versionId}`, {}),
+  // Edit document body content with a version snapshot + audit ("why").
+  editDocumentContent: (documentId: number, data: { content: string; change_reason?: string }) =>
+    apiClient.put(`/governance/documents/${documentId}`, data),
+  // Fill the Approval Signoff + Document Description tables (sign / fill
+  // placeholders later); snapshots a version + audits.
+  signoffDocument: (documentId: number, data: {
+    signoffs?: Array<{ role: string; name?: string; designation?: string; date?: string }>;
+    effective_date?: string; version?: string; next_review_date?: string;
+    classification?: string; approval_authority?: string; mark_approved?: boolean;
+  }) => apiClient.post(`/governance/documents/${documentId}/signoff`, data),
+  // ── Production Sign-off & Document Control (participants + send + sign) ──
+  getDocumentSignoff: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/signoff`),
+  setSignoffParticipants: (documentId: number, data: {
+    prepared_by?: Array<{ target_type: string; target_id: number }>;
+    reviewers?: Array<{ target_type: string; target_id: number }>;
+    approvers?: Array<{ target_type: string; target_id: number }>;
+  }) => apiClient.put(`/governance/documents/${documentId}/signoff/participants`, data),
+  sendDocumentForReview: (documentId: number) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/send-for-review`, {}),
+  signDocumentOff: (documentId: number, data: { comment?: string; signature_text?: string }) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/sign`, data),
+  rejectDocumentSignoff: (documentId: number, data: { comment: string }) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/reject`, data),
+  getMySignoffPending: () =>
+    apiClient.get('/governance/documents/signoff/my-pending'),
   getPendingApprovals: (params?: { include_delegated?: boolean; skip?: number; limit?: number }) =>
     apiClient.get('/governance/workflows/pending', { params }),
   getWorkflowDashboard: () => apiClient.get('/governance/workflows/dashboard'),
@@ -395,6 +446,12 @@ export const governanceApi = {
     apiClient.post('/governance/workflows/templates/seed-defaults', null, { params: { tenant_id: tenantId } }),
   getDocumentMappings: (documentId: number) =>
     apiClient.get(`/governance/mappings/document/${documentId}`),
+  // Control coverage of a document vs its applicable frameworks: per-framework
+  // mapped / recommended / missing (gap) controls.
+  getDocumentCoverage: (documentId: number, frameworkIds?: number[]) =>
+    apiClient.get(`/governance/mappings/document/${documentId}/coverage`, {
+      params: frameworkIds && frameworkIds.length ? { framework_ids: frameworkIds.join(',') } : {},
+    }),
   getFrameworkApplicability: (frameworkId: number) =>
     apiClient.get(`/governance/applicability/framework/${frameworkId}`),
   getApplicabilityAuditLog: (frameworkId: number) =>
@@ -407,6 +464,8 @@ export const governanceApi = {
     apiClient.post('/governance/mappings/control', data),
   unlinkControl: (linkId: number) =>
     apiClient.delete(`/governance/mappings/control/${linkId}`),
+  linkRecommendedControl: (documentId: number, data: { control_kind: string; control_code: string | null; link: boolean }) =>
+    apiClient.post(`/governance/mappings/document/${documentId}/recommended-controls/link`, data),
   linkDocumentToRisk: (data: { document_id: number; risk_id: number; link_type?: string; notes?: string }) =>
     apiClient.post('/governance/mappings/risk', data),
   unlinkDocumentFromRisk: (linkId: number) =>
@@ -532,6 +591,14 @@ export const policyExceptionApi = {
   getComments: (id: number) => apiClient.get(`/governance/policy-exceptions/${id}/comments`),
   addComment: (id: number, data: { comment: string }) =>
     apiClient.post(`/governance/policy-exceptions/${id}/comments`, data),
+  // Create an ERM risk-register entry from an exception's potential risks so the
+  // likelihood/impact assessment can be completed in the risk module.
+  promoteToRisk: (id: number) => apiClient.post(`/governance/policy-exceptions/${id}/promote-to-risk`),
+  // Asset-weighted risk posture + aging + closure-timeliness for the charts.
+  getAnalytics: () => apiClient.get('/governance/policy-exceptions/analytics'),
+  // Real posture-over-time trend from the snapshot history layer.
+  getTrend: (metric = 'exception_risk_posture', days = 180) =>
+    apiClient.get('/enriched-dashboard/metric-trend', { params: { metric, days } }),
 };
 
 export const documentsApi = {
@@ -927,8 +994,9 @@ export const ermApi = {
       apiClient.get('/erm/risks/template/download', {
         responseType: 'blob',
       }),
-    closeRisk: (riskId: number, notes: string) => 
-      apiClient.post<Risk>(`/erm/risks/${riskId}/close`, { notes }),
+    closeRisk: (riskId: number, notes?: string) =>
+      // Backend expects closure_notes as a query param (not a body).
+      apiClient.post<Risk>(`/erm/risks/${riskId}/close`, null, notes ? { params: { closure_notes: notes } } : undefined),
     reopenRisk: (riskId: number) => 
       apiClient.post<Risk>(`/erm/risks/${riskId}/reopen`),
     getRiskAging: () => 
@@ -1913,6 +1981,185 @@ export const vendorRiskApi = {
     apiClient.get('/vendor-risk/questionnaire-responses', { params }),
   updateQuestionnaireResponse: (responseId: number, data: { assessment_id?: number }) =>
     apiClient.patch(`/vendor-risk/questionnaire-responses/${responseId}`, data),
+
+  // ── TPRA 8-stage lifecycle ──
+  getLifecycleStages: () => apiClient.get('/vendor-risk/lifecycle/stages'),
+  advanceStage: (vendorId: number, data?: { target_stage?: string; note?: string }) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/advance-stage`, data || {}),
+  // Remediation tracker (stage 5)
+  getRemediation: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/remediation`),
+  addRemediation: (vendorId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/remediation`, data),
+  updateRemediation: (vendorId: number, actionId: string, data: Record<string, unknown>) =>
+    apiClient.patch(`/vendor-risk/vendors/${vendorId}/remediation/${actionId}`, data),
+  deleteRemediation: (vendorId: number, actionId: string) =>
+    apiClient.delete(`/vendor-risk/vendors/${vendorId}/remediation/${actionId}`),
+  // Reassessment scheduling (stage 7)
+  scheduleReassessment: (vendorId: number, data?: { cadence_days?: number; next_date?: string }) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/schedule-reassessment`, data || {}),
+  // Offboarding checklist (stage 8)
+  getOffboarding: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/offboarding`),
+  updateOffboarding: (vendorId: number, items: Array<{ item: string; done: boolean }>) =>
+    apiClient.patch(`/vendor-risk/vendors/${vendorId}/offboarding`, { items }),
+  // TPRA AI (graceful — never 503)
+  aiRecommendTier: (vendorId: number) => apiClient.post('/vendor-risk/ai/recommend-tier', { vendor_id: vendorId }),
+  aiGapAnalysis: (assessmentId: number) => apiClient.post('/vendor-risk/ai/gap-analysis', { assessment_id: assessmentId }),
+  aiRemediationPlan: (vendorId: number, assessmentId?: number) =>
+    apiClient.post('/vendor-risk/ai/remediation-plan', { vendor_id: vendorId, assessment_id: assessmentId }),
+};
+
+// ── TPRA productionized 11-stage lifecycle (normalized) ──────────────────────
+// Talks to /vendor-risk/tpra/*. Separate from the legacy vendorRiskApi flat
+// methods above so the new lifecycle UI has a clean, grouped client surface.
+export const tpraApi = {
+  // Program dashboard + analytics
+  dashboard: (scope: 'portfolio' | 'mine' = 'portfolio') =>
+    apiClient.get('/vendor-risk/tpra/dashboard', { params: { scope } }),
+  riskTrend: (params?: { scope?: 'portfolio' | 'vendor'; vendor_id?: number; months?: number }) =>
+    apiClient.get('/vendor-risk/tpra/risk-trend', { params: params || {} }),
+  findingsRegister: (params?: {
+    status?: string; severity?: string; domain?: string; vendor_id?: number;
+    overdue_only?: boolean; sort?: string; order?: 'asc' | 'desc'; skip?: number; limit?: number;
+  }) => apiClient.get('/vendor-risk/tpra/findings-register', { params: params || {} }),
+  monitoringFeed: (params?: {
+    severity?: string; signal_type?: string; acknowledged?: boolean; vendor_id?: number;
+    skip?: number; limit?: number;
+  }) => apiClient.get('/vendor-risk/tpra/monitoring-feed', { params: params || {} }),
+  riskRegister: () => apiClient.get('/vendor-risk/tpra/risk-register'),
+  // Lifecycle
+  getStages: () => apiClient.get('/vendor-risk/tpra/stages'),
+  getBoard: () => apiClient.get('/vendor-risk/tpra/board'),
+  getLifecycle: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle`),
+  initLifecycle: (vendorId: number) => apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/lifecycle/init`, {}),
+  listAssessmentVersions: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/assessments`),
+  advance: (assessmentId: number, data?: { note?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/advance`, data || {}),
+  sendBack: (assessmentId: number, data: { target_stage: string; reason: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/send-back`, data),
+  skip: (assessmentId: number, data: { stage_key: string; reason: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/skip`, data),
+  gateDecision: (assessmentId: number, data: { stage_key: string; decision: string; rationale?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/gate-decision`, data),
+  runTiering: (assessmentId: number, data?: { factors?: Record<string, number> }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/run-tiering`, data || {}),
+  runScoring: (assessmentId: number) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/run-scoring`, {}),
+  reassess: (vendorId: number, data: { reason: string; assessment_type?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/reassess`, data),
+
+  // Findings + remediation + acceptance
+  listFindings: (assessmentId: number, params?: {
+    status?: string; domain?: string; severity?: string;
+    sort?: string; order?: string; skip?: number; limit?: number; include_deleted?: boolean;
+  }) => apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/findings`, { params }),
+  createFinding: (assessmentId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/findings`, data),
+  getFinding: (findingId: number) => apiClient.get(`/vendor-risk/tpra/findings/${findingId}`),
+  updateFinding: (findingId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/vendor-risk/tpra/findings/${findingId}`, data),
+  deleteFinding: (findingId: number) => apiClient.delete(`/vendor-risk/tpra/findings/${findingId}`),
+  restoreFinding: (findingId: number) => apiClient.post(`/vendor-risk/tpra/findings/${findingId}/restore`, {}),
+  listRemediations: (findingId: number) => apiClient.get(`/vendor-risk/tpra/findings/${findingId}/remediations`),
+  createRemediation: (findingId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/tpra/findings/${findingId}/remediations`, data),
+  updateRemediation: (remId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/vendor-risk/tpra/remediations/${remId}`, data),
+  deleteRemediation: (remId: number) => apiClient.delete(`/vendor-risk/tpra/remediations/${remId}`),
+  createAcceptance: (findingId: number, data: { rationale: string; expiry?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/findings/${findingId}/acceptances`, data),
+  revokeAcceptance: (accId: number) => apiClient.delete(`/vendor-risk/tpra/acceptances/${accId}`),
+  // Move a finding into the ERM Risk Register as a vendor-sourced risk.
+  promoteFindingToRegister: (findingId: number) =>
+    apiClient.post(`/vendor-risk/tpra/findings/${findingId}/promote-to-register`, {}),
+
+  // Evidence — upload OR link existing (assessment-level pack + per-finding)
+  listEvidence: (assessmentId: number, params?: { finding_id?: number }) =>
+    apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/evidence`, { params: params || {} }),
+  uploadEvidence: (assessmentId: number, data: FormData) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/evidence/upload`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  linkEvidence: (assessmentId: number, data: { evidence_id: number; finding_id?: number; response_id?: number; note?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/evidence/link`, data),
+  unlinkEvidence: (linkId: number) => apiClient.delete(`/vendor-risk/tpra/evidence-links/${linkId}`),
+
+  // Contracts + obligations
+  listContracts: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/contracts`),
+  createContract: (vendorId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/contracts`, data),
+  updateContract: (contractId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/vendor-risk/tpra/contracts/${contractId}`, data),
+  deleteContract: (contractId: number) => apiClient.delete(`/vendor-risk/tpra/contracts/${contractId}`),
+  listObligations: (contractId: number) => apiClient.get(`/vendor-risk/tpra/contracts/${contractId}/obligations`),
+  createObligation: (contractId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/tpra/contracts/${contractId}/obligations`, data),
+  updateObligation: (oblId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/vendor-risk/tpra/obligations/${oblId}`, data),
+  deleteObligation: (oblId: number) => apiClient.delete(`/vendor-risk/tpra/obligations/${oblId}`),
+
+  // Approvals (append-only)
+  listApprovals: (assessmentId: number) => apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`),
+  createApproval: (assessmentId: number, data: { decision: string; conditions?: string[]; rationale?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/approvals`, data),
+
+  // Per-stage task checklist + DD-planning
+  saveChecklist: (
+    assessmentId: number, stageKey: string,
+    items: Array<{ text: string; done: boolean; note?: string | null; owner_id?: number | null; due_date?: string | null }>,
+  ) => apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/stages/${stageKey}/checklist`, { items }),
+  savePlan: (assessmentId: number, data: { template_id?: number; reviewed_by?: number; due_date?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/plan`, data),
+  saveRoles: (assessmentId: number, stageKey: string, assigned_roles: Array<{ role: string; user_id: number }>) =>
+    apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/stages/${stageKey}/roles`, { assigned_roles }),
+  saveTeam: (assessmentId: number, roster: Record<string, number>) =>
+    apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/team`, { roster }),
+  // Admin / Settings — program config (tiering weights, thresholds, cadence)
+  getConfig: () => apiClient.get('/vendor-risk/tpra/config'),
+  saveConfig: (data: { weights?: Record<string, number>; thresholds?: Record<string, number>; cadence_days?: Record<string, number> }) =>
+    apiClient.put('/vendor-risk/tpra/config', data),
+  getVendorAudit: (vendorId: number, limit = 100) =>
+    apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/audit`, { params: { limit } }),
+  getCoverage: () => apiClient.get('/vendor-risk/tpra/coverage'),
+
+  // Monitoring signals
+  listSignals: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/signals`),
+  createSignal: (vendorId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/signals`, data),
+  updateSignal: (signalId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/vendor-risk/tpra/signals/${signalId}`, data),
+  deleteSignal: (signalId: number) => apiClient.delete(`/vendor-risk/tpra/signals/${signalId}`),
+};
+
+// ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.
+// Reused by the TPRA lifecycle by namespacing framework_key = `tpra-vendor-{id}`.
+export const artifactsApi = {
+  list: (params: { framework_key?: string; assessment_id?: number; assessment_type?: string; status?: string }) =>
+    apiClient.get('/artifacts', { params }),
+  get: (id: number) => apiClient.get(`/artifacts/${id}`),
+  create: (data: Record<string, unknown>) => apiClient.post('/artifacts', data),
+  update: (id: number, data: Record<string, unknown>) => apiClient.put(`/artifacts/${id}`, data),
+  remove: (id: number) => apiClient.delete(`/artifacts/${id}`),
+  export: (id: number, fmt: string) => apiClient.get(`/artifacts/${id}/export`, { params: { fmt }, responseType: 'blob' }),
+  catalogContent: (artifactId: string, frameworkKey: string) =>
+    apiClient.get('/artifacts/catalog/content', { params: { artifact_id: artifactId, framework_key: frameworkKey } }),
+};
+
+// Generic AI-recommendation store — save a reviewed AI output so it persists
+// per tenant and every user with module access sees the same saved result.
+export const aiRecommendationsApi = {
+  list: (params: { module: string; entity_type?: string; entity_id?: string | number; recommendation_type?: string }) =>
+    apiClient.get('/ai-recommendations', { params }),
+  save: (data: {
+    module: string;
+    recommendation_type: string;
+    entity_type?: string;
+    entity_id?: string | number;
+    title?: string;
+    summary?: string;
+    output: Record<string, unknown>;
+    model?: string;
+  }) => apiClient.post('/ai-recommendations', data),
+  remove: (id: number) => apiClient.delete(`/ai-recommendations/${id}`),
 };
 
 export const frameworkUploadApi = {
@@ -2016,6 +2263,9 @@ export const complianceApi = {
     }) => apiClient.get('/compliance/policies/statements', { params }),
     getById: (id: number) =>
       apiClient.get(`/compliance/policies/statements/${id}`),
+    // 360° auto-mapped linkage: controls (normalized/framework/parsed/internal) + evidence.
+    getLinkage: (id: number) =>
+      apiClient.get(`/compliance/policies/statements/${id}/linkage`),
     getByDocument: (documentId: number, params?: { category?: string; compliance_status?: string }) =>
       apiClient.get(`/compliance/policies/statements/by-document/${documentId}`, { params }),
     update: (id: number, data: {
@@ -3136,6 +3386,7 @@ export const committeeApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   getDashboard: () => apiClient.get('/governance/committees/dashboard'),
+  getOverview: () => apiClient.get('/governance/committees/overview'),
   getSuggestedAgendaItems: (meetingId: number) => 
     apiClient.get(`/governance/committees/meetings/${meetingId}/suggested-agenda-items`),
   autoPopulateAgenda: (meetingId: number, data: { include_documents?: boolean; include_exceptions?: boolean; include_regulatory_changes?: boolean }) => 

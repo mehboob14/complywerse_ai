@@ -8,6 +8,7 @@ import { authedFetch } from '@/lib/auth-fetch';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SearchInput, MultiSelectDropdown } from '@/components/ui';
 import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
+import StatementLinkagePanel from './_StatementLinkagePanel';
 
 import {
   FileText,
@@ -909,6 +910,8 @@ export default function PolicyStatementsPage() {
                   </div>
                 </div>
               )}
+
+              <StatementLinkagePanel statementId={selectedStatement.id} />
             </div>
 
             <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200">

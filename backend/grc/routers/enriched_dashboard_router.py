@@ -28,6 +28,37 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/enriched-dashboard", tags=["Enriched Dashboard"])
 
 
+# ── Single source of truth + real trends (dashboard overhaul: DASH-001/002/009) ─
+from ..services import metrics as _metrics
+from ..services import metric_snapshots as _metric_snap
+
+
+@router.get("/headline")
+def get_headline_kpis(db: Session = Depends(get_db), current_user=Depends(require_auth)):
+    """Reconciled headline KPIs — 0-100 scale, enterprise incl. third-party. THE
+    block every dashboard/board view should read so numbers reconcile everywhere."""
+    tids = get_user_tenants(current_user, db)
+    return _metrics.headline_kpis(db, tids)
+
+
+@router.get("/metric-trend")
+def get_metric_trend(
+    metric: str = Query(..., description="e.g. portfolio_avg_residual, open_risks, open_critical_issues"),
+    days: int = Query(180, ge=7, le=730),
+    dimension: str = Query("overall"),
+    dimension_value: str = Query("all"),
+    db: Session = Depends(get_db),
+    current_user=Depends(require_auth),
+):
+    """Real portfolio-metric time-series from the snapshot history layer — replaces
+    synthetic date scaffolding. Empty list ⇒ no snapshots yet (honest, not zeros)."""
+    tids = get_user_tenants(current_user, db)
+    return {
+        "metric": metric,
+        "series": _metric_snap.read_trend(db, tids, metric, days, dimension, dimension_value),
+    }
+
+
 @router.get("/executive/risk-velocity")
 def get_risk_velocity(
     days: int = Query(90, ge=7, le=365),

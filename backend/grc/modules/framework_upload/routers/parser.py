@@ -1,4 +1,5 @@
-from ....config import get_openai_api_key
+from ....config import get_openai_api_key, get_openai_model
+
 import os
 import json
 import threading
@@ -590,7 +591,7 @@ def extract_document_structure(text: str, framework_name: str) -> dict:
         print(f"[PARSE] Extracting document structure with OpenAI (gpt-4o)...", flush=True)
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": GRC_SME_SYSTEM_PROMPT},
                 {"role": "user", "content": f"""As a Senior GRC SME, analyze this regulatory framework document "{framework_name}" and provide comprehensive structural analysis.
@@ -713,7 +714,7 @@ Remember: Target 15-25+ controls per chunk. Split compound requirements. Every b
         print(f"[PARSE] Lightweight extraction chunk {chunk_number}/{total_chunks}...", flush=True)
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": "You are a compliance expert extracting regulatory requirements. Extract the MAXIMUM number of individual controls by splitting compound requirements. Each shall/must/should statement is a separate control."},
                 {"role": "user", "content": prompt}
@@ -809,7 +810,7 @@ Return JSON with "controls" array containing the enhanced controls with ALL fiel
             start_time = time.time()
             
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model=get_openai_model(),
                 messages=[
                     {"role": "system", "content": "You are a GRC expert adding audit-ready evidence requirements to compliance controls."},
                     {"role": "user", "content": prompt}
@@ -1143,7 +1144,7 @@ Example control structure:
         print(f"[PARSE] Calling OpenAI API (model: gpt-4o)...", flush=True)
         
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": GRC_SME_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
@@ -1584,7 +1585,7 @@ IMPORTANT:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=get_openai_model(),
             messages=[
                 {"role": "system", "content": CLASSIFICATION_SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
@@ -2538,7 +2539,7 @@ Return JSON with "controls" array containing objects with "id" and "evidence_req
                 start_time = time.time()
                 
                 response = client.chat.completions.create(
-                    model="gpt-4o",
+                    model=get_openai_model(),
                     messages=[
                         {"role": "system", "content": "You are a GRC expert adding audit-ready evidence requirements to compliance controls. Be specific and practical."},
                         {"role": "user", "content": prompt}
@@ -2752,7 +2753,7 @@ def generate_evidence_requirements_for_controls_batch(
         
         try:
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model=get_openai_model(),
                 messages=[
                     {"role": "system", "content": GRC_SME_SYSTEM_PROMPT},
                     {"role": "user", "content": prompt}

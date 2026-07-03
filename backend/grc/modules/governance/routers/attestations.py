@@ -322,6 +322,43 @@ async def get_document_attestations(
     }
 
 
+@router.get("/coverage-map")
+async def get_attestation_coverage_map(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Return per-document attestation compliance coverage for the tenant.
+
+    coverage_rate formula matches GET /attestations/document/{id}.summary.compliance_rate:
+        round(100 * completed / total)  where total = all attestations for the doc.
+    Documents with zero attestations are omitted (frontend treats missing as '-').
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    if not user_tenants:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tenant access")
+
+    attestations = db.query(PolicyAttestation).filter(
+        PolicyAttestation.tenant_id.in_(user_tenants)
+    ).all()
+
+    totals: dict = {}
+    completed: dict = {}
+    for att in attestations:
+        doc_id = att.document_id
+        totals[doc_id] = totals.get(doc_id, 0) + 1
+        if att.status == "completed":
+            completed[doc_id] = completed.get(doc_id, 0) + 1
+
+    coverage: dict = {}
+    for doc_id, total in totals.items():
+        if total <= 0:
+            continue
+        done = completed.get(doc_id, 0)
+        coverage[str(doc_id)] = round(done / total * 100)
+
+    return {"coverage": coverage}
+
+
 @router.get("/history")
 async def get_attestation_history(
     limit: int = 50,

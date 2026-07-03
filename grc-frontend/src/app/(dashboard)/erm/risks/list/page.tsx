@@ -39,6 +39,7 @@ import {
 import Link from 'next/link';
 import { useRef } from 'react';
 import { SearchInput } from '@/components/ui/SearchInput';
+import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
@@ -124,21 +125,26 @@ function renderSourceIcon(key: SourceStyle['iconKey']) {
 function SourceBadge({
   sourceType,
   sourceReference,
+  sourceLabel,
 }: {
   sourceType: string;
   sourceReference: string | null;
+  sourceLabel?: string | null;
 }) {
   const style = getSourceStyle(sourceType);
+  // Prefer the human-readable label (e.g. the vendor name) over the raw
+  // `vendor:15/vendor_assessment:15` reference.
+  const display = sourceLabel || sourceReference;
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ${style.badgeBg} ${style.badgeText} ${style.badgeRing}`}
-      title={`Originated from: ${style.label}${sourceReference ? ` (${sourceReference})` : ''}`}
+      title={`Originated from: ${style.label}${display ? ` (${display})` : ''}`}
     >
       {renderSourceIcon(style.iconKey)}
       <span>{style.label}</span>
-      {sourceReference && (
-        <span className="ml-1 rounded-full bg-white/70 px-1.5 font-mono text-[10px] text-gray-700">
-          {sourceReference}
+      {display && (
+        <span className={`ml-1 rounded-full bg-white/70 px-1.5 text-[10px] text-gray-700 ${sourceLabel ? 'font-medium' : 'font-mono'}`}>
+          {display}
         </span>
       )}
     </span>
@@ -1682,6 +1688,7 @@ export default function ERMRisksPage() {
                             <SourceBadge
                               sourceType={risk.source_type}
                               sourceReference={risk.source_reference || null}
+                              sourceLabel={risk.source_label || null}
                             />
                           )}
                           {(risk.mitigation_actions?.length || 0) > 0 && (
@@ -1972,12 +1979,14 @@ interface AISuggestion {
   suggested_description: string;
   suggested_causes: string[];
   suggested_consequences: string[];
+  suggested_recommendations?: string[];
   recommended_controls: Array<{
     control_id: number;
     control_name: string;
     control_code?: string;
     relevance: string;
     rationale: string;
+    control_source?: string; // internal | parsed | framework
   }>;
   suggested_likelihood: number;
   suggested_impact: number;
@@ -2022,6 +2031,8 @@ function RiskModal({
     residual_likelihood: risk?.residual_likelihood || 2,
     residual_impact: risk?.residual_impact || 2,
     treatment_plan: risk?.treatment_plan || '',
+    root_cause: (risk as unknown as { root_cause?: string } | null)?.root_cause || '',
+    recommendations: (risk as unknown as { recommendations?: string } | null)?.recommendations || '',
   });
   const [assetSearch, setAssetSearch] = useState('');
   const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>(
@@ -2241,6 +2252,21 @@ function RiskModal({
     }
   };
 
+  // Save the AI-suggested root causes / recommendations into their OWN fields
+  // (the user reviews them in the panel, then clicks to save).
+  const applyRootCauses = () => {
+    const causes = aiSuggestions?.suggested_causes || [];
+    if (causes.length) {
+      setFormData((prev) => ({ ...prev, root_cause: causes.map((c) => `• ${c}`).join('\n') }));
+    }
+  };
+  const applyRecommendations = () => {
+    const recs = aiSuggestions?.suggested_recommendations || [];
+    if (recs.length) {
+      setFormData((prev) => ({ ...prev, recommendations: recs.map((r) => `• ${r}`).join('\n') }));
+    }
+  };
+
   const applyLikelihoodImpact = () => {
     if (aiSuggestions) {
       setFormData({
@@ -2437,6 +2463,16 @@ function RiskModal({
                 
                 {showSuggestions && (
                   <div className="mt-4 space-y-4">
+                    {risk?.id && (
+                      <AiRecommendationSaver
+                        module="erm_risk_suggestion"
+                        recommendationType="ai_suggestion"
+                        entityType="risk"
+                        entityId={risk.id}
+                        title={`AI suggestion · ${formData.title || 'risk'}`}
+                        output={aiSuggestions as unknown as Record<string, unknown>}
+                      />
+                    )}
                     <div>
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Suggested Description</h4>
@@ -2456,13 +2492,23 @@ function RiskModal({
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider mb-2">Root Causes</h4>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Root Causes</h4>
+                          <button
+                            type="button"
+                            onClick={applyRootCauses}
+                            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-primary-600 hover:bg-primary-50"
+                          >
+                            <Check className="h-3 w-3" /> Save to field
+                          </button>
+                        </div>
                         <div className="flex flex-wrap gap-1">
                           {aiSuggestions.suggested_causes.map((cause, idx) => (
                             <button
                               key={idx}
                               type="button"
                               onClick={() => appendCauseToDescription(cause)}
+                              title="Append to description"
                               className="rounded-full bg-red-100 px-2.5 py-1 text-xs text-red-700 hover:bg-red-200 transition-colors border border-red-200"
                             >
                               + {cause}
@@ -2486,6 +2532,29 @@ function RiskModal({
                         </div>
                       </div>
                     </div>
+
+                    {Array.isArray(aiSuggestions.suggested_recommendations) && aiSuggestions.suggested_recommendations.length > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-xs font-medium text-slate-600 uppercase tracking-wider">Recommendations</h4>
+                          <button
+                            type="button"
+                            onClick={applyRecommendations}
+                            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium text-primary-600 hover:bg-primary-50"
+                          >
+                            <Check className="h-3 w-3" /> Save to field
+                          </button>
+                        </div>
+                        <ul className="space-y-1">
+                          {aiSuggestions.suggested_recommendations.map((rec, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-sm text-slate-700">
+                              <span className="mt-0.5 text-emerald-500">•</span>
+                              <span>{rec}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     <div>
                       <div className="flex items-center justify-between">
@@ -2541,8 +2610,17 @@ function RiskModal({
                                       {control.control_code}
                                     </span>
                                   )}
+                                  {control.control_source && (
+                                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                      control.control_source === 'internal'
+                                        ? 'bg-indigo-100 text-indigo-700'
+                                        : 'bg-sky-100 text-sky-700'
+                                    }`}>
+                                      {control.control_source === 'internal' ? 'Internal' : 'Framework'}
+                                    </span>
+                                  )}
                                   <span className={`rounded px-1.5 py-0.5 text-xs ${
-                                    control.relevance === 'high' 
+                                    control.relevance === 'high'
                                       ? 'bg-green-100 text-green-700'
                                       : control.relevance === 'medium'
                                       ? 'bg-yellow-100 text-yellow-700'
@@ -2927,6 +3005,29 @@ function RiskModal({
               onChange={(e) => setFormData({ ...formData, treatment_plan: e.target.value })}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               rows={formData.treatment_plan.length > 200 ? 8 : 2}
+            />
+          </div>
+
+          {/* Root Cause + Recommendations — reviewable AI-assist fields, also
+              free-text editable. "Save to field" in the AI panel fills these. */}
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Root Cause</label>
+            <textarea
+              value={formData.root_cause}
+              onChange={(e) => setFormData({ ...formData, root_cause: e.target.value })}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              rows={formData.root_cause.length > 200 ? 6 : 2}
+              placeholder="Why this risk exists (use AI Assist → Root Causes → Save to field, or write your own)…"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">Recommendations</label>
+            <textarea
+              value={formData.recommendations}
+              onChange={(e) => setFormData({ ...formData, recommendations: e.target.value })}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              rows={formData.recommendations.length > 200 ? 6 : 2}
+              placeholder="Recommended actions to reduce this risk (AI Assist → Recommendations → Save to field, or write your own)…"
             />
           </div>
 

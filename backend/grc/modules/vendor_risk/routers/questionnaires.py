@@ -17,6 +17,15 @@ from ....routers.auth_router import require_auth, get_user_tenants
 EVIDENCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "uploads", "questionnaire-evidence")
 os.makedirs(EVIDENCE_UPLOAD_DIR, exist_ok=True)
 
+# TPRM-009 — hardening for the PUBLIC (token-only, unauthenticated) evidence upload.
+_MAX_EVIDENCE_BYTES = 25 * 1024 * 1024        # 25 MB hard cap (read is bounded, no unbounded memory)
+_MAX_EVIDENCE_PER_RESPONSE = 100              # abuse guard: cap files per questionnaire
+_ALLOWED_EVIDENCE_EXT = {
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".txt", ".rtf", ".md",
+    ".ppt", ".pptx", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".zip",
+    ".json", ".xml", ".log",
+}
+
 router = APIRouter(tags=["Vendor Questionnaires"])
 
 
@@ -461,22 +470,49 @@ async def external_upload_evidence(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    """Upload evidence file for a specific question. No auth — token validated."""
+    """Upload evidence file for a specific question. No auth — token validated.
+
+    Hardened (TPRM-009): extension allow-list, 25 MB size cap (bounded read),
+    per-questionnaire file cap, and a UUID-based on-disk name derived only from the
+    validated extension (no path traversal from the client filename)."""
     qr = _validate_external_token(token, db)
 
-    # Save file
-    ext = os.path.splitext(file.filename or "")[1]
+    # Extension allow-list — reject executables/scripts/unknown types.
+    filename = (file.filename or "").strip()
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in _ALLOWED_EVIDENCE_EXT:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"File type '{ext or 'unknown'}' is not allowed. Allowed: {', '.join(sorted(_ALLOWED_EVIDENCE_EXT))}",
+        )
+
+    # Abuse guard: cap the number of files per questionnaire response.
+    if db.query(VendorQuestionnaireEvidence).filter(
+        VendorQuestionnaireEvidence.response_id == qr.id
+    ).count() >= _MAX_EVIDENCE_PER_RESPONSE:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail="Upload limit reached for this questionnaire.")
+
+    # Bounded read — never load an unbounded file into memory. Reading cap+1 lets
+    # us detect (and reject) anything over the limit without buffering the whole file.
+    contents = await file.read(_MAX_EVIDENCE_BYTES + 1)
+    if len(contents) > _MAX_EVIDENCE_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            detail=f"File exceeds the {_MAX_EVIDENCE_BYTES // (1024 * 1024)} MB limit.")
+    if not contents:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file.")
+
+    # On-disk name is a UUID + the validated extension only — the client filename
+    # never touches the path (path-traversal safe). The original name is kept for display.
     unique_name = f"{uuid.uuid4()}{ext}"
     file_path = os.path.join(EVIDENCE_UPLOAD_DIR, unique_name)
-
-    contents = await file.read()
     with open(file_path, "wb") as f:
         f.write(contents)
 
     evidence = VendorQuestionnaireEvidence(
         response_id=qr.id,
-        question_id=question_id,
-        file_name=file.filename or unique_name,
+        question_id=(question_id or "")[:100],
+        file_name=(os.path.basename(filename) or unique_name)[:255],
         file_path=file_path,
         file_type=file.content_type,
         file_size=len(contents),

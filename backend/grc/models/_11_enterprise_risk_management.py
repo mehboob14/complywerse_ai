@@ -36,6 +36,10 @@ class Risk(Base):
     risk_appetite = Column(String(50), nullable=True)
     status = Column(String(50), default="open")
     treatment_plan = Column(Text, nullable=True)
+    # Reviewable AI-assist fields (also user-editable): root-cause analysis and
+    # recommended actions, saved into their own columns rather than the description.
+    root_cause = Column(Text, nullable=True)
+    recommendations = Column(Text, nullable=True)
     closure_status = Column(String(50), nullable=True)  # null, pending_closure, closed
     closed_at = Column(DateTime, nullable=True)
     closed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
@@ -49,6 +53,11 @@ class Risk(Base):
     source_reference = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Transient (non-persisted) human-readable provenance, populated by the list
+    # endpoint from source_reference (e.g. the vendor name). Class default ensures
+    # RiskResponse.from_attributes always finds the attribute.
+    source_label = None
 
     tenant = relationship("Tenant", back_populates="risks")
     owner = relationship("GRCUser", back_populates="owned_risks", foreign_keys=[owner_id])

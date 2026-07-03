@@ -161,10 +161,20 @@ export const normalizeGovernanceMarkdown = (raw: string | null | undefined): str
     i = j - 1;
   }
 
-  // 6 — collapse runs of blank lines (3+ → 2)
+  // 7 — enumeration repair. AI drafts frequently emit "(i) … (ii) … (iii) …"
+  //     runs INSIDE a paragraph (or as line starts that markdown doesn't treat
+  //     as list markers). Turn both shapes into real markdown lists so they get
+  //     proper indentation/spacing instead of reading as a wall of text.
+  const withLists = repairEnumerations(withTables);
+
+  // 8 — emphasise leading clause numbers (4.1, 4.1.3 …) so numbered clauses are
+  //     visually distinct from body text (the renderer also indents them by depth).
+  const withClauses = withLists.map(boldLeadingClauseNumber);
+
+  // 9 — collapse runs of blank lines (3+ → 2)
   const out: string[] = [];
   let blankRun = 0;
-  for (const l of withTables) {
+  for (const l of withClauses) {
     if (l.trim() === '') {
       blankRun++;
       if (blankRun <= 2) out.push('');
@@ -174,6 +184,113 @@ export const normalizeGovernanceMarkdown = (raw: string | null | undefined): str
     }
   }
   return out.join('\n');
+};
+
+// Matches a bracketed enumerator like (i) (ii) (a) (b) (1) — the shapes AI
+// drafts use for inline sub-lists. Deliberately narrow (roman i–xix, single
+// a–h, 1–2 digits) so prose asides like "(e.g. …)" or "(see 4.2)" don't match.
+const ENUM_TOKEN = '(?:x?(?:ix|iv|v?i{1,3}|v)|[a-h]|\\d{1,2})';
+const ENUM_GLOBAL = new RegExp(`\\((${ENUM_TOKEN})\\)`, 'gi');
+
+const isStructuralLine = (line: string): boolean =>
+  /^\s*\|/.test(line) ||              // table row
+  /^\s*#{1,6}\s/.test(line) ||        // heading
+  /^\s*[-*+]\s/.test(line) ||         // already a bullet
+  /^\s*\d+\.\s/.test(line) ||         // already an ordered item
+  /^\s*```/.test(line);               // code fence
+
+/** Split "(i) … (ii) … (iii) …" inline runs and standalone lines into a list. */
+// Character ranges covered by `[ ... ]` citation spans. Enumerators inside these
+// are clause references (e.g. "[... clause Article 4 (i) and (ii)]"), NOT list
+// markers, so they must never be split.
+const bracketRanges = (line: string): Array<[number, number]> => {
+  const ranges: Array<[number, number]> = [];
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '[') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (line[i] === ']') {
+      depth = Math.max(0, depth - 1);
+      if (depth === 0 && start >= 0) {
+        ranges.push([start, i + 1]);
+        start = -1;
+      }
+    }
+  }
+  if (depth > 0 && start >= 0) ranges.push([start, line.length]);
+  return ranges;
+};
+
+const repairEnumerations = (lines: string[]): string[] => {
+  const out: string[] = [];
+  for (const line of lines) {
+    if (isStructuralLine(line) || line.trim() === '') {
+      out.push(line);
+      continue;
+    }
+    const brackets = bracketRanges(line);
+    const inBracket = (idx: number) => brackets.some(([s, e]) => idx >= s && idx < e);
+    const markers: Array<{ index: number }> = [];
+    let m: RegExpExecArray | null;
+    ENUM_GLOBAL.lastIndex = 0;
+    while ((m = ENUM_GLOBAL.exec(line)) !== null) {
+      if (!inBracket(m.index)) markers.push({ index: m.index });
+    }
+    // Need at least two enumerators to be confident it's a list, not an aside.
+    if (markers.length < 2) {
+      out.push(line);
+      continue;
+    }
+    const leadIn = line.slice(0, markers[0].index).trim();
+    // Require a genuine list introduction (lead-in ends with ':' or ',', or the
+    // line starts with the marker) — otherwise it is prose, not a list.
+    if (!(leadIn === '' || /[:,]$/.test(leadIn))) {
+      out.push(line);
+      continue;
+    }
+    const items: string[] = [];
+    for (let i = 0; i < markers.length; i++) {
+      const start = markers[i].index;
+      const end = i + 1 < markers.length ? markers[i + 1].index : line.length;
+      // Strip the "(x)" marker and any following separator, keep the item text.
+      const body = line.slice(start, end)
+        .replace(new RegExp(`^\\(${ENUM_TOKEN}\\)\\s*[.)\\-–—:]?\\s*`, 'i'), '')
+        .replace(/[;,]\s*$/, '')
+        .trim();
+      items.push(body);
+    }
+    // Every item must carry real content — a bare "]" or stray punctuation means
+    // we mis-read a citation, so leave the original line untouched.
+    if (items.some((b) => b.replace(/[\]\[)(]/g, '').trim().length < 4)) {
+      out.push(line);
+      continue;
+    }
+    if (leadIn) {
+      out.push(leadIn);
+      out.push('');
+    }
+    items.forEach((b, i) => out.push(`${i + 1}. ${b}`));
+    out.push('');
+  }
+  return out;
+};
+
+/** Wrap a leading clause number in ** so the number reads as a label. */
+const boldLeadingClauseNumber = (line: string): string => {
+  if (isStructuralLine(line)) return line;
+  // 4.1 / 4.1.3 / 4.1.3.2 at the very start, not already bold, followed by text.
+  return line.replace(
+    /^(\s*)(\d+(?:\.\d+){1,4})([)\s.:])(?=\s*\S)/,
+    (_full, indent: string, num: string, sep: string) => `${indent}**${num}**${sep === ')' || sep === '.' || sep === ':' ? sep + ' ' : ' '}`,
+  );
+};
+
+/** Depth of a leading clause number (dots + 1), else 0. */
+export const clauseDepth = (text: string): number => {
+  const m = text.match(/^\s*(\d+(?:\.\d+){1,4})\b/);
+  return m ? m[1].split('.').length : 0;
 };
 
 // Flatten ReactMarkdown's `children` prop into a plain string for matching
@@ -256,15 +373,31 @@ export function GovernanceDocumentMarkdown({
                 );
               }
             }
+            // Numbered clauses (4.1, 4.1.3 …) get depth-based indentation so the
+            // hierarchy is readable instead of a flat wall of numbered text.
+            const depth = clauseDepth(childrenToText(children));
+            if (depth >= 2) {
+              const indent = (depth - 1) * 18; // px per level
+              return (
+                <p
+                  className="text-gray-800 mb-1.5 leading-relaxed text-sm"
+                  style={depth >= 3
+                    ? { paddingLeft: indent, marginLeft: 4, borderLeft: '2px solid #eef2f7' }
+                    : { paddingLeft: indent }}
+                >
+                  {children}
+                </p>
+              );
+            }
             return <p className="text-gray-800 mb-3 leading-relaxed text-sm">{children}</p>;
           },
           ul: ({ children }) => (
-            <ul className="list-disc list-inside mb-3 space-y-1 text-gray-800 pl-4 text-sm">
+            <ul className="list-disc mb-3 space-y-1 text-gray-800 pl-9 text-sm marker:text-gray-400">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="list-decimal list-inside mb-3 space-y-1 text-gray-800 pl-4 text-sm">
+            <ol className="list-decimal mb-3 space-y-1 text-gray-800 pl-9 text-sm marker:text-gray-500">
               {children}
             </ol>
           ),
