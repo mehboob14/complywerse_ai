@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -17,7 +17,6 @@ import {
   ChevronDown,
   ChevronRight,
   Trash2,
-  Edit2,
   Play,
   Eye,
   ArrowRightCircle,
@@ -501,9 +500,7 @@ export default function RegulatoryFeedsPage() {
                                   <Play className="h-4 w-4" />
                                 )}
                               </button>
-                              {canCreate && <button className="btn-ghost btn-sm" title="Edit">
-                                <Edit2 className="h-4 w-4" />
-                              </button>}
+                              {/* No source-edit endpoint exists; the dead Edit button was removed (audit fix). */}
                               {canDelete && <button
                                 onClick={() => {
                                   if (confirm(`Delete "${source.name}" and all its feed items?`)) {
