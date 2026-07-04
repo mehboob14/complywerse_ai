@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi, assetsApi, ermApi, apiClient } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { InlineLinkPicker, PageLoader, ComboBoxInput, type ComboBoxOption } from '@/components/ui';
+import { InlineLinkPicker, PageLoader, ComboBoxInput, SeverityBadge, StatusBadge, type ComboBoxOption, type SeverityLevel } from '@/components/ui';
 import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import { Abbr } from '@/components/common/Abbr';
 import {
@@ -24,7 +24,6 @@ import {
   Trash2,
   FileText,
   FileCheck,
-  Link as LinkIcon,
   Link2,
   Calendar,
   User,
@@ -166,27 +165,6 @@ interface ControlLink {
   framework_short_code?: string | null;
 }
 
-interface Retest {
-  id: number;
-  test_date: string;
-  result: string;
-  tester_name?: string;
-  notes?: string;
-}
-
-interface RiskException {
-  id: number;
-  vuln_id?: string;
-  title?: string;
-  severity?: string;
-  is_exception: boolean;
-  exception_reason?: string;
-  exception_approved_by?: number;
-  exception_expiry?: string;
-  exception_approver_name?: string;
-  days_until_expiry?: number;
-}
-
 interface DepartmentAssignment {
   id: number;
   vulnerability_id: number;
@@ -243,21 +221,6 @@ interface Escalation {
   status: string;
 }
 
-// Note: AI Analysis lives inside the Overview tab (bottom card) — no
-// dedicated tab here. Keep the slot collapsed so muscle memory still
-// works for anyone bookmarking ?tab=overview to reach the AI panel.
-const TABS = [
-  { id: 'overview', label: 'Overview', icon: FileText },
-  { id: 'mitigations', label: 'Mitigations', icon: CheckCircle },
-  { id: 'assets', label: 'Assets', icon: Server },
-  { id: 'controls', label: 'Controls', icon: Shield },
-  { id: 'dependencies', label: 'Chain', icon: Link2 },
-  { id: 'departments', label: 'Departments', icon: Users },
-  { id: 'workflow', label: 'Workflow', icon: GitBranch },
-  { id: 'escalations', label: 'Escalations', icon: Bell },
-  { id: 'exception', label: 'Exception', icon: AlertCircle },
-];
-
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   critical: { bg: 'bg-red-50', text: 'text-red-600', label: 'Critical' },
   high: { bg: 'bg-orange-50', text: 'text-orange-600', label: 'High' },
@@ -275,10 +238,6 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   accepted: { bg: 'bg-primary-50', text: 'text-primary-600', label: 'Risk Accepted' },
   false_positive: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'False Positive' },
 };
-
-function getSeverityStyle(severity: string) {
-  return SEVERITY_STYLES[severity?.toLowerCase()] || SEVERITY_STYLES.info;
-}
 
 function getStatusStyle(status: string) {
   return STATUS_STYLES[status?.toLowerCase()] || STATUS_STYLES.open;
@@ -364,7 +323,6 @@ export default function VulnerabilityDetailPage() {
   const canDelete = hasPermission('vulnerabilities:vulnerability_register:delete');
   const vulnId = Number(params.id);
 
-  const [activeTab, setActiveTab] = useState('overview');
   const [showMitigationModal, setShowMitigationModal] = useState(false);
   // When the user clicks "Add as Mitigation" on an AI suggestion, we don't
   // create it instantly anymore — we stage the suggestion here, open the
@@ -390,8 +348,6 @@ export default function VulnerabilityDetailPage() {
   // transition status / re-assign / change due date without going back
   // to the create form.
   const [selectedMitigation, setSelectedMitigation] = useState<Mitigation | null>(null);
-  const [showRetestModal, setShowRetestModal] = useState(false);
-  const [showExceptionModal, setShowExceptionModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showDeptAssignModal, setShowDeptAssignModal] = useState(false);
   const [showTransitionModal, setShowTransitionModal] = useState(false);
@@ -438,7 +394,6 @@ export default function VulnerabilityDetailPage() {
       const response = await vulnManagementApi.mitigations.list(vulnId);
       return response.data as Mitigation[];
     },
-    enabled: activeTab === 'mitigations',
   });
 
   const { data: assetLinks } = useQuery({
@@ -447,7 +402,6 @@ export default function VulnerabilityDetailPage() {
       const response = await vulnManagementApi.assetLinks.list(vulnId);
       return response.data as AssetLink[];
     },
-    enabled: activeTab === 'assets',
   });
 
   const { data: controlLinks } = useQuery({
@@ -456,28 +410,7 @@ export default function VulnerabilityDetailPage() {
       const response = await vulnManagementApi.controlLinks.list(vulnId);
       return response.data as ControlLink[];
     },
-    enabled: activeTab === 'controls',
   });
-
-  const { data: retests } = useQuery({
-    queryKey: ['vuln-retests', vulnId],
-    queryFn: async () => {
-      const response = await vulnManagementApi.retests.list(vulnId);
-      return response.data as Retest[];
-    },
-    enabled: activeTab === 'retests',
-  });
-
-  const { data: exceptionsRaw } = useQuery({
-    queryKey: ['vuln-exceptions', vulnId],
-    queryFn: async () => {
-      const response = await vulnManagementApi.exceptions.list();
-      return response.data as RiskException[];
-    },
-    enabled: activeTab === 'exception',
-  });
-
-  const exceptions = exceptionsRaw?.filter((ex) => ex.id === vulnId);
 
   const { data: departmentAssignments } = useQuery({
     queryKey: ['vuln-departments', vulnId],
@@ -485,7 +418,6 @@ export default function VulnerabilityDetailPage() {
       const response = await vulnManagementApi.departments.getVulnerabilityDepartments(vulnId);
       return response.data as DepartmentAssignment[];
     },
-    enabled: activeTab === 'departments',
   });
 
   const { data: availableDepartments } = useQuery({
@@ -503,7 +435,6 @@ export default function VulnerabilityDetailPage() {
       const response = await vulnManagementApi.workflows.getAvailableTransitions(vulnId);
       return response.data as WorkflowTransition[];
     },
-    enabled: activeTab === 'workflow',
   });
 
   const { data: workflowHistory } = useQuery({
@@ -512,7 +443,6 @@ export default function VulnerabilityDetailPage() {
       const response = await vulnManagementApi.workflows.getHistory(vulnId);
       return response.data as WorkflowHistoryItem[];
     },
-    enabled: activeTab === 'workflow',
   });
 
   const { data: escalationsData } = useQuery({
@@ -521,7 +451,6 @@ export default function VulnerabilityDetailPage() {
       const response = await vulnManagementApi.escalations.getVulnerabilityEscalations(vulnId);
       return response.data as Escalation[];
     },
-    enabled: activeTab === 'escalations',
   });
 
   const { data: assets, isLoading: assetsLoading } = useQuery({
@@ -530,7 +459,6 @@ export default function VulnerabilityDetailPage() {
       const response = await assetsApi.getAll();
       return response.data;
     },
-    enabled: activeTab === 'assets',
   });
 
   const { data: internalControls, isLoading: internalControlsLoading } = useQuery({
@@ -539,7 +467,6 @@ export default function VulnerabilityDetailPage() {
       const response = await ermApi.internalControls.getAll();
       return response.data;
     },
-    enabled: activeTab === 'controls',
   });
 
   const changeStatusMutation = useMutation({
@@ -672,22 +599,6 @@ export default function VulnerabilityDetailPage() {
     },
   });
 
-  const createRetestMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => vulnManagementApi.retests.create(vulnId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vuln-retests', vulnId] });
-      setShowRetestModal(false);
-    },
-  });
-
-  const createExceptionMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => vulnManagementApi.exceptions.create(vulnId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['vuln-exceptions', vulnId] });
-      setShowExceptionModal(false);
-    },
-  });
-
   const assignDepartmentMutation = useMutation({
     mutationFn: (data: { department_id: number; priority?: string; sla_override_days?: number; notes?: string }) => 
       vulnManagementApi.departments.assignDepartment(vulnId, data),
@@ -739,7 +650,6 @@ export default function VulnerabilityDetailPage() {
     );
   }
 
-  const severityStyle = getSeverityStyle(vulnerability.severity);
   const statusStyle = getStatusStyle(vulnerability.status);
 
   // ── Hero-strip derived values ───────────────────────────────────────
@@ -784,155 +694,246 @@ export default function VulnerabilityDetailPage() {
   const hasPublicExploit = typeof vulnerability.public_exploit_count === 'number'
     && vulnerability.public_exploit_count > 0;
 
+  // Normalised severity level for the shared SeverityBadge (charter-fixed).
+  const severityLevel = (['critical', 'high', 'medium', 'low', 'info'].includes(
+    (vulnerability.severity || '').toLowerCase(),
+  ) ? (vulnerability.severity || '').toLowerCase() : 'info') as SeverityLevel;
+
+  // Mitigation-progress line (n of m complete) — derived from the always-loaded
+  // mitigations list; no new query.
+  const mitigationTotal = mitigations?.length ?? 0;
+  const mitigationDone = (mitigations || []).filter((m) => m.status === 'completed').length;
+
+  // Exception-state badge tone (mirrors the FSM panel's state styles).
+  const exceptionState = (vulnerability.exception_status || 'none') as string;
+  const exceptionStateTone = EXCEPTION_STATE_STYLES[exceptionState] || EXCEPTION_STATE_STYLES.none;
+
+  // Section registry for the right-column in-page nav. Each entry anchors to a
+  // scroll target so nothing that answers the core question hides behind a tab.
+  const SECTIONS = [
+    { id: 'sec-narrative', label: 'Threat', icon: Shield },
+    { id: 'sec-description', label: 'Description', icon: FileText },
+    { id: 'sec-assets', label: 'Assets', icon: Server },
+    { id: 'sec-remediation', label: 'Remediation', icon: CheckCircle },
+    { id: 'sec-controls', label: 'Controls', icon: Shield },
+    { id: 'sec-chain', label: 'Chain', icon: Link2 },
+    { id: 'sec-departments', label: 'Departments', icon: Users },
+    { id: 'sec-exception', label: 'Exception', icon: AlertCircle },
+    { id: 'sec-activity', label: 'Activity', icon: GitBranch },
+  ];
+
   return (
-    <div className="min-h-full bg-slate-50/30">
-      {/* ── Hero header ───────────────────────────────────────────────
-          Two-row strip: identity row (back / title / status / actions),
-          KPI row (severity / CVSS / EPSS / Priority / KEV / SLA / owner /
-          assets). All values link to existing columns; layout adapts on
-          smaller screens. */}
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
-        <div className="px-4 md:px-6 pt-3 pb-2">
+    <div className="risk-workspace -m-4 space-y-4 lg:-m-5">
+      {/* ── Header bar (D1 charter) ───────────────────────────────────── */}
+      <div className="border-b border-slate-200 px-4 py-3 sm:px-6">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex items-start gap-3">
             <Link
               href="/vulnerabilities"
-              className="mt-1 inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+              className="mt-0.5 rounded-md p-1.5 text-slate-600 hover:bg-slate-50 hover:text-slate-800"
               title="Back to vulnerabilities"
             >
-              <ArrowLeft size={14} />
+              <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
             </Link>
-            <div className="min-w-0 flex-1">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+              <Bug className="h-5 w-5" strokeWidth={1.75} />
+            </div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">
-                  Vulnerability · VULN-{vulnerability.id}
+                  VULN-{vulnerability.id}
                 </span>
                 {vulnerability.cve_id && (
-                  <span className="text-[10px] font-mono text-slate-500">
-                    · {vulnerability.cve_id}
-                  </span>
+                  <span className="text-[10px] font-mono text-slate-500">· {vulnerability.cve_id}</span>
                 )}
+              </div>
+              <h1 className="text-lg font-semibold text-slate-800 leading-snug">{vulnerability.title}</h1>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            <StatusBadge status={vulnerability.status} customLabel={statusStyle.label} size="md" />
+            <button
+              onClick={() => setShowStatusModal(true)}
+              className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50"
+            >
+              <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.75} />
+              Change Status
+            </button>
+            <CreateIssueButton
+              sourceType="vulnerability"
+              sourceId={vulnerability.id}
+              presetFields={{
+                title: `VULN-${vulnerability.id} — ${vulnerability.title}`,
+                description: vulnerability.description || undefined,
+                category: 'security',
+                issue_type: vulnerability.kev_flag ? 'incident' : 'audit_finding',
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── D1 split: pinned left context + scrolling right work column ── */}
+      <div className="mx-4 grid grid-cols-1 gap-4 pb-4 sm:mx-6 lg:grid-cols-12">
+        {/* ── LEFT: identity + triage facts stay on screen ──────────────── */}
+        <div className="lg:col-span-5">
+          <div className="space-y-3 lg:sticky lg:top-4">
+            {/* Threat flags */}
+            {(vulnerability.kev_flag || hasPublicExploit) && (
+              <div className="flex flex-wrap gap-1.5">
                 {vulnerability.kev_flag && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-800">
-                    <AlertCircle size={9} />
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700">
+                    <AlertCircle size={10} strokeWidth={1.75} />
                     <Abbr code="CISA" showIcon={false}>CISA</Abbr>{' '}<Abbr code="KEV" showIcon={false}>KEV</Abbr>
                   </span>
                 )}
-                {hasPublicExploit && !vulnerability.kev_flag && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-800">
+                {hasPublicExploit && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-700">
                     Public Exploit
                   </span>
                 )}
               </div>
-              <h1 className="mt-1 text-xl font-semibold text-slate-900 leading-snug">
-                {vulnerability.title}
-              </h1>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <span
-                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyle.bg} ${statusStyle.text} border-current/10`}
-              >
-                {statusStyle.label}
-              </span>
-              <button
-                onClick={() => setShowStatusModal(true)}
-                className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-              >
-                Change Status
-              </button>
-              <CreateIssueButton
-                sourceType="vulnerability"
-                sourceId={vulnerability.id}
-                presetFields={{
-                  title: `VULN-${vulnerability.id} — ${vulnerability.title}`,
-                  description: vulnerability.description || undefined,
-                  category: 'security',
-                  issue_type: vulnerability.kev_flag ? 'incident' : 'audit_finding',
-                }}
-              />
-            </div>
-          </div>
+            )}
 
-          {/* KPI strip — high-information-density at-a-glance row. Each
-              cell renders only when the underlying value exists, so the
-              strip stays compact on partially-enriched vulns. */}
-          <div className="mt-3 flex flex-wrap items-stretch gap-2">
-            <div className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 ${severityStyle.bg} ${severityStyle.text}`}>
-              <span className="text-[9px] uppercase tracking-wider opacity-75">Severity</span>
-              <span className="text-xs font-bold">{severityStyle.label}</span>
-            </div>
-            {/* CVSS / EPSS / Priority pills */}
-            {cvssValue !== null && (
-              <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1">
-                <span className="text-[9px] uppercase tracking-wider text-slate-500"><Abbr code="CVSS" showIcon={false} /></span>
-                <span className="text-xs font-bold text-slate-900">{cvssValue.toFixed(1)}</span>
-              </div>
-            )}
-            {epssValue !== null && (
-              <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1">
-                <span className="text-[9px] uppercase tracking-wider text-slate-500"><Abbr code="EPSS" showIcon={false} /></span>
-                <span className="text-xs font-bold text-slate-900">{(epssValue * 100).toFixed(1)}%</span>
-              </div>
-            )}
-            {priorityValue !== null && (
-              <div className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 ${priorityTone}`} title="Composite priority — blends CVSS, EPSS, KEV, and asset criticality">
-                <span className="text-[9px] uppercase tracking-wider opacity-75">Priority</span>
-                <span className="text-xs font-bold">{priorityValue.toFixed(2)} / 10</span>
-              </div>
-            )}
-            {dueLabel && (
-              <div className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 ${dueTone}`}>
-                <Clock size={11} />
-                <span className="text-xs font-semibold">{dueLabel}</span>
-              </div>
-            )}
-            {vulnerability.assigned_user_name && (
-              <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1">
-                <User size={11} className="text-slate-500" />
-                <span className="text-xs text-slate-700">{vulnerability.assigned_user_name}</span>
-              </div>
-            )}
-            {linkedAssetCount > 0 && (
-              <div className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1">
-                <Server size={11} className="text-slate-500" />
-                <span className="text-xs text-slate-700">
-                  {linkedAssetCount} asset{linkedAssetCount === 1 ? '' : 's'}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Tab navigation — pill-style hover, accent bar on active. */}
-          <nav className="mt-3 -mx-1 flex gap-1 overflow-x-auto">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`relative flex items-center gap-1.5 rounded-t-md px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
-                  activeTab === tab.id
-                    ? 'text-primary-700 bg-primary-50/50'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                <tab.icon size={13} />
-                {tab.label}
-                {activeTab === tab.id && (
-                  <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary-600" />
+            {/* Triage facts */}
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <SeverityBadge severity={severityLevel} size="md" />
+                {cvssValue !== null && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5 text-xs text-slate-700">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-500"><Abbr code="CVSS" showIcon={false} /></span>
+                    <span className="font-semibold text-slate-900">{cvssValue.toFixed(1)} / 10</span>
+                  </span>
                 )}
-              </button>
-            ))}
-          </nav>
+                {epssValue !== null && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5 text-xs text-slate-700">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-500"><Abbr code="EPSS" showIcon={false} /></span>
+                    <span className="font-semibold text-slate-900">{(epssValue * 100).toFixed(1)}%</span>
+                  </span>
+                )}
+                {priorityValue !== null && (
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs ${priorityTone}`}
+                    title="Composite priority — blends CVSS, EPSS, KEV, and asset criticality"
+                  >
+                    <span className="text-[9px] uppercase tracking-wider opacity-75">Priority</span>
+                    <span className="font-bold">{priorityValue.toFixed(2)} / 10</span>
+                  </span>
+                )}
+              </div>
+              {dueLabel && (
+                <div className={`mt-2.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${dueTone}`}>
+                  <Clock size={12} strokeWidth={1.75} />
+                  <span className="text-xs font-semibold">{dueLabel}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Identity */}
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-2">
+                <FileText className="h-3.5 w-3.5" strokeWidth={1.75} /> Identity
+              </div>
+              <dl className="space-y-2">
+                {vulnerability.cve_id && (
+                  <div className="flex items-baseline justify-between gap-2">
+                    <dt className="text-xs text-slate-500 flex-shrink-0"><Abbr code="CVE" /> ID</dt>
+                    <dd className="text-xs font-mono text-slate-900 text-right truncate">{vulnerability.cve_id}</dd>
+                  </div>
+                )}
+                {vulnerability.cwe_id && /^cwe-/i.test(vulnerability.cwe_id) && (
+                  <div className="flex items-baseline justify-between gap-2">
+                    <dt className="text-xs text-slate-500 flex-shrink-0"><Abbr code="CWE" /> ID</dt>
+                    <dd className="text-xs font-mono text-slate-900 text-right truncate">{vulnerability.cwe_id}</dd>
+                  </div>
+                )}
+                {vulnerability.affected_component && (
+                  <div className="flex items-baseline justify-between gap-2">
+                    <dt className="text-xs text-slate-500 flex-shrink-0">Component</dt>
+                    <dd className="text-xs text-slate-800 text-right truncate">{vulnerability.affected_component}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+
+            {/* Ownership & progress */}
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-2">
+                <User className="h-3.5 w-3.5" strokeWidth={1.75} /> Ownership &amp; Progress
+              </div>
+              <dl className="space-y-2">
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt className="text-xs text-slate-500 flex-shrink-0">Owner</dt>
+                  <dd className="text-xs text-slate-800 text-right truncate">{vulnerability.assigned_user_name || '— Unassigned —'}</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt className="text-xs text-slate-500 flex-shrink-0">Linked assets</dt>
+                  <dd className="text-xs text-slate-800 text-right">{linkedAssetCount}</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt className="text-xs text-slate-500 flex-shrink-0">Mitigations</dt>
+                  <dd className="text-xs text-slate-800 text-right">
+                    {mitigationTotal === 0 ? 'None yet' : `${mitigationDone} of ${mitigationTotal} complete`}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt className="text-xs text-slate-500 flex-shrink-0">Exception</dt>
+                  <dd>
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${exceptionStateTone}`}>
+                      {exceptionState}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            {/* Timeline */}
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 mb-2">
+                <Calendar className="h-3.5 w-3.5" strokeWidth={1.75} /> Timeline
+              </div>
+              <dl className="space-y-2">
+                {vulnerability.due_date && (
+                  <div className="flex items-baseline justify-between gap-2">
+                    <dt className="text-xs text-slate-500 flex-shrink-0">Due</dt>
+                    <dd className="text-xs text-slate-800 text-right">{new Date(vulnerability.due_date).toLocaleDateString()}</dd>
+                  </div>
+                )}
+                <div className="flex items-baseline justify-between gap-2">
+                  <dt className="text-xs text-slate-500 flex-shrink-0">Created</dt>
+                  <dd className="text-xs text-slate-700 text-right">{new Date(vulnerability.created_at).toLocaleDateString()}</dd>
+                </div>
+                {vulnerability.updated_at && (
+                  <div className="flex items-baseline justify-between gap-2">
+                    <dt className="text-xs text-slate-500 flex-shrink-0">Updated</dt>
+                    <dd className="text-xs text-slate-700 text-right">{new Date(vulnerability.updated_at).toLocaleDateString()}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+
+            {/* In-page section nav */}
+            <nav className="rounded-lg border border-slate-200 bg-white p-2">
+              <div className="flex flex-wrap gap-1">
+                {SECTIONS.map((s) => (
+                  <a
+                    key={s.id}
+                    href={`#${s.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-primary-700 transition-colors"
+                  >
+                    <s.icon size={13} strokeWidth={1.75} />
+                    {s.label}
+                  </a>
+                ))}
+              </div>
+            </nav>
+          </div>
         </div>
-      </header>
 
-      {/* ── Tab content ─────────────────────────────────────────────── */}
-      <div className="space-y-4 px-4 md:px-6 py-4">
-
-
-      {activeTab === 'overview' && (
-        <div className="space-y-4">
-          {/* v2: Issue Management linkage — surfaces any Issues that have
-              been opened against this vulnerability. Hidden when there are
-              none (the panel handles its own empty state). */}
+        {/* ── RIGHT: scrolling work column ──────────────────────────────── */}
+        <div className="space-y-4 lg:col-span-7">
+          {/* Linked Issues — surfaces any Issues opened against this vuln. */}
           <RelatedIssuesPanel
             sourceType="vulnerability"
             sourceId={vulnerability.id}
@@ -945,211 +946,202 @@ export default function VulnerabilityDetailPage() {
             }}
           />
 
-          {/* Description card — primary card. Slightly larger padding +
-              accent border so the operator's eye lands here first. */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
-                <FileText className="h-3.5 w-3.5 text-slate-500" />
-                Description
-              </h2>
-            </div>
+          {/* (1) Threat Narrative + Threat Intelligence + Patch Information.
+              ThreatIntelPanel is reused UNCHANGED — it hosts the plain-English
+              narrative banner, the enrich/sync actions, and the patch-info
+              Add-as-Mitigation handoff. */}
+          <section id="sec-narrative" className="scroll-mt-4">
+            <ThreatIntelPanel
+              vulnerability={vulnerability}
+              onAddRemediation={(prefill) => {
+                setMitigationPrefill({
+                  title: prefill.title,
+                  description: prefill.description,
+                  priority: prefill.priority,
+                  action_type: prefill.action_type ?? 'remediate',
+                  source: 'patch',
+                });
+                setShowMitigationModal(true);
+              }}
+            />
+          </section>
+
+          {/* (2) Description + affected component */}
+          <section id="sec-description" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4">
+            <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5 mb-2">
+              <FileText className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
+              Description
+            </h2>
             <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
               {vulnerability.description || (
                 <span className="text-slate-400 italic">No description provided.</span>
               )}
             </p>
-          </div>
+            {vulnerability.affected_component && (
+              <p className="mt-3 text-xs text-slate-500">
+                Affected component: <span className="text-slate-800">{vulnerability.affected_component}</span>
+              </p>
+            )}
 
-          {/* Sidebar — Identity / Asset Context / Ownership / Timeline.
-              Grouped sub-sections so the user can find each fact quickly.
-              Renders below the description on mobile, beside on lg+. */}
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div className="lg:col-span-2 space-y-4">
-              {/* NCA Template Fields — verbatim register data preserved on the bridge */}
-              {vulnerability.template_type === 'NCA Template' && vulnerability.template_fields && Object.keys(vulnerability.template_fields).length > 0 && (
-                <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-5">
-                  <h2 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-1.5">
-                    <FileText className="h-3.5 w-3.5 text-blue-600" />
-                    NCA Template Fields
-                  </h2>
-                  <p className="text-xs text-slate-600 mb-3">
-                    Verbatim fields from the NCA Saudi vulnerability register template. Owner and assets are managed via platform pickers in the other tabs.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                    {Object.entries(vulnerability.template_fields).filter(([, v]) => v !== null && v !== '' && v !== undefined).map(([k, v]) => (
-                      <div key={k} className="rounded-md border border-blue-100 bg-white px-2.5 py-2">
-                        <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-0.5">{k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</p>
-                        <p className="text-sm text-slate-800 whitespace-pre-wrap break-words">{String(v)}</p>
-                      </div>
-                    ))}
-                  </div>
+            {/* NCA Template Fields — verbatim register data preserved on the bridge */}
+            {vulnerability.template_type === 'NCA Template' && vulnerability.template_fields && Object.keys(vulnerability.template_fields).length > 0 && (
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+                <h3 className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-primary-600" strokeWidth={1.75} />
+                  NCA Template Fields
+                </h3>
+                <p className="text-xs text-slate-600 mb-3">
+                  Verbatim fields from the NCA Saudi vulnerability register template. Owner and assets are managed via the platform pickers.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  {Object.entries(vulnerability.template_fields).filter(([, v]) => v !== null && v !== '' && v !== undefined).map(([k, v]) => (
+                    <div key={k} className="rounded-md border border-slate-200 bg-white px-2.5 py-2">
+                      <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-0.5">{k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</p>
+                      <p className="text-sm text-slate-800 whitespace-pre-wrap break-words">{String(v)}</p>
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
 
-              {vulnerability.ai_recommendation && (
-                <div className="rounded-xl border border-primary-200 bg-gradient-to-br from-primary-50 to-primary-50/40 p-5">
-                  <h2 className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4 text-primary-600" />
-                    AI Recommendation
-                  </h2>
-                  {formatAIText(vulnerability.ai_recommendation)}
-                </div>
+            {/* Legacy AI Recommendation prose — charter: no gradient */}
+            {vulnerability.ai_recommendation && (
+              <div className="mt-4 rounded-lg border border-primary-200 bg-primary-50/60 p-4">
+                <h3 className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-1.5">
+                  <Sparkles className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
+                  AI Recommendation
+                </h3>
+                {formatAIText(vulnerability.ai_recommendation)}
+              </div>
+            )}
+          </section>
+
+          {/* (3) Affected Assets — linked asset records */}
+          <section id="sec-assets" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+                <Server className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
+                Affected Assets
+              </h2>
+              {canEdit && (
+                <InlineLinkPicker
+                  triggerLabel="Link Asset"
+                  triggerClassName="flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-700 transition-colors disabled:opacity-50"
+                  items={(assets || []).filter((a: { id: number }) => !assetLinks?.some((l) => l.asset_id === a.id)).map((a: { id: number; name: string; asset_type?: string }) => ({
+                    value: String(a.id),
+                    label: a.name,
+                    subLabel: a.asset_type,
+                  }))}
+                  isLoading={assetsLoading || createAssetLinkMutation.isPending}
+                  emptyText="No assets available"
+                  searchPlaceholder="Search assets"
+                  onSelect={(value) => createAssetLinkMutation.mutate({
+                    asset_id: Number(value),
+                    relationship_type: 'affected',
+                  })}
+                />
               )}
             </div>
-
-            <aside className="space-y-4">
-              {/* Identity card — CVE / CWE / Component */}
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
-                  Identity
-                </p>
-                <dl className="space-y-2">
-                  {vulnerability.cve_id && (
-                    <div className="flex items-baseline justify-between gap-2">
-                      <dt className="text-xs text-slate-500 flex-shrink-0"><Abbr code="CVE" /> ID</dt>
-                      <dd className="text-xs font-mono text-slate-900 text-right truncate">{vulnerability.cve_id}</dd>
-                    </div>
-                  )}
-                  {vulnerability.cwe_id && /^cwe-/i.test(vulnerability.cwe_id) && (
-                    <div className="flex items-baseline justify-between gap-2">
-                      <dt className="text-xs text-slate-500 flex-shrink-0"><Abbr code="CWE" /> ID</dt>
-                      <dd className="text-xs font-mono text-slate-900 text-right truncate">{vulnerability.cwe_id}</dd>
-                    </div>
-                  )}
-                  {typeof vulnerability.cvss_score === 'number' && (
-                    <div className="flex items-baseline justify-between gap-2">
-                      <dt className="text-xs text-slate-500 flex-shrink-0"><Abbr code="CVSS" /></dt>
-                      <dd className="text-xs font-semibold text-slate-900">{vulnerability.cvss_score.toFixed(1)} / 10</dd>
-                    </div>
-                  )}
-                  {vulnerability.affected_component && (
-                    <div className="flex items-baseline justify-between gap-2">
-                      <dt className="text-xs text-slate-500 flex-shrink-0">Component</dt>
-                      <dd className="text-xs text-slate-800 text-right truncate">{vulnerability.affected_component}</dd>
-                    </div>
-                  )}
-                </dl>
-              </div>
-
-              {/* Asset Context card */}
-              {((vulnerability.linked_assets && vulnerability.linked_assets.length > 0) || vulnerability.affected_host) && (
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
-                    <Server size={11} />
-                    Asset Context
-                  </p>
-                  {vulnerability.linked_assets && vulnerability.linked_assets.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
-                      {vulnerability.linked_assets.map((a) => (
-                        <span key={a} className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">
-                          {a}
-                        </span>
-                      ))}
-                    </div>
-                  ) : vulnerability.affected_host ? (
-                    <p className="text-xs text-slate-700">{vulnerability.affected_host}</p>
-                  ) : null}
-                </div>
+            <div className="overflow-hidden rounded-lg border border-slate-200">
+              {(!assetLinks || assetLinks.length === 0) ? (
+                <div className="p-8 text-center text-slate-600 text-sm">No assets linked yet</div>
+              ) : (
+                <table className="w-full">
+                  <thead className="bg-slate-50/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Asset</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Type</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Relationship</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Provenance</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {assetLinks.map((link) => (
+                      <tr key={link.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 cw-text">{link.asset_name}</td>
+                        <td className="px-4 py-3 text-slate-600">{link.asset_type || '-'}</td>
+                        <td className="px-4 py-3 text-slate-600">{link.relationship_type || 'affected'}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            {link.link_source && link.link_source !== 'manual' && (
+                              <span className="rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
+                                {link.link_source.replace(/_/g, ' ')}
+                              </span>
+                            )}
+                            {link.auto_linked && (
+                              <span
+                                className="rounded-full border border-primary-200 bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-700"
+                                title="Linked automatically by scanner / sync / matcher — review for accuracy"
+                              >
+                                Auto
+                              </span>
+                            )}
+                            {!link.link_source && !link.auto_linked && (
+                              <span className="text-[10px] text-slate-400">manual</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {canDelete && (
+                          <button
+                            onClick={() => deleteAssetLinkMutation.mutate(link.id)}
+                            className="text-slate-600 hover:text-red-600"
+                          >
+                            <Trash2 size={16} strokeWidth={1.75} />
+                          </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
+            </div>
+          </section>
 
-              {/* Ownership + Timeline card */}
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
-                  Ownership &amp; Timeline
-                </p>
-                <dl className="space-y-2">
-                  {vulnerability.assigned_user_name && (
-                    <div className="flex items-baseline justify-between gap-2">
-                      <dt className="text-xs text-slate-500 flex-shrink-0 flex items-center gap-1">
-                        <User size={11} />
-                        Assigned
-                      </dt>
-                      <dd className="text-xs text-slate-800 text-right truncate">{vulnerability.assigned_user_name}</dd>
-                    </div>
+          {/* (4) Remediation — Patch/AI plan + Mitigations list, co-located.
+              AIAnalysisTab is reused UNCHANGED. */}
+          <section id="sec-remediation" className="space-y-4 scroll-mt-4">
+            <AIAnalysisTab
+              vulnerability={vulnerability}
+              suggestFixMutation={suggestFixMutation}
+              onAcceptSuggestion={(payload) => {
+                const title = String(payload.action_title ?? '').replace(/^\[AI\]\s*/, '');
+                setMitigationPrefill({
+                  title,
+                  description: typeof payload.action_description === 'string' ? payload.action_description : undefined,
+                  priority: typeof payload.priority === 'string' ? payload.priority : undefined,
+                  action_type: 'remediate',
+                  source: 'ai',
+                });
+                setShowMitigationModal(true);
+              }}
+              acceptingSuggestion={createMitigationMutation.isPending}
+            />
+
+            {/* Mitigations list */}
+            <div className="cw-card rounded-xl p-4 sm:p-5">
+              <div className="flex justify-between items-center mb-3">
+                <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+                  <CheckCircle className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
+                  Mitigations
+                  {mitigationTotal > 0 && (
+                    <span className="text-xs font-normal text-slate-500">
+                      {mitigationDone} of {mitigationTotal} complete
+                    </span>
                   )}
-                  {vulnerability.due_date && (
-                    <div className="flex items-baseline justify-between gap-2">
-                      <dt className="text-xs text-slate-500 flex-shrink-0 flex items-center gap-1">
-                        <Calendar size={11} />
-                        Due
-                      </dt>
-                      <dd className="text-xs text-slate-800 text-right">{new Date(vulnerability.due_date).toLocaleDateString()}</dd>
-                    </div>
-                  )}
-                  <div className="flex items-baseline justify-between gap-2">
-                    <dt className="text-xs text-slate-500 flex-shrink-0">Created</dt>
-                    <dd className="text-xs text-slate-700 text-right">{new Date(vulnerability.created_at).toLocaleDateString()}</dd>
-                  </div>
-                  {vulnerability.updated_at && (
-                    <div className="flex items-baseline justify-between gap-2">
-                      <dt className="text-xs text-slate-500 flex-shrink-0">Updated</dt>
-                      <dd className="text-xs text-slate-700 text-right">{new Date(vulnerability.updated_at).toLocaleDateString()}</dd>
-                    </div>
-                  )}
-                </dl>
+                </h2>
+                <button onClick={() => setShowMitigationModal(true)} className="btn-primary flex items-center gap-1.5 text-sm py-1 px-3">
+                  <Plus size={14} strokeWidth={1.75} />
+                  Add Mitigation
+                </button>
               </div>
-            </aside>
-          </div>
-
-          {/* Threat Intelligence + Patch Information — full-width below
-              the description+sidebar grid. Panel hides itself when the
-              vuln has no CVE-ID. Exception Workflow lives in its own tab.
-              The Add buttons on each patch / advisory / remediation
-              guidance row stage their content into the Add Mitigation
-              modal pre-filled — operator picks Action Type / Override
-              Priority / Due Date / Assigned To before creating. */}
-          <ThreatIntelPanel
-            vulnerability={vulnerability}
-            onAddRemediation={(prefill) => {
-              setMitigationPrefill({
-                title: prefill.title,
-                description: prefill.description,
-                priority: prefill.priority,
-                action_type: prefill.action_type ?? 'remediate',
-                source: 'patch',
-              });
-              setShowMitigationModal(true);
-            }}
-          />
-
-          {/* AI Analysis — moved from a dedicated tab into the Overview so
-              the operator gets the full read on the vuln + suggested fixes
-              in a single scroll. Component is unchanged — same CTA, same
-              "stage into Add Mitigation" handoff. */}
-          <AIAnalysisTab
-            vulnerability={vulnerability}
-            suggestFixMutation={suggestFixMutation}
-            onAcceptSuggestion={(payload) => {
-              const title = String(payload.action_title ?? '').replace(/^\[AI\]\s*/, '');
-              setMitigationPrefill({
-                title,
-                description: typeof payload.action_description === 'string' ? payload.action_description : undefined,
-                priority: typeof payload.priority === 'string' ? payload.priority : undefined,
-                action_type: 'remediate',
-                source: 'ai',
-              });
-              setShowMitigationModal(true);
-            }}
-            acceptingSuggestion={createMitigationMutation.isPending}
-          />
-        </div>
-      )}
-
-      {activeTab === 'mitigations' && (
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <h2 className="text-sm font-semibold cw-text">Mitigations</h2>
-            <button onClick={() => setShowMitigationModal(true)} className="btn-primary flex items-center gap-1.5 text-sm py-1 px-3">
-              <Plus size={14} />
-              Add Mitigation
-            </button>
-          </div>
-          <div className="cw-card overflow-hidden">
-            {(!mitigations || mitigations.length === 0) ? (
-              <div className="p-8 text-center text-slate-600">No mitigations added yet</div>
-            ) : (
-              <table className="w-full">
+              <div className="overflow-hidden rounded-lg border border-slate-200">
+                {(!mitigations || mitigations.length === 0) ? (
+                  <div className="p-8 text-center text-slate-600 text-sm">No mitigations added yet</div>
+                ) : (
+                  <table className="w-full">
                 <thead className="bg-slate-50/50">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Title</th>
@@ -1194,98 +1186,19 @@ export default function VulnerabilityDetailPage() {
                   ))}
                 </tbody>
               </table>
-            )}
-          </div>
-        </div>
-      )}
+                )}
+              </div>
+            </div>
+          </section>
 
-      {activeTab === 'assets' && (
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <h2 className="text-sm font-semibold cw-text">Linked Assets</h2>
-            {canEdit && (
-              <InlineLinkPicker
-                triggerLabel="Link Asset"
-                triggerClassName="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
-                items={(assets || []).filter((a: { id: number }) => !assetLinks?.some((l) => l.asset_id === a.id)).map((a: { id: number; name: string; asset_type?: string }) => ({
-                  value: String(a.id),
-                  label: a.name,
-                  subLabel: a.asset_type,
-                }))}
-                isLoading={assetsLoading || createAssetLinkMutation.isPending}
-                emptyText="No assets available"
-                searchPlaceholder="Search assets"
-                onSelect={(value) => createAssetLinkMutation.mutate({
-                  asset_id: Number(value),
-                  relationship_type: 'affected',
-                })}
-              />
-            )}
-          </div>
-          <div className="cw-card overflow-hidden">
-            {(!assetLinks || assetLinks.length === 0) ? (
-              <div className="p-8 text-center text-slate-600">No assets linked yet</div>
-            ) : (
-              <table className="w-full">
-                <thead className="bg-slate-50/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Asset</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Relationship</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Provenance</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {assetLinks.map((link) => (
-                    <tr key={link.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 cw-text">{link.asset_name}</td>
-                      <td className="px-4 py-3 text-slate-600">{link.asset_type || '-'}</td>
-                      <td className="px-4 py-3 text-slate-600">{link.relationship_type || 'affected'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          {link.link_source && link.link_source !== 'manual' && (
-                            <span className="rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
-                              {link.link_source.replace(/_/g, ' ')}
-                            </span>
-                          )}
-                          {link.auto_linked && (
-                            <span
-                              className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700"
-                              title="Linked automatically by scanner / sync / matcher — review for accuracy"
-                            >
-                              Auto
-                            </span>
-                          )}
-                          {!link.link_source && !link.auto_linked && (
-                            <span className="text-[10px] text-slate-400">manual</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {canDelete && (
-                        <button
-                          onClick={() => deleteAssetLinkMutation.mutate(link.id)}
-                          className="text-slate-600 hover:text-red-600"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'controls' && (
-        <div className="space-y-3">
+          {/* (5) Controls — compliance impact */}
+          <section id="sec-controls" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4 space-y-3">
           <div className="flex justify-between items-center flex-wrap gap-2">
             <div>
-              <h2 className="text-sm font-semibold cw-text">Linked Controls</h2>
+              <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+                <Shield className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
+                Linked Controls
+              </h2>
               <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">
                 Compliance impact — every linked control this vulnerability currently breaks
                 or puts at risk. Auto-mapped rows come from this vuln&apos;s CWE; manual rows
@@ -1298,13 +1211,13 @@ export default function VulnerabilityDetailPage() {
                   type="button"
                   onClick={() => autoMapMutation.mutate()}
                   disabled={autoMapMutation.isPending}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-primary-300 bg-white px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-50 disabled:opacity-50"
                   title={`Auto-map framework controls from ${vulnerability.cwe_id}`}
                 >
                   {autoMapMutation.isPending ? (
                     <Loader2 size={14} className="animate-spin" />
                   ) : (
-                    <Sparkles size={14} />
+                    <Sparkles size={14} strokeWidth={1.75} />
                   )}
                   Auto-map from CWE
                 </button>
@@ -1312,7 +1225,7 @@ export default function VulnerabilityDetailPage() {
               {canEdit && (
                 <InlineLinkPicker
                   triggerLabel="Link Control"
-                  triggerClassName="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  triggerClassName="flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-700 transition-colors disabled:opacity-50"
                   items={(internalControls || []).filter((c: { id: number }) => !controlLinks?.some((l) => l.internal_control_id === c.id)).map((c: { id: number; control_id?: string; name: string; category?: string }) => ({
                     value: String(c.id),
                     label: c.control_id ? `${c.control_id} — ${c.name}` : c.name,
@@ -1503,27 +1416,30 @@ export default function VulnerabilityDetailPage() {
               </table>
             )}
           </div>
-        </div>
-      )}
+          </section>
 
-      {activeTab === 'dependencies' && (
-        <DependenciesTab vulnId={vulnId} />
-      )}
+          {/* (6) Chain — prerequisites + dependents + kill-chain (reused unchanged) */}
+          <section id="sec-chain" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4">
+            <DependenciesTab vulnId={vulnId} />
+          </section>
 
-      {activeTab === 'departments' && (
-        <div className="space-y-3">
+          {/* Departments — assignments */}
+          <section id="sec-departments" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4 space-y-3">
           <div className="flex justify-between items-center">
-            <h2 className="text-sm font-semibold cw-text">Department Assignments</h2>
+            <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5 text-slate-500" strokeWidth={1.75} />
+              Department Assignments
+            </h2>
             {canEdit && (
             <button onClick={() => setShowDeptAssignModal(true)} className="btn-primary flex items-center gap-1.5 text-sm py-1 px-3">
-              <Plus size={14} />
+              <Plus size={14} strokeWidth={1.75} />
               Assign Department
             </button>
             )}
           </div>
-          <div className="cw-card overflow-hidden">
+          <div className="overflow-hidden rounded-lg border border-slate-200">
             {(!departmentAssignments || departmentAssignments.length === 0) ? (
-              <div className="p-8 text-center text-slate-600">No departments assigned yet</div>
+              <div className="p-8 text-center text-slate-600 text-sm">No departments assigned yet</div>
             ) : (
               <table className="w-full">
                 <thead className="bg-slate-50/50">
@@ -1584,26 +1500,22 @@ export default function VulnerabilityDetailPage() {
               </table>
             )}
           </div>
-        </div>
-      )}
+          </section>
 
-      {activeTab === 'workflow' && (
-        <div className="space-y-3">
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="cw-card p-4">
-              <h2 className="text-sm font-semibold cw-text mb-2 flex items-center gap-1.5">
-                <GitBranch className="h-4 w-4 text-primary-600" />
-                Current State
+          {/* (7) Exception — full FSM workflow panel (reused unchanged; replaces
+              the old thin exception table). request → approve|deny → revoke. */}
+          <section id="sec-exception" className="scroll-mt-4">
+            <ExceptionWorkflowPanel vulnerability={vulnerability} currentUserId={currentUserId} />
+          </section>
+
+          {/* (8) Activity / History — workflow transitions + history timeline +
+              escalations, merged into one stream. */}
+          <section id="sec-activity" className="cw-card rounded-xl p-4 sm:p-5 scroll-mt-4 space-y-5">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-1.5">
+                <GitBranch className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
+                Workflow — Available Actions
               </h2>
-              <div className="flex items-center gap-3 mb-4">
-                <span className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-medium ${
-                  getStatusStyle(vulnerability.status).bg
-                } ${getStatusStyle(vulnerability.status).text}`}>
-                  {getStatusStyle(vulnerability.status).label}
-                </span>
-              </div>
-              
-              <h3 className="text-sm font-medium text-slate-600 mb-3">Available Actions</h3>
               {(!workflowTransitions || workflowTransitions.length === 0) ? (
                 <p className="text-slate-500 text-sm">No transitions available from current state</p>
               ) : (
@@ -1620,12 +1532,12 @@ export default function VulnerabilityDetailPage() {
                         }
                       }}
                       disabled={workflowTransitionMutation.isPending}
-                      className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] px-3 py-2 text-sm font-medium cw-text hover:bg-[var(--color-hover)] transition-colors"
+                      className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"
                     >
-                      <ChevronRight size={14} />
+                      <ChevronRight size={14} strokeWidth={1.75} />
                       {transition.name}
                       {transition.requires_comment && (
-                        <MessageSquare size={12} className="text-slate-600" />
+                        <MessageSquare size={12} className="text-slate-600" strokeWidth={1.75} />
                       )}
                     </button>
                   ))}
@@ -1633,11 +1545,11 @@ export default function VulnerabilityDetailPage() {
               )}
             </div>
 
-            <div className="cw-card p-4">
-              <h2 className="text-sm font-semibold cw-text mb-2 flex items-center gap-1.5">
-                <Clock className="h-4 w-4 text-slate-600" />
-                Workflow History
-              </h2>
+            <div className="border-t border-slate-100 pt-4">
+              <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-1.5">
+                <Clock className="h-4 w-4 text-slate-500" strokeWidth={1.75} />
+                History
+              </h3>
               {(!workflowHistory || workflowHistory.length === 0) ? (
                 <p className="text-slate-500 text-sm">No workflow history available</p>
               ) : (
@@ -1645,12 +1557,12 @@ export default function VulnerabilityDetailPage() {
                   {workflowHistory.map((item, index) => (
                     <div key={item.id} className="relative pl-6 pb-4">
                       {index < workflowHistory.length - 1 && (
-                        <div className="absolute left-2 top-4 bottom-0 w-0.5 bg-slate-600" />
+                        <div className="absolute left-2 top-4 bottom-0 w-0.5 bg-slate-200" />
                       )}
                       <div className="absolute left-0 top-1 w-4 h-4 rounded-full bg-primary-50 border-2 border-primary-500" />
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium cw-text">{item.transition_name || 'State Change'}</span>
+                          <span className="text-sm font-medium text-slate-800">{item.transition_name || 'State Change'}</span>
                           <span className="text-xs text-slate-500">
                             {item.from_state_name || 'Initial'} → {item.to_state_name || 'Unknown'}
                           </span>
@@ -1667,110 +1579,59 @@ export default function VulnerabilityDetailPage() {
                 </div>
               )}
             </div>
-          </div>
+
+            <div className="border-t border-slate-100 pt-4">
+              <h3 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-1.5">
+                <Bell className="h-4 w-4 text-slate-500" strokeWidth={1.75} />
+                Escalations
+              </h3>
+              <div className="overflow-hidden rounded-lg border border-slate-200">
+                {(!escalationsData || escalationsData.length === 0) ? (
+                  <div className="p-6 text-center text-slate-600 text-sm">No escalations triggered</div>
+                ) : (
+                  <table className="w-full">
+                    <thead className="bg-slate-50/50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Rule</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Escalated To</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {escalationsData.map((esc) => (
+                        <tr key={esc.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <Bell size={14} className="text-orange-600" strokeWidth={1.75} />
+                              <span className="text-slate-800">{esc.rule_name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-slate-600">{esc.escalated_to || '-'}</td>
+                          <td className="px-4 py-3 text-slate-600">
+                            {new Date(esc.escalated_at).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
+                              esc.status === 'acknowledged' ? 'bg-emerald-50 text-emerald-700' :
+                              esc.status === 'pending' ? 'bg-amber-50 text-amber-700' :
+                              'bg-slate-50 text-slate-700'
+                            }`}>
+                              {esc.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </section>
         </div>
-      )}
+      </div>
 
-      {activeTab === 'escalations' && (
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <h2 className="text-sm font-semibold cw-text">Escalation History</h2>
-          </div>
-          <div className="cw-card overflow-hidden">
-            {(!escalationsData || escalationsData.length === 0) ? (
-              <div className="p-8 text-center text-slate-600">No escalations triggered</div>
-            ) : (
-              <table className="w-full">
-                <thead className="bg-slate-50/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Rule</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Escalated To</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {escalationsData.map((esc) => (
-                    <tr key={esc.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Bell size={14} className="text-orange-600" />
-                          <span className="cw-text">{esc.rule_name}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">{esc.escalated_to || '-'}</td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {new Date(esc.escalated_at).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
-                          esc.status === 'acknowledged' ? 'bg-green-50 text-green-700' :
-                          esc.status === 'pending' ? 'bg-yellow-50 text-yellow-700' :
-                          'bg-slate-50 text-slate-700'
-                        }`}>
-                          {esc.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
-
-
-      {activeTab === 'exception' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-sm font-semibold text-slate-900">Risk Exception</h2>
-            <button onClick={() => setShowExceptionModal(true)} className="btn-primary flex items-center gap-2 text-sm">
-              <Plus size={16} />
-              Create Exception
-            </button>
-          </div>
-          <div className="cw-card overflow-hidden">
-            {(!exceptions || exceptions.length === 0) ? (
-              <div className="p-8 text-center text-slate-600">No exception requests</div>
-            ) : (
-              <table className="w-full">
-                <thead className="bg-slate-50/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Reason</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-600">Expiry</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {exceptions.map((ex) => (
-                    <tr key={ex.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 cw-text">{ex.exception_reason}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${
-                          ex.days_until_expiry !== undefined && ex.days_until_expiry !== null && ex.days_until_expiry < 0
-                            ? 'bg-red-50 text-red-700'
-                            : ex.days_until_expiry !== undefined && ex.days_until_expiry !== null && ex.days_until_expiry <= 30
-                            ? 'bg-yellow-50 text-yellow-700'
-                            : 'bg-green-50 text-green-700'
-                        }`}>
-                          {ex.days_until_expiry !== undefined && ex.days_until_expiry !== null && ex.days_until_expiry < 0
-                            ? 'Expired'
-                            : 'Active'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {ex.exception_expiry ? new Date(ex.exception_expiry).toLocaleDateString() : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
-
+      {/* ── Modals (page-level, reused unchanged) ─────────────────────── */}
       {showStatusModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="cw-card w-full max-w-md p-6 shadow-xl">
@@ -2162,69 +2023,6 @@ export default function VulnerabilityDetailPage() {
         </div>
       )}
 
-      {showExceptionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="cw-card w-full max-w-lg p-6 shadow-xl">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h2 className="text-xl font-bold cw-text">Create Exception</h2>
-                <p className="text-sm text-slate-500 mt-0.5">
-                  {vulnerability.title} &middot; VULN-{vulnId}
-                </p>
-              </div>
-              <button onClick={() => setShowExceptionModal(false)} className="text-slate-400 hover:text-slate-700 mt-0.5">
-                <X size={20} />
-              </button>
-            </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                const exceptionType = formData.get('exception_type') as string;
-                const reason = formData.get('reason') as string;
-                const exceptionReason = exceptionType
-                  ? `[${exceptionType}] ${reason}`
-                  : reason;
-                createExceptionMutation.mutate({
-                  exception_reason: exceptionReason,
-                  exception_expiry: (formData.get('exception_expiry') as string) || undefined,
-                });
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Exception Type *</label>
-                <select name="exception_type" required
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500">
-                  <option value="">Select a type...</option>
-                  <option value="Risk Accepted">Risk Accepted</option>
-                  <option value="False Positive">False Positive</option>
-                  <option value="Deferred">Deferred</option>
-                  <option value="Compensating Control">Compensating Control</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Reason *</label>
-                <textarea name="reason" rows={4} required
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
-                  placeholder="Explain why this vulnerability should be excepted from remediation..." />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Expiry Date</label>
-                <input type="date" name="exception_expiry"
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-              </div>
-              <div className="flex justify-end gap-3 pt-1">
-                <button type="button" onClick={() => setShowExceptionModal(false)} className="btn-secondary">Cancel</button>
-                <button type="submit" disabled={createExceptionMutation.isPending} className="btn-primary">
-                  {createExceptionMutation.isPending ? 'Submitting...' : 'Submit Exception'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {showDeptAssignModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="cw-card w-full max-w-md p-6 shadow-xl">
@@ -2347,7 +2145,6 @@ export default function VulnerabilityDetailPage() {
           </div>
         </div>
       )}
-      </div>
     </div>
   );
 }
