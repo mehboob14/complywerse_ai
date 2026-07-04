@@ -52,7 +52,18 @@ export function EvidenceWorkspace({ canCreate, canDelete, onUploadClick }: Evide
   const [previewFile, setPreviewFile] = useState<EvidenceFile | null>(null);
 
   const { data: summary } = useQuery({ queryKey: ['ev-ws-summary'], queryFn: fetchSummary });
-  const { data: listData, isLoading } = useQuery({ queryKey: ['ev-ws-items'], queryFn: () => fetchItems({ limit: 1000 }) });
+  const { data: listData, isLoading } = useQuery({
+    queryKey: ['ev-ws-items'],
+    queryFn: () => fetchItems({ limit: 1000 }),
+    // While any freshly-uploaded item is still being OCR'd / assessed, poll so
+    // its status + quality badges settle live (no manual refresh). Stops once
+    // nothing is pending/processing.
+    refetchInterval: (query) => {
+      const rows = (query.state.data as { items?: Array<{ ocr_status?: string }> } | undefined)?.items ?? [];
+      const busy = rows.some((r) => r.ocr_status === 'pending' || r.ocr_status === 'processing');
+      return busy ? 3000 : false;
+    },
+  });
   const { data: types = [] } = useQuery({ queryKey: ['ev-ws-types'], queryFn: fetchTypes });
   const { data: expiringSoon = [] } = useQuery({ queryKey: ['ev-ws-expiring'], queryFn: () => fetchExpiringSoon(30) });
 

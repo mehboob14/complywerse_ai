@@ -1,13 +1,12 @@
 'use client';
 
 /**
- * Register TABLE view (mockup frames 1A-table / 1B) for the Governance Documents
- * workspace. Dense, presentational table built on the shipped DataTable<GovDoc>.
- * The shell owns filtering/data; this component only renders rows + wires bulk
- * callbacks. Only useFrameworkNames() is called locally (per shared contract).
+ * Register TABLE view for the Governance Documents workspace. Dense, presentational
+ * table built on the shipped DataTable<GovDoc>. Columns: Title · Type · Lifecycle ·
+ * Owner · Frameworks · Ver · Actions. The shell owns filtering/data + action handlers.
  */
 
-import { CheckCircle2, Send, UserPlus, CalendarClock, Archive, FileText } from 'lucide-react';
+import { CheckCircle2, Send, UserPlus, CalendarClock, Archive, FileText, Eye, Download, Trash2, Pencil } from 'lucide-react';
 import {
   DataTable,
   type ColumnDef,
@@ -17,56 +16,51 @@ import {
   type GovDoc,
   TypePill,
   LifecycleDots,
-  ReviewStatus,
   OwnerChip,
   FrameworkPills,
-  AttestCell,
   useFrameworkNames,
 } from './lib';
+import { RowActionsMenu } from './RowActionsMenu';
 
 export interface RegisterTableProps {
   docs: GovDoc[];
-  coverageMap: Record<number, number>;
   totalCount: number;
   updatedLabel?: string;
   onOpenDoc: (id: number) => void;
+  onEdit: (doc: GovDoc) => void;
+  onDownload: (doc: GovDoc) => void;
+  onDelete: (doc: GovDoc) => void;
   onBulkApprove: (ids: number[]) => void;
   onBulkPublish: (ids: number[]) => void;
   onBulkArchive: (ids: number[]) => void;
   onBulkAssignOwner: (ids: number[]) => void;
   onBulkSetReviewDate: (ids: number[]) => void;
   canEdit?: boolean;
+  canDelete?: boolean;
   loading?: boolean;
 }
 
 export function RegisterTable({
   docs,
-  coverageMap,
   totalCount,
   updatedLabel,
   onOpenDoc,
+  onEdit,
+  onDownload,
+  onDelete,
   onBulkApprove,
   onBulkPublish,
   onBulkArchive,
   onBulkAssignOwner,
   onBulkSetReviewDate,
   canEdit = false,
+  canDelete = false,
   loading = false,
 }: RegisterTableProps) {
   const nameMap = useFrameworkNames();
   const rows = docs ?? [];
 
   const columns: ColumnDef<GovDoc>[] = [
-    {
-      id: 'code',
-      header: 'Code',
-      accessor: 'document_code',
-      sortable: true,
-      minWidth: '110px',
-      render: (d) => (
-        <span className="font-mono text-xs text-slate-500">{d.document_code ?? '—'}</span>
-      ),
-    },
     {
       id: 'title',
       header: 'Title',
@@ -90,23 +84,23 @@ export function RegisterTable({
       render: (d) => <LifecycleDots status={d.status} />,
     },
     {
-      id: 'frameworks',
-      header: 'Frameworks',
-      minWidth: '130px',
-      render: (d) => (
-        <FrameworkPills
-          ids={d.applicable_framework_ids ?? d.framework_ids}
-          nameMap={nameMap}
-          max={2}
-        />
-      ),
-    },
-    {
       id: 'owner',
       header: 'Owner',
       accessor: 'owner_name',
       minWidth: '150px',
       render: (d) => <OwnerChip name={d.owner_name} />,
+    },
+    {
+      id: 'frameworks',
+      header: 'Frameworks',
+      minWidth: '150px',
+      render: (d) => (
+        <FrameworkPills
+          ids={d.applicable_framework_ids ?? d.framework_ids}
+          nameMap={nameMap}
+          max={3}
+        />
+      ),
     },
     {
       id: 'ver',
@@ -117,18 +111,21 @@ export function RegisterTable({
       ),
     },
     {
-      id: 'review',
-      header: 'Review',
-      accessor: 'next_review_date',
-      sortable: true,
-      minWidth: '120px',
-      render: (d) => <ReviewStatus date={d.next_review_date} />,
-    },
-    {
-      id: 'attest',
-      header: 'Attest',
-      minWidth: '110px',
-      render: (d) => <AttestCell pct={coverageMap?.[d.id]} />,
+      id: 'actions',
+      header: 'Actions',
+      minWidth: '90px',
+      render: (d) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <RowActionsMenu
+            actions={[
+              { key: 'open', label: 'Open', icon: Eye, onClick: () => onOpenDoc(d.id) },
+              { key: 'edit', label: 'Edit', icon: Pencil, onClick: () => onEdit(d), hidden: !canEdit },
+              { key: 'download', label: 'Download', icon: Download, onClick: () => onDownload(d) },
+              { key: 'delete', label: 'Delete', icon: Trash2, onClick: () => onDelete(d), variant: 'danger', hidden: !canDelete },
+            ]}
+          />
+        </div>
+      ),
     },
   ];
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import {
@@ -143,17 +144,6 @@ export default function EvidenceCoverageDashboardPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['stale-evidence'] });
-      queryClient.invalidateQueries({ queryKey: ['evidence-summary'] });
-    },
-  });
-
-  const reassessMutation = useMutation({
-    mutationFn: async (evidenceId: number) => {
-      const response = await apiClient.post(`/evidence-mgmt/ai/${evidenceId}/assess?force_refresh=true`);
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['low-quality-evidence'] });
       queryClient.invalidateQueries({ queryKey: ['evidence-summary'] });
     },
   });
@@ -629,14 +619,13 @@ export default function EvidenceCoverageDashboardPage() {
                         </p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => reassessMutation.mutate(item.id)}
-                      disabled={reassessMutation.isPending}
-                      className="inline-flex items-center gap-1 rounded bg-orange-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+                    <Link
+                      href={`/evidence/${item.id}`}
+                      className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                     >
-                      <RefreshCw size={12} className={reassessMutation.isPending ? 'animate-spin' : ''} />
-                      Re-assess
-                    </button>
+                      <Eye size={12} />
+                      Review
+                    </Link>
                   </div>
                 ))}
               </div>

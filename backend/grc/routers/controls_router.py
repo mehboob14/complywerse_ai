@@ -17,7 +17,7 @@ from ..models import (
     NormalizedControl, ControlMapping, GRCRequiredEvidence,
     FrameworkControl, Framework, GRCUser, get_db,
     ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping,
-    Risk, RiskFrameworkControlLink,
+    Risk, RiskFrameworkControlLink, ControlImplementation,
 )
 from ..schemas import (
     NormalizedControlCreate, NormalizedControlUpdate, NormalizedControlResponse,

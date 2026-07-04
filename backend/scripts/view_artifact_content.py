@@ -76,7 +76,7 @@ def main() -> None:
             header = f"<!-- {fw} / {aid} | type={typ} | mode={cf} | model={model} | {len(body)} chars -->\n\n"
             out.write_text(header + body, encoding="utf-8")
             n += 1
-        print(f"Exported {n} document(s) to {_PREVIEW}")
+        print(f"Exported {n} document(s) to {_PREVIEW}") 
         print("Open that folder in the IDE and use the markdown preview to review quality.")
         return
 

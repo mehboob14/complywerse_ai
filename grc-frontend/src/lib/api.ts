@@ -375,6 +375,12 @@ export const governanceApi = {
     apiClient.get(`/governance/documents/${documentId}/download-file`, {
       responseType: 'blob',
     }),
+  // Download any document: the uploaded file when present, else a PDF rendered
+  // from the document's markdown content. Works for content-only (AI-drafted) docs.
+  exportDocument: (documentId: number) =>
+    apiClient.get(`/governance/documents/${documentId}/export`, {
+      responseType: 'blob',
+    }),
   parsePolicy: (documentId: number) =>
     apiClient.post(`/governance/documents/${documentId}/parse-policy`, {}, {
       timeout: 900000, // 15 minutes for large document parsing

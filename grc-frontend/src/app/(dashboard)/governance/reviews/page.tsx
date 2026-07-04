@@ -22,6 +22,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui';
+import AttestationsPage from '../attestations/page';
 
 interface ReviewDocument {
   id: number;
@@ -104,7 +105,7 @@ const getTypeStyle = (type: string) => {
 };
 
 type TabType = 'overdue' | 'upcoming' | 'completed' | 'all';
-type ReviewsSection = 'documents' | 'actions';
+type ReviewsSection = 'documents' | 'actions' | 'attestations';
 
 const formatDate = (dateStr: string | null) => {
   if (!dateStr) return '-';
@@ -288,30 +289,54 @@ export default function GovernanceReviewsPage() {
     { key: 'all', label: 'All', count: allDocuments.length },
   ];
 
+  const sectionBtn = (key: ReviewsSection, label: string, Icon: any, badge?: number) => (
+    <button
+      onClick={() => setReviewsSection(key)}
+      className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium ${
+        reviewsSection === key
+          ? 'border-blue-600 bg-blue-50 text-blue-700'
+          : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+      }`}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+      {badge != null && badge > 0 && (
+        <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] text-white">{badge}</span>
+      )}
+    </button>
+  );
+  const sectionButtons = (
+    <>
+      {sectionBtn('actions', 'Actions', Eye, pendingActionsCount)}
+      {sectionBtn('documents', 'Documents', FileCheck)}
+      {sectionBtn('attestations', 'Attestations', ClipboardList)}
+    </>
+  );
+
+  if (reviewsSection === 'attestations') {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-lg sm:text-xl font-semibold text-black">Pending Approvals</h1>
+            <p className="text-xs sm:text-sm text-gray-600">Policy attestations &amp; certification campaigns</p>
+          </div>
+          <div className="flex flex-wrap gap-2">{sectionButtons}</div>
+        </div>
+        <AttestationsPage />
+      </div>
+    );
+  }
+
   if (reviewsSection === 'actions') {
     return (
       <div className="space-y-4 sm:space-y-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-          <h1 className="text-lg sm:text-xl font-semibold text-black">My Reviews</h1>
-          <p className="text-xs sm:text-sm text-gray-600">Track and manage your submitted actions requiring review</p>
+          <h1 className="text-lg sm:text-xl font-semibold text-black">Pending Approvals</h1>
+          <p className="text-xs sm:text-sm text-gray-600">Actions and documents awaiting your review and approval</p>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setReviewsSection('actions')}
-              className="flex items-center gap-1.5 rounded-lg border border-blue-600 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700"
-            >
-              <Eye className="h-3.5 w-3.5" />
-              Actions {pendingActionsCount > 0 && <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] text-white">{pendingActionsCount}</span>}
-            </button>
-            <button
-              onClick={() => setReviewsSection('documents')}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            >
-              <FileCheck className="h-4 w-4" />
-              Documents
-            </button>
-          </div>
+          <div className="flex flex-wrap gap-2">{sectionButtons}</div>
         </div>
 
         <div className="grid gap-2.5 md:grid-cols-3">
@@ -459,21 +484,8 @@ export default function GovernanceReviewsPage() {
           <h1 className="text-lg sm:text-xl font-semibold text-black">Document Reviews</h1>
           <p className="text-xs sm:text-sm text-gray-600">Track and complete document review schedules</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setReviewsSection('actions')}
-            className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-100"
-          >
-            <Eye className="h-4 w-4" />
-            Actions {pendingActionsCount > 0 && <span className="rounded-full bg-red-500 px-2 py-0.5 text-xs text-white">{pendingActionsCount}</span>}
-          </button>
-          <button
-            onClick={() => setReviewsSection('documents')}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-black"
-          >
-            <FileCheck className="h-4 w-4" />
-            Documents
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {sectionButtons}
           <a
             href="/governance/reviews/calendar"
             className="flex items-center gap-1.5 rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"

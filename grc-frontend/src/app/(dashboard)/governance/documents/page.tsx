@@ -760,6 +760,7 @@ export default function GovernanceDocumentsPage() {
         onNewDocument={() => setIsUploadModalOpen(true)}
         onAIDraft={() => setIsAIDraftModalOpen(true)}
         onTemplates={() => setIsRecommendedOpen(true)}
+        onEditDocument={(doc) => handleEdit(doc as unknown as DocumentItem)}
       />
 
 

@@ -124,6 +124,10 @@ const getStatusStyle = (status: string) => {
   return STATUS_COLORS[status] || { bg: 'bg-slate-500/20', text: 'text-gray-600' };
 };
 
+// Control identifiers / clause references always render upper-cased
+// (e.g. "a.5.1" → "A.5.1"); digits and punctuation are unaffected.
+const upperCode = (s: string | null | undefined) => (s ?? '').toUpperCase();
+
 const KIND_META: Record<string, { label: string; cls: string }> = {
   internal: { label: 'Internal', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   normalized: { label: 'Normalized', cls: 'bg-violet-50 text-violet-700 border-violet-200' },
@@ -197,8 +201,8 @@ function RecommendedControlsSection({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-semibold text-black">{clause || '—'}</span>
-                        {showCode && <span className="text-[11px] text-gray-400">({r.control_code})</span>}
+                        <span className="font-semibold text-black">{upperCode(clause) || '—'}</span>
+                        {showCode && <span className="text-[11px] text-gray-400">({upperCode(r.control_code)})</span>}
                         <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${meta.cls}`}>{meta.label}</span>
                         {pct && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">{pct} match</span>}
                         {r.coverage_type && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{r.coverage_type}</span>}
@@ -265,10 +269,13 @@ function RecommendedControlsSection({
   );
 }
 
-export default function GovernanceMappingsPage() {
+export default function GovernanceMappingsPage({ initialDocumentId }: { initialDocumentId?: number } = {}) {
+  // `initialDocumentId` (passed when embedded in a document's Mappings tab) only
+  // pre-selects that document — the full UI (picker + stats + both panels) stays
+  // exactly like the standalone Mappings page.
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
-  const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(initialDocumentId ?? null);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [controlSearchTerm, setControlSearchTerm] = useState('');
   const [selectedLinkType, setSelectedLinkType] = useState('implements');
@@ -468,7 +475,7 @@ export default function GovernanceMappingsPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <div className="card">
           <div className="card-header">
             <div>
@@ -596,7 +603,7 @@ export default function GovernanceMappingsPage() {
                         <Shield className="h-4 w-4 text-emerald-400" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-black">{link.control_code}</p>
+                        <p className="font-medium text-black">{upperCode(link.control_code)}</p>
                         <p className="text-sm text-gray-600 truncate">{link.control_name}</p>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-xs px-2 py-0.5 rounded-full bg-primary-500/20 text-primary-400 capitalize">
@@ -714,7 +721,7 @@ export default function GovernanceMappingsPage() {
                       <Shield className="h-4 w-4 text-primary-400" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-black">{control.control_id}</p>
+                      <p className="font-medium text-black">{upperCode(control.control_id)}</p>
                       <p className="text-sm text-gray-600 truncate">{control.name}</p>
                       {control.category && (
                         <p className="text-xs text-gray-700 mt-0.5">

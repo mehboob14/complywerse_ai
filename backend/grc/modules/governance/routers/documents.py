@@ -4,13 +4,14 @@ from datetime import datetime, timedelta
 import logging
 import os
 import re
+import io
 import uuid
 import json
 import html
 
 logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_
 from pydantic import BaseModel, Field
@@ -1784,6 +1785,59 @@ def download_document_file(
         path=document.file_path,
         filename=document.file_name or f"document_{document_id}",
         media_type=ALLOWED_FILE_TYPES.get(document.file_type, "application/octet-stream")
+    )
+
+
+@router.get("/{document_id}/export")
+def export_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Download any governance document.
+
+    If the document has an uploaded file on disk, the native file is served
+    exactly as ``download_document_file`` does. Otherwise the document's
+    markdown ``content`` is rendered to a PDF (via the shared artifact
+    exporter) so that content-only / AI-drafted documents are downloadable
+    too.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants)
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    # Prefer the native uploaded file when present on disk.
+    if document.file_path and os.path.exists(document.file_path):
+        return FileResponse(
+            path=document.file_path,
+            filename=document.file_name or f"document_{document_id}",
+            media_type=ALLOWED_FILE_TYPES.get(document.file_type, "application/octet-stream")
+        )
+
+    # Content-only document: render its markdown content to a PDF.
+    if document.content:
+        from grc.routers._artifact_export import build_export  # local import: heavy libs
+        title = document.title or "document"
+        data, media_type, ext = build_export("pdf", title=title, content=document.content or "")
+        safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", title.strip())[:80] or "document"
+        return StreamingResponse(
+            io.BytesIO(data),
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}.{ext}"'}
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Document has no file or content to export"
     )
 
 

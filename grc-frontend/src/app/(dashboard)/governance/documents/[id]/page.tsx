@@ -3558,7 +3558,7 @@ function ControlCoveragePanel({ documentId }: { documentId: number }) {
                     <div className="max-h-64 overflow-y-auto space-y-1.5">
                       {fw.missing_controls.map((c) => (
                         <div key={c.id} className="flex items-start gap-2 rounded-md bg-rose-50/60 border border-rose-100 px-2.5 py-1.5">
-                          <span className="font-mono text-[10px] text-rose-600 mt-0.5 shrink-0">{c.reference}</span>
+                          <span className="font-mono text-[10px] text-rose-600 mt-0.5 shrink-0">{(c.reference ?? '').toUpperCase()}</span>
                           <div className="min-w-0">
                             <p className="text-xs text-slate-700 truncate">{c.title}</p>
                             {c.domain && <p className="text-[10px] text-slate-400">{c.domain}</p>}
@@ -3579,7 +3579,7 @@ function ControlCoveragePanel({ documentId }: { documentId: number }) {
           <div className="flex flex-wrap gap-1.5">
             {recommended.slice(0, 24).map((r: any, i: number) => (
               <span key={i} className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] text-primary-700" title={r.control_title || ''}>
-                {r.clause_reference || r.control_code}
+                {(r.clause_reference || r.control_code || '').toUpperCase()}
               </span>
             ))}
           </div>
@@ -3596,7 +3596,7 @@ function ControlsTab({ documentId }: any) {
   return (
     <div className="space-y-4">
       <ControlCoveragePanel documentId={documentId} />
-      <GovernanceMappingsPage lockedDocumentId={documentId} />
+      <GovernanceMappingsPage initialDocumentId={documentId} />
     </div>
   );
 }
