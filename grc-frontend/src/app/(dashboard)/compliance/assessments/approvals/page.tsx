@@ -68,8 +68,8 @@ interface PendingApproval {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  pending_review: { bg: 'bg-amber-500/20', text: 'text-amber-400', label: 'Pending Review' },
-  in_approval: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Approval' },
+  pending_review: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Pending Review' },
+  in_approval: { bg: 'bg-teal-50', text: 'text-teal-700', label: 'In Approval' },
 };
 
 export default function PendingApprovalsPage() {
@@ -212,8 +212,8 @@ export default function PendingApprovalsPage() {
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
-        <AlertCircle className="mb-2 h-8 w-8" />
+      <div className="flex h-64 flex-col items-center justify-center text-rose-600">
+        <AlertCircle className="mb-2 h-8 w-8" strokeWidth={1.75} />
         <p>Failed to load pending approvals</p>
       </div>
     );
@@ -224,12 +224,12 @@ export default function PendingApprovalsPage() {
       <div className="flex items-center gap-3">
         <Link
           href="/compliance/assessments"
-          className="rounded-lg p-2 text-gray-600 hover:bg-gray-50 hover:text-black flex-shrink-0"
+          className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 flex-shrink-0"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-5 w-5" strokeWidth={1.75} />
         </Link>
         <div className="min-w-0">
-          <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Pending Approvals</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Pending Approvals</h1>
           <p className="mt-1 text-sm text-slate-600">
             Evidence submissions awaiting your review
           </p>
@@ -238,9 +238,9 @@ export default function PendingApprovalsPage() {
 
       {(!pendingApprovals || pendingApprovals.length === 0) ? (
         <div className="card p-12 text-center">
-          <CheckCircle className="mx-auto h-12 w-12 text-emerald-600 mb-4" />
-          <h3 className="text-lg font-semibold text-black mb-2">All Caught Up!</h3>
-          <p className="text-gray-600">You have no pending approvals.</p>
+          <CheckCircle className="mx-auto h-12 w-12 text-emerald-600 mb-4" strokeWidth={1.75} />
+          <h3 className="text-lg font-semibold text-slate-900 mb-2">All Caught Up!</h3>
+          <p className="text-slate-600">You have no pending approvals.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -253,8 +253,8 @@ export default function PendingApprovalsPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <Paperclip className="h-5 w-5 text-blue-600" />
-                      <h3 className="font-semibold text-black">{approval.evidence.name}</h3>
+                      <Paperclip className="h-5 w-5 text-teal-600" strokeWidth={1.75} />
+                      <h3 className="font-semibold text-slate-900">{approval.evidence.name}</h3>
                       <span className={`badge ${statusStyle.bg} ${statusStyle.text}`}>
                         {statusStyle.label} (Tier {approval.current_tier})
                       </span>
@@ -262,25 +262,25 @@ export default function PendingApprovalsPage() {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div>
-                        <p className="text-gray-600 mb-1">Assessment</p>
+                        <p className="text-slate-500 mb-1">Assessment</p>
                         {approval.assessment_item ? (
-                          <Link 
+                          <Link
                             href={`/compliance/assessments/${approval.assessment_item.assessment.id}`}
-                            className="text-blue-600 hover:underline flex items-center gap-1"
+                            className="text-teal-700 hover:underline flex items-center gap-1"
                           >
                             {approval.assessment_item.assessment.name}
-                            <ExternalLink className="h-3 w-3" />
+                            <ExternalLink className="h-3 w-3" strokeWidth={1.75} />
                           </Link>
                         ) : (
-                          <Link href={`/evidence/${approval.evidence.id}`} className="text-blue-600 hover:underline flex items-center gap-1">
+                          <Link href={`/evidence/${approval.evidence.id}`} className="text-teal-700 hover:underline flex items-center gap-1">
                             Evidence Library
-                            <ExternalLink className="h-3 w-3" />
+                            <ExternalLink className="h-3 w-3" strokeWidth={1.75} />
                           </Link>
                         )}
                       </div>
                       <div>
-                        <p className="text-gray-600 mb-1">Control/Requirement</p>
-                        <p className="text-black text-xs line-clamp-2">
+                        <p className="text-slate-500 mb-1">Control/Requirement</p>
+                        <p className="text-slate-900 text-xs line-clamp-2">
                           {approval.assessment_item ? (
                             <>
                               {approval.assessment_item.item_number && `${approval.assessment_item.item_number}: `}
@@ -292,13 +292,13 @@ export default function PendingApprovalsPage() {
                         </p>
                       </div>
                       <div>
-                        <p className="text-gray-600 mb-1">File</p>
-                        <p className="text-black">{approval.evidence.file_name}</p>
+                        <p className="text-slate-500 mb-1">File</p>
+                        <p className="text-slate-900">{approval.evidence.file_name}</p>
                       </div>
                       <div>
-                        <p className="text-gray-600 mb-1">Submitted</p>
-                        <p className="text-black flex items-center gap-2">
-                          <User className="h-4 w-4" />
+                        <p className="text-slate-500 mb-1">Submitted</p>
+                        <p className="text-slate-900 flex items-center gap-2">
+                          <User className="h-4 w-4" strokeWidth={1.75} />
                           {approval.submitter?.full_name || 'Unknown'} • {formatDate(approval.submitted_at)}
                         </p>
                       </div>
@@ -315,7 +315,7 @@ export default function PendingApprovalsPage() {
                       {processingId === approval.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <ThumbsUp className="h-4 w-4" />
+                        <ThumbsUp className="h-4 w-4" strokeWidth={1.75} />
                       )}
                       Approve
                     </button>
@@ -325,7 +325,7 @@ export default function PendingApprovalsPage() {
                       onClick={() => handleAction(approval, 'reject')}
                       className="btn-danger flex items-center gap-2 text-sm"
                     >
-                      <ThumbsDown className="h-4 w-4" />
+                      <ThumbsDown className="h-4 w-4" strokeWidth={1.75} />
                       Reject
                     </button>
                     )}
@@ -334,7 +334,7 @@ export default function PendingApprovalsPage() {
                       onClick={() => handleAction(approval, 'return')}
                       className="btn-secondary flex items-center gap-2 text-sm"
                     >
-                      <RotateCcw className="h-4 w-4" />
+                      <RotateCcw className="h-4 w-4" strokeWidth={1.75} />
                       Return
                     </button>
                     )}
@@ -342,17 +342,17 @@ export default function PendingApprovalsPage() {
                       onClick={() => setExpandedId(isExpanded ? null : approval.id)}
                       className="btn-ghost text-sm flex items-center gap-1"
                     >
-                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      {isExpanded ? <ChevronDown className="h-4 w-4" strokeWidth={1.75} /> : <ChevronRight className="h-4 w-4" strokeWidth={1.75} />}
                       History
                     </button>
                   </div>
                 </div>
 
                 {isExpanded && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="mt-4 pt-4 border-t border-slate-200">
                     {actionType && (
-                      <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                        <p className="text-sm text-gray-700 mb-2">
+                      <div className="mb-4 p-4 bg-slate-50 rounded-lg">
+                        <p className="text-sm text-slate-700 mb-2">
                           {actionType === 'reject' ? 'Reason for rejection:' : 'Comments for return:'}
                         </p>
                         <textarea
@@ -371,7 +371,7 @@ export default function PendingApprovalsPage() {
                             {processingId === approval.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                              <Send className="h-4 w-4" />
+                              <Send className="h-4 w-4" strokeWidth={1.75} />
                             )}
                             Submit {actionType === 'reject' ? 'Rejection' : 'Return'}
                           </button>
@@ -387,21 +387,21 @@ export default function PendingApprovalsPage() {
 
                     {approval.approval_history && approval.approval_history.length > 0 ? (
                       <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-3">Approval History</h4>
+                        <h4 className="text-sm font-medium text-slate-700 mb-3">Approval History</h4>
                         <div className="space-y-3">
                           {approval.approval_history.map((entry) => (
                             <div key={entry.id} className="flex items-start gap-3 text-sm">
                               <div className={`mt-1 h-2 w-2 rounded-full ${
                                 entry.action === 'approved' ? 'bg-emerald-600' :
                                 entry.action === 'rejected' ? 'bg-rose-600' :
-                                entry.action === 'returned' ? 'bg-orange-600' :
-                                'bg-blue-600'
+                                entry.action === 'returned' ? 'bg-orange-500' :
+                                'bg-teal-600'
                               }`} />
                               <div className="flex-1">
-                                <p className="text-black">
+                                <p className="text-slate-900">
                                   <span className="font-medium">{entry.performer?.full_name || 'Unknown'}</span>
                                   {' '}
-                                  <span className="text-gray-600">
+                                  <span className="text-slate-600">
                                     {entry.action === 'submitted' ? 'submitted for review' :
                                      entry.action === 'approved' ? `approved at tier ${entry.tier_number}` :
                                      entry.action === 'rejected' ? 'rejected' :
@@ -409,16 +409,16 @@ export default function PendingApprovalsPage() {
                                   </span>
                                 </p>
                                 {entry.comments && (
-                                  <p className="text-gray-600 mt-1 italic">"{entry.comments}"</p>
+                                  <p className="text-slate-600 mt-1 italic">"{entry.comments}"</p>
                                 )}
-                                <p className="text-gray-500 text-xs mt-1">{formatDate(entry.performed_at)}</p>
+                                <p className="text-slate-400 text-xs mt-1">{formatDate(entry.performed_at)}</p>
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
                     ) : (
-                      <p className="text-gray-600 text-sm">No approval history yet.</p>
+                      <p className="text-slate-600 text-sm">No approval history yet.</p>
                     )}
                   </div>
                 )}

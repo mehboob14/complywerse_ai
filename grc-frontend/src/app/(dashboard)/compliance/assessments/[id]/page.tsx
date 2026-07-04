@@ -160,25 +160,35 @@ const COMPLIANCE_STATUS_STYLES: Record<string, { bg: string; text: string; borde
   complied: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200', label: 'Complied', icon: CheckCircle },
   partially_complied: { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-200', label: 'Partial', icon: AlertTriangle },
   not_complied: { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-200', label: 'Not Complied', icon: XCircle },
-  in_progress: { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200', label: 'In Progress', icon: Clock },
-  na: { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200', label: 'N/A', icon: Minus },
+  in_progress: { bg: 'bg-teal-100', text: 'text-teal-800', border: 'border-teal-200', label: 'In Progress', icon: Clock },
+  na: { bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200', label: 'N/A', icon: Minus },
 };
 
 const ASSESSMENT_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-gray-50', text: 'text-gray-600', label: 'Draft' },
-  in_progress: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'In Progress' },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Draft' },
+  in_progress: { bg: 'bg-teal-50', text: 'text-teal-700', label: 'In Progress' },
   completed: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Completed' },
-  archived: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Archived' },
+  archived: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Archived' },
 };
 
+type AssessmentTabId = 'assessment' | 'nca' | 'artifacts' | 'doc_assessment' | 'audit_plan';
+
+const ASSESSMENT_TABS: { id: AssessmentTabId; label: string; icon: typeof FileText }[] = [
+  { id: 'assessment', label: 'Assessment', icon: ClipboardList },
+  { id: 'nca', label: 'NCA', icon: Shield },
+  { id: 'doc_assessment', label: 'DCC', icon: FileText },
+  { id: 'audit_plan', label: 'Audit Plan', icon: ClipboardList },
+  { id: 'artifacts', label: 'Artifacts', icon: Package },
+];
+
 const EVIDENCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-gray-50', text: 'text-gray-600', label: 'Draft' },
+  draft: { bg: 'bg-slate-50', text: 'text-slate-600', label: 'Draft' },
   pending_review: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Pending Review' },
-  in_approval: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'In Approval' },
+  in_approval: { bg: 'bg-teal-50', text: 'text-teal-700', label: 'In Approval' },
   approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Approved' },
   rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
   returned: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Returned' },
-  framework_linked: { bg: 'bg-purple-50', text: 'text-purple-700', label: 'Framework Linked' },
+  framework_linked: { bg: 'bg-teal-50', text: 'text-teal-700', label: 'Framework Linked' },
 };
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string; border: string; dot: string; label: string }> = {
@@ -188,15 +198,8 @@ const PRIORITY_STYLES: Record<string, { bg: string; text: string; border: string
   low: { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-200', dot: 'bg-emerald-500', label: 'Low' },
 };
 
-function getScoreColor(score: number | null): { bg: string; text: string } {
-  if (score === null) return { bg: 'bg-gray-50', text: 'text-gray-600' };
-  if (score >= 80) return { bg: 'bg-emerald-50', text: 'text-emerald-700' };
-  if (score >= 50) return { bg: 'bg-amber-50', text: 'text-amber-700' };
-  return { bg: 'bg-rose-50', text: 'text-rose-700' };
-}
-
 function getScoreBarColor(score: number | null): string {
-  if (score === null) return 'bg-gray-300';
+  if (score === null) return 'bg-slate-300';
   if (score >= 80) return 'bg-emerald-500';
   if (score >= 50) return 'bg-amber-500';
   return 'bg-rose-500';
@@ -225,11 +228,9 @@ const STATUS_COLORS: Record<(typeof STATUS_ORDER)[number], string> = {
   complied: '#22c55e',
   partially_complied: '#f59e0b',
   not_complied: '#ef4444',
-  in_progress: '#60a5fa',
+  in_progress: '#14b8a6',
   na: '#64748b',
 };
-
-const DRAFT_REMAINDER_COLOR = '#d1d5db';
 
 function normalizeComplianceStatus(value: string | null | undefined): (typeof STATUS_ORDER)[number] {
   const status = (value || '').trim().toLowerCase();
@@ -238,12 +239,6 @@ function normalizeComplianceStatus(value: string | null | undefined): (typeof ST
   if (status === 'not_complied' || status === 'not complied') return 'not_complied';
   if (status === 'na' || status === 'n/a') return 'na';
   return 'in_progress';
-}
-
-function deriveCategoryFromDomain(domain: string): string {
-  const cleaned = (domain || '').trim();
-  if (!cleaned) return 'Uncategorized';
-  return cleaned.split(/[-/:|]/)[0].trim() || 'Uncategorized';
 }
 
 function getAuditMasterDomainGroup(domain: string): string {
@@ -263,7 +258,7 @@ export default function AssessmentDetailPage() {
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('compliance:assessments:edit');
 
-  const [activeTab, setActiveTab] = useState<'assessment' | 'nca' | 'artifacts' | 'doc_assessment' | 'audit_plan'>('assessment');
+  const [activeTab, setActiveTab] = useState<AssessmentTabId>('assessment');
   const [expandedDomains, setExpandedDomains] = useState<Set<string>>(new Set());
   const [expandedAuditItems, setExpandedAuditItems] = useState<Set<number>>(new Set());
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
@@ -807,12 +802,12 @@ export default function AssessmentDetailPage() {
 
   if (error || !assessment) {
     return (
-      <div className="bg-white border border-gray-200 rounded-lg p-8 flex flex-col items-center justify-center">
+      <div className="bg-white border border-slate-200 rounded-lg p-8 flex flex-col items-center justify-center">
         <div className="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center mb-4">
-          <AlertCircle className="h-6 w-6 text-rose-600" />
+          <AlertCircle className="h-6 w-6 text-rose-600" strokeWidth={1.75} />
         </div>
-        <p className="text-black font-medium mb-2">Failed to load assessment details</p>
-        <Link href="/compliance/assessments" className="text-blue-600 hover:text-blue-700 hover:underline font-medium">
+        <p className="text-slate-900 font-medium mb-2">Failed to load assessment details</p>
+        <Link href="/compliance/assessments" className="text-teal-700 hover:text-teal-800 hover:underline font-medium">
           Back to Assessments
         </Link>
       </div>
@@ -820,7 +815,6 @@ export default function AssessmentDetailPage() {
   }
 
   const statusStyle = ASSESSMENT_STATUS_STYLES[assessment.status] || ASSESSMENT_STATUS_STYLES.draft;
-  const scoreColor = getScoreColor(assessment.overall_score);
   const rawDomains = Object.keys(assessment.items_by_domain || {});
   const domainEntries = (() => {
     if (!isAuditMasterAssessment) {
@@ -869,10 +863,10 @@ export default function AssessmentDetailPage() {
   const existingDomains = Object.keys(assessment.items_by_domain || {})
     .filter((d) => d && d !== 'Uncategorized')
     .sort((a, b) => a.localeCompare(b));
-  const DOMAIN_OPTIONAL_FIELDS = ['responsible_party', 'timeline', 'gaps_identified', 'proposed_solution', 'evidence_reference', 'remarks'];
-  const domainFieldUsage = {};
+  const DOMAIN_OPTIONAL_FIELDS: (keyof AssessmentItem)[] = ['responsible_party', 'timeline', 'gaps_identified', 'proposed_solution', 'evidence_reference', 'remarks'];
+  const domainFieldUsage: Record<string, Set<string>> = {};
   for (const dom of existingDomains) {
-    const used = new Set();
+    const used = new Set<string>();
     for (const it of assessment.items_by_domain[dom] || []) {
       for (const f of DOMAIN_OPTIONAL_FIELDS) {
         const v = it[f];
@@ -883,7 +877,7 @@ export default function AssessmentDetailPage() {
   }
   // For the add form: which optional fields to show for the chosen domain.
   const selectedDomainUsage = !addNewDomain && newItemForm.area_domain ? domainFieldUsage[newItemForm.area_domain] : undefined;
-  const showItemField = (f) => !selectedDomainUsage || selectedDomainUsage.size === 0 || selectedDomainUsage.has(f);
+  const showItemField = (f: string) => !selectedDomainUsage || selectedDomainUsage.size === 0 || selectedDomainUsage.has(f);
 
   const fallbackStatusCounts = allItems.reduce(
     (acc, item) => {
@@ -909,7 +903,6 @@ export default function AssessmentDetailPage() {
   const totalItems = Math.max(assessment.total_items ?? allItems.length, 0);
   const accountedItems = STATUS_ORDER.reduce((sum, key) => sum + (statusCounts[key] || 0), 0);
   const normalizedTotal = Math.max(totalItems, accountedItems);
-  const remainingDraftCount = Math.max(normalizedTotal - accountedItems, 0);
   const statusSegments = STATUS_ORDER.map((key) => ({
     key,
     label: COMPLIANCE_STATUS_STYLES[key]?.label || key,
@@ -934,8 +927,8 @@ export default function AssessmentDetailPage() {
     };
   });
   // Hero (redesigned dashboard) — overall compliance ring + plain verdict.
+  // Charter: flat teal ring, no red→amber→green gradient.
   const heroPct = assessment.overall_score != null ? Math.round(assessment.overall_score) : 0;
-  const heroColor = heroPct >= 70 ? '#10b981' : heroPct >= 40 ? '#f59e0b' : '#ef4444';
   const heroC = 2 * Math.PI * 48;
   const heroAssessed = (statusCounts['complied'] || 0) + (statusCounts['partially_complied'] || 0) + (statusCounts['not_complied'] || 0) + (statusCounts['na'] || 0);
   let heroReadiness = 'Not started';
@@ -970,44 +963,15 @@ export default function AssessmentDetailPage() {
         percent: total > 0 ? (counts[key] / total) * 100 : 0,
       })).filter((segment) => segment.count > 0 && segment.percent > 0);
       const completedPercent = total > 0 ? Math.round((counts.complied / total) * 100) : 0;
-      const totalSegmentPercent = segments.reduce((sum, segment) => sum + segment.percent, 0);
-      const remainderPercent = Math.max(100 - totalSegmentPercent, 0);
 
       return {
         name: entry.name,
         total,
         completedPercent,
         segments,
-        remainderPercent,
       };
     })
     .sort((a, b) => b.total - a.total);
-  const categoryCoverageRows = Object.entries(
-    allItems.reduce((acc, item) => {
-      const category = deriveCategoryFromDomain(item.area_domain || 'Uncategorized');
-      const normalized = normalizeComplianceStatus(item.compliance_status);
-      if (!acc[category]) {
-        acc[category] = {
-          total: 0,
-          complied: 0,
-          partially_complied: 0,
-          not_complied: 0,
-          in_progress: 0,
-          na: 0,
-        };
-      }
-      acc[category].total += 1;
-      acc[category][normalized] += 1;
-      return acc;
-    }, {} as Record<string, { total: number } & Record<(typeof STATUS_ORDER)[number], number>>),
-  )
-    .map(([name, values]) => ({
-      name,
-      total: values.total,
-      completion: values.total > 0 ? Math.round((values.complied / values.total) * 100) : 0,
-    }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 6);
 
   const responsiblePartyOptions = (() => {
     const names = new Set<string>();
@@ -1025,30 +989,30 @@ export default function AssessmentDetailPage() {
     <div className="space-y-4">
       {aiError && (
         <div className="fixed top-4 right-4 z-50 bg-rose-50 border border-rose-200 text-rose-900 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 max-w-md animate-in slide-in-from-top-2">
-          <AlertTriangle className="h-5 w-5 text-rose-600 flex-shrink-0" />
+          <AlertTriangle className="h-5 w-5 text-rose-600 flex-shrink-0" strokeWidth={1.75} />
           <div className="flex-1">
-            <p className="text-sm font-medium text-black">AI Recommendation Error</p>
+            <p className="text-sm font-medium text-slate-900">AI Recommendation Error</p>
             <p className="text-xs text-rose-700">{aiError}</p>
           </div>
           <button onClick={() => setAiError(null)} className="text-rose-600 hover:text-rose-800">
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" strokeWidth={1.75} />
           </button>
         </div>
       )}
       <div className="flex items-start gap-3 flex-wrap">
         <Link
           href="/compliance/assessments"
-          className="mt-0.5 rounded-lg p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black transition-colors flex-shrink-0"
+          className="mt-0.5 rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors flex-shrink-0"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
         </Link>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600 flex-shrink-0">
-              <FileText className="h-5 w-5" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 text-teal-600 flex-shrink-0">
+              <FileText className="h-5 w-5" strokeWidth={1.75} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight truncate">{assessment.name}</h1>
+              <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight truncate">{assessment.name}</h1>
               <p className="mt-0.5 text-sm text-slate-600 truncate">
                 {assessment.assessment_type.replace(/_/g, ' ')} • {assessment.file_name}
               </p>
@@ -1059,14 +1023,38 @@ export default function AssessmentDetailPage() {
           <span className={`px-2.5 py-1 text-xs font-medium rounded-lg ${statusStyle.bg} ${statusStyle.text}`}>
             {statusStyle.label}
           </span>
-          <button onClick={handleExport} className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-700 font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
-            <Download className="h-3.5 w-3.5" />
+          <button onClick={handleExport} className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm text-slate-700 font-medium hover:bg-slate-50 transition-colors flex items-center gap-2">
+            <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
             <span className="hidden sm:inline">Export Excel</span>
             <span className="sm:hidden">Export</span>
           </button>
         </div>
       </div>
 
+      {/* Tab bar — makes every workspace (Assessment / NCA / Artifacts / DCC /
+          Audit Plan) reachable. Each tab component fetches its own data by
+          assessmentId and renders its own empty state. */}
+      <div className="flex flex-wrap items-center gap-1 border-b border-slate-200">
+        {ASSESSMENT_TABS.map((tab) => {
+          const TabIcon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'border-teal-600 text-teal-700'
+                  : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
+              }`}
+            >
+              <TabIcon className="h-4 w-4" strokeWidth={1.75} />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
 
       {activeTab === 'assessment' && (
       <>
@@ -1074,18 +1062,98 @@ export default function AssessmentDetailPage() {
         <XlsxMaturityViewer assessmentId={assessmentId} assessmentItems={assessment.items || []} />
       )}
 
-      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+      {/* Compliance summary — overall readiness ring + status mix + top-domain
+          coverage (revived from previously-computed-but-unrendered blocks). */}
+      {allItems.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="relative flex h-24 w-24 flex-shrink-0 items-center justify-center">
+                <svg viewBox="0 0 112 112" className="h-24 w-24 -rotate-90">
+                  <circle cx="56" cy="56" r="48" fill="none" stroke="#e2e8f0" strokeWidth="10" />
+                  <circle
+                    cx="56"
+                    cy="56"
+                    r="48"
+                    fill="none"
+                    stroke="#0d9488"
+                    strokeWidth="10"
+                    strokeLinecap="round"
+                    strokeDasharray={heroC}
+                    strokeDashoffset={heroC - (heroC * heroPct) / 100}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-xl font-bold text-slate-900">{heroPct}%</span>
+                  <span className="text-[10px] uppercase tracking-wide text-slate-400">Score</span>
+                </div>
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-900">{heroReadiness}</p>
+                <p className="mt-1 text-xs leading-snug text-slate-500">{heroVerdict}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-900">Status mix</h3>
+              <span className="text-xs text-slate-400">{normalizedTotal} items</span>
+            </div>
+            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+              {statusSegments.map((segment) => (
+                <div key={segment.key} style={{ width: `${segment.percent}%`, backgroundColor: segment.color }} title={`${segment.label}: ${segment.count}`} />
+              ))}
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+              {ringMetrics.map((metric) => {
+                const MetricIcon = metric.icon;
+                return (
+                  <div key={metric.key} className="flex items-center gap-2">
+                    <MetricIcon className="h-4 w-4 flex-shrink-0" strokeWidth={1.75} style={{ color: metric.color }} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900">{metric.count}</p>
+                      <p className="truncate text-[11px] text-slate-500">{metric.label}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {domainCoverageRows.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="mb-3 text-sm font-semibold text-slate-900">Domain coverage</h3>
+          <div className="space-y-2.5">
+            {domainCoverageRows.slice(0, 6).map((row) => (
+              <div key={row.name} className="flex items-center gap-3">
+                <div className="w-40 flex-shrink-0 truncate text-xs text-slate-600" title={row.name}>{row.name}</div>
+                <div className="flex h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                  {row.segments.map((segment) => (
+                    <div key={segment.key} style={{ width: `${segment.percent}%`, backgroundColor: segment.color }} />
+                  ))}
+                </div>
+                <div className="w-10 flex-shrink-0 text-right text-xs font-medium text-slate-700">{row.completedPercent}%</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-sm font-semibold text-black">Assessment Items</h2>
-            <p className="text-xs text-gray-500">
+            <h2 className="text-sm font-semibold text-slate-900">Assessment Items</h2>
+            <p className="text-xs text-slate-500">
               {domains.length} domain{domains.length !== 1 ? 's' : ''} • {normalizedTotal} items
             </p>
           </div>
           {canEdit && (
             <button
               onClick={() => { setAddNewDomain(false); setNewItemOpen(true); }}
-              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+              className="inline-flex items-center gap-1.5 rounded-md bg-teal-600 px-3 py-1.5 text-xs font-medium text-slate-900 hover:bg-teal-700"
             >
               <span className="text-base leading-none">+</span> New Item
             </button>
@@ -1097,15 +1165,15 @@ export default function AssessmentDetailPage() {
           {domains.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               <div className="relative min-w-[180px] flex-1">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" strokeWidth={1.75} />
                 <input
                   value={itemSearch}
                   onChange={(e) => setItemSearch(e.target.value)}
                   placeholder="Search items by number or description…"
-                  className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm focus:border-blue-400 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm focus:border-teal-400 focus:outline-none"
                 />
               </div>
-              <select value={itemStatusFilter} onChange={(e) => setItemStatusFilter(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none">
+              <select value={itemStatusFilter} onChange={(e) => setItemStatusFilter(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:border-teal-400 focus:outline-none">
                 <option value="">All statuses</option>
                 <option value="complied">Complied</option>
                 <option value="partially_complied">Partially Complied</option>
@@ -1113,7 +1181,7 @@ export default function AssessmentDetailPage() {
                 <option value="in_progress">In Progress</option>
                 <option value="na">N/A</option>
               </select>
-              <select value={itemPriorityFilter} onChange={(e) => setItemPriorityFilter(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:border-blue-400 focus:outline-none">
+              <select value={itemPriorityFilter} onChange={(e) => setItemPriorityFilter(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 focus:border-teal-400 focus:outline-none">
                 <option value="">All priorities</option>
                 <option value="critical">Critical</option>
                 <option value="high">High</option>
@@ -1121,14 +1189,14 @@ export default function AssessmentDetailPage() {
                 <option value="low">Low</option>
               </select>
               {(itemSearch || itemStatusFilter || itemPriorityFilter) && (
-                <button onClick={() => { setItemSearch(''); setItemStatusFilter(''); setItemPriorityFilter(''); }} className="text-xs font-medium text-blue-600 hover:underline">Clear</button>
+                <button onClick={() => { setItemSearch(''); setItemStatusFilter(''); setItemPriorityFilter(''); }} className="text-xs font-medium text-teal-700 hover:underline">Clear</button>
               )}
             </div>
           )}
           {domains.length === 0 ? (
             <div className="text-center py-8">
-              <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600">No assessment items found</p>
+              <FileText className="h-12 w-12 text-slate-400 mx-auto mb-3" strokeWidth={1.75} />
+              <p className="text-slate-600">No assessment items found</p>
             </div>
           ) : (
             domainEntries.map((domainEntry) => {
@@ -1150,42 +1218,42 @@ export default function AssessmentDetailPage() {
               return (
                 <div
                   key={domain}
-                  className="border border-gray-200 rounded-lg overflow-hidden"
+                  className="border border-slate-200 rounded-lg overflow-hidden"
                 >
-                  <div className="w-full flex items-center justify-between p-3 bg-gray-50">
+                  <div className="w-full flex items-center justify-between p-3 bg-slate-50">
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
                         onClick={() => toggleDomain(domain)}
                         aria-expanded={isExpanded}
                         aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${domainEntry.name}`}
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-gray-600 hover:bg-gray-200 hover:text-black transition-colors"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors"
                       >
                         {isExpanded ? (
-                          <ChevronDown className="h-4 w-4" />
+                          <ChevronDown className="h-4 w-4" strokeWidth={1.75} />
                         ) : (
-                          <ChevronRight className="h-4 w-4" />
+                          <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
                         )}
                       </button>
-                      <span className="text-sm font-medium text-black">{domainEntry.name}</span>
-                      <span className="text-xs text-gray-500">({items.length} items)</span>
+                      <span className="text-sm font-medium text-slate-900">{domainEntry.name}</span>
+                      <span className="text-xs text-slate-500">({items.length} items)</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 min-w-[100px]">
-                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
                           <div
                             className={`h-full ${getScoreBarColor(domainPercentage)} transition-all`}
                             style={{ width: `${domainPercentage}%` }}
                           />
                         </div>
-                        <span className="text-sm text-gray-600">{domainPercentage}%</span>
+                        <span className="text-sm text-slate-600">{domainPercentage}%</span>
                       </div>
                     </div>
                   </div>
 
                   {isExpanded && (
                     items.length === 0 ? (
-                      <div className="px-4 py-6 text-center text-sm text-gray-400">No items match the filters.</div>
+                      <div className="px-4 py-6 text-center text-sm text-slate-400">No items match the filters.</div>
                     ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full table-fixed text-sm">
@@ -1200,7 +1268,7 @@ export default function AssessmentDetailPage() {
                           <col style={{ width: '128px' }} />
                         </colgroup>
                         <thead>
-                          <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                          <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                             <th className="px-2 py-2.5"></th>
                             <th className="px-2 py-2.5">#</th>
                             <th className="px-2 py-2.5">Control</th>
@@ -1254,25 +1322,25 @@ export default function AssessmentDetailPage() {
                                     <div className="flex items-center justify-end gap-1">
                                       {isEditing ? (
                                         <>
-                                          <button onClick={saveEditing} disabled={updateItemMutation.isPending} className="rounded-lg bg-blue-600 p-1.5 text-white hover:bg-blue-700 disabled:opacity-50" title="Save">
-                                            {updateItemMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                                          <button onClick={saveEditing} disabled={updateItemMutation.isPending} className="rounded-lg bg-teal-600 p-1.5 text-slate-900 hover:bg-teal-700 disabled:opacity-50" title="Save">
+                                            {updateItemMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" strokeWidth={1.75} />}
                                           </button>
-                                          <button onClick={cancelEditing} className="rounded-lg p-1.5 text-gray-600 hover:bg-gray-100" title="Cancel"><X className="h-4 w-4" /></button>
+                                          <button onClick={cancelEditing} className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100" title="Cancel"><X className="h-4 w-4" strokeWidth={1.75} /></button>
                                         </>
                                       ) : (
                                         <>
                                           {canEdit && (
-                                            <button onClick={() => { startEditing(item); if (!expandedAuditItems.has(item.id)) toggleAuditItem(item.id); }} className="rounded-lg p-1.5 text-gray-600 hover:bg-blue-50 hover:text-blue-600" title="Edit"><Edit2 className="h-4 w-4" /></button>
+                                            <button onClick={() => { startEditing(item); if (!expandedAuditItems.has(item.id)) toggleAuditItem(item.id); }} className="rounded-lg p-1.5 text-slate-600 hover:bg-teal-50 hover:text-teal-700" title="Edit"><Edit2 className="h-4 w-4" strokeWidth={1.75} /></button>
                                           )}
                                           {canEdit && (
-                                            <button onClick={() => setDeleteItemTarget({ id: item.id, name: item.control_description?.slice(0, 80) || `Item ${item.item_number}` })} className="rounded-lg p-1.5 text-gray-600 hover:bg-rose-50 hover:text-rose-600" title="Delete"><X className="h-4 w-4" /></button>
+                                            <button onClick={() => setDeleteItemTarget({ id: item.id, name: item.control_description?.slice(0, 80) || `Item ${item.item_number}` })} className="rounded-lg p-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-600" title="Delete"><X className="h-4 w-4" strokeWidth={1.75} /></button>
                                           )}
-                                          <button onClick={() => openItemPanel(item.id, 'evidence')} className={`relative rounded-lg p-1.5 ${panelItemId === item.id ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'}`} title="Evidence">
-                                            <Paperclip className="h-4 w-4" />
-                                            {evCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] text-white">{evCount}</span>}
+                                          <button onClick={() => openItemPanel(item.id, 'evidence')} className={`relative rounded-lg p-1.5 ${panelItemId === item.id ? 'bg-teal-50 text-teal-700' : 'text-slate-600 hover:bg-teal-50 hover:text-teal-700'}`} title="Evidence">
+                                            <Paperclip className="h-4 w-4" strokeWidth={1.75} />
+                                            {evCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-teal-600 text-[10px] text-slate-900">{evCount}</span>}
                                           </button>
-                                          <button onClick={() => handleGenerateAIRecommendation(item.id)} disabled={generatingAIForItem === item.id} className={`rounded-lg p-1.5 ${hasAi ? 'bg-purple-50 text-purple-600' : 'text-gray-600 hover:bg-purple-50 hover:text-purple-600'} disabled:opacity-50`} title="AI Suggest Evidence">
-                                            {generatingAIForItem === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                                          <button onClick={() => handleGenerateAIRecommendation(item.id)} disabled={generatingAIForItem === item.id} className={`rounded-lg p-1.5 ${hasAi ? 'bg-teal-50 text-teal-700' : 'text-slate-600 hover:bg-teal-50 hover:text-teal-700'} disabled:opacity-50`} title="AI Suggest Evidence">
+                                            {generatingAIForItem === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" strokeWidth={1.75} />}
                                           </button>
                                         </>
                                       )}
@@ -1297,7 +1365,7 @@ export default function AssessmentDetailPage() {
                                               <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Responsible Party</th>
                                               <td className="px-3 py-2 text-sm text-slate-700">
                                                 {isEditing && canEdit ? (
-                                                  <select value={editingResponsibleParty} onChange={(e) => setEditingResponsibleParty(e.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                  <select value={editingResponsibleParty} onChange={(e) => setEditingResponsibleParty(e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                                                     <option value="">Unassigned</option>
                                                     {responsiblePartyOptions.map((o) => <option key={o} value={o}>{o}</option>)}
                                                   </select>
@@ -1308,7 +1376,7 @@ export default function AssessmentDetailPage() {
                                               <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Timeline</th>
                                               <td className="px-3 py-2 text-sm text-slate-700">
                                                 {isEditing && canEdit ? (
-                                                  <input type="date" value={editingTimeline} onChange={(e) => { setEditingTimeline(e.target.value); setEditingTimelineTouched(true); }} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                                  <input type="date" value={editingTimeline} onChange={(e) => { setEditingTimeline(e.target.value); setEditingTimelineTouched(true); }} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                                                 ) : formatTimelineDisplay(item.timeline)}
                                               </td>
                                             </tr>
@@ -1316,7 +1384,7 @@ export default function AssessmentDetailPage() {
                                               <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Priority</th>
                                               <td className="px-3 py-2 text-sm capitalize text-slate-700">
                                                 {isEditing && canEdit ? (
-                                                  <select value={editingPriority} onChange={(e) => setEditingPriority(e.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                  <select value={editingPriority} onChange={(e) => setEditingPriority(e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                                                     <option value="">— Select —</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
                                                   </select>
                                                 ) : (item.priority || <span className="italic text-slate-400">—</span>)}
@@ -1326,7 +1394,7 @@ export default function AssessmentDetailPage() {
                                               <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Area / Domain</th>
                                               <td className="px-3 py-2 text-sm text-slate-700">
                                                 {isEditing && canEdit ? (
-                                                  <input type="text" value={editingAreaDomain} onChange={(e) => setEditingAreaDomain(e.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                                  <input type="text" value={editingAreaDomain} onChange={(e) => setEditingAreaDomain(e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                                                 ) : (item.area_domain || <span className="italic text-slate-400">—</span>)}
                                               </td>
                                             </tr>
@@ -1334,7 +1402,7 @@ export default function AssessmentDetailPage() {
                                               <tr className="align-top">
                                                 <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Status</th>
                                                 <td className="px-3 py-2 text-sm text-slate-700">
-                                                  <select value={editingStatus} onChange={(e) => setEditingStatus(e.target.value)} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                  <select value={editingStatus} onChange={(e) => setEditingStatus(e.target.value)} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                                                     {STATUS_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                                                   </select>
                                                 </td>
@@ -1344,7 +1412,7 @@ export default function AssessmentDetailPage() {
                                               <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Remarks</th>
                                               <td className="px-3 py-2 text-sm text-slate-700">
                                                 {isEditing && canEdit ? (
-                                                  <textarea value={editingRemarks} onChange={(e) => setEditingRemarks(e.target.value)} rows={2} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                                  <textarea value={editingRemarks} onChange={(e) => setEditingRemarks(e.target.value)} rows={2} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                                                 ) : (item.remarks || <span className="italic text-slate-400">—</span>)}
                                               </td>
                                             </tr>
@@ -1352,7 +1420,7 @@ export default function AssessmentDetailPage() {
                                               <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Gaps Identified</th>
                                               <td className="whitespace-pre-line px-3 py-2 text-sm text-slate-700">
                                                 {isEditing && canEdit ? (
-                                                  <textarea value={editingGapsIdentified} onChange={(e) => setEditingGapsIdentified(e.target.value)} rows={3} placeholder="Describe the gaps observed…" className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                                  <textarea value={editingGapsIdentified} onChange={(e) => setEditingGapsIdentified(e.target.value)} rows={3} placeholder="Describe the gaps observed…" className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                                                 ) : (item.gaps_identified || <span className="italic text-slate-400">No gaps recorded</span>)}
                                               </td>
                                             </tr>
@@ -1360,7 +1428,7 @@ export default function AssessmentDetailPage() {
                                               <th className="bg-slate-50 px-3 py-2 text-left align-top text-xs font-medium text-slate-500">Proposed Solution</th>
                                               <td className="whitespace-pre-line px-3 py-2 text-sm text-slate-700">
                                                 {isEditing && canEdit ? (
-                                                  <textarea value={editingProposedSolution} onChange={(e) => setEditingProposedSolution(e.target.value)} rows={3} placeholder="Suggest remediation steps…" className="w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                                  <textarea value={editingProposedSolution} onChange={(e) => setEditingProposedSolution(e.target.value)} rows={3} placeholder="Suggest remediation steps…" className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
                                                 ) : (item.proposed_solution || <span className="italic text-slate-400">No proposed solution</span>)}
                                               </td>
                                             </tr>
@@ -1386,6 +1454,27 @@ export default function AssessmentDetailPage() {
       </div>
       </>)}
 
+      {activeTab === 'nca' && (
+        <NcaTab assessmentId={assessmentId} tenantUsers={tenantUsers} />
+      )}
+
+      {activeTab === 'doc_assessment' && (
+        <DCCAssessmentTab assessmentId={assessmentId} tenantUsers={tenantUsers} />
+      )}
+
+      {activeTab === 'audit_plan' && (
+        <AuditPlanTab assessmentId={assessmentId} tenantUsers={tenantUsers} />
+      )}
+
+      {activeTab === 'artifacts' && (
+        <ArtifactsTab
+          assessmentId={assessmentId}
+          assessmentType={assessment.assessment_type}
+          tenantId={assessment.tenant_id}
+          tenantUsers={tenantUsers}
+        />
+      )}
+
       {/* Evidence & AI side panel — single instance, driven by panelItemId. */}
       {activePanelItem && (
         <RightSlidePanel
@@ -1398,8 +1487,8 @@ export default function AssessmentDetailPage() {
           <div className="mb-4 flex items-center gap-1 rounded-lg bg-slate-100 p-1">
             {([{ id: 'ai', label: 'AI Suggestions', icon: Sparkles }, { id: 'evidence', label: 'Evidence', icon: Paperclip }] as { id: 'ai' | 'evidence'; label: string; icon: typeof Sparkles }[]).map(({ id, label, icon: Icon }) => (
               <button key={id} onClick={() => setPanelTab(id)} className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-semibold transition ${panelTab === id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                <Icon className="h-3.5 w-3.5" /> {label}
-                {id === 'evidence' && activePanelEvidence.length > 0 && <span className="ml-0.5 rounded-full bg-blue-100 px-1.5 text-[10px] font-bold text-blue-700">{activePanelEvidence.length}</span>}
+                <Icon className="h-3.5 w-3.5" strokeWidth={1.75} /> {label}
+                {id === 'evidence' && activePanelEvidence.length > 0 && <span className="ml-0.5 rounded-full bg-teal-100 px-1.5 text-[10px] font-bold text-teal-700">{activePanelEvidence.length}</span>}
               </button>
             ))}
           </div>
@@ -1409,20 +1498,20 @@ export default function AssessmentDetailPage() {
               {activePanelAi ? (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-purple-600" />
-                    <h4 className="text-sm font-medium text-purple-600">AI Evidence Recommendations</h4>
-                    {activePanelItem.ai_recommendation_generated_at && <span className="text-xs text-gray-500">Generated {formatDateTime(activePanelItem.ai_recommendation_generated_at)}</span>}
+                    <Sparkles className="h-4 w-4 text-teal-600" strokeWidth={1.75} />
+                    <h4 className="text-sm font-medium text-teal-700">AI Evidence Recommendations</h4>
+                    {activePanelItem.ai_recommendation_generated_at && <span className="text-xs text-slate-500">Generated {formatDateTime(activePanelItem.ai_recommendation_generated_at)}</span>}
                   </div>
-                  <p className="text-sm text-gray-700">{activePanelAi.summary}</p>
+                  <p className="text-sm text-slate-700">{activePanelAi.summary}</p>
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     {activePanelAi.recommendations.map((rec, idx) => (
-                      <div key={idx} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                      <div key={idx} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                         <div className="mb-2 flex items-center justify-between">
-                          <span className="text-sm font-medium text-black">{rec.evidence_type}</span>
-                          <span className={`rounded px-2 py-0.5 text-xs ${rec.priority === 'high' ? 'bg-rose-50 text-rose-700' : rec.priority === 'medium' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-700'}`}>{rec.priority}</span>
+                          <span className="text-sm font-medium text-slate-900">{rec.evidence_type}</span>
+                          <span className={`rounded px-2 py-0.5 text-xs ${rec.priority === 'high' ? 'bg-rose-50 text-rose-700' : rec.priority === 'medium' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>{rec.priority}</span>
                         </div>
-                        <p className="mb-2 text-xs text-gray-600">{rec.description}</p>
-                        {rec.example_files.length > 0 && <div className="text-xs text-gray-500">Examples: {rec.example_files.join(', ')}</div>}
+                        <p className="mb-2 text-xs text-slate-600">{rec.description}</p>
+                        {rec.example_files.length > 0 && <div className="text-xs text-slate-500">Examples: {rec.example_files.join(', ')}</div>}
                       </div>
                     ))}
                   </div>
@@ -1430,10 +1519,10 @@ export default function AssessmentDetailPage() {
               ) : (
                 <div className="flex items-center gap-3 py-2">
                   <button onClick={() => handleGenerateAIRecommendation(activePanelItem.id)} disabled={generatingAIForItem === activePanelItem.id} className="btn-secondary btn-sm flex items-center gap-2">
-                    {generatingAIForItem === activePanelItem.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    {generatingAIForItem === activePanelItem.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" strokeWidth={1.75} />}
                     Generate AI Suggestions
                   </button>
-                  <span className="text-xs text-gray-500">Get AI-powered recommendations for evidence to upload</span>
+                  <span className="text-xs text-slate-500">Get AI-powered recommendations for evidence to upload</span>
                 </div>
               )}
             </div>
@@ -1443,27 +1532,27 @@ export default function AssessmentDetailPage() {
             <div className="space-y-4">
               {activePanelEvidence.length > 0 && (
                 <div className="space-y-3">
-                  <h4 className="flex items-center gap-2 text-sm font-medium text-gray-700"><Paperclip className="h-4 w-4" /> Linked Evidence ({activePanelEvidence.length})</h4>
+                  <h4 className="flex items-center gap-2 text-sm font-medium text-slate-700"><Paperclip className="h-4 w-4" strokeWidth={1.75} /> Linked Evidence ({activePanelEvidence.length})</h4>
                   <div className="space-y-2">
                     {activePanelEvidence.map((ev) => {
                       const isFrameworkLink = ev.source === 'framework_link';
                       const evStatusStyle = EVIDENCE_STATUS_STYLES[ev.status] || EVIDENCE_STATUS_STYLES.draft;
                       return (
-                        <div key={ev.id} className={`rounded-lg border p-3 ${isFrameworkLink ? 'border-purple-200 bg-purple-50' : 'border-gray-200 bg-gray-50'}`}>
+                        <div key={ev.id} className={`rounded-lg border p-3 ${isFrameworkLink ? 'border-teal-200 bg-teal-50' : 'border-slate-200 bg-slate-50'}`}>
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
-                                <FileText className={`h-4 w-4 ${isFrameworkLink ? 'text-purple-600' : 'text-gray-600'}`} />
-                                <span className="text-sm font-medium text-black">{ev.evidence?.name || 'Evidence'}</span>
+                                <FileText className={`h-4 w-4 ${isFrameworkLink ? 'text-teal-600' : 'text-slate-600'}`} strokeWidth={1.75} />
+                                <span className="text-sm font-medium text-slate-900">{ev.evidence?.name || 'Evidence'}</span>
                                 <span className={`rounded px-2 py-0.5 text-xs ${evStatusStyle.bg} ${evStatusStyle.text}`}>{evStatusStyle.label}</span>
                               </div>
                               {ev.evidence && (
                                 <div className="mt-1 flex items-center gap-2">
-                                  <p className="text-xs text-gray-500">{ev.evidence.file_name} • {ev.evidence.file_type}</p>
-                                  <EvidencePreviewButton evidenceId={ev.evidence.id} label="Preview" className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 hover:bg-blue-100" />
+                                  <p className="text-xs text-slate-500">{ev.evidence.file_name} • {ev.evidence.file_type}</p>
+                                  <EvidencePreviewButton evidenceId={ev.evidence.id} label="Preview" className="inline-flex items-center gap-1 rounded bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-700 hover:bg-teal-100" />
                                 </div>
                               )}
-                              <p className="text-xs text-gray-500">Linked {formatDateTime(ev.created_at)}</p>
+                              <p className="text-xs text-slate-500">Linked {formatDateTime(ev.created_at)}</p>
                             </div>
                             {!isFrameworkLink && ev.status === 'draft' && (
                               <button onClick={() => approvalActionMutation.mutate({ evidenceLinkId: ev.id as number, action: 'submit', comments: '' })} disabled={approvalActionMutation.isPending} className="btn-primary ml-4 flex items-center gap-2 text-sm">
@@ -1478,15 +1567,15 @@ export default function AssessmentDetailPage() {
                 </div>
               )}
 
-              <div className="space-y-3 border-t border-gray-200 pt-2">
-                <h4 className="flex items-center gap-2 text-sm font-medium text-gray-700"><Paperclip className="h-4 w-4" /> Link Existing Evidence</h4>
+              <div className="space-y-3 border-t border-slate-200 pt-2">
+                <h4 className="flex items-center gap-2 text-sm font-medium text-slate-700"><Paperclip className="h-4 w-4" /> Link Existing Evidence</h4>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <div className="md:col-span-1">
-                    <label className="mb-1 block text-xs text-gray-600">Search</label>
+                    <label className="mb-1 block text-xs text-slate-600">Search</label>
                     <input type="text" value={existingEvidenceSearch[activePanelItem.id] || ''} onChange={(e) => setExistingEvidenceSearch((prev) => ({ ...prev, [activePanelItem.id]: e.target.value }))} placeholder="Search evidence by name or file" className="input text-sm" />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="mb-1 block text-xs text-gray-600">Evidence Library</label>
+                    <label className="mb-1 block text-xs text-slate-600">Evidence Library</label>
                     <select value={selectedExistingEvidence[activePanelItem.id] ?? ''} onChange={(e) => setSelectedExistingEvidence((prev) => ({ ...prev, [activePanelItem.id]: e.target.value ? Number(e.target.value) : null }))} className="input text-sm">
                       <option value="">{isEvidenceLibraryLoading ? 'Loading evidence...' : 'Select evidence to link'}</option>
                       {activePanelEvidenceOptions.map((ev) => <option key={ev.id} value={ev.id}>{ev.name} ({ev.file_name || `Evidence #${ev.id}`})</option>)}
@@ -1498,19 +1587,19 @@ export default function AssessmentDetailPage() {
                 </button>
               </div>
 
-              <div className="space-y-3 border-t border-gray-200 pt-2">
-                <h4 className="flex items-center gap-2 text-sm font-medium text-gray-700"><FileUp className="h-4 w-4" /> Upload New Evidence</h4>
+              <div className="space-y-3 border-t border-slate-200 pt-2">
+                <h4 className="flex items-center gap-2 text-sm font-medium text-slate-700"><FileUp className="h-4 w-4" /> Upload New Evidence</h4>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <div>
-                    <label className="mb-1 block text-xs text-gray-600">File</label>
+                    <label className="mb-1 block text-xs text-slate-600">File</label>
                     <input type="file" accept="*/*" onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)} className="input py-1 text-sm" />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-gray-600">Evidence Name</label>
+                    <label className="mb-1 block text-xs text-slate-600">Evidence Name</label>
                     <input type="text" value={evidenceName} onChange={(e) => setEvidenceName(e.target.value)} placeholder="e.g., Security Policy v2" className="input text-sm" />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-gray-600">Description (optional)</label>
+                    <label className="mb-1 block text-xs text-slate-600">Description (optional)</label>
                     <input type="text" value={evidenceDescription} onChange={(e) => setEvidenceDescription(e.target.value)} placeholder="Brief description" className="input text-sm" />
                   </div>
                 </div>
@@ -1543,7 +1632,7 @@ export default function AssessmentDetailPage() {
                   value={newItemForm.item_number}
                   onChange={(e) => setNewItemForm((s) => ({ ...s, item_number: e.target.value }))}
                   placeholder="Auto generated when blank"
-                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </FieldRow>
               <FieldRow label="Area / Domain">
@@ -1555,7 +1644,7 @@ export default function AssessmentDetailPage() {
                       if (v === '__new__') { setAddNewDomain(true); setNewItemForm((s) => ({ ...s, area_domain: '' })); }
                       else { setAddNewDomain(false); setNewItemForm((s) => ({ ...s, area_domain: v })); }
                     }}
-                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   >
                     <option value="">Select a domain…</option>
                     {existingDomains.map((d) => <option key={d} value={d}>{d}</option>)}
@@ -1567,7 +1656,7 @@ export default function AssessmentDetailPage() {
                     value={newItemForm.area_domain}
                     onChange={(e) => setNewItemForm((s) => ({ ...s, area_domain: e.target.value }))}
                     placeholder="New domain name (e.g. Access Control)"
-                    className={`w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${existingDomains.length > 0 ? 'mt-2' : ''}`}
+                    className={`w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 ${existingDomains.length > 0 ? 'mt-2' : ''}`}
                   />
                 )}
                 {!addNewDomain && newItemForm.area_domain && selectedDomainUsage && selectedDomainUsage.size > 0 && (
@@ -1580,7 +1669,7 @@ export default function AssessmentDetailPage() {
                   onChange={(e) => setNewItemForm((s) => ({ ...s, control_description: e.target.value }))}
                   rows={3}
                   placeholder="Describe the control requirement, obligation, or audit point."
-                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </FieldRow>
               <div className="grid grid-cols-2 gap-3">
@@ -1588,7 +1677,7 @@ export default function AssessmentDetailPage() {
                   <select
                     value={newItemForm.compliance_status}
                     onChange={(e) => setNewItemForm((s) => ({ ...s, compliance_status: e.target.value }))}
-                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   >
                     <option value="in_progress">In Progress</option>
                     <option value="complied">Complied</option>
@@ -1601,7 +1690,7 @@ export default function AssessmentDetailPage() {
                   <select
                     value={newItemForm.priority}
                     onChange={(e) => setNewItemForm((s) => ({ ...s, priority: e.target.value }))}
-                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   >
                     <option value="critical">Critical</option>
                     <option value="high">High</option>
@@ -1616,7 +1705,7 @@ export default function AssessmentDetailPage() {
                     value={newItemForm.responsible_party}
                     onChange={(e) => setNewItemForm((s) => ({ ...s, responsible_party: e.target.value }))}
                     placeholder="Owner team or person"
-                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </FieldRow>
               )}
@@ -1626,7 +1715,7 @@ export default function AssessmentDetailPage() {
                     value={newItemForm.timeline}
                     onChange={(e) => setNewItemForm((s) => ({ ...s, timeline: e.target.value }))}
                     placeholder="Target date or Q3 2026"
-                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </FieldRow>
               )}
@@ -1636,7 +1725,7 @@ export default function AssessmentDetailPage() {
                     value={newItemForm.gaps_identified}
                     onChange={(e) => setNewItemForm((s) => ({ ...s, gaps_identified: e.target.value }))}
                     rows={2}
-                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </FieldRow>
               )}
@@ -1646,7 +1735,7 @@ export default function AssessmentDetailPage() {
                     value={newItemForm.proposed_solution}
                     onChange={(e) => setNewItemForm((s) => ({ ...s, proposed_solution: e.target.value }))}
                     rows={2}
-                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </FieldRow>
               )}
@@ -1655,7 +1744,7 @@ export default function AssessmentDetailPage() {
                   <input
                     value={newItemForm.evidence_reference}
                     onChange={(e) => setNewItemForm((s) => ({ ...s, evidence_reference: e.target.value }))}
-                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </FieldRow>
               )}
@@ -1665,7 +1754,7 @@ export default function AssessmentDetailPage() {
                     value={newItemForm.remarks}
                     onChange={(e) => setNewItemForm((s) => ({ ...s, remarks: e.target.value }))}
                     rows={2}
-                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </FieldRow>
               )}
@@ -1680,7 +1769,7 @@ export default function AssessmentDetailPage() {
               <button
                 disabled={!newItemForm.control_description.trim() || createItemMutation.isPending}
                 onClick={() => createItemMutation.mutate(newItemForm)}
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-md bg-teal-600 px-3 py-1.5 text-sm text-slate-900 hover:bg-teal-700 disabled:opacity-50"
               >
                 {createItemMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Create Item
