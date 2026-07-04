@@ -35,6 +35,9 @@
 
 | # | Date | Scope | Module | Files | What | Commit / Revert |
 |---|------|-------|--------|-------|------|-----------------|
+| 3.12 | 2026-07-04 | ui | Shared · SeverityBadge | `components/ui/SeverityBadge.tsx` | **Prerequisite for the vuln register.** Converted the dark `bg-severity-*/20` chips to charter **light pills** (critical rose · high orange · medium amber · low emerald · info slate). Improves every current consumer too. | `git revert <commit>` |
+| 3.13 | 2026-07-04 | mockup | Assets Workspace | `mockups/assets-workspace-A-register.html` (new) | Register view — Documents-style DataTable (Owner/criticality/CIA/status/lifecycle/last-seen cols, ⋯ menu, KPI strip, view-switcher). Throwaway. | delete file |
+| 3.14 | 2026-07-04 | mockup | Assets Workspace | `mockups/assets-workspace-B-workbench.html` (new) | Workbench view — Evidence master-detail (asset list left + sticky preview right: CIA/criticality/coverage/CIS/risk tiles + owner chain + cross-module counts + "Open full record"). Throwaway. | delete file |
 | 3.1 | 2026-07-04 | mockup | Governance Overview | `mockups/governance-overview-A-board-snapshot.html` (new) | Direction A — board snapshot (health gauge + KPI strip + ranked attention rail + posture bars). Throwaway, no app code. | delete file |
 | 3.2 | 2026-07-04 | mockup | Governance Overview | `mockups/governance-overview-B-command-center.html` (new) | Direction B — command center (6 metric tiles: donut/ring/bars, recolored + consolidated). Throwaway. | delete file |
 | 3.3 | 2026-07-04 | mockup | Governance Overview | `mockups/governance-overview-C-focus-rail.html` (new) | Direction C — focus + sticky attention rail (mirrors Committees/Documents). Throwaway. | delete file |

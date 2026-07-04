@@ -20,38 +20,40 @@ const severityConfig: Record<SeverityLevel, {
   icon: typeof AlertCircle;
   label: string;
 }> = {
+  // Charter: light single-hue pills (bg-{tone}-50 text-{tone}-700), sanctioned
+  // red→amber→green severity ramp; slate for info. No dark *-500/20 chips.
   critical: {
-    bg: 'bg-severity-critical/20',
-    text: 'text-red-600',
-    border: 'border-red-200',
+    bg: 'bg-rose-50',
+    text: 'text-rose-700',
+    border: 'border-rose-200',
     icon: AlertOctagon,
     label: 'Critical',
   },
   high: {
-    bg: 'bg-severity-high/20',
-    text: 'text-orange-600',
-    border: 'border-orange-500/30',
+    bg: 'bg-orange-50',
+    text: 'text-orange-700',
+    border: 'border-orange-200',
     icon: ShieldAlert,
     label: 'High',
   },
   medium: {
-    bg: 'bg-severity-medium/20',
-    text: 'text-yellow-600',
-    border: 'border-yellow-200',
+    bg: 'bg-amber-50',
+    text: 'text-amber-700',
+    border: 'border-amber-200',
     icon: AlertTriangle,
     label: 'Medium',
   },
   low: {
-    bg: 'bg-severity-low/20',
-    text: 'text-blue-600',
-    border: 'border-blue-200',
+    bg: 'bg-emerald-50',
+    text: 'text-emerald-700',
+    border: 'border-emerald-200',
     icon: AlertCircle,
     label: 'Low',
   },
   info: {
-    bg: 'bg-severity-info/20',
+    bg: 'bg-slate-100',
     text: 'text-slate-600',
-    border: 'border-slate-500/30',
+    border: 'border-slate-200',
     icon: Info,
     label: 'Info',
   },
