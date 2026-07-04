@@ -35,7 +35,10 @@
 
 | # | Date | Scope | Module | Files | What | Commit / Revert |
 |---|------|-------|--------|-------|------|-----------------|
-| — | — | — | — | — | *(none yet — awaiting Phase 2 approval)* | — |
+| 3.1 | 2026-07-04 | mockup | Governance Overview | `mockups/governance-overview-A-board-snapshot.html` (new) | Direction A — board snapshot (health gauge + KPI strip + ranked attention rail + posture bars). Throwaway, no app code. | delete file |
+| 3.2 | 2026-07-04 | mockup | Governance Overview | `mockups/governance-overview-B-command-center.html` (new) | Direction B — command center (6 metric tiles: donut/ring/bars, recolored + consolidated). Throwaway. | delete file |
+| 3.3 | 2026-07-04 | mockup | Governance Overview | `mockups/governance-overview-C-focus-rail.html` (new) | Direction C — focus + sticky attention rail (mirrors Committees/Documents). Throwaway. | delete file |
+| 3.4 | 2026-07-04 | ui | Governance Overview | `governance/page.tsx` | **Implemented Direction A** (board snapshot). Presentation-layer reskin — **all 16 `useQuery` hooks, keys, and data flow unchanged**. New layout: proper H1 (`text-sm`→`text-xl`), 5-KPI strip, teal health gauge + 4 signal tiles + 6 posture bars + document-status split, ranked "needs attention now" rail, framework-coverage bars + gap chips, recolored (teal/slate) throughput trend. Removed dead `SpeedometerCard`/`GovernanceSunburst`/`GovernanceBowTie` + their dead data, and the off-brand `DonutChart`/`MiniMetricRing`/`GovernanceHealthRadar`/`LollipopChart` helpers. Added attention-rail nav links to existing routes only. Type-checks clean. | `git revert <this commit>` |
 
 ---
 
