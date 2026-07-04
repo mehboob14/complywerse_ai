@@ -35,7 +35,7 @@ function Card({ title, icon, children, className = '' }: { title: string; icon: 
   return (
     <div className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>
       <div className="mb-3 flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 ring-1 ring-blue-100">{icon}</div>
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-50 ring-1 ring-primary-100">{icon}</div>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-700">{title}</h3>
       </div>
       {children}
@@ -101,7 +101,7 @@ export function FrameworkChartsOverview({ journeyId }: { journeyId: number }) {
 
       {/* Gauge + status donut */}
       <div className="grid gap-3 lg:grid-cols-2">
-        <Card title="Overall Compliance" icon={<Gauge className="h-3.5 w-3.5 text-blue-600" />}>
+        <Card title="Overall Compliance" icon={<Gauge className="h-3.5 w-3.5 text-primary-600" strokeWidth={1.75} />}>
           <div className="flex items-center gap-4">
             <div className="relative h-[170px] w-[170px] shrink-0">
               <ResponsiveContainer width="100%" height="100%">
@@ -118,13 +118,13 @@ export function FrameworkChartsOverview({ journeyId }: { journeyId: number }) {
             </div>
             <div className="flex-1 space-y-2">
               <Bar label="Readiness" value={Math.round(gauge.readiness_pct)} color="#10b981" />
-              <Bar label="Evidence coverage" value={Math.round(gauge.evidence_coverage_pct)} color="#3b82f6" />
+              <Bar label="Evidence coverage" value={Math.round(gauge.evidence_coverage_pct)} color="#1ed4b0" />
               <Bar label="Compliant" value={completion} color={gColor} />
             </div>
           </div>
         </Card>
 
-        <Card title="Requirement Status" icon={<PieIcon className="h-3.5 w-3.5 text-blue-600" />}>
+        <Card title="Requirement Status" icon={<PieIcon className="h-3.5 w-3.5 text-primary-600" strokeWidth={1.75} />}>
           {status_donut.length > 0 ? (
             <DonutWithLegend data={status_donut} centerValue={stats.applicable} centerLabel="in scope" />
           ) : <EmptyChart />}
@@ -133,7 +133,7 @@ export function FrameworkChartsOverview({ journeyId }: { journeyId: number }) {
 
       {/* Automation assurance + maturity radar */}
       <div className="grid gap-3 lg:grid-cols-2">
-        <Card title="Automated Controls Assurance" icon={<Cast className="h-3.5 w-3.5 text-blue-600" />}>
+        <Card title="Automated Controls Assurance" icon={<Cast className="h-3.5 w-3.5 text-primary-600" strokeWidth={1.75} />}>
           {automation_donut.some((d) => d.value > 0) ? (
             <DonutWithLegend data={automation_donut.map((d, i) => ({ ...d, key: String(i) }))} centerValue={`${stats.automated}`} centerLabel="automated" />
           ) : (
@@ -143,13 +143,13 @@ export function FrameworkChartsOverview({ journeyId }: { journeyId: number }) {
           )}
         </Card>
 
-        <Card title="Maturity by Domain" icon={<RadarIcon className="h-3.5 w-3.5 text-blue-600" />}>
+        <Card title="Maturity by Domain" icon={<RadarIcon className="h-3.5 w-3.5 text-primary-600" strokeWidth={1.75} />}>
           {maturity.length >= 3 ? (
             <ResponsiveContainer width="100%" height={240}>
               <RadarChart data={maturity} outerRadius="72%">
                 <PolarGrid stroke="#e2e8f0" />
                 <PolarAngleAxis dataKey="label" tick={{ fontSize: 9, fill: '#64748b' }} />
-                <Radar dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.35} />
+                <Radar dataKey="value" stroke="#1ed4b0" fill="#1ed4b0" fillOpacity={0.35} />
                 <Tooltip formatter={(v: any) => [`${v}%`, 'Completion']} />
               </RadarChart>
             </ResponsiveContainer>
@@ -160,21 +160,21 @@ export function FrameworkChartsOverview({ journeyId }: { journeyId: number }) {
       </div>
 
       {/* Compliance trend */}
-      <Card title="Compliance Trend" icon={<TrendingUp className="h-3.5 w-3.5 text-blue-600" />}>
+      <Card title="Compliance Trend" icon={<TrendingUp className="h-3.5 w-3.5 text-primary-600" strokeWidth={1.75} />}>
         {trend.length >= 2 ? (
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={trend} margin={{ top: 8, right: 12, left: -16, bottom: 0 }}>
               <defs>
                 <linearGradient id="ctComp" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#1ed4b0" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#1ed4b0" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#64748b' }} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: '#64748b' }} unit="%" />
               <Tooltip formatter={(v: any, n: any) => [`${v}%`, n === 'completion' ? 'Compliant' : 'Readiness']} />
-              <Area type="monotone" dataKey="completion" stroke="#3b82f6" strokeWidth={2} fill="url(#ctComp)" />
+              <Area type="monotone" dataKey="completion" stroke="#1ed4b0" strokeWidth={2} fill="url(#ctComp)" />
               <Area type="monotone" dataKey="readiness" stroke="#10b981" strokeWidth={2} fill="none" />
             </AreaChart>
           </ResponsiveContainer>

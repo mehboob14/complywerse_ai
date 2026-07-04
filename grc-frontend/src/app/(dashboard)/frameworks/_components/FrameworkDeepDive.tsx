@@ -23,11 +23,11 @@ import type { CertificationJourney, ProgressSummary } from '@/types';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
-function toneFor(pct: number): { ring: string; text: string; bgFrom: string } {
-  if (pct >= 75) return { ring: '#10b981', text: 'text-emerald-700', bgFrom: 'from-emerald-50' };
-  if (pct >= 50) return { ring: '#3b82f6', text: 'text-blue-700', bgFrom: 'from-blue-50' };
-  if (pct >= 25) return { ring: '#f59e0b', text: 'text-amber-700', bgFrom: 'from-amber-50' };
-  return { ring: '#f43f5e', text: 'text-rose-700', bgFrom: 'from-rose-50' };
+function toneFor(pct: number): { ring: string; text: string; soft: string } {
+  if (pct >= 75) return { ring: '#10b981', text: 'text-emerald-700', soft: 'bg-emerald-50' };
+  if (pct >= 50) return { ring: '#1ed4b0', text: 'text-primary-700', soft: 'bg-primary-50' };
+  if (pct >= 25) return { ring: '#f59e0b', text: 'text-amber-700', soft: 'bg-amber-50' };
+  return { ring: '#f43f5e', text: 'text-rose-700', soft: 'bg-rose-50' };
 }
 
 function resolveName(j: CertificationJourney): string {
@@ -47,7 +47,7 @@ function MiniGauge({
 }: { label: string; pct: number; icon: React.ComponentType<{ className?: string }>; sublabel?: string }) {
   const t = toneFor(pct);
   return (
-    <div className={`relative rounded-xl border border-slate-200 bg-gradient-to-br ${t.bgFrom} to-white p-3 shadow-sm`}>
+    <div className={`relative rounded-xl border border-slate-200 ${t.soft} p-3 shadow-sm`}>
       <div className="flex items-center gap-2 mb-2">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white shadow-sm ring-1 ring-slate-200">
           <Icon className="h-3.5 w-3.5 text-slate-700" />
@@ -103,7 +103,7 @@ function JourneyPicker({
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 min-w-[260px]"
       >
-        <ShieldCheck className="h-4 w-4 text-blue-600 shrink-0" />
+        <ShieldCheck className="h-4 w-4 text-primary-600 shrink-0" strokeWidth={1.75} />
         <span className="truncate flex-1 text-left">
           {selected ? resolveName(selected) : 'Select framework…'}
         </span>
@@ -128,10 +128,10 @@ function JourneyPicker({
                   key={j.id}
                   onClick={() => { onSelect(j.id); setOpen(false); }}
                   className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors ${
-                    isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
+                    isActive ? 'bg-primary-50 text-primary-700' : 'text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  <ShieldCheck className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                  <ShieldCheck className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-primary-600' : 'text-slate-400'}`} strokeWidth={1.75} />
                   <span className="flex-1 text-xs font-medium truncate">{resolveName(j)}</span>
                   {code && (
                     <span className="rounded border border-slate-200 bg-white px-1.5 py-px text-[10px] font-medium text-slate-500 shrink-0">
@@ -195,11 +195,11 @@ export function FrameworkDeepDive({ journeys }: { journeys: CertificationJourney
   return (
     <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       {/* Header strip */}
-      <div className="border-b border-slate-200 bg-gradient-to-br from-slate-50 to-white px-4 py-3">
+      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 ring-1 ring-blue-100">
-              <FileSearch className="h-4 w-4 text-blue-600" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 ring-1 ring-primary-100">
+              <FileSearch className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
             </div>
             <div>
               <h2 className="text-sm font-semibold text-slate-900">Framework Snapshot</h2>
@@ -211,10 +211,10 @@ export function FrameworkDeepDive({ journeys }: { journeys: CertificationJourney
             {selected && (
               <Link
                 href={`/frameworks/${selected.id}`}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-blue-300 hover:text-blue-700"
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-primary-300 hover:text-primary-700"
               >
                 Open full detail
-                <ArrowUpRight className="h-3.5 w-3.5" />
+                <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={1.75} />
               </Link>
             )}
           </div>
@@ -225,7 +225,7 @@ export function FrameworkDeepDive({ journeys }: { journeys: CertificationJourney
           <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
             <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-medium ${
               selected.status === 'in_progress'
-                ? 'border-blue-200 bg-blue-50 text-blue-700'
+                ? 'border-primary-200 bg-primary-50 text-primary-700'
                 : selected.status === 'not_started'
                   ? 'border-slate-200 bg-slate-50 text-slate-600'
                   : selected.status === 'completed'

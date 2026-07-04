@@ -169,7 +169,7 @@ export function FrameworkJourneyPicker({
           aria-haspopup="listbox"
           aria-expanded={open}
           className={`inline-flex items-center gap-2 rounded-lg border bg-white px-3 py-1.5 text-xs font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 ${
-            open ? 'border-slate-400 ring-2 ring-blue-500/15' : 'border-slate-300 hover:border-slate-400'
+            open ? 'border-slate-400 ring-2 ring-primary-500/15' : 'border-slate-300 hover:border-slate-400'
           }`}
         >
           <span>Onboard Framework</span>
@@ -194,7 +194,7 @@ export function FrameworkJourneyPicker({
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search frameworks…"
-                  className="w-full rounded-md border border-slate-200 bg-white pl-8 pr-2 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full rounded-md border border-slate-200 bg-white pl-8 pr-2 py-1.5 text-xs text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
                 />
               </div>
             </div>
@@ -224,7 +224,7 @@ export function FrameworkJourneyPicker({
                             className="group w-full rounded-md px-2 py-1.5 text-left hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <span className="truncate text-xs font-medium text-slate-800 group-hover:text-blue-700">
+                              <span className="truncate text-xs font-medium text-slate-800 group-hover:text-primary-700">
                                 {display}
                               </span>
                               {f.controls_count != null && (
@@ -303,16 +303,16 @@ function FrameworkStartModal({
         className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl bg-white shadow-2xl border border-slate-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-3.5 bg-gradient-to-r from-blue-50/60 via-white to-white">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-3.5 bg-primary-50/60">
           <div className="flex items-start gap-3 min-w-0">
             <div className={`flex h-10 w-10 items-center justify-center rounded-xl shadow-sm ring-1 ${
               isCert
                 ? 'bg-emerald-50 ring-emerald-200 text-emerald-700'
                 : isComp
-                  ? 'bg-blue-50 ring-blue-200 text-blue-700'
+                  ? 'bg-primary-50 ring-primary-200 text-primary-700'
                   : 'bg-slate-50 ring-slate-200 text-slate-700'
             }`}>
-              <Rocket className="h-5 w-5" />
+              <Rocket className="h-5 w-5" strokeWidth={1.75} />
             </div>
             <div className="min-w-0">
               <h3 className="text-base font-semibold text-slate-900 truncate">{displayName}</h3>
@@ -324,7 +324,7 @@ function FrameworkStartModal({
                   <span className={`rounded border px-1.5 py-0.5 text-[9px] font-medium uppercase ${
                     isCert
                       ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                      : 'border-blue-200 bg-blue-50 text-blue-700'
+                      : 'border-primary-200 bg-primary-50 text-primary-700'
                   }`}>
                     {cls}
                   </span>
@@ -393,7 +393,7 @@ function FrameworkStartModal({
               <ul className="space-y-1">
                 {framework.framework_objectives.slice(0, 6).map((obj, i) => (
                   <li key={i} className="flex items-start gap-1.5 text-xs text-slate-700">
-                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-blue-500" />
+                    <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-primary-500" />
                     <span>{obj}</span>
                   </li>
                 ))}
@@ -404,45 +404,45 @@ function FrameworkStartModal({
           <div className="grid gap-2 sm:grid-cols-2 pt-1">
             <Link
               href={`/frameworks/overview/${framework.id}`}
-              className="group flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 transition-all hover:border-blue-300 hover:shadow-sm"
+              className="group flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 transition-all hover:border-primary-300 hover:shadow-sm"
             >
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-50 ring-1 ring-cyan-100">
-                <Eye className="h-3.5 w-3.5 text-cyan-700" />
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 ring-1 ring-slate-200">
+                <Eye className="h-3.5 w-3.5 text-slate-600" strokeWidth={1.75} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold text-slate-800 group-hover:text-blue-700">Full Overview</div>
+                <div className="text-xs font-semibold text-slate-800 group-hover:text-primary-700">Full Overview</div>
                 <div className="text-[10px] text-slate-500">Classification, phases, artifacts</div>
               </div>
-              <ArrowRight className="h-3 w-3 text-slate-300 group-hover:text-blue-500" />
+              <ArrowRight className="h-3 w-3 text-slate-300 group-hover:text-primary-500" strokeWidth={1.75} />
             </Link>
             <Link
               href={`/controls?framework=${framework.id}`}
-              className="group flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 transition-all hover:border-blue-300 hover:shadow-sm"
+              className="group flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 transition-all hover:border-primary-300 hover:shadow-sm"
             >
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 ring-1 ring-indigo-100">
-                <Shield className="h-3.5 w-3.5 text-indigo-700" />
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-50 ring-1 ring-primary-100">
+                <Shield className="h-3.5 w-3.5 text-primary-700" strokeWidth={1.75} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold text-slate-800 group-hover:text-blue-700">Browse Controls</div>
+                <div className="text-xs font-semibold text-slate-800 group-hover:text-primary-700">Browse Controls</div>
                 <div className="text-[10px] text-slate-500">{framework.controls_count ?? '—'} requirements</div>
               </div>
-              <ArrowRight className="h-3 w-3 text-slate-300 group-hover:text-blue-500" />
+              <ArrowRight className="h-3 w-3 text-slate-300 group-hover:text-primary-500" strokeWidth={1.75} />
             </Link>
           </div>
 
-          <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+          <div className="rounded-lg border border-primary-100 bg-primary-50/40 p-3">
             <label className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-              <Calendar className="h-3 w-3" /> Target Completion Date
+              <Calendar className="h-3 w-3" strokeWidth={1.75} /> Target Completion Date
               <span className="ml-1 font-normal normal-case text-slate-400">(optional)</span>
             </label>
             <div className="relative">
-              <Calendar className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <Calendar className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" strokeWidth={1.75} />
               <input
                 type="date"
                 value={targetDate}
                 min={minDate}
                 onChange={(e) => setTargetDate(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white pl-8 pr-2 py-2 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full rounded-lg border border-slate-300 bg-white pl-8 pr-2 py-2 text-xs text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               />
             </div>
             <p className="mt-1 text-[10px] text-slate-500">
@@ -469,7 +469,7 @@ function FrameworkStartModal({
           <button
             onClick={onStart}
             disabled={isStarting}
-            className="group inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:shadow-md hover:translate-y-[-1px] disabled:from-slate-300 disabled:to-slate-300 disabled:translate-y-0 disabled:shadow-none disabled:cursor-not-allowed"
+            className="group inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-xs font-semibold text-[color:var(--color-on-base,#0a0a0a)] shadow-sm transition-all hover:bg-primary-700 hover:shadow-md hover:translate-y-[-1px] disabled:bg-slate-300 disabled:translate-y-0 disabled:shadow-none disabled:cursor-not-allowed"
           >
             {isStarting ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
