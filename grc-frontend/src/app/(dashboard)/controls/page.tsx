@@ -23,7 +23,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { controlsApi, ermApi, adminApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { SearchInput, MultiSelectDropdown, PageLoader, RightSlidePanel } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, PageLoader, RightSlidePanel, AnimatedModal } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import {
@@ -146,6 +146,8 @@ export default function ControlsPage() {
   const [sortBy, setSortBy] = useState<SortField>('control_id');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [selectedControlId, setSelectedControlId] = useState<number | null>(null);
+  // Heavy inspector sections open in a popup so the docked record stays short.
+  const [showRecEvidence, setShowRecEvidence] = useState(false);
   const [page, setPage] = useState(0);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [aiRecommendations, setAiRecommendations] = useState<Record<number, AIRecommendations>>({});
@@ -496,8 +498,8 @@ export default function ControlsPage() {
             </>
           ) : (
             <>
-              <h1 className="text-2xl font-bold text-slate-900">Controls Workbench</h1>
-              <p className="text-slate-600">Search, inspect, and evidence controls extracted from your frameworks</p>
+              <h1 className="text-lg font-semibold text-slate-900">Controls Workbench</h1>
+              <p className="text-xs text-slate-500">Search, inspect &amp; evidence controls from your frameworks</p>
             </>
           )}
         </div>
@@ -672,6 +674,7 @@ export default function ControlsPage() {
               const currentStatus = selectedImplStatus?.status ?? (control.is_verified ? 'verified' : 'not_started');
               const stageIdx = PIPELINE_STAGES.findIndex((s) => s.key === currentStatus);
               return (
+                <>
                 <div className="card p-0">
                   {/* Inspector header */}
                   <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
@@ -738,6 +741,16 @@ export default function ControlsPage() {
                       >
                         <Paperclip className="h-3.5 w-3.5" strokeWidth={1.75} /> Manage evidence
                       </Link>
+                      {control.evidence_requirements && control.evidence_requirements.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowRecEvidence(true)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                        >
+                          <FileText className="h-3.5 w-3.5 text-amber-600" strokeWidth={1.75} /> Recommended evidence
+                          <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">{control.evidence_requirements.length}</span>
+                        </button>
+                      )}
                     </div>
 
                     {/* Requirement */}
@@ -764,36 +777,10 @@ export default function ControlsPage() {
                       <FrameworkControlEvidenceLinkSection controlId={control.id} />
                     </div>
 
-                    {/* Recommended evidence */}
-                    {control.evidence_requirements && control.evidence_requirements.length > 0 && (
-                      <div className="rounded-xl border border-slate-200 bg-white p-4">
-                        <h4 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                          <FileText className="h-3.5 w-3.5 text-amber-600" />
-                          Recommended evidence
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">{control.evidence_requirements.length}</span>
-                        </h4>
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                          {control.evidence_requirements.map((evidence, idx) => {
-                            const evTitle = evidence.name || evidence.title || 'Evidence';
-                            const evType = evidence.filetype || evidence.artifact_type;
-                            return (
-                              <div key={idx} className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
-                                <div className="flex items-start gap-2">
-                                  <div className="mt-0.5 flex-shrink-0 text-amber-600">{getEvidenceTypeIcon(evType || 'document')}</div>
-                                  <div className="min-w-0 flex-1">
-                                    <h5 className="text-sm font-medium text-slate-800">{evTitle}</h5>
-                                    {evidence.description && <p className="mt-1 text-xs text-slate-600">{evidence.description}</p>}
-                                    {evType && <span className="mt-2 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs uppercase text-amber-700">{evType}</span>}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                    {/* Recommended evidence moved to a popup (button in the action row) */}
 
-                    {/* Mapping */}
+                    {/* Mapping + Activity — compact side-by-side */}
+                    <div className="grid gap-4 md:grid-cols-2">
                     <div className="rounded-xl border border-slate-200 bg-white p-4">
                       <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Mapping</h4>
                       <dl className="space-y-2 text-sm">
@@ -892,6 +879,7 @@ export default function ControlsPage() {
                       ) : (
                         <p className="text-sm text-slate-400">No tracked activity yet. {control.evidence_count} evidence item{control.evidence_count === 1 ? '' : 's'} linked.</p>
                       )}
+                    </div>
                     </div>
 
                     {/* AI Recommendations */}
@@ -1072,6 +1060,35 @@ export default function ControlsPage() {
                     </button>
                   </div>
                 </div>
+
+                {/* Recommended-evidence popup — keeps the docked inspector short */}
+                <AnimatedModal
+                  isOpen={showRecEvidence}
+                  onClose={() => setShowRecEvidence(false)}
+                  title="Recommended evidence"
+                  subtitle={`${control.control_id} · ${control.evidence_requirements?.length || 0} suggested`}
+                  size="lg"
+                >
+                  <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
+                    {(control.evidence_requirements || []).map((evidence, idx) => {
+                      const evTitle = evidence.name || evidence.title || 'Evidence';
+                      const evType = evidence.filetype || evidence.artifact_type;
+                      return (
+                        <div key={idx} className="rounded-lg border border-slate-200 bg-white p-3">
+                          <div className="flex items-start gap-2">
+                            <div className="mt-0.5 flex-shrink-0 text-amber-600">{getEvidenceTypeIcon(evType || 'document')}</div>
+                            <div className="min-w-0 flex-1">
+                              <h5 className="text-sm font-medium text-slate-800">{evTitle}</h5>
+                              {evidence.description && <p className="mt-1 text-xs text-slate-600">{evidence.description}</p>}
+                              {evType && <span className="mt-2 inline-block rounded bg-amber-50 px-2 py-0.5 text-[10px] uppercase text-amber-700">{evType}</span>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </AnimatedModal>
+                </>
               );
             })()}
           </div>
