@@ -190,8 +190,12 @@ export default function NcaRegisterTab({ kind }: { kind: Kind }) {
             </div>
           )}
 
-          {/* Inherent + residual heat-maps */}
-          {model.inhHeat.length > 0 && (
+          {/* Inherent + residual heat-maps. For the vuln register we only draw the
+              L×Severity matrix when EVERY entry carries both likelihood and severity —
+              a partly-populated matrix (e.g. rows scored only by CVSS/Risk Level) reads
+              as a mostly-empty grid. When it's not complete, the "Inherent risk rating"
+              distribution bar above already conveys risk exposure across all rows. */}
+          {model.inhHeat.length > 0 && (kind !== 'vuln' || model.inhHeat.length === model.entries.length) && (
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <h4 className="mb-3 text-[12.5px] font-bold uppercase tracking-wide text-slate-500">Likelihood × {kind === 'vuln' ? 'Severity' : 'Impact'} heat-map</h4>
               <div className="flex flex-wrap gap-8">

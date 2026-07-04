@@ -17,6 +17,31 @@ import apiClient from '@/lib/api';
 const DCC_FORMAT = 'nca_dcc_tool';
 const PRIMARY: React.CSSProperties = { background: 'var(--color-base, #14b8a6)', color: '#fff' };
 
+// The DCC workbook is bilingual. Control text is "<Arabic sentence> <English
+// translation>"; each domain reads "<Arabic> (English name)". We surface the
+// English as the primary label and keep the Arabic as a small secondary
+// reference (RTL) so nothing is lost and the page reads cleanly in English.
+const ARABIC = /[؀-ۿ]/;
+function splitBilingual(s: string | null): { en: string; ar: string } {
+  const t = (s || '').trim();
+  if (!t) return { en: '', ar: '' };
+  if (!ARABIC.test(t)) return { en: t, ar: '' };
+  let last = -1;
+  for (let i = 0; i < t.length; i++) if (ARABIC.test(t[i])) last = i;
+  const en = t.slice(last + 1).replace(/^[\s.,:;،؛-]+/, '').trim();
+  const ar = t.slice(0, last + 1).trim();
+  return en ? { en, ar } : { en: ar, ar: '' }; // Arabic-only → keep it visible
+}
+// Domain / subdomain label → English. "N- Arabic (English)" → "N · English".
+function enLabel(s: string | null): string {
+  const t = (s || '').trim();
+  const num = t.match(/^(\d+(?:-\d+)?)/)?.[1];
+  const paren = t.match(/\(([^)]+)\)\s*$/)?.[1];
+  if (paren) return num ? `${num} · ${paren.trim()}` : paren.trim();
+  const { en } = splitBilingual(t);
+  return en || t;
+}
+
 interface Item { id: number; item_number: string; area_domain: string | null; subdomain_name: string | null; control_description: string | null; compliance_status: string; priority: string | null; remarks: string | null; evidence_count?: number; }
 interface Detail { id: number; name: string; source: string | null; items: Item[]; }
 
@@ -102,13 +127,14 @@ export default function DccToolTab() {
     const items = detail?.items || [];
     const byDom = new Map<string, Item[]>();
     for (const it of items) { const k = it.area_domain || 'DCC'; if (!byDom.has(k)) byDom.set(k, []); byDom.get(k)!.push(it); }
+    const domNum = (s: string) => { const m = s.match(/^(\d+)/); return m ? parseInt(m[1], 10) : 99; };
     const doms = [...byDom.entries()].map(([name, its]) => {
       const na = its.filter((i) => i.compliance_status === 'na').length;
       const impl = its.filter((i) => i.compliance_status === 'complied').length;
       const part = its.filter((i) => i.compliance_status === 'partially_complied').length;
       const denom = Math.max(1, its.length - na);
       return { name, items: its, total: its.length, impl, pct: Math.round(((impl + part * 0.5) / denom) * 100) };
-    });
+    }).sort((a, b) => domNum(a.name) - domNum(b.name));
     const na = items.filter((i) => i.compliance_status === 'na').length;
     const impl = items.filter((i) => i.compliance_status === 'complied').length;
     const part = items.filter((i) => i.compliance_status === 'partially_complied').length;
@@ -168,7 +194,7 @@ export default function DccToolTab() {
             <div className="space-y-2.5">
               {doms.map((d) => (
                 <button key={d.name} onClick={() => setOpenDom(d.name)} className="group flex w-full items-center gap-3 text-left">
-                  <span dir="auto" className="w-72 shrink-0 truncate text-[12.5px] font-medium text-slate-700 group-hover:text-slate-900">{d.name}</span>
+                  <span className="w-72 shrink-0 truncate text-[12.5px] font-medium text-slate-700 group-hover:text-slate-900">{enLabel(d.name)}</span>
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${d.pct}%`, backgroundColor: col(d.pct) }} /></div>
                   <span className="w-10 shrink-0 text-right text-[12px] font-bold tabular-nums" style={{ color: col(d.pct) }}>{d.pct}%</span>
                   <span className="w-12 shrink-0 text-right text-[11px] text-slate-400">{d.impl}/{d.total}</span>
@@ -196,7 +222,7 @@ export default function DccToolTab() {
                 <div key={d.name} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                   <button onClick={() => setOpenDom(open && openDom === d.name ? null : d.name)} className="flex w-full items-center gap-3 px-4 py-3 hover:bg-slate-50">
                     <ChevronRight className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} />
-                    <span dir="auto" className="flex-1 text-left text-[14px] font-bold text-slate-800">{d.name}</span>
+                    <span className="flex-1 text-left text-[14px] font-bold text-slate-800">{enLabel(d.name)}</span>
                     <span className="text-[11px] text-slate-400">{rows.length} controls</span>
                     <span className="w-10 text-right text-[12px] font-bold tabular-nums" style={{ color: col(d.pct) }}>{d.pct}%</span>
                   </button>
@@ -212,8 +238,13 @@ export default function DccToolTab() {
                                 {it.priority && <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={it.priority === 'high' ? { background: '#eef2ff', color: '#4338ca' } : { background: '#f1f5f9', color: '#64748b' }}>{it.priority === 'high' ? 'Essential' : 'Sub'}</span>}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p dir="auto" className="text-[13px] leading-relaxed text-slate-800">{it.control_description}</p>
-                                {it.subdomain_name && <p dir="auto" className="mt-0.5 text-[10.5px] font-medium text-slate-400">{it.subdomain_name}</p>}
+                                {(() => { const { en, ar } = splitBilingual(it.control_description); return (
+                                  <>
+                                    <p className="text-[13px] leading-relaxed text-slate-800">{en}</p>
+                                    {ar && <p dir="rtl" className="mt-0.5 text-[11.5px] leading-relaxed text-slate-400">{ar}</p>}
+                                  </>
+                                ); })()}
+                                {it.subdomain_name && <p className="mt-1 text-[10.5px] font-medium text-slate-400">{enLabel(it.subdomain_name)}</p>}
                               </div>
                               <div className="flex shrink-0 flex-wrap items-center gap-1">
                                 <button onClick={() => setEvOpen(evActive ? null : it.id)} title="Evidence" className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition" style={evActive || evc > 0 ? { borderColor: '#0f766e', color: '#0f766e', backgroundColor: '#e7faf5' } : { borderColor: '#e2e8f0', color: '#64748b' }}><Paperclip className="h-3 w-3" /> {evc > 0 ? evc : 'Ev'}</button>

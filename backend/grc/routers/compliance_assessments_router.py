@@ -2355,31 +2355,33 @@ def parse_dcc_tool_workbook(wb) -> tuple[List[dict], dict]:
     ctl_re = re.compile(r"^(\d+-\d+-\d+(?:-\d+)*)")  # "1-1-2" / "1-2-1-1" (control)
     clean = lambda s: re.sub(r"\s+", " ", s).strip()
 
-    # Pass 1: build ref→name maps for domains and subdomains from header cells.
-    domain_map: Dict[str, str] = {}
-    subdomain_map: Dict[str, str] = {}
-    for r in rows:
-        cells = [(raw, _dcc_norm(raw)) for raw in r if raw]
-        for raw, nv in cells:
-            dm = dom_re.match(nv)
-            if dm and not ctl_re.match(nv) and not sub_re.match(nv):
-                domain_map.setdefault(dm.group(1), clean(raw))
-            sm = sub_re.match(nv)
-            if sm and not ctl_re.match(nv):
-                key = sm.group(1)
-                name = max((o for o, onv in cells if onv != nv and not ctl_re.match(onv) and not dom_re.match(onv)), key=len, default="")
-                if key not in subdomain_map:
-                    subdomain_map[key] = clean(f"{key} {name}") if name else key
-
-    # Pass 2: emit one item per control (3+ part ref).
+    # Single pass with CARRY-FORWARD grouping. A control's real domain is the
+    # main-domain header it physically sits under (Governance / Defense /
+    # Third-Party) — NOT the first digit of its ref (the DCC ref numbering does
+    # not correspond to the domain, e.g. a "5-1-6-2" control lives under
+    # Defense). We track the last domain / subdomain header seen and assign it.
     items: List[dict] = []
+    current_domain = None
+    current_subdomain = None
     for r in rows:
         cells = [(raw, _dcc_norm(raw)) for raw in r if raw]
+        if not cells:
+            continue
+        # Main-domain header ("N- <name>"), not a ref cell.
+        dcell = next((raw for raw, nv in cells if dom_re.match(nv) and not ctl_re.match(nv) and len(raw) > 8), None)
+        if dcell:
+            current_domain = clean(dcell)
+            current_subdomain = None
+        # Subdomain header (a bare "N-M" ref + its name).
+        subm = next(((raw, nv) for raw, nv in cells if sub_re.match(nv) and not ctl_re.match(nv)), None)
+        if subm:
+            name = max((o for o, onv in cells if onv != subm[1] and not ctl_re.match(onv) and not dom_re.match(onv)), key=len, default="")
+            current_subdomain = clean(f"{subm[1]} {name}") if name else subm[1]
+        # Control row (3+ part ref).
         ref_m = next((ctl_re.match(nv) for _, nv in cells if ctl_re.match(nv)), None)
         if not ref_m:
             continue
         ref = ref_m.group(1)
-        parts = ref.split("-")
         text = max((raw for raw, nv in cells
                     if nv != ref and raw not in ("أساسي", "فرعي") and not ctl_re.match(nv) and len(raw) > 8),
                    key=len, default="")
@@ -2390,8 +2392,8 @@ def parse_dcc_tool_workbook(wb) -> tuple[List[dict], dict]:
             remark_parts.append(f"Type: {type_label}")
         items.append({
             "item_number": ref[:50],
-            "area_domain": domain_map.get(parts[0], f"Domain {parts[0]}"),
-            "subdomain_name": subdomain_map.get(f"{parts[0]}-{parts[1]}", f"{parts[0]}-{parts[1]}"),
+            "area_domain": current_domain or "DCC",
+            "subdomain_name": current_subdomain,
             "control_description": clean(text or ref)[:8000],
             "compliance_status": "in_progress",
             "priority": ("high" if ctrl_type == "أساسي" else "medium" if ctrl_type == "فرعي" else None),
