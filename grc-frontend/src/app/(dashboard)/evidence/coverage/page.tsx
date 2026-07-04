@@ -184,23 +184,23 @@ export default function EvidenceCoverageDashboardPage() {
   };
 
   const getCoverageColor = (percentage: number) => {
-    if (percentage >= 80) return 'bg-green-500';
-    if (percentage >= 50) return 'bg-yellow-500';
+    if (percentage >= 80) return 'bg-emerald-500';
+    if (percentage >= 50) return 'bg-amber-500';
     if (percentage >= 20) return 'bg-orange-500';
-    return 'bg-red-500';
+    return 'bg-rose-500';
   };
 
   const getCoverageTextColor = (percentage: number) => {
-    if (percentage >= 80) return 'text-green-400';
-    if (percentage >= 50) return 'text-yellow-400';
-    if (percentage >= 20) return 'text-orange-400';
-    return 'text-red-400';
+    if (percentage >= 80) return 'text-emerald-600';
+    if (percentage >= 50) return 'text-amber-600';
+    if (percentage >= 20) return 'text-orange-600';
+    return 'text-rose-600';
   };
 
   const getExpiryStatusStyle = (daysRemaining: number) => {
-    if (daysRemaining <= 3) return { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Critical' };
-    if (daysRemaining <= 7) return { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'Warning' };
-    return { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Expiring Soon' };
+    if (daysRemaining <= 3) return { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Critical' };
+    if (daysRemaining <= 7) return { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Warning' };
+    return { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Expiring Soon' };
   };
 
   const isLoading = summaryLoading || coverageLoading;
@@ -210,15 +210,15 @@ export default function EvidenceCoverageDashboardPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Evidence Coverage Dashboard</h1>
-          <p className="text-gray-600">Monitor evidence coverage across frameworks and controls</p>
+          <p className="text-slate-500">Monitor evidence coverage across frameworks and controls</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative">
-            <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
+            <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" strokeWidth={1.75} />
             <select
               value={selectedFrameworkId || ''}
               onChange={(e) => setSelectedFrameworkId(e.target.value ? Number(e.target.value) : null)}
-              className="appearance-none rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-10 text-slate-700 focus:border-primary-500 focus:outline-none"
+              className="appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-10 text-slate-700 focus:border-primary-500 focus:outline-none"
             >
               <option value="">All Frameworks</option>
               {coverage?.frameworks.map(fw => (
@@ -227,7 +227,7 @@ export default function EvidenceCoverageDashboardPage() {
                 </option>
               ))}
             </select>
-            <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600 pointer-events-none" />
+            <ChevronDown className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none" strokeWidth={1.75} />
           </div>
         </div>
       </div>
@@ -235,8 +235,8 @@ export default function EvidenceCoverageDashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="stat-card">
           <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/10 p-3">
-              <Shield className="h-6 w-6 text-primary-400" />
+            <div className="rounded-xl bg-primary-50 p-3">
+              <Shield className="h-6 w-6 text-primary-600" strokeWidth={1.75} />
             </div>
           </div>
           <p className="stat-value">{isLoading ? '-' : coverage?.total_controls || 0}</p>
@@ -245,11 +245,11 @@ export default function EvidenceCoverageDashboardPage() {
 
         <div className="stat-card">
           <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/10 p-3">
-              <CheckCircle className="h-6 w-6 text-green-400" />
+            <div className="rounded-xl bg-emerald-50 p-3">
+              <CheckCircle className="h-6 w-6 text-emerald-600" strokeWidth={1.75} />
             </div>
             {coverage && coverage.total_controls > 0 && (
-              <span className="rounded-full bg-green-500/20 px-2 py-0.5 text-xs font-medium text-green-400">
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                 {coverage.coverage_percentage}%
               </span>
             )}
@@ -260,8 +260,8 @@ export default function EvidenceCoverageDashboardPage() {
 
         <div className="stat-card">
           <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/10 p-3">
-              <XCircle className="h-6 w-6 text-orange-400" />
+            <div className="rounded-xl bg-orange-50 p-3">
+              <XCircle className="h-6 w-6 text-orange-600" strokeWidth={1.75} />
             </div>
           </div>
           <p className="stat-value">{isLoading ? '-' : coverage?.controls_without_evidence || 0}</p>
@@ -270,13 +270,13 @@ export default function EvidenceCoverageDashboardPage() {
 
         <div className="stat-card group">
           <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/10 p-3">
-              <AlertTriangle className="h-6 w-6 text-red-400" />
+            <div className="rounded-xl bg-rose-50 p-3">
+              <AlertTriangle className="h-6 w-6 text-rose-600" strokeWidth={1.75} />
             </div>
             {(summary?.stale_count || 0) > 0 && (
               <span className="flex h-2 w-2">
-                <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500"></span>
+                <span className="absolute inline-flex h-2 w-2 animate-ping rounded-full bg-rose-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500"></span>
               </span>
             )}
           </div>
@@ -286,8 +286,8 @@ export default function EvidenceCoverageDashboardPage() {
 
         <div className="stat-card">
           <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 p-3">
-              <TrendingDown className="h-6 w-6 text-yellow-400" />
+            <div className="rounded-xl bg-amber-50 p-3">
+              <TrendingDown className="h-6 w-6 text-amber-600" strokeWidth={1.75} />
             </div>
           </div>
           <p className="stat-value">{lowQualityLoading ? '-' : lowQualityEvidence?.length || 0}</p>
@@ -306,28 +306,28 @@ export default function EvidenceCoverageDashboardPage() {
         {coverageLoading ? (
           <PageLoader className="h-64" />
         ) : coverageError ? (
-          <div className="flex h-64 flex-col items-center justify-center text-red-400">
-            <AlertCircle className="mb-2 h-8 w-8" />
+          <div className="flex h-64 flex-col items-center justify-center text-rose-600">
+            <AlertCircle className="mb-2 h-8 w-8" strokeWidth={1.75} />
             <p>Failed to load coverage data</p>
           </div>
         ) : !coverage?.frameworks.length ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <BarChart3 className="mb-4 h-12 w-12 text-gray-400" />
+            <BarChart3 className="mb-4 h-12 w-12 text-slate-300" strokeWidth={1.75} />
             <h3 className="text-lg font-medium text-slate-800">No framework data available</h3>
-            <p className="mt-1 text-gray-600">Add frameworks and controls to see coverage</p>
+            <p className="mt-1 text-slate-500">Add frameworks and controls to see coverage</p>
           </div>
         ) : (
           <div className="space-y-4">
             {coverage.frameworks.map(fw => (
-              <div key={fw.framework_id} className="rounded-lg border border-gray-200 p-4">
+              <div key={fw.framework_id} className="rounded-lg border border-slate-200 p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100">
-                      <Shield className="h-5 w-5 text-gray-600" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
+                      <Shield className="h-5 w-5 text-slate-500" strokeWidth={1.75} />
                     </div>
                     <div>
                       <h3 className="font-medium text-slate-900">{fw.framework_code}</h3>
-                      <p className="text-xs text-gray-600">{fw.framework_name}</p>
+                      <p className="text-xs text-slate-500">{fw.framework_name}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -335,37 +335,37 @@ export default function EvidenceCoverageDashboardPage() {
                       <p className={`text-lg font-bold ${getCoverageTextColor(fw.coverage_percentage)}`}>
                         {fw.coverage_percentage}%
                       </p>
-                      <p className="text-xs text-gray-600">
+                      <p className="text-xs text-slate-500">
                         {fw.controls_with_evidence} / {fw.total_controls} controls
                       </p>
                     </div>
                   </div>
                 </div>
-                
-                <div className="mb-2 h-3 w-full overflow-hidden rounded-full bg-gray-100">
+
+                <div className="mb-2 h-3 w-full overflow-hidden rounded-full bg-slate-100">
                   <div
                     className={`h-full transition-all ${getCoverageColor(fw.coverage_percentage)}`}
                     style={{ width: `${fw.coverage_percentage}%` }}
                   />
                 </div>
-                
+
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {fw.controls.slice(0, 30).map(ctrl => (
                     <div
                       key={ctrl.id}
                       className={`group relative cursor-pointer rounded px-2 py-1 text-xs transition-all ${
-                        ctrl.has_evidence 
-                          ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
-                          : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                        ctrl.has_evidence
+                          ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                          : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
                       }`}
                       onMouseEnter={() => setHoveredCell({ frameworkId: fw.framework_id, controlId: ctrl.id })}
                       onMouseLeave={() => setHoveredCell(null)}
                     >
                       {ctrl.code}
                       {hoveredCell?.controlId === ctrl.id && hoveredCell?.frameworkId === fw.framework_id && (
-                        <div className="absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-gray-800 px-3 py-2 text-xs shadow-lg border border-gray-200">
+                        <div className="absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-3 py-2 text-xs shadow-lg">
                           <p className="font-medium text-white">{ctrl.name}</p>
-                          <p className={ctrl.has_evidence ? 'text-green-400' : 'text-red-400'}>
+                          <p className={ctrl.has_evidence ? 'text-emerald-300' : 'text-rose-300'}>
                             {ctrl.has_evidence ? 'Has Evidence' : 'Missing Evidence'}
                           </p>
                         </div>
@@ -373,7 +373,7 @@ export default function EvidenceCoverageDashboardPage() {
                     </div>
                   ))}
                   {fw.controls.length > 30 && (
-                    <span className="rounded px-2 py-1 text-xs text-gray-600">
+                    <span className="rounded px-2 py-1 text-xs text-slate-500">
                       +{fw.controls.length - 30} more
                     </span>
                   )}
@@ -396,35 +396,38 @@ export default function EvidenceCoverageDashboardPage() {
           <div className="max-h-96 overflow-y-auto">
             {filteredOrphanControls.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <CheckCircle className="mb-3 h-10 w-10 text-green-400" />
-                <p className="text-gray-600">All controls have evidence!</p>
+                <CheckCircle className="mb-3 h-10 w-10 text-emerald-500" strokeWidth={1.75} />
+                <p className="text-slate-500">All controls have evidence!</p>
               </div>
             ) : (
               <table className="w-full">
                 <thead className="sticky top-0 bg-white">
                   <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-600">Framework</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-600">Control</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium uppercase text-gray-600">Action</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-500">Framework</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-500">Control</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium uppercase text-slate-500">Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-slate-200">
                   {filteredOrphanControls.slice(0, 10).map(ctrl => (
-                    <tr key={`${ctrl.frameworkId}-${ctrl.id}`} className="hover:bg-gray-50">
+                    <tr key={`${ctrl.frameworkId}-${ctrl.id}`} className="hover:bg-slate-50">
                       <td className="px-4 py-2">
-                        <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
+                        <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
                           {ctrl.frameworkCode}
                         </span>
                       </td>
                       <td className="px-4 py-2">
                         <p className="text-sm font-medium text-slate-900">{ctrl.code}</p>
-                        <p className="text-xs text-gray-600 truncate max-w-xs">{ctrl.name}</p>
+                        <p className="text-xs text-slate-500 truncate max-w-xs">{ctrl.name}</p>
                       </td>
                       <td className="px-4 py-2 text-right">
-                        <button className="inline-flex items-center gap-1 rounded bg-primary-600 px-2 py-1 text-xs font-medium text-white hover:bg-primary-700">
-                          <Plus size={12} />
+                        <Link
+                          href="/evidence"
+                          className="inline-flex items-center gap-1 rounded bg-primary-600 px-2 py-1 text-xs font-medium text-white hover:bg-primary-700"
+                        >
+                          <Plus size={12} strokeWidth={1.75} />
                           Add Evidence
-                        </button>
+                        </Link>
                       </td>
                     </tr>
                   ))}
@@ -432,8 +435,8 @@ export default function EvidenceCoverageDashboardPage() {
               </table>
             )}
             {filteredOrphanControls.length > 10 && (
-              <div className="border-t border-gray-200 p-3 text-center">
-                <span className="text-sm text-gray-600">
+              <div className="border-t border-slate-200 p-3 text-center">
+                <span className="text-sm text-slate-500">
                   Showing 10 of {filteredOrphanControls.length} controls
                 </span>
               </div>
@@ -445,35 +448,35 @@ export default function EvidenceCoverageDashboardPage() {
           <div className="card-header">
             <div>
               <h2 className="card-title flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-red-400" />
+                <AlertTriangle className="h-5 w-5 text-rose-500" strokeWidth={1.75} />
                 Stale Evidence Alerts
               </h2>
               <p className="card-description">{staleEvidence?.total || 0} items need attention</p>
             </div>
           </div>
-          
+
           <div className="max-h-96 overflow-y-auto">
             {staleLoading ? (
               <div className="flex h-32 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-primary-500" strokeWidth={1.75} />
               </div>
             ) : !staleEvidence?.items.length ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <CheckCircle className="mb-3 h-10 w-10 text-green-400" />
-                <p className="text-gray-600">No stale evidence!</p>
+                <CheckCircle className="mb-3 h-10 w-10 text-emerald-500" strokeWidth={1.75} />
+                <p className="text-slate-500">No stale evidence!</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {staleEvidence.items.slice(0, 5).map(item => (
-                  <div key={item.id} className="flex items-center justify-between rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+                  <div key={item.id} className="flex items-center justify-between rounded-lg border border-rose-200 bg-rose-50 p-3">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-500/20">
-                        <AlertTriangle className="h-4 w-4 text-red-400" />
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-100">
+                        <AlertTriangle className="h-4 w-4 text-rose-600" strokeWidth={1.75} />
                       </div>
                       <div>
                         <p className="text-sm font-medium text-slate-900">{item.name}</p>
-                        <p className="text-xs text-red-400">
-                          {item.expiry_date 
+                        <p className="text-xs text-rose-600">
+                          {item.expiry_date
                             ? `${getDaysOverdue(item.expiry_date)} days overdue`
                             : 'Marked as stale'
                           }
@@ -483,9 +486,9 @@ export default function EvidenceCoverageDashboardPage() {
                     <button
                       onClick={() => renewMutation.mutate(item.id)}
                       disabled={renewMutation.isPending}
-                      className="inline-flex items-center gap-1 rounded bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-50"
+                      className="inline-flex items-center gap-1 rounded bg-rose-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-700 disabled:opacity-50"
                     >
-                      <RefreshCw size={12} className={renewMutation.isPending ? 'animate-spin' : ''} />
+                      <RefreshCw size={12} className={renewMutation.isPending ? 'animate-spin' : ''} strokeWidth={1.75} />
                       Renew
                     </button>
                   </div>
@@ -501,51 +504,51 @@ export default function EvidenceCoverageDashboardPage() {
           <div className="card-header">
             <div>
               <h2 className="card-title flex items-center gap-2">
-                <Clock className="h-5 w-5 text-yellow-400" />
+                <Clock className="h-5 w-5 text-amber-500" strokeWidth={1.75} />
                 Expiring Soon
               </h2>
               <p className="card-description">Evidence expiring within 30 days</p>
             </div>
           </div>
-          
+
           <div className="max-h-96 overflow-y-auto">
             {expiringLoading ? (
               <div className="flex h-32 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-primary-500" strokeWidth={1.75} />
               </div>
             ) : !expiringEvidence?.items.length ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <CheckCircle className="mb-3 h-10 w-10 text-green-400" />
-                <p className="text-gray-600">No evidence expiring soon</p>
+                <CheckCircle className="mb-3 h-10 w-10 text-emerald-500" strokeWidth={1.75} />
+                <p className="text-slate-500">No evidence expiring soon</p>
               </div>
             ) : (
               <table className="w-full">
                 <thead className="sticky top-0 bg-white">
                   <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-600">Evidence</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-600">Expiry</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-600">Status</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-500">Evidence</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-500">Expiry</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-slate-500">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-slate-200">
                   {expiringEvidence.items.map(item => {
                     const daysRemaining = getDaysRemaining(item.expiry_date);
                     const status = getExpiryStatusStyle(daysRemaining);
                     return (
-                      <tr key={item.id} className="hover:bg-gray-50">
+                      <tr key={item.id} className="hover:bg-slate-50">
                         <td className="px-4 py-2">
-                          <p className="text-sm font-medium text-black">{item.name}</p>
-                          <p className="text-xs text-gray-600 capitalize">{item.evidence_type?.replace(/_/g, ' ') || 'Unknown'}</p>
+                          <p className="text-sm font-medium text-slate-900">{item.name}</p>
+                          <p className="text-xs text-slate-500 capitalize">{item.evidence_type?.replace(/_/g, ' ') || 'Unknown'}</p>
                         </td>
                         <td className="px-4 py-2">
-                          <p className="text-sm text-gray-700">
+                          <p className="text-sm text-slate-700">
                             {new Date(item.expiry_date).toLocaleDateString()}
                           </p>
-                          <p className="text-xs text-gray-600">{daysRemaining} days remaining</p>
+                          <p className="text-xs text-slate-500">{daysRemaining} days remaining</p>
                         </td>
                         <td className="px-4 py-2">
                           <span className={`inline-flex items-center gap-1 rounded-full ${status.bg} px-2 py-0.5 text-xs font-medium ${status.text}`}>
-                            {daysRemaining <= 3 ? <AlertCircle size={10} /> : <Clock size={10} />}
+                            {daysRemaining <= 3 ? <AlertCircle size={10} strokeWidth={1.75} /> : <Clock size={10} strokeWidth={1.75} />}
                             {status.label}
                           </span>
                         </td>
@@ -562,31 +565,31 @@ export default function EvidenceCoverageDashboardPage() {
           <div className="card-header">
             <div>
               <h2 className="card-title flex items-center gap-2">
-                <TrendingDown className="h-5 w-5 text-orange-400" />
+                <TrendingDown className="h-5 w-5 text-orange-500" strokeWidth={1.75} />
                 Low Quality Evidence
               </h2>
               <p className="card-description">Quality score below 50%</p>
             </div>
           </div>
-          
+
           <div className="max-h-96 overflow-y-auto">
             {lowQualityLoading ? (
               <div className="flex h-32 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-primary-500" strokeWidth={1.75} />
               </div>
             ) : !lowQualityEvidence?.length ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <CheckCircle className="mb-3 h-10 w-10 text-green-400" />
-                <p className="text-gray-600">All evidence meets quality standards</p>
+                <CheckCircle className="mb-3 h-10 w-10 text-emerald-500" strokeWidth={1.75} />
+                <p className="text-slate-500">All evidence meets quality standards</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {lowQualityEvidence.slice(0, 5).map(item => (
-                  <div key={item.id} className="flex items-center justify-between rounded-lg border border-orange-500/20 bg-orange-500/5 p-3">
+                  <div key={item.id} className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50 p-3">
                     <div className="flex items-center gap-3">
                       <div className="relative">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-gray-200">
-                          <span className="text-sm font-bold text-orange-400">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-slate-200">
+                          <span className="text-sm font-bold text-orange-600">
                             {item.quality_score?.toFixed(0) || 0}%
                           </span>
                         </div>
@@ -598,7 +601,7 @@ export default function EvidenceCoverageDashboardPage() {
                             strokeWidth="4"
                             stroke="currentColor"
                             fill="none"
-                            className="text-gray-700"
+                            className="text-slate-200"
                           />
                           <circle
                             cx="24"
@@ -614,7 +617,7 @@ export default function EvidenceCoverageDashboardPage() {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-slate-900">{item.name}</p>
-                        <p className="text-xs text-gray-600">
+                        <p className="text-xs text-slate-500">
                           Last assessed: {item.uploaded_at ? new Date(item.uploaded_at).toLocaleDateString() : 'Never'}
                         </p>
                       </div>
@@ -623,7 +626,7 @@ export default function EvidenceCoverageDashboardPage() {
                       href={`/evidence/${item.id}`}
                       className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                     >
-                      <Eye size={12} />
+                      <Eye size={12} strokeWidth={1.75} />
                       Review
                     </Link>
                   </div>
@@ -631,8 +634,8 @@ export default function EvidenceCoverageDashboardPage() {
               </div>
             )}
             {lowQualityEvidence && lowQualityEvidence.length > 5 && (
-              <div className="border-t border-gray-200 p-3 text-center">
-                <span className="text-sm text-gray-600">
+              <div className="border-t border-slate-200 p-3 text-center">
+                <span className="text-sm text-slate-500">
                   Showing 5 of {lowQualityEvidence.length} items
                 </span>
               </div>
@@ -641,27 +644,27 @@ export default function EvidenceCoverageDashboardPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white/50 p-4">
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
         <div className="flex items-start gap-3">
-          <Info className="h-5 w-5 text-gray-600 mt-0.5" />
+          <Info className="h-5 w-5 text-slate-400 mt-0.5" strokeWidth={1.75} />
           <div>
             <h4 className="text-sm font-medium text-slate-900">Coverage Legend</h4>
             <div className="mt-2 flex flex-wrap gap-4 text-xs">
               <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded bg-green-500"></div>
-                <span className="text-gray-600">80%+ Excellent</span>
+                <div className="h-3 w-3 rounded bg-emerald-500"></div>
+                <span className="text-slate-600">80%+ Excellent</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded bg-yellow-500"></div>
-                <span className="text-gray-600">50-79% Good</span>
+                <div className="h-3 w-3 rounded bg-amber-500"></div>
+                <span className="text-slate-600">50-79% Good</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="h-3 w-3 rounded bg-orange-500"></div>
-                <span className="text-gray-600">20-49% Needs Improvement</span>
+                <span className="text-slate-600">20-49% Needs Improvement</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded bg-red-500"></div>
-                <span className="text-gray-600">&lt;20% Critical</span>
+                <div className="h-3 w-3 rounded bg-rose-500"></div>
+                <span className="text-slate-600">&lt;20% Critical</span>
               </div>
             </div>
           </div>
