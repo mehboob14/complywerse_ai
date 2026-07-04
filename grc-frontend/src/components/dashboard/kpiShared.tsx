@@ -109,6 +109,44 @@ export function toneOf(k: Kpi) {
   return k.onTarget == null ? '#94a3b8' : k.onTarget ? GOOD : BAD;
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export function dlabel(iso: string) {
+  const p = (iso || '').split('-');
+  return p.length < 3 ? '' : `${MONTHS[+p[1] - 1] || ''} ${+p[2]}`;
+}
+
+// The full trend chart — teal actual line with value labels, dashed target line,
+// dated x-axis. The big "trading chart" view for the drill-in.
+export function RichTrend({ history, target }: { history: Point[]; target: number | null }) {
+  const pts = (history || []).filter((h) => h.value != null);
+  if (pts.length < 2) return null;
+  const W = 520, H = 150, padL = 8, padR = 16, padT = 26, padB = 22;
+  const n = pts.length;
+  const x = (i: number) => padL + ((W - padL - padR) * i) / (n - 1);
+  const y = (v: number) => H - padB - (clamp(v) / 100) * (H - padT - padB);
+  const line = pts.map((h, i) => `${x(i).toFixed(1)},${y(h.value as number).toFixed(1)}`).join(' ');
+  const showLbl = (i: number) => i === 0 || i === n - 1 || i % 2 === 1;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+      {[25, 50, 75].map((g) => <line key={g} x1={padL} x2={W - padR} y1={y(g)} y2={y(g)} stroke="#f1f5f9" strokeWidth="1" />)}
+      {target != null && (
+        <>
+          <line x1={padL} x2={W - padR} y1={y(target)} y2={y(target)} stroke="#94a3b8" strokeWidth="1.2" strokeDasharray="4 3" />
+          <text x={W - padR} y={y(target) - 4} fontSize="9" fill="#94a3b8" textAnchor="end">target {Math.round(target)}%</text>
+        </>
+      )}
+      <polyline points={line} fill="none" stroke={TEAL} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+      {pts.map((h, i) => (
+        <g key={i}>
+          <circle cx={x(i)} cy={y(h.value as number)} r={i === n - 1 ? 3.4 : 2.3} fill={TEAL} />
+          {showLbl(i) && <text x={x(i)} y={y(h.value as number) - 7} fontSize="9" fontWeight="600" fill={TEAL} textAnchor="middle">{Math.round(h.value as number)}%</text>}
+          {(i % 2 === 0 || i === n - 1) && <text x={x(i)} y={H - 6} fontSize="8" fill="#94a3b8" textAnchor="middle">{dlabel(h.date)}</text>}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 // Detail popup: for LIVE KPIs the exact computation (numerator/denominator/formula
 // + link to the module); for EXTERNAL KPIs an honest "no in-platform source" note.
 export function KpiDetailModal({ k, onClose }: { k: Kpi | null; onClose: () => void }) {
@@ -135,9 +173,24 @@ export function KpiDetailModal({ k, onClose }: { k: Kpi | null; onClose: () => v
                       <span className="inline-flex items-center gap-1"><span className="inline-block h-[2px] w-4" style={{ background: TEAL }} /> actual</span>
                       <span className="inline-flex items-center gap-1"><span className="inline-block h-[2px] w-4 border-t border-dashed border-slate-400" /> target</span>
                     </span>
-                    <span>last {k.history.length} weeks</span>
+                    <span>recorded weekly · live</span>
                   </div>
-                  <Trend history={k.history} target={k.target} actual={k.actual} tone={tone} width={520} height={80} />
+                  <RichTrend history={k.history} target={k.target} />
+                  {/* period breakdown — recent snapshots with variance vs target */}
+                  <div className="mt-2 grid grid-cols-5 gap-1.5">
+                    {k.history.filter((h) => h.value != null).slice(-5).map((p, i) => {
+                      const v = Math.round(p.value as number);
+                      const varc = k.target != null ? Math.round((p.value as number) - k.target) : null;
+                      return (
+                        <div key={i} className="rounded-lg border border-slate-100 px-1.5 py-1.5 text-center">
+                          <div className="text-[8.5px] text-slate-400">{dlabel(p.date)}</div>
+                          <div className="text-[12px] font-bold tabular-nums" style={{ color: TEAL }}>{v}%</div>
+                          {k.target != null && <div className="text-[8px] text-slate-400">vs {Math.round(k.target)}%</div>}
+                          {varc != null && <div className="text-[9px] font-semibold tabular-nums" style={{ color: varc >= 0 ? GOOD : BAD }}>{varc >= 0 ? '+' : ''}{varc}pp</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
               <div className="rounded-xl p-4" style={{ backgroundColor: `${tone}0f` }}>
