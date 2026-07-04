@@ -34,11 +34,14 @@ function KpiCell({ k, onOpen }: { k: Kpi; onOpen: () => void }) {
       {k.live ? (
         <div className="mt-auto">
           <div className="mb-1 flex items-baseline justify-between">
-            <span className="text-[18px] font-bold leading-none tabular-nums" style={{ color: tone }}>{pct(k.actual)}</span>
+            <span className="text-[19px] font-bold leading-none tabular-nums" style={{ color: tone }}>{pct(k.actual)}</span>
             <span className="flex items-center gap-0.5 text-[10px] text-slate-400"><Target className="h-3 w-3" />{pct(k.target)}</span>
           </div>
           <TargetBar actual={k.actual} target={k.target} tone={tone} />
-          <p className="mt-1.5 text-[9px] font-medium" style={{ color: k.onTarget ? GOOD : BAD }}>{k.onTarget ? 'On target' : 'Below target'} · live</p>
+          <div className="mt-1.5 flex items-center justify-between">
+            <span className="text-[9px] font-medium" style={{ color: k.onTarget ? GOOD : BAD }}>{k.onTarget ? 'On target' : 'Below target'} · live</span>
+            {k.numerator != null && k.denominator != null && <span className="text-[9px] tabular-nums text-slate-400">{k.numerator}/{k.denominator}</span>}
+          </div>
         </div>
       ) : (
         <div className="mt-auto">

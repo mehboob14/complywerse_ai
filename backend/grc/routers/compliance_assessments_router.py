@@ -5195,6 +5195,80 @@ def kpi_live_metrics(
     except Exception:
         pass
 
+    # 4) Assets monitored recently — IT Assets inventory
+    try:
+        from datetime import timedelta
+        from grc.models._14_it_asset_inventory import ITAsset
+        assets = db.query(ITAsset).all()
+        if assets:
+            seen = [a for a in assets if getattr(a, "last_seen_at", None) and a.last_seen_at >= now - timedelta(days=30)]
+            metrics["asset_monitoring"] = {
+                "label": "Assets seen in the last 30 days",
+                "actual": pct(len(seen), len(assets)), "numerator": len(seen), "denominator": len(assets),
+                "formula": "assets with a check-in in the last 30 days / total assets",
+                "target": 90, "direction": "higher",
+                "source": "IT Assets - inventory monitoring", "href": "/assets",
+            }
+    except Exception:
+        pass
+
+    # 5) Assets free of open critical/high vulnerabilities — IT Assets + Vulnerability
+    try:
+        from grc.models._14_it_asset_inventory import ITAsset
+        from grc.models._23_track_a_phase_7_cloud_connector_framework_foundation import VulnerabilityAssetLink
+        try:
+            from grc.models._22_vulnerability_management import Vulnerability
+        except Exception:
+            from grc.models import Vulnerability
+        assets = db.query(ITAsset).all()
+        if assets:
+            bad = {v.id for v in db.query(Vulnerability).all()
+                   if str(getattr(v, "severity", "") or "").lower() in ("critical", "high")
+                   and str(getattr(v, "status", "") or "").lower() not in ("resolved", "closed")}
+            bad_assets = {l.asset_id for l in db.query(VulnerabilityAssetLink).all() if l.vulnerability_id in bad}
+            free = len(assets) - len([a for a in assets if a.id in bad_assets])
+            metrics["asset_vuln_free"] = {
+                "label": "Assets free of open critical/high vulnerabilities",
+                "actual": pct(free, len(assets)), "numerator": free, "denominator": len(assets),
+                "formula": "assets with no open critical/high vulnerability / total assets",
+                "target": 90, "direction": "higher",
+                "source": "IT Assets - vulnerability exposure", "href": "/assets",
+            }
+    except Exception:
+        pass
+
+    # 6) Risks with a treatment plan — Risk management register
+    try:
+        from grc.models._11_enterprise_risk_management import Risk
+        risks = db.query(Risk).all()
+        if risks:
+            treated = [r for r in risks if (getattr(r, "treatment_plan", None) or "").strip()]
+            metrics["risk_treatment"] = {
+                "label": "Risks with a treatment plan",
+                "actual": pct(len(treated), len(risks)), "numerator": len(treated), "denominator": len(risks),
+                "formula": "risks with a documented treatment plan / total risks",
+                "target": 90, "direction": "higher",
+                "source": "Risk management - register", "href": "/erm",
+            }
+    except Exception:
+        pass
+
+    # 7) Incidents resolved — Risk management incidents (business continuity)
+    try:
+        from grc.models._11_enterprise_risk_management import RiskIncident
+        incs = db.query(RiskIncident).all()
+        if incs:
+            resolved = [i for i in incs if str(getattr(i, "status", "") or "").lower() in ("resolved", "closed", "contained")]
+            metrics["incident_resolution"] = {
+                "label": "Incidents resolved or contained",
+                "actual": pct(len(resolved), len(incs)), "numerator": len(resolved), "denominator": len(incs),
+                "formula": "incidents resolved, closed or contained / total incidents",
+                "target": 90, "direction": "higher",
+                "source": "Risk management - incidents", "href": "/erm",
+            }
+    except Exception:
+        pass
+
     for m in metrics.values():
         a, t, d = m["actual"], m["target"], m["direction"]
         m["on_target"] = None if (a is None or t is None) else (a <= t if d == "lower" else a >= t)

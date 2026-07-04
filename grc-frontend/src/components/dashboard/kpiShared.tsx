@@ -33,6 +33,10 @@ const DOMAIN_TO_METRIC: Record<string, string> = {
   'cybersecurity assurance & compliance': 'policy_review',
   'identity and access management': 'access_cert',
   'vulnerability management': 'vuln_sla',
+  'asset management': 'asset_monitoring',
+  'physical security': 'asset_vuln_free',
+  'risk management': 'risk_treatment',
+  'business continuity': 'incident_resolution',
 };
 
 function catalog(item: any) {
