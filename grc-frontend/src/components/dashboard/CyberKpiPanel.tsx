@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import apiClient from '@/lib/api';
-import { Activity, ArrowRight, Target, Info, ExternalLink } from 'lucide-react';
+import { Activity, ArrowRight, Target } from 'lucide-react';
 import { KPI_FORMAT, GOOD, BAD, TEAL, type Kpi, type LiveMetric, buildKpis, pct, toneOf, RichTrend, KpiDetailModal } from '@/components/dashboard/kpiShared';
 
 // Full inline KPI card — the rich trend chart + period cards shown right on the
@@ -109,39 +109,12 @@ export default function CyberKpiPanel() {
       </div>
 
       {/* Live KPIs as compact rich cards; the last card(s) widen to fill the row (no gaps). */}
-      <div className="grid grid-cols-1 gap-2.5 px-5 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2.5 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-3">
         {liveKpis.map((k, i) => {
           const rem = liveKpis.length % 3;
           const span = i === liveKpis.length - 1 ? (rem === 1 ? 3 : rem === 2 ? 2 : 1) : 1;
           return <KpiRichCard key={i} k={k} onOpen={() => setSel(k)} span={span} />;
         })}
-      </div>
-
-      {/* Un-feedable KPIs collapse into a compact strip — no odd empty cards. */}
-      {extKpis.length > 0 && (
-        <div className="mx-5 mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-3.5 py-3">
-          <p className="mb-2 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">
-            <ExternalLink className="h-3.5 w-3.5" /> {extKpis.length} KPIs need an external feed (not measured in this platform)
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {extKpis.map((k, i) => (
-              <button key={i} type="button" onClick={() => setSel(k)}
-                className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
-                title={k.topic}>
-                {k.domain}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="mx-5 mb-5 mt-3 flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3.5 py-2.5">
-        <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
-        <p className="text-[10.5px] leading-4 text-slate-500">
-          Cards show only the KPIs computed live from real modules (policy reviews → Governance, vulnerability SLA → Vulnerability management,
-          access certification → Access review). The rest measure things owned by tools outside a GRC platform (AV/EDR, SIEM, training, firewall) —
-          there's no feed here, so they're listed but not scored. <b className="text-slate-600">Click any item</b> for its computation or source.
-        </p>
       </div>
 
       <KpiDetailModal k={sel} onClose={() => setSel(null)} />
