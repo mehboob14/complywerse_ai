@@ -75,6 +75,20 @@ export function buildKpis(items: any[], metrics: Record<string, LiveMetric>): Kp
 export const pct = (v: number | null) => (v == null ? '—' : `${Math.round(v)}%`);
 const clamp = (v: number | null) => Math.max(0, Math.min(100, v ?? 0));
 
+// Auto-zoom the y-axis to the data (+ target) so the trend fills the chart height
+// instead of hugging a flat line — the way a trading chart scales to its range.
+function makeY(pts: Point[], target: number | null, H: number, padT: number, padB: number) {
+  const vals = pts.map((p) => p.value as number);
+  const refs = target != null ? [...vals, target] : vals;
+  let lo = Math.min(...refs), hi = Math.max(...refs);
+  const span = hi - lo;
+  const pad = Math.max(4, span * 0.18);
+  lo = Math.max(0, lo - pad);
+  hi = Math.min(100, hi + pad);
+  if (hi - lo < 1) hi = lo + 1;
+  return (v: number) => H - padB - ((clamp(v) - lo) / (hi - lo)) * (H - padT - padB);
+}
+
 // Actual bar with a target marker (fallback when there isn't enough history).
 export function TargetBar({ actual, target, tone }: { actual: number | null; target: number | null; tone: string }) {
   return (
@@ -92,7 +106,7 @@ export function Trend({ history, target, actual, tone, width = 130, height = 40 
   const W = width, H = height, pad = 4;
   const n = pts.length;
   const x = (i: number) => pad + ((W - 2 * pad) * i) / (n - 1);
-  const y = (v: number) => H - pad - (clamp(v) / 100) * (H - 2 * pad);
+  const y = makeY(pts, target, H, pad, pad);
   const line = pts.map((h, i) => `${x(i).toFixed(1)},${y(h.value as number).toFixed(1)}`).join(' ');
   const lastY = y(pts[n - 1].value as number);
   return (
@@ -123,7 +137,7 @@ export function RichTrend({ history, target }: { history: Point[]; target: numbe
   const W = 520, H = 150, padL = 8, padR = 16, padT = 26, padB = 22;
   const n = pts.length;
   const x = (i: number) => padL + ((W - padL - padR) * i) / (n - 1);
-  const y = (v: number) => H - padB - (clamp(v) / 100) * (H - padT - padB);
+  const y = makeY(pts, target, H, padT, padB);
   const line = pts.map((h, i) => `${x(i).toFixed(1)},${y(h.value as number).toFixed(1)}`).join(' ');
   const showLbl = (i: number) => i === 0 || i === n - 1 || i % 2 === 1;
   return (
