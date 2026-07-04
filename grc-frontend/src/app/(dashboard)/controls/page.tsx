@@ -1,104 +1,66 @@
-﻿'use client';
+'use client';
 
-import { Fragment, useState, useEffect, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+/**
+ * Controls Workbench — a split master/detail surface. The LEFT pane is a
+ * searchable, filterable, scrollable list of framework-control rows; the RIGHT
+ * pane is a docked inspector that shows everything about the selected control
+ * inline (no popup): status pipeline, owner, requirement, evidence checklist,
+ * mapping, activity, AI recommendations, and promote-to-risk.
+ *
+ * The framework Tree / Document (Figure-2) structure views and the health
+ * snapshot strip live on the companion `/controls/overview` route.
+ *
+ * Every useQuery / useMutation / handler / permission / filter from the
+ * original monolithic page is preserved verbatim — no API call, query key, or
+ * data shape changed. The status pipeline and owner are READ-ONLY because the
+ * backend exposes no framework-control status-update endpoint; they reflect the
+ * status-summary `control_status` record.
+ */
+
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { controlsApi, evidenceApi, ermApi, adminApi } from '@/lib/api';
+import { controlsApi, ermApi, adminApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { SearchInput, MultiSelectDropdown, InlineLinkPicker, PageLoader, RightSlidePanel, AnimatedModal } from '@/components/ui';
+import { SearchInput, MultiSelectDropdown, PageLoader, RightSlidePanel } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
+import {
+  FrameworkControlEvidenceLinkSection,
+  PriorityLevelBadge,
+  ImplStatusPill,
+  IMPL_STATUS_META,
+  type FrameworkControl,
+  type FrameworkControlsResponse,
+  type FrameworkSummaryResponse,
+  type StatusSummary,
+} from './_shared/components';
 import {
   Shield,
   Loader2,
   AlertCircle,
-  Search,
-  Filter,
   CheckCircle,
   Clock,
-  ChevronDown,
   ChevronRight,
+  ChevronLeft,
   FileText,
-  Layers,
   ArrowLeft,
   FileStack,
-  Info,
   Paperclip,
-  HelpCircle,
   Sparkles,
   Link2,
-  Link2Off,
-  ExternalLink,
-  Upload,
-  ArrowUpDown,
+  User,
+  LayoutGrid,
   ClipboardList,
   FolderOpen,
   AlertTriangle,
   Target,
   Plus,
-  ShieldAlert
+  ShieldAlert,
+  Activity,
+  ListChecks,
 } from 'lucide-react';
-
-interface FrameworkControl {
-  id: number;
-  control_id: string;
-  original_reference: string | null;
-  title: string;
-  description: string | null;
-  full_text: string | null;
-  domain: string | null;
-  category: string | null;
-  is_mandatory: boolean;
-  priority: string;
-  // Native implementation-order tier (NDMO P1/P2/P3 → Year 1/2/3 roadmap) and
-  // control-level prerequisite codes. Null/[] for frameworks without them.
-  priority_level: string | null;
-  dependencies: string[];
-  version_history: Array<{ date?: string; version?: string }>;
-  control_description: string | null;
-  section_number: string | null;
-  parent_section: string | null;
-  ai_confidence: number | null;
-  ai_notes: string | null;
-  is_verified: boolean;
-  framework_id: number;
-  framework_name: string;
-  framework_version: string | null;
-  created_at: string | null;
-  evidence_count: number;
-  // Saved per-control evidence recommendations (seed shape: name/description/filetype).
-  // Older callers used title/artifact_type, so both are accepted for safety.
-  evidence_requirements: Array<{
-    name?: string;
-    title?: string;
-    description?: string;
-    filetype?: string;
-    artifact_type?: string;
-  }>;
-}
-
-interface FrameworkSummary {
-  id: number;
-  name: string;
-  version: string | null;
-  framework_type: string | null;
-  status: string;
-  control_count: number;
-}
-
-interface FrameworkControlsResponse {
-  controls: FrameworkControl[];
-  total: number;
-  skip: number;
-  limit: number;
-}
-
-interface FrameworkSummaryResponse {
-  frameworks: FrameworkSummary[];
-  total_frameworks: number;
-  total_controls: number;
-}
 
 interface TestProcedure {
   procedure_type: string;
@@ -132,25 +94,6 @@ interface AIRecommendations {
   risks_if_not_implemented: PotentialRisk[];
 }
 
-interface ControlImplStatus {
-  status: string;
-  assignee_name: string | null;
-  implementation_date: string | null;
-  verified_date: string | null;
-}
-interface StatusSummary {
-  total: number;
-  verified: number;
-  with_evidence: number;
-  mandatory: number;
-  by_priority: Record<string, number>;
-  implementation: {
-    tracked: boolean;
-    by_status: Record<string, number>;
-  };
-  control_status: Record<string, ControlImplStatus>;
-}
-
 const RISK_CATEGORIES = ['strategic', 'operational', 'financial', 'compliance', 'technology', 'third_party', 'project_change', 'internal'];
 // Mirror the standard ERM Risk Register "Register Type" options (UBL/NCA template
 // import flows are excluded — they don't apply to a control-gap risk).
@@ -158,7 +101,7 @@ const REGISTER_TYPES = ['PCI-DSS', 'ISO 27001', 'SOX', 'GDPR', 'NIST', 'SAMA CSF
 const RISK_INPUT_CLS = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
 function riskSevCls(sev?: string): string {
   const m: Record<string, string> = {
-    critical: 'bg-red-50 text-red-700 border-red-200', high: 'bg-orange-50 text-orange-700 border-orange-200',
+    critical: 'bg-rose-50 text-rose-700 border-rose-200', high: 'bg-orange-50 text-orange-700 border-orange-200',
     medium: 'bg-amber-50 text-amber-700 border-amber-200', low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   };
   return m[(sev || 'medium').toLowerCase()] || m.medium;
@@ -173,845 +116,27 @@ type SortField =
   | 'evidence_count'
   | 'status';
 
-interface FrameworkControlEvidenceLink {
-  id: number;
-  evidence_id: number;
-  title?: string;
-  description?: string;
-  evidence_type?: string;
-  status?: string;
-  file_name?: string;
-  linked_at?: string;
-}
-
-interface EvidenceOption {
-  id: number;
-  name?: string;
-  title?: string;
-  file_name?: string;
-  evidence_type?: string;
-  status?: string;
-}
-
-function FrameworkControlEvidenceLinkSection({ controlId }: { controlId: number }) {
-  const queryClient = useQueryClient();
-  const [showPicker, setShowPicker] = useState(false);
-  const [showUploader, setShowUploader] = useState(false);
-  const [searchEv, setSearchEv] = useState('');
-  const [uploadName, setUploadName] = useState('');
-  const [uploadDescription, setUploadDescription] = useState('');
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadError, setUploadError] = useState('');
-
-  const { data: linkedEvidence, isLoading: loadingLinked } = useQuery({
-    queryKey: ['framework-control-evidence', controlId],
-    queryFn: async () => {
-      const res = await controlsApi.getFrameworkControlEvidence(controlId);
-      return res.data as FrameworkControlEvidenceLink[];
-    },
-  });
-
-  const { data: allEvidence, isLoading: evidenceLoading } = useQuery({
-    queryKey: ['evidence-all'],
-    queryFn: async () => {
-      const res = await evidenceApi.getAll();
-      return res.data as EvidenceOption[];
-    },
-  });
-
-  const linkMutation = useMutation({
-    mutationFn: (evidenceId: number) =>
-      controlsApi.linkFrameworkControlEvidence(controlId, { evidence_id: evidenceId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['framework-control-evidence', controlId] });
-      queryClient.invalidateQueries({ queryKey: ['framework-controls'] });
-      setShowPicker(false);
-      setSearchEv('');
-    },
-  });
-
-  const unlinkMutation = useMutation({
-    mutationFn: (linkId: number) => controlsApi.unlinkFrameworkControlEvidence(controlId, linkId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['framework-control-evidence', controlId] });
-      queryClient.invalidateQueries({ queryKey: ['framework-controls'] });
-    },
-  });
-
-  const uploadAndLinkMutation = useMutation({
-    mutationFn: async () => {
-      if (!uploadFile) {
-        throw new Error('Please select a file to upload.');
-      }
-
-      const formData = new FormData();
-      formData.append('name', uploadName.trim() || uploadFile.name);
-      if (uploadDescription.trim()) {
-        formData.append('description', uploadDescription.trim());
-      }
-      formData.append('file', uploadFile);
-
-      const uploadRes = await evidenceApi.create(formData);
-      const uploadedEvidenceId = uploadRes.data?.id;
-      if (!uploadedEvidenceId) {
-        throw new Error('Evidence uploaded but no evidence ID was returned.');
-      }
-
-      await controlsApi.linkFrameworkControlEvidence(controlId, { evidence_id: uploadedEvidenceId });
-      return uploadedEvidenceId;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['framework-control-evidence', controlId] });
-      queryClient.invalidateQueries({ queryKey: ['framework-controls'] });
-      queryClient.invalidateQueries({ queryKey: ['evidence-all'] });
-      setShowUploader(false);
-      setUploadError('');
-      setUploadName('');
-      setUploadDescription('');
-      setUploadFile(null);
-    },
-    onError: (error: any) => {
-      const detail = error?.response?.data?.detail;
-      setUploadError(typeof detail === 'string' ? detail : (error?.message || 'Failed to upload and link evidence.'));
-    },
-  });
-
-  const linkedIds = new Set((linkedEvidence ?? []).map((l) => l.evidence_id));
-  const evidencePickerItems = (allEvidence ?? [])
-    .filter((ev) => !linkedIds.has(ev.id))
-    .map((ev) => ({
-      value: String(ev.id),
-      label: ev.name || ev.title || ev.file_name || `Evidence #${ev.id}`,
-      subLabel: ev.evidence_type,
-    }));
-  void searchEv; void setSearchEv; void showPicker; void setShowPicker;
-
-  return (
-    <div className="mt-6 border-t border-slate-200 pt-5">
-      <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
-        <h3 className="text-sm font-semibold text-slate-800">Linked Evidence</h3>
-        <div className="flex items-center gap-2">
-          <InlineLinkPicker
-            triggerLabel="Link Existing"
-            triggerIcon={<Link2 className="h-3 w-3" />}
-            triggerClassName="flex items-center gap-1 rounded border border-primary-200 bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50"
-            items={evidencePickerItems}
-            isLoading={evidenceLoading || linkMutation.isPending}
-            emptyText="No evidence available"
-            searchPlaceholder="Search evidence"
-            popoverWidth={320}
-            onSelect={(value) => linkMutation.mutate(Number(value))}
-          />
-          <button
-            type="button"
-            onClick={() => {
-              setShowUploader(!showUploader);
-              setUploadError('');
-            }}
-            className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
-          >
-            <Upload className="h-3 w-3" />
-            {showUploader ? 'Close Upload' : 'Upload New'}
-          </button>
-        </div>
-      </div>
-
-      {showUploader && (
-        <form
-          className="mb-4 space-y-2 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setUploadError('');
-            uploadAndLinkMutation.mutate();
-          }}
-        >
-          <input
-            type="text"
-            value={uploadName}
-            onChange={(e) => setUploadName(e.target.value)}
-            placeholder="Evidence name (optional, file name will be used)"
-            className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
-          />
-          <textarea
-            value={uploadDescription}
-            onChange={(e) => setUploadDescription(e.target.value)}
-            placeholder="Description (optional)"
-            rows={2}
-            className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
-          />
-          <input
-            type="file"
-            required
-            onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-            className="w-full text-xs text-slate-600 file:mr-2 file:rounded file:border file:border-slate-300 file:bg-white file:px-2 file:py-1 file:text-xs file:text-slate-700"
-          />
-          {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={uploadAndLinkMutation.isPending}
-              className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {uploadAndLinkMutation.isPending ? 'Uploading...' : 'Upload & Link'}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {loadingLinked ? (
-        <div className="flex justify-center py-4">
-          <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-        </div>
-      ) : (linkedEvidence ?? []).length === 0 ? (
-        <p className="text-xs text-slate-500">No evidence linked yet.</p>
-      ) : (
-        <div className="space-y-2">
-          {(linkedEvidence ?? []).map((lnk) => (
-            <div
-              key={lnk.id}
-              className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
-            >
-              <div className="min-w-0">
-                <Link
-                  href={`/evidence/${lnk.evidence_id}`}
-                  className="block truncate text-xs font-medium text-primary-700 hover:underline"
-                >
-                  {lnk.title || lnk.file_name || `Evidence #${lnk.evidence_id}`}
-                </Link>
-                {lnk.evidence_type && (
-                  <span className="text-[11px] text-slate-500">{lnk.evidence_type}</span>
-                )}
-              </div>
-              <div className="ml-2 flex flex-shrink-0 items-center gap-1">
-                <Link
-                  href={`/evidence/${lnk.evidence_id}`}
-                  className="rounded p-1 text-slate-400 hover:text-primary-600"
-                  title="View evidence"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => unlinkMutation.mutate(lnk.id)}
-                  disabled={unlinkMutation.isPending}
-                  className="rounded p-1 text-slate-400 hover:text-red-500"
-                  title="Unlink"
-                >
-                  {unlinkMutation.isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Link2Off className="h-3.5 w-3.5" />
-                  )}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Native framework tree (NDMO-style): Domain -> Control -> Specification, with
-// P1/P2/P3 implementation-order badges, a Year 1/2/3 phased filter, and the
-// control-level dependency graph. Rendered for frameworks that carry
-// `priority_level` (the NDMO 3-year roadmap model). Self-contained: its own
-// query (fetches the full control set, unpaginated) and local UI state.
-// ---------------------------------------------------------------------------
-const PL_META: Record<string, { year: number; label: string; badge: string; dot: string }> = {
-  P1: { year: 1, label: 'Year 1', badge: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500' },
-  P2: { year: 2, label: 'Year 2', badge: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' },
-  P3: { year: 3, label: 'Year 3', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
-};
-
-function PriorityLevelBadge({ level }: { level: string | null }) {
-  if (!level) {
-    return (
-      <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500" title="Not assessed by NDMO (NCA-governed)">
-        N/A
-      </span>
-    );
-  }
-  const m = PL_META[level];
-  const cls = m ? m.badge : 'bg-slate-100 text-slate-500 border-slate-200';
-  return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${cls}`} title={m ? `Priority ${level} — implement by ${m.label}` : level}>
-      {level}
-    </span>
-  );
-}
-
-function DomainId({ code }: { code: string }) {
-  const id = (code || '').split('.')[0] || '?';
-  return (
-    <span className="inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-md bg-primary-600 px-1.5 text-[11px] font-bold tracking-wide text-white">
-      {id}
-    </span>
-  );
-}
-
-function NativeFrameworkTree({ frameworkId }: { frameworkId: number }) {
-  const [phase, setPhase] = useState<0 | 1 | 2 | 3>(0); // 0 = all
-  const [openDomains, setOpenDomains] = useState<Set<string>>(new Set());
-  const [openSpec, setOpenSpec] = useState<number | null>(null);
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['framework-controls-tree', frameworkId],
-    queryFn: async () => {
-      const res = await controlsApi.getFrameworkControls({
-        framework_id: frameworkId, limit: 2000, sort_by: 'control_id', sort_order: 'asc',
-      });
-      return res.data as FrameworkControlsResponse;
-    },
-  });
-
-  // Sort by row id = the framework's published/document order (seeded in
-  // document order), so domains render as in the source (e.g. NDMO: Data
-  // Governance first), not alphabetically by control code.
-  const controls = useMemo(() => [...(data?.controls ?? [])].sort((a, b) => a.id - b.id), [data]);
-
-  const grouped = useMemo(() => {
-    const domains: { name: string; controls: { code: string; name: string; deps: string[]; specs: FrameworkControl[] }[] }[] = [];
-    const dIdx = new Map<string, number>();
-    const cIdx = new Map<string, number>();
-    for (const c of controls) {
-      const dn = c.domain || 'Uncategorized';
-      if (!dIdx.has(dn)) { dIdx.set(dn, domains.length); domains.push({ name: dn, controls: [] }); }
-      const di = dIdx.get(dn)!;
-      const code = c.parent_section || c.control_id;
-      const ckey = dn + '||' + code;
-      if (!cIdx.has(ckey)) {
-        // Control name: the flat `category` carries "DG.1: Strategy and Plan".
-        const rawCat = c.category || '';
-        const name = rawCat.includes(':') ? rawCat.split(':').slice(1).join(':').trim() : rawCat;
-        cIdx.set(ckey, domains[di].controls.length);
-        domains[di].controls.push({ code, name, deps: c.dependencies || [], specs: [] });
-      }
-      domains[di].controls[cIdx.get(ckey)!].specs.push(c);
-    }
-    return domains;
-  }, [controls]);
-
-  const counts = useMemo(() => {
-    const c = { P1: 0, P2: 0, P3: 0, other: 0 };
-    for (const x of controls) {
-      if (x.priority_level === 'P1') c.P1++;
-      else if (x.priority_level === 'P2') c.P2++;
-      else if (x.priority_level === 'P3') c.P3++;
-      else c.other++;
-    }
-    return c;
-  }, [controls]);
-
-  const included = useMemo(() => {
-    const s = new Set<string>();
-    if (phase >= 1) s.add('P1');
-    if (phase >= 2) s.add('P2');
-    if (phase >= 3) s.add('P3');
-    return s;
-  }, [phase]);
-
-  const specVisible = (s: FrameworkControl) =>
-    phase === 0 ? true : (s.priority_level ? included.has(s.priority_level) : false);
-
-  const toggleDomain = (name: string) =>
-    setOpenDomains((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name); else next.add(name);
-      return next;
-    });
-
-  const allDomainNames = grouped.map((d) => d.name);
-  const allOpen = openDomains.size >= allDomainNames.length && allDomainNames.length > 0;
-
-  if (isLoading) {
-    return (
-      <div className="flex h-48 items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-      </div>
-    );
-  }
-
-  const phaseChips: { v: 0 | 1 | 2 | 3; label: string; sub: string }[] = [
-    { v: 0, label: 'All', sub: `${controls.length}` },
-    { v: 1, label: 'Year 1', sub: `${counts.P1}` },
-    { v: 2, label: 'Year 2', sub: `${counts.P1 + counts.P2}` },
-    { v: 3, label: 'Year 3', sub: `${counts.P1 + counts.P2 + counts.P3}` },
-  ];
-
-  return (
-    <div className="space-y-4">
-      {/* Phased roadmap summary + filter */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Target className="h-4 w-4 text-slate-700" />
-          <h3 className="text-sm font-semibold text-slate-800">3-Year Implementation Roadmap</h3>
-          <span className="text-xs text-slate-500">specifications scored 100% / 0%, cascaded to control → domain → entity</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {phaseChips.map((p) => (
-            <button
-              key={p.v}
-              type="button"
-              onClick={() => setPhase(p.v)}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                phase === p.v
-                  ? 'border-primary-600 bg-primary-600 text-white'
-                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <span>{p.label}</span>
-              <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${phase === p.v ? 'bg-white/20' : 'bg-slate-100 text-slate-600'}`}>{p.sub}</span>
-            </button>
-          ))}
-          <div className="ml-auto flex items-center gap-3 text-[11px] text-slate-500">
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-rose-500" />P1</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-500" />P2</span>
-            <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" />P3</span>
-            {counts.other > 0 && <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-slate-300" />N/A ({counts.other})</span>}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">
-          {grouped.length} domains · {controls.length} specifications
-          {phase !== 0 && ` · showing ${phaseChips[phase].label} (${phaseChips[phase].sub})`}
-        </p>
-        <button
-          type="button"
-          onClick={() => setOpenDomains(allOpen ? new Set() : new Set(allDomainNames))}
-          className="text-xs font-medium text-slate-600 hover:text-slate-900"
-        >
-          {allOpen ? 'Collapse all' : 'Expand all'}
-        </button>
-      </div>
-
-      {/* Domain -> Control -> Specification tree */}
-      <div className="space-y-2">
-        {grouped.map((domain) => {
-          const visibleControls = domain.controls
-            .map((ctrl) => ({ ...ctrl, vspecs: ctrl.specs.filter(specVisible) }))
-            .filter((ctrl) => ctrl.vspecs.length > 0);
-          if (visibleControls.length === 0) return null;
-          const specCount = visibleControls.reduce((n, c) => n + c.vspecs.length, 0);
-          const domainCode = domain.controls[0]?.code || '';
-          const isOpen = openDomains.has(domain.name);
-          return (
-            <div key={domain.name} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-              <button
-                type="button"
-                onClick={() => toggleDomain(domain.name)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50"
-              >
-                {isOpen ? <ChevronDown className="h-4 w-4 flex-shrink-0 text-slate-400" /> : <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-400" />}
-                <DomainId code={domainCode} />
-                <span className="flex-1 text-sm font-semibold text-slate-800">{domain.name}</span>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                  {visibleControls.length} controls · {specCount} specs
-                </span>
-              </button>
-
-              {isOpen && (
-                <div className="border-t border-slate-100 px-3 pb-3 pt-1 sm:px-4">
-                  {visibleControls.map((ctrl) => (
-                    <div key={ctrl.code} className="mt-3 first:mt-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs font-semibold text-slate-900">{ctrl.code}</span>
-                        {ctrl.name && <span className="text-sm font-medium text-slate-700">{ctrl.name}</span>}
-                        {ctrl.deps.length > 0 && (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
-                            <Link2 className="h-3 w-3" />
-                            depends on:
-                            {ctrl.deps.map((d) => (
-                              <span key={d} className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">{d}</span>
-                            ))}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-1.5 space-y-1 border-l-2 border-slate-100 pl-3">
-                        {ctrl.vspecs.map((spec) => {
-                          const isSpecOpen = openSpec === spec.id;
-                          const specCode = spec.section_number || spec.original_reference || spec.control_id;
-                          return (
-                            <div key={spec.id} className="rounded-md">
-                              <button
-                                type="button"
-                                onClick={() => setOpenSpec(isSpecOpen ? null : spec.id)}
-                                className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-slate-50"
-                              >
-                                <PriorityLevelBadge level={spec.priority_level} />
-                                <span className="mt-0.5 font-mono text-[11px] text-slate-500">{specCode}</span>
-                                <span className="flex-1 text-sm text-slate-700">{spec.title}</span>
-                                {isSpecOpen ? <ChevronDown className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" /> : <ChevronRight className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />}
-                              </button>
-                              {isSpecOpen && (
-                                <div className="ml-2 mb-2 mt-1 rounded-md border border-slate-100 bg-slate-50/60 px-3 py-2 text-xs text-slate-600">
-                                  {spec.full_text || spec.description || 'No description provided.'}
-                                  <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
-                                    {spec.priority_level && PL_META[spec.priority_level] && (
-                                      <span>Priority {spec.priority_level} · implement by {PL_META[spec.priority_level].label}</span>
-                                    )}
-                                    <span>{spec.is_mandatory ? 'Mandatory' : 'Optional'}</span>
-                                    <span className="inline-flex items-center gap-1">
-                                      <Paperclip className="h-3 w-3" /> {spec.evidence_count} evidence
-                                    </span>
-                                    <Link
-                                      href={`/evidence?control_id=${spec.id}`}
-                                      className="text-primary-700 hover:underline"
-                                    >
-                                      Manage evidence
-                                    </Link>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Figure-2 view: renders every control as the exact boxed "Control Structure
-// Format" table from the NDMO v1.5 standard (§7, Figure 2):
-//   Domain Name | Domain ID
-//   Control Name | Control ID
-//   Control Description
-//   [ Specification # | Specification Name | Control Specification | Priority ]
-//   Version History (Date | Version)
-//   Dependencies
-// Grouped by domain, with the same Year 1/2/3 phase filter.
-// ---------------------------------------------------------------------------
-function Figure2View({ frameworkId }: { frameworkId: number }) {
-  const [phase, setPhase] = useState<0 | 1 | 2 | 3>(0);
-  const [openDomains, setOpenDomains] = useState<Set<string>>(new Set());
-  const [openSpecs, setOpenSpecs] = useState<Set<number>>(new Set());
-  const toggleSpec = (id: number) => setOpenSpecs((prev) => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['framework-controls-doc', frameworkId],
-    queryFn: async () => {
-      const res = await controlsApi.getFrameworkControls({
-        framework_id: frameworkId, limit: 2000, sort_by: 'control_id', sort_order: 'asc',
-      });
-      return res.data as FrameworkControlsResponse;
-    },
-  });
-
-  // Sort by row id = the framework's published/document order (seeded in
-  // document order), so domains render as in the source (e.g. NDMO: Data
-  // Governance first), not alphabetically by control code.
-  const controls = useMemo(() => [...(data?.controls ?? [])].sort((a, b) => a.id - b.id), [data]);
-
-  const grouped = useMemo(() => {
-    const domains: { name: string; controls: {
-      code: string; name: string; desc: string | null; deps: string[];
-      versions: Array<{ date?: string; version?: string }>; specs: FrameworkControl[];
-    }[] }[] = [];
-    const dIdx = new Map<string, number>();
-    const cIdx = new Map<string, number>();
-    for (const c of controls) {
-      const dn = c.domain || 'Uncategorized';
-      if (!dIdx.has(dn)) { dIdx.set(dn, domains.length); domains.push({ name: dn, controls: [] }); }
-      const di = dIdx.get(dn)!;
-      const code = c.parent_section || c.control_id;
-      const ckey = dn + '||' + code;
-      if (!cIdx.has(ckey)) {
-        const rawCat = c.category || '';
-        const name = rawCat.includes(':') ? rawCat.split(':').slice(1).join(':').trim() : rawCat;
-        cIdx.set(ckey, domains[di].controls.length);
-        domains[di].controls.push({
-          code, name, desc: c.control_description || null,
-          deps: c.dependencies || [], versions: c.version_history || [], specs: [],
-        });
-      }
-      domains[di].controls[cIdx.get(ckey)!].specs.push(c);
-    }
-    return domains;
-  }, [controls]);
-
-  const counts = useMemo(() => {
-    const c = { P1: 0, P2: 0, P3: 0, other: 0 };
-    for (const x of controls) {
-      if (x.priority_level === 'P1') c.P1++;
-      else if (x.priority_level === 'P2') c.P2++;
-      else if (x.priority_level === 'P3') c.P3++;
-      else c.other++;
-    }
-    return c;
-  }, [controls]);
-
-  const included = useMemo(() => {
-    const s = new Set<string>();
-    if (phase >= 1) s.add('P1');
-    if (phase >= 2) s.add('P2');
-    if (phase >= 3) s.add('P3');
-    return s;
-  }, [phase]);
-  const specVisible = (s: FrameworkControl) =>
-    phase === 0 ? true : (s.priority_level ? included.has(s.priority_level) : false);
-
-  const toggleDomain = (name: string) =>
-    setOpenDomains((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name); else next.add(name);
-      return next;
-    });
-
-  const allDomainNames = grouped.map((d) => d.name);
-  const allOpen = openDomains.size >= allDomainNames.length && allDomainNames.length > 0;
-
-  if (isLoading) {
-    return <div className="flex h-48 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>;
-  }
-
-  const phaseChips: { v: 0 | 1 | 2 | 3; label: string; sub: string }[] = [
-    { v: 0, label: 'All', sub: `${controls.length}` },
-    { v: 1, label: 'Year 1', sub: `${counts.P1}` },
-    { v: 2, label: 'Year 2', sub: `${counts.P1 + counts.P2}` },
-    { v: 3, label: 'Year 3', sub: `${counts.P1 + counts.P2 + counts.P3}` },
-  ];
-
-  return (
-    <div className="space-y-4">
-      {/* Phase filter */}
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Target className="h-4 w-4 text-slate-700" />
-          <h3 className="text-sm font-semibold text-slate-800">Control Structure (Figure 2 format) · 3-Year Roadmap</h3>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {phaseChips.map((p) => (
-            <button key={p.v} type="button" onClick={() => setPhase(p.v)}
-              className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                phase === p.v ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}>
-              <span>{p.label}</span>
-              <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${phase === p.v ? 'bg-white/20' : 'bg-slate-100 text-slate-600'}`}>{p.sub}</span>
-            </button>
-          ))}
-          <button type="button" onClick={() => setOpenDomains(allOpen ? new Set() : new Set(allDomainNames))}
-            className="ml-auto text-xs font-medium text-slate-600 hover:text-slate-900">
-            {allOpen ? 'Collapse all' : 'Expand all'}
-          </button>
-        </div>
-      </div>
-
-      {grouped.map((domain) => {
-        const domainCode = (domain.controls[0]?.code || '').split('.')[0] || '?';
-        const visibleControls = domain.controls
-          .map((ctrl) => ({ ...ctrl, vspecs: ctrl.specs.filter(specVisible) }))
-          .filter((ctrl) => ctrl.vspecs.length > 0);
-        if (visibleControls.length === 0) return null;
-        const isOpen = openDomains.has(domain.name);
-        return (
-          <div key={domain.name} className="space-y-3">
-            <button type="button" onClick={() => toggleDomain(domain.name)}
-              className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-left hover:bg-slate-100">
-              {isOpen ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
-              <DomainId code={domainCode} />
-              <span className="flex-1 text-sm font-semibold text-slate-800">{domain.name}</span>
-              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-600">{visibleControls.length} controls</span>
-            </button>
-
-            {isOpen && visibleControls.map((ctrl) => (
-              <div key={ctrl.code} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
-                {/* Identity block — all Figure-2 header fields, labelled */}
-                <div className="border-b border-slate-100 bg-white px-5 py-4">
-                  <div className="grid grid-cols-1 gap-x-10 gap-y-3 sm:grid-cols-2">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Domain Name</p>
-                      <p className="mt-0.5 text-sm font-medium text-slate-800">{domain.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Domain ID</p>
-                      <p className="mt-0.5 font-mono text-sm font-semibold text-primary-700">{domainCode}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control Name</p>
-                      <p className="mt-0.5 text-sm font-medium text-slate-800">{ctrl.name || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control ID</p>
-                      <p className="mt-0.5 font-mono text-sm font-semibold text-primary-700">{ctrl.code}</p>
-                    </div>
-                  </div>
-                  {ctrl.desc && (
-                    <div className="mt-3 border-t border-slate-100 pt-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control Description</p>
-                      <p className="mt-0.5 text-[13px] leading-relaxed text-slate-600">{ctrl.desc}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Specifications — scannable; click a row to reveal the
-                    Control Specification text */}
-                <div className="flex items-center justify-between px-5 pt-3 pb-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Specifications</p>
-                  <p className="text-[11px] text-slate-400">{ctrl.vspecs.length} · click to expand</p>
-                </div>
-                <div className="divide-y divide-slate-100">
-                  {ctrl.vspecs.map((s) => {
-                    const isSpecOpen = openSpecs.has(s.id);
-                    const specCode = s.section_number || s.original_reference || s.control_id;
-                    return (
-                      <div key={s.id}>
-                        <button
-                          type="button"
-                          onClick={() => toggleSpec(s.id)}
-                          className="flex w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-slate-50"
-                        >
-                          <span className="w-14 shrink-0 font-mono text-xs text-slate-400">{specCode}</span>
-                          <span className="flex-1 truncate text-sm font-medium text-slate-800">{s.title}</span>
-                          <PriorityLevelBadge level={s.priority_level} />
-                          <ChevronDown className={`h-4 w-4 shrink-0 text-slate-300 transition-transform ${isSpecOpen ? 'rotate-180' : ''}`} />
-                        </button>
-                        {isSpecOpen && (
-                          <div className="px-5 pb-4 pl-[4.25rem]">
-                            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Control Specification</p>
-                            <p className="rounded-lg bg-slate-50 px-4 py-3 text-[13px] leading-relaxed text-slate-600 whitespace-pre-wrap">
-                              {s.full_text || s.description || '—'}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Version History + Dependencies — labelled footer */}
-                <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border-t border-slate-100 bg-slate-50/40 px-5 py-3 text-[12px]">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="font-semibold uppercase tracking-wide text-slate-400">Version History</span>
-                    <span className="text-slate-600">
-                      {ctrl.versions[0]?.date || '—'}{ctrl.versions[0]?.version ? ` · Version ${ctrl.versions[0].version}` : ''}
-                    </span>
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="font-semibold uppercase tracking-wide text-slate-400">Dependencies</span>
-                    {ctrl.deps.length === 0 ? (
-                      <span className="text-slate-400">None</span>
-                    ) : (
-                      <span className="inline-flex flex-wrap items-center gap-1">
-                        {ctrl.deps.map((d) => (
-                          <span key={d} className="rounded-md bg-white px-1.5 py-0.5 font-mono text-[11px] text-slate-600 ring-1 ring-slate-200">{d}</span>
-                        ))}
-                      </span>
-                    )}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// Implementation-status pill (certification-journey status). Semantic tints only.
-const IMPL_STATUS_META: Record<string, { label: string; cls: string }> = {
-  not_started: { label: 'Not started', cls: 'bg-slate-100 text-slate-600' },
-  in_progress: { label: 'In progress', cls: 'bg-amber-50 text-amber-700' },
-  implemented: { label: 'Implemented', cls: 'bg-primary-50 text-primary-700' },
-  verified: { label: 'Verified', cls: 'bg-emerald-50 text-emerald-700' },
-  not_applicable: { label: 'N/A', cls: 'bg-slate-100 text-slate-500' },
-};
-function ImplStatusPill({ status }: { status: string }) {
-  const m = IMPL_STATUS_META[status] || { label: status, cls: 'bg-slate-100 text-slate-600' };
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${m.cls}`}>
-      {m.label}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Control-health snapshot — a compact, on-brand tile strip driven by the new
-// status-summary endpoint (guarded to {}). Verified % / evidence coverage % are
-// endpoint-derived (not the paginated list). The implementation mini-bar only
-// renders when the endpoint reports implementation.tracked.
-// ---------------------------------------------------------------------------
-const IMPL_BAR: { key: string; label: string; cls: string }[] = [
-  { key: 'not_started', label: 'Not started', cls: 'bg-slate-300' },
-  { key: 'in_progress', label: 'In progress', cls: 'bg-amber-400' },
-  { key: 'implemented', label: 'Implemented', cls: 'bg-primary-400' },
-  { key: 'verified', label: 'Verified', cls: 'bg-emerald-500' },
+// ── The 4-stage implementation pipeline. Backend vocabulary is preserved; we
+// only present it as an ordered pipeline. `not_applicable` is not part of the
+// linear pipeline, so it renders as a standalone pill instead. ────────────────
+const PIPELINE_STAGES: { key: string; label: string }[] = [
+  { key: 'not_started', label: 'Not started' },
+  { key: 'in_progress', label: 'In progress' },
+  { key: 'implemented', label: 'Implemented' },
+  { key: 'verified', label: 'Verified' },
 ];
-function ControlHealthSnapshot({
-  summary, totalFrameworks, fallbackTotal,
-}: { summary?: Partial<StatusSummary>; totalFrameworks: number; fallbackTotal: number }) {
-  const total = summary?.total ?? fallbackTotal ?? 0;
-  const hasEndpoint = summary?.total != null;
-  const verified = summary?.verified ?? 0;
-  const withEvidence = summary?.with_evidence ?? 0;
-  const mandatory = summary?.mandatory ?? 0;
-  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 100) : 0);
-  const impl = summary?.implementation;
-  const tracked = !!impl?.tracked;
-  const byStatus = impl?.by_status ?? {};
-  const implTotal = IMPL_BAR.reduce((s, b) => s + (byStatus[b.key] || 0), 0);
 
-  const Tile = ({ value, label, tone }: { value: React.ReactNode; label: string; tone?: string }) => (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-      <p className={`text-xl font-bold ${tone || 'text-slate-900'}`}>{value}</p>
-      <p className="mt-0.5 text-xs text-slate-500">{label}</p>
-    </div>
-  );
-
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-      <Tile value={total} label="Total controls" />
-      <Tile value={totalFrameworks} label={totalFrameworks === 1 ? 'Framework' : 'Frameworks'} />
-      <Tile value={hasEndpoint ? `${pct(verified)}%` : '—'} label="Verified" tone="text-emerald-600" />
-      <Tile value={hasEndpoint ? `${pct(withEvidence)}%` : '—'} label="Evidence coverage" tone="text-primary-600" />
-      <Tile value={hasEndpoint ? mandatory : '—'} label="Mandatory" tone="text-rose-600" />
-      {tracked && implTotal > 0 ? (
-        <div className="col-span-2 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:col-span-3 lg:col-span-1">
-          <p className="mb-1.5 text-xs font-medium text-slate-600">Implementation</p>
-          <div className="flex h-2 w-full overflow-hidden rounded-full bg-slate-100">
-            {IMPL_BAR.map((b) => {
-              const n = byStatus[b.key] || 0;
-              if (n === 0) return null;
-              return <div key={b.key} className={b.cls} style={{ width: `${(n / implTotal) * 100}%` }} title={`${b.label}: ${n}`} />;
-            })}
-          </div>
-          <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
-            {IMPL_BAR.map((b) => (
-              <span key={b.key} className="inline-flex items-center gap-1 text-[10px] text-slate-500">
-                <span className={`h-2 w-2 rounded-full ${b.cls}`} />{byStatus[b.key] || 0}
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <Tile value={hasEndpoint && total > 0 ? `${pct(withEvidence)}%` : '—'} label="Coverage" tone="text-primary-600" />
-      )}
-    </div>
-  );
-}
+// Left-pane quick filters. Each maps onto real page state (search / status
+// summary), never an invented API param. `mine`/`in_progress` filter against
+// the read-only control_status record; `gaps` = no evidence linked yet.
+type QuickFilter = 'all' | 'gaps' | 'mine' | 'in_progress';
 
 export default function ControlsPage() {
   const searchParams = useSearchParams();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('controls:control_library:create');
   const initialFrameworkId = searchParams.get('framework');
-  
+
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [frameworkFilter, setFrameworkFilter] = useState<number | null>(
@@ -1022,15 +147,12 @@ export default function ControlsPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [selectedControlId, setSelectedControlId] = useState<number | null>(null);
   const [page, setPage] = useState(0);
-  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [aiRecommendations, setAiRecommendations] = useState<Record<number, AIRecommendations>>({});
   const [loadingAI, setLoadingAI] = useState<number | null>(null);
-  // Table (default global view) vs Tree (NDMO-style Domain→Control→Spec native
-  // view). The tree auto-engages the first time a phased framework is opened,
-  // unless the user has explicitly toggled.
-  const [viewMode, setViewMode] = useState<'table' | 'tree' | 'doc'>('table');
-  const [viewTouched, setViewTouched] = useState(false);
   const pageSize = 50;
+
+  void domainFilter; void setDomainFilter; void sortBy; void setSortBy; void sortOrder; void setSortOrder;
 
   const aiRecommendationMutation = useMutation({
     mutationFn: (data: { control_id: number; control_title: string; control_description?: string; framework_name?: string }) =>
@@ -1222,7 +344,8 @@ export default function ControlsPage() {
   });
 
   // Control-health snapshot — endpoint-derived, unpaginated. Guarded to {} so a
-  // 404/absent endpoint degrades gracefully (list-only metrics; no impl tile).
+  // 404/absent endpoint degrades gracefully. Drives the read-only status
+  // pipeline + owner in the inspector (control_status record).
   const { data: statusSummary } = useQuery({
     queryKey: ['framework-controls-status-summary', frameworkFilter],
     queryFn: async (): Promise<Partial<StatusSummary>> => {
@@ -1255,60 +378,14 @@ export default function ControlsPage() {
       if (searchTerm) params.search = searchTerm;
       params.sort_by = sortBy;
       params.sort_order = sortOrder;
-      
+
       const response = await controlsApi.getFrameworkControls(params);
       return response.data as FrameworkControlsResponse;
     },
     placeholderData: (previousData) => previousData,
   });
 
-  // A framework is "phased" when its controls carry NDMO-style P1/P2/P3 tiers.
-  const isPhased = !!data?.controls?.some((c) => c.priority_level);
-
-  // Auto-engage the native Document (Figure-2) view the first time a phased
-  // framework is opened.
-  useEffect(() => {
-    if (!viewTouched && frameworkFilter && isPhased) {
-      setViewMode('doc');
-    }
-  }, [viewTouched, frameworkFilter, isPhased]);
-
-  const handleSort = (field: SortField) => {
-    setPage(0);
-    if (sortBy === field) {
-      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-      return;
-    }
-    setSortBy(field);
-    setSortOrder(field === 'evidence_count' ? 'desc' : 'asc');
-  };
-
-  const renderSortHeader = (
-    label: string,
-    field: SortField,
-    align: 'left' | 'center' | 'right' = 'left'
-  ) => {
-    const justifyClass =
-      align === 'center' ? 'justify-center' :
-      align === 'right' ? 'justify-end' :
-      'justify-start';
-    const isActive = sortBy === field;
-
-    return (
-      <button
-        type="button"
-        onClick={() => handleSort(field)}
-        className={`inline-flex w-full items-center gap-1 ${justifyClass} text-slate-600 hover:text-black`}
-      >
-        <span>{label}</span>
-        {isActive ? (
-          <span className="text-xs">{sortOrder === 'asc' ? '^' : 'v'}</span>
-        ) : (
-          <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
-        )}
-      </button>
-    );
-  };
+  const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
 
   const getPriorityBadge = (priority: string) => {
     const colors: Record<string, string> = {
@@ -1338,7 +415,10 @@ export default function ControlsPage() {
     );
   };
 
-  const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
+  // Read-only implementation status for a control, keyed by the status-summary
+  // endpoint's control_status record.
+  const implStatusFor = (control: FrameworkControl) =>
+    statusSummary?.control_status?.[String(control.id)] ?? null;
 
   if (isLoading && !data) {
     return (
@@ -1350,137 +430,89 @@ export default function ControlsPage() {
 
   if (error) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-600">
+      <div className="flex h-64 flex-col items-center justify-center text-rose-600">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load controls</p>
       </div>
     );
   }
 
-  const selectedControl = data?.controls.find((c) => c.id === selectedControlId) ?? null;
-  const selectedImplStatus = selectedControl
-    ? (statusSummary?.control_status?.[String(selectedControl.id)] ?? null)
-    : null;
+  const allControls = data?.controls ?? [];
+
+  // Quick-filter chips → real filters (no new API params).
+  const filteredControls = allControls.filter((c) => {
+    if (quickFilter === 'gaps') return c.evidence_count === 0;
+    const st = implStatusFor(c)?.status;
+    if (quickFilter === 'in_progress') return st === 'in_progress';
+    if (quickFilter === 'mine') return !!implStatusFor(c)?.assignee_name;
+    return true;
+  });
+
+  const selectedControl = allControls.find((c) => c.id === selectedControlId) ?? null;
+  const selectedImplStatus = selectedControl ? implStatusFor(selectedControl) : null;
+
+  // Prev/Next navigation across the currently filtered list.
+  const selectedIndex = selectedControl ? filteredControls.findIndex((c) => c.id === selectedControl.id) : -1;
+  const prevControl = selectedIndex > 0 ? filteredControls[selectedIndex - 1] : null;
+  const nextControl = selectedIndex >= 0 && selectedIndex < filteredControls.length - 1 ? filteredControls[selectedIndex + 1] : null;
 
   const selectedFramework = summaryData?.frameworks.find(f => f.id === frameworkFilter);
-
   // Fallback: derive framework name from loaded controls when not in summaryData (e.g. status=draft/classified)
-  const fallbackFrameworkName = !selectedFramework && frameworkFilter && data?.controls?.length
-    ? data.controls[0]?.framework_name
+  const fallbackFrameworkName = !selectedFramework && frameworkFilter && allControls.length
+    ? allControls[0]?.framework_name
     : null;
   const effectiveFrameworkName = selectedFramework?.name || fallbackFrameworkName;
 
+  const quickChips: { key: QuickFilter; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'gaps', label: 'Gaps' },
+    { key: 'mine', label: 'Mine' },
+    { key: 'in_progress', label: 'In progress' },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
+    <div className="space-y-5">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           {frameworkFilter && (selectedFramework || effectiveFrameworkName) ? (
             <>
-              <div className="flex items-center gap-2 mb-1">
-                <Link 
-                  href="/frameworks" 
-                  className="flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+              <div className="mb-1 flex items-center gap-2">
+                <Link
+                  href="/frameworks"
+                  className="flex items-center gap-1 text-sm text-slate-600 transition-colors hover:text-slate-900"
                 >
-                  <ArrowLeft className="h-4 w-4" />
+                  <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
                   Back to Frameworks
                 </Link>
               </div>
-              <h1 className="text-2xl font-bold text-black flex items-center gap-2">
-                <FileStack className="h-6 w-6 text-black" />
+              <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
+                <FileStack className="h-6 w-6 text-slate-900" strokeWidth={1.75} />
                 {effectiveFrameworkName}
               </h1>
               <p className="text-slate-600">
-                {selectedFramework ? `${selectedFramework.control_count} controls extracted from this framework` : `Controls for this framework`}
+                {selectedFramework ? `${selectedFramework.control_count} controls extracted from this framework` : 'Controls for this framework'}
               </p>
             </>
           ) : (
             <>
-              <h1 className="text-2xl font-bold text-black">Framework Controls</h1>
-              <p className="text-slate-600">Controls extracted from your uploaded regulatory frameworks</p>
+              <h1 className="text-2xl font-bold text-slate-900">Controls Workbench</h1>
+              <p className="text-slate-600">Search, inspect, and evidence controls extracted from your frameworks</p>
             </>
           )}
         </div>
-        {/* <button
-          onClick={() => setShowInfoModal(true)}
-          className="flex items-center gap-2 rounded-lg bg-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-600 transition-colors"
+        <Link
+          href={`/controls/overview${frameworkFilter ? `?framework=${frameworkFilter}` : ''}`}
+          className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
         >
-          <HelpCircle className="h-4 w-4" />
-          How It Works
-        </button> */}
+          <LayoutGrid className="h-4 w-4" strokeWidth={1.75} />
+          Overview
+        </Link>
       </div>
 
-      {showInfoModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-lg mx-4 rounded-xl bg-white border border-slate-200 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 p-4">
-              <h2 className="text-lg font-semibold text-black flex items-center gap-2">
-                <Info className="h-5 w-5 text-primary-600" />
-                Understanding Frameworks & Controls
-              </h2>
-              <button
-                onClick={() => setShowInfoModal(false)}
-                className="rounded-lg p-1 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
-              >
-                <ChevronDown className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="p-4 space-y-4 text-sm">
-              <div className="space-y-3">
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary-50 flex items-center justify-center text-primary-600 font-bold">1</div>
-                  <div>
-                    <h3 className="font-medium text-black">Upload Framework</h3>
-                    <p className="text-slate-600">Upload your regulatory framework document (PDF, Excel). The AI extracts individual controls/requirements.</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold">2</div>
-                  <div>
-                    <h3 className="font-medium text-black">Controls Are Extracted</h3>
-                    <p className="text-slate-600">Each requirement becomes a control shown here. Controls retain their original reference IDs from the framework document.</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary-50 flex items-center justify-center text-primary-600 font-bold">3</div>
-                  <div>
-                    <h3 className="font-medium text-black">Link Evidence</h3>
-                    <p className="text-slate-600">Upload evidence documents to prove compliance. Link evidence to specific controls to demonstrate you meet each requirement.</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 h-8 w-8 rounded-full bg-primary-50 flex items-center justify-center text-primary-600 font-bold">4</div>
-                  <div>
-                    <h3 className="font-medium text-black">Track Compliance</h3>
-                    <p className="text-slate-600">Start a certification journey from the Frameworks page to track your progress toward full compliance.</p>
-                  </div>
-                </div>
-              </div>
-              <div className="pt-3 border-t border-slate-200">
-                <p className="text-xs text-slate-500">
-                  <strong>Tip:</strong> Use the Evidence module to upload documents, then link them to controls here. Each control can have multiple pieces of evidence.
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end border-t border-slate-200 p-4">
-              <button
-                onClick={() => setShowInfoModal(false)}
-                className="btn-primary"
-              >
-                Got it
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <ControlHealthSnapshot
-        summary={statusSummary}
-        totalFrameworks={frameworkFilter ? 1 : (summaryData?.total_frameworks ?? 0)}
-        fallbackTotal={frameworkFilter ? (data?.total ?? 0) : (summaryData?.total_controls ?? 0)}
-      />
-
+      {/* ── Filter bar (search + framework) ────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex-1 min-w-[180px] sm:min-w-[280px]">
+        <div className="min-w-[180px] flex-1 sm:min-w-[280px]">
           <SearchInput
             value={searchInput}
             onChange={setSearchInput}
@@ -1512,509 +544,539 @@ export default function ControlsPage() {
           searchPlaceholder="Search frameworks"
           size="md"
         />
-        {frameworkFilter && isPhased && (
-          <div className="inline-flex overflow-hidden rounded-lg border border-slate-200">
-            <button
-              type="button"
-              onClick={() => { setViewTouched(true); setViewMode('doc'); }}
-              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
-                viewMode === 'doc' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <FileText className="h-4 w-4" /> Document
-            </button>
-            <button
-              type="button"
-              onClick={() => { setViewTouched(true); setViewMode('tree'); }}
-              className={`flex items-center gap-1.5 border-l border-slate-200 px-3 py-2 text-sm font-medium transition-colors ${
-                viewMode === 'tree' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Layers className="h-4 w-4" /> Tree
-            </button>
-            <button
-              type="button"
-              onClick={() => { setViewTouched(true); setViewMode('table'); }}
-              className={`flex items-center gap-1.5 border-l border-slate-200 px-3 py-2 text-sm font-medium transition-colors ${
-                viewMode === 'table' ? 'bg-primary-600 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <ClipboardList className="h-4 w-4" /> Table
-            </button>
-          </div>
-        )}
       </div>
 
-      {viewMode === 'doc' && frameworkFilter ? (
-        <Figure2View frameworkId={frameworkFilter} />
-      ) : viewMode === 'tree' && frameworkFilter ? (
-        <NativeFrameworkTree frameworkId={frameworkFilter} />
-      ) : (
-      <>
-      <div className="overflow-hidden rounded-lg border border-slate-200">
-        <table className="w-full">
-          <thead className="bg-white">
-            <tr>
-              <th className="px-4 py-3 text-left text-sm font-medium">{renderSortHeader('Control ID', 'control_id')}</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">{renderSortHeader('Title', 'title')}</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium md:table-cell">{renderSortHeader('Framework', 'framework_name')}</th>
-              <th className="hidden px-4 py-3 text-left text-sm font-medium lg:table-cell">{renderSortHeader('Domain', 'domain')}</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">{renderSortHeader('Priority', 'priority')}</th>
-              <th className="px-4 py-3 text-center text-sm font-medium">{renderSortHeader('Evidence', 'evidence_count', 'center')}</th>
-              <th className="px-4 py-3 text-left text-sm font-medium">{renderSortHeader('Status', 'status')}</th>
-              <th className="px-4 py-3 text-right text-sm font-medium text-slate-600"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-700">
-            {data?.controls.map((control) => {
-              return (
-                <Fragment key={control.id}>
-                  <tr
-                    className="group bg-white/50 hover:bg-slate-50 cursor-pointer"
-                    onClick={() => setSelectedControlId(control.id)}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {/* <Shield className="h-4 w-4 text-primary-600 flex-shrink-0" /> */}
-                        <span className="font-mono text-sm text-black">
-                          {control.original_reference || control.control_id}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="text-sm text-black line-clamp-1">{control.title}</p>
-                    </td>
-                    <td className="hidden px-4 py-3 md:table-cell">
-                      <span className="rounded-full whitespace-nowrap bg-primary-50 px-2 py-1 text-xs text-primary-700">
-                        {control.framework_name}
-                      </span>
-                    </td>
-                    <td className="hidden px-4 py-3 lg:table-cell">
-                      <span className="text-sm text-slate-600">{control.domain || '-'}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {control.priority_level
-                        ? <PriorityLevelBadge level={control.priority_level} />
-                        : getPriorityBadge(control.priority)}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Link
-                        href={`/evidence?control_id=${control.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs transition-colors ${
-                          control.evidence_count > 0
-                            ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-500/30'
-                            : 'bg-slate-200 text-slate-500 hover:bg-slate-600'
-                        }`}
-                      >
-                        <Paperclip className="h-3 w-3" />
-                        {control.evidence_count}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3">
-                      {getVerificationBadge(control.is_verified)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <ChevronRight className="ml-auto h-5 w-5 text-slate-400 transition-colors group-hover:text-primary-600" />
-                    </td>
-                  </tr>
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-slate-600">
-            Showing {page * pageSize + 1} to {Math.min((page + 1) * pageSize, data?.total || 0)} of{' '}
-            {data?.total || 0} controls
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPage(Math.max(0, page - 1))}
-              disabled={page === 0}
-              className="btn-secondary btn-sm"
-            >
-              Previous
-            </button>
-            <span className="text-sm text-slate-600">
-              Page {page + 1} of {totalPages}
+      {/* ── Split workbench ────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        {/* LEFT — master list */}
+        <div className="lg:col-span-5">
+          {/* Quick filter chips */}
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            {quickChips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                onClick={() => setQuickFilter(chip.key)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  quickFilter === chip.key
+                    ? 'border-primary-600 bg-primary-600 text-white'
+                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {chip.label}
+              </button>
+            ))}
+            <span className="ml-auto text-[11px] text-slate-400">
+              {filteredControls.length}{filteredControls.length !== allControls.length ? ` / ${allControls.length}` : ''} shown
             </span>
-            <button
-              onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
-              disabled={page >= totalPages - 1}
-              className="btn-secondary btn-sm"
-            >
-              Next
-            </button>
           </div>
-        </div>
-      )}
 
-      {(!data?.controls || data.controls.length === 0) && (
-        <div className="card flex flex-col items-center justify-center py-12 text-center">
-          <Shield className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-black">No controls found</h3>
-          <p className="mt-1 text-slate-600">
-            {summaryData?.total_frameworks === 0
-              ? 'Upload a regulatory framework to see controls here'
-              : 'Try adjusting your search or filters'}
-          </p>
-        </div>
-      )}
-      </>
-      )}
-
-      {/* Control detail — animated centered popup with side-by-side tiles */}
-      <AnimatedModal
-        isOpen={selectedControl != null}
-        onClose={() => setSelectedControlId(null)}
-        size="3xl"
-        title={selectedControl ? (
-          <span className="flex items-center gap-2">
-            <span className="font-mono text-sm text-primary-700">{selectedControl.original_reference || selectedControl.control_id}</span>
-            <span className="truncate">{selectedControl.title}</span>
-          </span>
-        ) : ''}
-        subtitle={selectedControl ? (
-          `${selectedControl.framework_name}${selectedControl.framework_version ? ` (${selectedControl.framework_version})` : ''}${selectedControl.domain ? ` · ${selectedControl.domain}` : ''}`
-        ) : ''}
-        headerAccessory={selectedControl ? (
-          <div className="flex items-center gap-2">
-            {selectedControl.priority_level
-              ? <PriorityLevelBadge level={selectedControl.priority_level} />
-              : getPriorityBadge(selectedControl.priority)}
-            {selectedImplStatus
-              ? <ImplStatusPill status={selectedImplStatus.status} />
-              : getVerificationBadge(selectedControl.is_verified)}
-          </div>
-        ) : undefined}
-        footer={selectedControl ? (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Link
-              href={`/evidence?control_id=${selectedControl.id}`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Paperclip className="h-4 w-4" /> Manage evidence
-            </Link>
-            <button
-              onClick={() => setSelectedControlId(null)}
-              className="rounded-lg bg-primary-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
-            >
-              Close
-            </button>
-          </div>
-        ) : undefined}
-      >
-        {selectedControl && (() => {
-          const control = selectedControl;
-          return (
-          <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
-            {/* Requirement */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
-              <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Requirement</h4>
-              <div className="max-h-72 space-y-3 overflow-y-auto scrollbar-thin pr-1">
-                {control.description && (
-                  <p className="text-sm text-slate-700">{control.description}</p>
-                )}
-                {control.full_text && (
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{control.full_text}</p>
-                )}
-                {!control.description && !control.full_text && (
-                  <p className="text-sm text-slate-400">No requirement text provided.</p>
-                )}
-              </div>
-            </div>
-
-            {/* Framework mapping */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Framework mapping</h4>
-              <dl className="space-y-2 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500">Framework</dt>
-                  <dd className="text-right font-medium text-slate-800">{control.framework_name}{control.framework_version && ` (${control.framework_version})`}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500">Domain</dt>
-                  <dd className="text-right text-slate-700">{control.domain || '—'}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500">Category</dt>
-                  <dd className="text-right text-slate-700">{control.category || '—'}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500">Section</dt>
-                  <dd className="text-right font-mono text-slate-700">{control.section_number || '—'}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-slate-500">Original reference</dt>
-                  <dd className="text-right font-mono text-slate-700">{control.original_reference || control.control_id}</dd>
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <dt className="text-slate-500">Parent control</dt>
-                  <dd className="text-right">
-                    {control.parent_section ? (
-                      <button
-                        onClick={() => {
-                          setSearchInput(control.parent_section || '');
-                          setSearchTerm(control.parent_section || '');
-                          setPage(0);
-                          setSelectedControlId(null);
-                        }}
-                        className="inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-0.5 font-mono text-xs text-primary-700 hover:bg-primary-100"
-                      >
-                        <ChevronRight className="h-3.5 w-3.5" />{control.parent_section}
-                      </button>
-                    ) : <span className="text-slate-400">—</span>}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-
-            {/* Implementation status */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Implementation status</h4>
-              {selectedImplStatus ? (
-                <div className="space-y-2 text-sm">
-                  <div><ImplStatusPill status={selectedImplStatus.status} /></div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-slate-500">Assignee</span>
-                    <span className="text-right text-slate-700">{selectedImplStatus.assignee_name || 'Unassigned'}</span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-slate-500">Implemented</span>
-                    <span className="text-right text-slate-700">{selectedImplStatus.implementation_date || '—'}</span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-slate-500">Verified</span>
-                    <span className="text-right text-slate-700">{selectedImplStatus.verified_date || '—'}</span>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">Not tracked in a certification journey yet.</p>
-              )}
-            </div>
-
-            {/* Linked evidence */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
-              <FrameworkControlEvidenceLinkSection controlId={control.id} />
-            </div>
-
-            {/* Recommended evidence */}
-            {control.evidence_requirements && control.evidence_requirements.length > 0 && (
-              <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
-                <h4 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  <FileText className="h-3.5 w-3.5 text-amber-600" />
-                  Recommended evidence
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">{control.evidence_requirements.length}</span>
-                </h4>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                  {control.evidence_requirements.map((evidence, idx) => {
-                    const evTitle = evidence.name || evidence.title || 'Evidence';
-                    const evType = evidence.filetype || evidence.artifact_type;
-                    return (
-                      <div key={idx} className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
-                        <div className="flex items-start gap-2">
-                          <div className="mt-0.5 flex-shrink-0 text-amber-600">{getEvidenceTypeIcon(evType || 'document')}</div>
-                          <div className="min-w-0 flex-1">
-                            <h5 className="text-sm font-medium text-slate-800">{evTitle}</h5>
-                            {evidence.description && <p className="mt-1 text-xs text-slate-600">{evidence.description}</p>}
-                            {evType && <span className="mt-2 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs uppercase text-amber-700">{evType}</span>}
-                          </div>
+          <div className="card p-0">
+            {filteredControls.length ? (
+              <div className="max-h-[75vh] divide-y divide-slate-100 overflow-y-auto">
+                {filteredControls.map((control) => {
+                  const isSelected = control.id === selectedControlId;
+                  const st = implStatusFor(control)?.status;
+                  // Right-side status dot: verified > tracked-status > pending.
+                  const dot =
+                    st === 'verified' || control.is_verified ? 'bg-emerald-500' :
+                    st === 'implemented' ? 'bg-primary-500' :
+                    st === 'in_progress' ? 'bg-amber-500' :
+                    'bg-slate-300';
+                  return (
+                    <button
+                      key={control.id}
+                      type="button"
+                      onClick={() => setSelectedControlId(control.id)}
+                      className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors ${
+                        isSelected ? 'bg-primary-50' : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-xs font-semibold text-slate-900">
+                            {control.original_reference || control.control_id}
+                          </span>
+                          <span className="rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] text-primary-700">
+                            {control.framework_name}
+                          </span>
+                          {control.priority_level && <PriorityLevelBadge level={control.priority_level} />}
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-sm text-slate-700">{control.title}</p>
+                        <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
+                          <span className="inline-flex items-center gap-1">
+                            <Paperclip className="h-3 w-3" strokeWidth={1.75} />
+                            {control.evidence_count} evidence
+                          </span>
+                          {control.domain && <span className="truncate">{control.domain}</span>}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                      <span className={`mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full ${dot}`} title={st ? IMPL_STATUS_META[st]?.label ?? st : (control.is_verified ? 'Verified' : 'Pending')} />
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex min-h-[16rem] flex-col items-center justify-center px-4 py-8 text-center">
+                <Shield className="mb-3 h-10 w-10 text-slate-300" strokeWidth={1.5} />
+                <p className="text-sm font-medium text-slate-700">No controls found</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {summaryData?.total_frameworks === 0
+                    ? 'Upload a regulatory framework to see controls here'
+                    : 'Try adjusting your search, framework, or quick filter'}
+                </p>
               </div>
             )}
+          </div>
 
-            {/* Dependencies + AI confidence */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
-              <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Dependencies &amp; AI confidence</h4>
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {control.dependencies && control.dependencies.length > 0 ? (
-                    control.dependencies.map((d) => (
-                      <span key={d} className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600">
-                        <Link2 className="h-3 w-3" />{d}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-sm text-slate-400">No dependencies</span>
-                  )}
-                </div>
-                {control.ai_confidence !== null && (
-                  <div className="ml-auto flex items-center gap-2">
-                    <span className="text-xs text-slate-500">AI confidence</span>
-                    <span className={`text-sm font-semibold ${
-                      control.ai_confidence >= 0.8 ? 'text-emerald-600' :
-                      control.ai_confidence >= 0.5 ? 'text-amber-600' : 'text-rose-600'
-                    }`}>{Math.round(control.ai_confidence * 100)}%</span>
-                  </div>
-                )}
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="mt-3 flex items-center justify-between">
+              <p className="text-xs text-slate-500">
+                {page * pageSize + 1}–{Math.min((page + 1) * pageSize, data?.total || 0)} of {data?.total || 0}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(Math.max(0, page - 1))}
+                  disabled={page === 0}
+                  className="btn-secondary btn-sm"
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-slate-500">
+                  {page + 1} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
+                  disabled={page >= totalPages - 1}
+                  className="btn-secondary btn-sm"
+                >
+                  Next
+                </button>
               </div>
             </div>
+          )}
+        </div>
 
-            {/* AI Recommendations */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 md:col-span-2">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary-600" />
-                  <h4 className="text-sm font-semibold text-slate-800">AI Recommendations</h4>
-                </div>
-                {!aiRecommendations[control.id] && canCreate && (
-                  <button
-                    onClick={() => handleGetAIRecommendations(control)}
-                    disabled={loadingAI === control.id}
-                    className="flex items-center gap-2 rounded-lg bg-primary-50 px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50"
-                  >
-                    {loadingAI === control.id ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
-                    ) : (
-                      <><Sparkles className="h-4 w-4" /> Get AI Recommendations</>
-                    )}
-                  </button>
-                )}
+        {/* RIGHT — docked inspector */}
+        <div className="lg:col-span-7">
+          <div className="lg:sticky lg:top-4">
+            {!selectedControl ? (
+              <div className="card flex min-h-[24rem] flex-col items-center justify-center text-center">
+                <ListChecks className="mb-3 h-10 w-10 text-slate-300" strokeWidth={1.5} />
+                <p className="text-sm font-medium text-slate-700">Select a control to inspect</p>
+                <p className="mt-1 text-xs text-slate-500">Everything about a control opens here — no popup.</p>
               </div>
-
-              {aiRecommendations[control.id] && (
-                <div className="space-y-6">
-                  <AiRecommendationSaver
-                    module="control_library"
-                    recommendationType="control_ai_recommendations"
-                    entityType="framework_control"
-                    entityId={control.id}
-                    title={`AI recommendations · ${control.control_id}`}
-                    output={aiRecommendations[control.id] as unknown as Record<string, unknown>}
-                    model="gpt-4o"
-                  />
-                  <div className="rounded-lg border border-primary-200 bg-primary-500/5 p-4">
-                    <div className="mb-3 flex items-center gap-2">
-                      <ClipboardList className="h-4 w-4 text-primary-600" />
-                      <h5 className="text-sm font-medium text-primary-600">Test Procedures</h5>
-                    </div>
-                    <div className="space-y-3">
-                      {aiRecommendations[control.id].test_procedures.map((proc, idx) => (
-                        <div key={idx} className="flex gap-3">
-                          <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-medium text-primary-600">{idx + 1}</span>
-                          <div className="flex-1">
-                            <div className="mb-1 flex items-center gap-2">
-                              {getProcedureTypeBadge(proc.procedure_type)}
-                              <span className="text-xs text-slate-500">{proc.frequency}</span>
-                              {proc.sample_size !== 'N/A' && proc.sample_size !== 'N/A for inquiry' && (
-                                <span className="text-xs text-slate-500">| Sample: {proc.sample_size}</span>
-                              )}
-                            </div>
-                            <p className="text-sm text-slate-600">{proc.description}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-500/5 p-4">
-                    <div className="mb-2 flex items-center gap-2">
-                      <Target className="h-4 w-4 text-emerald-600" />
-                      <h5 className="text-sm font-medium text-emerald-600">Audit Focus Areas</h5>
-                    </div>
-                    <ul className="space-y-1">
-                      {aiRecommendations[control.id].audit_focus_areas.map((area, idx) => (
-                        <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
-                          <span className="mt-1 text-emerald-600">•</span>{area}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {aiRecommendations[control.id].addressed_risks.length > 0 ? (
-                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
-                      <div className="mb-3 flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-amber-600" />
-                        <h5 className="text-sm font-medium text-amber-600">Risks addressed by this control</h5>
-                        <span className="text-[10px] text-slate-400">linked in the Risk Register · close when mitigated</span>
+            ) : (() => {
+              const control = selectedControl;
+              const currentStatus = selectedImplStatus?.status ?? (control.is_verified ? 'verified' : 'not_started');
+              const stageIdx = PIPELINE_STAGES.findIndex((s) => s.key === currentStatus);
+              return (
+                <div className="card p-0">
+                  {/* Inspector header */}
+                  <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-sm text-primary-700">{control.original_reference || control.control_id}</span>
+                        {control.priority_level
+                          ? <PriorityLevelBadge level={control.priority_level} />
+                          : getPriorityBadge(control.priority)}
                       </div>
-                      <div className="space-y-2">
-                        {aiRecommendations[control.id].addressed_risks.map((r) => {
-                          const isClosed = closedRiskIds.has(r.id) || (r.status || '').toLowerCase() === 'closed';
+                      <h2 className="mt-1 text-sm font-semibold text-slate-900">{control.title}</h2>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {control.framework_name}{control.framework_version ? ` (${control.framework_version})` : ''}{control.domain ? ` · ${control.domain}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      {selectedImplStatus
+                        ? <ImplStatusPill status={selectedImplStatus.status} />
+                        : getVerificationBadge(control.is_verified)}
+                    </div>
+                  </div>
+
+                  <div className="max-h-[72vh] space-y-4 overflow-y-auto px-4 py-4 scrollbar-thin">
+                    {/* Status pipeline (read-only: no framework-control status endpoint) */}
+                    <div>
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Implementation stage</h4>
+                        {currentStatus === 'not_applicable' && <ImplStatusPill status="not_applicable" />}
+                      </div>
+                      <div className="flex overflow-hidden rounded-lg border border-slate-200">
+                        {PIPELINE_STAGES.map((stage, i) => {
+                          const done = stageIdx >= 0 && i <= stageIdx;
+                          const isCurrent = i === stageIdx;
                           return (
-                            <div key={r.id} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
-                              <AlertTriangle className={`mt-0.5 h-4 w-4 flex-shrink-0 ${isClosed ? 'text-slate-300' : 'text-amber-500'}`} />
-                              <div className="min-w-0 flex-1">
-                                <Link href="/erm/risks/list" className="text-sm font-medium text-slate-800 hover:text-primary-600">{r.title}</Link>
-                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                                  {r.category && <span className="capitalize">{r.category.replace('_', ' ')}</span>}
-                                  {r.residual_score != null && <span className="font-mono">· res {r.residual_score}</span>}
-                                  {isClosed && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-emerald-600"><CheckCircle className="h-3 w-3" /> Closed</span>}
-                                </div>
-                              </div>
-                              {canCreate && (
-                                isClosed ? (
-                                  <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-600"><CheckCircle className="h-3.5 w-3.5" /> Closed</span>
-                                ) : (
-                                  <button onClick={() => closeRiskMutation.mutate(r.id)}
-                                    disabled={closingRiskId === r.id}
-                                    className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
-                                    {closingRiskId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />} Close risk
-                                  </button>
-                                )
-                              )}
+                            <div
+                              key={stage.key}
+                              className={`flex-1 border-r border-slate-200 px-2 py-1.5 text-center text-[11px] font-medium last:border-r-0 ${
+                                isCurrent ? 'bg-primary-600 text-white'
+                                : done ? 'bg-primary-50 text-primary-700'
+                                : 'bg-white text-slate-400'
+                              }`}
+                              title={stage.label}
+                            >
+                              {stage.label}
                             </div>
                           );
                         })}
                       </div>
-                    </div>
-                  ) : aiRecommendations[control.id].risks_if_not_implemented.length > 0 ? (
-                    <div className="rounded-lg border border-red-200 bg-red-500/5 p-4">
-                      <div className="mb-3 flex items-center gap-2">
-                        <ShieldAlert className="h-4 w-4 text-red-600" />
-                        <h5 className="text-sm font-medium text-red-600">Risks if this control isn’t implemented</h5>
-                        <span className="text-[10px] text-slate-400">AI-reasoned · no risks linked yet · add to Risk Register</span>
-                      </div>
-                      <div className="space-y-2">
-                        {aiRecommendations[control.id].risks_if_not_implemented.map((r, idx) => (
-                          <div key={idx} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
-                            <span className={`mt-0.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize ${riskSevCls(r.severity)}`}>{r.severity || 'medium'}</span>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-slate-800">{r.title}</p>
-                              {r.description && <p className="mt-0.5 text-xs text-slate-500">{r.description}</p>}
-                              {r.rationale && <p className="mt-1 text-[11px] italic text-slate-400">Why: {r.rationale}</p>}
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-                                {r.category && <span className="capitalize">{r.category.replace('_', ' ')}</span>}
-                                {!!r.likelihood && !!r.impact && <span>· L{r.likelihood}×I{r.impact} = {r.likelihood * r.impact}</span>}
-                              </div>
-                            </div>
-                            {canCreate && (
-                              <button onClick={() => openPromote(control, r)}
-                                className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg bg-red-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-red-700">
-                                <Plus className="h-3.5 w-3.5" /> Add to Risk Register
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-xs text-slate-500">No register risks are linked to this control, and the AI found no residual risks to add.</p>
-                      {aiRecommendations[control.id].key_risks_addressed.length > 0 && (
-                        <ul className="mt-2 space-y-1">
-                          {aiRecommendations[control.id].key_risks_addressed.map((risk, idx) => (
-                            <li key={idx} className="flex items-start gap-2 text-xs text-slate-500"><span className="mt-0.5 text-amber-600">•</span>{risk}</li>
-                          ))}
-                        </ul>
+                      {!selectedImplStatus && (
+                        <p className="mt-1 text-[11px] text-slate-400">Not tracked in a certification journey yet — start one from Frameworks to update the stage.</p>
                       )}
                     </div>
-                  )}
+
+                    {/* Owner + link-evidence actions */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700">
+                        <User className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
+                        <span className="text-slate-500">Owner:</span>
+                        <span className="font-medium text-slate-800">{selectedImplStatus?.assignee_name || 'Unassigned'}</span>
+                      </span>
+                      <Link
+                        href={`/evidence?control_id=${control.id}`}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                      >
+                        <Paperclip className="h-3.5 w-3.5" strokeWidth={1.75} /> Manage evidence
+                      </Link>
+                    </div>
+
+                    {/* Requirement */}
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Requirement</h4>
+                      <div className="max-h-72 space-y-3 overflow-y-auto pr-1 scrollbar-thin">
+                        {control.description && (
+                          <p className="text-sm text-slate-700">{control.description}</p>
+                        )}
+                        {control.full_text && (
+                          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{control.full_text}</p>
+                        )}
+                        {!control.description && !control.full_text && (
+                          <p className="text-sm text-slate-400">No requirement text provided.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Evidence checklist */}
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <h4 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        <ListChecks className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} /> Evidence checklist
+                      </h4>
+                      <FrameworkControlEvidenceLinkSection controlId={control.id} />
+                    </div>
+
+                    {/* Recommended evidence */}
+                    {control.evidence_requirements && control.evidence_requirements.length > 0 && (
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <h4 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                          <FileText className="h-3.5 w-3.5 text-amber-600" />
+                          Recommended evidence
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">{control.evidence_requirements.length}</span>
+                        </h4>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          {control.evidence_requirements.map((evidence, idx) => {
+                            const evTitle = evidence.name || evidence.title || 'Evidence';
+                            const evType = evidence.filetype || evidence.artifact_type;
+                            return (
+                              <div key={idx} className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+                                <div className="flex items-start gap-2">
+                                  <div className="mt-0.5 flex-shrink-0 text-amber-600">{getEvidenceTypeIcon(evType || 'document')}</div>
+                                  <div className="min-w-0 flex-1">
+                                    <h5 className="text-sm font-medium text-slate-800">{evTitle}</h5>
+                                    {evidence.description && <p className="mt-1 text-xs text-slate-600">{evidence.description}</p>}
+                                    {evType && <span className="mt-2 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs uppercase text-amber-700">{evType}</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mapping */}
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Mapping</h4>
+                      <dl className="space-y-2 text-sm">
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-slate-500">Framework</dt>
+                          <dd className="text-right font-medium text-slate-800">{control.framework_name}{control.framework_version && ` (${control.framework_version})`}</dd>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-slate-500">Domain</dt>
+                          <dd className="text-right text-slate-700">{control.domain || '—'}</dd>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-slate-500">Category</dt>
+                          <dd className="text-right text-slate-700">{control.category || '—'}</dd>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-slate-500">Section</dt>
+                          <dd className="text-right font-mono text-slate-700">{control.section_number || '—'}</dd>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-slate-500">Original reference</dt>
+                          <dd className="text-right font-mono text-slate-700">{control.original_reference || control.control_id}</dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-4">
+                          <dt className="text-slate-500">Mandatory</dt>
+                          <dd className="text-right text-slate-700">{control.is_mandatory ? 'Yes' : 'No'}</dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-4">
+                          <dt className="text-slate-500">Parent control</dt>
+                          <dd className="text-right">
+                            {control.parent_section ? (
+                              <button
+                                onClick={() => {
+                                  setSearchInput(control.parent_section || '');
+                                  setSearchTerm(control.parent_section || '');
+                                  setPage(0);
+                                  setSelectedControlId(null);
+                                }}
+                                className="inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-0.5 font-mono text-xs text-primary-700 hover:bg-primary-100"
+                              >
+                                <ChevronRight className="h-3.5 w-3.5" />{control.parent_section}
+                              </button>
+                            ) : <span className="text-slate-400">—</span>}
+                          </dd>
+                        </div>
+                      </dl>
+                      {/* Dependencies + AI confidence */}
+                      <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-slate-100 pt-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {control.dependencies && control.dependencies.length > 0 ? (
+                            control.dependencies.map((d) => (
+                              <span key={d} className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600">
+                                <Link2 className="h-3 w-3" />{d}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-slate-400">No dependencies</span>
+                          )}
+                        </div>
+                        {control.ai_confidence !== null && (
+                          <div className="ml-auto flex items-center gap-2">
+                            <span className="text-xs text-slate-500">AI confidence</span>
+                            <span className={`text-sm font-semibold ${
+                              control.ai_confidence >= 0.8 ? 'text-emerald-600' :
+                              control.ai_confidence >= 0.5 ? 'text-amber-600' : 'text-rose-600'
+                            }`}>{Math.round(control.ai_confidence * 100)}%</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Activity — status changes / evidence linked */}
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <h4 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        <Activity className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} /> Activity
+                      </h4>
+                      {selectedImplStatus ? (
+                        <ul className="space-y-2 text-sm">
+                          <li className="flex items-center justify-between gap-4">
+                            <span className="flex items-center gap-2 text-slate-600"><span className="h-1.5 w-1.5 rounded-full bg-primary-400" /> Current stage</span>
+                            <span className="text-slate-700"><ImplStatusPill status={selectedImplStatus.status} /></span>
+                          </li>
+                          <li className="flex items-center justify-between gap-4">
+                            <span className="flex items-center gap-2 text-slate-600"><span className="h-1.5 w-1.5 rounded-full bg-slate-300" /> Implemented</span>
+                            <span className="text-slate-700">{selectedImplStatus.implementation_date || '—'}</span>
+                          </li>
+                          <li className="flex items-center justify-between gap-4">
+                            <span className="flex items-center gap-2 text-slate-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Verified</span>
+                            <span className="text-slate-700">{selectedImplStatus.verified_date || '—'}</span>
+                          </li>
+                          <li className="flex items-center justify-between gap-4">
+                            <span className="flex items-center gap-2 text-slate-600"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> Evidence linked</span>
+                            <span className="text-slate-700">{control.evidence_count}</span>
+                          </li>
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-slate-400">No tracked activity yet. {control.evidence_count} evidence item{control.evidence_count === 1 ? '' : 's'} linked.</p>
+                      )}
+                    </div>
+
+                    {/* AI Recommendations */}
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-primary-600" />
+                          <h4 className="text-sm font-semibold text-slate-800">AI Recommendations</h4>
+                        </div>
+                        {!aiRecommendations[control.id] && canCreate && (
+                          <button
+                            onClick={() => handleGetAIRecommendations(control)}
+                            disabled={loadingAI === control.id}
+                            className="flex items-center gap-2 rounded-lg bg-primary-50 px-3 py-1.5 text-sm text-primary-700 transition-colors hover:bg-primary-100 disabled:opacity-50"
+                          >
+                            {loadingAI === control.id ? (
+                              <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
+                            ) : (
+                              <><Sparkles className="h-4 w-4" /> Get AI Recommendations</>
+                            )}
+                          </button>
+                        )}
+                      </div>
+
+                      {aiRecommendations[control.id] && (
+                        <div className="space-y-6">
+                          <AiRecommendationSaver
+                            module="control_library"
+                            recommendationType="control_ai_recommendations"
+                            entityType="framework_control"
+                            entityId={control.id}
+                            title={`AI recommendations · ${control.control_id}`}
+                            output={aiRecommendations[control.id] as unknown as Record<string, unknown>}
+                            model="gpt-4o"
+                          />
+                          <div className="rounded-lg border border-primary-200 bg-primary-50 p-4">
+                            <div className="mb-3 flex items-center gap-2">
+                              <ClipboardList className="h-4 w-4 text-primary-600" />
+                              <h5 className="text-sm font-medium text-primary-600">Test Procedures</h5>
+                            </div>
+                            <div className="space-y-3">
+                              {aiRecommendations[control.id].test_procedures.map((proc, idx) => (
+                                <div key={idx} className="flex gap-3">
+                                  <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-medium text-primary-600">{idx + 1}</span>
+                                  <div className="flex-1">
+                                    <div className="mb-1 flex items-center gap-2">
+                                      {getProcedureTypeBadge(proc.procedure_type)}
+                                      <span className="text-xs text-slate-500">{proc.frequency}</span>
+                                      {proc.sample_size !== 'N/A' && proc.sample_size !== 'N/A for inquiry' && (
+                                        <span className="text-xs text-slate-500">| Sample: {proc.sample_size}</span>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-slate-600">{proc.description}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                            <div className="mb-2 flex items-center gap-2">
+                              <Target className="h-4 w-4 text-emerald-600" />
+                              <h5 className="text-sm font-medium text-emerald-600">Audit Focus Areas</h5>
+                            </div>
+                            <ul className="space-y-1">
+                              {aiRecommendations[control.id].audit_focus_areas.map((area, idx) => (
+                                <li key={idx} className="flex items-start gap-2 text-sm text-slate-600">
+                                  <span className="mt-1 text-emerald-600">•</span>{area}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          {aiRecommendations[control.id].addressed_risks.length > 0 ? (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                              <div className="mb-3 flex items-center gap-2">
+                                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                <h5 className="text-sm font-medium text-amber-600">Risks addressed by this control</h5>
+                                <span className="text-[10px] text-slate-400">linked in the Risk Register · close when mitigated</span>
+                              </div>
+                              <div className="space-y-2">
+                                {aiRecommendations[control.id].addressed_risks.map((r) => {
+                                  const isClosed = closedRiskIds.has(r.id) || (r.status || '').toLowerCase() === 'closed';
+                                  return (
+                                    <div key={r.id} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
+                                      <AlertTriangle className={`mt-0.5 h-4 w-4 flex-shrink-0 ${isClosed ? 'text-slate-300' : 'text-amber-500'}`} />
+                                      <div className="min-w-0 flex-1">
+                                        <Link href="/erm/risks/list" className="text-sm font-medium text-slate-800 hover:text-primary-600">{r.title}</Link>
+                                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                                          {r.category && <span className="capitalize">{r.category.replace('_', ' ')}</span>}
+                                          {r.residual_score != null && <span className="font-mono">· res {r.residual_score}</span>}
+                                          {isClosed && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-emerald-600"><CheckCircle className="h-3 w-3" /> Closed</span>}
+                                        </div>
+                                      </div>
+                                      {canCreate && (
+                                        isClosed ? (
+                                          <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-600"><CheckCircle className="h-3.5 w-3.5" /> Closed</span>
+                                        ) : (
+                                          <button onClick={() => closeRiskMutation.mutate(r.id)}
+                                            disabled={closingRiskId === r.id}
+                                            className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50">
+                                            {closingRiskId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />} Close risk
+                                          </button>
+                                        )
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : aiRecommendations[control.id].risks_if_not_implemented.length > 0 ? (
+                            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
+                              <div className="mb-3 flex items-center gap-2">
+                                <ShieldAlert className="h-4 w-4 text-rose-600" />
+                                <h5 className="text-sm font-medium text-rose-600">Risks if this control isn’t implemented</h5>
+                                <span className="text-[10px] text-slate-400">AI-reasoned · no risks linked yet · add to Risk Register</span>
+                              </div>
+                              <div className="space-y-2">
+                                {aiRecommendations[control.id].risks_if_not_implemented.map((r, idx) => (
+                                  <div key={idx} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
+                                    <span className={`mt-0.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize ${riskSevCls(r.severity)}`}>{r.severity || 'medium'}</span>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-medium text-slate-800">{r.title}</p>
+                                      {r.description && <p className="mt-0.5 text-xs text-slate-500">{r.description}</p>}
+                                      {r.rationale && <p className="mt-1 text-[11px] italic text-slate-400">Why: {r.rationale}</p>}
+                                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                                        {r.category && <span className="capitalize">{r.category.replace('_', ' ')}</span>}
+                                        {!!r.likelihood && !!r.impact && <span>· L{r.likelihood}×I{r.impact} = {r.likelihood * r.impact}</span>}
+                                      </div>
+                                    </div>
+                                    {canCreate && (
+                                      <button onClick={() => openPromote(control, r)}
+                                        className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-rose-700">
+                                        <Plus className="h-3.5 w-3.5" /> Add to Risk Register
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                              <p className="text-xs text-slate-500">No register risks are linked to this control, and the AI found no residual risks to add.</p>
+                              {aiRecommendations[control.id].key_risks_addressed.length > 0 && (
+                                <ul className="mt-2 space-y-1">
+                                  {aiRecommendations[control.id].key_risks_addressed.map((risk, idx) => (
+                                    <li key={idx} className="flex items-start gap-2 text-xs text-slate-500"><span className="mt-0.5 text-amber-600">•</span>{risk}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Prev / Next control navigation */}
+                  <div className="flex items-center justify-between gap-2 border-t border-slate-200 px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => prevControl && setSelectedControlId(prevControl.id)}
+                      disabled={!prevControl}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      <ChevronLeft className="h-4 w-4" strokeWidth={1.75} /> Previous
+                    </button>
+                    <span className="text-[11px] text-slate-400">
+                      {selectedIndex >= 0 ? `${selectedIndex + 1} of ${filteredControls.length}` : ''}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => nextControl && setSelectedControlId(nextControl.id)}
+                      disabled={!nextControl}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      Next <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
+              );
+            })()}
           </div>
-          );
-        })()}
-      </AnimatedModal>
+        </div>
+      </div>
 
       {/* Promote an AI risk → real ERM Risk Register entry */}
       {promoteCtx && (
@@ -2035,11 +1097,11 @@ export default function ControlsPage() {
           }
         >
           <div className="space-y-4">
-            <p className="rounded-lg bg-red-50 p-2 text-[11px] text-red-700">
+            <p className="rounded-lg bg-rose-50 p-2 text-[11px] text-rose-700">
               Creates a real risk in the ERM Risk Register, linked to this control as a mitigation. These are the same fields as the Risk Register. Residual defaults to inherent until the control is implemented.
             </p>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-700">Title <span className="text-red-500">*</span></label>
+              <label className="mb-1 block text-xs font-medium text-gray-700">Title <span className="text-rose-500">*</span></label>
               <input className={RISK_INPUT_CLS} value={promoteForm.title} onChange={(e) => setPromoteForm({ ...promoteForm, title: e.target.value })} required />
             </div>
             <div>
