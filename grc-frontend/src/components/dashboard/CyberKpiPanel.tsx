@@ -14,33 +14,34 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import apiClient from '@/lib/api';
 import { Activity, ArrowRight, Target, Info, ExternalLink } from 'lucide-react';
-import { KPI_FORMAT, GOOD, BAD, TEAL, type Kpi, type LiveMetric, buildKpis, pct, toneOf, RichTrend, PeriodCards, KpiDetailModal } from '@/components/dashboard/kpiShared';
+import { KPI_FORMAT, GOOD, BAD, TEAL, type Kpi, type LiveMetric, buildKpis, pct, toneOf, RichTrend, KpiDetailModal } from '@/components/dashboard/kpiShared';
 
 // Full inline KPI card — the rich trend chart + period cards shown right on the
 // card (not just in the popup). `wide` spans both columns to fill an odd row.
-function KpiRichCard({ k, onOpen, wide }: { k: Kpi; onOpen: () => void; wide: boolean }) {
+function KpiRichCard({ k, onOpen, span }: { k: Kpi; onOpen: () => void; span: number }) {
   const tone = toneOf(k);
+  const colClass = span === 3 ? 'lg:col-span-3' : span === 2 ? 'lg:col-span-2' : '';
+  const tw = span === 3 ? 1060 : span === 2 ? 700 : 440;
   return (
     <button type="button" onClick={onOpen}
-      className={`group flex flex-col rounded-xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-slate-300 hover:shadow-sm ${wide ? 'lg:col-span-2' : ''}`}>
+      className={`group flex flex-col rounded-xl border border-slate-200 bg-white p-3 text-left transition-all hover:border-slate-300 hover:shadow-sm ${colClass}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="truncate text-[9.5px] font-semibold uppercase tracking-wide text-slate-400">{k.domain}</span>
             <span className="rounded-full px-1.5 py-0.5 text-[8.5px] font-bold uppercase" style={{ backgroundColor: `${TEAL}14`, color: TEAL }}>Live</span>
           </div>
-          <p className="truncate text-[13px] font-medium text-slate-700" title={k.topic}>{k.topic}</p>
+          <p className="truncate text-[12px] font-medium text-slate-700" title={k.topic}>{k.topic}</p>
         </div>
         <div className="flex-shrink-0 text-right">
-          <div className="text-[22px] font-bold leading-none tabular-nums" style={{ color: tone }}>{pct(k.actual)}</div>
-          <div className="mt-0.5 flex items-center justify-end gap-0.5 text-[10px] text-slate-400"><Target className="h-3 w-3" />{pct(k.target)}</div>
+          <div className="text-[19px] font-bold leading-none tabular-nums" style={{ color: tone }}>{pct(k.actual)}</div>
+          <div className="mt-0.5 flex items-center justify-end gap-0.5 text-[9.5px] text-slate-400"><Target className="h-2.5 w-2.5" />{pct(k.target)}</div>
         </div>
       </div>
-      <div className="mt-2"><RichTrend history={k.history} target={k.target} width={wide ? 1060 : 500} height={wide ? 140 : 118} /></div>
-      <div className="mt-2"><PeriodCards history={k.history} target={k.target} /></div>
-      <div className="mt-2 flex items-center justify-between text-[10px]">
+      <div className="mt-1.5"><RichTrend history={k.history} target={k.target} width={tw} height={span >= 2 ? 74 : 66} /></div>
+      <div className="mt-1 flex items-center justify-between text-[9.5px]">
         <span className="font-medium" style={{ color: k.onTarget ? GOOD : BAD }}>{k.onTarget ? 'On target' : 'Below target'} · live</span>
-        {k.numerator != null && k.denominator != null && <span className="tabular-nums text-slate-400">{k.numerator}/{k.denominator}</span>}
+        {k.numerator != null && k.denominator != null && <span className="tabular-nums text-slate-400">{k.numerator}/{k.denominator} · click for detail</span>}
       </div>
     </button>
   );
@@ -107,11 +108,13 @@ export default function CyberKpiPanel() {
         <Tile label="External (no feed)" value={`${ext}`} />
       </div>
 
-      {/* Live KPIs as full rich cards; the last odd one spans both columns to fill the row. */}
-      <div className="grid grid-cols-1 gap-2.5 px-5 lg:grid-cols-2">
-        {liveKpis.map((k, i) => (
-          <KpiRichCard key={i} k={k} onOpen={() => setSel(k)} wide={liveKpis.length % 2 === 1 && i === liveKpis.length - 1} />
-        ))}
+      {/* Live KPIs as compact rich cards; the last card(s) widen to fill the row (no gaps). */}
+      <div className="grid grid-cols-1 gap-2.5 px-5 sm:grid-cols-2 lg:grid-cols-3">
+        {liveKpis.map((k, i) => {
+          const rem = liveKpis.length % 3;
+          const span = i === liveKpis.length - 1 ? (rem === 1 ? 3 : rem === 2 ? 2 : 1) : 1;
+          return <KpiRichCard key={i} k={k} onOpen={() => setSel(k)} span={span} />;
+        })}
       </div>
 
       {/* Un-feedable KPIs collapse into a compact strip — no odd empty cards. */}
