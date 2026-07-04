@@ -1,68 +1,29 @@
-﻿'use client';
+'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
 import apiClient from '@/lib/api';
-import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis,
-} from 'recharts';
-
-const ASSET_TYPE_COLORS: Record<string, string> = {
-  application:   '#3b82f6',
-  infrastructure:'#8b5cf6',
-  data:          '#10b981',
-  cloud:         '#f59e0b',
-  third_party:   '#ec4899',
-};
-const CRITICALITY_COLORS: Record<string, string> = {
-  critical: '#ef4444',
-  high:     '#f97316',
-  medium:   '#eab308',
-  low:      '#22c55e',
-};
-const AssetTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) => {
-  if (active && payload?.length) {
-    return (
-      <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-md text-xs">
-        <p className="font-medium text-gray-800 capitalize">{payload[0].name.replace(/_/g, ' ')}</p>
-        <p className="text-gray-500">{payload[0].value} assets</p>
-      </div>
-    );
-  }
-  return null;
-};
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { usePermissions } from '@/hooks/usePermissions';
 import { assetsApi } from '@/lib/api';
 import { CriticalityCoverageWidget } from '@/components/assets/CriticalityCoverageWidget';
 import { ITAsset, AssetType } from '@/types';
-import { SearchInput, MultiSelectDropdown, PageLoader, ComboBoxInput, type ComboBoxOption } from '@/components/ui';
+import { PageLoader, ComboBoxInput, type ComboBoxOption } from '@/components/ui';
+import { AssetsWorkspace } from './_workspace/AssetsWorkspace';
 import {
-  Server,
   Loader2,
   AlertCircle,
-  Plus,
   X,
   AppWindow,
   HardDrive,
   Database,
   Cloud,
   Building2,
-  ChevronDown,
-  ChevronRight,
-  Eye,
   Edit,
-  Trash2,
-  Shield,
   DollarSign,
-  Download,
   Upload,
   FileSpreadsheet,
   CheckCircle2,
-  // CIS Module Updated — per-row "Connect" button that deep-links into
-  // the Connect Wizard with hostname pre-filled.
-  Plug,
 } from 'lucide-react';
 
 type StatusFilter = 'all' | 'active' | 'inactive' | 'decommissioned';
@@ -145,6 +106,9 @@ export default function AssetsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [criticalityFilter, setCriticalityFilter] = useState<CriticalityFilter>('all');
+  // Asset-type facet (workspace toolbar). Additive client-side filter — 'all'
+  // is a no-op so the default view is unchanged.
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   // Phase 5 filters. Client-side only — the list is small enough that we
   // don't need a round-trip per filter change, and the existing list query
   // doesn't accept these params yet by design (default sort preserved).
@@ -239,79 +203,6 @@ export default function AssetsPage() {
     setEditingAsset(asset);
   };
 
-  const getAssetIcon = (type: string) => {
-    const assetType = ASSET_TYPES.find(t => t.value === type);
-    const Icon = assetType?.icon || Server;
-    return <Icon className="h-5 w-5 text-primary-400" />;
-  };
-
-  const getStatusBadge = (status: string) => {
-    const colors: Record<string, string> = {
-      active: 'bg-green-100',
-      inactive: 'bg-yellow-100',
-      decommissioned: 'bg-slate-100',
-    };
-    return (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium text-slate-900 ${colors[status] || 'bg-slate-100'}`}>
-        {status}
-      </span>
-    );
-  };
-
-  const getCriticalityBadge = (criticality: string) => {
-    const colors: Record<string, string> = {
-      critical: 'bg-red-100',
-      high: 'bg-orange-100',
-      medium: 'bg-yellow-100',
-      low: 'bg-green-100',
-    };
-    return (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium text-slate-900 ${colors[criticality] || 'bg-slate-100'}`}>
-        {criticality}
-      </span>
-    );
-  };
-
-  const getTypeBadge = (type: string) => {
-    const assetType = ASSET_TYPES.find(t => t.value === type);
-    const color = ASSET_TYPE_COLORS[type] ?? '#6b7280';
-    return (
-      <span
-        className="rounded-full px-2 py-0.5 text-xs font-medium text-slate-900"
-        style={{ backgroundColor: color + '22' }}
-      >
-        {assetType?.label || type}
-      </span>
-    );
-  };
-
-  const getCIARatingBar = (rating: number | undefined, label: string, color: string) => {
-    const value = rating || 0;
-    return (
-      <div className="flex items-center gap-1" title={`${label}: ${value}/5`}>
-        <span className="text-xs text-slate-500">{label[0]}</span>
-        <div className="flex gap-0.5">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div
-              key={i}
-              className={`h-2 w-1.5 rounded-sm ${i <= value ? color : 'bg-slate-200'}`}
-            />
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const formatCurrency = (value: number | undefined) => {
-    if (!value) return '-';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
   const filteredAssets = assets?.filter((asset: ITAsset) => {
     const matchesSearch =
       asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -320,6 +211,7 @@ export default function AssetsPage() {
 
     const matchesStatus = statusFilter === 'all' || asset.status === statusFilter;
     const matchesCriticality = criticalityFilter === 'all' || asset.criticality === criticalityFilter;
+    const matchesType = typeFilter === 'all' || asset.asset_type === typeFilter;
 
     // Phase 5 filters. NULL fields fall through unless the user has actively
     // selected a value — assets that pre-date the migration are not excluded
@@ -353,6 +245,7 @@ export default function AssetsPage() {
       matchesSearch &&
       matchesStatus &&
       matchesCriticality &&
+      matchesType &&
       matchesLifecycle &&
       matchesClassification &&
       matchesStale &&
@@ -432,47 +325,6 @@ export default function AssetsPage() {
     router.push(`/admin/integrations/connect?${params.toString()}`);
   };
 
-  const assetTypeChartData = useMemo(() => {
-    const byType = dashboard?.by_type || {};
-    return Object.entries(byType)
-      .filter(([, v]) => (v as number) > 0)
-      .map(([key, value]) => ({
-        name: key.replace(/_/g, ' '),
-        value: value as number,
-        fill: ASSET_TYPE_COLORS[key] || '#6b7280',
-      }));
-  }, [dashboard?.by_type]);
-
-  const criticalityChartData = useMemo(() => {
-    const byCrit = dashboard?.by_criticality || {};
-    return ['critical', 'high', 'medium', 'low']
-      .filter((k) => (byCrit[k] ?? 0) > 0)
-      .map((key) => ({
-        name: key.charAt(0).toUpperCase() + key.slice(1),
-        value: byCrit[key] as number,
-        fill: CRITICALITY_COLORS[key],
-      }));
-  }, [dashboard?.by_criticality]);
-
-  const ciaRadarData = useMemo(() => {
-    const assetList = (assets as ITAsset[]) || [];
-    const types = ['application', 'infrastructure', 'data', 'cloud', 'third_party'];
-    return types.map((type) => {
-      const group = assetList.filter((a) => a.asset_type === type);
-      if (!group.length) return null;
-      const avg = (field: keyof ITAsset) =>
-        Math.round((group.reduce((s, a) => s + ((a[field] as number) || 0), 0) / group.length) * 10) / 10;
-      return {
-        type: type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        C: avg('confidentiality_rating'),
-        I: avg('integrity_rating'),
-        A: avg('availability_rating'),
-      };
-    }).filter(Boolean) as Array<{ type: string; C: number; I: number; A: number }>;
-  }, [assets]);
-
-  const totalAssets = dashboard?.total_assets || 0;
-
   if (isLoading) {
     return (
       <PageLoader className="h-64" />
@@ -488,561 +340,59 @@ export default function AssetsPage() {
     );
   }
 
+  // Adapter for the workspace primitives, which call handlers without a DOM
+  // event. The existing handlers open with e.stopPropagation(); a no-op stub
+  // satisfies that while preserving their behavior verbatim.
+  const noopEvent = { stopPropagation: () => {} } as unknown as React.MouseEvent;
+
   return (
     <div className="assets-light space-y-4 sm:space-y-5 px-3 sm:px-4 pt-3">
       {/* Criticality coverage banner hidden — keep import + component
           on disk so re-enabling is a single-line uncomment.
       <CriticalityCoverageWidget /> */}
 
-      {/* Visual overview — 3 chart panels */}
-      <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
-
-        {/* Panel 1 — Asset type donut */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">By Asset Type</p>
-          {assetTypeChartData.length === 0 ? (
-            <div className="flex h-[120px] items-center justify-center text-xs text-slate-400">No data</div>
-          ) : (
-            <div className="flex items-center gap-4">
-              <div className="relative h-[110px] w-[110px] flex-shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={assetTypeChartData} cx="50%" cy="50%" innerRadius={30} outerRadius={50} dataKey="value" paddingAngle={2}>
-                      {assetTypeChartData.map((entry, i) => (
-                        <Cell key={i} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<AssetTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-lg font-bold text-slate-900">{totalAssets}</span>
-                  <span className="text-[10px] text-slate-400">total</span>
-                </div>
-              </div>
-              <div className="flex flex-1 flex-col gap-1.5 min-w-0">
-                {assetTypeChartData.map((entry) => (
-                  <div key={entry.name} className="flex items-center gap-2 text-xs">
-                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.fill }} />
-                    <span className="text-slate-500 capitalize truncate">{entry.name}</span>
-                    <span className="font-semibold text-slate-800 ml-auto">{entry.value}</span>
-                  </div>
-                ))}
-                <div className="mt-1 border-t border-slate-100 pt-1 flex justify-between text-[10px] text-slate-400">
-                  <span>High Value</span>
-                  <span className="font-semibold text-green-600">{dashboard?.high_value_assets || 0}</span>
-                </div>
-                <div className="flex justify-between text-[10px] text-slate-400">
-                  <span>Need CIA</span>
-                  <span className="font-semibold text-amber-500">{dashboard?.assets_needing_assessment || 0}</span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Panel 2 — Criticality ring */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">By Criticality</p>
-          {criticalityChartData.length === 0 ? (
-            <div className="flex h-[120px] items-center justify-center text-xs text-slate-400">No data</div>
-          ) : (
-            <div className="flex items-center gap-4">
-              <div className="relative h-[110px] w-[110px] flex-shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={criticalityChartData} cx="50%" cy="50%" innerRadius={30} outerRadius={50} dataKey="value" paddingAngle={2}>
-                      {criticalityChartData.map((entry, i) => (
-                        <Cell key={i} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<AssetTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-lg font-bold text-slate-900">{criticalityChartData.reduce((s, e) => s + e.value, 0)}</span>
-                  <span className="text-[10px] text-slate-400">assets</span>
-                </div>
-              </div>
-              <div className="flex flex-1 flex-col gap-1.5 min-w-0">
-                {criticalityChartData.map((entry) => (
-                  <div key={entry.name} className="flex items-center gap-2 text-xs">
-                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.fill }} />
-                    <span className="text-slate-500">{entry.name}</span>
-                    <span className="font-semibold text-slate-800 ml-auto">{entry.value}</span>
-                  </div>
-                ))}
-                <div className="mt-1 border-t border-slate-100 pt-1 flex justify-between text-[10px] text-slate-400">
-                  <span>Active</span>
-                  <span className="font-semibold text-green-600">{dashboard?.by_status?.active || 0}</span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Panel 3 — CIA radar by asset type */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">CIA Profile by Type</p>
-          <p className="text-[10px] text-slate-400 mb-2">Avg Confidentiality / Integrity / Availability (1–5)</p>
-          {ciaRadarData.length === 0 ? (
-            <div className="flex h-[110px] items-center justify-center text-xs text-slate-400">Rate your assets to see CIA profile</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={120}>
-              <RadarChart data={ciaRadarData} cx="50%" cy="50%" outerRadius={46}>
-                <PolarGrid stroke="#e2e8f0" />
-                <PolarAngleAxis dataKey="type" tick={{ fontSize: 9, fill: '#64748b' }} />
-                <Radar name="C" dataKey="C" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} />
-                <Radar name="I" dataKey="I" stroke="#10b981" fill="#10b981" fillOpacity={0.15} />
-                <Radar name="A" dataKey="A" stroke="#eab308" fill="#eab308" fillOpacity={0.15} />
-                <Tooltip formatter={(value, name) => [value, name === 'C' ? 'Confidentiality' : name === 'I' ? 'Integrity' : 'Availability']} />
-              </RadarChart>
-            </ResponsiveContainer>
-          )}
-          <div className="flex items-center justify-center gap-4 mt-1">
-            <div className="flex items-center gap-1 text-[10px] text-slate-500"><span className="h-2 w-2 rounded-full bg-blue-500" />C</div>
-            <div className="flex items-center gap-1 text-[10px] text-slate-500"><span className="h-2 w-2 rounded-full bg-emerald-500" />I</div>
-            <div className="flex items-center gap-1 text-[10px] text-slate-500"><span className="h-2 w-2 rounded-full bg-yellow-400" />A</div>
-          </div>
-        </div>
-
-      </div>
-
-      <div className="flex flex-nowrap items-center gap-1.5 min-w-0">
-        <div className="min-w-0 flex-1 max-w-[200px] shrink">
-          <SearchInput
-            value={searchTerm}
-            onChange={setSearchTerm}
-            placeholder="Search…"
-            size="sm"
-          />
-        </div>
-
-        <MultiSelectDropdown
-          title="Status"
-          items={[
-            { value: 'active', label: 'Active' },
-            { value: 'inactive', label: 'Inactive' },
-            { value: 'decommissioned', label: 'Decommissioned' },
-          ]}
-          selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
-          onApply={(v) => setStatusFilter((v[0] as StatusFilter) || 'all')}
-          multiSelect={false}
-          autoApply
-          placeholder="All Status"
-          size="sm"
-        />
-
-        <MultiSelectDropdown
-          title="Criticality"
-          items={[
-            { value: 'critical', label: 'Critical' },
-            { value: 'high', label: 'High' },
-            { value: 'medium', label: 'Medium' },
-            { value: 'low', label: 'Low' },
-          ]}
-          selectedValues={criticalityFilter !== 'all' ? [criticalityFilter] : []}
-          onApply={(v) => setCriticalityFilter((v[0] as CriticalityFilter) || 'all')}
-          multiSelect={false}
-          autoApply
-          placeholder="All Criticality"
-          size="sm"
-        />
-
-        {/* ── Phase 5 list filters ─────────────────────────────────────── */}
-        <MultiSelectDropdown
-          title="Lifecycle"
-          items={[
-            { value: 'planned', label: 'Planned' },
-            { value: 'active', label: 'Active' },
-            { value: 'maintenance', label: 'Maintenance' },
-            { value: 'decommissioned', label: 'Decommissioned' },
-            { value: 'retired', label: 'Retired' },
-          ]}
-          selectedValues={lifecycleFilter !== 'all' ? [lifecycleFilter] : []}
-          onApply={(v) => setLifecycleFilter(v[0] || 'all')}
-          multiSelect={false}
-          autoApply
-          placeholder="All Lifecycle"
-          size="sm"
-        />
-
-        <MultiSelectDropdown
-          title="Data Classification"
-          items={[
-            { value: 'public', label: 'Public' },
-            { value: 'internal', label: 'Internal' },
-            { value: 'confidential', label: 'Confidential' },
-            { value: 'restricted', label: 'Restricted' },
-          ]}
-          selectedValues={classificationFilter !== 'all' ? [classificationFilter] : []}
-          onApply={(v) => setClassificationFilter(v[0] || 'all')}
-          multiSelect={false}
-          autoApply
-          placeholder="All Classifications"
-          size="sm"
-        />
-
-        <div className="ml-auto flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={() => assetsApi.downloadTemplate()}
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-            title="Download CSV template for bulk import"
-          >
-            <Download size={14} />
-            <span className="hidden 2xl:inline">Template</span>
-          </button>
-          <button
-            onClick={() => setIsImportModalOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-white px-2.5 py-1.5 text-xs font-medium text-primary-600 hover:bg-primary-50"
-            title="Import assets from CSV"
-          >
-            <Upload size={14} />
-            <span className="hidden 2xl:inline">Import</span>
-          </button>
-          {canCreate && (
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-primary-700"
-              title="Add a new asset"
-            >
-              <Plus size={15} />
-              <span className="hidden md:inline">Add Asset</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ─── Bulk-connect toolbar — visible only while assets are selected */}
-      {selectedAssetIds.size > 0 && (
-        <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2.5">
-          <div className="flex items-center gap-2 text-sm text-indigo-900">
-            <span className="font-semibold">{selectedAssetIds.size}</span>
-            <span>asset{selectedAssetIds.size === 1 ? '' : 's'} selected</span>
-            <button
-              type="button"
-              onClick={clearSelection}
-              className="ml-2 text-xs text-indigo-700 underline hover:text-indigo-900"
-            >
-              Clear
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={handleBulkConnect}
-            className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
-          >
-            <Plug className="h-4 w-4" />
-            Connect {selectedAssetIds.size} selected — shared credentials
-          </button>
-        </div>
-      )}
-
-      {/* ─── Connection guidance card ───────────────────────────────────
-          Shown until the operator dismisses it. Explains both flows:
-          1) connect one asset at a time (click 🔌 on the row)
-          2) connect N assets in bulk (tick checkboxes → "Connect N selected")
-          Plus the live count so the operator knows what's left to do. */}
-      {!guidanceDismissed && Array.isArray(assets) && assets.length > 0 && (() => {
-        const connectedHosts = new Set(
-          (connectionsData || [])
-            .map((c) => (c.console_url || '').toLowerCase().trim())
-            .filter((h) => !!h)
-        );
-        const assetsWithHost = (assets as ITAsset[]).filter((a) => !!a.host_name);
-        const connectedCount = assetsWithHost.filter(
-          (a) => connectedHosts.has((a.host_name || '').toLowerCase().trim()),
-        ).length;
-        const remainingCount = assetsWithHost.length - connectedCount;
-        return (
-          <div className="mb-4 rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3 flex-1">
-                <span className="text-3xl flex-shrink-0">🔌</span>
-                <div className="flex-1">
-                  <h2 className="text-base font-semibold text-blue-900">
-                    Connect your assets so we can scan them
-                  </h2>
-                  <p className="mt-1 text-xs text-blue-800">
-                    {assetsWithHost.length === 0
-                      ? `You have ${assets.length} asset(s), but none have a host_name set yet. Edit each one and fill in the Host Name / IP first — without it we don't know what to connect to.`
-                      : connectedCount === assetsWithHost.length
-                      ? `All ${assetsWithHost.length} asset(s) with a host are connected. You're ready to scan from the Compliance tab on each asset.`
-                      : `${connectedCount} of ${assetsWithHost.length} asset(s) connected · ${remainingCount} still need credentials.`}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={dismissGuidance}
-                className="text-xs text-blue-700 hover:underline whitespace-nowrap"
-                title="Hide this guidance — you can re-show by clearing browser storage"
-              >
-                Dismiss
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              {/* Single-asset flow */}
-              <div className="rounded-lg border border-blue-200 bg-white p-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-blue-900 mb-2">
-                  Connect ONE asset
-                </h3>
-                <ol className="space-y-1.5 text-xs text-slate-700 list-decimal pl-4">
-                  <li>
-                    Find the asset in the table below. Make sure it has a <strong>Host Name</strong> set (Edit the row if not).
-                  </li>
-                  <li>
-                    Click the <Plug className="inline-block h-3.5 w-3.5 text-blue-600 mx-0.5 align-text-bottom" /> <strong>plug icon</strong> in the actions column.
-                  </li>
-                  <li>
-                    Wizard opens with <strong>hostname pre-filled</strong>. Enter the username + password for that device's service account.
-                  </li>
-                  <li>
-                    Click <strong>Connect server</strong>. We run a live pre-flight (WinRM / SSH whoami) before saving — you know immediately if creds are wrong.
-                  </li>
-                </ol>
-              </div>
-
-              {/* Bulk flow */}
-              <div className="rounded-lg border border-indigo-200 bg-white p-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-indigo-900 mb-2">
-                  Connect MANY assets at once
-                </h3>
-                <ol className="space-y-1.5 text-xs text-slate-700 list-decimal pl-4">
-                  <li>
-                    Tick the <strong>checkbox</strong> on each asset row you want to connect (or use the header checkbox to select all).
-                  </li>
-                  <li>
-                    Click <strong className="text-indigo-700">Connect N selected</strong> in the toolbar above the table.
-                  </li>
-                  <li>
-                    Enter the <strong>shared credentials once</strong> — same service account that has WinRM/SSH on every selected box (typical for AD-joined fleet).
-                  </li>
-                  <li>
-                    Wizard iterates through each asset, runs handshake + pre-flight, and shows a live <strong>X of N done</strong> progress with any failures.
-                  </li>
-                </ol>
-                <p className="mt-2 text-[11px] text-indigo-700 italic">
-                  Tip: if assets in your selection use different credentials, do them in groups — one group per credential set.
-                </p>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <table className="w-full">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-3 py-2 text-center text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500" style={{ width: 36 }}>
-                {/* Select-all checkbox — covers only assets that have a
-                    host_name (others can't be connected anyway). */}
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 cursor-pointer rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                  checked={
-                    Array.isArray(assets) &&
-                    (assets as ITAsset[]).filter((a) => !!a.host_name).length > 0 &&
-                    (assets as ITAsset[]).filter((a) => !!a.host_name).every((a) => selectedAssetIds.has(a.id))
-                  }
-                  onChange={(e) => {
-                    if (!Array.isArray(assets)) return;
-                    if (e.target.checked) {
-                      setSelectedAssetIds(new Set((assets as ITAsset[]).filter((a) => !!a.host_name).map((a) => a.id)));
-                    } else {
-                      clearSelection();
-                    }
-                  }}
-                  title="Select all assets with a host_name"
-                />
-              </th>
-              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Asset</th>
-              <th className="hidden px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 md:table-cell">Type</th>
-              <th className="hidden px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">CIA Ratings</th>
-              <th className="hidden px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 lg:table-cell">Valuation</th>
-              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Criticality</th>
-              <th className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
-              <th className="px-3 py-2 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {filteredAssets?.map((asset: ITAsset) => {
-              const isExpanded = expandedAsset === asset.id;
-              const displayName = (() => {
-                const isAutoName = asset.name === asset.ip_address || asset.name?.startsWith('Nessus-Host-');
-                if (isAutoName) {
-                  const locationName = asset.location
-                    ? asset.location.split(',')[0].trim()
-                    : '';
-                  return asset.host_name || locationName || asset.name;
-                }
-                return asset.name;
-              })();
-              return (
-                <React.Fragment key={asset.id}>
-                  <tr
-                    className="cursor-pointer bg-white transition-colors hover:bg-slate-50"
-                    onClick={() => setExpandedAsset(isExpanded ? null : asset.id)}
-                  >
-                    {/* Bulk-connect checkbox — disabled for assets with
-                        no host_name (nothing to connect to). */}
-                    <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 cursor-pointer rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
-                        checked={selectedAssetIds.has(asset.id)}
-                        onChange={() => toggleAssetSelected(asset.id)}
-                        disabled={!asset.host_name}
-                        title={
-                          !asset.host_name
-                            ? 'Set a Host Name on this asset before selecting it for bulk-connect.'
-                            : 'Select for bulk-connect'
-                        }
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-3">
-                        {getAssetIcon(asset.asset_type)}
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-slate-900">{displayName}</p>
-                            {asset.cde_environment && (
-                              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">CDE</span>
-                            )}
-                          </div>
-                          <p className="line-clamp-1 text-sm text-slate-500">{asset.description || 'No description'}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="hidden px-3 py-2 md:table-cell">
-                      {getTypeBadge(asset.asset_type)}
-                    </td>
-                    <td className="hidden px-3 py-2 lg:table-cell">
-                      <div className="flex items-center gap-3">
-                        {getCIARatingBar(asset.confidentiality_rating, 'Confidentiality', 'bg-blue-500')}
-                        {getCIARatingBar(asset.integrity_rating, 'Integrity', 'bg-green-500')}
-                        {getCIARatingBar(asset.availability_rating, 'Availability', 'bg-yellow-500')}
-                      </div>
-                    </td>
-                    <td className="hidden px-3 py-2 lg:table-cell">
-                      <div className="flex items-center gap-1 text-sm">
-                        <DollarSign className="h-3 w-3 text-green-400" />
-                        <span className="text-slate-700">{formatCurrency(asset.valuation)}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">{getCriticalityBadge(asset.criticality)}</td>
-                    <td className="px-3 py-2">{getStatusBadge(asset.status)}</td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center justify-end gap-2">
-                        {/* Connect — opens the Connect Wizard with this
-                            asset's hostname pre-filled, so the operator
-                            only enters username + password. Shown only
-                            for assets that don't have a connection yet
-                            (host_name is set but no IntegrationConnection
-                            row points at it). */}
-                        {asset.host_name && (
-                          <button
-                            onClick={(e) => handleConnect(e, asset)}
-                            className="rounded p-1 text-slate-500 hover:bg-blue-50 hover:text-blue-700"
-                            title="Connect — opens wizard pre-filled with this host"
-                          >
-                            <Plug className="h-4 w-4" />
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => handleView(e, asset.id)}
-                          className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                          title="View"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        {canEdit && (
-                          <button
-                            onClick={(e) => handleEdit(e, asset)}
-                            className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                            title="Edit"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button
-                            onClick={(e) => handleDelete(e, asset.id)}
-                            className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-red-600"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4 text-slate-500" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4 text-slate-500" />
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                  {isExpanded && (
-                    <tr key={`${asset.id}-expanded`}>
-                      <td colSpan={8} className="bg-slate-50 px-3 py-3">
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                          <div>
-                            <h4 className="text-sm font-medium text-slate-500">Description</h4>
-                            <p className="mt-1 text-sm text-slate-900">{asset.description || 'No description'}</p>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-slate-500">Owner</h4>
-                            <p className="mt-1 text-sm text-slate-900">{asset.owner_name || 'Not assigned'}</p>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-slate-500">Vendor</h4>
-                            <p className="mt-1 text-sm text-slate-900">{asset.vendor || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-slate-500">Location</h4>
-                            <p className="mt-1 text-sm text-slate-900">{asset.location || 'Unknown'}</p>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-slate-500">Component</h4>
-                            <p className="mt-1 text-sm text-slate-900">{asset.host_name || 'Not specified'}</p>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-slate-500">Sub-components</h4>
-                            <p className="mt-1 text-sm text-slate-900">{asset.custodian || 'Not specified'}</p>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-slate-500">IP Address</h4>
-                            <p className="mt-1 text-sm text-slate-900">{asset.ip_address || 'N/A'}</p>
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-slate-400">Linked Controls</h4>
-                            <button 
-                              onClick={(e) => handleView(e, asset.id)}
-                              className="mt-1 flex items-center gap-1 text-sm text-primary-400 hover:text-primary-300"
-                            >
-                              <Shield size={14} />
-                              <span>View details</span>
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {(!filteredAssets || filteredAssets.length === 0) && (
-        <div className="card flex flex-col items-center justify-center py-10 text-center">
-          <Server className="mb-4 h-12 w-12 text-slate-600" />
-          <h3 className="text-lg font-medium text-slate-900">No assets found</h3>
-          <p className="mt-1 text-slate-500">Add your first IT asset to get started</p>
-        </div>
-      )}
+      <AssetsWorkspace
+        assets={(assets as ITAsset[]) || []}
+        filteredAssets={filteredAssets || []}
+        dashboard={dashboard}
+        loading={isLoading}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        statusFilter={statusFilter}
+        setStatusFilter={(v) => setStatusFilter(v as StatusFilter)}
+        criticalityFilter={criticalityFilter}
+        setCriticalityFilter={(v) => setCriticalityFilter(v as CriticalityFilter)}
+        lifecycleFilter={lifecycleFilter}
+        setLifecycleFilter={setLifecycleFilter}
+        typeFilter={typeFilter}
+        setTypeFilter={setTypeFilter}
+        canCreate={canCreate}
+        canEdit={canEdit}
+        canDelete={canDelete}
+        onView={(asset) => handleView(noopEvent, asset.id)}
+        onEdit={(asset) => handleEdit(noopEvent, asset)}
+        onDelete={(asset) => handleDelete(noopEvent, asset.id)}
+        onConnect={(asset) => handleConnect(noopEvent, asset)}
+        onBulkConnect={(ids) => {
+          // Reuse the existing bulk-connect flow: seed the selection set from
+          // the ids the register handed us, then invoke the page's handler.
+          const next = new Set(ids);
+          setSelectedAssetIds(next);
+          const first = (assets as ITAsset[] | undefined)?.find((a) => a.id === ids[0]);
+          const fam = ((first as any)?.os_family || '').toLowerCase();
+          const platform =
+            fam === 'windows' ? 'windows' :
+            fam === 'linux' ? 'linux' : '';
+          const params = new URLSearchParams();
+          if (platform) params.set('platform', platform);
+          params.set('asset_ids', ids.join(','));
+          router.push(`/admin/integrations/connect?${params.toString()}`);
+        }}
+        onOpenFull={(id) => router.push(`/assets/${id}`)}
+        onTemplate={() => assetsApi.downloadTemplate()}
+        onImport={() => setIsImportModalOpen(true)}
+        onAdd={() => setIsModalOpen(true)}
+      />
 
       {isModalOpen && (
         <AssetModal
