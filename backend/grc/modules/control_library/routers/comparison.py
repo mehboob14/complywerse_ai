@@ -1080,8 +1080,9 @@ def export_comparison(
         wb.save(output)
         output.seek(0)
         
-        return StreamingResponse(
-            output,
+        from fastapi.responses import Response as _PlainResponse
+        return _PlainResponse(
+            content=output.getvalue(),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": "attachment; filename=framework_comparison.xlsx"}
         )
@@ -1101,9 +1102,10 @@ def export_comparison(
         writer.writerow(filtered_row)
     
     output.seek(0)
-    
-    return StreamingResponse(
-        iter([output.getvalue()]),
+
+    from fastapi.responses import Response as _PlainResponse
+    return _PlainResponse(
+        content=output.getvalue(),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=framework_comparison.csv"}
     )

@@ -31,6 +31,21 @@ class IdentityProviderConfig(Base):
     connected_at = Column(DateTime, nullable=True)
     connected_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
 
+    # Okta connector: just the org domain (the SSWS API token is NOT stored at
+    # rest — it is supplied per-sync). Lives on the provider='okta' config row.
+    okta_domain = Column(String(255), nullable=True)
+
+    # On-prem AD/LDAP connector: server URL + search base. The bind password is
+    # NEVER stored — it is supplied per-sync. Lives on provider='ldap' row.
+    ldap_server = Column(String(255), nullable=True)
+    ldap_base_dn = Column(String(500), nullable=True)
+
+    # Tier-2 IGA governance connector (SailPoint, Saviynt, …): the API base URL +
+    # vendor. The client secret is NEVER stored — supplied per-sync. Lives on the
+    # provider='sailpoint' (etc.) config row.
+    iga_base_url = Column(String(255), nullable=True)
+    iga_vendor = Column(String(32), nullable=True)
+
     # LEGACY (per-tenant Azure-app pattern). New rows leave these NULL.
     azure_tenant_id = Column(String(64), nullable=True)
     client_id = Column(String(64), nullable=True)

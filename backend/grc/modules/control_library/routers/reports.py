@@ -20,7 +20,8 @@ from ....models import (
     CommonControlGroup, CommonControlGroupMapping, NormalizedControl,
     FrameworkControl, FrameworkDomain, ControlObjective, Framework,
     ControlSimilarityMapping, AIEvidenceRecommendation,
-    Evidence, EvidenceControlMapping, GRCUser, get_db
+    Evidence, EvidenceControlMapping, GRCUser, get_db,
+    NormalizationRun, NormalizedControlLink,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
@@ -681,8 +682,9 @@ def export_harmonization_report(
         }
         
         output.seek(0)
-        return StreamingResponse(
-            output,
+        from fastapi.responses import Response as _PlainResponse
+        return _PlainResponse(
+            content=output.getvalue(),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": f"attachment; filename={filename}.xlsx"}
         )
@@ -717,8 +719,9 @@ def export_harmonization_report(
         }
         
         output.seek(0)
-        return StreamingResponse(
-            output,
+        from fastapi.responses import Response as _PlainResponse
+        return _PlainResponse(
+            content=output.getvalue(),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}.csv"}
         )
@@ -1157,8 +1160,9 @@ def download_report(
     else:
         media_type = "application/octet-stream"
     
-    return StreamingResponse(
-        io.BytesIO(content),
+    from fastapi.responses import Response as _PlainResponse
+    return _PlainResponse(
+        content=content,
         media_type=media_type,
         headers={"Content-Disposition": f"attachment; filename={report.get('filename', 'report')}"}
     )
@@ -1194,4 +1198,170 @@ def get_report_history(
         "skip": skip,
         "limit": limit,
         "reports": paginated
+    }
+
+
+# ============================================================================
+# Library Health — scored formulas over the active unified control library.
+# Same section/metric shape as the governance & ERM dashboards: every metric
+# returns numerator, denominator, weight, target and a formula string so the
+# frontend renders backend truth and the math lives in the detail popup.
+# ============================================================================
+from collections import Counter as _Counter
+
+
+def _cl_metric(key, label, weight, num, den, formula, inverse=False, empty_score=None):
+    if den:
+        pct = (num / den) * 100
+        score = round(100 - pct, 1) if inverse else round(pct, 1)
+    else:
+        score = empty_score
+    return {"key": key, "label": label, "weight": weight, "score": score,
+            "numerator": round(num, 1) if isinstance(num, float) else num,
+            "denominator": round(den, 1) if isinstance(den, float) else den,
+            "formula": formula, "inverse": inverse, "target": 85}
+
+
+def _cl_section_score(metrics):
+    avail = [m for m in metrics if m["score"] is not None]
+    tw = sum(m["weight"] for m in avail)
+    if not avail or not tw:
+        return None
+    return round(sum(m["score"] * m["weight"] for m in avail) / tw, 1)
+
+
+@router.get("/library-health")
+def get_library_health(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Health of the active unified control library, scored by formula.
+
+    Sections: Normalization Quality, Harmonization, Evidence Reuse,
+    Evidence Coverage. Computed over the ACTIVE baseline NormalizationRun.
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    now = datetime.utcnow()
+
+    base = db.query(NormalizationRun).filter(
+        NormalizationRun.tenant_id.in_(user_tenants),
+        NormalizationRun.is_baseline == True,  # noqa: E712
+    ).order_by(NormalizationRun.id.desc()).first()
+    if not base:
+        base = db.query(NormalizationRun).filter(
+            NormalizationRun.tenant_id.in_(user_tenants)
+        ).order_by(NormalizationRun.id.desc()).first()
+
+    if not base:
+        return {"as_of": now.isoformat(), "baseline": None, "sections": {},
+                "performance": {"score": None, "grade": None, "components": []}}
+
+    ncq = db.query(NormalizedControl).filter(NormalizedControl.run_id == base.id)
+    nc_rows = ncq.with_entities(
+        NormalizedControl.id, NormalizedControl.review_status,
+        NormalizedControl.domain, NormalizedControl.common_group_id,
+        NormalizedControl.recommended_evidence,
+    ).all()
+    total = len(nc_rows)
+    nc_ids = {r.id for r in nc_rows}
+
+    approved = sum(1 for r in nc_rows if r.review_status == "approved")
+    flagged = sum(1 for r in nc_rows if r.review_status == "flagged")
+    reviewed = sum(1 for r in nc_rows if r.review_status in ("approved", "flagged"))
+    grouped = sum(1 for r in nc_rows if r.common_group_id is not None)
+    with_rec = sum(1 for r in nc_rows
+                   if r.recommended_evidence not in (None, [], {}, ""))
+    domains = len({r.domain for r in nc_rows if r.domain})
+
+    link_counts = _Counter(
+        x[0] for x in db.query(NormalizedControlLink.normalized_control_id).all()
+        if x[0] in nc_ids
+    )
+    mapped = len(link_counts)
+    unified = sum(1 for v in link_counts.values() if v >= 2)
+
+    ecm = db.query(EvidenceControlMapping.evidence_id,
+                   EvidenceControlMapping.normalized_control_id).all()
+    ev_map = _Counter(e for (e, _n) in ecm)
+    ev_mapped = len(ev_map)
+    ev_multi = sum(1 for v in ev_map.values() if v >= 2)
+    covered_nc = len({n for (_e, n) in ecm if n in nc_ids})
+    avg_per_ev = round(sum(ev_map.values()) / ev_mapped, 2) if ev_mapped else 0.0
+    REUSE_TARGET = 3.0
+
+    normalization = [
+        _cl_metric("approved", "Approved", 0.40, approved, total,
+                   "normalized controls approved / all normalized controls"),
+        _cl_metric("soundness", "Not flagged", 0.35, flagged, total,
+                   "1 - (flagged controls / all normalized controls)",
+                   inverse=True, empty_score=100),
+        _cl_metric("reviewed", "Reviewed", 0.25, reviewed, total,
+                   "controls reviewed (approved or flagged) / all normalized controls"),
+    ]
+    harmonization = [
+        _cl_metric("framework_mapped", "Framework-mapped", 0.40, mapped, total,
+                   "normalized controls linked to >=1 framework/parsed control / all"),
+        _cl_metric("consolidation", "Consolidated into sets", 0.35, unified, total,
+                   "normalized controls unifying >=2 framework members / all (cross-framework dedup)"),
+        _cl_metric("grouped", "Assigned to a family", 0.25, grouped, total,
+                   "normalized controls assigned to a common control group / all"),
+    ]
+    reuse = [
+        _cl_metric("reuse_factor", "Reuse factor", 0.55,
+                   min(avg_per_ev, REUSE_TARGET), REUSE_TARGET,
+                   "avg controls per mapped evidence (" + str(avg_per_ev) +
+                   ") vs target " + str(REUSE_TARGET) + " (capped 100%)",
+                   empty_score=None),
+        _cl_metric("reuse_breadth", "Multi-control evidence", 0.45, ev_multi, ev_mapped,
+                   "evidence mapped to >=2 controls / mapped evidence"),
+    ]
+    coverage = [
+        _cl_metric("evidence_coverage", "Controls with evidence", 0.60, covered_nc, total,
+                   "normalized controls with >=1 linked evidence / all normalized controls"),
+        _cl_metric("recommended_ready", "Evidence recommended", 0.40, with_rec, total,
+                   "normalized controls with recommended evidence types / all"),
+    ]
+
+    sections = {
+        "normalization": {"key": "normalization", "label": "Normalization Quality",
+                          "weight": 0.30, "score": _cl_section_score(normalization),
+                          "metrics": normalization,
+                          "counts": {"total": total, "approved": approved,
+                                     "flagged": flagged, "pending": total - reviewed}},
+        "harmonization": {"key": "harmonization", "label": "Harmonization",
+                          "weight": 0.30, "score": _cl_section_score(harmonization),
+                          "metrics": harmonization,
+                          "counts": {"mapped": mapped, "unified": unified,
+                                     "standalone": total - unified, "domains": domains,
+                                     "groups": db.query(CommonControlGroup).filter(
+                                         CommonControlGroup.tenant_id.in_(user_tenants)).count()}},
+        "reuse": {"key": "reuse", "label": "Evidence Reuse", "weight": 0.20,
+                  "score": _cl_section_score(reuse), "metrics": reuse,
+                  "counts": {"evidence_mapped": ev_mapped, "multi_control": ev_multi,
+                             "avg_controls_per_evidence": avg_per_ev}},
+        "coverage": {"key": "coverage", "label": "Evidence Coverage", "weight": 0.20,
+                     "score": _cl_section_score(coverage), "metrics": coverage,
+                     "counts": {"covered": covered_nc, "uncovered": total - covered_nc,
+                                "recommended": with_rec}},
+    }
+
+    components = [{"key": s["key"], "label": s["label"], "score": s["score"],
+                   "weight": s["weight"], "target": 85} for s in sections.values()]
+    scored = [c for c in components if c["score"] is not None]
+    wsum = sum(c["weight"] for c in scored)
+    perf = round(sum(c["score"] * c["weight"] for c in scored) / wsum, 1) if scored and wsum else None
+    grade = (None if perf is None else "excellent" if perf >= 85 else "good" if perf >= 70
+             else "fair" if perf >= 50 else "poor")
+
+    return {
+        "as_of": now.isoformat(),
+        "baseline": {"run_id": base.id, "label": base.label, "total_controls": total,
+                     "domains": domains, "unified_sets": unified,
+                     "standalone": total - unified},
+        "sections": sections,
+        "performance": {
+            "score": perf, "grade": grade,
+            "formula": "weighted mean of section scores: normalization 30% + harmonization 30% + reuse 20% + coverage 20%",
+            "components": components,
+        },
     }

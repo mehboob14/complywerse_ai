@@ -16,7 +16,8 @@ from .routers import (
     rcsa_custom_router,
     risk_assessments_router,
     framework_risk_assessments_router,
-    advanced_analytics_router
+    advanced_analytics_router,
+    sections_dashboard_router,
 )
 
 router = APIRouter(
@@ -41,6 +42,7 @@ router.include_router(rcsa_custom_router, tags=["RCSA - Custom Templates"])
 router.include_router(risk_assessments_router, tags=["ERM - Risk Assessments"])
 router.include_router(framework_risk_assessments_router, tags=["ERM - Framework Risk Assessments"])
 router.include_router(advanced_analytics_router, tags=["ERM - Advanced Analytics"])
+router.include_router(sections_dashboard_router, tags=["ERM Sections Dashboard"])
 
 
 @router.get("")

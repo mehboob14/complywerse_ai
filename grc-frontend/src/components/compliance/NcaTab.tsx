@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import DCCAssessmentTab from './DCCAssessmentTab';
 import AuditPlanTab from './AuditPlanTab';
+import { SlaClosurePanel } from './_redesign/SlaClosurePanel';
+import type { SlaPolicy, SlaItemInput } from './_redesign/slaEngine';
 
 interface TenantUser {
   id: number;
@@ -43,6 +45,22 @@ export default function NcaTab({ assessmentId, tenantUsers }: Props) {
     queryFn: async () => (await apiClient.get(`/compliance/assessments/${assessmentId}/audit-plan`)).data,
     staleTime: 30_000,
   });
+
+  // Flat DCC points (with SLA dates) for the closure panel + shared SLA policy.
+  const { data: ncaItems = [] } = useQuery<SlaItemInput[]>({
+    queryKey: ['nca-sla-items', assessmentId],
+    queryFn: async () => (await apiClient.get(`/compliance/assessments/${assessmentId}`)).data?.items || [],
+    staleTime: 30_000,
+  });
+  const { data: slaPolicy } = useQuery<SlaPolicy>({
+    queryKey: ['redesign-sla-policy'],
+    queryFn: async () => (await apiClient.get('/compliance/assessments/sla-policy')).data,
+    staleTime: 60_000,
+  });
+  const saveSlaPolicy = async (p: SlaPolicy) => {
+    await apiClient.put('/compliance/assessments/sla-policy', null, { params: p as unknown as Record<string, number> });
+    queryClient.invalidateQueries({ queryKey: ['redesign-sla-policy'] });
+  };
 
   const dccInitialized = !!dccData?.initialized;
   const auditEntryCount = auditData?.summary?.total ?? 0;

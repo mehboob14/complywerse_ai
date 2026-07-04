@@ -25,6 +25,19 @@ class GRCUser(Base):
     external_provider = Column(String(32), nullable=True, index=True)
     external_id = Column(String(128), nullable=True, index=True)
 
+    # ---- Access-review enrichment (synced from Microsoft Entra Graph) ----
+    # Written by grc.modules.access_review.enrichment.sync_population and read
+    # by the access-review sampling + checks. All nullable so existing rows and
+    # local-password users behave unchanged. New tenant DBs get these via
+    # create_all; pre-existing tenant DBs via identity/schema_migrations._COLUMN_ADDS.
+    account_enabled = Column(Boolean, nullable=True)
+    mfa_enabled = Column(Boolean, nullable=True)
+    mfa_methods = Column(JSON, default=list)
+    hire_date = Column(Date, nullable=True)
+    termination_date = Column(Date, nullable=True)
+    entra_last_sign_in = Column(DateTime, nullable=True)
+    access_synced_at = Column(DateTime, nullable=True)
+
     # ---- Account lockout state (Admin → Password Policy controls thresholds) ----
     # Increment on each failed login, reset on success. When the count crosses
     # the policy's `lockout_threshold`, `locked_until` is set to now() +

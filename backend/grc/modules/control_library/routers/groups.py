@@ -13,7 +13,7 @@ from sqlalchemy import or_, func, distinct
 from pydantic import BaseModel
 from openai import OpenAI
 
-from ....job_status import set_status as set_job_status, get_status as get_job_status
+from ....job_status import set_status as set_job_status, get_status as get_job_status, update_status as update_job_status
 
 _jobs_logger = logging.getLogger(__name__)
 
@@ -654,6 +654,189 @@ def review_queue(
     return {"items": items, "total": total, "counts": counts}
 
 
+_RICH_CACHE: Dict[str, Any] = {}
+
+
+def _load_stage4_domains():
+    """Load + cache the locked stage4 unified-library dataset (per-domain rich view)."""
+    if "domains" not in _RICH_CACHE:
+        path = os.path.join(os.path.dirname(__file__), "..", "..", "..",
+                            "seed_data", "stage4_all_domains.json")
+        with open(path, encoding="utf-8") as f:
+            _RICH_CACHE["domains"] = json.load(f)["domains"]
+    return _RICH_CACHE["domains"]
+
+
+def _framework_domain_map():
+    """framework -> sorted list of domains it appears in (across the whole library).
+    Lets the UI show that a framework 'absent' from one domain is still covered
+    elsewhere (it just has no controls of this domain's control-type)."""
+    if "fw_doms" not in _RICH_CACHE:
+        m: Dict[str, set] = {}
+        for d in _load_stage4_domains():
+            for f in d.get("frameworks", []):
+                m.setdefault(f, set()).add(d["domain"])
+        _RICH_CACHE["fw_doms"] = {k: sorted(v) for k, v in m.items()}
+    return _RICH_CACHE["fw_doms"]
+
+
+@router.get("/framework-templates")
+def framework_templates(db: Session = Depends(get_db),
+                        current_user: GRCUser = Depends(require_auth)):
+    """Framework-level artifact catalogs, aggregated ONCE per framework across the
+    whole library. (In stage4 these are broadcast identically into every domain;
+    here we de-duplicate so each framework's generic, org-wide document templates
+    are listed a single time.) These are framework-level — NOT control-level or
+    normalized."""
+    by_fw: Dict[str, dict] = {}
+    for d in _load_stage4_domains():
+        for c in d.get("framework_catalog_artifacts", []):
+            fw = c.get("framework", "")
+            if not fw:
+                continue
+            entry = by_fw.setdefault(fw, {"framework": fw, "note": c.get("note", ""), "seen": set(), "artifacts": []})
+            for a in c.get("artifacts", []):
+                key = (a.get("name", ""), a.get("type", ""))
+                if key not in entry["seen"]:
+                    entry["seen"].add(key)
+                    entry["artifacts"].append({"name": a.get("name", ""), "type": a.get("type", "")})
+    out = [{"framework": e["framework"], "note": e["note"], "artifacts": e["artifacts"]}
+           for e in by_fw.values()]
+    out.sort(key=lambda x: -len(x["artifacts"]))
+    return {
+        "frameworks": out,
+        "total_frameworks": len(out),
+        "total_artifacts": sum(len(x["artifacts"]) for x in out),
+    }
+
+
+@router.get("/{group_id}/rich")
+def group_rich(group_id: int, db: Session = Depends(get_db),
+               current_user: GRCUser = Depends(require_auth)):
+    """Rich per-domain view for the seeded unified library: cross-framework sets
+    with members (one control per framework, original titles preserved),
+    normalized evidence (+ what each absorbs), excluded/off-topic evidence with
+    reasons, requirement-specific artifacts, framework-level catalog artifacts,
+    and absent-framework reasons. Keyed by the group's domain from stage4."""
+    group = db.query(CommonControlGroup).filter(CommonControlGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    dom_name = (group.domain or group.name or "").strip()
+    domains = _load_stage4_domains()
+    dm = next((d for d in domains if d.get("domain") == dom_name), None)
+    if dm is None and dom_name:
+        dm = next((d for d in domains if d.get("domain", "").startswith(dom_name[:14])), None)
+    if dm is None:
+        raise HTTPException(status_code=404, detail=f"No rich data for domain '{dom_name}'")
+    multi = [s for s in dm.get("sets", []) if s.get("member_count", 0) > 1]
+    single = [s for s in dm.get("sets", []) if s.get("member_count", 0) == 1]
+    # attach the DB NormalizedControl id to each set/standalone (by heading within
+    # this group) so the UI can upload + link evidence to the actual control rows.
+    import re as _re
+    _nk = lambda s: _re.sub(r"\s+", " ", _re.sub(r"[^a-z0-9 ]", " ", (s or "").lower())).strip()
+    name2id: Dict[str, int] = {}
+    for nc in db.query(NormalizedControl.id, NormalizedControl.name).filter(
+            NormalizedControl.common_group_id == group.id).all():
+        name2id.setdefault(_nk(nc.name), nc.id)
+    def _attach(lst):
+        return [{**s, "nc_id": name2id.get(_nk(s.get("normalized_title")))} for s in lst]
+    multi, single = _attach(multi), _attach(single)
+    fw_doms = _framework_domain_map()
+    # enrich each absent framework with where it IS covered (other domains)
+    absent = []
+    for a in dm.get("absent_frameworks", []):
+        present_in = fw_doms.get(a.get("name"), [])
+        absent.append({**a, "present_in": present_in, "present_in_count": len(present_in)})
+    return {
+        "domain": dm.get("domain"),
+        "controls_in": dm.get("controls_in"),
+        "frameworks": dm.get("frameworks", []),
+        "framework_count": len(dm.get("frameworks", [])),
+        "absent_frameworks": absent,
+        "framework_catalog_artifacts": dm.get("framework_catalog_artifacts", []),
+        "normalized_sets": len(multi),
+        "standalone": len(single),
+        "sets": multi,
+        "standalone_controls": single,
+    }
+
+
+_EVIDENCE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..",
+                             "uploads", "evidence")
+
+
+@router.get("/normalized/{nc_id}/evidence")
+def list_set_evidence(nc_id: int, db: Session = Depends(get_db),
+                      current_user: GRCUser = Depends(require_auth)):
+    """Evidence uploaded against a normalized set (the linked Evidence records)."""
+    ev_ids = [r[0] for r in db.query(EvidenceControlMapping.evidence_id).filter(
+        EvidenceControlMapping.normalized_control_id == nc_id).distinct().all()]
+    items = []
+    for e in (db.query(Evidence).filter(Evidence.id.in_(ev_ids))
+              .order_by(Evidence.uploaded_at.desc()).all() if ev_ids else []):
+        linked = db.query(EvidenceControlMapping).filter(
+            EvidenceControlMapping.evidence_id == e.id,
+            EvidenceControlMapping.parsed_control_id.isnot(None)).count()
+        items.append({"id": e.id, "name": e.name, "file_name": e.file_name,
+                      "evidence_type": e.evidence_type, "status": e.status,
+                      "uploaded_at": e.uploaded_at.isoformat() if e.uploaded_at else None,
+                      "linked_controls": linked})
+    return {"items": items, "count": len(items)}
+
+
+@router.post("/normalized/{nc_id}/evidence")
+async def upload_set_evidence(nc_id: int, name: Optional[str] = Form(None),
+                              evidence_type: Optional[str] = Form(None),
+                              file: UploadFile = File(...),
+                              db: Session = Depends(get_db),
+                              current_user: GRCUser = Depends(require_auth)):
+    """Upload one evidence file for a normalized set. Stores it in the evidence
+    library and auto-links it to the normalized control AND every member framework
+    control — so one upload satisfies all frameworks and shows on each requirement."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="User has no tenant")
+    nc = db.query(NormalizedControl).filter(NormalizedControl.id == nc_id).first()
+    if not nc:
+        raise HTTPException(status_code=404, detail="Normalized control not found")
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    tdir = os.path.join(_EVIDENCE_DIR, str(tenant_id))
+    os.makedirs(tdir, exist_ok=True)
+    path = os.path.join(tdir, f"{uuid.uuid4()}{ext}")
+    contents = await file.read()
+    with open(path, "wb") as fh:
+        fh.write(contents)
+    ev = Evidence(tenant_id=tenant_id, name=(name or file.filename or "Evidence"),
+                  description=f"Uploaded for unified control: {nc.name}", file_path=path,
+                  file_name=file.filename, file_type=file.content_type,
+                  evidence_type=evidence_type, uploaded_by=current_user.id,
+                  status="approved", ocr_status="not_applicable")
+    db.add(ev)
+    db.flush()
+    # link to the normalized (unified) control itself
+    db.add(EvidenceControlMapping(evidence_id=ev.id, normalized_control_id=nc.id,
+                                  coverage_type="full", confidence_score=100.0,
+                                  created_by_ai=False, control_title=nc.name))
+    fw_name = {f.id: f.name for f in db.query(UploadedFramework.id, UploadedFramework.name).all()}
+    linked = 0
+    for ln in db.query(NormalizedControlLink).filter(
+            NormalizedControlLink.normalized_control_id == nc.id).all():
+        p = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.id == ln.parsed_control_id).first()
+        if not p:
+            continue
+        db.add(EvidenceControlMapping(
+            evidence_id=ev.id, normalized_control_id=nc.id, parsed_control_id=p.id,
+            uploaded_framework_id=p.uploaded_framework_id,
+            framework_name=fw_name.get(p.uploaded_framework_id),
+            control_code=p.original_reference or p.control_id, control_title=p.title,
+            coverage_type="full", confidence_score=100.0, created_by_ai=False))
+        linked += 1
+    db.commit()
+    return {"evidence_id": ev.id, "name": ev.name, "linked_controls": linked,
+            "message": f"Added to the evidence library and linked to {linked} framework controls."}
+
+
 def _set_review(db, current_user, nc_id, status_value):
     nc = db.query(NormalizedControl).filter(NormalizedControl.id == nc_id).first()
     if not nc:
@@ -822,10 +1005,12 @@ def serialize_group(group: CommonControlGroup, db: Session, include_controls: bo
     ).count()
 
     # Standalone = single-framework-unique controls placed under the domain but
-    # not consolidated into a unified control (mapping_source='standalone').
+    # not consolidated into a cross-framework set (mapping_source='standalone').
+    # These are stored as normalized-control mappings (one NormalizedControl per
+    # framework-unique control), so count by normalized_control_id, not parsed.
     standalone_count = db.query(CommonControlGroupMapping).filter(
         CommonControlGroupMapping.group_id == group.id,
-        CommonControlGroupMapping.parsed_control_id.isnot(None),
+        CommonControlGroupMapping.normalized_control_id.isnot(None),
         CommonControlGroupMapping.mapping_source == "standalone",
     ).count()
 
@@ -1036,10 +1221,18 @@ def list_groups(
     # True count of distinct mapped controls across ALL groups in scope (not just
     # the current page) — the stat card was summing only the visible page.
     group_ids_subq = query.with_entities(CommonControlGroup.id).subquery()
-    total_mapped = (db.query(CommonControlGroupMapping.parsed_control_id)
-                    .filter(CommonControlGroupMapping.group_id.in_(group_ids_subq),
-                            CommonControlGroupMapping.parsed_control_id.isnot(None))
-                    .distinct().count())
+    # Count distinct mapped controls across ALL in-scope groups. Modern baselines
+    # map by normalized_control_id (one NormalizedControl per unified/standalone
+    # control); older ones mapped by parsed_control_id. Count whichever is present.
+    norm_mapped = (db.query(CommonControlGroupMapping.normalized_control_id)
+                   .filter(CommonControlGroupMapping.group_id.in_(group_ids_subq),
+                           CommonControlGroupMapping.normalized_control_id.isnot(None))
+                   .distinct().count())
+    parsed_mapped = (db.query(CommonControlGroupMapping.parsed_control_id)
+                     .filter(CommonControlGroupMapping.group_id.in_(group_ids_subq),
+                             CommonControlGroupMapping.parsed_control_id.isnot(None))
+                     .distinct().count())
+    total_mapped = norm_mapped + parsed_mapped
 
     return {
         "items": [serialize_group(g, db) for g in groups],
@@ -3368,3 +3561,374 @@ def get_group_similarities(
         })
     
     return {"items": items}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# PIPELINE LAB — extend the baseline with a new framework (test endpoints).
+# Safe by design: analyze writes nothing; commit creates a CANDIDATE run and
+# never promotes unless asked; demo/candidate deletes are guarded to demo data.
+# ════════════════════════════════════════════════════════════════════════════
+from .. services import extend_baseline as _EB  # noqa: E402
+
+class _ExtendReq(BaseModel):
+    framework_id: int
+    promote: bool = False
+
+# (framework list is fetched in the UI from the existing /frameworks/available
+#  endpoint — a GET /extend/frameworks here collides with /{group_id}/... routes.)
+
+@router.post("/extend/demo")
+def extend_create_demo(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """Create a throwaway DEMO framework (non-canonical domains) to test the pipeline."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    demo = [
+        ("D-1", "Information Security Policy", "Top-level approved information security policy.", "Governance & Oversight"),
+        ("D-2", "Access Control Policy", "Govern user access provisioning and authorization.", "Identity & Access Mgmt"),
+        ("D-3", "Incident Response Plan", "Procedures for reporting and managing incidents.", "Incident Handling"),
+        ("D-4", "Conduct a security risk assessment", "Identify threats, likelihood and impact.", "Risk & Compliance"),
+        ("D-5", "Security Awareness Training", "Periodic security awareness training for staff.", "People & Training"),
+        ("D-6", "Anti-Malware Protection", "Deploy and maintain anti-malware across endpoints.", "Threat Defense"),
+        ("D-7", "Bespoke Flux Capacitor Attunement Record", "Deliberately unique — should be standalone.", "Misc Ops"),
+    ]
+    fw = UploadedFramework(tenant_id=tenant_id, name=f"DEMO Framework {uuid.uuid4().hex[:6]} (delete me)",
+                           file_name="demo.json", file_path="(demo)", file_type="application/json",
+                           upload_status="completed", framework_type="regulatory", source_organization="DEMO",
+                           version="1.0", is_active=True, is_shared=False, uploaded_by=current_user.id)
+    db.add(fw); db.flush()
+    for cid, t, desc, dom in demo:
+        db.add(ParsedFrameworkControl(uploaded_framework_id=fw.id, control_id=cid, title=t, description=desc,
+                                      full_text=desc, domain=dom, is_mandatory=True, priority="high",
+                                      evidence_requirements=[f"{t} document"]))
+    db.commit()
+    return {"framework_id": fw.id, "name": fw.name, "controls": len(demo)}
+
+@router.post("/extend/analyze")
+def extend_analyze(req: _ExtendReq, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    return _EB.analyze(db, tenant_id, req.framework_id, get_client=get_openai_client)
+
+@router.post("/extend/commit")
+def extend_commit(req: _ExtendReq, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    return _EB.commit(db, tenant_id, req.framework_id, get_client=get_openai_client,
+                      user_id=current_user.id, label="Pipeline-Lab candidate", promote=req.promote)
+
+@router.delete("/extend/candidate/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+def extend_delete_candidate(run_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    run = db.query(NormalizationRun).filter(NormalizationRun.id == run_id, NormalizationRun.tenant_id == tenant_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.is_baseline:
+        raise HTTPException(status_code=400, detail="Refusing to delete the live baseline.")
+    from sqlalchemy import text as _text
+    for stmt in ["delete from grc_common_control_group_mappings where group_id in (select id from grc_common_control_groups where run_id=:r)",
+                 "delete from grc_normalized_control_links where normalized_control_id in (select id from grc_normalized_controls where run_id=:r)",
+                 "delete from grc_common_control_groups where run_id=:r",
+                 "delete from grc_normalized_controls where run_id=:r",
+                 "delete from grc_normalization_runs where id=:r"]:
+        db.execute(_text(stmt), {"r": run_id})
+    db.commit()
+
+@router.delete("/extend/framework/{framework_id}", status_code=status.HTTP_204_NO_CONTENT)
+def extend_delete_framework(framework_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    fw = db.query(UploadedFramework).filter(UploadedFramework.id == framework_id).first()
+    if not fw:
+        raise HTTPException(status_code=404, detail="Framework not found")
+    # Safety: a framework that is part of the LIVE baseline (one of the kept 30)
+    # may not be deleted here. Demo frameworks and any newly-uploaded framework
+    # that hasn't been kept into the baseline yet are removable.
+    base = _scoped_get_baseline_run(db, tenant_id)
+    base_ids = set(base.framework_ids or []) if base else set()
+    is_demo = (fw.name or "").startswith(("DEMO", "PIPELINE"))
+    if not is_demo and framework_id in base_ids:
+        raise HTTPException(status_code=400,
+                            detail="This framework is part of the live library and cannot be deleted here.")
+    from sqlalchemy import text as _text
+    # also remove the framework's ingested artifacts from the catalog
+    fkey = _EB.framework_key_for(fw.name)
+    db.execute(_text("delete from grc_artifact_catalog_items where framework_key=:k"), {"k": fkey})
+    for stmt in ["delete from grc_control_evidence_requirements where parsed_control_id in (select id from grc_parsed_framework_controls where uploaded_framework_id=:f)",
+                 "delete from grc_normalized_control_links where parsed_control_id in (select id from grc_parsed_framework_controls where uploaded_framework_id=:f)",
+                 "delete from grc_common_control_group_mappings where parsed_control_id in (select id from grc_parsed_framework_controls where uploaded_framework_id=:f)",
+                 "delete from grc_parsed_framework_controls where uploaded_framework_id=:f",
+                 "delete from grc_uploaded_frameworks where id=:f"]:
+        db.execute(_text(stmt), {"f": framework_id})
+    db.commit()
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# AUTO-ABSORB — the real flow: a new framework enters the system and the pipeline
+# triggers on its own. /extend/pending detects new frameworks; /extend/upload
+# ingests a seed JSON; /extend/start kicks the phased background job; the UI polls
+# /extend/job/{id}; /extend/promote keeps the result; deletes above discard it.
+# ════════════════════════════════════════════════════════════════════════════
+from .. services.scoped_session import get_baseline_run as _scoped_get_baseline_run  # noqa: E402
+
+_ABSORB_NS = "absorb"
+
+
+def _phases_meta():
+    return [{"key": k, "label": l} for k, l in _EB.PHASES]
+
+
+def _absorb_worker(slug: str, tenant_id: int, fw_id: int, user_id: int, promote: bool):
+    """Background thread: runs the phased absorption with its own tenant session,
+    streaming progress into the Redis job-status store the UI polls."""
+    from ....db import open_tenant_session
+    wdb = open_tenant_session(slug)
+
+    def progress(phase, pct, msg, extra):
+        patch = {"status": "running", "phase": phase, "percent": pct, "message": msg}
+        if extra:
+            patch.update(extra)
+        update_job_status(slug, _ABSORB_NS, fw_id, patch)
+
+    try:
+        res = _EB.run_absorption(wdb, tenant_id, fw_id, get_client=get_openai_client,
+                                 user_id=user_id, promote=promote, progress=progress)
+        update_job_status(slug, _ABSORB_NS, fw_id, {
+            "status": "done", "phase": "done", "percent": 100,
+            "message": "Absorption complete — review and keep or discard.", "result": res})
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger(__name__).exception("auto-absorb failed for fw=%s", fw_id)
+        update_job_status(slug, _ABSORB_NS, fw_id, {"status": "error", "message": str(e)})
+    finally:
+        wdb.close()
+
+
+@router.get("/extend/pending")
+def extend_pending(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """Active frameworks not yet part of the live baseline — what auto-absorb picks up."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    return _EB.pending_frameworks(db, tenant_id)
+
+
+@router.post("/extend/upload")
+async def extend_upload(request: Request, file: UploadFile = File(...),
+                        db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """Upload a raw framework seed (.json, controls-only is fine). Ingests it as a
+    new framework (like a developer seeding it), then it shows up as pending."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    raw = await file.read()
+    try:
+        data = json.loads(raw)
+    except Exception:
+        raise HTTPException(status_code=400, detail="File is not valid JSON.")
+    if not isinstance(data, dict) or "metadata" not in data or "controls" not in data:
+        raise HTTPException(status_code=400,
+                            detail="Seed must be an object with 'metadata' and 'controls'.")
+    from ....seed_frameworks import seed_framework_from_json, framework_exists
+    name = (data.get("metadata") or {}).get("name")
+    if name and framework_exists(db, name, tenant_id):
+        existing = db.query(UploadedFramework).filter(
+            UploadedFramework.name == name, UploadedFramework.tenant_id == tenant_id).first()
+        n = db.query(ParsedFrameworkControl).filter(
+            ParsedFrameworkControl.uploaded_framework_id == existing.id).count()
+        return {"framework_id": existing.id, "name": existing.name, "controls": n, "already_existed": True}
+    fw = seed_framework_from_json(db, data, tenant_id=tenant_id, uploaded_by=current_user.id, force=False)
+    if not fw:
+        raise HTTPException(status_code=400, detail="Could not ingest the framework.")
+    # SANDBOX ISOLATION: the uploaded framework is hidden from the rest of the app
+    # (Frameworks / Coverage / Gap / main library all filter is_active) until the
+    # user presses Keep. This guarantees testing never affects the live library.
+    fw.is_active = False
+    fw.is_shared = False
+    fw.upload_status = "sandbox"
+    db.commit()
+    n = db.query(ParsedFrameworkControl).filter(
+        ParsedFrameworkControl.uploaded_framework_id == fw.id).count()
+    # The framework brings its own artifacts too — ingest them into the catalog.
+    artifacts_in = 0
+    if isinstance(data.get("artifacts"), list) and data["artifacts"]:
+        artifacts_in = _EB.ingest_artifacts(db, fw.id, data["artifacts"])
+    return {"framework_id": fw.id, "name": fw.name, "controls": n,
+            "artifacts": artifacts_in, "already_existed": False}
+
+
+@router.post("/extend/start")
+def extend_start(req: _ExtendReq, request: Request,
+                 db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """Kick the phased auto-absorb job for a framework. Returns immediately; the UI
+    polls /extend/job/{framework_id}. Builds a CANDIDATE (never promotes unless asked)."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    slug = getattr(request.state, "tenant_slug", None)
+    if not slug:
+        raise HTTPException(status_code=400, detail="Tenant context required.")
+    fw = db.query(UploadedFramework).filter(UploadedFramework.id == req.framework_id).first()
+    if not fw:
+        raise HTTPException(status_code=404, detail="Framework not found")
+    # Concurrency guard: never run two absorptions for the same framework at once
+    # (a browser-tab watcher + a manual start, or several open tabs, would otherwise
+    # each spawn a candidate run). If one is already in flight, return it as-is.
+    existing = get_job_status(slug, _ABSORB_NS, fw.id, default={"status": "idle"})
+    if existing.get("status") == "running":
+        return {"job_id": fw.id, "framework_id": fw.id, "status": "running",
+                "already_running": True, "phases": _phases_meta()}
+    # If a finished candidate already exists for this framework (and is still
+    # present, i.e. not yet discarded), don't build a duplicate — return it.
+    if existing.get("status") == "done":
+        cand_id = (existing.get("result") or {}).get("candidate_run_id")
+        if cand_id and db.query(NormalizationRun).filter(NormalizationRun.id == cand_id).first():
+            return {"job_id": fw.id, "framework_id": fw.id, "status": "done",
+                    "already_done": True, "phases": _phases_meta()}
+    set_job_status(slug, _ABSORB_NS, fw.id, {
+        "status": "running", "phase": "read", "percent": 1,
+        "message": "Starting…", "framework": fw.name, "phases": _phases_meta()})
+    threading.Thread(target=_absorb_worker,
+                     args=(slug, tenant_id, fw.id, current_user.id, bool(req.promote)),
+                     daemon=True).start()
+    return {"job_id": fw.id, "framework_id": fw.id, "status": "running", "phases": _phases_meta()}
+
+
+@router.get("/extend/job/{framework_id}")
+def extend_job(framework_id: int, request: Request,
+               db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    slug = getattr(request.state, "tenant_slug", None)
+    if not slug:
+        raise HTTPException(status_code=400, detail="Tenant context required.")
+    st = get_job_status(slug, _ABSORB_NS, framework_id, default={"status": "idle"})
+    if "phases" not in st:
+        st["phases"] = _phases_meta()
+    return st
+
+
+@router.get("/extend/candidate/{run_id}/placements")
+def extend_placements(run_id: int, framework_id: int = Query(...),
+                      db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """The mock/duplicate library: faithful copy of the live library + where every
+    new-framework control landed in it. The live library is never touched."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        return _EB.candidate_placements(db, tenant_id, run_id, framework_id)
+    except RuntimeError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/extend/candidate/{run_id}/export")
+def extend_export(run_id: int, framework_id: int = Query(...),
+                  db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """Download the pipeline result as an Excel workbook (Summary / Placements /
+    Evidence sheets) — the 'goal answers in Excel'."""
+    from fastapi import Response
+    import io as _io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        data = _EB.candidate_placements(db, tenant_id, run_id, framework_id)
+    except RuntimeError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    wb = Workbook()
+    hdr_fill = PatternFill("solid", fgColor="6D28D9")
+    hdr_font = Font(bold=True, color="FFFFFF")
+
+    def _style_header(ws, ncols):
+        for c in range(1, ncols + 1):
+            cell = ws.cell(row=1, column=c)
+            cell.fill = hdr_fill; cell.font = hdr_font
+            cell.alignment = Alignment(vertical="center")
+        ws.freeze_panes = "A2"
+
+    def _autosize(ws, widths):
+        from openpyxl.utils import get_column_letter
+        for i, w in enumerate(widths, start=1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+
+    # Sheet 1 — Summary
+    ws = wb.active; ws.title = "Summary"
+    ws.append(["New-Framework Absorption — Result"]); ws["A1"].font = Font(bold=True, size=14)
+    ws.append([])
+    summary = [
+        ("Framework", data["framework"]),
+        ("Candidate (mock) library run", f"#{data['candidate_run_id']}"),
+        ("Live library (untouched)", f"run #{data['live']['run_id']} · {data['live']['total']} entries · {data['live']['domains']} domains"),
+        ("Mock library", f"{data['mock']['total']} entries · {data['mock']['domains']} domains"),
+        ("Controls absorbed", len(data["placements"])),
+        ("Joined existing sets", data["mock"]["added_join"]),
+        ("New standalone entries", data["mock"]["added_standalone"]),
+        ("Recommended evidence items generated", len(data["evidence"])),
+    ]
+    for k, v in summary:
+        ws.append([k, v]); ws.cell(row=ws.max_row, column=1).font = Font(bold=True)
+    _autosize(ws, [40, 70])
+
+    # Sheet 2 — Placements (the framework → library pipeline)
+    ws2 = wb.create_sheet("Placements")
+    cols = ["Control ID", "Title", "Framework domain", "→ Library domain", "Disposition", "Joined set"]
+    ws2.append(cols); _style_header(ws2, len(cols))
+    for p in data["placements"]:
+        ws2.append([p["control_id"], p["title"], p["framework_domain"],
+                    p["canonical_domain"], p["disposition"], p["joined_set"] or ""])
+    _autosize(ws2, [16, 50, 28, 30, 14, 40])
+
+    # Sheet 3 — Per-domain composition
+    ws3 = wb.create_sheet("By domain")
+    cols3 = ["Library domain", "Existing (live)", "Added from framework", "Total in mock"]
+    ws3.append(cols3); _style_header(ws3, len(cols3))
+    for d in data["per_domain"]:
+        ws3.append([d["domain"], d["baseline"], d["added"], d["total"]])
+    _autosize(ws3, [38, 16, 22, 16])
+
+    # Sheet 4 — Evidence (carried + generated)
+    ws4 = wb.create_sheet("Evidence")
+    cols4 = ["Control ID", "Control title", "Recommended evidence", "Type"]
+    ws4.append(cols4); _style_header(ws4, len(cols4))
+    for e in data["evidence"]:
+        ws4.append([e["control_id"], e["control_title"], e["evidence_title"], e["evidence_type"]])
+    _autosize(ws4, [16, 45, 50, 16])
+
+    # Sheet 5 — Artifact normalization (new vs deduped against the unified catalog)
+    art = data.get("artifacts") or {}
+    ws5 = wb.create_sheet("Artifacts")
+    ws5.append([f"Artifacts: {art.get('artifacts_total', 0)} total · "
+                f"{art.get('artifacts_new', 0)} new · {art.get('artifacts_duplicate', 0)} deduped"])
+    ws5["A1"].font = Font(bold=True)
+    ws5.append([])
+    ws5.append(["Disposition", "Artifact", "Type", "Matches existing / control ref"])
+    _style_header(ws5, 4)
+    # openpyxl freezes row 1; header is row 3 here — re-apply header style on row 3
+    for c in range(1, 5):
+        cell = ws5.cell(row=3, column=c); cell.fill = hdr_fill; cell.font = hdr_font
+    for a in art.get("artifacts_new_sample", []):
+        ws5.append(["NEW", a.get("artifact"), a.get("type"), a.get("control_ref") or ""])
+    for a in art.get("artifacts_dup_sample", []):
+        ws5.append(["DEDUPED", a.get("artifact"), a.get("type"),
+                    f"{a.get('matches')} ({a.get('in_framework')})"])
+    _autosize(ws5, [14, 44, 16, 50])
+
+    buf = _io.BytesIO(); wb.save(buf); buf.seek(0)
+    safe = "".join(ch for ch in (data["framework"] or "framework") if ch.isalnum() or ch in " -_")[:50].strip().replace(" ", "_")
+    fname = f"absorption_{safe}_run{data['candidate_run_id']}.xlsx"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+@router.post("/extend/promote/{run_id}")
+def extend_promote(run_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """Keep a candidate run: make it the live baseline (the only step that changes
+    what the rest of the UI shows). Fully reversible — the old baseline run remains."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    run = db.query(NormalizationRun).filter(
+        NormalizationRun.id == run_id, NormalizationRun.tenant_id == tenant_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    db.query(NormalizationRun).filter(
+        NormalizationRun.tenant_id == tenant_id, NormalizationRun.is_baseline.is_(True)).update(
+        {NormalizationRun.is_baseline: False})
+    run.is_baseline = True
+    # Activate any sandbox framework(s) this run added — now that it's live, the
+    # framework and its artifacts become visible in the rest of the app.
+    ids = list(run.framework_ids or [])
+    if ids:
+        db.query(UploadedFramework).filter(
+            UploadedFramework.id.in_(ids),
+            UploadedFramework.upload_status == "sandbox").update(
+            {UploadedFramework.is_active: True, UploadedFramework.is_shared: True,
+             UploadedFramework.upload_status: "completed"}, synchronize_session=False)
+    db.commit()
+    return {"promoted_run_id": run_id, "is_baseline": True}

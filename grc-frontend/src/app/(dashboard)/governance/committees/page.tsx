@@ -23,6 +23,22 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { AnimatedModal } from '@/components/ui/AnimatedModal';
+import {
+  type OverviewMetric,
+  scoreBand,
+  ScoreRing,
+  MetricRow,
+} from '@/components/dashboard/score-kit';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RTooltip,
+} from 'recharts';
 
 // ── Types (mirror GET /governance/committees/overview) ──────────────────────
 interface OverviewCommittee {
@@ -71,7 +87,15 @@ interface Overview {
     meetings_this_quarter: number;
     actions: { open: number; in_progress: number; overdue: number; completed: number; total: number; pct_done: number };
     avg_attendance_pct: number | null;
+    quorum_met?: number;
+    quorum_meetings?: number;
+    quorum_met_rate_pct?: number | null;
     charters_active: number;
+    performance?: {
+      score: number | null;
+      grade: string | null;
+      metrics: OverviewMetric[];
+    };
   };
   committees: OverviewCommittee[];
   upcoming_meetings: OverviewMeeting[];
@@ -147,6 +171,7 @@ export default function CommitteesDashboardPage() {
   const canCreate = hasPermission('governance:committees:create');
   const canDelete = hasPermission('governance:committees:delete');
   const queryClient = useQueryClient();
+  const [perfOpen, setPerfOpen] = useState(false);
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [committeeModalOpen, setCommitteeModalOpen] = useState(false);
@@ -298,19 +323,80 @@ export default function CommitteesDashboardPage() {
         <EmptyModule canCreate={canCreate} onCreate={() => setCommitteeModalOpen(true)} />
       ) : (
         <>
-          {/* ── KPI strip ── */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-            <KpiTile icon={Users} tone="primary" value={k!.active_committees}
-              label="Active committees" sub={`${k!.total_committees} total`} />
-            <KpiTile icon={Calendar} tone="info" value={k!.meetings_upcoming}
-              label="Upcoming meetings" sub={`${k!.meetings_this_quarter} this quarter`} />
-            <KpiTile icon={CheckSquare} tone="success" value={`${k!.actions.pct_done}%`}
-              label="Actions completed" sub={`${k!.actions.completed}/${k!.actions.total} done`} />
-            <KpiTile icon={AlertTriangle} tone={k!.actions.overdue > 0 ? 'danger' : 'muted'} value={k!.actions.overdue}
-              label="Overdue actions" sub={`${k!.actions.open + k!.actions.in_progress} still open`} />
-            <KpiTile icon={UserCheck} tone="muted"
-              value={k!.avg_attendance_pct != null ? `${k!.avg_attendance_pct}%` : '—'}
-              label="Avg attendance" sub={k!.avg_attendance_pct != null ? 'quorum met' : 'no data yet'} />
+          {/* ── KPI strip — performance ring first, formulas one click away ── */}
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+            <button
+              type="button"
+              onClick={() => setPerfOpen(true)}
+              className="rounded-xl border border-slate-200 bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Performance</p>
+                  {k!.performance?.grade && (
+                    <span className={`mt-1.5 inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${scoreBand(k!.performance.score).pill}`}>
+                      {k!.performance.grade}
+                    </span>
+                  )}
+                </div>
+                <ScoreRing score={k!.performance?.score ?? null} size={52} />
+              </div>
+            </button>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex items-start justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Committees</p>
+                <Users className="h-4 w-4 text-violet-500" />
+              </div>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{k!.active_committees}</p>
+              <p className="mt-1 text-[11px] text-slate-400">{k!.total_committees} total · {k!.charters_active} active charters</p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex items-start justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Meetings</p>
+                <Calendar className="h-4 w-4 text-blue-500" />
+              </div>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{k!.meetings_upcoming}</p>
+              <p className="mt-1 text-[11px] text-slate-400">upcoming · {k!.meetings_this_quarter} this quarter</p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex items-start justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Actions Done</p>
+                <CheckSquare className="h-4 w-4 text-emerald-500" />
+              </div>
+              <p className="mt-1 text-2xl font-bold text-emerald-600">{k!.actions.pct_done}%</p>
+              <div className="mt-2 h-1.5 rounded-full bg-slate-100">
+                <div className="h-1.5 rounded-full bg-emerald-500" style={{ width: `${Math.min(100, k!.actions.pct_done)}%` }} />
+              </div>
+              <p className="mt-1.5 text-[11px] text-slate-400">{k!.actions.completed}/{k!.actions.total} done</p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex items-start justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Overdue</p>
+                <AlertTriangle className={`h-4 w-4 ${k!.actions.overdue > 0 ? 'text-rose-500' : 'text-slate-300'}`} />
+              </div>
+              <p className={`mt-1 text-2xl font-bold ${k!.actions.overdue > 0 ? 'text-rose-600' : 'text-slate-900'}`}>{k!.actions.overdue}</p>
+              <p className="mt-1 text-[11px] text-slate-400">{k!.actions.open + k!.actions.in_progress} actions still open</p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex items-start justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Attendance</p>
+                <UserCheck className="h-4 w-4 text-blue-500" />
+              </div>
+              <p className="mt-1 text-2xl font-bold text-slate-900">
+                {k!.avg_attendance_pct != null ? `${Math.round(k!.avg_attendance_pct)}%` : '—'}
+              </p>
+              <div className="mt-2 h-1.5 rounded-full bg-slate-100">
+                <div className="h-1.5 rounded-full bg-blue-500" style={{ width: `${Math.min(100, k!.avg_attendance_pct ?? 0)}%` }} />
+              </div>
+              <p className="mt-1.5 text-[11px] text-slate-400">
+                {k!.quorum_meetings ? `quorum met in ${k!.quorum_met}/${k!.quorum_meetings}` : 'no meeting data yet'}
+              </p>
+            </div>
           </div>
 
           {/* ── Master–detail: committee tiles (left) ↔ sticky context (right) ── */}
@@ -353,6 +439,51 @@ export default function CommitteesDashboardPage() {
             <ProgressChart data={overview!.progress_over_time} />
             <TopPerformers rows={overview!.top_performers} />
           </div>
+
+          <AnimatedModal
+            isOpen={perfOpen}
+            onClose={() => setPerfOpen(false)}
+            size="lg"
+            title="Committee Performance"
+            subtitle="Weighted mean of the five committee formulas — same score as the Governance overview"
+          >
+            {k!.performance && (
+              <div className="p-5">
+                <div className="mb-4 flex items-center gap-4 rounded-xl bg-slate-50 p-4">
+                  <ScoreRing score={k!.performance.score} size={72} />
+                  <div className="min-w-0">
+                    {k!.performance.grade && (
+                      <span className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${scoreBand(k!.performance.score).pill}`}>
+                        {k!.performance.grade}
+                      </span>
+                    )}
+                    <p className="mt-1.5 text-xs leading-5 text-slate-500">
+                      Each row shows its weight, count, and the exact formula behind the number.
+                      Metrics with no data are excluded and the remaining weights re-normalize.
+                    </p>
+                  </div>
+                </div>
+                <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                  {k!.performance.metrics.map((m) => (
+                    <MetricRow key={m.key} metric={m} />
+                  ))}
+                </div>
+                {k!.performance.score != null && (
+                  <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-3.5 py-2.5">
+                    <p className="text-[11px] leading-5 text-slate-600">
+                      <span className="font-semibold text-slate-700">Score</span>{' = '}
+                      {k!.performance.metrics
+                        .filter((m) => m.score != null)
+                        .map((m) => `${Math.round(m.score as number)}×${Math.round(m.weight * 100)}%`)
+                        .join(' + ')}
+                      {' = '}
+                      <span className="font-bold text-slate-800">{Math.round(k!.performance.score)}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </AnimatedModal>
         </>
       )}
 
@@ -383,23 +514,6 @@ const TONE: Record<string, string> = {
   primary: 'text-primary-600', info: 'text-slate-500', success: 'text-emerald-600',
   danger: 'text-rose-600', warning: 'text-amber-600', muted: 'text-slate-400',
 };
-function KpiTile({ icon: Icon, tone, value, label, sub }: {
-  icon: any; tone: keyof typeof TONE | string; value: React.ReactNode; label: string; sub?: string;
-}) {
-  return (
-    <div className="stat-card">
-      <div className="flex items-start gap-2.5">
-        <Icon size={18} className={TONE[tone] || TONE.muted} />
-        <div className="min-w-0">
-          <p className="text-xl font-bold leading-none text-slate-900">{value}</p>
-          <p className="mt-1 truncate text-[13px] font-medium text-slate-600">{label}</p>
-          {sub && <p className="mt-0.5 truncate text-xs text-slate-400">{sub}</p>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Committee tile (master list item)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -565,7 +679,6 @@ function ContextPanel({ selected, meetings, actions, onClear }: {
 // Progress over time (minimal inline bar chart)
 // ─────────────────────────────────────────────────────────────────────────────
 function ProgressChart({ data }: { data: OverviewMonth[] }) {
-  const maxCompleted = Math.max(1, ...data.map((d) => d.actions_completed));
   const anyActivity = data.some((d) => d.actions_completed > 0 || d.meetings_held > 0);
   return (
     <div className="card">
@@ -577,23 +690,38 @@ function ProgressChart({ data }: { data: OverviewMonth[] }) {
       {!anyActivity ? (
         <p className="py-4 text-center text-xs text-slate-400">No meetings or completed actions recorded yet.</p>
       ) : (
-        <div className="flex items-end justify-between gap-2 pt-2">
-          {data.map((d) => (
-            <div key={d.month} className="flex flex-1 flex-col items-center gap-1">
-              {/* Label matches what the bar encodes (actions completed); the
-                  completion-rate lives in the tooltip to avoid dual-encoding. */}
-              <span className="text-[11px] font-medium text-slate-500">{d.actions_completed || ''}</span>
-              <div className="flex h-24 w-full items-end justify-center">
-                <div
-                  className="w-6 rounded-t bg-primary-500 transition-all"
-                  style={{ height: `${Math.max(4, (d.actions_completed / maxCompleted) * 100)}%` }}
-                  title={`${d.actions_completed} actions completed · ${d.meetings_held} meetings held${d.completion_pct != null ? ` · ${Math.round(d.completion_pct)}% of due-this-month completed` : ''}`}
-                />
-              </div>
-              <span className="text-[11px] text-slate-500">{monthLabel(d.month)}</span>
-              <span className="text-[10px] text-slate-400">{d.meetings_held}mtg</span>
-            </div>
-          ))}
+        <div className="h-[200px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart
+              data={data.map((d) => ({
+                month: monthLabel(d.month),
+                'Meetings held': d.meetings_held,
+                'Actions completed': d.actions_completed,
+              }))}
+              margin={{ top: 8, right: 12, left: -14, bottom: 0 }}
+            >
+              <defs>
+                <linearGradient id="committeeMeetings" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
+                </linearGradient>
+                <linearGradient id="committeeActions" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="2 2" stroke="#f1f5f9" vertical={false} />
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <RTooltip
+                contentStyle={{ fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', color: '#1e293b' }}
+              />
+              <Area type="monotone" dataKey="Meetings held" stroke="#3b82f6" strokeWidth={2}
+                    fill="url(#committeeMeetings)" dot={{ r: 3, strokeWidth: 2, fill: '#fff' }} />
+              <Area type="monotone" dataKey="Actions completed" stroke="#10b981" strokeWidth={2}
+                    fill="url(#committeeActions)" dot={{ r: 3, strokeWidth: 2, fill: '#fff' }} />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       )}
     </div>

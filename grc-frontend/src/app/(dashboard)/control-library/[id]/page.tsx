@@ -1,2058 +1,617 @@
-﻿'use client';
+'use client';
 
-
-import { PageLoader } from '@/components/ui';
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import apiClient, { frameworksApi, controlsApi, frameworkUploadApi } from '@/lib/api';
-import { usePermissions } from '@/hooks/usePermissions';
-import { 
-  ArrowLeft, Loader2, AlertCircle, Shield, Calendar, Tag,
-  Edit2, Sparkles, Trash2, Plus, X, Search, Layers, GitMerge,
-  FileCheck, Link2, Eye, RefreshCw, Brain, ChevronDown, ChevronRight,
-  CheckCircle, Clock, AlertTriangle, Filter, Lightbulb, Info, Library, FileText
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import apiClient from '@/lib/api';
+import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import {
+  ChevronLeft, Layers, Shield, FileText, Download, X, CheckCircle2, ChevronDown,
+  Loader2, Boxes, GitMerge, Library, Network, FileStack, Sparkles, Building2,
+  Search, LayoutGrid, List, ArrowRight, Upload, Filter, Check,
 } from 'lucide-react';
-import Link from 'next/link';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 
-type TabType = 'controls' | 'similarity' | 'evidence' | 'inheritance';
+const SF: [string, string][] = [
+  ['ARAMCO', 'ARAMCO'], ['COBIT', 'COBIT'], ['Health Information', 'DOH ADHIE'], ['ADHIE', 'DOH ADHIE'],
+  ['Abu Dhabi', 'ADHICS'], ['DOH', 'DOH ADHIE'], ['HIPAA', 'HIPAA'], ['HITRUST', 'HITRUST'], ['22301', 'ISO 22301'],
+  ['42001', 'ISO 42001'], ['27001', 'ISO 27001'], ['MAS', 'MAS TRM'], ['Artificial Intelligence', 'NIST AI RMF'],
+  ['800-53', 'NIST 800-53'], ['Cybersecurity Framework', 'NIST CSF'], ['PCI', 'PCI DSS'], ['Qatar', 'Qatar CB'],
+  ['SABIC', 'SABIC'], ['SAMA', 'SAMA'], ['SBP Cloud', 'SBP Cloud'], ['ETGRMF', 'SBP ETGRMF'],
+  ['Internet Banking', 'SBP IB'], ['SOX', 'SOX'], ['SWIFT', 'SWIFT'], ['Sri Lanka', 'Sri Lanka'],
+  ['Personal Data Transfer', 'KSA Transfer'], ['CIS', 'CIS'], ['General Data', 'GDPR'],
+  ['National Data', 'KSA NDMO'], ['Digital Operational', 'DORA'], ['NIS2', 'NIS2'], ['SOC', 'SOC 2'],
+];
+const sf = (f: string) => { for (const [k, v] of SF) if ((f || '').includes(k)) return v; return (f || '').split(' ')[0]; };
 
-interface NormalizedControlItem {
-  mapping_id: number;
-  control_id: number;
-  code: string;
-  name: string;
-  statement: string | null;
-  mapping_confidence: number | null;
-  mapping_source: string | null;
-  frameworks?: string[];
-  framework_count?: number;
-  linked_control_count?: number;
+interface Member { framework: string; control_id: string; original_title: string; reference?: string; }
+interface Ev { name: string; absorbs?: string[]; sources?: string[]; }
+interface Art { name: string; type?: string; sources?: string[]; }
+interface SetT {
+  set_id: string; normalized_title: string; member_count: number; frameworks: string[];
+  members: Member[]; normalized_evidence: Ev[]; excluded_evidence?: { name: string; reason: string }[];
+  normalized_artifacts: Art[]; nc_id?: number;
+}
+interface Rich {
+  domain: string; controls_in: number; frameworks: string[]; framework_count: number;
+  absent_frameworks: { name: string; reason: string; present_in?: string[]; present_in_count?: number }[];
+  framework_catalog_artifacts: { framework: string; note: string; artifacts: Art[] }[];
+  normalized_sets: number; standalone: number; sets: SetT[]; standalone_controls: SetT[];
 }
 
-interface FrameworkControlItem {
-  mapping_id: number;
-  control_id: number;
-  code: string;
-  name: string;
-  statement: string | null;
-  framework_id: number | null;
-  framework_name: string | null;
-  framework_code: string | null;
-  mapping_confidence: number | null;
-  mapping_source: string | null;
+function StatCard({ value, label, sub, grad, icon }: { value: ReactNode; label: string; sub: string; grad: string; icon: ReactNode }) {
+  return (
+    <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${grad}`} />
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{value}</p>
+          <p className="mt-1.5 text-xs font-semibold text-slate-600">{label}</p>
+        </div>
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${grad} text-white shadow-sm transition-transform group-hover:scale-105`}>{icon}</span>
+      </div>
+      <p className="mt-3 text-[11px] text-slate-400">{sub}</p>
+    </div>
+  );
 }
 
-interface ParsedControlItem {
-  mapping_id: number;
-  control_id: number;
-  code: string;
-  name: string;
-  statement: string | null;
-  framework_id: number | null;
-  framework_name: string | null;
-  mapping_confidence: number | null;
-  mapping_source: string | null;
-}
-
-interface ControlGroupDetail {
-  id: number;
-  tenant_id: number;
-  code: string;
-  name: string;
-  description: string | null;
-  category: string | null;
-  domain: string | null;
-  keywords: string[];
-  ai_summary: string | null;
-  evidence_types: string[];
-  normalized_control_count: number;
-  framework_control_count: number;
-  parsed_control_count: number;
-  total_control_count: number;
-  created_at: string | null;
-  updated_at: string | null;
-  created_by: number | null;
-  normalized_controls: NormalizedControlItem[];
-  framework_controls: FrameworkControlItem[];
-  parsed_controls: ParsedControlItem[];
-}
-
-interface FrameworkBreakdown {
-  framework_id: number;
-  framework_name: string;
-  framework_code: string;
-  control_count: number;
-}
-
-interface FrameworksResponse {
-  group_id: number;
-  group_name: string;
-  normalized_control_count: number;
-  frameworks: FrameworkBreakdown[];
-}
-
-interface EvidenceRecommendation {
-  id: number;
-  tenant_id: number;
-  group_id: number | null;
-  normalized_control_id: number | null;
-  framework_control_id: number | null;
-  evidence_type: string;
-  evidence_description: string | null;
-  priority: string;
-  ai_confidence: number | null;
-  ai_reasoning: string | null;
-  sample_evidence_names: string[];
-  created_at: string;
-  control_name: string | null;
-  control_code: string | null;
-  framework_name: string | null;
-  group_name: string | null;
-}
-
-interface InheritanceItem {
-  inheritance_id: number;
-  inheritance_type: string;
-  coverage_percentage: number;
-  condition_description: string | null;
-  control: {
-    id: number;
-    type: string;
-    code: string;
-    name: string;
-    statement: string | null;
-    framework_id?: number;
-    framework_name?: string;
-    framework_code?: string;
-  };
-}
-
-interface SimilarityItem {
-  id: number;
-  control1_type: string;
-  control1_id: number;
-  control1_code: string;
-  control1_name: string;
-  control2_type: string;
-  control2_id: number;
-  control2_code: string;
-  control2_name: string;
-  control1_framework: string;
-  control2_framework: string;
-  similarity_score: number;
-  ai_reasoning: string | null;
-}
-
-const PRIORITY_STYLES: Record<string, { bg: string; text: string }> = {
-  critical: { bg: 'bg-red-100', text: 'text-red-700' },
-  high: { bg: 'bg-orange-100', text: 'text-orange-700' },
-  medium: { bg: 'bg-yellow-100', text: 'text-yellow-700' },
-  low: { bg: 'bg-green-100', text: 'text-green-700' },
-};
-
-const SOURCE_STYLES: Record<string, { bg: string; text: string }> = {
-  manual: { bg: 'bg-slate-100', text: 'text-slate-600' },
-  ai: { bg: 'bg-primary-50', text: 'text-primary-700' },
-  import: { bg: 'bg-slate-100', text: 'text-slate-600' },
-};
-
-export default function ControlGroupDetailPage() {
+export default function CategoryDetail() {
   const params = useParams();
   const router = useRouter();
-  const { hasPermission } = usePermissions();
-  const canEdit = hasPermission('controls:control_library:edit');
-  const rawId = String(params.id ?? '');
-  const groupId = Number(rawId);
-  const isValidGroupId = Number.isFinite(groupId) && groupId > 0 && /^\d+$/.test(rawId);
-  // Whenever this dynamic page is invoked with a non-numeric id (which can
-  // happen on stale/CDN-cached production bundles where /control-library/coverage
-  // accidentally routes through `[id]`), redirect to the correct sibling route
-  // if the id matches a known sub-page, otherwise fall back to the index.
-  const SIBLING_ROUTES: Record<string, string> = {
-    coverage: '/control-library/coverage',
-    gaps: '/control-library/gaps',
-    compare: '/control-library/compare',
-    evidence: '/control-library/evidence',
-  };
-  useEffect(() => {
-    if (!isValidGroupId) {
-      router.replace(SIBLING_ROUTES[rawId] ?? '/control-library');
-    }
-  }, [isValidGroupId, rawId, router]);
-  const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<TabType>('controls');
-  // null = show all · 'normalized' = only normalized controls · number = one framework
-  const [frameworkFilter, setFrameworkFilter] = useState<number | 'normalized' | null>(null);
-  const [groupByFramework, setGroupByFramework] = useState(false);
-  const [showAddControlsModal, setShowAddControlsModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-
-  const { data: group, isLoading, error } = useQuery<ControlGroupDetail>({
-    queryKey: ['control-group-detail', groupId],
-    queryFn: async () => {
-      const response = await apiClient.get(`/control-library/groups/${groupId}`);
-      return response.data;
-    },
-    enabled: isValidGroupId,
-  });
-
-  const { data: frameworksData } = useQuery<FrameworksResponse>({
-    queryKey: ['control-group-frameworks', groupId],
-    queryFn: async () => {
-      const response = await apiClient.get(`/control-library/groups/${groupId}/frameworks`);
-      return response.data;
-    },
-    enabled: isValidGroupId,
-  });
-
-  const { data: evidenceRecs, refetch: refetchEvidence } = useQuery<{ recommendations: EvidenceRecommendation[] }>({
-    queryKey: ['control-group-evidence-recs', groupId],
-    queryFn: async () => {
-      const response = await apiClient.get(`/control-library/evidence-recs/for-group/${groupId}`);
-      return response.data;
-    },
-    enabled: isValidGroupId && activeTab === 'evidence',
-  });
-
-  const { data: similarities } = useQuery<{ items: SimilarityItem[] }>({
-    queryKey: ['control-group-similarities', groupId],
-    queryFn: async () => {
-      const response = await apiClient.get(`/control-library/groups/${groupId}/similarities`);
-      return response.data;
-    },
-    enabled: isValidGroupId && activeTab === 'similarity',
-  });
-
-  const generateSummaryMutation = useMutation({
-    mutationFn: () => apiClient.post(`/control-library/groups/${groupId}/generate-summary`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['control-group-detail', groupId] });
-    },
-  });
-
-  const updateGroupMutation = useMutation({
-    mutationFn: (data: Partial<ControlGroupDetail>) =>
-      apiClient.put(`/control-library/groups/${groupId}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['control-group-detail', groupId] });
-      setShowEditModal(false);
-    },
-  });
-
-  const removeControlMutation = useMutation({
-    mutationFn: (mappingId: number) =>
-      apiClient.delete(`/control-library/groups/${groupId}/controls/${mappingId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['control-group-detail', groupId] });
-      queryClient.invalidateQueries({ queryKey: ['control-group-frameworks', groupId] });
-    },
-  });
-
-  const generateEvidenceRecsMutation = useMutation({
-    mutationFn: () => apiClient.post(`/control-library/evidence-recs/generate-for-group/${groupId}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['control-group-evidence-recs', groupId] });
-      refetchEvidence();
-    },
-  });
-
-  const populateFromFrameworksMutation = useMutation({
-    mutationFn: () => apiClient.post(`/control-library/groups/${groupId}/populate-from-frameworks`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['control-group-detail', groupId] });
-      queryClient.invalidateQueries({ queryKey: ['control-group-frameworks', groupId] });
-    },
-  });
-
-  const formatDate = (dateString?: string | null) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
-  const getPriorityStyle = (priority: string) => {
-    return PRIORITY_STYLES[priority] || PRIORITY_STYLES.medium;
-  };
-
-  const getSourceStyle = (source: string | null) => {
-    return SOURCE_STYLES[source || 'manual'] || SOURCE_STYLES.manual;
-  };
-
-  const getConfidenceBadge = (confidence: number | null) => {
-    if (confidence === null) return null;
-    const percent = Math.round(confidence * 100);
-    let color = 'text-green-400';
-    if (percent < 60) color = 'text-red-400';
-    else if (percent < 80) color = 'text-yellow-400';
-    return (
-      <span className={`text-xs ${color}`}>
-        {percent}%
-      </span>
-    );
-  };
-
-  const getFilteredControls = () => {
-    if (!group) return { normalized: [], framework: [], parsed: [] };
-    let normalized = group.normalized_controls || [];
-    let framework = group.framework_controls || [];
-    let parsed = group.parsed_controls || [];
-    if (frameworkFilter === 'normalized') {
-      // Only the normalized (consolidated, cross-framework) controls.
-      return { normalized, framework: [], parsed: [] };
-    }
-    if (typeof frameworkFilter === 'number') {
-      framework = framework.filter(c => c.framework_id === frameworkFilter);
-      parsed = parsed.filter(c => c.framework_id === frameworkFilter);
-      normalized = [];
-    }
-    return { normalized, framework, parsed };
-  };
-
-  const groupControlsByFramework = () => {
-    if (!group) return {};
-    const groups: Record<string, (FrameworkControlItem | ParsedControlItem)[]> = {};
-    for (const control of group.framework_controls || []) {
-      const key = control.framework_name || 'Unknown Framework';
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(control);
-    }
-    for (const control of group.parsed_controls || []) {
-      const key = control.framework_name || 'Unknown Framework';
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(control);
-    }
-    return groups;
-  };
-
-  if (!isValidGroupId) {
-    // The useEffect above is redirecting to /control-library. Render a
-    // minimal manual-navigation fallback so the user is never stuck on a
-    // blank page if router.replace fails or is delayed by the host.
-    return (
-      <div className="flex h-64 flex-col items-center justify-center gap-3 text-slate-600">
-        <PageLoader size="sm" />
-        <p className="text-sm">Redirecting…</p>
-        <Link href="/control-library" className="text-xs text-primary-700 hover:underline">
-          Tap here if not redirected
-        </Link>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <PageLoader size="md" />
-      </div>
-    );
-  }
-
-  if (error || !group) {
-    return (
-      <div className="flex h-64 flex-col items-center justify-center text-red-400">
-        <AlertCircle className="mb-2 h-8 w-8" />
-        <p>Failed to load control group details</p>
-        <Link href="/control-library" className="mt-4 text-primary-700 hover:underline">
-          Back to Control Library
-        </Link>
-      </div>
-    );
-  }
-
-  const tabs: { id: TabType; label: string; icon: React.ElementType }[] = [
-    { id: 'controls', label: 'Mapped Controls', icon: Shield },
-    { id: 'inheritance', label: 'Inheritance', icon: Link2 },
-  ];
-
-  const filteredControls = getFilteredControls();
-  const groupedControls = groupControlsByFramework();
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-start gap-4">
-        <Link
-          href="/control-library"
-          className="mt-1 rounded-lg p-2 text-gray-600 hover:bg-white hover:text-black"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-sm">
-              <Layers className="h-6 w-6 text-white" />
-            </span>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-sm font-semibold text-primary-700">{group.code}</span>
-                <h1 className="text-2xl font-bold text-slate-900">{group.name}</h1>
-              </div>
-              <p className="text-slate-500">{group.description || 'No description'}</p>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {group.category && (
-            <span className="rounded-full bg-primary-50 px-3 py-1 text-sm font-medium text-primary-700 ring-1 ring-primary-100">
-              {group.category}
-            </span>
-          )}
-          {group.domain && (
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600">
-              {group.domain}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {canEdit && (
-          <button
-            onClick={() => setShowEditModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-black hover:bg-gray-200"
-          >
-            <Edit2 className="h-4 w-4" />
-            Edit
-          </button>
-          )}
-          <button
-            onClick={() => populateFromFrameworksMutation.mutate()}
-            disabled={populateFromFrameworksMutation.isPending}
-            className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-black hover:bg-gray-200 disabled:opacity-50"
-          >
-            {populateFromFrameworksMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
-            )}
-            Populate Controls
-          </button>
-          <button
-            onClick={() => generateSummaryMutation.mutate()}
-            disabled={generateSummaryMutation.isPending || group.total_control_count === 0}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
-          >
-            {generateSummaryMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
-            )}
-            Generate AI Summary
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
-          {group.ai_summary && (
-            <div className="rounded-lg border border-primary-200 bg-gradient-to-r from-primary-50 to-white p-4">
-              <div className="mb-2 flex items-center gap-2 text-primary-700">
-                <Brain className="h-4 w-4" />
-                <span className="text-sm font-semibold">AI Summary</span>
-              </div>
-              <p className="text-slate-600">{group.ai_summary}</p>
-            </div>
-          )}
-
-          {group.keywords && group.keywords.length > 0 && (
-            <div className="rounded-lg border border-gray-200 bg-white p-4">
-              <div className="mb-3 flex items-center gap-2 text-gray-600">
-                <Tag className="h-4 w-4" />
-                <span className="text-sm font-medium">Keywords</span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {group.keywords.map((keyword, idx) => (
-                  <span
-                    key={idx}
-                    className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700"
-                  >
-                    {keyword}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <div className="mb-3 flex items-center gap-2 text-gray-600">
-              <Calendar className="h-4 w-4" />
-              <span className="text-sm font-medium">Details</span>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Created</span>
-                <span className="text-black">{formatDate(group.created_at)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Updated</span>
-                <span className="text-black">{formatDate(group.updated_at)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Total Controls</span>
-                <span className="text-black">{group.total_control_count}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
-        <button
-          onClick={() => setFrameworkFilter(null)}
-          className={`rounded-lg border p-4 text-center transition-colors ${
-            frameworkFilter === null
-              ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-200'
-              : 'border-gray-200 bg-white hover:bg-gray-50'
-          }`}
-        >
-          <Library className="mx-auto mb-2 h-6 w-6 text-slate-400" />
-          <div className="text-lg font-bold text-slate-900">{group.total_control_count}</div>
-          <div className="text-xs text-gray-600">All</div>
-        </button>
-        <button
-          onClick={() => setFrameworkFilter(frameworkFilter === 'normalized' ? null : 'normalized')}
-          className={`rounded-lg border p-4 text-center transition-colors ${
-            frameworkFilter === 'normalized'
-              ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-200'
-              : 'border-gray-200 bg-white hover:bg-gray-50'
-          }`}
-        >
-          <Sparkles className="mx-auto mb-2 h-6 w-6 text-primary-600" />
-          <div className="text-lg font-bold text-slate-900">
-            {frameworksData?.normalized_control_count ?? (group.normalized_controls?.length || 0)}
-          </div>
-          <div className="text-xs text-gray-600">Normalized</div>
-        </button>
-        {frameworksData?.frameworks.map((fw) => (
-          <button
-            key={fw.framework_id}
-            onClick={() => setFrameworkFilter(fw.framework_id === frameworkFilter ? null : fw.framework_id)}
-            className={`rounded-lg border p-4 text-center transition-colors ${
-              frameworkFilter === fw.framework_id
-                ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-200'
-                : 'border-gray-200 bg-white hover:bg-gray-50'
-            }`}
-          >
-            <Layers className="mx-auto mb-2 h-6 w-6 text-slate-400" />
-            <div className="text-lg font-bold text-slate-900">{fw.control_count}</div>
-            <div className="truncate text-xs text-gray-600">{fw.framework_code || fw.framework_name}</div>
-          </button>
-        ))}
-      </div>
-
-      <div className="border-b border-gray-200">
-        <nav className="flex gap-1">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? 'border-primary-500 text-primary-700'
-                    : 'border-transparent text-gray-600 hover:text-black'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-white p-6">
-        {activeTab === 'controls' && (
-          <MappedControlsTab
-            normalizedControls={filteredControls.normalized}
-            frameworkControls={filteredControls.framework}
-            parsedControls={filteredControls.parsed}
-            groupByFramework={groupByFramework}
-            setGroupByFramework={setGroupByFramework}
-            groupedControls={groupedControls}
-            onAddControls={() => setShowAddControlsModal(true)}
-            onRemoveControl={(mappingId) => removeControlMutation.mutate(mappingId)}
-            isRemoving={removeControlMutation.isPending}
-            getConfidenceBadge={getConfidenceBadge}
-            getSourceStyle={getSourceStyle}
-            frameworkFilter={frameworkFilter}
-          />
-        )}
-
-        {activeTab === 'similarity' && (
-          <SimilarityTab similarities={similarities?.items || []} />
-        )}
-
-        {activeTab === 'evidence' && (
-          <EvidenceRecommendationsTab
-            recommendations={evidenceRecs?.recommendations || []}
-            onGenerateRecs={() => generateEvidenceRecsMutation.mutate()}
-            isGenerating={generateEvidenceRecsMutation.isPending}
-            getPriorityStyle={getPriorityStyle}
-            groupId={groupId}
-            groupName={group?.name}
-          />
-        )}
-
-        {activeTab === 'inheritance' && (
-          <InheritanceTab groupId={groupId} controls={[...filteredControls.normalized.map(c => ({...c, type: 'normalized'})), ...filteredControls.framework.map(c => ({...c, type: 'framework'})), ...filteredControls.parsed.map(c => ({...c, type: 'parsed'}))]} />
-        )}
-      </div>
-
-      {showAddControlsModal && (
-        <AddControlsModal
-          groupId={groupId}
-          existingNormalizedIds={(group.normalized_controls || []).map(c => c.control_id)}
-          existingFrameworkIds={(group.framework_controls || []).map(c => c.control_id)}
-          existingParsedIds={(group.parsed_controls || []).map(c => c.control_id)}
-          onClose={() => setShowAddControlsModal(false)}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['control-group-detail', groupId] });
-            queryClient.invalidateQueries({ queryKey: ['control-group-frameworks', groupId] });
-            setShowAddControlsModal(false);
-          }}
-        />
-      )}
-
-      {showEditModal && (
-        <EditGroupModal
-          group={group}
-          onClose={() => setShowEditModal(false)}
-          onSave={(data) => updateGroupMutation.mutate(data)}
-          isSaving={updateGroupMutation.isPending}
-        />
-      )}
-    </div>
-  );
-}
-
-function MappedControlsTab({
-  normalizedControls,
-  frameworkControls,
-  parsedControls,
-  groupByFramework,
-  setGroupByFramework,
-  groupedControls,
-  onAddControls,
-  onRemoveControl,
-  isRemoving,
-  getConfidenceBadge,
-  getSourceStyle,
-  frameworkFilter,
-}: {
-  normalizedControls: NormalizedControlItem[];
-  frameworkControls: FrameworkControlItem[];
-  parsedControls: ParsedControlItem[];
-  groupByFramework: boolean;
-  setGroupByFramework: (v: boolean) => void;
-  groupedControls: Record<string, (FrameworkControlItem | ParsedControlItem)[]>;
-  onAddControls: () => void;
-  onRemoveControl: (mappingId: number) => void;
-  isRemoving: boolean;
-  getConfidenceBadge: (c: number | null) => React.ReactNode;
-  getSourceStyle: (s: string | null) => { bg: string; text: string };
-  frameworkFilter: number | 'normalized' | null;
-}) {
-  const allControls = [...normalizedControls, ...frameworkControls, ...parsedControls];
-  const [selected, setSelected] = useState<any | null>(null);
-  const selectedKey = selected ? `${selected.type}-${selected.mapping_id}` : null;
-
-  return (
-    <div className="space-y-4">
-      <ControlDetailDrawer control={selected} onClose={() => setSelected(null)} />
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-black">
-          Mapped Controls ({allControls.length})
-        </h3>
-        <div className="flex items-center gap-3">
-          {frameworkFilter === null && (
-            <label className="flex items-center gap-2 text-sm text-gray-600">
-              <input
-                type="checkbox"
-                checked={groupByFramework}
-                onChange={(e) => setGroupByFramework(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-600 focus:ring-primary-500"
-              />
-              Group by framework
-            </label>
-          )}
-          <button
-            onClick={onAddControls}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
-          >
-            <Plus className="h-4 w-4" />
-            Add Controls
-          </button>
-        </div>
-      </div>
-
-      {allControls.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Shield className="mb-4 h-12 w-12 text-gray-400" />
-          <h3 className="text-lg font-medium text-black">No controls mapped</h3>
-          <p className="mt-1 text-gray-600">Add controls to this group to get started</p>
-          <button
-            onClick={onAddControls}
-            className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700"
-          >
-            <Plus className="h-4 w-4" />
-            Add Controls
-          </button>
-        </div>
-      ) : groupByFramework && frameworkFilter === null ? (
-        <div className="space-y-6">
-          {normalizedControls.length > 0 && (
-            <div>
-              <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-green-700">
-                <Shield className="h-4 w-4" />
-                Normalized Controls ({normalizedControls.length})
-              </h4>
-              <ControlsTable
-                controls={normalizedControls.map(c => ({ ...c, type: 'normalized' as const, framework_name: null, framework_code: null }))}
-                onRemove={onRemoveControl}
-                isRemoving={isRemoving}
-                getConfidenceBadge={getConfidenceBadge}
-                getSourceStyle={getSourceStyle}
-                onSelect={setSelected}
-                selectedKey={selectedKey}
-              />
-            </div>
-          )}
-          {Object.entries(groupedControls).map(([frameworkName, controls]) => (
-            <div key={frameworkName}>
-              <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-orange-700">
-                <Layers className="h-4 w-4" />
-                {frameworkName} ({controls.length})
-              </h4>
-              <ControlsTable
-                controls={controls.map(c => ({ ...c, type: 'framework' as const }))}
-                onRemove={onRemoveControl}
-                isRemoving={isRemoving}
-                getConfidenceBadge={getConfidenceBadge}
-                getSourceStyle={getSourceStyle}
-                onSelect={setSelected}
-                selectedKey={selectedKey}
-              />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <ControlsTable
-          controls={[
-            ...normalizedControls.map(c => ({ ...c, type: 'normalized' as const, framework_name: null, framework_code: null })),
-            ...frameworkControls.map(c => ({ ...c, type: 'framework' as const })),
-            ...parsedControls.map(c => ({ ...c, type: 'parsed' as const, framework_code: null })),
-          ]}
-          onRemove={onRemoveControl}
-          isRemoving={isRemoving}
-          getConfidenceBadge={getConfidenceBadge}
-          getSourceStyle={getSourceStyle}
-          onSelect={setSelected}
-          selectedKey={selectedKey}
-        />
-      )}
-    </div>
-  );
-}
-
-function ControlRow({
-  control, onRemove, isRemoving, getConfidenceBadge, getSourceStyle, onSelect, isSelected,
-}: {
-  control: any;
-  onRemove: (mappingId: number) => void;
-  isRemoving: boolean;
-  getConfidenceBadge: (c: number | null) => React.ReactNode;
-  getSourceStyle: (s: string | null) => { bg: string; text: string };
-  onSelect: (c: any) => void;
-  isSelected: boolean;
-}) {
-  const sourceStyle = getSourceStyle(control.mapping_source);
-  return (
-    <tr
-      onClick={() => onSelect(control)}
-      className={`cursor-pointer transition-colors ${isSelected ? 'bg-teal-50' : 'hover:bg-teal-50/40'}`}
-    >
-      <td className="px-4 py-3 align-top">
-        <div className="flex items-center gap-1.5">
-          <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${isSelected ? 'rotate-90 text-teal-500' : 'text-gray-400'}`} />
-          <span className="whitespace-nowrap font-mono text-sm text-primary-700">{control.code}</span>
-        </div>
-      </td>
-      <td className="px-4 py-3">
-        <p className="max-w-xs truncate text-sm text-black">{control.name}</p>
-        {control.type === 'normalized' && (control.framework_count ?? 0) > 0 && (
-          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700 ring-1 ring-teal-100">
-            <Sparkles className="h-2.5 w-2.5" /> Same requirement in {control.framework_count} framework{control.framework_count === 1 ? '' : 's'}
-          </span>
-        )}
-      </td>
-      <td className="px-4 py-3 align-top">
-        {control.type === 'normalized' ? (<span className="inline-block whitespace-nowrap rounded bg-teal-100 px-2 py-1 text-xs text-teal-700">Normalized</span>)
-          : control.type === 'parsed' ? (<span title={control.framework_name || 'Parsed'} className="inline-block max-w-[14rem] truncate align-middle rounded bg-cyan-100 px-2 py-1 text-xs text-cyan-700">{control.framework_name || 'Parsed'}</span>)
-          : (<span title={control.framework_name || control.framework_code || 'Framework'} className="inline-block max-w-[14rem] truncate align-middle rounded bg-orange-100 px-2 py-1 text-xs text-orange-700">{control.framework_code || control.framework_name || 'Framework'}</span>)}
-      </td>
-      <td className="px-4 py-3">{getConfidenceBadge(control.mapping_confidence)}</td>
-      <td className="px-4 py-3"><span className={`rounded px-2 py-1 text-xs ${sourceStyle.bg} ${sourceStyle.text}`}>{control.mapping_source || 'manual'}</span></td>
-      <td className="px-4 py-3 text-right">
-        <button onClick={(e) => { e.stopPropagation(); onRemove(control.mapping_id); }} disabled={isRemoving}
-          className="rounded p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-400 disabled:opacity-50">
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </td>
-    </tr>
-  );
-}
-
-function ControlDetailDrawer({ control, onClose }: { control: any | null; onClose: () => void }) {
-  const qc = useQueryClient();
-  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const id = params?.id as string;
+  const [data, setData] = useState<Rich | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [tab, setTab] = useState<'details' | 'evidence' | 'artifact' | 'upload'>('details');
+  const [tab, setTab] = useState<'sets' | 'standalone' | 'byframework'>('sets');
+  const [selectedFw, setSelectedFw] = useState<string[]>(() => {
+    const fw = searchParams?.get('fw');           // carried over from the main library page
+    return fw ? fw.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  }); // [] = all frameworks
+  const [showFwFilter, setShowFwFilter] = useState(false);
+  const [bfFw, setBfFw] = useState<string>(''); // active framework in the By-framework view
+  const [openSet, setOpenSet] = useState<SetT | null>(null);
+  const [panelTab, setPanelTab] = useState<'members' | 'evidence' | 'artifacts' | 'upload'>('members');
+  const [uploads, setUploads] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
 
-  // Reset all per-control state whenever a different control is opened.
-  useEffect(() => {
-    setTab('details'); setUploadMsg(null); setErr(null); setFile(null);
-  }, [control?.control_id, control?.type]);
-
-  const cid = control?.control_id ?? control?.id;
-  const base = `/control-library/groups/control/${control?.type}/${cid}`;
-  const refresh = () => {
-    qc.invalidateQueries({ queryKey: ['control-group-detail'] });
-    qc.invalidateQueries({ queryKey: ['control-coverage', control?.type, cid] });
+  const loadUploads = (nc?: number) => {
+    if (!nc) { setUploads([]); return; }
+    apiClient.get(`/control-library/groups/normalized/${nc}/evidence`)
+      .then((r) => setUploads(r.data.items || [])).catch(() => setUploads([]));
   };
-  const errMsg = (e: any) => e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || 'Action failed';
+  useEffect(() => { if (openSet?.nc_id && panelTab === 'upload') loadUploads(openSet.nc_id); }, [openSet, panelTab]);
 
-  // Cross-framework coverage: which frameworks this control consolidates and
-  // what evidence is already linked anywhere in its fan-out.
-  const { data: coverage, isLoading: coverageLoading } = useQuery<any>({
-    queryKey: ['control-coverage', control?.type, cid],
-    queryFn: async () => (await apiClient.get(`${base}/coverage`)).data,
-    enabled: !!control,
-  });
-
-  // Built-in recommended evidence + pre-built artifacts the frameworks already
-  // prescribe (NOT AI-generated). Aggregated across frameworks for a normalized
-  // control.
-  const { data: reqs, isLoading: reqsLoading } = useQuery<any>({
-    queryKey: ['control-requirements', control?.type, cid],
-    queryFn: async () => (await apiClient.get(`${base}/requirements`)).data,
-    enabled: !!control,
-  });
-
-  const upload = useMutation({
-    mutationFn: async () => {
+  const handleUpload = async (file: File) => {
+    if (!openSet?.nc_id) { setUploadMsg('This set is not linked to a control id.'); return; }
+    setUploading(true); setUploadMsg(null);
+    try {
       const fd = new FormData();
-      fd.append('name', file?.name || 'Evidence');
-      if (file) fd.append('file', file);
-      return (await apiClient.post(`${base}/upload-evidence`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
-    },
-    onMutate: () => setErr(null), onSuccess: (d: any) => { setUploadMsg(d.message); setFile(null); refresh(); setTab('details'); }, onError: (e: any) => setErr(errMsg(e)),
-  });
+      fd.append('file', file);
+      fd.append('name', file.name);
+      const r = await apiClient.post(`/control-library/groups/normalized/${openSet.nc_id}/evidence`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setUploadMsg(r.data?.message || 'Uploaded and linked.');
+      loadUploads(openSet.nc_id);
+    } catch (e: any) {
+      setUploadMsg(e?.response?.data?.detail || 'Upload failed.');
+    } finally { setUploading(false); }
+  };
+  const [query, setQuery] = useState('');
+  const [view, setView] = useState<'grid' | 'table'>('grid');
+  const [fwGroup, setFwGroup] = useState<string | null>(null);
+  const [showAbsent, setShowAbsent] = useState(false);
 
-  if (!control) return null;
-  const desc = control.statement || control.objective || control.description || '';
-  const TABS: Array<{ id: typeof tab; label: string; icon: any }> = [
-    { id: 'details', label: 'Details', icon: Info },
-    { id: 'evidence', label: 'Evidence', icon: FileCheck },
-    { id: 'artifact', label: 'Artifacts', icon: FileText },
-    { id: 'upload', label: 'Upload', icon: Plus },
-  ];
+  useEffect(() => {
+    if (!id) return;
+    apiClient.get(`/control-library/groups/${id}/rich`)
+      .then((r) => setData(r.data as Rich))
+      .catch((e) => setErr(e?.response?.data?.detail || 'Failed to load category'));
+  }, [id]);
+
+  const totals = useMemo(() => {
+    if (!data) return { ev: 0, art: 0, dedup: 0 };
+    const ev = data.sets.reduce((a, s) => a + (s.normalized_evidence?.length || 0), 0);
+    const art = data.sets.reduce((a, s) => a + (s.normalized_artifacts?.length || 0), 0)
+      + (data.standalone_controls?.reduce((a, s) => a + (s.normalized_artifacts?.length || 0), 0) || 0);
+    // controls collapsed by normalization = members-in-sets minus number-of-sets
+    const membersInSets = data.sets.reduce((a, s) => a + s.member_count, 0);
+    const dedup = membersInSets - data.normalized_sets;
+    return { ev, art, dedup };
+  }, [data]);
+
+  // The library's artifacts are document specifications (name/type/sources), not
+  // stored files — so we generate a real, Word-openable .doc starter template.
+  const download = (a: Art) => {
+    const esc = (s: unknown) => String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string));
+    const typeLabel = a.type || 'Document';
+    const html =
+      `<!DOCTYPE html><html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">` +
+      `<head><meta charset="utf-8"><title>${esc(a.name)}</title></head>` +
+      `<body style="font-family:Calibri,Arial,sans-serif;color:#1e293b;line-height:1.5;">` +
+      `<h1 style="color:#0f766e;margin-bottom:4px;">${esc(a.name)}</h1>` +
+      `<p style="margin-top:0;"><b>Artifact type:</b> ${esc(typeLabel)}<br><b>Domain:</b> ${esc(data?.domain || '')}` +
+      (a.sources?.length ? `<br><b>Maps to:</b> ${esc(a.sources.join('; '))}` : '') + `</p><hr>` +
+      `<h2>Purpose</h2><p>This is the <b>${esc(a.name)}</b> required to satisfy the related control(s). Replace the guidance below with your organisation's actual content.</p>` +
+      `<h2>1. Scope</h2><p>[Describe what this ${esc(typeLabel.toLowerCase())} covers.]</p>` +
+      `<h2>2. Content</h2><p>[Add the ${esc(typeLabel.toLowerCase())} content here.]</p>` +
+      `<h2>3. Ownership &amp; Review</h2><p>Owner: ____________&nbsp;&nbsp;&nbsp;Approved by: ____________&nbsp;&nbsp;&nbsp;Review cycle: ____________</p>` +
+      `<p style="color:#94a3b8;font-size:10pt;">Generated from the Unified Control Library as a starter template — this is a blank document to fill in, not pre-filled evidence.</p>` +
+      `</body></html>`;
+    const blob = new Blob(['﻿', html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = `${(a.name || 'artifact').replace(/[^a-z0-9]+/gi, '_')}.doc`;
+    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+  };
+
+  const chip = 'inline-block text-[11px] font-medium text-primary-800 border border-primary-200 bg-primary-50 rounded px-1.5 py-0.5';
+  const tag = 'inline-block text-[11px] border border-slate-300 text-slate-500 rounded px-1.5 py-0.5';
+
+  if (err) return (
+    <div className="space-y-4">
+      <button onClick={() => router.push('/control-library')} className="flex items-center gap-1 text-sm text-slate-500 hover:text-primary-700"><ChevronLeft size={15} />Control Library</button>
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{err}</div>
+    </div>
+  );
+  if (!data) return <div className="flex items-center gap-2 p-10 text-slate-400"><Loader2 className="animate-spin" size={18} />Loading category…</div>;
+
+  // ── framework filter ("Build your view") ──────────────────────────────
+  const fwAll = Array.from(new Set(data.frameworks.map(sf))).sort();
+  // Frameworks NOT in this domain (no controls of this control-type) — shown
+  // disabled in the Build-your-view picker so nothing looks "missing".
+  const fwAbsent = Array.from(new Set((data.absent_frameworks || []).map((a) => sf(a.name))))
+    .filter((f) => !fwAll.includes(f)).sort();
+  const filterOn = selectedFw.length > 0;
+  const fwOn = (f: string) => !filterOn || selectedFw.includes(f);
+  const setHasFw = (s: SetT) => !filterOn || s.frameworks.some((f) => selectedFw.includes(sf(f)));
+
+  // Scope a SET to the active filter. We KEEP all members (so a normalized set
+  // still shows the full cross-framework mapping — your frameworks highlighted,
+  // the rest shown as "also normalized with"), but scope evidence/artifacts to
+  // your frameworks (their `sources` are like "SAMA Cyber Security Framework 3.1.1").
+  const srcInSel = (src: string) => selectedFw.includes(sf(src));
+  const scopeSet = (s: SetT): SetT => {
+    if (!filterOn) return s;
+    const normalized_evidence = (s.normalized_evidence || []).filter((e) => !e.sources?.length || e.sources.some(srcInSel));
+    const normalized_artifacts = (s.normalized_artifacts || []).filter((a) => !a.sources?.length || a.sources.some(srcInSel));
+    return { ...s, normalized_evidence, normalized_artifacts };
+  };
+  // How many of a set's controls belong to YOUR frameworks (for the scoped counts).
+  const selMembers = (s: SetT) => filterOn ? s.members.filter((m) => selectedFw.includes(sf(m.framework))).length : s.member_count;
+
+  // sets / standalone after the framework filter (graceful — nothing is dropped, only hidden)
+  const fSets = data.sets.filter(setHasFw).map(scopeSet);
+  const fStd = data.standalone_controls.filter((s) => fwOn(sf(s.members[0]?.framework || '')));
+
+  const stdByFw: Record<string, SetT[]> = {};
+  fStd.forEach((s) => { const f = sf(s.members[0]?.framework || ''); (stdByFw[f] ||= []).push(s); });
+  const stdFwList = Object.entries(stdByFw).sort((a, b) => b[1].length - a[1].length);
+  const grp = (fwGroup && stdByFw[fwGroup]) ? fwGroup : (stdFwList[0]?.[0] ?? '');
+
+  // ── by-framework grouping (each framework's controls in this domain) ───
+  const byFw: Record<string, { control_id: string; title: string; set: string | null }[]> = {};
+  data.sets.forEach((s) => s.members.forEach((m) => {
+    (byFw[sf(m.framework)] ||= []).push({ control_id: m.control_id, title: m.original_title, set: s.normalized_title });
+  }));
+  data.standalone_controls.forEach((s) => { const m = s.members[0]; if (m) (byFw[sf(m.framework)] ||= []).push({ control_id: m.control_id, title: m.original_title, set: null }); });
+  const byFwList = Object.entries(byFw).filter(([f]) => fwOn(f)).sort((a, b) => b[1].length - a[1].length);
+  const bfActive = (bfFw && byFw[bfFw] && fwOn(bfFw)) ? bfFw : (byFwList[0]?.[0] ?? '');
+
+  // Headline stat cards react to the filter (count sets + standalone after scoping).
+  const sEv = fSets.reduce((a, s) => a + (s.normalized_evidence?.length || 0), 0) + fStd.reduce((a, s) => a + (s.normalized_evidence?.length || 0), 0);
+  const sArt = fSets.reduce((a, s) => a + (s.normalized_artifacts?.length || 0), 0) + fStd.reduce((a, s) => a + (s.normalized_artifacts?.length || 0), 0);
+  const sControls = fSets.reduce((a, s) => a + selMembers(s), 0) + fStd.length;
+  const stat = {
+    controls: filterOn ? sControls : data.controls_in,
+    frameworks: filterOn ? byFwList.length : data.framework_count,
+    sets: filterOn ? fSets.length : data.normalized_sets,
+    standalone: filterOn ? fStd.length : data.standalone,
+    ev: filterOn ? sEv : totals.ev,
+    art: filterOn ? sArt : totals.art,
+  };
+  // Banner framework chips also follow the filter (no unselected framework on screen).
+  const bannerFrameworks = filterOn ? data.frameworks.filter((f) => selectedFw.includes(sf(f))) : data.frameworks;
 
   return (
-    <>
-      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
-      <aside className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
-        {/* Header + tabs */}
-        <div className="border-b border-gray-100 bg-gradient-to-r from-teal-50 to-white px-5 pt-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="rounded bg-teal-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-teal-700">{control.code}</span>
-                <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium capitalize text-gray-500 ring-1 ring-gray-200">{control.type}</span>
-              </div>
-              <h3 className="mt-1.5 text-base font-semibold leading-snug text-gray-900">{control.name}</h3>
+    <div className="space-y-5">
+      <button onClick={() => router.push('/control-library')} className="flex items-center gap-1 text-xs text-slate-500 hover:text-primary-700"><ChevronLeft size={14} />All control domains</button>
+
+      {/* ── Domain banner (grouping) ─────────────────────────────────────── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 p-6 text-white shadow-sm">
+        <div className="absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white/10" />
+        <div className="absolute -right-20 bottom-0 h-44 w-44 rounded-full bg-white/5" />
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25"><Layers size={24} /></span>
+            <div>
+              <div className="text-[11px] font-medium uppercase tracking-wide text-primary-100">Control domain · grouping</div>
+              <h1 className="text-2xl font-bold leading-tight">{data.domain}</h1>
+              <p className="mt-1 max-w-2xl text-sm text-primary-50/90">
+                {data.controls_in} controls from {data.framework_count} frameworks are grouped under this domain — {data.normalized_sets} requirements normalized across frameworks, {data.standalone} unique to a single framework.
+              </p>
+              {filterOn && (
+                <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-[11.5px] font-medium ring-1 ring-white/25">
+                  <Filter className="h-3 w-3" />
+                  Filtered to {selectedFw.length} framework{selectedFw.length === 1 ? '' : 's'} · {fSets.length} sets · {fStd.length} standalone
+                  <button onClick={() => setSelectedFw([])} className="ml-1 rounded-full bg-white/20 px-1.5 hover:bg-white/30">clear</button>
+                </div>
+              )}
             </div>
-            <button onClick={onClose} className="rounded-full p-1 text-gray-400 hover:bg-white hover:text-gray-700"><X className="h-5 w-5" /></button>
           </div>
-          <div className="mt-3 flex gap-1">
-            {TABS.map((t) => {
-              const active = tab === t.id; const Icon = t.icon;
+          <div className="flex flex-wrap gap-1.5">
+            {bannerFrameworks.slice(0, 8).map((f) => <span key={f} className="rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-medium ring-1 ring-white/20">{sf(f)}</span>)}
+            {bannerFrameworks.length > 8 && <span className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] ring-1 ring-white/15">+{bannerFrameworks.length - 8}</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Dashboard stat cards ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <StatCard value={stat.controls} label="Controls grouped" sub={filterOn ? `In your ${selectedFw.length}-framework view` : 'Under this domain'} grad="from-sky-500 to-blue-600" icon={<Library className="h-5 w-5" />} />
+        <StatCard value={filterOn ? stat.frameworks : `${data.framework_count}/30`} label="Frameworks represented" sub={filterOn ? 'Selected frameworks here' : (data.absent_frameworks.length > 0 ? `${data.absent_frameworks.length} have no controls of this type — see why below` : 'All frameworks represented')} grad="from-indigo-500 to-violet-600" icon={<Building2 className="h-5 w-5" />} />
+        <StatCard value={stat.sets} label="Normalized sets" sub="Same requirement, deduped" grad="from-primary-500 to-primary-700" icon={<GitMerge className="h-5 w-5" />} />
+        <StatCard value={stat.standalone} label="Standalone" sub="Framework-unique" grad="from-slate-400 to-slate-600" icon={<Shield className="h-5 w-5" />} />
+        <StatCard value={stat.ev} label="Normalized evidence" sub={filterOn ? 'In your filtered view' : 'Across all sets'} grad="from-emerald-500 to-teal-600" icon={<FileText className="h-5 w-5" />} />
+        <StatCard value={stat.art} label="Artifacts" sub={filterOn ? 'In your filtered view' : 'Across sets & standalone'} grad="from-amber-500 to-orange-600" icon={<FileStack className="h-5 w-5" />} />
+      </div>
+
+      {/* framework coverage in this domain — collapsible tables (whole-domain explainer; hidden under a filter) */}
+      {!filterOn && fwAll.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white">
+          <button onClick={() => setShowAbsent(!showAbsent)} className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left">
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Building2 className="h-4 w-4 text-indigo-500" />Framework coverage in this domain</span>
+            <span className="flex items-center gap-2 text-[11.5px]">
+              <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700">{data.framework_count}/30 represented</span>
+              {data.absent_frameworks.length > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">{data.absent_frameworks.length} not here</span>}
+              <ChevronDown size={15} className={`text-slate-400 ${showAbsent ? 'rotate-180 transition' : 'transition'}`} />
+            </span>
+          </button>
+          {showAbsent && (
+            <div className="space-y-4 border-t border-slate-100 px-4 py-3">
+              <p className="text-xs leading-relaxed text-slate-500">
+                <b className="text-slate-700">{data.framework_count} of 30</b> frameworks have <b>{data.domain.toLowerCase()}</b>-type controls here.
+                {data.absent_frameworks.length > 0 && <> The other <b className="text-slate-700">{data.absent_frameworks.length}</b> have none — not missing coverage; their controls live in the domains that match their control-types.</>}
+              </p>
+
+              {/* Not in this domain — table */}
+              {data.absent_frameworks.length > 0 && (
+                <div>
+                  <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700"><Network className="h-3 w-3" />Not in this domain ({data.absent_frameworks.length})</div>
+                  <div className="overflow-hidden rounded-lg border border-slate-200">
+                    <table className="w-full text-left text-[12px]">
+                      <thead className="bg-slate-50 text-[10.5px] uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2 font-semibold">Framework</th>
+                          <th className="px-3 py-2 text-center font-semibold">Covered in</th>
+                          <th className="px-3 py-2 font-semibold">Domains where its controls live</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {data.absent_frameworks.slice().sort((a, b) => (b.present_in_count ?? 0) - (a.present_in_count ?? 0)).map((a, i) => (
+                          <tr key={i} className="align-top hover:bg-slate-50/60">
+                            <td className="whitespace-nowrap px-3 py-2 font-medium text-slate-800">{sf(a.name)}</td>
+                            <td className="px-3 py-2 text-center"><span className="rounded-full bg-primary-50 px-1.5 py-0.5 text-[11px] font-semibold text-primary-700 tabular-nums">{a.present_in_count ?? 0}</span></td>
+                            <td className="px-3 py-2 text-slate-500">{a.present_in?.length ? a.present_in.join(', ') : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {/* Framework-level artifact catalogs moved to the dedicated /control-library/templates
+          page (they are framework-wide, not control-level — they were identical on every domain). */}
+
+      {/* tabs + toolbar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => setTab('sets')} className={`flex items-center gap-1.5 rounded-lg border px-4 py-1.5 text-sm ${tab === 'sets' ? 'border-primary-500 bg-primary-50 font-medium text-primary-800' : 'border-slate-300 text-slate-600 hover:border-primary-300'}`}><GitMerge className="h-4 w-4" />Normalized sets ({fSets.length})</button>
+        <button onClick={() => setTab('standalone')} className={`flex items-center gap-1.5 rounded-lg border px-4 py-1.5 text-sm ${tab === 'standalone' ? 'border-primary-500 bg-primary-50 font-medium text-primary-800' : 'border-slate-300 text-slate-600 hover:border-primary-300'}`}><Shield className="h-4 w-4" />Standalone ({fStd.length})</button>
+        <button onClick={() => setTab('byframework')} className={`flex items-center gap-1.5 rounded-lg border px-4 py-1.5 text-sm ${tab === 'byframework' ? 'border-primary-500 bg-primary-50 font-medium text-primary-800' : 'border-slate-300 text-slate-600 hover:border-primary-300'}`}><Building2 className="h-4 w-4" />By framework ({byFwList.length})</button>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="relative">
+            <button onClick={() => setShowFwFilter((v) => !v)} className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm ${filterOn || showFwFilter ? 'border-primary-500 bg-primary-50 font-medium text-primary-800' : 'border-slate-300 text-slate-600 hover:border-primary-300'}`}>
+              <Filter className="h-4 w-4" />{filterOn ? `${selectedFw.length} framework${selectedFw.length === 1 ? '' : 's'}` : 'Build your view'}
+              <ChevronDown size={14} className={showFwFilter ? 'rotate-180 transition' : 'transition'} />
+            </button>
+            {showFwFilter && (
+              <>
+                <button className="fixed inset-0 z-30 cursor-default" aria-hidden onClick={() => setShowFwFilter(false)} />
+                <div className="absolute right-0 z-40 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                  <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700"><Filter className="h-3.5 w-3.5 text-primary-600" />Build your view</span>
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <button onClick={() => setSelectedFw(fwAll)} className="rounded px-1.5 py-0.5 text-slate-500 hover:bg-slate-100">All</button>
+                      <button onClick={() => setSelectedFw([])} className="rounded px-1.5 py-0.5 text-slate-500 hover:bg-slate-100">Clear</button>
+                    </div>
+                  </div>
+                  <div className="max-h-72 overflow-auto p-1.5">
+                    {fwAll.map((f) => {
+                      const on = selectedFw.includes(f);
+                      const count = (byFw[f] || []).length;
+                      return (
+                        <button key={f} onClick={() => setSelectedFw((prev) => prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f])} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50">
+                          <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${on ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-300 bg-white'}`}>{on && <Check className="h-3 w-3" />}</span>
+                          <span className="flex-1 truncate text-[12.5px] text-slate-700">{f}</span>
+                          <span className="rounded-full bg-slate-100 px-1.5 text-[10.5px] tabular-nums text-slate-500">{count}</span>
+                        </button>
+                      );
+                    })}
+                    {fwAbsent.length > 0 && (
+                      <>
+                        <div className="mt-1 border-t border-slate-100 px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">No controls of this type in this domain</div>
+                        {fwAbsent.map((f) => (
+                          <div key={f} title="This framework has no controls of this domain's control-type — it's covered in other domains." className="flex w-full cursor-not-allowed items-center gap-2.5 rounded-lg px-2 py-1.5 opacity-55">
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-100" />
+                            <span className="flex-1 truncate text-[12.5px] text-slate-400 line-through">{f}</span>
+                            <span className="rounded-full bg-slate-100 px-1.5 text-[10.5px] tabular-nums text-slate-400">0</span>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                  <div className="border-t border-slate-100 px-3 py-2 text-[11px] text-slate-500">{filterOn ? <span className="font-medium text-primary-700">{selectedFw.length} selected · {fSets.length} sets · {fStd.length} standalone</span> : 'All frameworks shown'}</div>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tab === 'sets' ? 'Search sets or framework…' : tab === 'standalone' ? 'Search standalone…' : 'Search controls…'} className="w-56 rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-primary-400 focus:outline-none" />
+          </div>
+          {tab === 'sets' && (
+            <div className="flex overflow-hidden rounded-lg border border-slate-300">
+              <button onClick={() => setView('grid')} title="Card view" className={`px-2.5 py-1.5 ${view === 'grid' ? 'bg-primary-50 text-primary-700' : 'bg-white text-slate-500 hover:bg-slate-50'}`}><LayoutGrid size={15} /></button>
+              <button onClick={() => setView('table')} title="Table view" className={`border-l border-slate-300 px-2.5 py-1.5 ${view === 'table' ? 'bg-primary-50 text-primary-700' : 'bg-white text-slate-500 hover:bg-slate-50'}`}><List size={15} /></button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* sets — grid or table */}
+      {tab === 'sets' && (() => {
+        const q = query.trim().toLowerCase();
+        const sets = q ? fSets.filter((s) => s.normalized_title.toLowerCase().includes(q) || s.frameworks.some((f) => sf(f).toLowerCase().includes(q))) : fSets;
+        if (sets.length === 0) return <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-400">{q ? 'No sets match your search.' : filterOn ? 'No normalized sets involve the selected frameworks. Try adding more frameworks to your view.' : 'No cross-framework sets — every control here is framework-unique.'}</div>;
+        if (view === 'table') return (
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-2.5 font-semibold">Normalized requirement</th>
+                  <th className="px-4 py-2.5 font-semibold">Frameworks</th>
+                  <th className="px-4 py-2.5 text-center font-semibold"># Frameworks</th>
+                  <th className="px-4 py-2.5 text-center font-semibold">Evidence</th>
+                  <th className="px-4 py-2.5 text-center font-semibold">Artifacts</th>
+                  <th className="px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {sets.map((s) => {
+                  const fwc = Array.from(new Set(s.frameworks.map(sf))).sort((a, b) => (filterOn ? ((selectedFw.includes(b) ? 1 : 0) - (selectedFw.includes(a) ? 1 : 0)) : 0));
+                  return (
+                    <tr key={s.set_id} onClick={() => { setOpenSet(s); setPanelTab('members'); }} className="cursor-pointer transition-colors hover:bg-primary-50/40">
+                      <td className="px-4 py-3 font-medium text-slate-800">{s.normalized_title}</td>
+                      <td className="px-4 py-3"><div className="flex flex-wrap gap-1">{fwc.slice(0, 5).map((f) => <span key={f} className={filterOn && !selectedFw.includes(f) ? tag : chip}>{f}</span>)}{fwc.length > 5 && <span className={tag}>+{fwc.length - 5}</span>}</div></td>
+                      <td className="px-4 py-3 text-center font-semibold tabular-nums text-primary-700">{filterOn ? `${selMembers(s)}/${s.member_count}` : s.member_count}</td>
+                      <td className="px-4 py-3 text-center tabular-nums text-slate-600">{s.normalized_evidence.length}</td>
+                      <td className="px-4 py-3 text-center tabular-nums text-slate-600">{s.normalized_artifacts.length}</td>
+                      <td className="px-4 py-3 text-right"><ArrowRight size={15} className="text-slate-300" /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+        return (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {sets.map((s) => {
+              const fwc = Array.from(new Set(s.frameworks.map(sf))).sort((a, b) => (filterOn ? ((selectedFw.includes(b) ? 1 : 0) - (selectedFw.includes(a) ? 1 : 0)) : 0));
               return (
-                <button key={t.id} onClick={() => setTab(t.id)}
-                  className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-semibold transition-colors ${active ? 'border-teal-600 text-teal-700' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-                  <Icon className="h-3.5 w-3.5" /> {t.label}
+                <button key={s.set_id} onClick={() => { setOpenSet(s); setPanelTab('members'); }} className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-lg">
+                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary-400 via-primary-600 to-primary-700 opacity-70 transition-opacity group-hover:opacity-100" />
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary-600"><GitMerge className="h-3 w-3" />normalized</span>
+                    <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 ring-1 ring-primary-100">{filterOn ? `${selMembers(s)} of ${s.member_count}` : `${s.member_count} frameworks`}</span>
+                  </div>
+                  <h3 className="mt-1.5 line-clamp-2 min-h-[2.6em] text-[13.5px] font-semibold leading-snug text-slate-900">{s.normalized_title}</h3>
+                  <div className="mt-2 flex flex-wrap gap-1">{fwc.slice(0, 6).map((f) => <span key={f} className={filterOn && !selectedFw.includes(f) ? tag : chip}>{f}</span>)}{fwc.length > 6 && <span className={tag}>+{fwc.length - 6}</span>}</div>
+                  <div className="mt-auto grid grid-cols-3 gap-2 border-t border-slate-100 pt-2.5 text-center">
+                    <div><div className="flex items-center justify-center gap-1 text-sm font-bold tabular-nums text-slate-800"><Network size={12} className="text-primary-500" />{s.member_count}</div><div className="text-[10px] text-slate-400">frameworks</div></div>
+                    <div><div className="flex items-center justify-center gap-1 text-sm font-bold tabular-nums text-slate-800"><FileText size={12} className="text-emerald-500" />{s.normalized_evidence.length}</div><div className="text-[10px] text-slate-400">evidence</div></div>
+                    <div><div className="flex items-center justify-center gap-1 text-sm font-bold tabular-nums text-slate-800"><FileStack size={12} className="text-amber-500" />{s.normalized_artifacts.length}</div><div className="text-[10px] text-slate-400">artifacts</div></div>
+                  </div>
                 </button>
               );
             })}
           </div>
-        </div>
+        );
+      })()}
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-5">
-          {err && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">{err}</p>}
-
-          {tab === 'details' && (
-            <div className="space-y-5">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Description</p>
-                <p className="mt-1.5 text-sm leading-relaxed text-gray-700">{desc || <span className="text-gray-400">No description recorded.</span>}</p>
-              </div>
-
-              {/* Cross-framework coverage — proves which frameworks share this control */}
-              <div>
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Common across frameworks</p>
-                {coverageLoading ? (
-                  <div className="flex items-center gap-2 py-4 text-xs text-gray-400"><Loader2 className="h-4 w-4 animate-spin" /> Resolving coverage…</div>
-                ) : !coverage || (coverage.frameworks?.length ?? 0) === 0 ? (
-                  <p className="rounded-lg bg-gray-50 px-3 py-3 text-xs leading-relaxed text-gray-500">
-                    This control isn’t linked to other frameworks yet. Run AI Grouping &amp; Normalization so it consolidates the matching controls across your frameworks.
-                  </p>
-                ) : (
-                  <div className="space-y-2.5">
-                    <div className="flex items-center gap-2 rounded-lg bg-teal-50 px-3 py-2 text-xs font-medium text-teal-800 ring-1 ring-teal-100">
-                      <CheckCircle className="h-4 w-4 shrink-0 text-teal-600" />
-                      Same requirement found in <b>{coverage.framework_count}</b> framework{coverage.framework_count === 1 ? '' : 's'} — comply once here to satisfy all of them.
-                    </div>
-                    {/* One row per framework: framework name + the exact control code(s)
-                        that carry this requirement there, shown as tags. */}
-                    <div className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200">
-                      {coverage.frameworks.map((fw: any, i: number) => (
-                        <div key={i} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                          <span className="min-w-0 flex-1 text-sm font-medium text-gray-700">{fw.framework_name}</span>
-                          <div className="flex shrink-0 flex-wrap justify-end gap-1">
-                            {fw.controls.map((c: any, j: number) => (
-                              <span key={j} title={c.name} className="rounded bg-teal-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-teal-700 ring-1 ring-teal-100">{c.code || c.name}</span>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Linked evidence — verification that an upload actually fanned out */}
-              <div>
-                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Evidence linked</p>
-                {coverage && (coverage.evidence?.length ?? 0) > 0 ? (
-                  <ul className="space-y-1.5">
-                    {coverage.evidence.map((ev: any) => (
-                      <li key={ev.id} className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2">
-                        <FileCheck className="h-4 w-4 shrink-0 text-teal-500" />
-                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-700">{ev.name || ev.file_name}</span>
-                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] capitalize text-gray-500">{ev.status || 'draft'}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="rounded-lg bg-gray-50 px-3 py-3 text-xs text-gray-500">No evidence linked yet. Use the <b>Upload</b> tab — it attaches to every framework control listed above in one step.</p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {tab === 'evidence' && (
-            <div>
-              <p className="text-sm font-semibold text-gray-800">Recommended evidence</p>
-              <p className="mb-3 mt-0.5 text-xs leading-relaxed text-gray-500">
-                {reqs?.is_normalized
-                  ? 'Consolidated — each item, uploaded once, satisfies every framework listed on it.'
-                  : 'What this framework already prescribes to demonstrate the control.'}
-              </p>
-              {reqsLoading ? (
-                <div className="flex flex-col items-center justify-center py-16 text-gray-400"><Loader2 className="mb-2 h-6 w-6 animate-spin" /></div>
-              ) : !reqs || (reqs.consolidated_evidence?.length ?? 0) === 0 ? (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 py-16 text-center"><FileCheck className="mb-2 h-7 w-7 text-gray-300" /><p className="text-sm text-gray-600">No recommended evidence on record</p><p className="mt-1 px-6 text-xs text-gray-400">No framework specified evidence for this control.</p></div>
-              ) : (
-                <div>
-                  {reqs.is_normalized && (
-                    <div className="mb-3 flex items-center gap-2 rounded-lg bg-teal-50 px-3 py-2 text-xs font-medium text-teal-800 ring-1 ring-teal-100">
-                      <CheckCircle className="h-4 w-4 shrink-0 text-teal-600" />
-                      <b>{reqs.unique_evidence_total}</b> unique evidence items cover all linked frameworks (instead of {reqs.evidence_total} separate ones).
-                    </div>
-                  )}
-                  <ul className="space-y-2">
-                    {reqs.consolidated_evidence.map((it: any, i: number) => (
-                      <li key={i} className="rounded-lg border border-gray-200 p-3">
-                        <div className="flex items-start gap-2">
-                          <FileCheck className="mt-0.5 h-4 w-4 shrink-0 text-teal-500" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-gray-800">{it.name}</p>
-                            {it.description && <p className="mt-0.5 text-xs leading-relaxed text-gray-600">{it.description}</p>}
-                            <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                              {reqs.is_normalized && (
-                                <span className="mr-1 text-[10px] font-medium text-teal-700">satisfies {it.framework_count}:</span>
-                              )}
-                              {it.frameworks.map((f: any, j: number) => (
-                                <span key={j} title={f.framework} className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] font-medium text-gray-600">{f.code}</span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-
-          {tab === 'artifact' && (
-            <div>
-              <p className="text-sm font-semibold text-gray-800">Required artifacts</p>
-              <p className="mb-3 mt-0.5 text-xs leading-relaxed text-gray-500">
-                {reqs?.is_normalized
-                  ? 'Consolidated — each pre-built deliverable, with the frameworks it satisfies.'
-                  : 'Pre-defined deliverables this control expects, from the framework’s artifact catalog.'}
-              </p>
-              {reqsLoading ? (
-                <div className="flex flex-col items-center justify-center py-16 text-gray-400"><Loader2 className="mb-2 h-6 w-6 animate-spin" /></div>
-              ) : !reqs || (reqs.consolidated_artifacts?.length ?? 0) === 0 ? (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 py-12 text-center">
-                  <FileText className="mb-2 h-7 w-7 text-gray-300" />
-                  <p className="text-sm text-gray-600">No pre-built artifacts</p>
-                  <p className="mt-1 px-6 text-xs text-gray-400">The artifact catalog only covers a set of standard frameworks (ISO, COBIT, PCI, NIST CSF, SOC 2…). The frameworks behind this control aren’t in it, so there’s nothing pre-defined to show — use the <b>Evidence</b> tab for what to collect.</p>
-                </div>
-              ) : (
-                <div>
-                  {reqs.is_normalized && (
-                    <div className="mb-3 flex items-center gap-2 rounded-lg bg-teal-50 px-3 py-2 text-xs font-medium text-teal-800 ring-1 ring-teal-100">
-                      <CheckCircle className="h-4 w-4 shrink-0 text-teal-600" />
-                      <b>{reqs.unique_artifact_total}</b> deliverable{reqs.unique_artifact_total === 1 ? '' : 's'} cover the linked frameworks.
-                    </div>
-                  )}
-                  <ul className="space-y-2">
-                    {reqs.consolidated_artifacts.map((it: any, i: number) => (
-                      <li key={i} className="rounded-lg border border-gray-200 p-3">
-                        <div className="flex items-start gap-2">
-                          <FileText className="mt-0.5 h-4 w-4 shrink-0 text-teal-500" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-gray-800">{it.name}</p>
-                            {it.description && <p className="mt-0.5 text-xs leading-relaxed text-gray-600">{it.description}</p>}
-                            <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                              {reqs.is_normalized && <span className="mr-1 text-[10px] font-medium text-teal-700">satisfies {it.framework_count}:</span>}
-                              {it.frameworks.map((f: any, j: number) => (
-                                <span key={j} title={f.framework} className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] font-medium text-gray-600">{f.code}</span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-
-          {tab === 'upload' && (
-            <div>
-              <p className="text-sm font-semibold text-gray-800">Upload evidence</p>
-              <p className="mb-3 mt-0.5 text-xs leading-relaxed text-gray-500">Runs OCR + AI assessment and auto-links the file to every framework control this consolidates.</p>
-              <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-12 text-center hover:border-teal-300 hover:bg-teal-50/30">
-                <FileCheck className="h-7 w-7 text-teal-400" />
-                <span className="text-sm font-medium text-gray-700">{file ? file.name : 'Click to choose a file'}</span>
-                <span className="text-[11px] text-gray-400">PDF, image, document…</span>
-                <input type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-              </label>
-              {file && (
-                <button onClick={() => upload.mutate()} disabled={upload.isPending}
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-teal-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50">
-                  {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck className="h-4 w-4" />} Upload &amp; link across frameworks
-                </button>
-              )}
-              {uploadMsg && <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-emerald-50 px-3 py-2.5 text-xs leading-relaxed text-emerald-700"><CheckCircle className="mt-px h-3.5 w-3.5 shrink-0" />{uploadMsg}</p>}
-            </div>
-          )}
-        </div>
-      </aside>
-    </>
-  );
-}
-
-function ControlsTable({
-  controls,
-  onRemove,
-  isRemoving,
-  getConfidenceBadge,
-  getSourceStyle,
-  onSelect,
-  selectedKey,
-}: {
-  controls: Array<(NormalizedControlItem | FrameworkControlItem | ParsedControlItem) & { type: 'normalized' | 'framework' | 'parsed'; framework_name?: string | null; framework_code?: string | null }>;
-  onRemove: (mappingId: number) => void;
-  isRemoving: boolean;
-  getConfidenceBadge: (c: number | null) => React.ReactNode;
-  getSourceStyle: (s: string | null) => { bg: string; text: string };
-  onSelect: (c: any) => void;
-  selectedKey: string | null;
-}) {
-  return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="w-full min-w-[820px]">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Code</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Name</th>
-            <th className="min-w-[10rem] px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Framework</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Confidence</th>
-            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Source</th>
-            <th className="w-16 px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-600">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200">
-          {controls.map((control) => (
-            <ControlRow
-              key={`${control.type}-${control.mapping_id}`}
-              control={control}
-              onRemove={onRemove}
-              isRemoving={isRemoving}
-              getConfidenceBadge={getConfidenceBadge}
-              getSourceStyle={getSourceStyle}
-              onSelect={onSelect}
-              isSelected={selectedKey === `${control.type}-${control.mapping_id}`}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function SimilarityTab({ similarities }: { similarities: SimilarityItem[] }) {
-  const [strengthFilter, setStrengthFilter] = useState<'all' | 'strong' | 'moderate' | 'weak'>('all');
-  const [groupByPair, setGroupByPair] = useState(false);
-
-  if (similarities.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <GitMerge className="mb-4 h-12 w-12 text-gray-400" />
-        <h3 className="text-lg font-medium text-black">No cross-framework mappings found</h3>
-        <p className="mt-1 max-w-md text-gray-600">
-          Run AI Analysis from the Control Library to discover controls across different frameworks that address the same requirements.
-        </p>
-      </div>
-    );
-  }
-
-  const getMatchStrength = (score: number) => {
-    const pct = score * 100;
-    if (pct >= 70) return 'strong';
-    if (pct >= 40) return 'moderate';
-    return 'weak';
-  };
-
-  const getMatchLabel = (score: number) => {
-    const strength = getMatchStrength(score);
-    if (strength === 'strong') return 'Strong Match';
-    if (strength === 'moderate') return 'Moderate Match';
-    return 'Weak Match';
-  };
-
-  const getMatchStyle = (score: number) => {
-    const strength = getMatchStrength(score);
-    if (strength === 'strong') return { bg: 'bg-green-500/15', border: 'border-green-500/30', text: 'text-green-400', icon: CheckCircle };
-    if (strength === 'moderate') return { bg: 'bg-amber-500/15', border: 'border-amber-500/30', text: 'text-amber-400', icon: Info };
-    return { bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-600', icon: AlertTriangle };
-  };
-
-  const cleanReasoning = (reasoning: string | null, fw1: string, fw2: string): string => {
-    if (!reasoning) return `These controls address similar compliance requirements.`;
-    let cleaned = reasoning
-      .replace(/keywords?:\s*\[.*?\]/gi, '')
-      .replace(/matching keywords?:?\s*/gi, '')
-      .replace(/\[.*?\]/g, '')
-      .replace(/score:\s*[\d.]+/gi, '')
-      .replace(/similarity:\s*[\d.]+%?/gi, '')
-      .replace(/\s{2,}/g, ' ')
-      .trim();
-    if (!cleaned || cleaned.length < 10) {
-      cleaned = `These controls address similar compliance requirements.`;
-    }
-    return cleaned;
-  };
-
-  const strongCount = similarities.filter(s => getMatchStrength(s.similarity_score) === 'strong').length;
-  const moderateCount = similarities.filter(s => getMatchStrength(s.similarity_score) === 'moderate').length;
-  const weakCount = similarities.filter(s => getMatchStrength(s.similarity_score) === 'weak').length;
-
-  const filtered = strengthFilter === 'all'
-    ? similarities
-    : similarities.filter(s => getMatchStrength(s.similarity_score) === strengthFilter);
-
-  const getFrameworkPairKey = (sim: SimilarityItem) => {
-    const fws = [sim.control1_framework || 'Unknown', sim.control2_framework || 'Unknown'].sort();
-    return `${fws[0]} ↔ ${fws[1]}`;
-  };
-
-  const groupedByPair: Record<string, SimilarityItem[]> = {};
-  if (groupByPair) {
-    for (const sim of filtered) {
-      const key = getFrameworkPairKey(sim);
-      if (!groupedByPair[key]) groupedByPair[key] = [];
-      groupedByPair[key].push(sim);
-    }
-  }
-
-  const FRAMEWORK_COLORS: Record<string, { bg: string; text: string }> = {};
-  const COLOR_PALETTE = [
-    { bg: 'bg-teal-50 ring-1 ring-teal-100', text: 'text-teal-700' },
-    { bg: 'bg-indigo-50 ring-1 ring-indigo-100', text: 'text-indigo-700' },
-    { bg: 'bg-rose-50 ring-1 ring-rose-100', text: 'text-rose-700' },
-    { bg: 'bg-cyan-50 ring-1 ring-cyan-100', text: 'text-cyan-700' },
-    { bg: 'bg-amber-50 ring-1 ring-amber-100', text: 'text-amber-700' },
-    { bg: 'bg-emerald-50 ring-1 ring-emerald-100', text: 'text-emerald-700' },
-    { bg: 'bg-fuchsia-50 ring-1 ring-fuchsia-100', text: 'text-fuchsia-700' },
-    { bg: 'bg-sky-50 ring-1 ring-sky-100', text: 'text-sky-700' },
-  ];
-  let colorIdx = 0;
-  const getFrameworkColor = (fw: string) => {
-    if (!FRAMEWORK_COLORS[fw]) {
-      FRAMEWORK_COLORS[fw] = COLOR_PALETTE[colorIdx % COLOR_PALETTE.length];
-      colorIdx++;
-    }
-    return FRAMEWORK_COLORS[fw];
-  };
-
-  const renderCard = (sim: SimilarityItem) => {
-    const matchStyle = getMatchStyle(sim.similarity_score);
-    const MatchIcon = matchStyle.icon;
-    const fw1Color = getFrameworkColor(sim.control1_framework || 'Unknown');
-    const fw2Color = getFrameworkColor(sim.control2_framework || 'Unknown');
-    const pct = Math.round(sim.similarity_score * 100);
-
-    return (
-      <div key={sim.id} className={`rounded-xl border ${matchStyle.border} ${matchStyle.bg} p-5`}>
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-          <div className="space-y-2">
-            <span className={`inline-block rounded-md px-2.5 py-1 text-xs font-semibold ${fw1Color.bg} ${fw1Color.text}`}>
-              {sim.control1_framework || 'Unknown'}
-            </span>
-            <p className="font-mono text-sm font-medium text-black">{sim.control1_code}</p>
-            <p className="text-sm text-gray-700">{sim.control1_name}</p>
-          </div>
-
-          <div className="flex flex-col items-center gap-1 px-3">
-            <MatchIcon className={`h-6 w-6 ${matchStyle.text}`} />
-            <span className={`text-xs font-bold ${matchStyle.text}`}>{pct}%</span>
-            <span className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${matchStyle.text}`}>
-              {getMatchLabel(sim.similarity_score)}
-            </span>
-          </div>
-
-          <div className="space-y-2 text-right">
-            <span className={`inline-block rounded-md px-2.5 py-1 text-xs font-semibold ${fw2Color.bg} ${fw2Color.text}`}>
-              {sim.control2_framework || 'Unknown'}
-            </span>
-            <p className="font-mono text-sm font-medium text-black">{sim.control2_code}</p>
-            <p className="text-sm text-gray-700">{sim.control2_name}</p>
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-gray-200 bg-gray-50 p-3">
-          <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-          <div>
-            <p className="text-xs font-medium text-amber-400">What this means</p>
-            <p className="mt-0.5 text-sm text-gray-700">
-              {cleanReasoning(sim.ai_reasoning, sim.control1_framework, sim.control2_framework)}
-              {pct >= 40 && (
-                <span className="text-gray-600">
-                  {' '}Evidence collected for one may satisfy both.
-                </span>
-              )}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const filterButtons: { key: typeof strengthFilter; label: string; count: number }[] = [
-    { key: 'all', label: 'All', count: similarities.length },
-    { key: 'strong', label: 'Strong Match (70%+)', count: strongCount },
-    { key: 'moderate', label: 'Moderate Match (40-69%)', count: moderateCount },
-    { key: 'weak', label: 'Weak Match (<40%)', count: weakCount },
-  ];
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-xl font-bold text-black">Cross-Framework Control Mapping</h3>
-        <p className="mt-1 max-w-2xl text-sm text-gray-600">
-          Controls from different frameworks that address the same requirements. Sharing evidence across equivalent controls reduces duplicate compliance work.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-center">
-          <p className="text-2xl font-bold text-black">{similarities.length}</p>
-          <p className="text-xs text-gray-600">Total Pairs</p>
-        </div>
-        <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3 text-center">
-          <p className="text-2xl font-bold text-green-400">{strongCount}</p>
-          <p className="text-xs text-green-400/70">Strong Matches</p>
-        </div>
-        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-center">
-          <p className="text-2xl font-bold text-amber-400">{moderateCount}</p>
-          <p className="text-xs text-amber-400/70">Moderate Matches</p>
-        </div>
-        <div className="rounded-lg border border-gray-300 bg-gray-50 p-3 text-center">
-          <p className="text-2xl font-bold text-gray-600">{weakCount}</p>
-          <p className="text-xs text-gray-500">Weak Matches</p>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          {filterButtons.map((btn) => (
-            <button
-              key={btn.key}
-              onClick={() => setStrengthFilter(btn.key)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                strengthFilter === btn.key
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {btn.label} ({btn.count})
-            </button>
-          ))}
-        </div>
-        <label className="flex items-center gap-2 text-sm text-gray-600">
-          <input
-            type="checkbox"
-            checked={groupByPair}
-            onChange={(e) => setGroupByPair(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-600 focus:ring-primary-500"
-          />
-          Group by framework pair
-        </label>
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="py-8 text-center text-gray-600">
-          No matches found for the selected filter.
-        </div>
-      ) : groupByPair ? (
-        <div className="space-y-6">
-          {Object.entries(groupedByPair).sort(([a], [b]) => a.localeCompare(b)).map(([pairKey, items]) => (
-            <div key={pairKey}>
-              <div className="mb-3 flex items-center gap-2">
-                <GitMerge className="h-4 w-4 text-primary-700" />
-                <h4 className="text-sm font-semibold text-black">{pairKey}</h4>
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                  {items.length} {items.length === 1 ? 'pair' : 'pairs'}
-                </span>
-              </div>
-              <div className="space-y-3">
-                {items.map(renderCard)}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filtered.map(renderCard)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GroupEvidenceUpload({ groupId, groupName }: { groupId: number; groupName?: string }) {
-  const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [name, setName] = useState('');
-  const [evType, setEvType] = useState('document');
-  const [result, setResult] = useState<any>(null);
-
-  const upload = useMutation({
-    mutationFn: async () => {
-      const fd = new FormData();
-      fd.append('name', name || file?.name || 'Evidence');
-      fd.append('evidence_type', evType);
-      if (file) fd.append('file', file);
-      const res = await apiClient.post(`/control-library/groups/${groupId}/upload-evidence`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      return res.data;
-    },
-    onSuccess: (data) => {
-      setResult(data);
-      setFile(null); setName('');
-      qc.invalidateQueries({ queryKey: ['control-group-detail', groupId] });
-    },
-  });
-
-  return (
-    <>
-      <button
-        onClick={() => { setOpen(true); setResult(null); }}
-        className="flex items-center gap-2 rounded-lg border border-emerald-500 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-500/20"
-      >
-        <FileCheck className="h-4 w-4" /> Upload Evidence
-      </button>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-900">Upload evidence — {groupName}</h3>
-              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700">✕</button>
-            </div>
-            {result ? (
-              <div className="space-y-3">
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                  {result.message}
-                  <div className="mt-1 text-xs text-emerald-600">
-                    Linked to {result.linked_controls} control(s): {result.breakdown?.framework ?? 0} framework + {result.breakdown?.parsed ?? 0} parsed + {result.breakdown?.normalized ?? 0} normalized.
-                  </div>
-                </div>
-                <button onClick={() => setOpen(false)} className="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Done</button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm" />
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Evidence name (optional)"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" />
-                <select value={evType} onChange={(e) => setEvType(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700">
-                  {['document', 'policy', 'procedure', 'screenshot', 'certificate', 'audit_report', 'log', 'record'].map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-                <p className="rounded-md bg-primary-50 px-2 py-1.5 text-[11px] text-primary-700">
-                  This evidence will be linked to <strong>all controls</strong> in the “{groupName}” domain across every framework — upload once, satisfy everywhere.
-                </p>
-                <div className="flex gap-2">
-                  <button onClick={() => upload.mutate()} disabled={!file || upload.isPending}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-                    {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck className="h-4 w-4" />}
-                    {upload.isPending ? 'Uploading…' : 'Upload & link to all'}
-                  </button>
-                  <button onClick={() => setOpen(false)} className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
-                </div>
-                {upload.isError && <p className="text-xs text-red-600">Upload failed. Please try again.</p>}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-function EvidenceRecommendationsTab({
-  recommendations,
-  onGenerateRecs,
-  isGenerating,
-  getPriorityStyle,
-  groupId,
-  groupName,
-}: {
-  recommendations: EvidenceRecommendation[];
-  onGenerateRecs: () => void;
-  isGenerating: boolean;
-  getPriorityStyle: (p: string) => { bg: string; text: string };
-  groupId: number;
-  groupName?: string;
-}) {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-black">
-          Evidence Recommendations ({recommendations.length})
-        </h3>
-        <div className="flex items-center gap-2">
-          <GroupEvidenceUpload groupId={groupId} groupName={groupName} />
-          <button
-            onClick={onGenerateRecs}
-            disabled={isGenerating}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-          >
-            {isGenerating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
-            )}
-            Generate Recommendations
-          </button>
-        </div>
-      </div>
-
-      {recommendations.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <FileCheck className="mb-4 h-12 w-12 text-gray-400" />
-          <h3 className="text-lg font-medium text-black">No recommendations yet</h3>
-          <p className="mt-1 text-gray-600">Generate AI-powered evidence recommendations for this control group</p>
-          <button
-            onClick={onGenerateRecs}
-            disabled={isGenerating}
-            className="mt-4 flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
-          >
-            {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            Generate Recommendations
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {recommendations.map((rec) => {
-            const priorityStyle = getPriorityStyle(rec.priority);
-            return (
-              <div key={rec.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-medium text-black">{rec.evidence_type}</h4>
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${priorityStyle.bg} ${priorityStyle.text}`}>
-                        {rec.priority}
-                      </span>
-                      {rec.ai_confidence !== null && (
-                        <span className="text-xs text-gray-500">
-                          {Math.round(rec.ai_confidence * 100)}% confidence
-                        </span>
-                      )}
-                    </div>
-                    {rec.evidence_description && (
-                      <p className="mt-2 text-sm text-gray-600">{rec.evidence_description}</p>
-                    )}
-                    {rec.ai_reasoning && (
-                      <p className="mt-2 text-xs text-gray-500">{rec.ai_reasoning}</p>
-                    )}
-                  </div>
-                </div>
-                {rec.sample_evidence_names && rec.sample_evidence_names.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="text-xs text-gray-500">Samples:</span>
-                    {rec.sample_evidence_names.map((name, idx) => (
-                      <span key={idx} className="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-700">
-                        {name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {rec.control_code && (
-                  <div className="mt-2 text-xs text-gray-500">
-                    From: <span className="font-mono text-primary-700">{rec.control_code}</span>
-                    {rec.framework_name && <span> ({rec.framework_name})</span>}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function InheritanceTab({ groupId, controls }: { groupId: number; controls: Array<{ control_id: number; type: string; code: string; name: string }> }) {
-  const [selectedControl, setSelectedControl] = useState<{ type: string; id: number } | null>(null);
-
-  const { data: inheritedData, isLoading: loadingInherited } = useQuery({
-    queryKey: ['inheritance-parent', selectedControl?.type, selectedControl?.id],
-    queryFn: async () => {
-      if (!selectedControl) return null;
-      const response = await apiClient.get(`/control-library/inheritance/parent/${selectedControl.type}/${selectedControl.id}`);
-      return response.data;
-    },
-    enabled: !!selectedControl,
-  });
-
-  const { data: satisfyingData, isLoading: loadingSatisfying } = useQuery({
-    queryKey: ['inheritance-child', selectedControl?.type, selectedControl?.id],
-    queryFn: async () => {
-      if (!selectedControl) return null;
-      const response = await apiClient.get(`/control-library/inheritance/child/${selectedControl.type}/${selectedControl.id}`);
-      return response.data;
-    },
-    enabled: !!selectedControl,
-  });
-
-  return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-black">Control Inheritance</h3>
-      <p className="text-sm text-gray-600">
-        Select a control from this group to view its inheritance relationships
-      </p>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div>
-          <h4 className="mb-3 text-sm font-medium text-gray-600">Controls in this group</h4>
-          <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-200">
-            {controls.map((control) => (
-              <button
-                key={`${control.type}-${control.control_id}`}
-                onClick={() => setSelectedControl({ type: control.type, id: control.control_id })}
-                className={`w-full border-b border-gray-200 px-4 py-3 text-left last:border-0 ${
-                  selectedControl?.type === control.type && selectedControl?.id === control.control_id
-                    ? 'bg-primary-500/20'
-                    : 'hover:bg-gray-100'
-                }`}
-              >
-                <span className="font-mono text-sm text-primary-700">{control.code}</span>
-                <p className="truncate text-sm text-gray-700">{control.name}</p>
+      {/* standalone grouped by framework */}
+      {tab === 'standalone' && (
+        <div className="flex items-start gap-3">
+          <div className="flex max-h-[560px] flex-[0_0_30%] flex-col gap-1.5 overflow-auto pr-1">
+            {stdFwList.map(([f, items]) => (
+              <button key={f} onClick={() => setFwGroup(f)} className={`flex items-center justify-between rounded-lg border bg-white px-3 py-2 ${f === grp ? 'border-l-[3px] border-l-primary-600 bg-primary-50' : 'border-slate-200 hover:border-primary-300'}`}>
+                <span className="text-[12.5px] font-medium text-slate-800">{f}</span><span className="rounded-full bg-slate-100 px-1.5 text-xs text-slate-500">{items.length}</span>
               </button>
             ))}
-            {controls.length === 0 && (
-              <div className="p-4 text-center text-sm text-gray-500">No controls in this group</div>
-            )}
+          </div>
+          <div className="max-h-[560px] flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="font-semibold text-slate-900">{grp} <span className="text-sm font-normal text-slate-400">· {(stdByFw[grp] || []).length} framework-unique controls</span></div>
+            <p className="mb-3 text-xs text-slate-500">Appear only in {grp} — no equivalent in any other framework, so they are grouped here but not normalized into a set.</p>
+            <p className="mb-2 text-[11px] text-slate-400">Click a control to view its evidence, artifacts, and upload evidence.</p>
+            <div className="space-y-1.5">{(stdByFw[grp] || []).filter((s) => { const q = query.trim().toLowerCase(); return !q || (s.members[0]?.original_title || '').toLowerCase().includes(q) || (s.members[0]?.control_id || '').toLowerCase().includes(q); }).map((s, i) => (
+              <button key={i} onClick={() => { setOpenSet(s); setPanelTab('members'); }} className="flex w-full items-start justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-left transition-colors hover:border-primary-300 hover:bg-primary-50/40">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2"><span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600">{s.members[0]?.control_id}</span></div>
+                  <div className="mt-0.5 text-[12.5px] text-slate-700">{s.members[0]?.original_title}</div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10.5px] font-medium text-emerald-700"><FileText className="h-2.5 w-2.5" />{s.normalized_evidence?.length || 0}</span>
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10.5px] font-medium text-amber-700"><FileStack className="h-2.5 w-2.5" />{s.normalized_artifacts?.length || 0}</span>
+                  <ArrowRight size={13} className="text-slate-300" />
+                </div>
+              </button>
+            ))}</div>
           </div>
         </div>
+      )}
 
-        <div className="space-y-4">
-          {selectedControl ? (
-            <>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-green-400">
-                  <ChevronDown className="h-4 w-4" />
-                  Controls Inherited FROM this control ({inheritedData?.inherited_controls?.length || 0})
-                </h4>
-                {loadingInherited ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-gray-600" />
-                ) : inheritedData?.inherited_controls?.length > 0 ? (
-                  <div className="space-y-2">
-                    {inheritedData.inherited_controls.map((item: InheritanceItem) => (
-                      <div key={item.inheritance_id} className="flex items-center justify-between rounded bg-white p-2">
-                        <div>
-                          <span className="font-mono text-xs text-primary-700">{item.control.code}</span>
-                          <p className="text-sm text-gray-700">{item.control.name}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500">{item.coverage_percentage}%</span>
-                          <span className="rounded bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700 ring-1 ring-primary-100">
-                            {item.inheritance_type}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500">No controls inherit from this control</p>
-                )}
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <h4 className="mb-3 flex items-center gap-2 text-sm font-medium text-orange-400">
-                  <ChevronRight className="h-4 w-4" />
-                  Controls that SATISFY this control ({satisfyingData?.satisfying_controls?.length || 0})
-                </h4>
-                {loadingSatisfying ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-gray-600" />
-                ) : satisfyingData?.satisfying_controls?.length > 0 ? (
-                  <div className="space-y-2">
-                    {satisfyingData.satisfying_controls.map((item: InheritanceItem) => (
-                      <div key={item.inheritance_id} className="flex items-center justify-between rounded bg-white p-2">
-                        <div>
-                          <span className="font-mono text-xs text-primary-700">{item.control.code}</span>
-                          <p className="text-sm text-gray-700">{item.control.name}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500">{item.coverage_percentage}%</span>
-                          <span className="rounded bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700 ring-1 ring-primary-100">
-                            {item.inheritance_type}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500">No controls satisfy this control</p>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="flex h-64 flex-col items-center justify-center text-center">
-              <Link2 className="mb-4 h-12 w-12 text-gray-400" />
-              <p className="text-gray-600">Select a control to view inheritance</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AddControlsModal({
-  groupId,
-  existingNormalizedIds,
-  existingFrameworkIds,
-  existingParsedIds,
-  onClose,
-  onSuccess,
-}: {
-  groupId: number;
-  existingNormalizedIds: number[];
-  existingFrameworkIds: number[];
-  existingParsedIds: number[];
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [frameworkFilter, setFrameworkFilter] = useState<number | null>(null);
-  const [selectedNormalized, setSelectedNormalized] = useState<number[]>([]);
-  const [selectedFramework, setSelectedFramework] = useState<number[]>([]);
-
-  const { data: normalizedControls } = useQuery<Array<{ id: number; code: string; name: string }>>({
-    queryKey: ['all-normalized-controls'],
-    queryFn: async () => {
-      const response = await controlsApi.getNormalized();
-      const controls = (response.data || []) as Array<{
-        id: number | string;
-        code?: string;
-        internal_id?: string;
-        name?: string;
-      }>;
-      return controls
-        .map((control) => {
-          const numericId = typeof control.id === 'number' ? control.id : Number(control.id);
-          return {
-            id: numericId,
-            code: control.code || control.internal_id || `CTRL-${control.id}`,
-            name: control.name || 'Untitled Control',
-          };
-        })
-        .filter((control) => Number.isFinite(control.id));
-    },
-  });
-
-  const { data: frameworks } = useQuery({
-    queryKey: ['frameworks-available'],
-    queryFn: async () => {
-      const response = await frameworksApi.getAvailable();
-      return response.data;
-    },
-  });
-
-  const { data: frameworkControls, isLoading: frameworkControlsLoading } = useQuery({
-    queryKey: ['framework-controls', frameworkFilter],
-    queryFn: async () => {
-      if (!frameworkFilter) return [];
-      const response = await frameworkUploadApi.getParsedControls(frameworkFilter, { limit: 500 });
-      const controls = (response.data?.items || []) as Array<{
-        id: number;
-        control_id?: string | null;
-        original_reference?: string | null;
-        title?: string | null;
-      }>;
-      return controls.map((control) => ({
-        id: control.id,
-        code: control.original_reference || control.control_id || `CTRL-${control.id}`,
-        name: control.title || 'Untitled Control',
-      }));
-    },
-    enabled: !!frameworkFilter,
-  });
-
-  const addControlsMutation = useMutation({
-    mutationFn: async () => {
-      const data = {
-        normalized_control_ids: selectedNormalized,
-        framework_control_ids: [],
-        parsed_control_ids: selectedFramework,
-      };
-      await apiClient.post(`/control-library/groups/${groupId}/controls`, data);
-    },
-    onSuccess: () => {
-      onSuccess();
-    },
-  });
-
-  const filteredNormalized = (normalizedControls || []).filter((c) =>
-    !existingNormalizedIds.includes(c.id) &&
-    (searchTerm === '' || c.code.toLowerCase().includes(searchTerm.toLowerCase()) || c.name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  const filteredFramework = (frameworkControls || []).filter((c: { id: number; code: string; name: string }) =>
-    !existingFrameworkIds.includes(c.id) &&
-    !existingParsedIds.includes(c.id) &&
-    (searchTerm === '' || c.code.toLowerCase().includes(searchTerm.toLowerCase()) || c.name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  const toggleNormalized = (id: number) => {
-    setSelectedNormalized(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
-
-  const toggleFramework = (id: number) => {
-    setSelectedFramework(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
-
-  const totalSelected = selectedNormalized.length + selectedFramework.length;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-3xl rounded-lg border border-gray-200 bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-black">Add Controls to Group</h2>
-          <button onClick={onClose} className="text-gray-600 hover:text-black">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="space-y-4 p-6">
-          <div className="flex gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
-              <input
-                type="text"
-                placeholder="Search controls..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-gray-100 py-2 pl-10 pr-4 text-black placeholder-gray-500 focus:border-primary-500 focus:outline-none"
-              />
-            </div>
-            <select
-              value={frameworkFilter || ''}
-              onChange={(e) => setFrameworkFilter(e.target.value ? Number(e.target.value) : null)}
-              className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
-            >
-              <option value="">All Frameworks</option>
-              {frameworks?.map((fw: { id: number; name: string }) => (
-                <option key={fw.id} value={fw.id}>{fw.name}</option>
+      {/* by framework — each framework's controls in this domain */}
+      {tab === 'byframework' && (() => {
+        if (byFwList.length === 0) return <div className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-400">No frameworks match the current filter.</div>;
+        const items = byFw[bfActive] || [];
+        const q = query.trim().toLowerCase();
+        const shown = q ? items.filter((c) => (c.title || '').toLowerCase().includes(q) || (c.control_id || '').toLowerCase().includes(q) || (c.set || '').toLowerCase().includes(q)) : items;
+        const inSets = items.filter((c) => c.set).length;
+        const stdN = items.length - inSets;
+        return (
+          <div className="flex items-start gap-3">
+            <div className="flex max-h-[600px] flex-[0_0_30%] flex-col gap-1.5 overflow-auto pr-1">
+              {byFwList.map(([f, list]) => (
+                <button key={f} onClick={() => setBfFw(f)} className={`flex items-center justify-between rounded-lg border bg-white px-3 py-2 ${f === bfActive ? 'border-l-[3px] border-l-primary-600 bg-primary-50' : 'border-slate-200 hover:border-primary-300'}`}>
+                  <span className="text-[12.5px] font-medium text-slate-800">{f}</span><span className="rounded-full bg-slate-100 px-1.5 text-xs text-slate-500">{list.length}</span>
+                </button>
               ))}
-            </select>
-          </div>
-
-          <div className="max-h-80 overflow-y-auto rounded-lg border border-gray-200">
-            {frameworkFilter === null && filteredNormalized.length > 0 && (
-              <>
-                <div className="sticky top-0 bg-gray-100 px-4 py-2 text-sm font-medium text-green-400">
-                  Normalized Controls
+            </div>
+            <div className="max-h-[600px] flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-semibold text-slate-900">{bfActive} <span className="text-sm font-normal text-slate-400">· {items.length} controls in this domain</span></div>
+                <div className="flex items-center gap-1.5 text-[11px]">
+                  <span className="rounded-full bg-primary-50 px-2 py-0.5 font-medium text-primary-700 ring-1 ring-primary-100">{inSets} normalized</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">{stdN} standalone</span>
                 </div>
-                {filteredNormalized.map((control) => (
-                  <label
-                    key={`normalized-${control.id}`}
-                    className="flex cursor-pointer items-center gap-3 border-b border-gray-200 px-4 py-3 hover:bg-gray-100"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedNormalized.includes(control.id)}
-                      onChange={() => toggleNormalized(control.id)}
-                      className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-600 focus:ring-primary-500"
-                    />
-                    <div>
-                      <span className="font-mono text-sm text-primary-700">{control.code}</span>
-                      <p className="text-sm text-gray-700">{control.name}</p>
+              </div>
+              <p className="mb-3 mt-1 text-xs text-slate-500">Every {bfActive} control grouped under <b>{data.domain}</b> — those merged into a cross-framework set are tagged with the set, the rest are unique to {bfActive}.</p>
+              <div className="space-y-1.5">{shown.map((c, i) => {
+                const parentSet = c.set ? data.sets.find((s) => s.normalized_title === c.set) : null;
+                return (
+                  <div key={i} className={`rounded-lg border px-3 py-2 transition-colors ${c.set ? 'border-primary-200 bg-primary-50/30 hover:bg-primary-50' : 'border-slate-200 hover:border-primary-200 hover:bg-primary-50/20'} ${parentSet ? 'cursor-pointer' : ''}`} onClick={() => { if (parentSet) { setOpenSet(parentSet); setPanelTab('members'); } }}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600">{c.control_id}</span>
+                      {c.set
+                        ? <span className="inline-flex items-center gap-1 rounded-full bg-primary-100 px-2 py-0.5 text-[10.5px] font-medium text-primary-700"><GitMerge className="h-2.5 w-2.5" />in set: {c.set}</span>
+                        : <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-medium text-slate-500"><Shield className="h-2.5 w-2.5" />standalone</span>}
                     </div>
-                  </label>
+                    <div className="mt-0.5 text-[12.5px] text-slate-700">{c.title}</div>
+                  </div>
+                );
+              })}
+              {shown.length === 0 && <p className="text-xs text-slate-400">No controls match your search.</p>}</div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* set detail — right side panel (system UI) */}
+      <RightSlidePanel
+        isOpen={!!openSet}
+        onClose={() => setOpenSet(null)}
+        width="w-full max-w-xl"
+        title={openSet?.normalized_title || openSet?.members?.[0]?.original_title || ''}
+        subtitle={openSet ? (openSet.member_count <= 1
+          ? `Standalone control · ${sf(openSet.members?.[0]?.framework || '')} · framework-unique`
+          : `Normalized set · ${openSet.member_count} frameworks · one control per framework`) : undefined}
+      >
+        {openSet && (
+          <div>
+            {/* in-panel sub-tabs */}
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {([['members', `Frameworks ${openSet.member_count}`], ['evidence', `Evidence ${openSet.normalized_evidence.length}`], ['artifacts', `Artifacts ${openSet.normalized_artifacts.length}`], ['upload', 'Upload evidence']] as const).map(([k, lbl]) => (
+                <button key={k} onClick={() => setPanelTab(k)} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${panelTab === k ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{lbl}</button>
+              ))}
+            </div>
+
+            {panelTab === 'members' && (() => {
+              const mine = filterOn ? openSet.members.filter((m) => selectedFw.includes(sf(m.framework))) : openSet.members;
+              const others = filterOn ? openSet.members.filter((m) => !selectedFw.includes(sf(m.framework))) : [];
+              const Row = (m: Member, key: string, muted: boolean) => (
+                <div key={key} className={`mb-1.5 rounded-lg border px-3 py-2 ${muted ? 'border-slate-200 bg-slate-50/60' : 'border-primary-200 bg-primary-50/30'}`}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={muted ? 'rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] text-slate-500' : 'rounded border border-primary-300 bg-primary-100 px-1.5 py-0.5 text-[11px] font-medium text-primary-800'}>{sf(m.framework)}</span>
+                    <span className="font-mono text-[12px] text-slate-500">{m.control_id}</span>
+                    {!muted && filterOn && <span className="rounded-full bg-primary-600 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">your view</span>}
+                  </div>
+                  <div className="mt-0.5 text-[12.5px] text-slate-700">{m.original_title}</div>
+                </div>
+              );
+              return (
+                <>
+                  <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><Network className="h-3 w-3" />One control per framework — original titles preserved{filterOn && others.length > 0 && ` · ${openSet.member_count} frameworks share this requirement`}</div>
+                  {mine.map((m, i) => Row(m, 'mine' + i, false))}
+                  {others.length > 0 && (
+                    <>
+                      <div className="my-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><GitMerge className="h-3 w-3" />Also normalized with — {others.length} other framework{others.length === 1 ? '' : 's'} sharing this requirement</div>
+                      {others.map((m, i) => Row(m, 'oth' + i, true))}
+                    </>
+                  )}
+                </>
+              );
+            })()}
+
+            {panelTab === 'evidence' && (
+              <>
+                <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-600"><FileText className="h-3 w-3" />Normalized evidence ({openSet.normalized_evidence.length})</div>
+                {openSet.normalized_evidence.length === 0 && <p className="text-xs text-slate-400">Evidence pending (source gap).</p>}
+                {openSet.normalized_evidence.map((e, i) => (
+                  <div key={i} className="flex items-start gap-2 py-1 text-[12.5px] text-slate-700"><CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-500" /><span>{e.name}</span></div>
                 ))}
               </>
             )}
 
-            {frameworkFilter !== null && filteredFramework.length > 0 && (
+            {panelTab === 'artifacts' && (
               <>
-                <div className="sticky top-0 bg-gray-100 px-4 py-2 text-sm font-medium text-orange-400">
-                  Framework Controls
+                <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-600"><FileStack className="h-3 w-3" />Requirement-specific artifacts ({openSet.normalized_artifacts.length}) — click to download</div>
+                {openSet.normalized_artifacts.length === 0 && <p className="text-xs text-slate-400">No requirement-specific artifacts — supporting templates are under the domain's framework-level catalogs.</p>}
+                <div className="space-y-1.5">
+                  {openSet.normalized_artifacts.map((a, i) => (
+                    <button key={i} onClick={() => download(a)} className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-[12.5px] text-slate-700 shadow-sm hover:border-amber-300 hover:bg-amber-50">
+                      <span className="flex items-center gap-2"><FileStack size={14} className="text-amber-500" />{a.name}{a.type && <span className="text-slate-400">· {a.type}</span>}</span>
+                      <Download size={14} className="text-slate-400" />
+                    </button>
+                  ))}
                 </div>
-                {filteredFramework.map((control: { id: number; code: string; name: string }) => (
-                  <label
-                    key={`framework-${control.id}`}
-                    className="flex cursor-pointer items-center gap-3 border-b border-gray-200 px-4 py-3 hover:bg-gray-100"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedFramework.includes(control.id)}
-                      onChange={() => toggleFramework(control.id)}
-                      className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-600 focus:ring-primary-500"
-                    />
-                    <div>
-                      <span className="font-mono text-sm text-primary-700">{control.code}</span>
-                      <p className="text-sm text-gray-700">{control.name}</p>
-                    </div>
-                  </label>
-                ))}
               </>
             )}
 
-            {frameworkFilter === null && filteredNormalized.length === 0 && (
-              <div className="p-8 text-center text-gray-600">
-                {searchTerm ? 'No matching controls found' : 'Select a framework to view controls'}
-              </div>
+            {panelTab === 'upload' && (
+              <>
+                <div className="mb-3 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-[12px] leading-relaxed text-primary-900">
+                  Upload evidence once here — it is linked to <b>all {openSet.member_count} member controls</b> across frameworks, added to the <b>Evidence Library</b>, and attached to each framework requirement automatically.
+                </div>
+                <label className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center transition-colors hover:border-primary-400 hover:bg-primary-50/40 ${uploading ? 'pointer-events-none opacity-60' : ''}`}>
+                  {uploading ? <Loader2 className="h-6 w-6 animate-spin text-primary-500" /> : <Upload className="h-6 w-6 text-primary-500" />}
+                  <span className="text-[12.5px] font-medium text-slate-700">{uploading ? 'Uploading & linking…' : 'Click to upload evidence file'}</span>
+                  <span className="text-[11px] text-slate-400">PDF, image or document — auto-linked to every framework control</span>
+                  <input type="file" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.currentTarget.value = ''; }} />
+                </label>
+                {uploadMsg && <div className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800 ring-1 ring-emerald-100">{uploadMsg}</div>}
+
+                <div className="mb-2 mt-4 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><FileText className="h-3 w-3" />Uploaded evidence ({uploads.length})</div>
+                {uploads.length === 0 && <p className="text-xs text-slate-400">No evidence uploaded yet for this set.</p>}
+                {uploads.map((u) => (
+                  <div key={u.id} className="mb-1.5 flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-[12.5px] font-medium text-slate-800">{u.name}</div>
+                      <div className="truncate text-[11px] text-slate-400">{u.file_name} · linked to {u.linked_controls} controls</div>
+                    </div>
+                    <span className="ml-2 shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-100">{u.status}</span>
+                  </div>
+                ))}
+
+                <div className="mb-2 mt-4 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><CheckCircle2 className="h-3 w-3" />Recommended evidence to provide ({openSet.normalized_evidence.length})</div>
+                {openSet.normalized_evidence.map((e, i) => (
+                  <div key={i} className="flex items-start gap-2 py-0.5 text-[12px] text-slate-600"><span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary-300" />{e.name}</div>
+                ))}
+              </>
             )}
-
-            {frameworkFilter !== null && frameworkControlsLoading && (
-              <div className="flex items-center justify-center gap-2 p-8 text-gray-600">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading framework controls...
-              </div>
-            )}
-
-            {frameworkFilter !== null && !frameworkControlsLoading && filteredFramework.length === 0 && (
-              <div className="p-8 text-center text-gray-600">
-                {searchTerm ? 'No matching controls found' : 'No available controls in this framework'}
-              </div>
-            )}
           </div>
-        </div>
-
-        <div className="flex items-center justify-between border-t border-gray-200 px-6 py-4">
-          <span className="text-sm text-gray-600">
-            {totalSelected} control{totalSelected !== 1 ? 's' : ''} selected
-          </span>
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-black hover:bg-gray-100"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => addControlsMutation.mutate()}
-              disabled={totalSelected === 0 || addControlsMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {addControlsMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
-              Add Selected
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EditGroupModal({
-  group,
-  onClose,
-  onSave,
-  isSaving,
-}: {
-  group: ControlGroupDetail;
-  onClose: () => void;
-  onSave: (data: Partial<ControlGroupDetail>) => void;
-  isSaving: boolean;
-}) {
-  const [formData, setFormData] = useState({
-    name: group.name,
-    code: group.code,
-    description: group.description || '',
-    category: group.category || '',
-    domain: group.domain || '',
-    keywords: group.keywords?.join(', ') || '',
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave({
-      name: formData.name,
-      code: formData.code,
-      description: formData.description || null,
-      category: formData.category || null,
-      domain: formData.domain || null,
-      keywords: formData.keywords ? formData.keywords.split(',').map(k => k.trim()).filter(Boolean) : [],
-    });
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-lg rounded-lg border border-gray-200 bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-lg font-semibold text-black">Edit Control Group</h2>
-          <button onClick={onClose} className="text-gray-600 hover:text-black">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4 p-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Code</label>
-            <input
-              type="text"
-              value={formData.code}
-              onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value }))}
-              required
-              className="mt-1 w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Name</label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              required
-              className="mt-1 w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              rows={3}
-              className="mt-1 w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Category</label>
-              <input
-                type="text"
-                value={formData.category}
-                onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Domain</label>
-              <input
-                type="text"
-                value={formData.domain}
-                onChange={(e) => setFormData(prev => ({ ...prev, domain: e.target.value }))}
-                className="mt-1 w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black focus:border-primary-500 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Keywords (comma-separated)</label>
-            <input
-              type="text"
-              value={formData.keywords}
-              onChange={(e) => setFormData(prev => ({ ...prev, keywords: e.target.value }))}
-              placeholder="keyword1, keyword2, keyword3"
-              className="mt-1 w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-black placeholder-gray-500 focus:border-primary-500 focus:outline-none"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-black hover:bg-gray-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {isSaving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <CheckCircle className="h-4 w-4" />
-              )}
-              Save Changes
-            </button>
-          </div>
-        </form>
-      </div>
+        )}
+      </RightSlidePanel>
     </div>
   );
 }

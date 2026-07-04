@@ -141,6 +141,28 @@ const statusConfig: Record<string, {
     icon: XCircle,
     label: 'Cancelled',
   },
+  // Access-review campaign lifecycle
+  population_built: {
+    bg: 'bg-blue-50',
+    text: 'text-blue-600',
+    border: 'border-blue-200',
+    icon: Circle,
+    label: 'Population Built',
+  },
+  sampled: {
+    bg: 'bg-indigo-50',
+    text: 'text-indigo-600',
+    border: 'border-indigo-200',
+    icon: PlayCircle,
+    label: 'Sampled',
+  },
+  in_review: {
+    bg: 'bg-amber-50',
+    text: 'text-amber-600',
+    border: 'border-amber-500/30',
+    icon: Clock,
+    label: 'In Review',
+  },
 };
 
 const defaultConfig = {

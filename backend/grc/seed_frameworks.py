@@ -2179,6 +2179,31 @@ def seed_framework_from_json(db, data: Dict[str, Any], tenant_id: int = None,
             db.add(evidence_record)
             evidence_req_count += 1
     
+    # ── Ingestion guardrail ──────────────────────────────────────────────
+    # Fail loudly if any control was silently dropped during load (the SAMA
+    # framework once lost 67 of 170 controls when a downstream step deduped on
+    # a non-unique key). Also warn when a framework reuses control_id strings,
+    # because anything that keys on control_id alone will collapse them.
+    loaded = (
+        db.query(ParsedFrameworkControl)
+        .filter(ParsedFrameworkControl.uploaded_framework_id == framework.id)
+        .count()
+    )
+    if loaded != len(controls):
+        raise RuntimeError(
+            f"Ingestion guardrail FAILED for '{name}': loaded {loaded} controls but "
+            f"source JSON has {len(controls)}. Controls were dropped during seeding — "
+            f"investigate before continuing."
+        )
+    _ids = [str(c.get("control_id", "")) for c in controls]
+    _dups = sorted({i for i in _ids if _ids.count(i) > 1})
+    if _dups:
+        print(
+            f"  ⚠ '{name}': {len(controls) - len(set(_ids))} controls share a non-unique "
+            f"control_id (e.g. {_dups[:3]}). All are loaded here, but any downstream step "
+            f"that keys on control_id alone will collapse them — key on a unique identity."
+        )
+
     print(f"Seeded framework '{name}' with {len(controls)} controls and {evidence_req_count} evidence requirements")
     return framework
 

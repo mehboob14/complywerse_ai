@@ -32,6 +32,10 @@ import {
   Grid3X3,
   TrendingUp,
   Info,
+  Filter,
+  Check,
+  Building2,
+  FlaskConical,
 } from 'lucide-react';
 import Link from 'next/link';
 import { ProgressRing, SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
@@ -88,6 +92,20 @@ interface AutoGroupResult {
   controls_covered?: number;
 }
 
+// Short framework labels (mirror of the domain-detail page) — used by the
+// "Build your view" framework filter so chips read cleanly.
+const SF: [string, string][] = [
+  ['ARAMCO', 'ARAMCO'], ['COBIT', 'COBIT'], ['Health Information', 'DOH ADHIE'], ['ADHIE', 'DOH ADHIE'],
+  ['Abu Dhabi', 'ADHICS'], ['DOH', 'DOH ADHIE'], ['HIPAA', 'HIPAA'], ['HITRUST', 'HITRUST'], ['22301', 'ISO 22301'],
+  ['42001', 'ISO 42001'], ['27001', 'ISO 27001'], ['MAS', 'MAS TRM'], ['Artificial Intelligence', 'NIST AI RMF'],
+  ['800-53', 'NIST 800-53'], ['Cybersecurity Framework', 'NIST CSF'], ['PCI', 'PCI DSS'], ['Qatar', 'Qatar CB'],
+  ['SABIC', 'SABIC'], ['SAMA', 'SAMA'], ['SBP Cloud', 'SBP Cloud'], ['ETGRMF', 'SBP ETGRMF'],
+  ['Internet Banking', 'SBP IB'], ['SOX', 'SOX'], ['SWIFT', 'SWIFT'], ['Sri Lanka', 'Sri Lanka'],
+  ['Personal Data Transfer', 'KSA Transfer'], ['CIS', 'CIS'], ['General Data', 'GDPR'],
+  ['National Data', 'KSA NDMO'], ['Digital Operational', 'DORA'], ['NIS2', 'NIS2'], ['SOC', 'SOC 2'],
+];
+const sf = (f: string) => { for (const [k, v] of SF) if ((f || '').includes(k)) return v; return (f || '').split(' ')[0]; };
+
 const STATUS_STYLES: Record<string, { bg: string; text: string; icon: typeof CheckCircle }> = {
   completed: { bg: 'bg-green-500/20', text: 'text-green-400', icon: CheckCircle },
   processing: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: RefreshCw },
@@ -111,6 +129,10 @@ export default function ControlLibraryPage() {
   // domain complete (otherwise domains split across paginated pages).
   const [pageSize] = useState(200);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  // "Build your view" — live, client-side framework filter over the whole
+  // library (no backend re-run). pickedFw = [] means the full library.
+  const [showBuild, setShowBuild] = useState(false);
+  const [pickedFw, setPickedFw] = useState<string[]>([]);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAutoGroupModal, setShowAutoGroupModal] = useState(false);
@@ -276,6 +298,47 @@ export default function ControlLibraryPage() {
       }
     },
   });
+
+  // ── "Build your view" coverage index ────────────────────────────────────
+  // Lazily pulls the per-domain framework breakdown (one /rich per domain) the
+  // first time the filter is opened, then everything below is client-side.
+  const buildEnabled = showBuild || pickedFw.length > 0;
+  const { data: coverage, isFetching: coverageLoading } = useQuery({
+    queryKey: ['cl-build-coverage', selectedRunId],
+    enabled: buildEnabled && !!groupsData?.items?.length,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const items = groupsData!.items;
+      const results = await Promise.all(items.map((g) =>
+        apiClient.get(`/control-library/groups/${g.id}/rich`).then((r) => ({ id: g.id, d: r.data })).catch(() => null)
+      ));
+      const byDomain: Record<number, { sets: string[][]; standalone: string[] }> = {};
+      const fwTotals: Record<string, number> = {};
+      for (const res of results) {
+        if (!res) continue;
+        const sets: string[][] = (res.d.sets || []).map((s: any) =>
+          Array.from(new Set((s.members || []).map((m: any) => sf(m.framework)))) as string[]);
+        const standalone: string[] = (res.d.standalone_controls || []).map((s: any) => sf(s.members?.[0]?.framework || ''));
+        byDomain[res.id] = { sets, standalone };
+        // Per-framework unified-entry count (a set counts once per member framework).
+        sets.forEach((fws) => fws.forEach((f) => { fwTotals[f] = (fwTotals[f] || 0) + 1; }));
+        standalone.forEach((f) => { fwTotals[f] = (fwTotals[f] || 0) + 1; });
+      }
+      const frameworks = Object.keys(fwTotals).sort();
+      return { byDomain, frameworks, fwTotals };
+    },
+  });
+
+  const filterActive = pickedFw.length > 0;
+  // Per-domain counts recomputed for the picked frameworks (sets that include
+  // at least one picked framework + standalone controls of a picked framework).
+  const filteredStatFor = (groupId: number) => {
+    const cov = coverage?.byDomain?.[groupId];
+    if (!cov) return null;
+    const sets = cov.sets.filter((fws) => fws.some((f) => pickedFw.includes(f))).length;
+    const standalone = cov.standalone.filter((f) => pickedFw.includes(f)).length;
+    return { sets, standalone, total: sets + standalone };
+  };
 
   const createGroupMutation = useMutation({
     mutationFn: (data: typeof newGroup) => apiClient.post('/control-library/groups', data),
@@ -485,9 +548,33 @@ export default function ControlLibraryPage() {
   const totalControls = (groupsData as { total_mapped_controls?: number } | undefined)?.total_mapped_controls
     ?? groupsData?.items?.reduce((sum, g) => sum + g.total_control_count, 0) ?? 0;
 
-  const filteredGroups = showEmptyGroups
-    ? groupsData?.items
-    : groupsData?.items?.filter(g => g.total_control_count > 0);
+  const filteredGroups = (() => {
+    const base = (showEmptyGroups
+      ? groupsData?.items
+      : groupsData?.items?.filter(g => g.total_control_count > 0)) || [];
+    // Apply the "Build your view" framework filter: recompute each domain's
+    // sets/standalone for the picked frameworks and drop domains with none.
+    if (!filterActive || !coverage) return base;
+    return base
+      .map((g) => {
+        const f = filteredStatFor(g.id);
+        if (!f) return null;
+        return { ...g, normalized_control_count: f.total, standalone_control_count: f.standalone, total_control_count: f.total } as ControlGroup;
+      })
+      .filter((g): g is ControlGroup => !!g && g.total_control_count > 0);
+  })();
+
+  // Library totals shown in the header — scoped to the filter when active.
+  const filteredControls = filterActive && coverage
+    ? filteredGroups.reduce((a, g) => a + g.total_control_count, 0) : 0;
+  const filteredDomains = filterActive && coverage ? filteredGroups.length : 0;
+  const scoped = filterActive && !!coverage;
+  const dispDomains = scoped ? filteredDomains : totalGroups;
+  const dispControls = scoped ? filteredControls : totalControls;
+  const dispSetsScoped = scoped
+    ? filteredGroups.reduce((a, g) => a + Math.max(0, (g.normalized_control_count ?? 0) - (g.standalone_control_count ?? 0)), 0) : 0;
+  const dispStandaloneScoped = scoped
+    ? filteredGroups.reduce((a, g) => a + (g.standalone_control_count ?? 0), 0) : 0;
 
   const totalPages = Math.ceil((groupsData?.total || 0) / pageSize);
 
@@ -506,6 +593,31 @@ export default function ControlLibraryPage() {
     const sum = groupsData.items.reduce((acc, g) => acc + getGroupCompletionPercent(g), 0);
     return Math.round(sum / groupsData.items.length);
   }, [groupsData]);
+
+  // Library-wide normalization split (meaningful headline metrics).
+  const libStats = useMemo(() => {
+    const items = groupsData?.items || [];
+    const standalone = items.reduce((a, g) => a + (g.standalone_control_count ?? 0), 0);
+    const sets = items.reduce((a, g) => a + Math.max(0, (g.normalized_control_count ?? 0) - (g.standalone_control_count ?? 0)), 0);
+    return { sets, standalone };
+  }, [groupsData]);
+  // Headline set/standalone counts, scoped to the framework filter when active.
+  const dispSets = scoped ? dispSetsScoped : libStats.sets;
+  const dispStandalone = scoped ? dispStandaloneScoped : libStats.standalone;
+
+  // Carry the active framework filter into a domain so drilling in stays scoped.
+  const domainHref = (gid: number) => (filterActive && pickedFw.length)
+    ? `/control-library/${gid}?fw=${encodeURIComponent(pickedFw.join(','))}`
+    : `/control-library/${gid}`;
+
+  // Category/Domain filter options derived from the REAL groups (the /categories
+  // and /domains endpoints still return stale legacy values from old runs).
+  const realCategoryOpts = useMemo(
+    () => Array.from(new Set((groupsData?.items || []).map((g) => g.category).filter(Boolean) as string[])).sort(),
+    [groupsData]);
+  const realDomainOpts = useMemo(
+    () => Array.from(new Set((groupsData?.items || []).map((g) => g.domain).filter(Boolean) as string[])).sort(),
+    [groupsData]);
 
   // ── Persistent auto-group job tracking — survives dialog close / page reload.
   // Polls the tenant's latest job; shows a banner with progress + a Stop button
@@ -603,9 +715,12 @@ export default function ControlLibraryPage() {
           </p>
         </div>
       )}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 px-5 py-4 shadow-lg sm:px-6 sm:py-5">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-20 right-40 h-44 w-44 rounded-full bg-white/5 blur-2xl" />
+      <div className="relative rounded-2xl bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 px-5 py-4 shadow-lg sm:px-6 sm:py-5">
+        {/* clip ONLY the decorative blur circles, so the Build-view dropdown can overflow the banner */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+          <div className="absolute -right-20 -top-24 h-56 w-56 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute -bottom-20 right-40 h-44 w-44 rounded-full bg-white/5 blur-2xl" />
+        </div>
         <div className="relative flex flex-col gap-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-center gap-3.5">
@@ -618,22 +733,54 @@ export default function ControlLibraryPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 lg:max-w-2xl lg:justify-end">
-          {sessionsData && sessionsData.length > 1 && (
-            <select
-              value={selectedRunId ?? ''}
-              onChange={(e) => { setSelectedRunId(e.target.value ? Number(e.target.value) : null); setPage(0); }}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              title="Switch normalization session — the master baseline plus any framework-scoped sessions"
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-white/25 bg-white/15 px-3 py-2 text-sm font-medium text-white backdrop-blur">
+            {filterActive
+              ? <><Filter className="h-4 w-4" /> Filtered · {coverageLoading ? '…' : filteredControls} of {totalControls} unified controls</>
+              : <><CheckCircle className="h-4 w-4" /> Active library · {groupsLoading ? '—' : totalControls} unified controls</>}
+          </span>
+          <div className="relative">
+            <button
+              onClick={() => setShowBuild((v) => !v)}
+              title="Pick frameworks to scope the whole library"
+              className={`flex items-center gap-1.5 rounded-lg border px-3.5 py-2 text-sm font-medium backdrop-blur ${filterActive || showBuild ? 'border-white bg-white text-primary-700' : 'border-white/25 bg-white/15 text-white hover:bg-white/25'}`}
             >
-              {sessionsData.map((s) => (
-                <option key={s.id} value={s.is_baseline ? '' : s.id}>
-                  {s.is_baseline
-                    ? `★ Master baseline (${s.unified_controls})`
-                    : `${s.label} (${s.unified_controls})`}
-                </option>
-              ))}
-            </select>
-          )}
+              <Filter size={16} />
+              {filterActive ? `${pickedFw.length} framework${pickedFw.length === 1 ? '' : 's'}` : 'Build your view'}
+              <ChevronDown size={15} className={showBuild ? 'rotate-180 transition' : 'transition'} />
+            </button>
+            {showBuild && (
+              <>
+                <button className="fixed inset-0 z-30 cursor-default" aria-hidden onClick={() => setShowBuild(false)} />
+                <div className="absolute right-0 z-40 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-xl">
+                  <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700"><Filter className="h-3.5 w-3.5 text-primary-600" />Build your view</span>
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <button onClick={() => setPickedFw(coverage?.frameworks || [])} disabled={!coverage} className="rounded px-1.5 py-0.5 text-slate-500 hover:bg-slate-100 disabled:opacity-40">All</button>
+                      <button onClick={() => setPickedFw([])} className="rounded px-1.5 py-0.5 text-slate-500 hover:bg-slate-100">Clear</button>
+                    </div>
+                  </div>
+                  {coverageLoading && !coverage ? (
+                    <div className="flex items-center gap-2 px-3 py-4 text-xs text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" />Loading framework coverage…</div>
+                  ) : (
+                    <div className="max-h-72 overflow-auto p-1.5">
+                      {(coverage?.frameworks || []).map((f) => {
+                        const on = pickedFw.includes(f);
+                        const count = coverage?.fwTotals?.[f] ?? 0;
+                        return (
+                          <button key={f} onClick={() => setPickedFw((prev) => prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f])} className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-slate-50">
+                            <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${on ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-300 bg-white'}`}>{on && <Check className="h-3 w-3" />}</span>
+                            <span className="flex-1 truncate text-[12.5px] text-slate-700">{f}</span>
+                            <span className="rounded-full bg-slate-100 px-1.5 text-[10.5px] tabular-nums text-slate-500">{count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="border-t border-slate-100 px-3 py-2 text-[11px] text-slate-500">{filterActive ? <span className="font-medium text-primary-700">{pickedFw.length} selected · {coverageLoading ? '…' : filteredControls} controls · {filteredDomains} domains</span> : 'All frameworks shown'}</div>
+                </div>
+              </>
+            )}
+          </div>
           {/* Delete the selected scoped session (the master baseline has no run id
               selected, so this only ever appears for disposable sessions). */}
           {selectedRunId && (
@@ -677,62 +824,9 @@ export default function ControlLibraryPage() {
             <ShieldCheck size={18} />
             Review Master List
           </Link>
-          <button
-            onClick={() => {
-              setAutoGroupResult(null);
-              setShowAutoGroupModal(true);
-            }}
-            className="flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-primary-700 shadow-sm hover:bg-primary-50"
-          >
-            <Sparkles size={18} />
-            Build Unified View
-          </button>
-          {canCreate && (
-            <button
-              onClick={() => {
-                const phrase = window.prompt(
-                  '⚠ HEAVY ONE-TIME REBUILD\n\n' +
-                  'This rebuilds the ENTIRE library with AI across all 30 frameworks and ~3,400 ' +
-                  'controls (~15–40 min) on the background worker. It does NOT touch your live ' +
-                  'baseline — it builds a separate candidate you review, then Promote.\n\n' +
-                  'To confirm, type exactly:  REBUILD BASELINE',
-                );
-                if (phrase === null) return;                  // cancelled
-                if (phrase.trim().toUpperCase() === 'REBUILD BASELINE') {
-                  createBaseline.mutate('REBUILD BASELINE');
-                } else {
-                  window.alert('Phrase did not match — baseline build was NOT started.');
-                }
-              }}
-              disabled={createBaseline.isPending || (baselineBuild?.status === 'running')}
-              title="Run the first-time / rebuild normalization to create a master-baseline candidate"
-              className="flex items-center gap-2 rounded-lg border border-primary-300 bg-primary-50 px-3.5 py-2 text-sm font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-50"
-            >
-              <RefreshCw size={18} className={baselineBuild?.status === 'running' ? 'animate-spin' : ''} />
-              {baselineBuild?.status === 'running' ? 'Building baseline…' : 'Create Master Baseline'}
-            </button>
-          )}
-          {canCreate && (
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <Plus size={18} />
-              Create Group
-            </button>
-          )}
-          <button
-            onClick={() => populateFromFrameworksMutation.mutate()}
-            disabled={populateFromFrameworksMutation.isPending}
-            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            {populateFromFrameworksMutation.isPending ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <RefreshCw size={18} />
-            )}
-            Populate from Frameworks
-          </button>
+          {/* Stale pipeline actions (Build Unified View, Create/Rebuild Master Baseline,
+              Create Group, Populate from Frameworks) removed — the library is seeded and
+              locked, so it is browsed and reviewed, not built in the UI. */}
           {/* <button
             onClick={() => {
               setAnalysisResult(null);
@@ -747,13 +841,13 @@ export default function ControlLibraryPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 border-t border-white/15 pt-3 text-xs font-semibold text-white">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 ring-1 ring-white/20">
-            <Library className="h-3.5 w-3.5" />{groupsLoading ? '—' : totalGroups} domains
+            <Library className="h-3.5 w-3.5" />{groupsLoading ? '—' : dispDomains} domains
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 ring-1 ring-white/20">
-            <GitMerge className="h-3.5 w-3.5" />{groupsLoading ? '—' : totalControls} mapped controls
+            <GitMerge className="h-3.5 w-3.5" />{groupsLoading ? '—' : dispControls} mapped controls
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 ring-1 ring-white/20">
-            <Shield className="h-3.5 w-3.5" />{groupsLoading ? '—' : (availableFrameworks?.length || 0)} frameworks
+            <Shield className="h-3.5 w-3.5" />{groupsLoading ? '—' : (filterActive ? pickedFw.length : (availableFrameworks?.length || 0))} frameworks
           </span>
           <span className="ml-auto hidden items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-primary-50 ring-1 ring-white/15 sm:inline-flex">
             <Sparkles className="h-3.5 w-3.5" />AI-normalized · filter any subset, no re-run
@@ -762,26 +856,13 @@ export default function ControlLibraryPage() {
       </div>
       </div>
 
-      {canCreate && (
-        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white px-4 py-3 text-xs text-amber-900 shadow-sm">
-          <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100">
-            <Info size={13} className="text-amber-600" />
-          </span>
-          <span>
-            <b>Note:</b> “Create Master Baseline” is a <b>one-time</b> setup that rebuilds the whole library with AI (~15 min).
-            This install is already seeded with a baseline, so you only need it for a fresh DB or a new set of frameworks.
-            It builds a candidate you review, then <b>Promote</b> — your live baseline is never touched until you do.
-          </span>
-        </div>
-      )}
-
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {/* Control Domains */}
         <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary-500 to-primary-700" />
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : totalGroups}</p>
+              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : dispDomains}</p>
               <p className="mt-1.5 text-xs font-semibold text-slate-600">Control Domains</p>
             </div>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-sm transition-transform group-hover:scale-105">
@@ -795,7 +876,7 @@ export default function ControlLibraryPage() {
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-500 to-blue-600" />
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : totalControls}</p>
+              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : dispControls}</p>
               <p className="mt-1.5 text-xs font-semibold text-slate-600">Mapped Controls</p>
             </div>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-sm transition-transform group-hover:scale-105">
@@ -809,7 +890,7 @@ export default function ControlLibraryPage() {
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 to-violet-600" />
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : availableFrameworks?.length || 0}</p>
+              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : (filterActive ? pickedFw.length : (availableFrameworks?.length || 0))}</p>
               <p className="mt-1.5 text-xs font-semibold text-slate-600">Frameworks Covered</p>
             </div>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm transition-transform group-hover:scale-105">
@@ -818,71 +899,36 @@ export default function ControlLibraryPage() {
           </div>
           <p className="mt-3 text-[11px] text-slate-400">Compliance standards</p>
         </div>
-        {/* Evidence Coverage */}
+        {/* Normalized sets */}
         <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-          <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${(gapDashboard?.evidence_coverage_percentage || 0) >= 70 ? 'from-emerald-500 to-green-600' : (gapDashboard?.evidence_coverage_percentage || 0) >= 40 ? 'from-amber-500 to-orange-500' : 'from-rose-500 to-red-600'}`} />
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary-500 to-primary-700" />
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{gapDashboard?.evidence_coverage_percentage || 0}%</p>
-              <p className="mt-1.5 text-xs font-semibold text-slate-600">Evidence Coverage</p>
+              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : dispSets}</p>
+              <p className="mt-1.5 text-xs font-semibold text-slate-600">Normalized Sets</p>
             </div>
-            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm transition-transform group-hover:scale-105 bg-gradient-to-br ${(gapDashboard?.evidence_coverage_percentage || 0) >= 70 ? 'from-emerald-500 to-green-600' : (gapDashboard?.evidence_coverage_percentage || 0) >= 40 ? 'from-amber-500 to-orange-500' : 'from-rose-500 to-red-600'}`}>
-              <TrendingUp className="h-5 w-5" />
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white shadow-sm transition-transform group-hover:scale-105">
+              <GitMerge className="h-5 w-5" />
             </span>
           </div>
-          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <div
-              className={`h-full rounded-full bg-gradient-to-r ${(gapDashboard?.evidence_coverage_percentage || 0) >= 70 ? 'from-emerald-500 to-green-600' : (gapDashboard?.evidence_coverage_percentage || 0) >= 40 ? 'from-amber-500 to-orange-500' : 'from-rose-500 to-red-600'}`}
-              style={{ width: `${Math.max(2, Math.min(100, gapDashboard?.evidence_coverage_percentage || 0))}%` }}
-            />
-          </div>
+          <p className="mt-3 text-[11px] text-slate-400">Same requirement, deduped across frameworks</p>
         </div>
-        {/* Completion ring */}
-        <div className="relative col-span-2 flex items-center justify-center gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-primary-50 to-white p-4 shadow-sm sm:col-span-1">
-          <ProgressRing
-            percentage={averageCompletion}
-            size={68}
-            color={averageCompletion >= 70 ? 'success' : averageCompletion >= 40 ? 'warning' : 'danger'}
-            label="Completion"
-          />
+        {/* Standalone */}
+        <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-slate-400 to-slate-600" />
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{groupsLoading ? '—' : dispStandalone}</p>
+              <p className="mt-1.5 text-xs font-semibold text-slate-600">Standalone</p>
+            </div>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-400 to-slate-600 text-white shadow-sm transition-transform group-hover:scale-105">
+              <Shield className="h-5 w-5" />
+            </span>
+          </div>
+          <p className="mt-3 text-[11px] text-slate-400">Framework-unique controls</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        <Link href="/control-library/coverage" className="group rounded-xl border border-slate-200 bg-white p-4 transition-all hover:border-primary-300 hover:shadow-md">
-          <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-primary-50 p-3 ring-1 ring-primary-100">
-              <Grid3X3 className="h-6 w-6 text-primary-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-900 transition-colors group-hover:text-primary-700">Coverage Matrix</h3>
-              <p className="text-sm text-slate-500">View evidence coverage heatmap</p>
-            </div>
-          </div>
-        </Link>
-        <Link href="/control-library/gaps" className="group rounded-xl border border-slate-200 bg-white p-4 transition-all hover:border-amber-300 hover:shadow-md">
-          <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-amber-50 p-3 ring-1 ring-amber-100">
-              <AlertCircle className="h-6 w-6 text-amber-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-900 transition-colors group-hover:text-amber-700">Gap Analysis</h3>
-              <p className="text-sm text-slate-500">Identify and address control gaps</p>
-            </div>
-          </div>
-        </Link>
-        <Link href="/control-library/compare" className="group rounded-xl border border-slate-200 bg-white p-4 transition-all hover:border-indigo-300 hover:shadow-md">
-          <div className="flex items-center gap-4">
-            <div className="rounded-xl bg-indigo-50 p-3 ring-1 ring-indigo-100">
-              <BarChart3 className="h-6 w-6 text-indigo-600" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-900 transition-colors group-hover:text-indigo-700">Compare Controls</h3>
-              <p className="text-sm text-slate-500">Side-by-side control comparison</p>
-            </div>
-          </div>
-        </Link>
-      </div>
 
       <div className="card">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -895,19 +941,21 @@ export default function ControlLibraryPage() {
                 size="md"
               />
             </div>
-            <MultiSelectDropdown
-              title="Category"
-              items={(categories || []).map((cat) => ({ value: cat, label: cat }))}
-              selectedValues={categoryFilter ? [categoryFilter] : []}
-              onApply={(v) => { setCategoryFilter(v[0] || ''); setPage(0); }}
-              multiSelect={false}
-              autoApply
-              placeholder="All Categories"
-              size="md"
-            />
+            {realCategoryOpts.length > 1 && (
+              <MultiSelectDropdown
+                title="Category"
+                items={realCategoryOpts.map((cat) => ({ value: cat, label: cat }))}
+                selectedValues={categoryFilter ? [categoryFilter] : []}
+                onApply={(v) => { setCategoryFilter(v[0] || ''); setPage(0); }}
+                multiSelect={false}
+                autoApply
+                placeholder="All Categories"
+                size="md"
+              />
+            )}
             <MultiSelectDropdown
               title="Domain"
-              items={(domains || []).map((dom) => ({ value: dom, label: dom }))}
+              items={realDomainOpts.map((dom) => ({ value: dom, label: dom }))}
               selectedValues={domainFilter ? [domainFilter] : []}
               onApply={(v) => { setDomainFilter(v[0] || ''); setPage(0); }}
               multiSelect={false}
@@ -1005,20 +1053,16 @@ export default function ControlLibraryPage() {
                         <Shield className="h-5 w-5" />
                       </span>
                       <div className="min-w-0">
-                        <span className="inline-block rounded-md bg-primary-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary-700 ring-1 ring-primary-100">{group.code}</span>
-                        <h3 className="mt-0.5 font-semibold text-slate-900 line-clamp-1">{group.name}</h3>
+                        <h3 className="font-semibold text-slate-900 line-clamp-2">{group.name}</h3>
                       </div>
                     </div>
-                    <ProgressRing
-                      percentage={completion}
-                      size={40}
-                      strokeWidth={3}
-                      color={completion >= 70 ? 'success' : completion >= 40 ? 'warning' : 'danger'}
-                      showPercentage={false}
-                    />
+                    <span className="shrink-0 rounded-lg bg-slate-50 px-2.5 py-1 text-center ring-1 ring-slate-200">
+                      <span className="block text-base font-bold leading-none text-slate-800 tabular-nums">{group.normalized_control_count ?? 0}</span>
+                      <span className="block text-[9px] uppercase tracking-wide text-slate-400">controls</span>
+                    </span>
                   </div>
 
-                  {group.description && (
+                  {group.description && group.description !== group.name && (
                     <p className="text-sm text-slate-500 line-clamp-2 mb-3">{group.description}</p>
                   )}
 
@@ -1026,7 +1070,7 @@ export default function ControlLibraryPage() {
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 font-semibold text-primary-700 ring-1 ring-primary-100">
                         <Layers className="h-3.5 w-3.5" />
-                        {group.normalized_control_count} <span className="font-medium text-primary-500">unified</span>
+                        {Math.max(0, (group.normalized_control_count ?? 0) - (group.standalone_control_count ?? 0))} <span className="font-medium text-primary-500">sets</span>
                       </span>
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 font-semibold text-slate-600 ring-1 ring-slate-200">
                         <Shield className="h-3.5 w-3.5" />
@@ -1035,7 +1079,7 @@ export default function ControlLibraryPage() {
                     </div>
                     <div className="mt-2.5 flex items-center justify-end gap-1 border-t border-slate-50 pt-2 opacity-60 transition-opacity group-hover:opacity-100">
                       <Link
-                        href={`/control-library/${group.id}`}
+                        href={domainHref(group.id)}
                         title="View Details"
                         className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                       >
@@ -1143,7 +1187,7 @@ export default function ControlLibraryPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <Link
-                          href={`/control-library/${group.id}`}
+                          href={domainHref(group.id)}
                           title="View Details"
                           className="rounded p-1.5 text-gray-600 hover:bg-gray-100 hover:text-black"
                         >

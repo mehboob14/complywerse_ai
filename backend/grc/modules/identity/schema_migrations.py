@@ -79,10 +79,36 @@ _COLUMN_ADDS = [
     ("grc_users", "external_provider", "VARCHAR(32)"),
     ("grc_users", "external_id", "VARCHAR(128)"),
     ("grc_user_roles", "source", "VARCHAR(16)"),
+    # Access-review enrichment columns on grc_users (synced from Entra Graph).
+    # Must mirror the ORM columns in models/_04_user_model_extended.py so the
+    # enrichment writer actually persists MFA / sign-in / termination data.
+    ("grc_users", "account_enabled", "BOOLEAN"),
+    ("grc_users", "mfa_enabled", "BOOLEAN"),
+    ("grc_users", "mfa_methods", "JSON"),
+    ("grc_users", "hire_date", "DATE"),
+    ("grc_users", "termination_date", "DATE"),
+    ("grc_users", "entra_last_sign_in", "TIMESTAMP"),
+    ("grc_users", "access_synced_at", "TIMESTAMP"),
+    # Access-review AI-assist columns on the items table.
+    ("grc_access_review_items", "ai_recommendation", "VARCHAR(20)"),
+    ("grc_access_review_items", "ai_reason", "TEXT"),
+    ("grc_access_review_items", "ai_recommended_at", "TIMESTAMP"),
+    ("grc_access_review_items", "risk_score", "INTEGER"),
+    ("grc_access_review_items", "is_anomaly", "BOOLEAN"),
+    ("grc_access_review_items", "anomaly_note", "TEXT"),
+    ("grc_access_review_campaigns", "ai_summary", "TEXT"),
+    ("grc_access_review_campaigns", "ai_summary_at", "TIMESTAMP"),
     # SaaS multi-tenant Entra columns
     ("grc_identity_provider_configs", "entra_directory_id", "VARCHAR(64)"),
     ("grc_identity_provider_configs", "connected_at", "TIMESTAMP"),
     ("grc_identity_provider_configs", "connected_by_id", "INTEGER"),
+    ("grc_identity_provider_configs", "okta_domain", "VARCHAR(255)"),
+    # On-prem AD/LDAP connector (bind password supplied per-sync, never stored)
+    ("grc_identity_provider_configs", "ldap_server", "VARCHAR(255)"),
+    ("grc_identity_provider_configs", "ldap_base_dn", "VARCHAR(500)"),
+    # Tier-2 IGA governance connector (client secret supplied per-sync)
+    ("grc_identity_provider_configs", "iga_base_url", "VARCHAR(255)"),
+    ("grc_identity_provider_configs", "iga_vendor", "VARCHAR(32)"),
 ]
 
 _INDEX_ADDS = [

@@ -733,3 +733,222 @@ def get_frameworks_aggregate(
         "by_domain": by_domain,
         "recent_activity": activity,
     }
+
+
+# ============================================================================
+# Compliance module sections-overview — one scored section per compliance page
+# (Frameworks · Control Library · Evidence · Assessments · Statements), blended
+# into one board-level compliance score. Same shape as the ERM/governance
+# dashboards: every metric carries numerator/denominator/weight/formula.
+# ============================================================================
+from collections import Counter as _CCounter
+from sqlalchemy.exc import SQLAlchemyError as _SQLErr
+
+
+def _cm(key, label, weight, num, den, formula, inverse=False, empty_score=None):
+    if den:
+        pct = (num / den) * 100
+        score = round(100 - pct, 1) if inverse else round(pct, 1)
+    else:
+        score = empty_score
+    return {"key": key, "label": label, "weight": weight, "score": score,
+            "numerator": round(num, 1) if isinstance(num, float) else num,
+            "denominator": round(den, 1) if isinstance(den, float) else den,
+            "formula": formula, "inverse": inverse, "target": 85}
+
+
+def _sec_score(metrics):
+    avail = [m for m in metrics if m["score"] is not None]
+    tw = sum(m["weight"] for m in avail)
+    return round(sum(m["score"] * m["weight"] for m in avail) / tw, 1) if avail and tw else None
+
+
+
+
+@router.get("/sections-overview")
+def get_compliance_sections_overview(
+    tenant_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Compliance module board view — one scored section per Compliance nav page:
+    Frameworks · Controls · Evidence · Control Library."""
+    from collections import Counter as _CCounter
+    from sqlalchemy.exc import SQLAlchemyError as _SQLErr
+    from ....models import (
+        Evidence, EvidenceControlMapping, NormalizedControl, NormalizationRun,
+        NormalizedControlLink, FrameworkControlAlignment, ClauseApplicability,
+        ControlEvidenceRequirement,
+    )
+    user_tenants = get_user_tenants(current_user, db)
+    scoped = [tenant_id] if (tenant_id and tenant_id in user_tenants) else user_tenants
+    now = datetime.utcnow()
+    if not scoped:
+        return {"as_of": now.isoformat(), "sections": {}, "attention_queue": {},
+                "performance": {"score": None, "grade": None, "components": []}}
+
+    # ---------- Frameworks (upload → publish pipeline) ----------
+    try:
+        ufs = db.query(UploadedFramework.id, UploadedFramework.upload_status,
+                       UploadedFramework.published_framework_id).filter(
+            UploadedFramework.tenant_id.in_(scoped)).all()
+    except _SQLErr:
+        db.rollback(); ufs = []
+    uf_ids = [r.id for r in ufs]
+    uf_total = len(ufs)
+    uf_published = sum(1 for r in ufs if r.published_framework_id or r.upload_status == "published")
+    uf_failed = sum(1 for r in ufs if r.upload_status in ("failed", "error"))
+    uf_parsed = sum(1 for r in ufs if r.upload_status in ("parsed", "classified", "published"))
+    fw_metrics = [
+        _cm("publish_rate", "Published to library", 0.45, uf_published, uf_total,
+            "uploaded frameworks published / all uploaded frameworks"),
+        _cm("parse_progress", "Parsed", 0.30, uf_parsed, uf_total,
+            "uploaded frameworks parsed or beyond / all uploaded frameworks"),
+        _cm("parse_health", "Parse health", 0.25, uf_failed, uf_total,
+            "1 - (failed parses / all uploaded frameworks)", inverse=True, empty_score=100),
+    ]
+
+    # ---------- Controls (parsed framework controls: verify, evidence, align, applicability) ----------
+    try:
+        pfc = db.query(ParsedFrameworkControl.id, ParsedFrameworkControl.is_verified).filter(
+            ParsedFrameworkControl.uploaded_framework_id.in_(uf_ids)).all() if uf_ids else []
+        pfc_ids = {r.id for r in pfc}
+        ev_pfc = {x[0] for x in db.query(EvidenceControlMapping.parsed_control_id).filter(
+            EvidenceControlMapping.parsed_control_id.isnot(None)).all()}
+        aligned_pfc = {x[0] for x in db.query(FrameworkControlAlignment.parsed_control_id).all()}
+        applic = db.query(ClauseApplicability.control_id, ClauseApplicability.status).filter(
+            ClauseApplicability.uploaded_framework_id.in_(uf_ids)).all() if uf_ids else []
+        cer = db.query(ControlEvidenceRequirement.status,
+                       ControlEvidenceRequirement.is_mandatory).filter(
+            ControlEvidenceRequirement.parsed_control_id.in_(pfc_ids)).all() if pfc_ids else []
+    except _SQLErr:
+        db.rollback(); pfc, pfc_ids, ev_pfc, aligned_pfc, applic, cer = [], set(), set(), set(), [], []
+    pfc_total = len(pfc)
+    pfc_verified = sum(1 for r in pfc if r.is_verified)
+    pfc_with_ev = len(ev_pfc & pfc_ids)
+    pfc_aligned = len(aligned_pfc & pfc_ids)
+    applic_decided = sum(1 for c in applic if c.status in ("approved", "rejected"))
+    cer_mandatory = [r for r in cer if r.is_mandatory]
+    cer_satisfied = sum(1 for r in cer_mandatory if r.status == "approved")
+    ctrl_metrics = [
+        _cm("evidence_coverage", "Controls with evidence", 0.25, pfc_with_ev, pfc_total,
+            "framework controls with >=1 linked evidence / all framework controls"),
+        _cm("requirements_satisfied", "Required evidence approved", 0.25, cer_satisfied, len(cer_mandatory),
+            "mandatory evidence requirements approved / all mandatory evidence requirements"),
+        _cm("verified", "Verified", 0.20, pfc_verified, pfc_total,
+            "framework controls verified / all framework controls"),
+        _cm("library_aligned", "Aligned to library", 0.20, pfc_aligned, pfc_total,
+            "framework controls aligned to the unified library / all framework controls"),
+        _cm("applicability", "Applicability decided", 0.10, applic_decided, pfc_total,
+            "framework controls with an approved/rejected applicability decision / all"),
+    ]
+
+    # ---------- Evidence (the evidence library) ----------
+    try:
+        ev = db.query(Evidence.status, Evidence.is_stale, Evidence.id,
+                      Evidence.ocr_status).filter(Evidence.tenant_id.in_(scoped)).all()
+        linked_ev = {x[0] for x in db.query(EvidenceControlMapping.evidence_id).all()}
+    except _SQLErr:
+        db.rollback(); ev, linked_ev = [], set()
+    ev_total = len(ev)
+    ev_approved = sum(1 for e in ev if e.status == "approved")
+    ev_stale = sum(1 for e in ev if e.is_stale)
+    ev_linked = sum(1 for e in ev if e.id in linked_ev)
+    ev_ocr_universe = [e for e in ev if e.ocr_status in ("pending", "completed", "processing", "failed")]
+    ev_ocr_done = sum(1 for e in ev_ocr_universe if e.ocr_status == "completed")
+    ev_metrics = [
+        _cm("approval_rate", "Approved", 0.30, ev_approved, ev_total,
+            "approved evidence / all evidence"),
+        _cm("freshness", "Fresh (not stale)", 0.25, ev_stale, ev_total,
+            "1 - (stale evidence / all evidence)", inverse=True, empty_score=100),
+        _cm("ocr_processed", "OCR processed", 0.20, ev_ocr_done, len(ev_ocr_universe),
+            "evidence with OCR completed / evidence needing OCR (machine-readable for AI mapping)"),
+        _cm("linked", "Linked to controls", 0.25, ev_linked, ev_total,
+            "evidence mapped to >=1 control / all evidence"),
+    ]
+
+    # ---------- Control Library (unified/normalized library quality) ----------
+    try:
+        base = db.query(NormalizationRun).filter(
+            NormalizationRun.tenant_id.in_(scoped), NormalizationRun.is_baseline == True  # noqa: E712
+        ).order_by(NormalizationRun.id.desc()).first()
+        if base:
+            nc = db.query(NormalizedControl.id, NormalizedControl.review_status,
+                          NormalizedControl.recommended_evidence).filter(
+                NormalizedControl.run_id == base.id).all()
+            nc_ids = {r.id for r in nc}
+            total_nc = len(nc)
+            approved_nc = sum(1 for r in nc if r.review_status == "approved")
+            rec_nc = sum(1 for r in nc if r.recommended_evidence not in (None, [], {}, ""))
+            lk = _CCounter(x[0] for x in db.query(NormalizedControlLink.normalized_control_id).all() if x[0] in nc_ids)
+            mapped_nc = len(lk); unified_nc = sum(1 for v in lk.values() if v >= 2)
+            source_total = sum(lk.values())  # raw framework requirements feeding the library
+            covered_nc = len({n for (_e, n) in db.query(
+                EvidenceControlMapping.evidence_id, EvidenceControlMapping.normalized_control_id).all()
+                if n in nc_ids})
+        else:
+            total_nc = rec_nc = mapped_nc = unified_nc = source_total = covered_nc = 0
+    except _SQLErr:
+        db.rollback(); base = None; total_nc = rec_nc = mapped_nc = unified_nc = source_total = covered_nc = 0
+    # Board-level library value: how much effort normalization saves (consolidation
+    # + deduplication) and whether the library is actually operational (evidence).
+    # Dropped "Framework-mapped" and "Approved" — on a locked, curated baseline both
+    # are 100% by construction, so they told a leader nothing and inflated the score.
+    cl_metrics = [
+        _cm("consolidation", "Consolidated into sets", 0.30, unified_nc, total_nc,
+            "normalized controls unifying >=2 framework requirements / all (cross-framework reuse breadth)"),
+        _cm("dedup_savings", "Deduplication savings", 0.25, total_nc, source_total,
+            "1 - (managed controls / source framework requirements) = requirements collapsed by normalization",
+            inverse=True),
+        _cm("evidence_recommended", "Evidence-ready", 0.25, rec_nc, total_nc,
+            "normalized controls that specify their required evidence / all (library knows what each control needs)"),
+        _cm("evidence_coverage", "Evidence-backed", 0.20, covered_nc, total_nc,
+            "normalized controls with >=1 linked evidence artifact / all (evidence actually collected)"),
+    ]
+
+    sections = {
+        "frameworks": {"key": "frameworks", "label": "Frameworks", "weight": 0.25,
+                       "score": _sec_score(fw_metrics), "metrics": fw_metrics,
+                       "counts": {"uploaded": uf_total, "published": uf_published,
+                                  "failed": uf_failed}},
+        "controls": {"key": "controls", "label": "Controls", "weight": 0.25,
+                     "score": _sec_score(ctrl_metrics), "metrics": ctrl_metrics,
+                     "counts": {"total": pfc_total, "verified": pfc_verified,
+                                "with_evidence": pfc_with_ev, "aligned": pfc_aligned}},
+        "evidence": {"key": "evidence", "label": "Evidence", "weight": 0.25,
+                     "score": _sec_score(ev_metrics), "metrics": ev_metrics,
+                     "counts": {"total": ev_total, "approved": ev_approved,
+                                "stale": ev_stale, "linked": ev_linked}},
+        "control_library": {"key": "control_library", "label": "Control Library", "weight": 0.25,
+                            "score": _sec_score(cl_metrics), "metrics": cl_metrics,
+                            "counts": {"controls": total_nc, "unified": unified_nc,
+                                       "standalone": total_nc - unified_nc,
+                                       "baseline": base.label if base else None}},
+    }
+
+    components = [{"key": s["key"], "label": s["label"], "score": s["score"],
+                   "weight": s["weight"], "target": 85} for s in sections.values()]
+    scored = [c for c in components if c["score"] is not None]
+    wsum = sum(c["weight"] for c in scored)
+    perf = round(sum(c["score"] * c["weight"] for c in scored) / wsum, 1) if scored and wsum else None
+    grade = (None if perf is None else "excellent" if perf >= 85 else "good" if perf >= 70
+             else "fair" if perf >= 50 else "poor")
+
+    return {
+        "as_of": now.isoformat(),
+        "sections": sections,
+        "attention_queue": {
+            # Non-overlapping actionable buckets (a control gap is counted once).
+            "frameworks_unpublished": uf_total - uf_published,
+            "controls_without_evidence": (pfc_total - pfc_with_ev) if pfc_total else 0,
+            "controls_unverified": (pfc_total - pfc_verified) if pfc_total else 0,
+            "evidence_stale": ev_stale,
+            "total": ((uf_total - uf_published)
+                      + ((pfc_total - pfc_with_ev) if pfc_total else 0) + ev_stale),
+        },
+        "performance": {
+            "score": perf, "grade": grade,
+            "formula": "weighted mean of section scores: frameworks 25% + controls 25% + evidence 25% + control library 25%",
+            "components": components,
+        },
+    }

@@ -1,7 +1,7 @@
 from ....config import get_openai_api_key, get_openai_model
 
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import logging
 import io
@@ -709,12 +709,73 @@ def get_committee_overview(
     q_start = datetime(now.year, 3 * ((now.month - 1) // 3) + 1, 1)
     m_quarter = sum(1 for m in meetings if m.scheduled_date and m.scheduled_date >= q_start)
 
-    ratios = [
-        (m.quorum_present / m.quorum_required)
-        for m in meetings
-        if m.quorum_required and m.quorum_present is not None and m.quorum_required > 0
+    # Attendance = attendees / committee membership (capped at 100%), averaged
+    # over held meetings with quorum data; falls back to the quorum threshold
+    # as the base when a committee has no member records. The previous
+    # quorum_present/quorum_required average could exceed 100% (attendance
+    # above the threshold), which is a quorum figure, not attendance.
+    held_with_quorum = [m for m in meetings
+                        if m.status == "completed" and m.quorum_present is not None
+                        and m.quorum_required and m.quorum_required > 0]
+    attendance_ratios = []
+    for m in held_with_quorum:
+        base = members_by_committee.get(m.committee_id, 0) or m.quorum_required
+        attendance_ratios.append(min(1.0, m.quorum_present / base))
+    avg_attendance = round((sum(attendance_ratios) / len(attendance_ratios)) * 100, 1) if attendance_ratios else None
+    quorum_met = sum(1 for m in held_with_quorum if m.quorum_present >= m.quorum_required)
+    quorum_met_rate = round((quorum_met / len(held_with_quorum)) * 100, 1) if held_with_quorum else None
+
+    # ── committee performance score — same five formulas as the governance
+    # overview's Committees section, so both pages always agree ──
+    def _metric(key, label, weight, num, den, formula, inverse=False, empty_score=None):
+        if den:
+            pct = (num / den) * 100
+            score = round(100 - pct, 1) if inverse else round(pct, 1)
+        else:
+            score = empty_score
+        return {"key": key, "label": label, "weight": weight, "score": score,
+                "numerator": num, "denominator": den, "formula": formula,
+                "inverse": inverse, "target": 85}
+
+    open_actions = [a for a in actions if a.status in ("open", "in_progress", "overdue")]
+    overdue_open = sum(1 for a in open_actions if is_overdue(a))
+    active_committee_count = sum(1 for c in committees if c.is_active)
+    recent_meeting_committees = {m.committee_id for m in meetings
+                                 if m.scheduled_date and m.scheduled_date >= now - timedelta(days=90)
+                                 and m.status != "cancelled"}
+    completed_180 = [m for m in meetings if m.status == "completed" and m.scheduled_date
+                     and m.scheduled_date >= now - timedelta(days=180)]
+    minute_meeting_ids = {r.meeting_id for r in db.query(MeetingMinutes.meeting_id).filter(
+        MeetingMinutes.meeting_id.in_([m.id for m in meetings])).all()} if meetings else set()
+    minuted_180 = sum(1 for m in completed_180 if m.id in minute_meeting_ids)
+
+    perf_metrics = [
+        _metric("action_health", "Action health", 0.30, overdue_open, len(open_actions),
+                "1 - (overdue oversight actions / open oversight actions)",
+                inverse=True, empty_score=100),
+        _metric("action_completion", "Actions completed", 0.20, a_done, a_total,
+                "completed oversight actions / all oversight actions"),
+        _metric("meeting_cadence", "Meeting cadence", 0.20, len(recent_meeting_committees),
+                active_committee_count,
+                "active committees that met in the last 90 days / active committees"),
+        _metric("minutes_discipline", "Minutes recorded", 0.15, minuted_180, len(completed_180),
+                "completed meetings (180d) with minutes recorded / completed meetings (180d)"),
+        _metric("quorum_rate", "Quorum met", 0.15, quorum_met, len(held_with_quorum),
+                "held meetings that reached their quorum threshold / held meetings with quorum data"),
     ]
-    avg_attendance = round((sum(ratios) / len(ratios)) * 100, 1) if ratios else None
+    _avail = [m for m in perf_metrics if m["score"] is not None]
+    _wsum = sum(m["weight"] for m in _avail)
+    perf_score = round(sum(m["score"] * m["weight"] for m in _avail) / _wsum, 1) if _avail and _wsum else None
+    if perf_score is None:
+        perf_grade = None
+    elif perf_score >= 85:
+        perf_grade = "excellent"
+    elif perf_score >= 70:
+        perf_grade = "good"
+    elif perf_score >= 50:
+        perf_grade = "fair"
+    else:
+        perf_grade = "poor"
 
     # ── per-committee rollup ──
     actions_by_committee = defaultdict(list)
@@ -839,7 +900,15 @@ def get_committee_overview(
                 "completed": a_done, "total": a_total, "pct_done": pct_done,
             },
             "avg_attendance_pct": avg_attendance,
+            "quorum_met": quorum_met,
+            "quorum_meetings": len(held_with_quorum),
+            "quorum_met_rate_pct": quorum_met_rate,
             "charters_active": charters_active,
+            "performance": {
+                "score": perf_score,
+                "grade": perf_grade,
+                "metrics": perf_metrics,
+            },
         },
         "committees": committee_rows,
         "upcoming_meetings": upcoming_meetings,
