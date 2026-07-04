@@ -1,16 +1,16 @@
 'use client';
 
-// Cyber Security KPI Report — the MANAGE & DRILL surface for the KPI assessment.
-// The at-a-glance visual story lives on the MAIN dashboard (CyberKpiPanel); this
-// page owns what the dashboard can't: (re)uploading the quarterly workbook, a
-// searchable list of every KPI, and drill-in to any KPI's full quarterly table +
-// logic (shared modal). Data: /compliance/assessments (format = kpi_report).
+// Cyber Security KPI Report — MANAGE & DRILL surface. The KPI list comes from the
+// uploaded workbook; ACTUAL values are computed LIVE from real modules where the
+// platform owns the data, overlaid via /compliance/assessments/kpi-live. KPIs with
+// no in-platform feed are flagged external (no fabricated number). This page owns
+// upload/refresh + a searchable list; the summary lives on the main dashboard.
 
 import { useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Activity, Loader2, Upload, Search, Trash2 } from 'lucide-react';
 import apiClient from '@/lib/api';
-import { KPI_FORMAT, GOOD, BAD, TEAL, type Kpi, parseKpi, KpiRow, KpiDetailModal } from '@/components/dashboard/kpiShared';
+import { KPI_FORMAT, GOOD, BAD, TEAL, type Kpi, type LiveMetric, buildKpis, KpiRow, KpiDetailModal } from '@/components/dashboard/kpiShared';
 
 const PRIMARY: React.CSSProperties = { background: 'var(--color-base, #14b8a6)', color: '#fff' };
 
@@ -46,6 +46,11 @@ export default function KpiReportTab() {
     enabled: !!activeId,
     staleTime: 30_000,
   });
+  const { data: liveMetrics = {} } = useQuery<Record<string, LiveMetric>>({
+    queryKey: ['kpi-live'],
+    queryFn: async () => (await apiClient.get('/compliance/assessments/kpi-live')).data?.metrics || {},
+    staleTime: 30_000,
+  });
 
   const deleteAssessment = useMutation({
     mutationFn: async () => apiClient.delete(`/compliance/assessments/${activeId}`),
@@ -72,21 +77,21 @@ export default function KpiReportTab() {
     } finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
   };
 
-  const { kpis, domains, onT, offT, cadence } = useMemo(() => {
-    const parsed: Kpi[] = (detail?.items || []).map(parseKpi);
-    // problem KPIs first (below target), then on-target, then n/a; then by domain.
-    const rank = (k: Kpi) => (k.onTarget === false ? 0 : k.onTarget === true ? 1 : 2);
-    parsed.sort((a, b) => rank(a) - rank(b) || a.domain.localeCompare(b.domain));
-    const rated = parsed.filter((k) => k.onTarget != null);
-    const freqs = new Set(parsed.map((k) => k.freq).filter(Boolean));
+  const { kpis, domains, live, onT, offT, ext } = useMemo(() => {
+    const built: Kpi[] = buildKpis(detail?.items || [], liveMetrics);
+    // live-below first (problems), then live-on-target, then external; by domain.
+    const rank = (k: Kpi) => (!k.live ? 2 : k.onTarget === false ? 0 : 1);
+    built.sort((a, b) => rank(a) - rank(b) || a.domain.localeCompare(b.domain));
+    const liveKpis = built.filter((k) => k.live);
     return {
-      kpis: parsed,
-      domains: new Set(parsed.map((k) => k.domain)).size,
-      onT: rated.filter((k) => k.onTarget).length,
-      offT: rated.filter((k) => !k.onTarget).length,
-      cadence: freqs.size === 1 ? [...freqs][0] : freqs.size > 1 ? 'Mixed' : 'Quarterly',
+      kpis: built,
+      domains: new Set(built.map((k) => k.domain)).size,
+      live: liveKpis.length,
+      onT: liveKpis.filter((k) => k.onTarget).length,
+      offT: liveKpis.filter((k) => k.onTarget === false).length,
+      ext: built.length - liveKpis.length,
     };
-  }, [detail]);
+  }, [detail, liveMetrics]);
 
   if (listLoading) return <div className="flex items-center justify-center py-24"><Loader2 className="h-7 w-7 animate-spin text-blue-500" /></div>;
   const term = search.trim().toLowerCase();
@@ -100,9 +105,9 @@ export default function KpiReportTab() {
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-[15px] font-bold text-gray-900">Cyber Security KPI Report</h3>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">Manage & drill · {cadence}</span>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">Manage &amp; drill · {live} live · {ext} external</span>
             </div>
-            <p className="text-[11px] text-gray-500">Upload the quarterly workbook and drill into any KPI. The summary lives on the main dashboard.</p>
+            <p className="text-[11px] text-gray-500">Actuals are computed live from real modules where the platform owns the data; the rest are flagged external.</p>
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
@@ -123,17 +128,17 @@ export default function KpiReportTab() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 py-20 text-center">
           <Activity className="mb-3 h-10 w-10 text-slate-300" />
           <p className="text-sm font-medium text-slate-700">No KPI Report uploaded yet.</p>
-          <p className="mt-1 max-w-md text-xs text-slate-400">Upload the Key Performance Indicator report workbook — every KPI, its domain, type, cadence, data source and quarterly target vs actual is parsed and tracked here.</p>
+          <p className="mt-1 max-w-md text-xs text-slate-400">Upload the KPI report workbook to define the KPI set. Where a KPI maps to a real module, its value is computed live; the rest are flagged external.</p>
         </div>
       ) : detailLoading ? (
         <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-blue-500" /></div>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-4">
-            <Stat label="KPIs tracked" value={`${kpis.length}`} />
-            <Stat label="Domains" value={`${domains}`} />
+            <Stat label="Live KPIs" value={`${live}`} tone={TEAL} />
             <Stat label="On target" value={`${onT}`} tone={GOOD} />
             <Stat label="Below target" value={`${offT}`} tone={offT > 0 ? BAD : GOOD} />
+            <Stat label="External (no feed)" value={`${ext}`} />
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -141,12 +146,7 @@ export default function KpiReportTab() {
               <Search className="h-3.5 w-3.5 text-slate-400" />
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search KPIs…" className="w-full border-0 bg-transparent text-[13px] outline-none" />
             </div>
-            <div className="flex items-center gap-3 text-[10.5px] text-slate-400">
-              <span className="inline-flex items-center gap-1"><span className="inline-block h-[2px] w-4" style={{ background: TEAL }} /> actual</span>
-              <span className="inline-flex items-center gap-1"><span className="inline-block h-[2px] w-4 border-t border-dashed border-slate-400" /> target</span>
-              <span className="text-slate-300">·</span>
-              <span>click a KPI for detail &amp; logic</span>
-            </div>
+            <p className="text-[10.5px] text-slate-400">Live = computed from a real module · External = no in-platform feed · click a KPI for detail</p>
           </div>
 
           <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">

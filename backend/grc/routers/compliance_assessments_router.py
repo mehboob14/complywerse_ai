@@ -5119,6 +5119,89 @@ def get_assessments_overview(
     }
 
 
+@router.get("/kpi-live")
+def kpi_live_metrics(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Live-computed Cyber Security KPI actuals from REAL in-platform modules.
+
+    Only KPIs that genuinely map to data this platform owns are computed here —
+    each with a real numerator/denominator/formula. Everything else the caller
+    flags as 'external source' (no fabricated number). Nothing static.
+    """
+    from datetime import datetime
+    now = datetime.utcnow()
+
+    def pct(n, d):
+        return round(100.0 * n / d, 1) if d else None
+
+    metrics = {}
+
+    # 1) Policy / document reviews on time — Governance
+    try:
+        from grc.models._13_governance_document_management_enhanced import GovernanceDocument
+        docs = db.query(GovernanceDocument).all()
+        with_date = [d for d in docs if getattr(d, "next_review_date", None)]
+        on_time = [d for d in with_date if d.next_review_date and d.next_review_date >= now]
+        if with_date:
+            metrics["policy_review"] = {
+                "label": "Policy & document reviews on time",
+                "actual": pct(len(on_time), len(with_date)),
+                "numerator": len(on_time), "denominator": len(with_date),
+                "formula": "documents reviewed on time / documents with a review date",
+                "target": 95, "direction": "higher",
+                "source": "Governance - document reviews", "href": "/governance",
+            }
+    except Exception:
+        pass
+
+    # 2) Vulnerabilities within remediation SLA — Vulnerability management
+    try:
+        try:
+            from grc.models._22_vulnerability_management import Vulnerability
+        except Exception:
+            from grc.models import Vulnerability
+        vulns = db.query(Vulnerability).all()
+        if vulns:
+            overdue = [v for v in vulns if getattr(v, "due_date", None) and v.due_date < now
+                       and str(getattr(v, "status", "") or "").lower() not in ("resolved", "closed")]
+            n = len(vulns) - len(overdue)
+            metrics["vuln_sla"] = {
+                "label": "Vulnerabilities within remediation SLA",
+                "actual": pct(n, len(vulns)),
+                "numerator": n, "denominator": len(vulns),
+                "formula": "vulnerabilities not past their due date / total vulnerabilities",
+                "target": 90, "direction": "higher",
+                "source": "Vulnerability management", "href": "/vulnerabilities",
+            }
+    except Exception:
+        pass
+
+    # 3) Access certification completed — Access review
+    try:
+        from grc.models._40_access_review_models import AccessReviewItem
+        items = db.query(AccessReviewItem).all()
+        if items:
+            decided = [i for i in items if str(getattr(i, "decision", "pending") or "pending").lower() != "pending"]
+            metrics["access_cert"] = {
+                "label": "Access certification completed",
+                "actual": pct(len(decided), len(items)),
+                "numerator": len(decided), "denominator": len(items),
+                "formula": "access items certified / sampled access items",
+                "target": 100, "direction": "higher",
+                "source": "Access review certification", "href": "/access-reviews",
+            }
+    except Exception:
+        pass
+
+    for m in metrics.values():
+        a, t, d = m["actual"], m["target"], m["direction"]
+        m["on_target"] = None if (a is None or t is None) else (a <= t if d == "lower" else a >= t)
+
+    return {"as_of": now.isoformat(), "metrics": metrics}
+
+
 @router.get("/{assessment_id}")
 def get_assessment(
     assessment_id: int,
