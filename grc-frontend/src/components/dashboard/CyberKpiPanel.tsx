@@ -13,10 +13,12 @@
  * Nothing is hardcoded; percentages are the workbook's own values.
  */
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import apiClient from '@/lib/api';
-import { Activity, ArrowRight, Target } from 'lucide-react';
+import { Activity, ArrowRight, Target, Info } from 'lucide-react';
+import { AnimatedModal } from '@/components/ui/AnimatedModal';
 
 const KPI_FORMAT = 'kpi_report';
 const GOOD = '#059669';
@@ -75,12 +77,13 @@ function Spark({ prior, quarters }: { prior: number | null; quarters: Q[] }) {
   );
 }
 
-function KpiCell({ k }: { k: Kpi }) {
+function KpiCell({ k, onOpen }: { k: Kpi; onOpen: () => void }) {
   const a = k.latest?.actual ?? null;
   const t = k.latest?.target ?? null;
   const tone = k.onTarget == null ? '#94a3b8' : k.onTarget ? GOOD : BAD;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3">
+    <button type="button" onClick={onOpen}
+      className="group rounded-xl border border-slate-200 bg-white p-3 text-left transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm">
       <div className="mb-1 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-[9.5px] font-semibold uppercase tracking-wide text-slate-400">{k.domain}</p>
@@ -95,7 +98,93 @@ function KpiCell({ k }: { k: Kpi }) {
         <span className="font-bold tabular-nums" style={{ color: tone }}>{pct(a)} <span className="font-normal text-slate-400">actual</span></span>
         <span className="flex items-center gap-1 text-slate-500"><Target className="h-3 w-3" />{pct(t)} target</span>
       </div>
-    </div>
+      <p className="mt-1.5 text-[9px] font-medium text-slate-300 group-hover:text-teal-500">Click for detail &amp; logic →</p>
+    </button>
+  );
+}
+
+// The "formula behind it" popup: full quarterly Target/Actual table + the exact
+// attainment logic (direction-aware) used to mark a KPI on-target or below.
+function KpiDetailModal({ k, onClose }: { k: Kpi | null; onClose: () => void }) {
+  const dir = k?.lowerBetter ? 'Lower is better' : 'Higher is better';
+  const rel = k?.lowerBetter ? '≤' : '≥';
+  const tone = k?.onTarget == null ? '#64748b' : k?.onTarget ? GOOD : BAD;
+  const rows: { label: string; target: number | null; actual: number | null }[] = k
+    ? [{ label: 'Prior year', target: null, actual: k.prior }, ...k.quarters.map((q) => ({ label: `Q${q.q}`, target: q.target, actual: q.actual }))]
+    : [];
+  const met = (target: number | null, actual: number | null) => {
+    if (target == null || actual == null) return null;
+    return k?.lowerBetter ? actual <= target : actual >= target;
+  };
+  return (
+    <AnimatedModal isOpen={k != null} onClose={onClose} size="lg" title={k?.topic} subtitle={k?.domain}>
+      {k && (
+        <div className="space-y-4 p-5">
+          {/* meta */}
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            {[['Type', 'Percentage'], ['Frequency', k.freq || '—'], ['Direction', dir]].map(([l, v]) => (
+              <span key={l} className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600"><b className="text-slate-500">{l}:</b> {v}</span>
+            ))}
+          </div>
+          {k.def && <p className="text-[12.5px] leading-5 text-slate-600">{k.def}</p>}
+
+          {/* latest attainment banner */}
+          {k.latest && (
+            <div className="rounded-xl p-4" style={{ backgroundColor: `${tone}0f` }}>
+              <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: tone }}>Latest quarter · Q{k.latest.q}</p>
+              <p className="mt-1 text-[13px] text-slate-700">
+                Actual <b className="tabular-nums" style={{ color: tone }}>{pct(k.latest.actual)}</b> vs target <b className="tabular-nums">{pct(k.latest.target)}</b>
+                <span className="text-slate-400"> (on target needs actual {rel} target)</span>
+                {' → '}
+                <b style={{ color: tone }}>{k.onTarget ? 'On target' : 'Below target'}</b>
+              </p>
+            </div>
+          )}
+
+          {/* quarterly table */}
+          <div className="overflow-hidden rounded-xl border border-slate-200">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-400">
+                  <th className="px-3 py-2 font-semibold">Period</th>
+                  <th className="px-3 py-2 text-right font-semibold">Target</th>
+                  <th className="px-3 py-2 text-right font-semibold">Actual</th>
+                  <th className="px-3 py-2 text-right font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((r) => {
+                  const ok = met(r.target, r.actual);
+                  return (
+                    <tr key={r.label}>
+                      <td className="px-3 py-2 text-slate-600">{r.label}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">{pct(r.target)}</td>
+                      <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-800">{pct(r.actual)}</td>
+                      <td className="px-3 py-2 text-right">
+                        {ok == null ? <span className="text-slate-300">—</span>
+                          : <span className="text-[11px] font-semibold" style={{ color: ok ? GOOD : BAD }}>{ok ? 'On target' : 'Below'}</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* the logic / formula */}
+          <div className="rounded-lg border border-slate-100 bg-slate-50 px-3.5 py-3">
+            <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-slate-700"><Info className="h-3.5 w-3.5" /> How this is read</p>
+            <ul className="ml-1 space-y-1 text-[11px] leading-5 text-slate-600">
+              <li><b>Direction —</b> {dir}. {k.lowerBetter
+                ? 'This KPI measures a negative outcome (its wording flags "not / past deadline"), so the target is a ceiling and actual should stay at or below it.'
+                : 'Actual should meet or exceed the target.'}</li>
+              <li><b>On target —</b> for the latest reported quarter, <span className="tabular-nums">actual {rel} target</span>.</li>
+              <li><b>Reporting, not scored —</b> the KPI Report is tracked quarterly against targets (from the source workbook); it is intentionally not reduced to a 0–100 maturity score.</li>
+            </ul>
+          </div>
+        </div>
+      )}
+    </AnimatedModal>
   );
 }
 
@@ -109,6 +198,7 @@ function Tile({ label, value, tone }: { label: string; value: string; tone?: str
 }
 
 export default function CyberKpiPanel() {
+  const [sel, setSel] = useState<Kpi | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ['main-kpi-report'],
     queryFn: async () => {
@@ -157,9 +247,22 @@ export default function CyberKpiPanel() {
         <Tile label="KPIs · domains" value={`${kpis.length} · ${domains}`} />
       </div>
 
-      <div className="grid grid-cols-1 gap-2.5 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {kpis.map((k, i) => <KpiCell key={i} k={k} />)}
+      <div className="grid grid-cols-1 gap-2.5 px-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        {kpis.map((k, i) => <KpiCell key={i} k={k} onOpen={() => setSel(k)} />)}
       </div>
+
+      {/* inline logic note so the numbers aren't unexplained */}
+      <div className="mx-5 mb-5 mt-3 flex items-start gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3.5 py-2.5">
+        <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-400" />
+        <p className="text-[10.5px] leading-4 text-slate-500">
+          <b className="text-slate-600">On target</b> = KPIs whose latest-quarter actual meets its target — direction-aware
+          (a KPI that counts a bad outcome, e.g. “% not monitored”, is on target when actual stays <b>at or below</b> target).
+          {' '}<b className="text-slate-600">Avg actual</b> = mean of the latest-quarter actuals. Values come from the source KPI
+          workbook. <b className="text-slate-600">Click any KPI</b> for its full quarterly table and the exact logic.
+        </p>
+      </div>
+
+      <KpiDetailModal k={sel} onClose={() => setSel(null)} />
     </div>
   );
 }

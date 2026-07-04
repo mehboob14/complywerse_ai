@@ -156,8 +156,9 @@ const navigation: NavEntry[] = [
           { name: 'CTI Maturity', href: '/assessments/cs_cti', icon: BarChart3, requiredPermissions: ['compliance:assessments:*'] },
           { name: 'Incident Management', href: '/assessments/cs_incident', icon: AlertTriangle, requiredPermissions: ['compliance:assessments:*'] },
           { name: 'IT Security Operations', href: '/assessments/cs_itsecops', icon: Activity, requiredPermissions: ['compliance:assessments:*'] },
-          // KPI Report intentionally NOT here — the Cyber Security KPI dashboard
-          // belongs in the main complyverse dashboard, not the Assessments module.
+          // KPI Report: the summary panel lives on the main dashboard, but the full
+          // assessment (per-KPI quarterly report) is reachable here too.
+          { name: 'KPI Report', href: '/assessments/cs_kpi', icon: Target, requiredPermissions: ['compliance:assessments:*'] },
         ],
       },
       // "NCA" folder → nested dropdown holding its templates.
