@@ -14,8 +14,10 @@ from .rcsa_custom import router as rcsa_custom_router
 from .risk_assessments import router as risk_assessments_router
 from .framework_risk_assessments import router as framework_risk_assessments_router
 from .advanced_analytics import router as advanced_analytics_router
+from .dashboard import router as sections_dashboard_router
 
 __all__ = [
+    "sections_dashboard_router",
     "risks_router",
     "kris_router",
     "incidents_router",

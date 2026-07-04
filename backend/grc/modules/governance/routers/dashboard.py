@@ -681,16 +681,31 @@ def get_documents_overview(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Single source of truth for the Documents dashboard.
+    """Deep per-section dashboard for the Governance / Documents module.
 
-    Every ratio is returned with its numerator, denominator, and formula
-    string so the UI renders backend-computed numbers instead of inventing
-    math client-side. Sections: documents (portfolio), mappings (linkage),
-    approvals, reviews, exceptions, freshness, attention_queue, performance.
+    Every functional area of the module (Documents register, Mappings,
+    Approvals & Sign-off, Reviews, Exceptions, Attestations, Committees) is a
+    SECTION with its own metrics computed from that area's own entities. Each
+    metric carries key/label/score/weight/numerator/denominator/formula so the
+    UI renders backend truth and never invents math.
+
+    Scoring rules:
+      - achievement metrics (coverage, completion): empty universe -> score None
+        (excluded; the section re-normalizes remaining weights)
+      - health metrics (1 - bad/universe): empty universe -> 100 (no obligations)
+      - section.score  = weighted mean of its non-null metrics
+      - performance.score = weighted mean of non-null section scores
+    Weights and the 85 target live here, never in the frontend.
     """
+    from sqlalchemy.exc import SQLAlchemyError
     from ....models import (
         DocumentRiskLink, DocumentAssetLink, PolicyException,
-        PolicyReviewHistory, PolicyGapFinding
+        PolicyReviewHistory, PolicyGapFinding, PolicyStatement,
+        StatementControlMapping, DocumentSignature, DocumentSignoffAssignment,
+        AttestationCampaign, AttestationRequest,
+        GovernanceCommittee, CommitteeMeeting, MeetingMinutes, OversightAction,
+        RegulatoryChange, RegulatoryImpactAssessment, RegulatoryImplementationTask,
+        RegulatoryFeedSource, RegulatoryFeedItem,
     )
 
     user_tenants = get_user_tenants(current_user, db)
@@ -702,16 +717,48 @@ def get_documents_overview(
 
     now = datetime.utcnow()
 
-    if not scoped:
-        return {"as_of": now.isoformat(), "documents": {"total": 0}, "performance": {"score": None, "components": []}}
+    def metric(key, label, weight, num, den, formula, inverse=False, empty_score=None):
+        """inverse=True scores 1 - num/den (num counts the bad items)."""
+        if den:
+            pct = (num / den) * 100
+            score = round(100 - pct, 1) if inverse else round(pct, 1)
+        else:
+            score = empty_score
+        return {"key": key, "label": label, "weight": weight, "score": score,
+                "numerator": num, "denominator": den, "formula": formula,
+                "inverse": inverse, "target": 85}
 
+    def section_score(metrics):
+        avail = [m for m in metrics if m["score"] is not None]
+        total_w = sum(m["weight"] for m in avail)
+        if not avail or not total_w:
+            return None
+        return round(sum(m["score"] * m["weight"] for m in avail) / total_w, 1)
+
+    if not scoped:
+        return {"as_of": now.isoformat(), "sections": {}, "attention_queue": {},
+                "performance": {"score": None, "grade": None, "components": []}}
+
+    # ================= raw reads (each group guarded so one missing =========
+    # ================= table never 500s the whole dashboard)        =========
     docs = db.query(
         GovernanceDocument.id, GovernanceDocument.status, GovernanceDocument.doc_type,
-        GovernanceDocument.classification, GovernanceDocument.next_review_date,
-        GovernanceDocument.expiry_date, GovernanceDocument.framework_ids
+        GovernanceDocument.classification, GovernanceDocument.owner_id,
+        GovernanceDocument.review_cycle_months, GovernanceDocument.next_review_date,
+        GovernanceDocument.expiry_date, GovernanceDocument.framework_ids,
+        GovernanceDocument.file_path,
+        GovernanceDocument.content.isnot(None).label("has_content"),
     ).filter(GovernanceDocument.tenant_id.in_(scoped)).all()
 
-    # ---- portfolio -------------------------------------------------------
+    try:
+        applicable_rows = db.query(
+            GovernanceDocument.id, GovernanceDocument.applicable_framework_ids
+        ).filter(GovernanceDocument.tenant_id.in_(scoped)).all()
+        applicable_map = {r.id: (r.applicable_framework_ids or []) for r in applicable_rows}
+    except SQLAlchemyError:
+        db.rollback()
+        applicable_map = {}
+
     by_status, by_type, by_classification = {}, {}, {}
     for d in docs:
         by_status[d.status or "draft"] = by_status.get(d.status or "draft", 0) + 1
@@ -724,146 +771,418 @@ def get_documents_overview(
     active_ids = {d.id for d in active_docs}
     published_docs = [d for d in docs if d.status == "published"]
     published_count = len(published_docs)
-    publishing_rate = round((published_count / active_count) * 100, 1) if active_count else 0.0
+    published_ids = {d.id for d in published_docs}
 
-    # ---- mappings / linkage ---------------------------------------------
+    # ---- link tables -----------------------------------------------------
     def link_stats(model):
-        rows = db.query(model.document_id).join(
-            GovernanceDocument, model.document_id == GovernanceDocument.id
-        ).filter(GovernanceDocument.tenant_id.in_(scoped)).all()
-        ids = [r.document_id for r in rows]
-        return len(ids), set(ids)
+        try:
+            rows = db.query(model.document_id).join(
+                GovernanceDocument, model.document_id == GovernanceDocument.id
+            ).filter(GovernanceDocument.tenant_id.in_(scoped)).all()
+            ids = [r.document_id for r in rows]
+            return len(ids), set(ids)
+        except SQLAlchemyError:
+            db.rollback()
+            return 0, set()
 
     control_links, control_doc_ids = link_stats(DocumentControlLink)
     risk_links, risk_doc_ids = link_stats(DocumentRiskLink)
-    framework_links, framework_doc_ids = link_stats(DocumentRegulatoryLink)
+    reg_links, reg_doc_ids = link_stats(DocumentRegulatoryLink)
     asset_links, asset_doc_ids = link_stats(DocumentAssetLink)
-
-    fw_ids_doc_ids = {d.id for d in docs if d.framework_ids and len(d.framework_ids) > 0}
-    framework_doc_ids = framework_doc_ids | fw_ids_doc_ids
+    fw_tag_ids = {d.id for d in docs if d.framework_ids and len(d.framework_ids) > 0}
+    fw_tag_ids |= {doc_id for doc_id, fws in applicable_map.items() if fws}
+    framework_doc_ids = reg_doc_ids | fw_tag_ids
 
     any_link_ids = (control_doc_ids | risk_doc_ids | framework_doc_ids | asset_doc_ids) & active_ids
     mapped_count = len(any_link_ids)
-    mapping_coverage = round((mapped_count / active_count) * 100, 1) if active_count else 0.0
 
-    # ---- approvals -------------------------------------------------------
-    steps = db.query(
-        DocumentApprovalStep.status, DocumentApprovalStep.due_date,
-        DocumentApprovalStep.requested_at, DocumentApprovalStep.completed_at,
-        DocumentApprovalStep.document_id
-    ).join(
-        GovernanceDocument, DocumentApprovalStep.document_id == GovernanceDocument.id
-    ).filter(GovernanceDocument.tenant_id.in_(scoped)).all()
+    # ---- policy statements + statement-level control mappings -------------
+    try:
+        stmt_rows = db.query(PolicyStatement.id, PolicyStatement.document_id).filter(
+            PolicyStatement.tenant_id.in_(scoped),
+            PolicyStatement.status == "active"
+        ).all()
+        stmt_ids = {r.id for r in stmt_rows}
+        docs_with_statements = {r.document_id for r in stmt_rows}
+        sm_rows = db.query(
+            StatementControlMapping.statement_id, StatementControlMapping.coverage_type
+        ).filter(StatementControlMapping.tenant_id.in_(scoped)).all()
+        mapped_stmt_ids = {r.statement_id for r in sm_rows} & stmt_ids
+        stmt_mappings_total = len(sm_rows)
+        stmt_mappings_full = sum(1 for r in sm_rows if r.coverage_type == "full")
+    except SQLAlchemyError:
+        db.rollback()
+        stmt_ids, docs_with_statements, mapped_stmt_ids = set(), set(), set()
+        stmt_mappings_total, stmt_mappings_full = 0, 0
+
+    # ---- approval steps + sign-off ----------------------------------------
+    try:
+        steps = db.query(
+            DocumentApprovalStep.status, DocumentApprovalStep.due_date,
+            DocumentApprovalStep.requested_at, DocumentApprovalStep.completed_at,
+            DocumentApprovalStep.document_id
+        ).join(
+            GovernanceDocument, DocumentApprovalStep.document_id == GovernanceDocument.id
+        ).filter(GovernanceDocument.tenant_id.in_(scoped)).all()
+    except SQLAlchemyError:
+        db.rollback()
+        steps = []
 
     pending_steps = [s for s in steps if s.status == "pending"]
     overdue_steps = [s for s in pending_steps if s.due_date and s.due_date < now]
     docs_awaiting_approval = len({s.document_id for s in pending_steps})
-
     window_90 = now - timedelta(days=90)
-    decided_90 = [s for s in steps if s.status in ("approved", "rejected") and s.completed_at and s.completed_at >= window_90]
+    decided_90 = [s for s in steps if s.status in ("approved", "rejected")
+                  and s.completed_at and s.completed_at >= window_90]
     approved_90 = sum(1 for s in decided_90 if s.status == "approved")
-    rejected_90 = sum(1 for s in decided_90 if s.status == "rejected")
-    approval_rate = round((approved_90 / len(decided_90)) * 100, 1) if decided_90 else None
-
-    cycle_days = [
-        (s.completed_at - s.requested_at).total_seconds() / 86400
-        for s in decided_90 if s.requested_at and s.completed_at >= s.requested_at
-    ]
+    cycle_days = [(s.completed_at - s.requested_at).total_seconds() / 86400
+                  for s in decided_90 if s.requested_at and s.completed_at >= s.requested_at]
     avg_decision_days = round(sum(cycle_days) / len(cycle_days), 1) if cycle_days else None
 
-    approval_health = round((1 - len(overdue_steps) / len(pending_steps)) * 100, 1) if pending_steps else 100.0
+    try:
+        sig_rows = db.query(
+            DocumentSignature.document_id, DocumentSignature.role_type, DocumentSignature.decision
+        ).filter(DocumentSignature.tenant_id.in_(scoped)).all()
+        signoff_assignments = db.query(func.count(DocumentSignoffAssignment.id)).filter(
+            DocumentSignoffAssignment.tenant_id.in_(scoped)).scalar() or 0
+    except SQLAlchemyError:
+        db.rollback()
+        sig_rows, signoff_assignments = [], 0
+    signed_doc_ids = {r.document_id for r in sig_rows
+                      if r.role_type == "approver" and r.decision == "signed"}
+    signatures_total = len(sig_rows)
+    signoff_published = len(signed_doc_ids & published_ids)
 
-    # ---- reviews ---------------------------------------------------------
-    review_universe = [d for d in docs if d.status in ("approved", "published") and d.next_review_date]
+    # ---- reviews ----------------------------------------------------------
+    review_pool = [d for d in docs if d.status in ("approved", "published")]
+    review_universe = [d for d in review_pool if d.next_review_date]
     overdue_reviews = sum(1 for d in review_universe if d.next_review_date < now)
     due_30 = sum(1 for d in review_universe if now <= d.next_review_date <= now + timedelta(days=30))
     due_60 = sum(1 for d in review_universe if now <= d.next_review_date <= now + timedelta(days=60))
     due_90 = sum(1 for d in review_universe if now <= d.next_review_date <= now + timedelta(days=90))
-    review_health = round((1 - overdue_reviews / len(review_universe)) * 100, 1) if review_universe else 100.0
 
-    window_365 = now - timedelta(days=365)
-    completed_reviews = db.query(
-        PolicyReviewHistory.scheduled_date, PolicyReviewHistory.completed_at
-    ).filter(
-        PolicyReviewHistory.tenant_id.in_(scoped),
-        PolicyReviewHistory.review_status == "completed",
-        PolicyReviewHistory.completed_at.isnot(None),
-        PolicyReviewHistory.completed_at >= window_365
-    ).all()
+    try:
+        window_365 = now - timedelta(days=365)
+        completed_reviews = db.query(
+            PolicyReviewHistory.scheduled_date, PolicyReviewHistory.completed_at
+        ).filter(
+            PolicyReviewHistory.tenant_id.in_(scoped),
+            PolicyReviewHistory.review_status == "completed",
+            PolicyReviewHistory.completed_at.isnot(None),
+            PolicyReviewHistory.completed_at >= window_365
+        ).all()
+    except SQLAlchemyError:
+        db.rollback()
+        completed_reviews = []
     with_schedule = [r for r in completed_reviews if r.scheduled_date]
     on_time = sum(1 for r in with_schedule if r.completed_at <= r.scheduled_date)
-    on_time_review_rate = round((on_time / len(with_schedule)) * 100, 1) if with_schedule else None
 
-    # ---- exceptions ------------------------------------------------------
-    exceptions = db.query(
-        PolicyException.status, PolicyException.expiry_date, PolicyException.document_id
-    ).filter(PolicyException.tenant_id.in_(scoped)).all()
-
+    # ---- exceptions --------------------------------------------------------
+    try:
+        exceptions = db.query(
+            PolicyException.status, PolicyException.expiry_date,
+            PolicyException.document_id, PolicyException.closed_at,
+            PolicyException.promoted_risk_id
+        ).filter(PolicyException.tenant_id.in_(scoped)).all()
+    except SQLAlchemyError:
+        db.rollback()
+        exceptions = []
     exc_total = len(exceptions)
     exc_pending = sum(1 for e in exceptions if e.status == "pending_approval")
-    exc_active = sum(1 for e in exceptions if e.status == "approved" and (not e.expiry_date or e.expiry_date >= now))
-    exc_expiring_30 = sum(
-        1 for e in exceptions
-        if e.status == "approved" and e.expiry_date and now <= e.expiry_date <= now + timedelta(days=30)
-    )
-    exc_expired = sum(
-        1 for e in exceptions
-        if e.status == "expired" or (e.status == "approved" and e.expiry_date and e.expiry_date < now)
-    )
+    exc_active = sum(1 for e in exceptions if e.status == "approved"
+                     and (not e.expiry_date or e.expiry_date >= now))
+    exc_expiring_30 = sum(1 for e in exceptions if e.status == "approved" and e.expiry_date
+                          and now <= e.expiry_date <= now + timedelta(days=30))
+    exc_expired = sum(1 for e in exceptions if e.status == "expired"
+                      or (e.status == "approved" and e.expiry_date and e.expiry_date < now))
     exc_attention = exc_pending + exc_expiring_30
-    exception_health = round((1 - exc_attention / exc_total) * 100, 1) if exc_total else 100.0
+    exc_closed_dated = [e for e in exceptions if e.closed_at and e.expiry_date]
+    exc_closed_on_time = sum(1 for e in exc_closed_dated if e.closed_at <= e.expiry_date)
+    exc_promoted = sum(1 for e in exceptions if e.promoted_risk_id)
 
-    # ---- freshness -------------------------------------------------------
-    stale_published = sum(
-        1 for d in published_docs
-        if (d.expiry_date and d.expiry_date < now) or (d.next_review_date and d.next_review_date < now)
-    )
-    freshness = round((1 - stale_published / published_count) * 100, 1) if published_count else 100.0
-    expiring_docs_30 = sum(
-        1 for d in docs
-        if d.status in ("approved", "published") and d.expiry_date and now <= d.expiry_date <= now + timedelta(days=30)
-    )
+    # ---- attestations ------------------------------------------------------
+    try:
+        window_365 = now - timedelta(days=365)
+        att_rows = db.query(
+            AttestationRequest.status, AttestationRequest.due_date,
+            AttestationRequest.completed_at, AttestationRequest.evidence_id
+        ).filter(
+            AttestationRequest.tenant_id.in_(scoped),
+            AttestationRequest.assigned_at >= window_365
+        ).all()
+        active_campaigns = db.query(func.count(AttestationCampaign.id)).filter(
+            AttestationCampaign.tenant_id.in_(scoped),
+            AttestationCampaign.status == "active").scalar() or 0
+    except SQLAlchemyError:
+        db.rollback()
+        att_rows, active_campaigns = [], 0
+    att_total = len(att_rows)
+    att_completed = [a for a in att_rows if a.status == "completed" or a.completed_at]
+    att_open = [a for a in att_rows if a.status in ("pending", "overdue", "escalated") and not a.completed_at]
+    att_overdue = sum(1 for a in att_open if a.status == "overdue" or (a.due_date and a.due_date < now))
+    att_evidence = sum(1 for a in att_completed if a.evidence_id)
 
-    # ---- open gaps (document-driven findings) ----------------------------
-    open_gaps = db.query(func.count(PolicyGapFinding.id)).filter(
-        PolicyGapFinding.tenant_id.in_(scoped),
-        PolicyGapFinding.remediation_status == "open"
-    ).scalar() or 0
+    # ---- committees --------------------------------------------------------
+    try:
+        committees_active = db.query(GovernanceCommittee.id).filter(
+            GovernanceCommittee.tenant_id.in_(scoped),
+            GovernanceCommittee.is_active == True  # noqa: E712
+        ).all()
+        committee_ids = [c.id for c in committees_active]
+        meetings = db.query(
+            CommitteeMeeting.id, CommitteeMeeting.committee_id,
+            CommitteeMeeting.scheduled_date, CommitteeMeeting.status,
+            CommitteeMeeting.quorum_required, CommitteeMeeting.quorum_present
+        ).filter(CommitteeMeeting.committee_id.in_(committee_ids)).all() if committee_ids else []
+        minutes_meeting_ids = {m.meeting_id for m in db.query(MeetingMinutes.meeting_id).filter(
+            MeetingMinutes.meeting_id.in_([m.id for m in meetings])).all()} if meetings else set()
+        actions = db.query(OversightAction.status, OversightAction.due_date).filter(
+            OversightAction.tenant_id.in_(scoped)).all()
+    except SQLAlchemyError:
+        db.rollback()
+        committee_ids, meetings, minutes_meeting_ids, actions = [], [], set(), []
 
-    # ---- performance composite ------------------------------------------
-    components = [
-        {
-            "key": "publishing", "label": "Publishing", "weight": 0.20, "target": 85,
-            "score": publishing_rate, "numerator": published_count, "denominator": active_count,
-            "formula": "published documents / active (non-archived) documents"
-        },
-        {
-            "key": "mapping_coverage", "label": "Coverage", "weight": 0.20, "target": 85,
-            "score": mapping_coverage, "numerator": mapped_count, "denominator": active_count,
-            "formula": "documents linked to >=1 control/risk/framework/asset / active documents"
-        },
-        {
-            "key": "review_health", "label": "Reviews", "weight": 0.20, "target": 85,
-            "score": review_health, "numerator": overdue_reviews, "denominator": len(review_universe),
-            "formula": "1 - (overdue reviews / documents with a review schedule)"
-        },
-        {
-            "key": "approval_health", "label": "Approvals", "weight": 0.15, "target": 85,
-            "score": approval_health, "numerator": len(overdue_steps), "denominator": len(pending_steps),
-            "formula": "1 - (overdue approval steps / pending approval steps)"
-        },
-        {
-            "key": "freshness", "label": "Freshness", "weight": 0.15, "target": 85,
-            "score": freshness, "numerator": stale_published, "denominator": published_count,
-            "formula": "1 - (published documents expired or review-overdue / published documents)"
-        },
-        {
-            "key": "exception_health", "label": "Exceptions", "weight": 0.10, "target": 85,
-            "score": exception_health, "numerator": exc_attention, "denominator": exc_total,
-            "formula": "1 - ((pending + expiring exceptions) / total exceptions)"
-        },
+    committees_count = len(committee_ids)
+    recent_meeting_committees = {m.committee_id for m in meetings
+                                 if m.scheduled_date and m.scheduled_date >= now - timedelta(days=90)
+                                 and m.status != "cancelled"}
+    completed_meetings_180 = [m for m in meetings if m.status == "completed"
+                              and m.scheduled_date and m.scheduled_date >= now - timedelta(days=180)]
+    minuted = sum(1 for m in completed_meetings_180 if m.id in minutes_meeting_ids)
+    open_actions = [a for a in actions if a.status in ("open", "in_progress", "overdue")]
+    overdue_actions = sum(1 for a in open_actions
+                          if a.status == "overdue" or (a.due_date and a.due_date < now))
+    actions_completed = sum(1 for a in actions if a.status == "completed")
+    upcoming_meetings = sum(1 for m in meetings if m.scheduled_date and m.scheduled_date >= now
+                            and m.status == "scheduled")
+    held_quorum = [m for m in meetings if m.status == "completed"
+                   and m.quorum_present is not None and m.quorum_required]
+    quorum_met_meetings = sum(1 for m in held_quorum if m.quorum_present >= m.quorum_required)
+
+    # ---- regulatory changes + feeds -----------------------------------------
+    try:
+        reg_changes = db.query(
+            RegulatoryChange.id, RegulatoryChange.status
+        ).filter(RegulatoryChange.tenant_id.in_(scoped)).all()
+        assessed_change_ids = {r.regulatory_change_id for r in db.query(
+            RegulatoryImpactAssessment.regulatory_change_id
+        ).filter(RegulatoryImpactAssessment.tenant_id.in_(scoped)).all()}
+        reg_tasks = db.query(
+            RegulatoryImplementationTask.status, RegulatoryImplementationTask.due_date
+        ).filter(RegulatoryImplementationTask.tenant_id.in_(scoped)).all()
+        feed_sources = db.query(
+            RegulatoryFeedSource.is_active, RegulatoryFeedSource.last_successful_poll
+        ).filter(RegulatoryFeedSource.tenant_id.in_(scoped)).all()
+        feed_items = db.query(RegulatoryFeedItem.status).filter(
+            RegulatoryFeedItem.tenant_id.in_(scoped)).all()
+    except SQLAlchemyError:
+        db.rollback()
+        reg_changes, assessed_change_ids, reg_tasks = [], set(), []
+        feed_sources, feed_items = [], []
+
+    reg_total = len(reg_changes)
+    reg_resolved = sum(1 for c in reg_changes if c.status in ("completed", "not_applicable"))
+    reg_applicable = [c for c in reg_changes if c.status != "not_applicable"]
+    reg_assessed = sum(1 for c in reg_applicable if c.id in assessed_change_ids)
+    reg_open_tasks = [t for t in reg_tasks if t.status in ("pending", "in_progress", "blocked")]
+    reg_overdue_tasks = sum(1 for t in reg_open_tasks if t.due_date and t.due_date < now)
+    active_sources = [s for s in feed_sources if s.is_active]
+    fresh_sources = sum(1 for s in active_sources if s.last_successful_poll
+                        and s.last_successful_poll >= now - timedelta(days=7))
+    feed_items_total = len(feed_items)
+    feed_items_triaged = sum(1 for i in feed_items if i.status in ("processed", "ignored"))
+    reg_pending_changes = sum(1 for c in reg_changes
+                              if c.status in ("identified", "under_assessment"))
+
+    # ---- gap analysis (Documents detail -> Gap Analysis tab) ----------------
+    try:
+        gap_rows = db.query(PolicyGapFinding.remediation_status).filter(
+            PolicyGapFinding.tenant_id.in_(scoped),
+            PolicyGapFinding.compliance_status.in_(["partially_compliant", "not_addressed"])
+        ).all()
+    except SQLAlchemyError:
+        db.rollback()
+        gap_rows = []
+    open_gaps = sum(1 for g in gap_rows if g.remediation_status == "open")
+    gaps_resolved = sum(1 for g in gap_rows
+                        if g.remediation_status in ("closed", "accepted_risk"))
+
+    # ================= sections ==============================================
+    stale_published = sum(1 for d in published_docs
+                          if (d.expiry_date and d.expiry_date < now)
+                          or (d.next_review_date and d.next_review_date < now))
+    docs_wellformed = sum(1 for d in active_docs
+                          if d.owner_id and d.classification and d.review_cycle_months)
+    docs_with_body = [d for d in active_docs if d.file_path or d.has_content]
+    docs_body_with_statements = sum(1 for d in docs_with_body if d.id in docs_with_statements)
+
+    documents_metrics = [
+        metric("publishing_rate", "Publishing", 0.20, published_count, active_count,
+               "published documents / active documents"),
+        metric("freshness", "Freshness", 0.20, stale_published, published_count,
+               "1 - (published documents expired or review-overdue / published documents)",
+               inverse=True, empty_score=100),
+        metric("metadata_completeness", "Well-formed", 0.15, docs_wellformed, active_count,
+               "documents with owner + classification + review cycle / active documents"),
+        metric("content_readiness", "Has content", 0.15, len(docs_with_body), active_count,
+               "documents with an uploaded file or authored content / active documents"),
+        metric("statement_extraction", "Statements parsed", 0.15,
+               docs_body_with_statements, len(docs_with_body),
+               "documents with parsed policy statements / documents that have content"),
+        metric("gap_remediation", "Gaps remediated", 0.15, gaps_resolved, len(gap_rows),
+               "gap findings closed or risk-accepted / all non-compliant gap findings"),
     ]
-    performance_score = round(sum(c["score"] * c["weight"] for c in components), 1) if total_docs else None
+
+    mappings_metrics = [
+        metric("document_coverage", "Docs mapped", 0.45, mapped_count, active_count,
+               "documents linked to >=1 control/risk/framework/asset / active documents"),
+        metric("statement_coverage", "Statements mapped", 0.35, len(mapped_stmt_ids), len(stmt_ids),
+               "active policy statements with >=1 control mapping / active policy statements"),
+        metric("mapping_quality", "Full-coverage maps", 0.20, stmt_mappings_full, stmt_mappings_total,
+               "statement-control mappings with coverage_type=full / all statement mappings"),
+    ]
+
+    approvals_metrics = [
+        metric("queue_health", "Queue health", 0.40, len(overdue_steps), len(pending_steps),
+               "1 - (overdue approval steps / pending approval steps)",
+               inverse=True, empty_score=100),
+        metric("decision_rate", "Approval rate 90d", 0.30, approved_90, len(decided_90),
+               "steps approved / steps decided, last 90 days"),
+        metric("signoff_integrity", "Signed-off published", 0.30, signoff_published, published_count,
+               "published documents with a recorded approver signature / published documents"),
+    ]
+
+    reviews_metrics = [
+        metric("schedule_coverage", "Schedule coverage", 0.25, len(review_universe), len(review_pool),
+               "approved/published documents with a next review date / approved+published documents"),
+        metric("schedule_health", "Schedule health", 0.45, overdue_reviews, len(review_universe),
+               "1 - (overdue reviews / documents with a review schedule)",
+               inverse=True, empty_score=100),
+        metric("on_time_rate", "On-time reviews 12m", 0.30, on_time, len(with_schedule),
+               "reviews completed on/before their scheduled date / completed reviews, last 12 months"),
+    ]
+
+    exceptions_metrics = [
+        metric("containment", "Containment", 0.60, exc_attention, exc_total,
+               "1 - ((pending + expiring-30d exceptions) / total exceptions)",
+               inverse=True, empty_score=100),
+        metric("closure_timeliness", "Closed on time", 0.40, exc_closed_on_time, len(exc_closed_dated),
+               "exceptions closed on/before their expiry date / closed exceptions with both dates"),
+    ]
+
+    attestations_metrics = [
+        metric("completion_rate", "Completion 12m", 0.50, len(att_completed), att_total,
+               "attestation requests completed / all requests, last 12 months"),
+        metric("overdue_containment", "Overdue containment", 0.30, att_overdue, len(att_open),
+               "1 - (overdue open requests / open requests)", inverse=True, empty_score=100),
+        metric("evidence_linkage", "Evidence linked", 0.20, att_evidence, len(att_completed),
+               "completed attestations linked to evidence / completed attestations"),
+    ]
+
+    committees_metrics = [
+        metric("action_health", "Action health", 0.30, overdue_actions, len(open_actions),
+               "1 - (overdue oversight actions / open oversight actions)",
+               inverse=True, empty_score=100),
+        metric("action_completion", "Actions completed", 0.20, actions_completed, len(actions),
+               "completed oversight actions / all oversight actions"),
+        metric("meeting_cadence", "Meeting cadence", 0.20, len(recent_meeting_committees), committees_count,
+               "active committees that met in the last 90 days / active committees"),
+        metric("minutes_discipline", "Minutes recorded", 0.15, minuted, len(completed_meetings_180),
+               "completed meetings (180d) with minutes recorded / completed meetings (180d)"),
+        metric("quorum_rate", "Quorum met", 0.15, quorum_met_meetings, len(held_quorum),
+               "held meetings that reached their quorum threshold / held meetings with quorum data"),
+    ]
+
+    regulatory_metrics = [
+        metric("change_progress", "Changes resolved", 0.25, reg_resolved, reg_total,
+               "regulatory changes completed or marked not-applicable / all regulatory changes"),
+        metric("assessment_coverage", "Changes assessed", 0.25, reg_assessed, len(reg_applicable),
+               "applicable changes with >=1 impact assessment / applicable changes"),
+        metric("task_health", "Task health", 0.20, reg_overdue_tasks, len(reg_open_tasks),
+               "1 - (overdue implementation tasks / open implementation tasks)",
+               inverse=True, empty_score=100),
+        metric("feed_triage", "Feed items triaged", 0.15, feed_items_triaged, feed_items_total,
+               "feed items processed or ignored / all ingested feed items"),
+        metric("feed_freshness", "Feeds polling", 0.15, fresh_sources, len(active_sources),
+               "active feed sources successfully polled in the last 7 days / active feed sources"),
+    ]
+
+    sections = {
+        "documents": {
+            "key": "documents", "label": "Documents", "weight": 0.18,
+            "score": section_score(documents_metrics), "metrics": documents_metrics,
+            "counts": {"total": total_docs, "active": active_count, "published": published_count,
+                       "by_status": by_status, "by_type": by_type,
+                       "by_classification": by_classification,
+                       "expiring_30d": sum(1 for d in docs if d.status in ("approved", "published")
+                                           and d.expiry_date and now <= d.expiry_date <= now + timedelta(days=30))},
+        },
+        "mappings": {
+            "key": "mappings", "label": "Mappings", "weight": 0.18,
+            "score": section_score(mappings_metrics), "metrics": mappings_metrics,
+            "counts": {"controls": {"links": control_links, "documents": len(control_doc_ids)},
+                       "risks": {"links": risk_links, "documents": len(risk_doc_ids)},
+                       "frameworks": {"links": reg_links, "documents": len(framework_doc_ids)},
+                       "assets": {"links": asset_links, "documents": len(asset_doc_ids)},
+                       "documents_mapped": mapped_count,
+                       "statements": len(stmt_ids), "statements_mapped": len(mapped_stmt_ids),
+                       "published_unmapped": len(published_ids - any_link_ids)},
+        },
+        "approvals": {
+            "key": "approvals", "label": "Approvals & Sign-off", "weight": 0.14,
+            "score": section_score(approvals_metrics), "metrics": approvals_metrics,
+            "counts": {"pending_steps": len(pending_steps), "overdue_steps": len(overdue_steps),
+                       "documents_awaiting": docs_awaiting_approval,
+                       "approved_90d": approved_90, "rejected_90d": len(decided_90) - approved_90,
+                       "avg_decision_days": avg_decision_days,
+                       "signatures": signatures_total, "signoff_assignments": signoff_assignments},
+        },
+        "reviews": {
+            "key": "reviews", "label": "Reviews", "weight": 0.14,
+            "score": section_score(reviews_metrics), "metrics": reviews_metrics,
+            "counts": {"scheduled_documents": len(review_universe), "overdue": overdue_reviews,
+                       "due_30d": due_30, "due_60d": due_60, "due_90d": due_90,
+                       "completed_365d": len(completed_reviews)},
+        },
+        "exceptions": {
+            "key": "exceptions", "label": "Exceptions", "weight": 0.09,
+            "score": section_score(exceptions_metrics), "metrics": exceptions_metrics,
+            "counts": {"total": exc_total, "pending_approval": exc_pending, "active": exc_active,
+                       "expiring_30d": exc_expiring_30, "expired": exc_expired,
+                       "promoted_to_risk": exc_promoted},
+        },
+        "attestations": {
+            "key": "attestations", "label": "Attestations", "weight": 0.09,
+            "score": section_score(attestations_metrics), "metrics": attestations_metrics,
+            "counts": {"requests_12m": att_total, "completed": len(att_completed),
+                       "open": len(att_open), "overdue": att_overdue,
+                       "active_campaigns": active_campaigns},
+        },
+        "committees": {
+            "key": "committees", "label": "Committees", "weight": 0.09,
+            "score": section_score(committees_metrics), "metrics": committees_metrics,
+            "counts": {"active_committees": committees_count, "upcoming_meetings": upcoming_meetings,
+                       "open_actions": len(open_actions), "overdue_actions": overdue_actions,
+                       "actions_completed": actions_completed, "actions_total": len(actions),
+                       "quorum_met_meetings": quorum_met_meetings, "held_with_quorum": len(held_quorum)},
+        },
+        "regulatory": {
+            "key": "regulatory", "label": "Regulatory", "weight": 0.09,
+            "score": section_score(regulatory_metrics), "metrics": regulatory_metrics,
+            "counts": {"changes_total": reg_total, "changes_resolved": reg_resolved,
+                       "changes_pending": reg_pending_changes,
+                       "open_tasks": len(reg_open_tasks), "overdue_tasks": reg_overdue_tasks,
+                       "feed_sources_active": len(active_sources),
+                       "feed_items_new": feed_items_total - feed_items_triaged},
+        },
+    }
+
+    components = [{"key": s["key"], "label": s["label"], "score": s["score"],
+                   "weight": s["weight"], "target": 85} for s in sections.values()]
+    scored = [c for c in components if c["score"] is not None]
+    weight_sum = sum(c["weight"] for c in scored)
+    performance_score = (round(sum(c["score"] * c["weight"] for c in scored) / weight_sum, 1)
+                         if scored and weight_sum else None)
     if performance_score is None:
         grade = None
     elif performance_score >= 85:
@@ -875,71 +1194,28 @@ def get_documents_overview(
     else:
         grade = "poor"
 
+    expiring_docs_30 = sections["documents"]["counts"]["expiring_30d"]
     return {
         "as_of": now.isoformat(),
-        "documents": {
-            "total": total_docs,
-            "active": active_count,
-            "published": published_count,
-            "publishing_rate_percent": publishing_rate,
-            "by_status": by_status,
-            "by_type": by_type,
-            "by_classification": by_classification,
-        },
-        "mappings": {
-            "controls": {"links": control_links, "documents": len(control_doc_ids)},
-            "risks": {"links": risk_links, "documents": len(risk_doc_ids)},
-            "frameworks": {"links": framework_links, "documents": len(framework_doc_ids)},
-            "assets": {"links": asset_links, "documents": len(asset_doc_ids)},
-            "documents_mapped": mapped_count,
-            "coverage_percent": mapping_coverage,
-        },
-        "approvals": {
-            "pending_steps": len(pending_steps),
-            "overdue_steps": len(overdue_steps),
-            "documents_awaiting": docs_awaiting_approval,
-            "approved_90d": approved_90,
-            "rejected_90d": rejected_90,
-            "approval_rate_percent": approval_rate,
-            "avg_decision_days": avg_decision_days,
-            "health_percent": approval_health,
-        },
-        "reviews": {
-            "scheduled_documents": len(review_universe),
-            "overdue": overdue_reviews,
-            "due_30d": due_30,
-            "due_60d": due_60,
-            "due_90d": due_90,
-            "completed_365d": len(completed_reviews),
-            "on_time_rate_percent": on_time_review_rate,
-            "health_percent": review_health,
-        },
-        "exceptions": {
-            "total": exc_total,
-            "pending_approval": exc_pending,
-            "active": exc_active,
-            "expiring_30d": exc_expiring_30,
-            "expired": exc_expired,
-            "attention": exc_attention,
-            "health_percent": exception_health,
-        },
-        "freshness": {
-            "published": published_count,
-            "stale": stale_published,
-            "expiring_documents_30d": expiring_docs_30,
-            "percent": freshness,
-        },
+        "sections": sections,
         "attention_queue": {
             "documents_awaiting_approval": docs_awaiting_approval,
             "overdue_reviews": overdue_reviews,
             "expiring_documents_30d": expiring_docs_30,
             "exceptions_attention": exc_attention,
             "open_gaps": open_gaps,
-            "total": docs_awaiting_approval + overdue_reviews + expiring_docs_30 + exc_attention + open_gaps,
+            "overdue_attestations": att_overdue,
+            "overdue_actions": overdue_actions,
+            "regulatory_overdue_tasks": reg_overdue_tasks,
+            "feed_items_untriaged": feed_items_total - feed_items_triaged,
+            "total": (docs_awaiting_approval + overdue_reviews + expiring_docs_30
+                      + exc_attention + open_gaps + att_overdue + overdue_actions
+                      + reg_overdue_tasks),
         },
         "performance": {
             "score": performance_score,
             "grade": grade,
+            "formula": "weighted mean of section scores: documents 18% + mappings 18% + approvals 14% + reviews 14% + exceptions 9% + attestations 9% + committees 9% + regulatory 9%",
             "components": components,
         },
     }

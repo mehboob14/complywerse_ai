@@ -12,7 +12,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Shield, Loader2, Upload, CheckCircle2, XCircle, MinusCircle, Clock,
-  ChevronRight, Search, ExternalLink, Server, Plus, X, Paperclip, FileText, Trash2,
+  ChevronRight, Search, Server, Plus, X, Paperclip, FileText, Trash2,
 } from 'lucide-react';
 import apiClient, { assetsApi } from '@/lib/api';
 
@@ -463,11 +463,11 @@ export default function ASVSAssessmentTab() {
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="text-[13px] leading-snug text-slate-800">{it.control_description}</p>
-                                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10.5px] text-slate-400">
-                                  {it.subdomain_name && <span className="font-medium text-slate-500">{it.subdomain_name}</span>}
-                                  {m.cwe && <a href={`https://cwe.mitre.org/data/definitions/${m.cwe.split(',')[0].trim()}.html`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 hover:text-slate-600">CWE-{m.cwe} <ExternalLink className="h-2.5 w-2.5" /></a>}
-                                  {m.nist && <span>NIST {m.nist}</span>}
-                                </div>
+                                {it.subdomain_name && (
+                                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10.5px] text-slate-400">
+                                    <span className="font-medium text-slate-500">{it.subdomain_name}</span>
+                                  </div>
+                                )}
                               </div>
                               {oos ? (
                                 <div className="flex shrink-0 items-center">

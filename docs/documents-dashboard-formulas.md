@@ -1,199 +1,168 @@
-# Documents Dashboard — Formula Specification
+# Documents Dashboard — Formula Specification (v2, per-section)
 
-**Scope:** Governance → Documents module. This document is the single reference for how the
-Documents Overview dashboard (`/governance`) is calculated: what each page in the module
-carries, what values it produces, and which formula each value feeds.
+**Scope:** Governance → Documents module. Each functional area (page) of the module is a
+**section** with its own formulas computed from that area's own entities. Section scores
+roll up into one module performance score. Nothing is aggregated "on the surface" — every
+number is a ratio over that section's real rows.
 
 **Backend source of truth:** `GET /governance/dashboard/documents-overview`
-(`backend/grc/modules/governance/routers/dashboard.py`). Every score in the payload is
-returned with its `numerator`, `denominator`, `weight`, `target`, and `formula` string —
-the frontend renders these values and never computes its own math.
+(`backend/grc/modules/governance/routers/dashboard.py`). Every metric returns
+`numerator / denominator / weight / target / formula`; the frontend only renders.
+
+**Scoring rules**
+- *Achievement* metrics (coverage, completion): empty universe → `null`, excluded, and the
+  section re-normalizes the remaining weights.
+- *Health* metrics (`1 − bad/universe`): empty universe → `100` (no obligations = healthy).
+- `section.score` = weighted mean of its non-null metrics.
+- `performance.score` = weighted mean of non-null section scores. Grade: ≥85 excellent ·
+  ≥70 good · ≥50 fair · <50 poor. Target per metric: 85.
 
 ---
 
 ## Table of Contents
 
-1. [Module map — pages and what they carry](#1-module-map)
-2. [Value inventory — what each page produces](#2-value-inventory)
-3. [Formula catalog](#3-formula-catalog)
-   - 3.1 Publishing Rate
-   - 3.2 Mapping Coverage
-   - 3.3 Approval Health / Approval Rate / Avg Decision Time
-   - 3.4 Review Health / On-Time Review Rate
-   - 3.5 Exception Health
-   - 3.6 Freshness
-   - 3.7 Attention Queue
-   - 3.8 Documents Performance Score (composite)
-4. [Lineage — how values flow into the Overview page](#4-lineage)
-5. [Values not yet in a formula (candidates)](#5-candidates)
-6. [Roll-up plan (committees → main dashboard)](#6-roll-up-plan)
+1. [Section: Documents](#1-documents) — 18%
+2. [Section: Mappings](#2-mappings) — 18%
+3. [Section: Approvals & Sign-off](#3-approvals) — 14%
+4. [Section: Reviews](#4-reviews) — 14%
+5. [Section: Exceptions](#5-exceptions) — 9%
+6. [Section: Attestations](#6-attestations) — 9%
+7. [Section: Committees](#7-committees) — 9%
+8. [Section: Regulatory](#8-regulatory) — 9%
+9. [Attention Queue](#9-attention-queue)
+10. [Module Performance Score](#10-performance)
+11. [Roll-up plan](#11-roll-up)
 
 ---
 
-## 1. Module map
+## 1. Documents (weight 18%) <a name="1-documents"></a>
+*Pages: Document Register, Document Detail. Tables: `grc_governance_documents`, `grc_policy_statements`.*
 
-Every page under Governance that creates or changes the data the dashboard measures.
+| Metric | Weight | Formula |
+|---|---|---|
+| Publishing | .20 | published documents ÷ active (non-archived) documents |
+| Freshness | .20 | 1 − (published docs expired or review-overdue ÷ published docs) |
+| Well-formed | .15 | docs with owner + classification + review cycle ÷ active docs |
+| Has content | .15 | docs with an uploaded file or authored content ÷ active docs |
+| Statements parsed | .15 | docs with parsed policy statements ÷ docs that have content |
+| Gaps remediated | .15 | gap findings closed or risk-accepted ÷ all non-compliant gap findings |
 
-| # | Page | Route | What it carries | Mutations that move dashboard numbers |
-|---|------|-------|-----------------|----------------------------------------|
-| 1 | **Overview (the dashboard)** | `/governance` | Consumes everything below; renders the formulas | none (read-only) |
-| 2 | **Document Register** | `/governance/documents` | The portfolio: title, code, type, status, owner, version, classification, effective/expiry dates, review cycle | Create / edit / delete / upload / publish / AI-draft — changes `status`, `doc_type`, `expiry_date`, `next_review_date` |
-| 3 | **Document Detail** | `/governance/documents/[id]` | One document: viewer, statements, control links, gap findings, review history | Parse statements, run gap analysis, accept-risk / fix findings, submit for review, publish — changes `status`, gap `remediation_status`, version |
-| 4 | **My Approvals** | `/governance/approvals` | Items awaiting the current user's sign-off | Approve / reject / delegate — changes `DocumentApprovalStep.status`, `completed_at` |
-| 5 | **Workflows** | `/governance/workflows` | Approval templates + all pending/overdue steps | Approve / reject steps; template edits set `due_date` behaviour (timeout_days) |
-| 6 | **Reviews** | `/governance/reviews` | Review schedule: next_review_date, last_reviewed_at, cycle, overdue/upcoming | Complete review — writes `PolicyReviewHistory` row, resets `next_review_date` |
-| 7 | **Review Calendar** | `/governance/reviews/calendar` | Same review data by month/day | none (navigation view) |
-| 8 | **Mappings** | `/governance/mappings` | Document ↔ control links (plus risk/regulatory/asset links per doc) | Link / unlink control — adds or removes `DocumentControlLink` rows |
-| 9 | **Exceptions** | `/governance/exceptions` | Policy exceptions: status, priority, justification, expiry | Create / submit / approve / reject / revoke — changes `PolicyException.status`, `expiry_date` |
-| 10 | **Attestations** | `/governance/attestations` (+ campaigns, my) | Campaigns, pending/overdue attestations, completion rate | Complete attestation, link to evidence — changes attestation status |
+## 2. Mappings (weight 18%) <a name="2-mappings"></a>
+*Pages: Mappings, Detail→Controls tab, statement auto-map. Tables: `grc_document_control_links`,
+`grc_document_risk_links`, `grc_document_regulatory_links`, `grc_document_asset_links`,
+`grc_statement_control_mappings`; doc columns `framework_ids`, `applicable_framework_ids` (new).*
 
-Backing tables (all tenant-scoped): `grc_governance_documents`, `grc_document_approval_steps`,
-`grc_policy_review_history`, `grc_document_control_links`, `grc_document_risk_links`,
-`grc_document_regulatory_links`, `grc_document_asset_links`, `grc_policy_exceptions`,
-`grc_policy_gap_findings`.
+| Metric | Weight | Formula |
+|---|---|---|
+| Docs mapped | .45 | active docs linked to ≥1 control/risk/framework/asset ÷ active docs |
+| Statements mapped | .35 | active statements with ≥1 control mapping ÷ active statements |
+| Full-coverage maps | .20 | statement mappings with `coverage_type=full` ÷ all statement mappings |
+
+## 3. Approvals & Sign-off (weight 14%) <a name="3-approvals"></a>
+*Pages: My Approvals, Workflows, the new sign-off flow. Tables: `grc_document_approval_steps`,
+`grc_document_signatures`, `grc_document_signoff_assignments` (new).*
+
+| Metric | Weight | Formula |
+|---|---|---|
+| Queue health | .40 | 1 − (overdue pending steps ÷ pending steps) |
+| Approval rate 90d | .30 | steps approved ÷ steps decided (last 90 days) |
+| Signed-off published | .30 | published docs with a recorded approver signature ÷ published docs |
+
+Info counts: avg decision days (mean `completed_at − requested_at`, 90d), signatures,
+sign-off assignments, docs awaiting.
+
+## 4. Reviews (weight 14%) <a name="4-reviews"></a>
+*Pages: Reviews, Review Calendar. Tables: doc review columns, `grc_policy_review_history`.*
+
+| Metric | Weight | Formula |
+|---|---|---|
+| Schedule coverage | .25 | approved/published docs **with** a next review date ÷ approved+published docs |
+| Schedule health | .45 | 1 − (overdue reviews ÷ docs with a review schedule) |
+| On-time reviews 12m | .30 | reviews completed on/before scheduled date ÷ completed reviews (12 months) |
+
+Info counts: due 30/60/90 buckets, completed last 12 months.
+
+## 5. Exceptions (weight 9%) <a name="5-exceptions"></a>
+*Page: Exceptions. Table: `grc_policy_exceptions` (+ new `closed_at`, `promoted_risk_id`).*
+
+| Metric | Weight | Formula |
+|---|---|---|
+| Containment | .60 | 1 − ((pending + expiring-30d) ÷ total exceptions) |
+| Closed on time | .40 | exceptions closed on/before expiry ÷ closed exceptions with both dates |
+
+Info counts: active, expired, promoted-to-risk.
+
+## 6. Attestations (weight 9%) <a name="6-attestations"></a>
+*Pages: Attestations, Campaigns, My. Tables: `grc_attestation_campaigns`, `grc_attestation_requests`.*
+
+| Metric | Weight | Formula |
+|---|---|---|
+| Completion 12m | .50 | completed requests ÷ all requests (assigned last 12 months) |
+| Overdue containment | .30 | 1 − (overdue open requests ÷ open requests) |
+| Evidence linked | .20 | completed attestations linked to evidence ÷ completed attestations |
+
+## 7. Committees (weight 9%) <a name="7-committees"></a>
+*Pages: Committees, Meetings, Actions. Tables: `grc_governance_committees`,
+`grc_committee_meetings`, `grc_meeting_minutes`, `grc_oversight_actions`.*
+
+| Metric | Weight | Formula |
+|---|---|---|
+| Action health | .30 | 1 − (overdue oversight actions ÷ open oversight actions) |
+| Actions completed | .20 | completed oversight actions ÷ all oversight actions |
+| Meeting cadence | .20 | active committees that met in last 90 days ÷ active committees |
+| Minutes recorded | .15 | completed meetings (180d) with minutes ÷ completed meetings (180d) |
+| Quorum met | .15 | held meetings that reached quorum ÷ held meetings with quorum data |
+
+**Committee page dashboard** (`GET /governance/committees/overview`) uses the same data with
+its own headline formulas: actions `pct_done` = completed ÷ total; **avg attendance** =
+mean(attendees ÷ committee members, capped 100%) over held meetings (falls back to the
+quorum threshold as base when a committee has no member records — the old
+`quorum_present ÷ quorum_required` average could exceed 100%); **quorum met rate** =
+meetings reaching quorum ÷ held meetings with quorum data. Per-member "top performers":
+completion = completed ÷ assigned, on-time = completed on/before due ÷ completed.
+
+*(Still deferred: voting outcomes and charter validity — candidates for the committees
+deep-dive.)*
+
+## 8. Regulatory (weight 9%) <a name="8-regulatory"></a>
+*Pages: Regulatory Changes, Regulatory Feeds. Tables: `grc_regulatory_changes`,
+`grc_regulatory_impact_assessments`, `grc_regulatory_implementation_tasks`,
+`grc_regulatory_feed_sources`, `grc_regulatory_feed_items`.*
+
+| Metric | Weight | Formula |
+|---|---|---|
+| Changes resolved | .25 | changes completed or not-applicable / all regulatory changes |
+| Changes assessed | .25 | applicable changes with >=1 impact assessment / applicable changes |
+| Task health | .20 | 1 - (overdue implementation tasks / open implementation tasks) |
+| Feed items triaged | .15 | feed items processed or ignored / all ingested feed items |
+| Feeds polling | .15 | active sources successfully polled in last 7 days / active sources |
+
+## 9. Attention Queue <a name="9-attention-queue"></a>
+Absolute counts, each linking to the page that clears it:
+```
+total = docs awaiting approval + overdue reviews + docs expiring 30d
+      + exception attention + open gap findings + overdue attestations
+      + overdue oversight actions + overdue regulatory tasks
+```
+
+## 10. Module Performance Score <a name="10-performance"></a>
+```
+score = Documents×18% + Mappings×18% + Approvals×14% + Reviews×14%
+      + Exceptions×9% + Attestations×9% + Committees×9% + Regulatory×9%
+```
+Sections with no data are excluded and weights re-normalize. This score is what the
+Governance card on the future main dashboard will display.
+
+## 11. Roll-up plan <a name="11-roll-up"></a>
+1. **Documents module** (this doc) — ✅ implemented, per-section.
+2. **Committees dashboard** — dedicated page: quorum, voting outcomes, attendance,
+   charter lifecycle; its score replaces/augments the committees section here.
+3. **Main dashboard** — module cards read each module's `performance.score` +
+   attention counts; Overall Readiness = weighted blend of module scores. No metric is
+   recomputed at the top level.
 
 ---
 
-## 2. Value inventory
-
-The raw values each page produces, and the formula(s) that consume them.
-
-| Value | Produced by (page) | Stored in (table.column) | Consumed by formula |
-|-------|--------------------|--------------------------|---------------------|
-| Document status (draft → published → expired/archived) | Register, Detail, Approvals | `governance_documents.status` | 3.1 Publishing, 3.6 Freshness, 3.4 Review universe |
-| Document type / classification | Register | `.doc_type`, `.classification` | Portfolio Mix donut (counts only) |
-| Expiry date | Register | `.expiry_date` | 3.6 Freshness, 3.7 Attention (expiring 30d) |
-| Next review date + cycle | Register, Reviews | `.next_review_date`, `.review_cycle_months` | 3.4 Review Health, 3.7 Attention |
-| Control links | Mappings, Detail (Controls tab) | `document_control_links` | 3.2 Mapping Coverage |
-| Risk links | Mappings | `document_risk_links` | 3.2 Mapping Coverage |
-| Framework links / framework_ids | Mappings, Register (create) | `document_regulatory_links`, `.framework_ids` | 3.2 Mapping Coverage |
-| Asset links | Mappings | `document_asset_links` | 3.2 Mapping Coverage |
-| Approval step status / due date / timestamps | Approvals, Workflows | `document_approval_steps.status,.due_date,.requested_at,.completed_at` | 3.3 all approval metrics, 3.7 Attention |
-| Review completion events | Reviews (Complete Review) | `policy_review_history.review_status,.scheduled_date,.completed_at` | 3.4 On-Time Review Rate |
-| Exception status / expiry | Exceptions | `policy_exceptions.status,.expiry_date` | 3.5 Exception Health, 3.7 Attention |
-| Gap findings (open) | Detail (Gap Analysis tab) | `policy_gap_findings.remediation_status` | 3.7 Attention (open gaps) |
-| Attestation completion rate | Attestations | attestation campaign tables | shown on Overview (Health Snapshot ring); **not yet** in composite — see §5 |
-
----
-
-## 3. Formula catalog
-
-All ratios are percentages rounded to 1 decimal. "Active documents" = status ≠ `archived`.
-Health-style metrics with an empty universe (no obligations) = **100** by definition;
-achievement-style metrics with an empty universe = **0**.
-
-### 3.1 Publishing Rate
-```
-publishing_rate = published_documents / active_documents × 100
-```
-Says how much of the governed portfolio is actually live. Weight in composite: **0.20**.
-
-### 3.2 Mapping Coverage
-```
-mapping_coverage = documents_with_≥1_link / active_documents × 100
-link = control link ∪ risk link ∪ framework link (incl. framework_ids) ∪ asset link
-```
-A document that governs nothing it can be traced to is uncovered. Weight: **0.20**.
-Per-type detail (controls/risks/frameworks/assets → link count + distinct docs) feeds the
-**Document Linkage** card.
-
-### 3.3 Approvals
-```
-approval_health   = (1 − overdue_pending_steps / pending_steps) × 100      (100 if no pending)
-approval_rate     = approved_steps / decided_steps × 100                    (window: last 90 days)
-avg_decision_days = mean(completed_at − requested_at)                       (window: last 90 days)
-```
-`overdue` = pending step whose `due_date` < now. Health weight: **0.15**. Rate and cycle time
-feed the **Workflow Performance** card.
-
-### 3.4 Reviews
-```
-review_health       = (1 − overdue_reviews / scheduled_documents) × 100     (100 if none scheduled)
-on_time_review_rate = reviews_completed_on_or_before_schedule / completed_reviews × 100   (window: 12 months)
-```
-`scheduled_documents` = approved/published docs with a `next_review_date`.
-Health weight: **0.20**. Due-in-30/60/90 buckets feed Workflow Performance + Attention Queue.
-
-### 3.5 Exception Health
-```
-exception_attention = pending_approval + approved_expiring_within_30d
-exception_health    = (1 − exception_attention / total_exceptions) × 100    (100 if none)
-```
-Weight: **0.10**.
-
-### 3.6 Freshness
-```
-stale     = published docs that are expired (expiry_date < now) OR review-overdue
-freshness = (1 − stale / published_documents) × 100                          (100 if none published)
-```
-Weight: **0.15**.
-
-### 3.7 Attention Queue (absolute counts, not a ratio)
-```
-attention_total = documents_awaiting_approval + overdue_reviews
-                + documents_expiring_30d + exception_attention + open_gap_findings
-```
-Each addend is one segment of the Attention Queue donut and links to the page that clears it
-(Approvals, Reviews, Register, Exceptions, Detail→Gap Analysis).
-
-### 3.8 Documents Performance Score (composite)
-```
-score = 0.20·publishing + 0.20·mapping_coverage + 0.20·review_health
-      + 0.15·approval_health + 0.15·freshness + 0.10·exception_health
-
-grade: ≥85 excellent · ≥70 good · ≥50 fair · <50 poor
-target per component: 85 (returned by the backend, shown on the radar)
-```
-This score is what the **Governance card on the future main dashboard** will display.
-
----
-
-## 4. Lineage
-
-How a user action travels to the Overview page:
-
-```
-Register/Detail (publish doc)      → documents.status            → 3.1 Publishing  ┐
-Mappings (link control/risk/…)     → document_*_links            → 3.2 Coverage    │
-Approvals/Workflows (approve step) → approval_steps.status/dates → 3.3 Approvals   ├─ 3.8 Performance Score
-Reviews (complete review)          → review_history + next_review→ 3.4 Reviews     │      │
-Exceptions (approve/expire)        → policy_exceptions.status    → 3.5 Exceptions  │      ▼
-Register (expiry passes)           → documents.expiry_date       → 3.6 Freshness   ┘  Overview page:
-Detail (gap analysis run)          → gap_findings (open)         → 3.7 Attention ───► KPIs · donuts · radar
-                                                                                      linkage · workflow cards
-```
-
-Overview widget → formula mapping:
-
-| Overview widget | Data used |
-|---|---|
-| KPI row (Documents / Published / Pending Flow / Coverage) | totals, 3.1, pending steps, 3.2 |
-| Document Status donut | `by_status` counts |
-| Portfolio Mix donut | `by_type` counts |
-| Attention Queue donut | 3.7 (five segments) |
-| Governance Posture Radar | the six components of 3.8 (score vs target) |
-| Health Snapshot rings | 3.1, 3.2, attestation completion, 3.8 score+grade |
-| Document Linkage card | 3.2 per-type detail |
-| Workflow Performance card | 3.3 + 3.4 detail (rate, cycle days, on-time, due buckets) |
-
----
-
-## 5. Values not yet in a formula (candidates)
-
-Present in the module but not yet feeding the composite — candidates for a later iteration:
-
-- **Attestation completion rate** — shown on the Overview ring but not weighted into 3.8.
-- **Gap remediation progress** (`closed / total findings`) — endpoint exists (`/remediation-progress`).
-- **Policy statement count / parsed coverage** — % of documents with parsed statements.
-- **Version churn** (versions per doc per year) — signal of stability vs. thrash.
-- **Owner load** (`/owner-statistics`) — docs per owner, unassigned count.
-- **Regulatory change assessments** — belongs to the regulatory module's own step.
-
-## 6. Roll-up plan
-
-1. **Documents** (this document) — ✅ implemented.
-2. **Committees** — same pattern: one overview endpoint with formulas over meetings held vs
-   scheduled, quorum rate, open/overdue oversight actions, charter validity, attendance/votes.
-3. **Main dashboard** — each module card shows its module's composite score (Governance card
-   = 3.8 score + attention counts); "Overall Readiness" = weighted blend of module scores.
-   Modules are never recomputed at the main-dashboard level — they expose one endpoint each.
+*Demo data:* `backend/seed_demo_governance_docs.py seed|cleanup` — tagged `DEMO-`/`[DEMO]`,
+covers every section (documents, links, statements, sign-offs, reviews, exceptions,
+attestations, committee with meetings/minutes/actions).

@@ -119,5 +119,6 @@ grc-frontend/public/library_data.json
 grc-frontend/public/stage4_governance.json
 grc-frontend/src/app/library-preview/
 grc-frontend/src/app/redesign-preview/
-grc-frontend/src/components/compliance/_redesign/
+# NOTE: _redesign/ holds PRODUCTION assessment-module components (imported by the
+# assessments pages, NcaTab, PDPLAssessmentTab, etc.) — it must be tracked, not ignored.
 grc-frontend/**/*.tsx.bak

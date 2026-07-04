@@ -82,7 +82,15 @@ export function AnimatedModal({
       className={`fixed inset-0 z-[60] flex items-center justify-center p-4 transition-opacity duration-200 ${show ? 'opacity-100' : 'opacity-0'}`}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="absolute inset-0 bg-slate-900/50" aria-hidden />
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundColor: 'rgba(15, 23, 42, 0.45)',
+          backdropFilter: 'blur(3px)',
+          WebkitBackdropFilter: 'blur(3px)',
+        }}
+        aria-hidden
+      />
       <div
         role="dialog"
         aria-modal="true"

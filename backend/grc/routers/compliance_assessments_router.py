@@ -694,12 +694,40 @@ def _normalized_header(value: object) -> str:
     return ''.join(ch.lower() for ch in str(value or "").strip() if ch.isalnum())
 
 
+def _strip_reference_links(text: object) -> str:
+    """Strip embedded reference links / URLs from a requirement string so the
+    dashboards show clean control text. The ASVS export appends OWASP
+    Proactive-Controls references like " ([C1](https://owasp.org/...))" to each
+    requirement; those are noise in the UI."""
+    t = str(text or "")
+    # Drop a trailing parenthetical made up of markdown links, e.g.
+    # " ([C1](url), [C2](url))".
+    t = re.sub(r"\s*\(\s*(?:\[[^\]]*\]\([^)]*\)[,;\s]*)+\)", "", t)
+    # Drop any remaining markdown links and bare URLs.
+    t = re.sub(r"\[[^\]]*\]\([^)]*\)", "", t)
+    t = re.sub(r"https?://\S+", "", t)
+    # Tidy leftover empty brackets/parens and doubled whitespace.
+    t = re.sub(r"\(\s*[,;]?\s*\)", "", t)
+    t = re.sub(r"\s{2,}", " ", t).strip()
+    return t
+
+
 # Friendly names for the workbook templates, used in upload/reupload guard
 # messages so a mismatch reads "This is a Mobile App Security assessment …".
 _FORMAT_LABELS = {
     "asvs_checklist": "OWASP ASVS",
     "mobile_app_security": "Mobile App Security (OWASP MASVS)",
     "owasp_v4_testing_checklist": "OWASP Testing",
+    "csir_maturity": "CSIR Maturity",
+    "cti_maturity": "CTI Maturity",
+    "itsecops_maturity": "IT Security Operations Maturity",
+    "incident_maturity": "Incident Management Maturity",
+    "kpi_report": "Cyber Security KPI Report",
+    "dpia_pia": "DPIA / PIA",
+    "nca_vuln_register": "NCA Vulnerability Register",
+    "nca_audit_register": "NCA Cybersecurity Audit Plan",
+    "nca_risk_register": "NCA Cybersecurity Risk Register",
+    "nca_dcc_tool": "NCA DCC-1:2022 Assessment",
     "pdpl_assessment_toolkit": "Saudi PDPL",
     "nca_container": "NCA",
     "digital_ops_maturity": "Digital Operations Maturity",
@@ -794,7 +822,7 @@ def parse_asvs_checklist_workbook(wb) -> tuple[List[dict], dict]:
                 current_area = str(area_raw).strip()
 
             control_id = str(control_id_raw or "").strip()
-            requirement = str(requirement_raw or "").strip()
+            requirement = _strip_reference_links(requirement_raw)
             if not control_id and not requirement:
                 continue
             if not requirement:
@@ -1390,7 +1418,11 @@ def _status_from_pdpl(maturity: object, status_text: object) -> str:
 
 # The Assessment + Client Profile + Remediation Plan trio is unique to the PDPL
 # toolkit; no other supported template carries all three.
-PDPL_SIGNAL_SHEETS = {"assessment", "clientprofile", "remediationplan"}
+# Distinctive sheet signature: an Assessment + Remediation Plan pair. (The
+# toolkit ships in variants — some have a separate 'Client Profile' sheet, the
+# bundled reference uses a 'Read Me' instead — so we don't require Client
+# Profile. The unique 'PDPL Ref.' column checked below is the real signature.)
+PDPL_SIGNAL_SHEETS = {"assessment", "remediationplan"}
 PDPL_ASSESSMENT_KEYS = ["Control ID", "Domain", "PDPL Ref.", "Maturity (0-5)", "Compliance Status"]
 
 
@@ -1533,34 +1565,46 @@ def parse_owasp_v4_checklist_workbook(wb) -> tuple[List[dict], dict]:
     current_area = "OWASP Testing"
     code_pattern = re.compile(r"^OTG-[A-Z0-9-]+$", re.IGNORECASE)
 
-    for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
+    # Iterate from the top: each WSTG category is introduced by a row whose first
+    # cell is the category name and whose "Test Name" column literally reads
+    # "Test Name" (a repeated sub-header). Test rows carry an OTG-… code.
+    for row in ws.iter_rows(min_row=1, values_only=True):
         if not row or not any(cell not in (None, "") for cell in row):
             continue
 
         code_val = str(row[code_idx] or "").strip() if code_idx < len(row) else ""
         test_name = str(row[name_idx] or "").strip() if name_idx < len(row) else ""
+
+        # Category header row (e.g. "Authentication Testing" | "Test Name" | …).
+        if code_val and not code_pattern.match(code_val) and _normalized_header(test_name) == "testname":
+            current_area = code_val
+            continue
+        # Only OTG-coded rows are real tests; skip title/blank/summary rows.
+        if not code_pattern.match(code_val):
+            continue
+
         description = str(row[desc_idx] or "").strip() if desc_idx < len(row) else ""
         tools = str(row[tools_idx] or "").strip() if tools_idx < len(row) else ""
         result = row[result_idx] if result_idx < len(row) else None
         remark = str(row[remark_idx] or "").strip() if remark_idx < len(row) else ""
 
-        if code_val and not code_pattern.match(code_val) and not test_name and not description:
-            current_area = code_val
-            continue
-        if not test_name and not description:
-            continue
-
-        control_description = test_name
+        # Keep the fields separate so the dashboard can render tools as chips and
+        # the description as subtext. Desc goes last (it may contain '|').
+        remark_parts = []
+        if tools:
+            remark_parts.append(f"Tools: {tools}")
+        if remark:
+            remark_parts.append(f"Note: {remark}")
         if description:
-            control_description = f"{test_name}. {description}" if test_name else description
+            remark_parts.append(f"Desc: {description}")
 
         items.append({
-            "item_number": code_val if code_pattern.match(code_val) else str(len(items) + 1),
+            "item_number": code_val,
             "area_domain": current_area,
-            "control_description": control_description,
+            "control_description": test_name or description or code_val,
             "compliance_status": _status_from_owasp_result(result),
             "evidence_reference": tools or None,
-            "remarks": remark or None,
+            "remarks": " | ".join(remark_parts) if remark_parts else None,
         })
 
     metadata = {
@@ -1574,6 +1618,791 @@ def parse_owasp_v4_checklist_workbook(wb) -> tuple[List[dict], dict]:
             "evidence_reference",
             "remarks",
         ],
+    }
+    return items, metadata
+
+
+# =========================================================================== #
+# Cyber Security maturity assessment tools (CREST / MMAT family)
+# Four distinct workbooks — CSIR (Incident Response high-level), CTI (Threat
+# Intelligence), IT Security Operations, and Incident Management (detailed) —
+# all rate a hierarchy of questions/capabilities on a 1-5 CMMI maturity scale.
+# Each is detected as its own format so it stays an independent assessment and
+# maps to its own nav tab, but all normalise to the same maturity item shape
+# and render through the shared MaturityAssessmentTab dashboard.
+# =========================================================================== #
+
+def _cell(row, idx):
+    return str(row[idx] or "").strip() if row is not None and 0 <= idx < len(row) else ""
+
+
+def _maturity_int(value) -> Optional[int]:
+    try:
+        n = int(float(str(value).strip()))
+        return n if 1 <= n <= 5 else None
+    except Exception:
+        return None
+
+
+def detect_maturity_kind(wb) -> Optional[str]:
+    """Return 'csir' | 'cti' | 'itsecops' | 'incident' for a recognised CREST
+    maturity workbook, else None. Distinguished by sheet names + the tool title
+    so each of the four stays a separate assessment/tab."""
+    try:
+        sheets = set(wb.sheetnames)
+    except Exception:
+        return None
+    if "1. Current and Target States" in sheets:
+        return "itsecops"
+    if {"Assessment - Phase 1", "Content"} & sheets and any(s.startswith("Assessment - Phase") for s in sheets):
+        return "incident"
+    if any(s.startswith("Assess ") for s in sheets) and "content" in {s.lower() for s in sheets}:
+        return "cti"
+    if "Assessment" in sheets and "MMAT ref" in sheets:
+        return "csir"
+    return None
+
+
+def detect_cyber_maturity_format(wb) -> bool:
+    return detect_maturity_kind(wb) is not None
+
+
+def _parse_csir(wb) -> List[dict]:
+    ws = wb["Assessment"]
+    rows = list(ws.iter_rows(values_only=True))
+    # header row carries "Statement" + "Level of maturity"
+    hdr = None
+    for i, r in enumerate(rows[:8]):
+        norm = [_normalized_header(v) for v in (r or [])]
+        if "statement" in norm and "levelofmaturity" in norm:
+            hdr = i
+            break
+    if hdr is None:
+        return []
+    items: List[dict] = []
+    current = "General"
+    for r in rows[hdr + 1:]:
+        stmt = _cell(r, 4)
+        if not stmt:
+            continue
+        low = stmt.lower()
+        if low.startswith("phase"):
+            current = stmt
+            continue
+        if low.startswith("step"):
+            ref = _cell(r, 13) or str(len(items) + 1)
+            level = _maturity_int(r[5] if len(r) > 5 else None)
+            weight = _cell(r, 6)
+            parts = []
+            if weight:
+                parts.append(f"Weighting: {weight}")
+            items.append({
+                "item_number": ref,
+                "area_domain": current,
+                "control_description": stmt,
+                "maturity_score": level,
+                "compliance_status": "in_progress",
+                "remarks": " | ".join(parts) or None,
+            })
+    return items
+
+
+def _parse_content_style(wb, kind: str) -> List[dict]:
+    """CTI 'content' and Incident 'Content' share a master-question layout:
+    Order | FullQ | Stage/Phase | Step | Q | subQ | Text | Weighting | …
+    Domain headers are single-letter (CTI stage) or plain-number (Incident
+    phase) FullQ rows; questions carry the deepest FullQ / a Text value."""
+    sheet = "content" if kind == "cti" else "Content"
+    if sheet not in wb.sheetnames:
+        sheet = next((s for s in wb.sheetnames if s.lower() == "content"), None)
+        if not sheet:
+            return []
+    ws = wb[sheet]
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+    norm = [_normalized_header(v) for v in rows[0]]
+    def cix(name, default):
+        return norm.index(name) if name in norm else default
+    fq_i = cix("fullq", 1)
+    txt_i = cix("text", 6)
+    w_i = cix("weighting", 7)
+    # The scored questions are the ones with a DEEP FullQ reference (≥2 dots,
+    # e.g. "A.1.01" for CTI or "1.1.01"/"1.1.02a" for Incident). Rows with a
+    # shallower ref are domain (0 dots: "A"/"1") or step headers (1 dot: "A.1"),
+    # and rows with a BLANK FullQ are supporting detail / guidance — which the
+    # Summary-Level tool does NOT score (verified against its Assess A-D forms).
+    stage_re = re.compile(r"^[A-Za-z]$")
+    items: List[dict] = []
+    domain = "General"
+    step = None
+    for r in rows[1:]:
+        fq = _cell(r, fq_i)
+        text = _cell(r, txt_i)
+        if not text:
+            continue
+        if not fq:
+            continue  # detail / guidance rows have no reference — skip
+        ndots = fq.count(".")
+        if ndots == 0:
+            domain = f"{fq}. {text}" if stage_re.match(fq) else text
+            step = None
+            continue
+        if ndots == 1:
+            step = text
+            continue
+        # ndots >= 2 → an assessable (scored) question.
+        weight = _cell(r, w_i)
+        parts = []
+        if weight and weight.lower() != "n/a":
+            parts.append(f"Weighting: {weight}")
+        items.append({
+            "item_number": fq,
+            "area_domain": domain,
+            "subdomain_name": step,
+            "control_description": text,
+            "maturity_score": None,
+            "compliance_status": "in_progress",
+            "remarks": " | ".join(parts) or None,
+        })
+    return items
+
+
+def _parse_itsecops(wb) -> List[dict]:
+    ws = wb["1. Current and Target States"]
+    rows = list(ws.iter_rows(values_only=True))
+    hdr = None
+    for i, r in enumerate(rows[:20]):
+        norm = [_normalized_header(v) for v in (r or [])]
+        if "promptid" in norm and "securitycapability" in norm:
+            hdr = i
+            hnorm = norm
+            break
+    if hdr is None:
+        return []
+    pid_i = hnorm.index("promptid")
+    fn_i = hnorm.index("securityfunction") if "securityfunction" in hnorm else pid_i + 1
+    cap_i = hnorm.index("securitycapability")
+    cur_i = hnorm.index("currentstate") if "currentstate" in hnorm else cap_i + 1
+    tgt_i = hnorm.index("targetstate12months") if "targetstate12months" in hnorm else None
+    dim_i = fn_i + 1  # People/Process/Technology/Policy dimension sits between
+    items: List[dict] = []
+    current_fn = "Security Operations"
+    for r in rows[hdr + 1:]:
+        pid = _cell(r, pid_i)
+        cap = _cell(r, cap_i)
+        if not pid.upper().startswith("PID") or not cap:
+            continue
+        fn = _cell(r, fn_i)
+        if fn:
+            current_fn = fn
+        dim = _cell(r, dim_i)
+        cur = _maturity_int(r[cur_i] if len(r) > cur_i else None)
+        tgt = _maturity_int(r[tgt_i] if (tgt_i is not None and len(r) > tgt_i) else None)
+        parts = []
+        if tgt is not None:
+            parts.append(f"Target: {tgt}")
+        if dim:
+            parts.append(f"Dimension: {dim}")
+        items.append({
+            "item_number": pid,
+            "area_domain": current_fn,
+            "subdomain_name": dim or None,
+            "control_description": cap,
+            "maturity_score": cur,
+            "compliance_status": "in_progress",
+            "remarks": " | ".join(parts) or None,
+        })
+    return items
+
+
+_MATURITY_LEVELS = [
+    "Level 1 - Initial", "Level 2 - Established", "Level 3 - Business Enabling",
+    "Level 4 - Quantitatively Managed", "Level 5 - Optimised",
+]
+_MATURITY_TITLES = {
+    "csir": "Cyber Security Incident Response (High-level)",
+    "cti": "Cyber Threat Intelligence",
+    "itsecops": "IT Security Operations",
+    "incident": "Incident Management (Detailed)",
+}
+
+
+def parse_cyber_maturity_workbook(wb, kind: str) -> tuple[List[dict], dict]:
+    if kind == "csir":
+        items = _parse_csir(wb)
+    elif kind == "itsecops":
+        items = _parse_itsecops(wb)
+    else:
+        items = _parse_content_style(wb, kind)
+    fmt = f"{kind}_maturity"
+    metadata = {
+        "assessment_format": fmt,
+        "detected_format": fmt,
+        "maturity_kind": kind,
+        "maturity_title": _MATURITY_TITLES.get(kind, "Cyber Maturity"),
+        "maturity_levels": _MATURITY_LEVELS,
+        "columns_detected": ["item_number", "area_domain", "subdomain_name", "control_description", "maturity_score", "remarks"],
+    }
+    return items, metadata
+
+
+# --------------------------------------------------------------------------- #
+# Cyber Security KPI Report — quarterly target-vs-actual metrics by domain.
+# --------------------------------------------------------------------------- #
+
+def detect_kpi_report_format(wb) -> bool:
+    try:
+        sheets = set(wb.sheetnames)
+    except Exception:
+        return False
+    if not ({"KPI", "Measurement table"} <= sheets):
+        return False
+    ws = wb["Measurement table"]
+    for r in ws.iter_rows(min_row=1, max_row=14, values_only=True):
+        norm = [_normalized_header(v) for v in (r or [])]
+        if "kpiid" in norm and "cybersecuritydomain" in norm:
+            return True
+    return False
+
+
+def _kpi_definition_map(wb) -> dict:
+    """kpi_id -> {name, description, type, frequency, source} from the 'KPI'
+    sheet, so the dashboard can show each KPI's topic, cadence and data source
+    (the Measurement table only carries the definition + numbers)."""
+    out: dict = {}
+    if "KPI" not in wb.sheetnames:
+        return out
+    ws = wb["KPI"]
+    rows = list(ws.iter_rows(values_only=True))
+    hdr = None
+    for i, r in enumerate(rows[:16]):
+        norm = [_normalized_header(v) for v in (r or [])]
+        if "kpiid" in norm and "kpitype" in norm:
+            hdr, hn = i, norm
+            break
+    if hdr is None:
+        return out
+    def ix(name):
+        return hn.index(name) if name in hn else -1
+    def starts(pfx):
+        return next((j for j, h in enumerate(hn) if h.startswith(pfx)), -1)
+    id_i = ix("kpiid")
+    name_i = ix("keyperformanceindicatorkpi")
+    desc_i = ix("kpidescription")
+    type_i = ix("kpitype")
+    freq_i = starts("frequency")
+    src_i = starts("datasource")
+    for r in rows[hdr + 1:]:
+        kid = _cell(r, id_i)
+        if not kid:
+            continue
+        out[kid] = {
+            "name": _cell(r, name_i),
+            "description": _cell(r, desc_i),
+            "type": _cell(r, type_i),
+            "frequency": _cell(r, freq_i),
+            "source": _cell(r, src_i),
+        }
+    return out
+
+
+def parse_kpi_report_workbook(wb) -> tuple[List[dict], dict]:
+    meta_map = _kpi_definition_map(wb)
+    ws = wb["Measurement table"]
+    rows = list(ws.iter_rows(values_only=True))
+    hdr = None
+    for i, r in enumerate(rows[:16]):
+        norm = [_normalized_header(v) for v in (r or [])]
+        if "kpiid" in norm and "cybersecuritydomain" in norm:
+            hdr, hn = i, norm
+            break
+    if hdr is None:
+        return [], {"assessment_format": "kpi_report", "columns_detected": []}
+
+    def ix(name):
+        return hn.index(name) if name in hn else -1
+    id_i = ix("kpiid")
+    dom_i = ix("cybersecuritydomain")
+    def_i = ix("kpidefinition")
+    type_i = ix("kpitype")
+    prior_i = ix("prioryearq4actual")
+    # Per-quarter Target/Actual/Notes column indices (Q1..Q4).
+    quarters = []
+    for q in range(1, 5):
+        quarters.append({
+            "q": q,
+            "t": ix(f"targetq{q}"),
+            "a": ix(f"actualq{q}"),
+            "n": ix(f"notesq{q}"),
+        })
+
+    def num(v):
+        try:
+            return float(v)
+        except Exception:
+            return None
+    def fmt(v, is_pct):
+        n = num(v)
+        if n is None:
+            return ""
+        return f"{round(n * 100, 1)}%" if (is_pct and abs(n) <= 1.5) else (f"{round(n, 2)}" if isinstance(n, float) else str(n))
+
+    items: List[dict] = []
+    for r in rows[hdr + 1:]:
+        kid = _cell(r, id_i)
+        definition = _cell(r, def_i) if def_i >= 0 else ""
+        if not (kid and definition):
+            continue
+        info = meta_map.get(kid, {})
+        ktype = info.get("type") or (_cell(r, type_i) if type_i >= 0 else "")
+        is_pct = "percent" in (ktype or "").lower()
+
+        parts = []
+        if info.get("name"):
+            parts.append(f"Topic: {info['name']}")
+        parts.append(f"Type: {ktype or 'Percentage'}")
+        if info.get("frequency"):
+            parts.append(f"Freq: {info['frequency']}")
+        if info.get("source"):
+            parts.append(f"Source: {info['source']}")
+        parts.append(f"Def: {definition}")
+        if prior_i >= 0:
+            p = fmt(r[prior_i] if len(r) > prior_i else None, is_pct)
+            if p:
+                parts.append(f"Prior: {p}")
+        note_parts = []
+        for qc in quarters:
+            t = fmt(r[qc["t"]] if (qc["t"] >= 0 and len(r) > qc["t"]) else None, is_pct)
+            a = fmt(r[qc["a"]] if (qc["a"] >= 0 and len(r) > qc["a"]) else None, is_pct)
+            if t or a:
+                parts.append(f"Q{qc['q']}: {t or '-'}/{a or '-'}")
+            n = _cell(r, qc["n"]) if qc["n"] >= 0 else ""
+            if n and n != "-":
+                note_parts.append(f"Q{qc['q']}Note: {n}")
+        parts.extend(note_parts)
+
+        items.append({
+            "item_number": kid,
+            "area_domain": _cell(r, dom_i) or "General",
+            "control_description": info.get("name") or definition,
+            "compliance_status": "in_progress",
+            "remarks": " | ".join(parts) or None,
+        })
+
+    metadata = {
+        "assessment_format": "kpi_report",
+        "detected_format": "kpi_report",
+        "columns_detected": ["item_number", "area_domain", "control_description", "remarks"],
+    }
+    return items, metadata
+
+
+# --------------------------------------------------------------------------- #
+# DPIA / PIA — Data Protection / Privacy Impact Assessment.
+# A risk-assessment workbook: Screening (threshold Yes/No), an Assessment
+# narrative, and a Risk Register (risks scored Likelihood×Impact with inherent +
+# residual ratings). Parsed into one item list tagged by section so the
+# dedicated dashboard can render the screening verdict, the risk heat-map and
+# the risk register. Risk band: score = L×I → 1-4 Low, 5-9 Medium, 10-14 High,
+# 15-25 Critical.
+# --------------------------------------------------------------------------- #
+
+def detect_dpia_format(wb) -> bool:
+    try:
+        sheets = wb.sheetnames
+    except Exception:
+        return False
+    low = [s.lower() for s in sheets]
+    has_screen = any("screening" in s for s in low)
+    has_risk = any("risk register" in s for s in low)
+    return has_screen and has_risk
+
+
+def _dpia_sheet(wb, needle):
+    for s in wb.sheetnames:
+        if needle in s.lower():
+            return wb[s]
+    return None
+
+
+def parse_dpia_workbook(wb) -> tuple[List[dict], dict]:
+    items: List[dict] = []
+
+    # 1) Screening — threshold questions (# | question | Yes/No | Notes).
+    ws = _dpia_sheet(wb, "screening")
+    if ws is not None:
+        rows = list(ws.iter_rows(values_only=True))
+        hdr = None
+        for i, r in enumerate(rows[:8]):
+            norm = [_normalized_header(v) for v in (r or [])]
+            if "screeningquestion" in norm:
+                hdr, hn = i, norm
+                break
+        if hdr is not None:
+            q_i = hn.index("screeningquestion")
+            ans_i = next((j for j, h in enumerate(hn) if h in ("yesno", "yes", "answer")), q_i + 1)
+            note_i = next((j for j, h in enumerate(hn) if h.startswith("note")), ans_i + 1)
+            n = 0
+            for r in rows[hdr + 1:]:
+                q = _cell(r, q_i)
+                if not q or _normalized_header(q) == "screeningquestion":
+                    continue
+                n += 1
+                ans = _cell(r, ans_i)
+                note = _cell(r, note_i)
+                parts = ["Section: screening"]
+                if ans:
+                    parts.append(f"Answer: {ans}")
+                if note:
+                    parts.append(f"Notes: {note}")
+                items.append({
+                    "item_number": f"S-{n:02d}",
+                    "area_domain": "Screening",
+                    "control_description": q,
+                    "compliance_status": _status_from_asvs_valid(ans),
+                    "remarks": " | ".join(parts),
+                })
+
+    # 2) Risk Register — the core deliverable.
+    ws = _dpia_sheet(wb, "risk register")
+    if ws is not None:
+        rows = list(ws.iter_rows(values_only=True))
+        hdr = None
+        for i, r in enumerate(rows[:6]):
+            if any(_normalized_header(v) == "riskid" for v in (r or [])):
+                hdr, hn = i, [_normalized_header(v) for v in r]
+                break
+        if hdr is not None:
+            def ix(*names):
+                for nm in names:
+                    if nm in hn:
+                        return hn.index(nm)
+                return -1
+            c_id = ix("riskid")
+            c_cat = ix("riskcategory")
+            c_desc = ix("riskdescription")
+            c_subj = ix("affecteddatasubjects")
+            c_l = ix("likelihood15", "likelihood")
+            c_i = ix("impact15", "impact")
+            c_inh = ix("inherentscore")
+            c_inhr = ix("inherentrating")
+            c_ctrl = ix("existingplannedcontrols", "existingcontrols")
+            c_owner = ix("controlowner")
+            c_rl = ix("residlikelihood", "residuallikelihood")
+            c_ri = ix("residimpact", "residualimpact")
+            c_res = ix("residualscore")
+            c_resr = ix("residualrating")
+            c_fw = ix("frameworkreference")
+            c_status = ix("status")
+            c_target = ix("targetdate")
+            for r in rows[hdr + 1:]:
+                rid = _cell(r, c_id)
+                desc = _cell(r, c_desc) if c_desc >= 0 else ""
+                if not rid or not desc:
+                    continue
+                parts = ["Section: risk"]
+                for label, idx in [("Subjects", c_subj), ("L", c_l), ("I", c_i),
+                                   ("Inherent", c_inh), ("InherentRating", c_inhr),
+                                   ("Controls", c_ctrl), ("Owner", c_owner),
+                                   ("ResL", c_rl), ("ResI", c_ri), ("Residual", c_res),
+                                   ("ResidualRating", c_resr), ("Framework", c_fw),
+                                   ("Target", c_target)]:
+                    v = _cell(r, idx) if idx >= 0 else ""
+                    if v:
+                        parts.append(f"{label}: {v}")
+                items.append({
+                    "item_number": rid,
+                    "area_domain": _cell(r, c_cat) or "Uncategorised",
+                    "control_description": desc,
+                    "compliance_status": _status_from_asvs_valid(_cell(r, c_status) if c_status >= 0 else ""),
+                    "risk_rating": (_cell(r, c_inhr) or None) if c_inhr >= 0 else None,
+                    "remarks": " | ".join(parts),
+                })
+
+    # 3) Assessment narrative — field labels + guidance (context; often blank in
+    # a fresh template but captured so nothing is dropped).
+    ws = _dpia_sheet(wb, "assessment")
+    if ws is not None:
+        section = None
+        n = 0
+        for r in ws.iter_rows(values_only=True):
+            vals = [_cell(r, j) for j in range(min(4, len(r)))]
+            label = next((v for v in vals if v), "")
+            if not label:
+                continue
+            # Section headers look like "A. Project & ownership".
+            if re.match(r"^[A-Z]\.\s", label):
+                section = label
+                continue
+            if label.upper().startswith("DPIA") or _normalized_header(label) == "":
+                continue
+            guidance = vals[1] if len(vals) > 1 and vals[1] and vals[1] != label else ""
+            n += 1
+            parts = ["Section: assessment"]
+            if guidance:
+                parts.append(f"Guidance: {guidance}")
+            items.append({
+                "item_number": f"A-{n:02d}",
+                "area_domain": "Assessment",
+                "subdomain_name": section,
+                "control_description": label,
+                "compliance_status": "in_progress",
+                "remarks": " | ".join(parts),
+            })
+
+    metadata = {
+        "assessment_format": "dpia_pia",
+        "detected_format": "dpia_pia",
+        "risk_bands": {"Low": [1, 4], "Medium": [5, 9], "High": [10, 14], "Critical": [15, 25]},
+        "columns_detected": ["item_number", "area_domain", "control_description", "compliance_status", "remarks"],
+    }
+    return items, metadata
+
+
+# --------------------------------------------------------------------------- #
+# NCA register templates — Vulnerability Register, Cybersecurity Audit Plan and
+# Cybersecurity Risk Register. Each is a tabular log (Legend sheet + a data
+# sheet + Heat-map/Summary). They share a flexible parser: locate the data
+# sheet + its header row, then capture every column of every row into the item
+# (the full row is preserved as JSON in `remarks` so nothing is dropped, while
+# the key fields are also mapped onto dedicated item columns for the dashboard).
+# --------------------------------------------------------------------------- #
+
+_NCA_REGISTER_CONF = {
+    "vuln": {
+        "sheet": "vulnerability register", "legend": "vulnerability register legend",
+        "id": ["vulnerabilityid"], "name": ["title"], "desc": ["vulnerabilitydescription"],
+        "group": ["risklevel", "riskseverity"], "status": ["status"],
+        "sev": ["risklevel"], "owner": ["owner"], "due": ["duedate"],
+    },
+    "audit": {
+        "sheet": "audit plan", "legend": "audit plan legend",
+        "id": ["auditid"], "name": ["auditname"], "desc": ["scopeofaudit"],
+        "group": ["typeofaudit", "teamresponsible"], "status": ["status"],
+        "sev": [], "owner": ["leadauditor"], "due": ["auditend"],
+    },
+    "risk": {
+        "sheet": "risk register", "legend": "risk register legend",
+        "id": ["riskidentifier"], "name": ["descriptionoftherisk"], "desc": ["descriptionoftherisk"],
+        "group": ["riskareascopeofrisk", "riskarea"], "status": ["status"],
+        "sev": ["overallinherentriskrating", "updatedoverallinherentriskrating"],
+        "owner": ["riskowner"], "due": ["deadlineforaction"],
+    },
+}
+
+
+def detect_nca_register_kind(wb) -> Optional[str]:
+    try:
+        low = {s.strip().lower() for s in wb.sheetnames}
+    except Exception:
+        return None
+    for kind, cfg in _NCA_REGISTER_CONF.items():
+        if cfg["sheet"] in low and cfg["legend"] in low:
+            return kind
+    return None
+
+
+def detect_nca_register_format(wb) -> bool:
+    return detect_nca_register_kind(wb) is not None
+
+
+def parse_nca_register_workbook(wb, kind: str) -> tuple[List[dict], dict]:
+    cfg = _NCA_REGISTER_CONF[kind]
+    ws = next((wb[s] for s in wb.sheetnames if s.strip().lower() == cfg["sheet"]), None)
+    if ws is None:
+        return [], {"assessment_format": f"nca_{kind}_register"}
+    rows = list(ws.iter_rows(values_only=True))
+    # Header row = first row with >= 4 non-empty text cells.
+    hdr = None
+    for i, r in enumerate(rows[:30]):
+        if sum(1 for x in r if str(x or "").strip()) >= 4:
+            hdr = i
+            break
+    if hdr is None:
+        return [], {"assessment_format": f"nca_{kind}_register"}
+    headers = [str(v or "").strip() for v in rows[hdr]]
+    norm = [_normalized_header(v) for v in headers]
+
+    def col(cands):
+        for cand in cands:
+            if cand in norm:
+                return norm.index(cand)
+        return -1
+    id_i = col(cfg["id"])
+    name_i = col(cfg["name"])
+    desc_i = col(cfg["desc"])
+    group_i = col(cfg["group"])
+    status_i = col(cfg["status"])
+    sev_i = col(cfg["sev"])
+    owner_i = col(cfg["owner"])
+    due_i = col(cfg["due"])
+    if id_i < 0:
+        id_i = 0
+
+    items: List[dict] = []
+    for r in rows[hdr + 1:]:
+        if sum(1 for x in r if str(x or "").strip()) < 2:
+            continue
+        rid = _cell_to_text(r[id_i]) if id_i < len(r) else None
+        if not rid or _normalized_header(rid) in norm:
+            continue
+        name = _cell_to_text(r[name_i]) if 0 <= name_i < len(r) else None
+        desc = _cell_to_text(r[desc_i]) if 0 <= desc_i < len(r) else None
+        # Skip blank template placeholder rows. These NCA templates ship with a
+        # few worked examples plus several empty rows (just an ID) for the user
+        # to fill. Keep a row that has a title/description OR enough real data
+        # (e.g. a scoring-only vulnerability) — drop pure-ID placeholders.
+        filled = sum(1 for x in r if str(x or "").strip())
+        if not (name or desc) and filled < 4:
+            continue
+        # Full row → {header: value} JSON so no column is lost.
+        rowdict = {}
+        for j, h in enumerate(headers):
+            if not h or j >= len(r):
+                continue
+            v = _cell_to_text(r[j])
+            if v:
+                rowdict[h] = v
+        items.append({
+            "item_number": rid[:50],
+            "area_domain": (_cell_to_text(r[group_i]) if 0 <= group_i < len(r) else None) or "General",
+            "control_description": (name or desc or rid)[:8000],
+            "compliance_status": _status_from_nca_register_status(_cell_to_text(r[status_i]) if 0 <= status_i < len(r) else None),
+            "priority": (_cell_to_text(r[sev_i]) if 0 <= sev_i < len(r) else None),
+            "risk_rating": (_cell_to_text(r[sev_i]) if 0 <= sev_i < len(r) else None),
+            "responsible_party": (_cell_to_text(r[owner_i]) if 0 <= owner_i < len(r) else None),
+            "timeline": (_cell_to_text(r[due_i]) if 0 <= due_i < len(r) else None),
+            "remarks": json.dumps(rowdict, ensure_ascii=False),
+        })
+
+    fmt = f"nca_{kind}_register"
+    metadata = {
+        "assessment_format": fmt,
+        "detected_format": fmt,
+        "nca_register_kind": kind,
+        "columns_detected": ["item_number", "area_domain", "control_description", "compliance_status", "priority", "remarks"],
+    }
+    return items, metadata
+
+
+def _status_from_nca_register_status(value) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return "in_progress"
+    if any(t in text for t in ["resolved", "closed", "done", "complete", "mitigated"]):
+        return "complied"
+    if any(t in text for t in ["open", "in progress", "on hold", "planned", "new"]):
+        return "in_progress"
+    if any(t in text for t in ["accepted", "n/a", "not applicable"]):
+        return "na"
+    return "in_progress"
+
+
+# --------------------------------------------------------------------------- #
+# NCA DCC-1:2022 Data Cybersecurity Controls — the bilingual (Arabic/English)
+# Assessment & Compliance Excel tool. Hierarchical controls (Main Domain →
+# Subdomain → control ref "1-1-2" / subcontrol "1-2-1-1") with a bilingual
+# requirement text, a control type (أساسي Essential / فرعي Sub) and a compliance
+# status (Implemented / Partially / Not Implemented / Not Applicable).
+# --------------------------------------------------------------------------- #
+
+_ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+
+
+def _dcc_norm(value) -> str:
+    t = str(value or "").strip().translate(_ARABIC_DIGITS)
+    for d in ("–", "—", "‑", "−", "­", "ـ"):
+        t = t.replace(d, "-")
+    return t
+
+
+def _dcc_controls_sheet(wb):
+    return next((wb[s] for s in wb.sheetnames if "الالتزام بالضوابط" in s), None)
+
+
+def detect_dcc_tool_format(wb) -> bool:
+    try:
+        sheets = wb.sheetnames
+    except Exception:
+        return False
+    return any("الالتزام بالضوابط" in s for s in sheets) and "tbl_choices" in sheets
+
+
+def _dcc_status(value) -> str:
+    t = str(value or "").strip().lower()
+    if not t:
+        return "in_progress"
+    if "partial" in t or "جزئ" in t:
+        return "partially_complied"
+    if "not implemented" in t or "غير مطبق" in t:
+        return "not_complied"
+    if "not applicable" in t or "لاينطبق" in t or "لا ينطبق" in t:
+        return "na"
+    if "implement" in t or "مطبق" in t:
+        return "complied"
+    return "in_progress"
+
+
+def parse_dcc_tool_workbook(wb) -> tuple[List[dict], dict]:
+    ws = _dcc_controls_sheet(wb)
+    if ws is None:
+        return [], {"assessment_format": "nca_dcc_tool"}
+    rows = [[str(x).strip() if x is not None else "" for x in r] for r in ws.iter_rows(values_only=True)]
+
+    dom_re = re.compile(r"^(\d+)-\s*\D")         # "1- Cybersecurity Governance"
+    sub_re = re.compile(r"^(\d+-\d+)(\s|$)")     # "1-1" (subdomain, 2 parts)
+    ctl_re = re.compile(r"^(\d+-\d+-\d+(?:-\d+)*)")  # "1-1-2" / "1-2-1-1" (control)
+    clean = lambda s: re.sub(r"\s+", " ", s).strip()
+
+    # Pass 1: build ref→name maps for domains and subdomains from header cells.
+    domain_map: Dict[str, str] = {}
+    subdomain_map: Dict[str, str] = {}
+    for r in rows:
+        cells = [(raw, _dcc_norm(raw)) for raw in r if raw]
+        for raw, nv in cells:
+            dm = dom_re.match(nv)
+            if dm and not ctl_re.match(nv) and not sub_re.match(nv):
+                domain_map.setdefault(dm.group(1), clean(raw))
+            sm = sub_re.match(nv)
+            if sm and not ctl_re.match(nv):
+                key = sm.group(1)
+                name = max((o for o, onv in cells if onv != nv and not ctl_re.match(onv) and not dom_re.match(onv)), key=len, default="")
+                if key not in subdomain_map:
+                    subdomain_map[key] = clean(f"{key} {name}") if name else key
+
+    # Pass 2: emit one item per control (3+ part ref).
+    items: List[dict] = []
+    for r in rows:
+        cells = [(raw, _dcc_norm(raw)) for raw in r if raw]
+        ref_m = next((ctl_re.match(nv) for _, nv in cells if ctl_re.match(nv)), None)
+        if not ref_m:
+            continue
+        ref = ref_m.group(1)
+        parts = ref.split("-")
+        text = max((raw for raw, nv in cells
+                    if nv != ref and raw not in ("أساسي", "فرعي") and not ctl_re.match(nv) and len(raw) > 8),
+                   key=len, default="")
+        ctrl_type = next((raw for raw, _ in cells if raw in ("أساسي", "فرعي")), "")
+        type_label = "Essential" if ctrl_type == "أساسي" else ("Sub" if ctrl_type == "فرعي" else "")
+        remark_parts = [f"Ref: {ref}"]
+        if type_label:
+            remark_parts.append(f"Type: {type_label}")
+        items.append({
+            "item_number": ref[:50],
+            "area_domain": domain_map.get(parts[0], f"Domain {parts[0]}"),
+            "subdomain_name": subdomain_map.get(f"{parts[0]}-{parts[1]}", f"{parts[0]}-{parts[1]}"),
+            "control_description": clean(text or ref)[:8000],
+            "compliance_status": "in_progress",
+            "priority": ("high" if ctrl_type == "أساسي" else "medium" if ctrl_type == "فرعي" else None),
+            "remarks": " | ".join(remark_parts),
+        })
+
+    metadata = {
+        "assessment_format": "nca_dcc_tool",
+        "detected_format": "nca_dcc_tool",
+        "framework": "Saudi NCA DCC-1:2022",
+        "columns_detected": ["item_number", "area_domain", "subdomain_name", "control_description", "compliance_status", "priority", "remarks"],
     }
     return items, metadata
 
@@ -2294,7 +3123,7 @@ async def upload_assessment(
             )
         
         lower_file_name = (file.filename or "").lower()
-        if not lower_file_name.endswith(('.xlsx', '.xls', '.csv', '.pdf')):
+        if not lower_file_name.endswith(('.xlsx', '.xls', '.xlsm', '.csv', '.pdf')):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="File must be an Excel (.xlsx, .xls), CSV, or supported PDF file"
@@ -2323,22 +3152,41 @@ async def upload_assessment(
         is_pdpl = False
         is_doma = False
         is_mobile_app_security = False
-        if lower_file_name.endswith(('.xlsx', '.xls')):
+        maturity_kind = None
+        is_kpi_report = False
+        is_dpia = False
+        nca_reg_kind = None
+        is_dcc_tool = False
+        if lower_file_name.endswith(('.xlsx', '.xls', '.xlsm')):
             _wb_check = None
             try:
                 _wb_check = openpyxl.load_workbook(io.BytesIO(file_content), read_only=True, data_only=True)
-                is_doma = detect_doma_format(_wb_check)
+                is_dcc_tool = detect_dcc_tool_format(_wb_check)
+                is_doma = (not is_dcc_tool) and detect_doma_format(_wb_check)
+                # CREST cyber-maturity tools (CSIR/CTI/IT-SecOps/Incident), the
+                # KPI report, the DPIA/PIA and the NCA registers are detected
+                # BEFORE the generic maturity detector so they get their
+                # dedicated parsers.
                 if not is_doma:
+                    maturity_kind = detect_maturity_kind(_wb_check)
+                if not is_doma and not maturity_kind:
+                    is_kpi_report = detect_kpi_report_format(_wb_check)
+                if not is_doma and not maturity_kind and not is_kpi_report:
+                    is_dpia = detect_dpia_format(_wb_check)
+                if not is_doma and not maturity_kind and not is_kpi_report and not is_dpia:
+                    nca_reg_kind = detect_nca_register_kind(_wb_check)
+                _pre = is_dcc_tool or is_doma or bool(maturity_kind) or is_kpi_report or is_dpia or bool(nca_reg_kind)
+                if not _pre:
                     is_maturity_format = detect_xlsx_maturity_format(_wb_check)
-                if not is_doma and not is_maturity_format:
+                if not _pre and not is_maturity_format:
                     is_pdpl = detect_pdpl_assessment_format(_wb_check)
-                if not is_doma and not is_maturity_format and not is_pdpl:
+                if not _pre and not is_maturity_format and not is_pdpl:
                     is_ubl_audit_master = detect_ubl_audit_master_tracking_format(_wb_check)
-                if not is_doma and not is_maturity_format and not is_pdpl and not is_ubl_audit_master:
+                if not _pre and not is_maturity_format and not is_pdpl and not is_ubl_audit_master:
                     is_mobile_app_security = detect_mobile_app_security_format(_wb_check)
-                if not is_doma and not is_maturity_format and not is_pdpl and not is_ubl_audit_master and not is_mobile_app_security:
+                if not _pre and not is_maturity_format and not is_pdpl and not is_ubl_audit_master and not is_mobile_app_security:
                     is_asvs_checklist = detect_asvs_checklist_format(_wb_check)
-                if not is_doma and not is_maturity_format and not is_pdpl and not is_asvs_checklist and not is_ubl_audit_master and not is_mobile_app_security:
+                if not _pre and not is_maturity_format and not is_pdpl and not is_asvs_checklist and not is_ubl_audit_master and not is_mobile_app_security:
                     is_owasp_checklist = detect_owasp_v4_checklist_format(_wb_check)
             except Exception:
                 pass
@@ -2355,6 +3203,11 @@ async def upload_assessment(
         if expected_format and expected_format != "standard":
             detected = (
                 "digital_ops_maturity" if is_doma else
+                f"{maturity_kind}_maturity" if maturity_kind else
+                "kpi_report" if is_kpi_report else
+                "dpia_pia" if is_dpia else
+                f"nca_{nca_reg_kind}_register" if nca_reg_kind else
+                "nca_dcc_tool" if is_dcc_tool else
                 "xlsx_maturity" if is_maturity_format else
                 "pdpl_assessment_toolkit" if is_pdpl else
                 "ubl_audit_master_tracking" if is_ubl_audit_master else
@@ -2472,6 +3325,41 @@ async def upload_assessment(
         if is_doma:
             logger.info("Detected Digital Operations Maturity (DOMA) format")
             items_data, parser_metadata = parse_doma_workbook(file_content)
+        elif maturity_kind:
+            logger.info(f"Detected CREST cyber-maturity tool: {maturity_kind}")
+            wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+            try:
+                items_data, parser_metadata = parse_cyber_maturity_workbook(wb, maturity_kind)
+            finally:
+                wb.close()
+        elif is_kpi_report:
+            logger.info("Detected Cyber Security KPI Report format")
+            wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+            try:
+                items_data, parser_metadata = parse_kpi_report_workbook(wb)
+            finally:
+                wb.close()
+        elif is_dpia:
+            logger.info("Detected DPIA / PIA format")
+            wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+            try:
+                items_data, parser_metadata = parse_dpia_workbook(wb)
+            finally:
+                wb.close()
+        elif nca_reg_kind:
+            logger.info(f"Detected NCA {nca_reg_kind} register format")
+            wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+            try:
+                items_data, parser_metadata = parse_nca_register_workbook(wb, nca_reg_kind)
+            finally:
+                wb.close()
+        elif is_dcc_tool:
+            logger.info("Detected NCA DCC-1:2022 bilingual Excel tool")
+            wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+            try:
+                items_data, parser_metadata = parse_dcc_tool_workbook(wb)
+            finally:
+                wb.close()
         elif lower_file_name.endswith('.pdf'):
             logger.info("Detected PDF upload format")
             items_data, parser_metadata = parse_cis_windows_server_2012_r2_pdf(file_content, file.filename or "")
@@ -2647,6 +3535,7 @@ _DOMA_MODULES = [
     'Data Analytics & Prescriptive', 'Digital Ops Strategy', 'Digital PD & PLM',
     'Integrated Planning', 'IT Architecture and Systems', 'Procurement 4.0',
     'Smart Factory', 'Smart Logistics', 'Smart Warehousing',
+    'Transparency and Visibility',
 ]
 _DOMA_LEVELS = ['Basic', 'Emerging', 'Advanced', 'Differentiated', 'Best In Class']
 
@@ -2715,23 +3604,36 @@ def _parse_assessment_file(file_content: bytes, filename: str):
     xlsx_data) — the same detection/parsers used by /upload, reused by the
     re-upload endpoint so an updated workbook refreshes an existing assessment."""
     lower = (filename or "").lower()
-    is_maturity = is_pdpl = is_ubl = is_asvs = is_owasp = is_doma = is_mobile = False
-    if lower.endswith(('.xlsx', '.xls')):
+    is_maturity = is_pdpl = is_ubl = is_asvs = is_owasp = is_doma = is_mobile = is_kpi = is_dpia = False
+    maturity_kind = None
+    nca_reg_kind = None
+    is_dcc_tool = False
+    if lower.endswith(('.xlsx', '.xls', '.xlsm')):
         _wb = None
         try:
             _wb = openpyxl.load_workbook(io.BytesIO(file_content), read_only=True, data_only=True)
-            is_doma = detect_doma_format(_wb)
+            is_dcc_tool = detect_dcc_tool_format(_wb)
+            is_doma = (not is_dcc_tool) and detect_doma_format(_wb)
             if not is_doma:
+                maturity_kind = detect_maturity_kind(_wb)
+            if not is_doma and not maturity_kind:
+                is_kpi = detect_kpi_report_format(_wb)
+            if not is_doma and not maturity_kind and not is_kpi:
+                is_dpia = detect_dpia_format(_wb)
+            if not is_doma and not maturity_kind and not is_kpi and not is_dpia:
+                nca_reg_kind = detect_nca_register_kind(_wb)
+            _pre = is_dcc_tool or is_doma or bool(maturity_kind) or is_kpi or is_dpia or bool(nca_reg_kind)
+            if not _pre:
                 is_maturity = detect_xlsx_maturity_format(_wb)
-            if not (is_doma or is_maturity):
+            if not _pre and not is_maturity:
                 is_pdpl = detect_pdpl_assessment_format(_wb)
-            if not (is_doma or is_maturity or is_pdpl):
+            if not _pre and not (is_maturity or is_pdpl):
                 is_ubl = detect_ubl_audit_master_tracking_format(_wb)
-            if not (is_doma or is_maturity or is_pdpl or is_ubl):
+            if not _pre and not (is_maturity or is_pdpl or is_ubl):
                 is_mobile = detect_mobile_app_security_format(_wb)
-            if not (is_doma or is_maturity or is_pdpl or is_ubl or is_mobile):
+            if not _pre and not (is_maturity or is_pdpl or is_ubl or is_mobile):
                 is_asvs = detect_asvs_checklist_format(_wb)
-            if not (is_doma or is_maturity or is_pdpl or is_ubl or is_asvs or is_mobile):
+            if not _pre and not (is_maturity or is_pdpl or is_ubl or is_asvs or is_mobile):
                 is_owasp = detect_owasp_v4_checklist_format(_wb)
         except Exception:
             pass
@@ -2745,6 +3647,46 @@ def _parse_assessment_file(file_content: bytes, filename: str):
     if is_doma:
         items_data, meta = parse_doma_workbook(file_content)
         return items_data, meta.get("assessment_format", "digital_ops_maturity"), None
+
+    if maturity_kind:
+        wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+        try:
+            items_data, meta = parse_cyber_maturity_workbook(wb, maturity_kind)
+        finally:
+            wb.close()
+        return items_data, meta.get("assessment_format", f"{maturity_kind}_maturity"), None
+
+    if is_kpi:
+        wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+        try:
+            items_data, meta = parse_kpi_report_workbook(wb)
+        finally:
+            wb.close()
+        return items_data, meta.get("assessment_format", "kpi_report"), None
+
+    if is_dpia:
+        wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+        try:
+            items_data, meta = parse_dpia_workbook(wb)
+        finally:
+            wb.close()
+        return items_data, meta.get("assessment_format", "dpia_pia"), None
+
+    if nca_reg_kind:
+        wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+        try:
+            items_data, meta = parse_nca_register_workbook(wb, nca_reg_kind)
+        finally:
+            wb.close()
+        return items_data, meta.get("assessment_format", f"nca_{nca_reg_kind}_register"), None
+
+    if is_dcc_tool:
+        wb = openpyxl.load_workbook(io.BytesIO(file_content), data_only=True)
+        try:
+            items_data, meta = parse_dcc_tool_workbook(wb)
+        finally:
+            wb.close()
+        return items_data, meta.get("assessment_format", "nca_dcc_tool"), None
 
     if is_maturity:
         xlsx_data = parse_xlsx_maturity_tool(file_content)
@@ -2826,7 +3768,7 @@ async def reupload_assessment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
 
     lower_file_name = (file.filename or "").lower()
-    if not lower_file_name.endswith(('.xlsx', '.xls', '.csv', '.pdf')):
+    if not lower_file_name.endswith(('.xlsx', '.xls', '.xlsm', '.csv', '.pdf')):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File must be an Excel (.xlsx, .xls), CSV, or supported PDF file")
 
     file_path = None
@@ -4000,6 +4942,7 @@ def list_all_points(
     """Flat list of every assessment point across the tenant, with the fields
     the dynamic-SLA closure board needs. One query (join), no per-assessment
     round-trips. Each point keeps its own dates — the board never blends them."""
+    from grc.modules.assessments.scoring import EXCLUDED_FORMATS
     user_tenants = get_user_tenants(current_user, db)
     rows = (
         db.query(ComplianceAssessmentDocumentItem, ComplianceAssessmentDocument)
@@ -4012,6 +4955,10 @@ def list_all_points(
     )
     points = []
     for item, a in rows:
+        # Internal Audit (UBL) + KPI Report + container/standard are not part of
+        # the Assessments module — keep them out of the SLA / open-by-assessment feed.
+        if (getattr(a, "assessment_format", "standard") or "standard") in EXCLUDED_FORMATS:
+            continue
         points.append({
             "id": item.id,
             "assessment_id": a.id,
@@ -4073,6 +5020,103 @@ def assessments_for_asset(
             "updated_at": a.updated_at.isoformat() if a.updated_at else None,
         })
     return {"asset_id": asset_id, "assessments": out}
+
+
+@router.get("/overview")
+def get_assessments_overview(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Board overview: every assessment scored by its family formula, grouped by
+    category, with a module rollup + a universal SLA closure summary. Powers the
+    redesigned graphical Assessments overview. (Registered before /{assessment_id}
+    so the literal path wins.)"""
+    from datetime import datetime as _dt
+    from grc.modules.assessments.scoring import score_assessment, EXCLUDED_FORMATS
+    from grc.models import (
+        ComplianceAssessmentDocument as _Doc,
+        ComplianceAssessmentDocumentItem as _Item,
+        ComplianceSlaPolicy as _Policy,
+        AssessmentItemEvidence as _Ev,
+    )
+    tids = get_user_tenants(current_user, db)
+    now = _dt.utcnow()
+    if not tids:
+        return {"as_of": now.isoformat(), "categories": [],
+                "performance": {"score": None, "grade": None, "assessments": 0},
+                "sla": {}, "attention": {}}
+
+    policy = db.query(_Policy).filter(_Policy.tenant_id.in_(tids)).first()
+    docs = db.query(_Doc).filter(_Doc.tenant_id.in_(tids)).all()
+    EV_FORMATS = {"asvs_checklist", "mobile_app_security", "owasp_v4_testing_checklist", "nca_dcc_tool"}
+
+    cats: dict = {}
+    sla_tot = {"gaps": 0, "closed": 0, "open": 0, "overdue": 0}
+    for d in docs:
+        fmt = getattr(d, "assessment_format", "standard") or "standard"
+        if fmt in EXCLUDED_FORMATS:
+            continue
+        items = db.query(_Item).filter(_Item.assessment_id == d.id).all()
+        ev = {}
+        if fmt in EV_FORMATS:
+            for it in items:
+                ev[it.id] = db.query(_Ev).filter(_Ev.assessment_item_id == it.id).count()
+        res = score_assessment(d, items, ev, policy, now)
+        if res is None:
+            continue
+        entry = {
+            "id": d.id, "name": d.name, "format": fmt, "family": res["family"],
+            "item_noun": res["item_noun"], "status": d.status,
+            "content": res["content"]["score"], "sla": res["sla"]["score"],
+            "level_achieved": res["content"].get("level_achieved"),
+            "metrics": res["content"]["metrics"], "sla_metrics": res["sla"]["metrics"],
+            "counts": res["content"].get("counts", {}),
+            "sla_counts": res["sla"].get("counts", {}),
+            "weights": res["content"].get("weights", {}),
+            "by_dimension": res["content"].get("by_dimension"),
+            "by_domain": res["content"].get("by_domain"),
+            "by_platform": res["content"].get("by_platform"),
+        }
+        cats.setdefault(res["category"], []).append(entry)
+        sc = res["sla"].get("counts", {})
+        for k in sla_tot:
+            sla_tot[k] += sc.get(k, 0)
+
+    CAT_ORDER = ["Cyber Security", "NCA", "Digital Operations", "Privacy & Data"]
+    categories = []
+    for cat in CAT_ORDER + [c for c in cats if c not in CAT_ORDER]:
+        rows = cats.get(cat)
+        if not rows:
+            continue
+        scored = [r["content"] for r in rows if r["content"] is not None]
+        slas = [r["sla"] for r in rows if r["sla"] is not None]
+        categories.append({
+            "category": cat,
+            "score": round(sum(scored) / len(scored), 1) if scored else None,
+            "sla": round(sum(slas) / len(slas), 1) if slas else None,
+            "count": len(rows),
+            "assessments": rows,
+        })
+
+    all_content = [r["content"] for rows in cats.values() for r in rows if r["content"] is not None]
+    all_sla = [r["sla"] for rows in cats.values() for r in rows if r["sla"] is not None]
+    perf = round(sum(all_content) / len(all_content), 1) if all_content else None
+    grade = (None if perf is None else "excellent" if perf >= 85 else "good" if perf >= 70
+             else "fair" if perf >= 50 else "poor")
+    module_sla = round(sum(all_sla) / len(all_sla), 1) if all_sla else None
+    return {
+        "as_of": now.isoformat(),
+        "performance": {"score": perf, "grade": grade,
+                        "assessments": sum(len(v) for v in cats.values())},
+        "sla": {"score": module_sla, "gaps": sla_tot["gaps"], "closed": sla_tot["closed"],
+                "open": sla_tot["open"], "overdue": sla_tot["overdue"]},
+        "attention": {
+            "overdue_gaps": sla_tot["overdue"],
+            "open_gaps": sla_tot["open"],
+            "not_started": sum(1 for rows in cats.values() for r in rows if r["content"] is None),
+        },
+        "categories": categories,
+    }
 
 
 @router.get("/{assessment_id}")

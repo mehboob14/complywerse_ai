@@ -577,6 +577,25 @@ def get_asset_coverage(
     )
 
 
+@router.get("/inventory-overview")
+def get_inventory_overview(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Board-level SCORED inventory overview: five sections (inventory hygiene,
+    criticality coverage, vulnerability exposure, scan/monitoring, lifecycle &
+    exposure) blended into one inventory score + an attention queue — every metric
+    a numerator/denominator over real asset/vuln/criticality records. Registered
+    before /{asset_id} so the literal path wins."""
+    from ..modules.it_assets.scoring import score_inventory
+    tids = get_user_tenants(current_user, db)
+    if not tids:
+        return {"as_of": None, "counts": {}, "sections": {},
+                "performance": {"score": None, "grade": None, "components": []},
+                "attention_queue": {}}
+    return score_inventory(db, tids)
+
+
 # ─── Criticality helper endpoints ─────────────────────────────────
 # Two helpers powering the new IT-Asset form:
 #   * `/criticality/business-functions` — catalogue of categories the

@@ -943,6 +943,9 @@ export const certificationsApi = {
 };
 
 export const ermApi = {
+  dashboard: {
+    getSectionsOverview: () => apiClient.get('/erm/dashboard/sections-overview'),
+  },
   risks: {
     getAll: (filters?: { category?: string; register_type?: string; status?: string; min_score?: number; max_score?: number }) => {
       const params = new URLSearchParams();
@@ -2233,6 +2236,8 @@ export const frameworkUploadApi = {
 
 export const complianceApi = {
   dashboard: {
+    getSectionsOverview: () =>
+      apiClient.get('/compliance/policies/dashboard/sections-overview'),
     getSummary: (params?: { tenant_id?: number; document_id?: number }) =>
       apiClient.get('/compliance/policies/dashboard/summary', { params }),
     getTrends: (params?: { tenant_id?: number; months?: number }) =>
@@ -3586,6 +3591,7 @@ export const controlLibraryApi = {
     getAuditSavings: () => apiClient.get('/control-library/coverage/audit-savings'),
     getTrends: (params?: { period?: 'weekly' | 'monthly' }) =>
       apiClient.get('/control-library/coverage/trends', { params }),
+    getLibraryHealth: () => apiClient.get('/control-library/reports/library-health'),
   },
 
   // Reports Module

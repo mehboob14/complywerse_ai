@@ -129,6 +129,7 @@ const navigation: NavEntry[] = [
     icon: ShieldCheck,
     requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
     items: [
+      { name: 'Overview', href: '/compliance', icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
       { name: 'Frameworks', href: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Controls', href: '/controls', icon: Shield, requiredPermissions: ['controls:control_library:*'] },
       // { name: 'Evidence Requirements', href: '/evidence-requirements', icon: ClipboardList, requiredPermissions: ['evidence:evidence_requirements:*'] },
@@ -155,7 +156,8 @@ const navigation: NavEntry[] = [
           { name: 'CTI Maturity', href: '/assessments/cs_cti', icon: BarChart3, requiredPermissions: ['compliance:assessments:*'] },
           { name: 'Incident Management', href: '/assessments/cs_incident', icon: AlertTriangle, requiredPermissions: ['compliance:assessments:*'] },
           { name: 'IT Security Operations', href: '/assessments/cs_itsecops', icon: Activity, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'KPI Report', href: '/assessments/cs_kpi', icon: BarChart3, requiredPermissions: ['compliance:assessments:*'] },
+          // KPI Report intentionally NOT here — the Cyber Security KPI dashboard
+          // belongs in the main complyverse dashboard, not the Assessments module.
         ],
       },
       // "NCA" folder → nested dropdown holding its templates.
@@ -171,6 +173,7 @@ const navigation: NavEntry[] = [
       },
       { name: 'Digital Operations Maturity', href: '/assessments/digital_ops_maturity', icon: Target, requiredPermissions: ['compliance:assessments:*'] },
       { name: 'DPIA / PIA', href: '/assessments/dpia', icon: ClipboardList, requiredPermissions: ['compliance:assessments:*'] },
+      { name: 'Saudi PDPL', href: '/assessments/pdpl', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },
     ],
   },
   {

@@ -51,6 +51,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
+import MainModuleCards from '@/components/dashboard/MainModuleCards';
 
 import {
   ExecutivePortfolioWidget,
@@ -2473,6 +2474,10 @@ export default function MainDashboard() {
 
   return (
     <div className="-m-4 flex flex-col bg-[var(--color-surface)] lg:-m-5">
+      {/* Aggregated module scorecards — each ring-card links to its module overview. */}
+      <div className="px-3 pt-4 sm:px-6">
+        <MainModuleCards />
+      </div>
       <div className="border-b border-gray-200 bg-white px-3 sm:px-6">
         <div className="flex items-center gap-0 overflow-x-auto -mb-px">
           {MAIN_TABS.map(({ id, label, icon: Icon }) => (

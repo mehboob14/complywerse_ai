@@ -6,6 +6,7 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
 } from 'recharts';
+import InventoryScorecard from '@/components/dashboard/InventoryScorecard';
 
 const ASSET_TYPE_COLORS: Record<string, string> = {
   application:   '#3b82f6',
@@ -493,6 +494,9 @@ export default function AssetsPage() {
       {/* Criticality coverage banner hidden — keep import + component
           on disk so re-enabling is a single-line uncomment.
       <CriticalityCoverageWidget /> */}
+
+      {/* Board-level, formula-driven inventory scorecard (server-scored). */}
+      <InventoryScorecard />
 
       {/* Visual overview — 3 chart panels */}
       <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3">
