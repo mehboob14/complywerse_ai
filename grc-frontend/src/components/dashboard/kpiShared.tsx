@@ -17,15 +17,18 @@ export const BAD = '#e11d48';
 export const TEAL = '#0d9488';
 export const KPI_FORMAT = 'kpi_report';
 
+export type Point = { date: string; value: number | null };
 export type LiveMetric = {
   label: string; actual: number | null; numerator: number; denominator: number;
   formula: string; target: number | null; direction: string; source: string; href: string; on_target: boolean | null;
+  history?: Point[];
 };
 export type Kpi = {
   domain: string; topic: string; def: string; extSource: string;
   live: boolean; lowerBetter: boolean;
   actual: number | null; target: number | null; onTarget: boolean | null;
   numerator?: number; denominator?: number; formula?: string; source: string; href?: string;
+  history: Point[];
 };
 
 // Which cybersecurity domains map to a live in-platform metric.
@@ -59,11 +62,12 @@ export function buildKpis(items: any[], metrics: Record<string, LiveMetric>): Kp
         live: true, lowerBetter: m.direction === 'lower',
         actual: m.actual, target: m.target, onTarget: m.on_target,
         numerator: m.numerator, denominator: m.denominator, formula: m.formula, source: m.source, href: m.href,
+        history: m.history || [],
       };
     }
     return {
       domain: c.domain, topic: c.topic, def: c.def, extSource: c.extSource,
-      live: false, lowerBetter: false, actual: null, target: null, onTarget: null, source: 'External source',
+      live: false, lowerBetter: false, actual: null, target: null, onTarget: null, source: 'External source', history: [],
     };
   });
 }
@@ -71,13 +75,32 @@ export function buildKpis(items: any[], metrics: Record<string, LiveMetric>): Kp
 export const pct = (v: number | null) => (v == null ? '—' : `${Math.round(v)}%`);
 const clamp = (v: number | null) => Math.max(0, Math.min(100, v ?? 0));
 
-// Actual bar with a target marker (live KPIs only).
+// Actual bar with a target marker (fallback when there isn't enough history).
 export function TargetBar({ actual, target, tone }: { actual: number | null; target: number | null; tone: string }) {
   return (
     <div className="relative h-2 w-full rounded-full bg-slate-100">
       <div className="h-2 rounded-full" style={{ width: `${clamp(actual)}%`, backgroundColor: tone }} />
       {target != null && <div className="absolute -top-0.5 h-3 w-[2px] rounded bg-slate-500" style={{ left: `calc(${clamp(target)}% - 1px)` }} title={`target ${Math.round(target)}%`} />}
     </div>
+  );
+}
+
+// The trend line — teal actual over time vs a dashed target line ("trading chart").
+export function Trend({ history, target, actual, tone, width = 130, height = 40 }: { history: Point[]; target: number | null; actual: number | null; tone: string; width?: number; height?: number }) {
+  const pts = (history || []).filter((h) => h.value != null);
+  if (pts.length < 2) return <TargetBar actual={actual} target={target} tone={tone} />;
+  const W = width, H = height, pad = 4;
+  const n = pts.length;
+  const x = (i: number) => pad + ((W - 2 * pad) * i) / (n - 1);
+  const y = (v: number) => H - pad - (clamp(v) / 100) * (H - 2 * pad);
+  const line = pts.map((h, i) => `${x(i).toFixed(1)},${y(h.value as number).toFixed(1)}`).join(' ');
+  const lastY = y(pts[n - 1].value as number);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
+      {target != null && <line x1={pad} x2={W - pad} y1={y(target)} y2={y(target)} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="3 2" />}
+      <polyline points={line} fill="none" stroke={TEAL} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={x(n - 1)} cy={lastY} r="2.4" fill={TEAL} />
+    </svg>
   );
 }
 
@@ -105,6 +128,18 @@ export function KpiDetailModal({ k, onClose }: { k: Kpi | null; onClose: () => v
 
           {k.live ? (
             <>
+              {k.history.filter((h) => h.value != null).length >= 2 && (
+                <div className="rounded-xl border border-slate-100 bg-white p-3">
+                  <div className="mb-1 flex items-center justify-between text-[10px] text-slate-400">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1"><span className="inline-block h-[2px] w-4" style={{ background: TEAL }} /> actual</span>
+                      <span className="inline-flex items-center gap-1"><span className="inline-block h-[2px] w-4 border-t border-dashed border-slate-400" /> target</span>
+                    </span>
+                    <span>last {k.history.length} weeks</span>
+                  </div>
+                  <Trend history={k.history} target={k.target} actual={k.actual} tone={tone} width={520} height={80} />
+                </div>
+              )}
               <div className="rounded-xl p-4" style={{ backgroundColor: `${tone}0f` }}>
                 <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: tone }}>Current</p>
                 <p className="mt-1 text-[13px] text-slate-700">
@@ -153,7 +188,7 @@ export function KpiRow({ k, onOpen }: { k: Kpi; onOpen: () => void }) {
         <p className="truncate text-[12.5px] font-medium text-slate-700" title={k.topic}>{k.topic}</p>
       </div>
       <div className="hidden w-[130px] flex-shrink-0 sm:block">
-        {k.live ? <TargetBar actual={k.actual} target={k.target} tone={tone} /> : <span className="text-[10px] text-slate-300">not measured in-platform</span>}
+        {k.live ? <Trend history={k.history} target={k.target} actual={k.actual} tone={tone} width={130} height={30} /> : <span className="text-[10px] text-slate-300">not measured in-platform</span>}
       </div>
       <div className="w-[64px] flex-shrink-0 text-right">
         <div className="text-[13px] font-bold tabular-nums" style={{ color: tone }}>{pct(k.actual)}</div>

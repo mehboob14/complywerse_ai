@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import apiClient from '@/lib/api';
 import { Activity, ArrowRight, Target, Info, ExternalLink } from 'lucide-react';
-import { KPI_FORMAT, GOOD, BAD, TEAL, type Kpi, type LiveMetric, buildKpis, pct, toneOf, TargetBar, KpiDetailModal } from '@/components/dashboard/kpiShared';
+import { KPI_FORMAT, GOOD, BAD, TEAL, type Kpi, type LiveMetric, buildKpis, pct, toneOf, Trend, KpiDetailModal } from '@/components/dashboard/kpiShared';
 
 function KpiCell({ k, onOpen }: { k: Kpi; onOpen: () => void }) {
   const tone = toneOf(k);
@@ -37,8 +37,8 @@ function KpiCell({ k, onOpen }: { k: Kpi; onOpen: () => void }) {
             <span className="text-[19px] font-bold leading-none tabular-nums" style={{ color: tone }}>{pct(k.actual)}</span>
             <span className="flex items-center gap-0.5 text-[10px] text-slate-400"><Target className="h-3 w-3" />{pct(k.target)}</span>
           </div>
-          <TargetBar actual={k.actual} target={k.target} tone={tone} />
-          <div className="mt-1.5 flex items-center justify-between">
+          <Trend history={k.history} target={k.target} actual={k.actual} tone={tone} width={150} height={40} />
+          <div className="mt-1 flex items-center justify-between">
             <span className="text-[9px] font-medium" style={{ color: k.onTarget ? GOOD : BAD }}>{k.onTarget ? 'On target' : 'Below target'} · live</span>
             {k.numerator != null && k.denominator != null && <span className="text-[9px] tabular-nums text-slate-400">{k.numerator}/{k.denominator}</span>}
           </div>

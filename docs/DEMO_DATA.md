@@ -56,6 +56,7 @@ rows then re-inserts; `cleanup` removes them. All accept `--tenant <slug>`
 | `seed_demo_mobile.py` | Assessments — Mobile (MASVS) |
 | `seed_demo_audit.py` | Assessments — audit tracking |
 | `seed_demo_rest.py` | Assessments — remaining checklist/tracking types |
+| `seed_demo_kpi_history.py` | Cyber Security KPI **trend history** (run LAST — reads the modules above) |
 
 ### Seed everything at once
 
@@ -65,6 +66,8 @@ for s in governance_docs erm compliance it_assets asvs itsecops pdpl \
   echo "== seeding $s =="
   python "seed_demo_${s}.py" seed --tenant complyverse
 done
+# KPI trend history reads the live values from the modules above, so seed it last:
+python seed_demo_kpi_history.py seed --tenant complyverse
 ```
 
 ### Roll it all back
