@@ -130,18 +130,18 @@ export function dlabel(iso: string) {
 }
 
 // The full trend chart — teal actual line with value labels, dashed target line,
-// dated x-axis. The big "trading chart" view for the drill-in.
-export function RichTrend({ history, target }: { history: Point[]; target: number | null }) {
+// dated x-axis. The big "trading chart" view; shown inline on cards and in drill-in.
+export function RichTrend({ history, target, width = 520, height = 150 }: { history: Point[]; target: number | null; width?: number; height?: number }) {
   const pts = (history || []).filter((h) => h.value != null);
   if (pts.length < 2) return null;
-  const W = 520, H = 150, padL = 8, padR = 16, padT = 26, padB = 22;
+  const W = width, H = height, padL = 8, padR = 16, padT = 26, padB = 22;
   const n = pts.length;
   const x = (i: number) => padL + ((W - padL - padR) * i) / (n - 1);
   const y = makeY(pts, target, H, padT, padB);
   const line = pts.map((h, i) => `${x(i).toFixed(1)},${y(h.value as number).toFixed(1)}`).join(' ');
   const showLbl = (i: number) => i === 0 || i === n - 1 || i % 2 === 1;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full" style={{ height: H }}>
       {[25, 50, 75].map((g) => <line key={g} x1={padL} x2={W - padR} y1={y(g)} y2={y(g)} stroke="#f1f5f9" strokeWidth="1" />)}
       {target != null && (
         <>
@@ -158,6 +158,29 @@ export function RichTrend({ history, target }: { history: Point[]; target: numbe
         </g>
       ))}
     </svg>
+  );
+}
+
+// Recent snapshots as period cards (value, vs target, variance) — like the old
+// quarterly Q1–Q4 cards, but on the real weekly history.
+export function PeriodCards({ history, target }: { history: Point[]; target: number | null }) {
+  const recent = (history || []).filter((h) => h.value != null).slice(-5);
+  if (!recent.length) return null;
+  return (
+    <div className="grid grid-cols-5 gap-1.5">
+      {recent.map((p, i) => {
+        const v = Math.round(p.value as number);
+        const varc = target != null ? Math.round((p.value as number) - target) : null;
+        return (
+          <div key={i} className="rounded-lg border border-slate-100 px-1.5 py-1.5 text-center">
+            <div className="text-[8.5px] text-slate-400">{dlabel(p.date)}</div>
+            <div className="text-[12px] font-bold tabular-nums" style={{ color: TEAL }}>{v}%</div>
+            {target != null && <div className="text-[8px] text-slate-400">vs {Math.round(target)}%</div>}
+            {varc != null && <div className="text-[9px] font-semibold tabular-nums" style={{ color: varc >= 0 ? GOOD : BAD }}>{varc >= 0 ? '+' : ''}{varc}pp</div>}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -190,21 +213,7 @@ export function KpiDetailModal({ k, onClose }: { k: Kpi | null; onClose: () => v
                     <span>recorded weekly · live</span>
                   </div>
                   <RichTrend history={k.history} target={k.target} />
-                  {/* period breakdown — recent snapshots with variance vs target */}
-                  <div className="mt-2 grid grid-cols-5 gap-1.5">
-                    {k.history.filter((h) => h.value != null).slice(-5).map((p, i) => {
-                      const v = Math.round(p.value as number);
-                      const varc = k.target != null ? Math.round((p.value as number) - k.target) : null;
-                      return (
-                        <div key={i} className="rounded-lg border border-slate-100 px-1.5 py-1.5 text-center">
-                          <div className="text-[8.5px] text-slate-400">{dlabel(p.date)}</div>
-                          <div className="text-[12px] font-bold tabular-nums" style={{ color: TEAL }}>{v}%</div>
-                          {k.target != null && <div className="text-[8px] text-slate-400">vs {Math.round(k.target)}%</div>}
-                          {varc != null && <div className="text-[9px] font-semibold tabular-nums" style={{ color: varc >= 0 ? GOOD : BAD }}>{varc >= 0 ? '+' : ''}{varc}pp</div>}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <div className="mt-2"><PeriodCards history={k.history} target={k.target} /></div>
                 </div>
               )}
               <div className="rounded-xl p-4" style={{ backgroundColor: `${tone}0f` }}>
