@@ -93,14 +93,6 @@ export default function GovernanceDashboardPage() {
     },
   });
 
-  const { data: complianceCoverage, isLoading: complianceLoading } = useQuery({
-    queryKey: ['governance-compliance-coverage'],
-    queryFn: async () => {
-      const response = await governanceApi.getComplianceCoverage();
-      return response.data;
-    },
-  });
-
   const { data: trends, isLoading: trendsLoading } = useQuery({
     queryKey: ['governance-trends'],
     queryFn: async () => {
@@ -195,42 +187,6 @@ export default function GovernanceDashboardPage() {
     },
   });
 
-  const { data: complianceByFramework, isLoading: frameworkLoading } = useQuery({
-    queryKey: ['governance-compliance-framework-overview'],
-    queryFn: async () => {
-      try {
-        const response = await governanceApi.getComplianceByFramework();
-        return response.data as {
-          frameworks?: Array<{
-            framework_id: number;
-            framework_name: string;
-            compliance_percentage: number;
-            fully_compliant?: number;
-            total_clauses?: number;
-          }>;
-        };
-      } catch {
-        return null;
-      }
-    },
-  });
-
-  const { data: openGapsSummary, isLoading: gapsLoading } = useQuery({
-    queryKey: ['governance-open-gaps-overview'],
-    queryFn: async () => {
-      try {
-        const response = await governanceApi.getOpenGapsSummary();
-        return response.data as {
-          total_open_gaps: number;
-          by_severity?: Record<string, number>;
-          aging_analysis?: Record<string, number>;
-        };
-      } catch {
-        return null;
-      }
-    },
-  });
-
   const isLoading =
     summaryLoading ||
     pendingLoading ||
@@ -238,15 +194,12 @@ export default function GovernanceDashboardPage() {
     overdueLoading ||
     recentLoading ||
     reviewStatsLoading ||
-    complianceLoading ||
     trendsLoading ||
     exceptionLoading ||
     workflowStatsLoading ||
     committeeLoading ||
     regulatoryLoading ||
-    attestationLoading ||
-    frameworkLoading ||
-    gapsLoading;
+    attestationLoading;
 
   if (isLoading) {
     return (
@@ -272,7 +225,7 @@ export default function GovernanceDashboardPage() {
     );
   }
 
-  // ---- Derived metrics (unchanged data flow; only presentation reworked) ----
+  // ---- Derived metrics (governance-only; no framework/compliance) ----
   const totalDocuments = summary?.total_documents || 0;
   const byStatus = summary?.by_status || {};
   const publishedCount = byStatus['published'] || 0;
@@ -280,7 +233,6 @@ export default function GovernanceDashboardPage() {
   const expiringCount = expiringSoon?.by_timeframe?.['30_days'] || 0;
   const overdueCount = overdueReviews?.count || 0;
   const reviewsDueThisMonth = reviewStats?.due_this_month || 0;
-  const complianceRate = complianceCoverage?.overall_coverage_percent || 0;
 
   const publishedPct = totalDocuments > 0 ? Math.round((publishedCount / totalDocuments) * 100) : 0;
   const exceptionTotal = exceptionSummary?.total || 0;
@@ -291,25 +243,29 @@ export default function GovernanceDashboardPage() {
   const freshnessScore = totalDocuments > 0 ? Math.max(0, 100 - Math.round((expiringCount / totalDocuments) * 100)) : 100;
 
   const workflowPendingAll = workflowDashboard?.pending_all || pendingCount;
+  const committeeCount = committeeDashboard?.total_committees || 0;
+  const upcomingMeetings = committeeDashboard?.upcoming_meetings || 0;
+  const openActions = committeeDashboard?.open_actions || 0;
   const overdueActions = committeeDashboard?.overdue_actions || 0;
+  const committeeHealth = openActions > 0 ? Math.max(0, 100 - Math.round((overdueActions / openActions) * 100)) : 100;
   const regulatoryChanges = regulatoryDashboard?.total_changes || 0;
   const regulatoryPendingAssessments = regulatoryDashboard?.pending_assessments || 0;
   const regulatoryGaps = regulatoryDashboard?.gaps_identified || 0;
   const attestationCompletion = Number(attestationDashboard?.completion_rate || 0);
   const attestationOverdue = attestationDashboard?.overdue_attestations || 0;
-  const openGapsTotal = openGapsSummary?.total_open_gaps || 0;
-  const gapSeverity: Record<string, number> = openGapsSummary?.by_severity || {};
 
+  // Blended governance health — documents, reviews, approvals, attestations,
+  // committee action health, exceptions, regulatory change management.
   const governanceHealthScore = Math.round(
-    publishedPct * 0.22 +
-    Math.round(complianceRate) * 0.24 +
-    reviewHealthScore * 0.18 +
-    approvalHealthScore * 0.14 +
-    attestationCompletion * 0.12 +
-    (exceptionTotal > 0 ? Math.max(0, 100 - exceptionAttentionPct) : 100) * 0.05 +
+    publishedPct * 0.24 +
+    reviewHealthScore * 0.20 +
+    approvalHealthScore * 0.16 +
+    attestationCompletion * 0.16 +
+    committeeHealth * 0.12 +
+    (exceptionTotal > 0 ? Math.max(0, 100 - exceptionAttentionPct) : 100) * 0.06 +
     (regulatoryChanges > 0
       ? Math.max(0, 100 - Math.round(((regulatoryPendingAssessments + regulatoryGaps) / Math.max(1, regulatoryChanges)) * 100))
-      : 100) * 0.05
+      : 100) * 0.06
   );
 
   // Half-gauge arc length (π·r, r=82) → dash for the score.
@@ -325,9 +281,9 @@ export default function GovernanceDashboardPage() {
 
   const postureBars = [
     { metric: 'Publishing', score: publishedPct },
-    { metric: 'Coverage', score: Math.round(complianceRate) },
     { metric: 'Reviews', score: reviewHealthScore },
     { metric: 'Approvals', score: approvalHealthScore },
+    { metric: 'Committees', score: committeeHealth },
     { metric: 'Freshness', score: freshnessScore },
     { metric: 'Exceptions', score: exceptionTotal > 0 ? Math.max(0, 100 - exceptionAttentionPct) : 100 },
   ];
@@ -349,14 +305,7 @@ export default function GovernanceDashboardPage() {
     { title: 'Overdue committee actions', sub: 'follow-ups past due', value: overdueActions, tone: 'rose', link: 'Committees', href: '/governance/committees/actions' },
     { title: 'Pending approvals', sub: 'awaiting sign-off', value: workflowPendingAll, tone: 'amber', link: 'Approvals', href: '/governance/approvals' },
     { title: 'Expiring ≤ 30 days', sub: 'documents to renew', value: expiringCount, tone: 'amber', link: 'Documents', href: '/governance/documents' },
-    {
-      title: 'Open framework gaps',
-      sub: `${gapSeverity.critical || 0} critical · ${gapSeverity.high || 0} high`,
-      value: openGapsTotal,
-      tone: 'amber',
-      link: 'Mappings',
-      href: '/governance/mappings',
-    },
+    { title: 'Exception attention', sub: 'pending + expiring', value: exceptionAttentionCount, tone: 'amber', link: 'Exceptions', href: '/governance/exceptions' },
   ];
 
   const trendData: { month: string; created: number; published: number }[] = (trends?.created || []).map(
@@ -370,20 +319,18 @@ export default function GovernanceDashboardPage() {
   const publishedTotalInPeriod = trendData.reduce((sum, item) => sum + item.published, 0);
   const publishRate = createdTotal > 0 ? Math.round((publishedTotalInPeriod / createdTotal) * 100) : 0;
 
-  const frameworkItems = ((complianceByFramework?.frameworks || []) as Array<any>).slice(0, 6).map((fw) => ({
-    label: fw.framework_name,
-    value: Number(fw.compliance_percentage || 0),
-    meta: `${fw.fully_compliant || 0}/${fw.total_clauses || 0} clauses`,
-  }));
-  const frameworkCount = ((complianceByFramework?.frameworks || []) as Array<any>).length;
-  const strongFrameworkCount = ((complianceByFramework?.frameworks || []) as Array<any>).filter((fw) => Number(fw.compliance_percentage || 0) >= 80).length;
+  const committeeTiles = [
+    { label: 'Meetings', value: upcomingMeetings, sub: 'upcoming', danger: false },
+    { label: 'Open actions', value: openActions, sub: 'in progress', danger: false },
+    { label: 'Overdue', value: overdueActions, sub: 'actions past due', danger: overdueActions > 0 },
+  ];
 
   const kpis = [
     { label: 'Documents', value: totalDocuments, sub: 'governed portfolio', tone: 'text-primary-700' },
     { label: 'Published', value: publishedCount, sub: `${publishedPct}% live`, tone: 'text-emerald-600' },
     { label: 'Pending flow', value: workflowPendingAll, sub: 'reviews & approvals', tone: 'text-amber-600' },
     { label: 'Overdue reviews', value: overdueCount, sub: 'past review date', tone: 'text-rose-600' },
-    { label: 'Coverage', value: `${Math.round(complianceRate)}%`, sub: 'framework mapping', tone: 'text-primary-700' },
+    { label: 'Committees', value: committeeCount, sub: 'oversight bodies', tone: 'text-primary-700' },
   ];
 
   return (
@@ -392,7 +339,7 @@ export default function GovernanceDashboardPage() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Governance Overview</h1>
-          <p className="text-sm text-slate-500">Real-time policy, framework, review &amp; oversight posture</p>
+          <p className="text-sm text-slate-500">Real-time policy, review, attestation &amp; committee posture</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
@@ -403,11 +350,11 @@ export default function GovernanceDashboardPage() {
             Attestations
           </Link>
           <Link
-            href="/compliance/statements"
+            href="/governance/committees"
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
           >
-            <FileText size={15} strokeWidth={1.75} />
-            Statements
+            <FileCheck size={15} strokeWidth={1.75} />
+            Committees
           </Link>
           <Link href="/governance/documents" className="btn-primary">
             <FileText size={15} strokeWidth={1.75} />
@@ -521,37 +468,43 @@ export default function GovernanceDashboardPage() {
         </div>
       </div>
 
-      {/* Framework coverage + Throughput */}
+      {/* Committee oversight + Throughput */}
       <div className="grid gap-4 lg:grid-cols-[7fr_5fr]">
-        {/* Framework coverage */}
+        {/* Committee oversight */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-card">
           <div className="mb-3 flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-slate-800">Framework coverage</h2>
-              <p className="text-[11px] text-slate-500">Mapped compliance by framework</p>
+              <h2 className="text-sm font-semibold text-slate-800">Committee oversight</h2>
+              <p className="text-[11px] text-slate-500">Governance bodies, meetings &amp; actions</p>
             </div>
-            <span className="text-[11px] text-slate-400">{strongFrameworkCount} of {frameworkCount} ≥ 80%</span>
+            <Link href="/governance/committees" className="whitespace-nowrap text-[11px] font-medium text-primary-700 hover:underline">
+              Open committees →
+            </Link>
           </div>
-          {frameworkItems.length > 0 ? (
-            frameworkItems.map((f) => (
-              <div key={f.label} className="mb-2.5 last:mb-0">
-                <div className="mb-1 flex justify-between text-xs">
-                  <span className="font-medium text-slate-700">{f.label}</span>
-                  <span className="text-slate-500">{f.value}% · {f.meta}</span>
-                </div>
-                <div className="h-[7px] overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full rounded-full" style={{ width: `${Math.min(100, f.value)}%`, backgroundColor: toneColor(f.value) }} />
-                </div>
+          <div className="grid grid-cols-3 gap-2">
+            {committeeTiles.map((t) => (
+              <div key={t.label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t.label}</p>
+                <p className={`mt-1 text-2xl font-bold leading-none ${t.danger ? 'text-rose-600' : 'text-slate-900'}`}>{t.value}</p>
+                <p className="mt-1 text-[10px] text-slate-400">{t.sub}</p>
               </div>
-            ))
-          ) : (
-            <div className="flex h-[180px] items-center justify-center text-xs text-slate-400">No framework mapping results yet</div>
-          )}
+            ))}
+          </div>
+          <div className="mt-4">
+            <div className="mb-1 flex justify-between text-xs">
+              <span className="font-medium text-slate-700">Committee action health</span>
+              <span className="text-slate-500">{committeeHealth}% on track</span>
+            </div>
+            <div className="h-[7px] overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full" style={{ width: `${Math.min(100, committeeHealth)}%`, backgroundColor: toneColor(committeeHealth) }} />
+            </div>
+          </div>
           <div className="mt-3 flex flex-wrap gap-1.5">
-            <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] font-medium text-rose-700">Critical {gapSeverity.critical || 0}</span>
-            <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700">High {gapSeverity.high || 0}</span>
-            <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700">Medium {gapSeverity.medium || 0}</span>
-            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">Low {gapSeverity.low || 0}</span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">{committeeCount} committees</span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-600">{upcomingMeetings} meetings scheduled</span>
+            {overdueActions > 0 && (
+              <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] font-medium text-rose-700">{overdueActions} overdue</span>
+            )}
           </div>
         </div>
 
