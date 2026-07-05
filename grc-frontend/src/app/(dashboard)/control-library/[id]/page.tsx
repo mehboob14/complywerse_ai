@@ -37,16 +37,18 @@ interface Rich {
   normalized_sets: number; standalone: number; sets: SetT[]; standalone_controls: SetT[];
 }
 
-function StatCard({ value, label, sub, grad, icon }: { value: ReactNode; label: string; sub: string; grad: string; icon: ReactNode }) {
+function StatCard({ value, label, sub, tone = 'primary', icon }: { value: ReactNode; label: string; sub: string; tone?: 'primary' | 'slate'; icon: ReactNode }) {
+  const bar = tone === 'slate' ? 'bg-slate-400' : 'bg-primary-600';
+  const chip = tone === 'slate' ? 'bg-slate-100 text-slate-600' : 'bg-primary-50 text-primary-600';
   return (
     <div className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${grad}`} />
+      <div className={`absolute inset-x-0 top-0 h-1 ${bar}`} />
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-2xl font-bold leading-none text-slate-900 tabular-nums">{value}</p>
           <p className="mt-1.5 text-xs font-semibold text-slate-600">{label}</p>
         </div>
-        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${grad} text-white shadow-sm transition-transform group-hover:scale-105`}>{icon}</span>
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${chip} shadow-sm transition-transform group-hover:scale-105`}>{icon}</span>
       </div>
       <p className="mt-3 text-[11px] text-slate-400">{sub}</p>
     </div>
@@ -215,9 +217,7 @@ export default function CategoryDetail() {
       <button onClick={() => router.push('/control-library')} className="flex items-center gap-1 text-xs text-slate-500 hover:text-primary-700"><ChevronLeft size={14} />All control domains</button>
 
       {/* ── Domain banner (grouping) ─────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 p-6 text-white shadow-sm">
-        <div className="absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white/10" />
-        <div className="absolute -right-20 bottom-0 h-44 w-44 rounded-full bg-white/5" />
+      <div className="relative overflow-hidden rounded-2xl bg-primary-600 p-6 text-white shadow-sm">
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25"><Layers size={24} /></span>
@@ -245,21 +245,21 @@ export default function CategoryDetail() {
 
       {/* ── Dashboard stat cards ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard value={stat.controls} label="Controls grouped" sub={filterOn ? `In your ${selectedFw.length}-framework view` : 'Under this domain'} grad="from-sky-500 to-blue-600" icon={<Library className="h-5 w-5" />} />
-        <StatCard value={filterOn ? stat.frameworks : `${data.framework_count}/30`} label="Frameworks represented" sub={filterOn ? 'Selected frameworks here' : (data.absent_frameworks.length > 0 ? `${data.absent_frameworks.length} have no controls of this type — see why below` : 'All frameworks represented')} grad="from-indigo-500 to-violet-600" icon={<Building2 className="h-5 w-5" />} />
-        <StatCard value={stat.sets} label="Normalized sets" sub="Same requirement, deduped" grad="from-primary-500 to-primary-700" icon={<GitMerge className="h-5 w-5" />} />
-        <StatCard value={stat.standalone} label="Standalone" sub="Framework-unique" grad="from-slate-400 to-slate-600" icon={<Shield className="h-5 w-5" />} />
-        <StatCard value={stat.ev} label="Normalized evidence" sub={filterOn ? 'In your filtered view' : 'Across all sets'} grad="from-emerald-500 to-teal-600" icon={<FileText className="h-5 w-5" />} />
-        <StatCard value={stat.art} label="Artifacts" sub={filterOn ? 'In your filtered view' : 'Across sets & standalone'} grad="from-amber-500 to-orange-600" icon={<FileStack className="h-5 w-5" />} />
+        <StatCard value={stat.controls} label="Controls grouped" sub={filterOn ? `In your ${selectedFw.length}-framework view` : 'Under this domain'} tone="primary" icon={<Library className="h-5 w-5" strokeWidth={1.75} />} />
+        <StatCard value={filterOn ? stat.frameworks : `${data.framework_count}/30`} label="Frameworks represented" sub={filterOn ? 'Selected frameworks here' : (data.absent_frameworks.length > 0 ? `${data.absent_frameworks.length} have no controls of this type — see why below` : 'All frameworks represented')} tone="primary" icon={<Building2 className="h-5 w-5" strokeWidth={1.75} />} />
+        <StatCard value={stat.sets} label="Normalized sets" sub="Same requirement, deduped" tone="primary" icon={<GitMerge className="h-5 w-5" strokeWidth={1.75} />} />
+        <StatCard value={stat.standalone} label="Standalone" sub="Framework-unique" tone="slate" icon={<Shield className="h-5 w-5" strokeWidth={1.75} />} />
+        <StatCard value={stat.ev} label="Normalized evidence" sub={filterOn ? 'In your filtered view' : 'Across all sets'} tone="primary" icon={<FileText className="h-5 w-5" strokeWidth={1.75} />} />
+        <StatCard value={stat.art} label="Artifacts" sub={filterOn ? 'In your filtered view' : 'Across sets & standalone'} tone="slate" icon={<FileStack className="h-5 w-5" strokeWidth={1.75} />} />
       </div>
 
       {/* framework coverage in this domain — collapsible tables (whole-domain explainer; hidden under a filter) */}
       {!filterOn && fwAll.length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white">
           <button onClick={() => setShowAbsent(!showAbsent)} className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left">
-            <span className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Building2 className="h-4 w-4 text-indigo-500" />Framework coverage in this domain</span>
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Building2 className="h-4 w-4 text-primary-600" strokeWidth={1.75} />Framework coverage in this domain</span>
             <span className="flex items-center gap-2 text-[11.5px]">
-              <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700">{data.framework_count}/30 represented</span>
+              <span className="rounded-full bg-primary-50 px-2 py-0.5 font-medium text-primary-700">{data.framework_count}/30 represented</span>
               {data.absent_frameworks.length > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">{data.absent_frameworks.length} not here</span>}
               <ChevronDown size={15} className={`text-slate-400 ${showAbsent ? 'rotate-180 transition' : 'transition'}`} />
             </span>
@@ -411,7 +411,7 @@ export default function CategoryDetail() {
               const fwc = Array.from(new Set(s.frameworks.map(sf))).sort((a, b) => (filterOn ? ((selectedFw.includes(b) ? 1 : 0) - (selectedFw.includes(a) ? 1 : 0)) : 0));
               return (
                 <button key={s.set_id} onClick={() => { setOpenSet(s); setPanelTab('members'); }} className="group relative flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-lg">
-                  <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary-400 via-primary-600 to-primary-700 opacity-70 transition-opacity group-hover:opacity-100" />
+                  <div className="absolute inset-x-0 top-0 h-1 bg-primary-600 opacity-70 transition-opacity group-hover:opacity-100" />
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-primary-600"><GitMerge className="h-3 w-3" />normalized</span>
                     <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 ring-1 ring-primary-100">{filterOn ? `${selMembers(s)} of ${s.member_count}` : `${s.member_count} frameworks`}</span>

@@ -2,7 +2,7 @@
 
 
 import { PageLoader } from '@/components/ui';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient, { frameworksApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -96,10 +96,10 @@ interface ControlGroup {
 }
 
 const PRIORITY_STYLES: Record<string, { bg: string; text: string; bar: string }> = {
-  critical: { bg: 'bg-red-500/20', text: 'text-red-400', bar: 'bg-red-500' },
-  high: { bg: 'bg-orange-500/20', text: 'text-orange-400', bar: 'bg-orange-500' },
-  medium: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', bar: 'bg-yellow-500' },
-  low: { bg: 'bg-green-500/20', text: 'text-green-400', bar: 'bg-green-500' },
+  critical: { bg: 'bg-red-50', text: 'text-red-700', bar: 'bg-red-500' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-700', bar: 'bg-orange-500' },
+  medium: { bg: 'bg-amber-50', text: 'text-amber-700', bar: 'bg-amber-500' },
+  low: { bg: 'bg-emerald-50', text: 'text-emerald-700', bar: 'bg-emerald-500' },
 };
 
 export default function EvidenceSuggestionsPage() {
@@ -245,7 +245,7 @@ export default function EvidenceSuggestionsPage() {
     const style = PRIORITY_STYLES[priority] || PRIORITY_STYLES.medium;
     return (
       <span className={`inline-flex items-center gap-1 rounded-full ${style.bg} px-2 py-0.5 text-xs font-medium ${style.text}`}>
-        {priority === 'critical' && <AlertTriangle size={10} />}
+        {priority === 'critical' && <AlertTriangle size={10} strokeWidth={1.75} />}
         {priority.charAt(0).toUpperCase() + priority.slice(1)}
       </span>
     );
@@ -254,7 +254,7 @@ export default function EvidenceSuggestionsPage() {
   const getConfidenceBadge = (confidence: number | null) => {
     if (confidence === null) return null;
     const pct = Math.round(confidence * 100);
-    const color = pct >= 80 ? 'text-green-400' : pct >= 60 ? 'text-yellow-400' : 'text-orange-400';
+    const color = pct >= 80 ? 'text-emerald-600' : pct >= 60 ? 'text-amber-600' : 'text-orange-600';
     return (
       <span className={`text-xs ${color}`}>
         {pct}%
@@ -273,15 +273,15 @@ export default function EvidenceSuggestionsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-black">Evidence Suggestions & Reuse</h1>
-          <p className="text-gray-600">AI-recommended evidence types and reuse metrics</p>
+          <h1 className="text-2xl font-bold text-slate-900">Evidence Suggestions & Reuse</h1>
+          <p className="text-slate-500">AI-recommended evidence types and reuse metrics</p>
         </div>
         {canCreate && <button
           onClick={() => {
             setBulkProgress(null);
             setShowBulkModal(true);
           }}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-black hover:bg-primary-700"
+          className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-[color:var(--color-on-base,#0a0a0a)] hover:bg-primary-700"
         >
           <Sparkles size={18} />
           Bulk Generate
@@ -291,8 +291,8 @@ export default function EvidenceSuggestionsPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="stat-card">
           <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-primary-500/20 to-primary-600/10 p-3">
-              <Brain className="h-6 w-6 text-blue-600" />
+            <div className="rounded-xl bg-primary-50 p-3">
+              <Brain className="h-6 w-6 text-primary-600" strokeWidth={1.75} />
             </div>
           </div>
           <p className="stat-value">{priorityLoading ? '-' : prioritySummary?.total || 0}</p>
@@ -301,8 +301,8 @@ export default function EvidenceSuggestionsPage() {
 
         <div className="stat-card">
           <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/10 p-3">
-              <AlertTriangle className="h-6 w-6 text-red-400" />
+            <div className="rounded-xl bg-red-50 p-3">
+              <AlertTriangle className="h-6 w-6 text-red-600" strokeWidth={1.75} />
             </div>
             {(prioritySummary?.priority_summary?.critical || 0) > 0 && (
               <span className="flex h-2 w-2">
@@ -317,8 +317,8 @@ export default function EvidenceSuggestionsPage() {
 
         <div className="stat-card">
           <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 p-3">
-              <Repeat className="h-6 w-6 text-blue-400" />
+            <div className="rounded-xl bg-primary-50 p-3">
+              <Repeat className="h-6 w-6 text-primary-600" strokeWidth={1.75} />
             </div>
           </div>
           <p className="stat-value">{reuseLoading ? '-' : `${reuseRate}%`}</p>
@@ -327,8 +327,8 @@ export default function EvidenceSuggestionsPage() {
 
         <div className="stat-card">
           <div className="flex items-start justify-between">
-            <div className="rounded-xl bg-gradient-to-br from-green-500/20 to-green-600/10 p-3">
-              <TrendingUp className="h-6 w-6 text-green-400" />
+            <div className="rounded-xl bg-emerald-50 p-3">
+              <TrendingUp className="h-6 w-6 text-emerald-600" strokeWidth={1.75} />
             </div>
           </div>
           <p className="stat-value">{savingsLoading ? '-' : `${auditSavings?.savings_percent || 0}%`}</p>
@@ -360,11 +360,11 @@ export default function EvidenceSuggestionsPage() {
                     <div className="mb-1 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className={`h-3 w-3 rounded-full ${style.bar}`}></span>
-                        <span className="text-sm font-medium capitalize text-black">{priority}</span>
+                        <span className="text-sm font-medium capitalize text-slate-900">{priority}</span>
                       </div>
                       <span className={`text-sm font-medium ${style.text}`}>{count}</span>
                     </div>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
                       <div
                         className={`h-full transition-all duration-500 ${style.bar}`}
                         style={{ width: `${pct}%` }}
@@ -386,8 +386,8 @@ export default function EvidenceSuggestionsPage() {
           </div>
           {!evidenceTypes?.length ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
-              <FileText className="mb-3 h-10 w-10 text-gray-400" />
-              <p className="text-sm text-gray-600">No evidence types yet</p>
+              <FileText className="mb-3 h-10 w-10 text-slate-400" strokeWidth={1.75} />
+              <p className="text-sm text-slate-500">No evidence types yet</p>
             </div>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -397,13 +397,13 @@ export default function EvidenceSuggestionsPage() {
                   onClick={() => handleTypeClick(type.evidence_type)}
                   className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
                     typeFilter === type.evidence_type
-                      ? 'border-primary-500 bg-primary-500/20 text-blue-600'
-                      : 'border-gray-300 bg-gray-100 text-gray-700 hover:border-gray-400 hover:bg-gray-100'
+                      ? 'border-primary-300 bg-primary-50 text-primary-700'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
-                  <FileCheck size={14} />
+                  <FileCheck size={14} strokeWidth={1.75} />
                   <span className="truncate max-w-[150px]">{type.evidence_type}</span>
-                  <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-xs text-gray-700">
+                  <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
                     {type.count}
                   </span>
                 </button>
@@ -427,36 +427,36 @@ export default function EvidenceSuggestionsPage() {
           </div>
         ) : !reuseStats?.top_reused_evidence?.length ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
-            <Repeat className="mb-3 h-10 w-10 text-gray-400" />
-            <p className="text-sm text-gray-600">No reused evidence found</p>
+            <Repeat className="mb-3 h-10 w-10 text-slate-400" strokeWidth={1.75} />
+            <p className="text-sm text-slate-500">No reused evidence found</p>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center gap-3">
-                  <FileCheck className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                  <FileCheck className="h-5 w-5 text-primary-600 flex-shrink-0" strokeWidth={1.75} />
                   <div>
-                    <p className="text-lg font-semibold text-black">{reuseStats.total_evidence}</p>
-                    <p className="text-xs text-gray-600">Total Evidence</p>
+                    <p className="text-lg font-semibold text-slate-900">{reuseStats.total_evidence}</p>
+                    <p className="text-xs text-slate-500">Total Evidence</p>
                   </div>
                 </div>
               </div>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center gap-3">
-                  <Repeat className="h-5 w-5 text-purple-500 flex-shrink-0" />
+                  <Repeat className="h-5 w-5 text-primary-600 flex-shrink-0" strokeWidth={1.75} />
                   <div>
-                    <p className="text-lg font-semibold text-black">{reuseStats.multi_framework_evidence}</p>
-                    <p className="text-xs text-gray-600">Multi-Framework</p>
+                    <p className="text-lg font-semibold text-slate-900">{reuseStats.multi_framework_evidence}</p>
+                    <p className="text-xs text-slate-500">Multi-Framework</p>
                   </div>
                 </div>
               </div>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                 <div className="flex items-center gap-3">
-                  <BarChart3 className="h-5 w-5 text-green-500 flex-shrink-0" />
+                  <BarChart3 className="h-5 w-5 text-emerald-600 flex-shrink-0" strokeWidth={1.75} />
                   <div>
-                    <p className="text-lg font-semibold text-black">{reuseStats.average_controls_per_evidence}</p>
-                    <p className="text-xs text-gray-600">Avg Controls/Evidence</p>
+                    <p className="text-lg font-semibold text-slate-900">{reuseStats.average_controls_per_evidence}</p>
+                    <p className="text-xs text-slate-500">Avg Controls/Evidence</p>
                   </div>
                 </div>
               </div>
@@ -464,27 +464,27 @@ export default function EvidenceSuggestionsPage() {
 
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50">
+                <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Evidence Name</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-600">Controls Linked</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-gray-600">Frameworks Covered</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Evidence Name</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-500">Controls Linked</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-500">Frameworks Covered</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-slate-200">
                   {reuseStats.top_reused_evidence.slice(0, 5).map((item) => (
-                    <tr key={item.evidence_id} className="hover:bg-gray-100">
+                    <tr key={item.evidence_id} className="hover:bg-slate-50">
                       <td className="px-4 py-3">
-                        <p className="text-sm font-medium text-black truncate max-w-xs">{item.evidence_name}</p>
+                        <p className="text-sm font-medium text-slate-900 truncate max-w-xs">{item.evidence_name}</p>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2 py-0.5 text-sm text-blue-400">
-                          <Link2 size={12} />
+                        <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-sm text-primary-700">
+                          <Link2 size={12} strokeWidth={1.75} />
                           {item.controls_linked}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className="text-sm text-gray-700">{item.frameworks_covered}</span>
+                        <span className="text-sm text-slate-700">{item.frameworks_covered}</span>
                       </td>
                     </tr>
                   ))}
@@ -493,14 +493,14 @@ export default function EvidenceSuggestionsPage() {
             </div>
 
             {auditSavings && (
-              <div className="mt-4 rounded-lg border border-green-500/30 bg-green-500/10 p-4">
+              <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
                 <div className="flex items-center gap-3">
-                  <Percent className="h-5 w-5 text-green-500 flex-shrink-0" />
+                  <Percent className="h-5 w-5 text-emerald-600 flex-shrink-0" strokeWidth={1.75} />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-green-400">
+                    <p className="text-sm font-medium text-emerald-700">
                       Audit Effort Savings: {auditSavings.savings_percent}%
                     </p>
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-slate-500">
                       Single-framework effort: {auditSavings.single_framework_effort} | 
                       Actual effort: {auditSavings.actual_effort} | 
                       Controls covered: {auditSavings.controls_covered}
@@ -521,19 +521,19 @@ export default function EvidenceSuggestionsPage() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-600" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" strokeWidth={1.75} />
               <input
                 type="text"
                 placeholder="Search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-sm text-black placeholder-gray-500 focus:border-primary-500 focus:outline-none sm:w-48"
+                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none sm:w-48"
               />
             </div>
             <select
               value={priorityFilter}
               onChange={(e) => { setPriorityFilter(e.target.value); setPage(0); }}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-black focus:border-primary-500 focus:outline-none"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
             >
               <option value="">All Priorities</option>
               <option value="critical">Critical</option>
@@ -544,10 +544,10 @@ export default function EvidenceSuggestionsPage() {
             {typeFilter && (
               <button
                 onClick={() => setTypeFilter('')}
-                className="flex items-center gap-1 rounded-lg border border-primary-500 bg-primary-500/20 px-3 py-2 text-sm text-blue-600"
+                className="flex items-center gap-1 rounded-lg border border-primary-300 bg-primary-50 px-3 py-2 text-sm text-primary-700"
               >
                 {typeFilter}
-                <X size={14} />
+                <X size={14} strokeWidth={1.75} />
               </button>
             )}
           </div>
@@ -558,66 +558,64 @@ export default function EvidenceSuggestionsPage() {
             <PageLoader size="md" />
           </div>
         ) : recsError ? (
-          <div className="flex h-64 flex-col items-center justify-center text-red-400">
-            <AlertCircle className="mb-2 h-8 w-8" />
+          <div className="flex h-64 flex-col items-center justify-center text-red-600">
+            <AlertCircle className="mb-2 h-8 w-8" strokeWidth={1.75} />
             <p>Failed to load recommendations</p>
-            <button onClick={() => refetchRecs()} className="mt-2 text-sm text-blue-600 hover:underline">
+            <button onClick={() => refetchRecs()} className="mt-2 text-sm text-primary-700 hover:underline">
               Try again
             </button>
           </div>
         ) : !filteredRecommendations?.length ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Sparkles className="mb-4 h-12 w-12 text-gray-400" />
-            <h3 className="text-lg font-medium text-black">No recommendations yet</h3>
-            <p className="mt-1 text-gray-600">Use Bulk Generate to create AI recommendations for your controls</p>
+            <Sparkles className="mb-4 h-12 w-12 text-slate-400" strokeWidth={1.75} />
+            <h3 className="text-lg font-medium text-slate-900">No recommendations yet</h3>
+            <p className="mt-1 text-slate-500">Use Bulk Generate to create AI recommendations for your controls</p>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50">
+                <thead className="bg-slate-50">
                   <tr>
                     <th className="w-8 px-2 py-3"></th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Control</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Evidence Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Priority</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600">Confidence</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-600">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Control</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Evidence Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Priority</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Confidence</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
+                <tbody className="divide-y divide-slate-200 bg-white">
                   {filteredRecommendations.map((rec) => (
-                    <>
+                    <Fragment key={rec.id}>
                       <tr
-                        key={rec.id}
-                        className="hover:bg-gray-100 cursor-pointer"
+                        className="hover:bg-slate-50 cursor-pointer"
                         onClick={() => toggleRowExpand(rec.id)}
                       >
                         <td className="px-2 py-3">
-                          <button className="text-gray-600 hover:text-black">
+                          <button className="text-slate-500 hover:text-slate-900">
                             {expandedRows.has(rec.id) ? (
-                              <ChevronDown size={16} />
+                              <ChevronDown size={16} strokeWidth={1.75} />
                             ) : (
-                              <ChevronRight size={16} />
+                              <ChevronRight size={16} strokeWidth={1.75} />
                             )}
                           </button>
                         </td>
                         <td className="px-4 py-3">
                           <div>
-                            <p className="text-sm font-medium text-black">
+                            <p className="text-sm font-medium text-slate-900">
                               {rec.control_code && (
-                                <span className="mr-2 font-mono text-blue-600">{rec.control_code}</span>
+                                <span className="mr-2 font-mono text-primary-700">{rec.control_code}</span>
                               )}
                               {rec.control_name || rec.group_name || 'Unknown Control'}
                             </p>
                             {rec.framework_name && (
-                              <p className="text-xs text-gray-600">{rec.framework_name}</p>
+                              <p className="text-xs text-slate-500">{rec.framework_name}</p>
                             )}
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1 rounded-lg bg-gray-100 px-2 py-1 text-sm text-black">
-                            <FileCheck size={14} className="text-gray-600" />
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-sm text-slate-900">
+                            <FileCheck size={14} className="text-slate-500" strokeWidth={1.75} />
                             {rec.evidence_type}
                           </span>
                         </td>
@@ -627,42 +625,31 @@ export default function EvidenceSuggestionsPage() {
                         <td className="px-4 py-3">
                           {getConfidenceBadge(rec.ai_confidence)}
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                            }}
-                            className="btn-ghost btn-sm inline-flex items-center gap-1"
-                          >
-                            <Link2 size={14} />
-                            Link
-                          </button>
-                        </td>
                       </tr>
                       {expandedRows.has(rec.id) && (
-                        <tr key={`${rec.id}-expanded`} className="bg-white/80">
-                          <td colSpan={6} className="px-4 py-4">
+                        <tr className="bg-slate-50/60">
+                          <td colSpan={5} className="px-4 py-4">
                             <div className="ml-8 space-y-3">
                               {rec.ai_reasoning && (
                                 <div>
-                                  <p className="mb-1 text-xs font-medium uppercase text-gray-500">AI Reasoning</p>
-                                  <p className="text-sm text-gray-700">{rec.ai_reasoning}</p>
+                                  <p className="mb-1 text-xs font-medium uppercase text-slate-400">AI Reasoning</p>
+                                  <p className="text-sm text-slate-700">{rec.ai_reasoning}</p>
                                 </div>
                               )}
                               {rec.evidence_description && (
                                 <div>
-                                  <p className="mb-1 text-xs font-medium uppercase text-gray-500">Description</p>
-                                  <p className="text-sm text-gray-700">{rec.evidence_description}</p>
+                                  <p className="mb-1 text-xs font-medium uppercase text-slate-400">Description</p>
+                                  <p className="text-sm text-slate-700">{rec.evidence_description}</p>
                                 </div>
                               )}
                               {rec.sample_evidence_names && rec.sample_evidence_names.length > 0 && (
                                 <div>
-                                  <p className="mb-1 text-xs font-medium uppercase text-gray-500">Sample Names</p>
+                                  <p className="mb-1 text-xs font-medium uppercase text-slate-400">Sample Names</p>
                                   <div className="flex flex-wrap gap-2">
                                     {rec.sample_evidence_names.map((name, idx) => (
                                       <span
                                         key={idx}
-                                        className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700"
+                                        className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-700"
                                       >
                                         {name}
                                       </span>
@@ -674,32 +661,32 @@ export default function EvidenceSuggestionsPage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
             </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3">
-                <p className="text-sm text-gray-600">
+              <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
+                <p className="text-sm text-slate-500">
                   Showing {page * pageSize + 1} - {Math.min((page + 1) * pageSize, totalRecommendations)} of {totalRecommendations}
                 </p>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setPage(Math.max(0, page - 1))}
                     disabled={page === 0}
-                    className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-1 text-sm text-black disabled:opacity-50"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm text-slate-900 hover:bg-slate-50 disabled:opacity-50"
                   >
                     Previous
                   </button>
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-slate-500">
                     Page {page + 1} of {totalPages}
                   </span>
                   <button
                     onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
                     disabled={page >= totalPages - 1}
-                    className="rounded-lg border border-gray-300 bg-gray-100 px-3 py-1 text-sm text-black disabled:opacity-50"
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm text-slate-900 hover:bg-slate-50 disabled:opacity-50"
                   >
                     Next
                   </button>
@@ -712,14 +699,14 @@ export default function EvidenceSuggestionsPage() {
 
       {showBulkModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-lg rounded-xl border border-gray-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-200 p-4">
-              <h3 className="text-lg font-semibold text-black">Bulk Generate Recommendations</h3>
+          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h3 className="text-lg font-semibold text-slate-900">Bulk Generate Recommendations</h3>
               <button
                 onClick={() => setShowBulkModal(false)}
-                className="text-gray-600 hover:text-black"
+                className="text-slate-500 hover:text-slate-900"
               >
-                <X size={20} />
+                <X size={20} strokeWidth={1.75} />
               </button>
             </div>
             <div className="p-4">
@@ -729,20 +716,20 @@ export default function EvidenceSuggestionsPage() {
                     {bulkProgress.status === 'processing' ? (
                       <div className="flex flex-col items-center gap-3">
                         <PageLoader size="lg" />
-                        <p className="text-gray-700">Generating recommendations...</p>
+                        <p className="text-slate-700">Generating recommendations...</p>
                       </div>
                     ) : bulkProgress.status === 'completed' ? (
                       <div className="flex flex-col items-center gap-3">
-                        <CheckCircle className="h-12 w-12 text-green-400" />
-                        <p className="text-black font-medium">Generation Complete!</p>
-                        <p className="text-gray-600">
+                        <CheckCircle className="h-12 w-12 text-emerald-600" strokeWidth={1.75} />
+                        <p className="text-slate-900 font-medium">Generation Complete!</p>
+                        <p className="text-slate-500">
                           Generated {bulkProgress.generated} recommendations
                         </p>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-3">
-                        <AlertCircle className="h-12 w-12 text-red-400" />
-                        <p className="text-red-400">Generation failed</p>
+                        <AlertCircle className="h-12 w-12 text-red-600" strokeWidth={1.75} />
+                        <p className="text-red-600">Generation failed</p>
                       </div>
                     )}
                   </div>
@@ -760,19 +747,19 @@ export default function EvidenceSuggestionsPage() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-slate-500">
                     Select controls to generate AI evidence recommendations. This will analyze each control and suggest appropriate evidence types.
                   </p>
-                  
+
                   <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700">
+                    <label className="mb-2 block text-sm font-medium text-slate-700">
                       Select Control Groups
                     </label>
-                    <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-300 bg-gray-800">
+                    <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-300 bg-white">
                       {controlGroups?.map((group) => (
                         <label
                           key={group.id}
-                          className="flex items-center gap-3 border-b border-gray-200 px-4 py-2 last:border-0 hover:bg-white"
+                          className="flex items-center gap-3 border-b border-slate-100 px-4 py-2 last:border-0 hover:bg-slate-50"
                         >
                           <input
                             type="checkbox"
@@ -784,22 +771,22 @@ export default function EvidenceSuggestionsPage() {
                                 setBulkControlIds(bulkControlIds.filter(c => !(c.type === 'group' && c.id === group.id)));
                               }
                             }}
-                            className="h-4 w-4 rounded border-gray-300 bg-gray-100 text-primary-600 focus:ring-primary-500"
+                            className="h-4 w-4 rounded border-slate-300 bg-white text-primary-600 focus:ring-primary-500"
                           />
                           <div className="flex-1">
-                            <p className="text-sm font-medium text-black">{group.code}</p>
-                            <p className="text-xs text-gray-600 truncate">{group.name}</p>
+                            <p className="text-sm font-medium text-slate-900">{group.code}</p>
+                            <p className="text-xs text-slate-500 truncate">{group.name}</p>
                           </div>
                         </label>
                       ))}
                       {(!controlGroups || controlGroups.length === 0) && (
-                        <p className="px-4 py-3 text-sm text-gray-500">No control groups available</p>
+                        <p className="px-4 py-3 text-sm text-slate-400">No control groups available</p>
                       )}
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between pt-2">
-                    <span className="text-sm text-gray-600">
+                    <span className="text-sm text-slate-500">
                       {bulkControlIds.length} item(s) selected
                     </span>
                     <div className="flex items-center gap-2">

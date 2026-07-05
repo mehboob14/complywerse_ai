@@ -496,18 +496,18 @@ export default function FrameworkComparisonPage() {
     <div className="space-y-4 sm:space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <Link href="/control-library" className="text-gray-500 hover:text-black flex-shrink-0">
+          <Link href="/control-library" className="text-slate-400 hover:text-slate-900 flex-shrink-0">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div className="min-w-0">
-            <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Framework Comparison</h1>
+            <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Framework Comparison</h1>
             <p className="mt-1 text-sm text-slate-600">Crosswalk mapping between regulatory frameworks</p>
           </div>
         </div>
         {crosswalkData?.crosswalk && crosswalkData.crosswalk.length > 0 && (
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-[color:var(--color-on-base,#0a0a0a)] hover:bg-primary-700"
           >
             <Download className="h-4 w-4" />
             Export CSV
@@ -539,7 +539,7 @@ export default function FrameworkComparisonPage() {
           </div>
 
           <div className="hidden lg:flex items-center justify-center pb-1">
-            <ArrowRight className="h-5 w-5 text-gray-500" />
+            <ArrowRight className="h-5 w-5 text-slate-400" />
           </div>
 
           <div className="flex-1 min-w-0">
@@ -575,7 +575,7 @@ export default function FrameworkComparisonPage() {
           <button
             onClick={() => handleAiCompare(false)}
             disabled={!sourceFrameworkId || !destFrameworkId || sourceFrameworkId === destFrameworkId || aiBusy}
-            className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 sm:px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 sm:px-6 py-2.5 text-sm font-medium text-[color:var(--color-on-base,#0a0a0a)] hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
             title="AI-driven comparison; cached per pair so it's instant on re-run"
           >
             {aiBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -587,14 +587,14 @@ export default function FrameworkComparisonPage() {
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex items-center gap-2 mb-1.5">
-            <Shield className="h-4 w-4 text-blue-600 flex-shrink-0" />
+            <Shield className="h-4 w-4 text-primary-600 flex-shrink-0" strokeWidth={1.75} />
             <p className="text-xs font-medium text-slate-500 truncate">Available Frameworks</p>
           </div>
           <p className="text-lg sm:text-xl font-semibold text-slate-900">{frameworkOptions.length || 0}</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           <div className="flex items-center gap-2 mb-1.5">
-            <GitCompare className="h-4 w-4 text-blue-500 flex-shrink-0" />
+            <GitCompare className="h-4 w-4 text-primary-600 flex-shrink-0" strokeWidth={1.75} />
             <p className="text-xs font-medium text-slate-500 truncate">Source Controls</p>
           </div>
           <p className="text-lg sm:text-xl font-semibold text-slate-900">{crosswalkData?.total || 0}</p>
@@ -673,9 +673,9 @@ export default function FrameworkComparisonPage() {
 
           {aiRun?.status === 'completed' && aiItems.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <AlertCircle className="mb-4 h-12 w-12 text-gray-400" />
-              <h3 className="text-lg font-medium text-black">No high-confidence matches</h3>
-              <p className="mt-1 text-gray-600">
+              <AlertCircle className="mb-4 h-12 w-12 text-slate-400" />
+              <h3 className="text-lg font-medium text-slate-900">No high-confidence matches</h3>
+              <p className="mt-1 text-slate-500">
                 AI did not find overlap above the 0.5 confidence threshold. Try the Quick Compare for a wider lookup.
               </p>
             </div>
@@ -697,19 +697,19 @@ export default function FrameworkComparisonPage() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1100px]">
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-24">Source Ref</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-64">Source Requirement</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-32">Source Domain</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-72">AI Mapped Destinations</th>
-                      <th className="px-3 py-3 text-center text-xs font-medium uppercase text-gray-600 w-20">Top Conf.</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-72">Evidence</th>
+                    <tr className="border-b border-slate-200">
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-slate-500 w-24">Source Ref</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-slate-500 w-64">Source Requirement</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-slate-500 w-32">Source Domain</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-slate-500 w-72">AI Mapped Destinations</th>
+                      <th className="px-3 py-3 text-center text-xs font-medium uppercase text-slate-500 w-20">Top Conf.</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-slate-500 w-72">Evidence</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-slate-200">
                     {filteredAiRows.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-3 py-10 text-center text-sm text-gray-500">
+                        <td colSpan={6} className="px-3 py-10 text-center text-sm text-slate-400">
                           No matches for "{searchQuery}"
                         </td>
                       </tr>
@@ -723,19 +723,19 @@ export default function FrameworkComparisonPage() {
                     return (
                       <Fragment key={row.source_control_id}>
                         <tr
-                          className="cursor-pointer align-top hover:bg-gray-50"
+                          className="cursor-pointer align-top hover:bg-slate-50"
                           onClick={() => toggleRow(row.source_control_id)}
                         >
                           <td className="px-3 py-3">
-                            <span className="font-mono text-sm font-medium text-blue-600">{row.source_reference}</span>
+                            <span className="font-mono text-sm font-medium text-primary-700">{row.source_reference}</span>
                           </td>
                           <td className="px-3 py-3">
-                            <p className="truncate whitespace-nowrap text-sm font-medium text-black" title={row.source_title}>
+                            <p className="truncate whitespace-nowrap text-sm font-medium text-slate-900" title={row.source_title}>
                               {truncateInlineText(row.source_title, 78)}
                             </p>
                           </td>
                           <td className="px-3 py-3">
-                            <span className="block truncate text-xs text-gray-700" title={row.source_domain || '—'}>
+                            <span className="block truncate text-xs text-slate-700" title={row.source_domain || '—'}>
                               {truncateInlineText(row.source_domain || '—', 26)}
                             </span>
                           </td>
@@ -753,11 +753,11 @@ export default function FrameworkComparisonPage() {
                                 {Math.round(top.confidence * 100)}%
                               </span>
                             ) : (
-                              <span className="text-xs text-gray-400">—</span>
+                              <span className="text-xs text-slate-400">—</span>
                             )}
                           </td>
                           <td className="px-3 py-3">
-                            <p className="truncate text-xs text-gray-700" title={evidence}>
+                            <p className="truncate text-xs text-slate-700" title={evidence}>
                               {truncateInlineText(evidence, 80)}
                             </p>
                           </td>
@@ -817,7 +817,7 @@ export default function FrameworkComparisonPage() {
           <div className="card-header flex items-center justify-between">
             <div>
               <h2 className="card-title flex items-center gap-2">
-                <GitCompare className="h-5 w-5 text-blue-600" />
+                <GitCompare className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
                 Crosswalk: {sourceFramework?.short_code || 'Source'} → {destFramework?.short_code || 'Destination'}
               </h2>
               <p className="card-description">
@@ -832,9 +832,9 @@ export default function FrameworkComparisonPage() {
             </div>
           ) : !crosswalkData?.crosswalk?.length ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <AlertCircle className="mb-4 h-12 w-12 text-gray-400" />
-              <h3 className="text-lg font-medium text-black">No crosswalk data available</h3>
-              <p className="mt-1 text-gray-600">No controls found for the selected frameworks</p>
+              <AlertCircle className="mb-4 h-12 w-12 text-slate-400" />
+              <h3 className="text-lg font-medium text-slate-900">No crosswalk data available</h3>
+              <p className="mt-1 text-slate-500">No controls found for the selected frameworks</p>
             </div>
           ) : (
             <>
@@ -852,21 +852,21 @@ export default function FrameworkComparisonPage() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[1200px]">
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-24">Source Ref</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-64">Source Requirement</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-32">Source Domain</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-24">Dest Ref(s)</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-64">Dest Requirement</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-32">Dest Domain</th>
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-600 w-48">Evidence</th>
-                      <th className="px-3 py-3 text-center text-xs font-medium uppercase text-gray-600 w-20">AI Map</th>
+                    <tr className="border-b border-slate-200">
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-slate-500 w-24">Source Ref</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-slate-500 w-64">Source Requirement</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-slate-500 w-32">Source Domain</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-slate-500 w-24">Dest Ref(s)</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-slate-500 w-64">Dest Requirement</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-slate-500 w-32">Dest Domain</th>
+                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-slate-500 w-48">Evidence</th>
+                      <th className="px-3 py-3 text-center text-xs font-medium uppercase text-slate-500 w-20">AI Map</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-slate-200">
                     {filteredKeywordRows.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="px-3 py-10 text-center text-sm text-gray-500">
+                        <td colSpan={8} className="px-3 py-10 text-center text-sm text-slate-400">
                           No matches for "{searchQuery}"
                         </td>
                       </tr>
@@ -887,34 +887,34 @@ export default function FrameworkComparisonPage() {
                         <Fragment key={row.source_control.id}>
                           <tr
                             key={row.source_control.id}
-                            className="cursor-pointer align-top transition-colors hover:bg-gray-50"
+                            className="cursor-pointer align-top transition-colors hover:bg-slate-50"
                             onClick={() => toggleRow(row.source_control.id)}
                           >
                             <td className="px-3 py-3">
                               <div className="flex items-center gap-2">
-                                <span className="font-mono text-sm font-medium text-blue-600">{row.source_control.reference}</span>
+                                <span className="font-mono text-sm font-medium text-primary-700">{row.source_control.reference}</span>
                               </div>
                             </td>
                             <td className="px-3 py-3">
-                              <p className="truncate whitespace-nowrap text-sm font-medium text-black" title={row.source_control.title}>
+                              <p className="truncate whitespace-nowrap text-sm font-medium text-slate-900" title={row.source_control.title}>
                                 {truncateInlineText(row.source_control.title, 78)}
                               </p>
                             </td>
                             <td className="px-3 py-3">
-                              <span className="block truncate whitespace-nowrap text-xs text-gray-700" title={row.source_control.domain || row.source_control.category || '—'}>
+                              <span className="block truncate whitespace-nowrap text-xs text-slate-700" title={row.source_control.domain || row.source_control.category || '—'}>
                                 {truncateInlineText(row.source_control.domain || row.source_control.category || '—', 26)}
                               </span>
                             </td>
                             <td className="px-3 py-3">
                               <div className="space-y-1">
-                                <p className="truncate whitespace-nowrap font-mono text-sm text-blue-700" title={destinationRefs}>
+                                <p className="truncate whitespace-nowrap font-mono text-sm text-primary-700" title={destinationRefs}>
                                   {truncateInlineText(destinationRefs, 40)}
                                 </p>
                                 <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
                                   row.match_type === 'category' ? 'bg-green-100 text-green-700' :
                                   row.match_type === 'domain' ? 'bg-blue-100 text-blue-700' :
                                   row.match_type === 'keyword' ? 'bg-amber-100 text-amber-700' :
-                                  'bg-gray-100 text-gray-700'
+                                  'bg-slate-100 text-slate-700'
                                 }`}>
                                   {row.match_type === 'category' ? 'Category Match' :
                                    row.match_type === 'domain' ? 'Domain Match' :
@@ -923,17 +923,17 @@ export default function FrameworkComparisonPage() {
                               </div>
                             </td>
                             <td className="px-3 py-3">
-                              <p className="truncate whitespace-nowrap text-sm text-gray-700" title={destinationTitles}>
+                              <p className="truncate whitespace-nowrap text-sm text-slate-700" title={destinationTitles}>
                                 {truncateInlineText(destinationTitles, 80)}
                               </p>
                             </td>
                             <td className="px-3 py-3">
-                              <p className="truncate whitespace-nowrap text-xs text-gray-700" title={destinationDomains}>
+                              <p className="truncate whitespace-nowrap text-xs text-slate-700" title={destinationDomains}>
                                 {truncateInlineText(destinationDomains, 28)}
                               </p>
                             </td>
                             <td className="px-3 py-3">
-                              <p className="truncate whitespace-nowrap text-xs text-gray-700" title={evidenceSummary}>
+                              <p className="truncate whitespace-nowrap text-xs text-slate-700" title={evidenceSummary}>
                                 {truncateInlineText(evidenceSummary, 72)}
                               </p>
                             </td>
@@ -960,27 +960,27 @@ export default function FrameworkComparisonPage() {
                             <tr key={`expanded-${row.source_control.id}`} className="bg-slate-50">
                               <td colSpan={8} className="px-4 py-4">
                                 <div className="grid gap-4 lg:grid-cols-3">
-                                  <div className="rounded-lg border border-gray-200 bg-white p-3">
-                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Source Details</p>
-                                    <p className="text-sm font-medium text-black">{row.source_control.title}</p>
+                                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Source Details</p>
+                                    <p className="text-sm font-medium text-slate-900">{row.source_control.title}</p>
                                     {row.source_control.description && (
-                                      <p className="mt-1 text-xs text-gray-600">{row.source_control.description}</p>
+                                      <p className="mt-1 text-xs text-slate-500">{row.source_control.description}</p>
                                     )}
                                   </div>
-                                  <div className="rounded-lg border border-gray-200 bg-white p-3">
-                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Mapped Requirements</p>
+                                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Mapped Requirements</p>
                                     {hasDest ? row.destination_controls.map((dc) => (
                                       <div key={dc.id} className="mb-2 last:mb-0">
-                                        <p className="text-sm font-medium text-black">{dc.reference} — {dc.title}</p>
-                                        {dc.description && <p className="mt-0.5 text-xs text-gray-600">{dc.description}</p>}
+                                        <p className="text-sm font-medium text-slate-900">{dc.reference} — {dc.title}</p>
+                                        {dc.description && <p className="mt-0.5 text-xs text-slate-500">{dc.description}</p>}
                                       </div>
-                                    )) : <p className="text-xs text-gray-500">No mapping found.</p>}
+                                    )) : <p className="text-xs text-slate-400">No mapping found.</p>}
                                   </div>
-                                  <div className="rounded-lg border border-gray-200 bg-white p-3">
-                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Evidence Recommendations</p>
+                                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Evidence Recommendations</p>
                                     {row.evidence_recommendations.length > 0 ? row.evidence_recommendations.map((ev, idx) => (
-                                      <p key={idx} className="mb-1 text-xs text-gray-700">• {formatEvidence(ev)}</p>
-                                    )) : <p className="text-xs text-gray-500">No recommendations available.</p>}
+                                      <p key={idx} className="mb-1 text-xs text-slate-700">• {formatEvidence(ev)}</p>
+                                    )) : <p className="text-xs text-slate-400">No recommendations available.</p>}
                                   </div>
                                 </div>
 
@@ -1021,15 +1021,15 @@ export default function FrameworkComparisonPage() {
               </div>
 
               {totalPages > 1 && (
-                <div className="mt-4 flex items-center justify-between border-t border-gray-200 px-4 pt-4">
-                  <p className="text-sm text-gray-600">
+                <div className="mt-4 flex items-center justify-between border-t border-slate-200 px-4 pt-4">
+                  <p className="text-sm text-slate-500">
                     Page {page + 1} of {totalPages}
                   </p>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setPage(p => Math.max(0, p - 1))}
                       disabled={page === 0}
-                      className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                      className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
                     >
                       <ChevronLeft className="h-4 w-4" />
                       Previous
@@ -1037,7 +1037,7 @@ export default function FrameworkComparisonPage() {
                     <button
                       onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                       disabled={page >= totalPages - 1}
-                      className="flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                      className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
                     >
                       Next
                       <ChevronRight className="h-4 w-4" />
@@ -1109,9 +1109,9 @@ export default function FrameworkComparisonPage() {
 
           <div className="card">
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <GitCompare className="mb-4 h-16 w-16 text-gray-400" />
-              <h3 className="text-xl font-medium text-black">Framework Crosswalk Comparison</h3>
-              <p className="mt-2 max-w-lg text-gray-600">
+              <GitCompare className="mb-4 h-16 w-16 text-slate-400" />
+              <h3 className="text-xl font-medium text-slate-900">Framework Crosswalk Comparison</h3>
+              <p className="mt-2 max-w-lg text-slate-500">
                 Select a source and destination framework above, then click Compare to generate a crosswalk
                 mapping showing how requirements align between the two frameworks with evidence recommendations.
               </p>
@@ -1147,7 +1147,7 @@ function CompareTableToolbar({
   matchesLabel,
 }: CompareTableToolbarProps) {
   return (
-    <div className="flex flex-col gap-2 border-b border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-1 items-center gap-2">
         <div className="flex-1 max-w-md">
           <SearchInput
@@ -1167,7 +1167,7 @@ function CompareTableToolbar({
         <select
           value={sortField}
           onChange={(e) => onSortFieldChange(e.target.value as CompareTableToolbarProps['sortField'])}
-          className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         >
           <option value="reference">Reference</option>
           <option value="title">Title</option>
@@ -1177,7 +1177,7 @@ function CompareTableToolbar({
         <button
           type="button"
           onClick={onSortDirToggle}
-          className="flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+          className="flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
           title={sortDir === 'asc' ? 'Ascending — click for descending' : 'Descending — click for ascending'}
           aria-label={`Sort ${sortDir === 'asc' ? 'descending' : 'ascending'}`}
         >
