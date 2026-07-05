@@ -58,10 +58,10 @@ interface SyncHistoryRecord {
 
 function StatusBadge({ status }: { status: string }) {
   const cls =
-    status === 'connected'   ? 'bg-green-50 text-green-700 border-green-200' :
-    status === 'error'       ? 'bg-red-50 text-red-700 border-red-200' :
+    status === 'connected'   ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+    status === 'error'       ? 'bg-rose-50 text-rose-700 border-rose-200' :
     status === 'deactivated' ? 'bg-slate-100 text-slate-500 border-slate-200' :
-    'bg-yellow-50 text-yellow-700 border-yellow-200';
+    'bg-amber-50 text-amber-700 border-amber-200';
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${cls}`}>
       {status}
@@ -149,7 +149,7 @@ export default function ConnectionsPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="animate-spin text-blue-600" size={32} />
+        <Loader2 className="animate-spin text-primary-600" size={32} />
       </div>
     );
   }
@@ -157,7 +157,7 @@ export default function ConnectionsPage() {
   if (isError) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-slate-500">
-        <XCircle size={32} className="text-red-400 mb-2" />
+        <XCircle size={32} className="text-rose-400 mb-2" strokeWidth={1.75} />
         <p className="text-sm">Failed to load connections. Please try again later.</p>
       </div>
     );
@@ -171,7 +171,7 @@ export default function ConnectionsPage() {
         {canCreate && (
           <button
             onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#0a0a0a] bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
           >
             <Plus size={16} /> Add Connection
           </button>
@@ -197,7 +197,7 @@ export default function ConnectionsPage() {
                 name="integration_type"
                 value={selectedType}
                 onChange={(e) => setSelectedType(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
               >
                 <option value="nexpose">Rapid7 Nexpose / InsightVM</option>
                 <option value="nessus">Tenable Nessus</option>
@@ -208,7 +208,7 @@ export default function ConnectionsPage() {
               <input
                 name="connection_name"
                 required
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder={selectedType === 'nessus' ? 'Production Nessus' : 'Production Nexpose'}
               />
             </div>
@@ -217,7 +217,7 @@ export default function ConnectionsPage() {
               <input
                 name="console_url"
                 required
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder={selectedType === 'nessus' ? 'https://nessus.company.com' : 'https://nexpose.company.com'}
               />
             </div>
@@ -228,7 +228,7 @@ export default function ConnectionsPage() {
                 type="number"
                 defaultValue={selectedType === 'nessus' ? 8834 : 3780}
                 key={selectedType}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
             <div>
@@ -236,7 +236,7 @@ export default function ConnectionsPage() {
               <input
                 name="credential_env_prefix"
                 required
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder={selectedType === 'nessus' ? 'NESSUS_PROD' : 'NEXPOSE_PROD'}
               />
               <p className="text-xs text-slate-400 mt-1">
@@ -249,7 +249,7 @@ export default function ConnectionsPage() {
               <label className="block text-sm font-medium text-slate-700 mb-1">Username (optional)</label>
               <input
                 name="username"
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder={selectedType === 'nessus' ? 'nessus-user' : 'scanner-user'}
                 autoComplete="username"
               />
@@ -259,7 +259,7 @@ export default function ConnectionsPage() {
               <input
                 name="password"
                 type="password"
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 placeholder="Enter scanner password"
                 autoComplete="new-password"
               />
@@ -270,11 +270,11 @@ export default function ConnectionsPage() {
               <input
                 name="sync_schedule"
                 defaultValue="0 */4 * * *"
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
             </div>
             {createMutation.isError && (
-              <p className="text-sm text-red-600">Failed to create connection. Check if name is unique.</p>
+              <p className="text-sm text-rose-600">Failed to create connection. Check if name is unique.</p>
             )}
           </div>
           <div className="flex-shrink-0 flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
@@ -288,7 +288,7 @@ export default function ConnectionsPage() {
             <button
               type="submit"
               disabled={createMutation.isPending}
-              className="inline-flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-6 py-2 text-sm font-medium text-[#0a0a0a] bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
             >
               {createMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
               Add Connection
@@ -307,7 +307,7 @@ export default function ConnectionsPage() {
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 flex-shrink-0">
               <div className="flex items-center gap-3">
                 {detailConn.is_active
-                  ? <Wifi size={18} className="text-blue-600" />
+                  ? <Wifi size={18} className="text-primary-600" />
                   : <WifiOff size={18} className="text-slate-400" />}
                 <div>
                   <h2 className="text-base font-semibold text-slate-900">{detailConn.connection_name}</h2>
@@ -357,7 +357,7 @@ export default function ConnectionsPage() {
                   {detailConn.last_sync_at && (
                     <p className="text-xs text-slate-400 mt-2">
                       Last synced {new Date(detailConn.last_sync_at).toLocaleString()} ·{' '}
-                      <span className={detailConn.last_sync_status === 'success' ? 'text-green-600' : 'text-red-500'}>
+                      <span className={detailConn.last_sync_status === 'success' ? 'text-emerald-600' : 'text-rose-500'}>
                         {detailConn.last_sync_status}
                       </span>
                     </p>
@@ -393,13 +393,13 @@ export default function ConnectionsPage() {
                             <td className="py-2 text-slate-500">{new Date(h.started_at).toLocaleString()}</td>
                             <td className="py-2 text-slate-500">{h.duration_ms ? `${(h.duration_ms / 1000).toFixed(1)}s` : '—'}</td>
                             <td className="py-2 text-center">
-                              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${h.status === 'completed' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${h.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
                                 {h.status}
                               </span>
                             </td>
-                            <td className="py-2 text-right text-green-600">+{h.assets_new + h.vulns_new}</td>
-                            <td className="py-2 text-right text-blue-600">{h.assets_updated + h.vulns_updated}</td>
-                            <td className="py-2 text-right text-red-600">{h.errors_count || 0}</td>
+                            <td className="py-2 text-right text-emerald-600">+{h.assets_new + h.vulns_new}</td>
+                            <td className="py-2 text-right text-slate-600">{h.assets_updated + h.vulns_updated}</td>
+                            <td className="py-2 text-right text-rose-600">{h.errors_count || 0}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -425,7 +425,7 @@ export default function ConnectionsPage() {
               <div className="flex items-center gap-3 px-4 py-3">
                 <div className="flex-shrink-0">
                   {conn.is_active
-                    ? <Wifi size={18} className="text-blue-600" />
+                    ? <Wifi size={18} className="text-primary-600" />
                     : <WifiOff size={18} className="text-slate-400" />}
                 </div>
 
@@ -433,7 +433,7 @@ export default function ConnectionsPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-slate-900 text-sm">{conn.connection_name}</span>
                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
-                      conn.integration_type === 'nessus' ? 'bg-teal-50 text-teal-700' : 'bg-indigo-50 text-indigo-700'
+                      conn.integration_type === 'nessus' ? 'bg-primary-50 text-primary-700' : 'bg-slate-100 text-slate-700'
                     }`}>
                       {conn.integration_type === 'nessus' ? 'Tenable Nessus' : 'Rapid7 Nexpose'}
                     </span>
@@ -454,7 +454,7 @@ export default function ConnectionsPage() {
 
                   <button
                     onClick={() => setDetailConn(conn)}
-                    className="flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                    className="flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 text-slate-500 hover:bg-primary-50 hover:text-primary-600 transition-colors"
                     title="View connection details"
                   >
                     <ChevronLeft size={14} />
@@ -477,7 +477,7 @@ export default function ConnectionsPage() {
                     <button
                       onClick={() => syncMutation.mutate(conn.id)}
                       disabled={syncMutation.isPending || !conn.is_active}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
                     >
                       {syncMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                       Sync Now
@@ -496,7 +496,7 @@ export default function ConnectionsPage() {
                           }
                         }}
                         disabled={!conn.is_active}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 disabled:opacity-50"
                       >
                         <Trash2 size={13} /> Deactivate
                       </button>
@@ -506,21 +506,21 @@ export default function ConnectionsPage() {
                       <span className="text-xs text-slate-400 ml-auto">
                         Last sync: {new Date(conn.last_sync_at).toLocaleString()} ·{' '}
                         {conn.last_sync_status === 'success'
-                          ? <span className="text-green-600">success</span>
-                          : <span className="text-red-500">{conn.last_sync_status}</span>}
+                          ? <span className="text-emerald-600">success</span>
+                          : <span className="text-rose-500">{conn.last_sync_status}</span>}
                       </span>
                     )}
                   </div>
 
                   {testResult?.id === conn.id && (
-                    <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${testResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                    <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${testResult.success ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
                       {testResult.success ? <CheckCircle size={15} /> : <XCircle size={15} />}
                       {testResult.message}
                     </div>
                   )}
 
                   {syncResult?.id === conn.id && (
-                    <div className={`p-3 rounded-lg text-sm ${syncResult.data?.status === 'completed' ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'}`}>
+                    <div className={`p-3 rounded-lg text-sm ${syncResult.data?.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
                       Sync {syncResult.data?.status} · Assets: +{syncResult.data?.assets_new || 0} new, {syncResult.data?.assets_updated || 0} updated · Vulns: +{syncResult.data?.vulns_new || 0} new, {syncResult.data?.vulns_updated || 0} updated, {syncResult.data?.vulns_closed || 0} closed
                       {syncResult.data?.errors_count > 0 && ` · ${syncResult.data.errors_count} errors`}
                     </div>
@@ -549,7 +549,7 @@ export default function ConnectionsPage() {
             <p className="text-sm text-slate-500 mb-4">Add a vulnerability scanner connection to start syncing data</p>
             <button
               onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#0a0a0a] bg-primary-600 rounded-lg hover:bg-primary-700"
             >
               <Plus size={16} /> Add Connection
             </button>
