@@ -97,12 +97,12 @@ interface Assessment {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  not_started: { bg: 'bg-slate-500/20', text: 'text-slate-600', label: 'Not Started' },
-  in_progress: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Progress' },
-  submitted: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Submitted' },
-  under_review: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'Under Review' },
-  approved: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Approved' },
-  rejected: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Rejected' },
+  not_started: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Not Started' },
+  in_progress: { bg: 'bg-primary-50', text: 'text-primary-700', label: 'In Progress' },
+  submitted: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Submitted' },
+  under_review: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Under Review' },
+  approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Approved' },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
 };
 
 const LIKELIHOOD_OPTIONS = [
@@ -450,9 +450,9 @@ export default function AssessmentDetailPage() {
 
   if (error || !assessment) {
     return (
-      <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
-        <p className="mt-2 text-red-400">Failed to load assessment</p>
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+        <AlertCircle className="mx-auto h-8 w-8 text-rose-600" strokeWidth={1.75} />
+        <p className="mt-2 text-rose-700">Failed to load assessment</p>
       </div>
     );
   }
@@ -515,7 +515,7 @@ export default function AssessmentDetailPage() {
             <button
               onClick={() => setShowRejectModal(true)}
               disabled={rejectMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-slate-900 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-600 text-white transition-colors"
             >
               {rejectMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
               Reject
@@ -570,13 +570,13 @@ export default function AssessmentDetailPage() {
           <div className="flex items-center gap-4 border-b border-slate-200">
             <button
               onClick={() => setViewMode('list')}
-              className={`px-1 py-2 text-sm font-medium border-b-2 transition-colors ${viewMode === 'list' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+              className={`px-1 py-2 text-sm font-medium border-b-2 transition-colors ${viewMode === 'list' ? 'border-primary-600 text-primary-700' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
             >
               List View
             </button>
             <button
               onClick={() => setViewMode('step')}
-              className={`px-1 py-2 text-sm font-medium border-b-2 transition-colors ${viewMode === 'step' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
+              className={`px-1 py-2 text-sm font-medium border-b-2 transition-colors ${viewMode === 'step' ? 'border-primary-600 text-primary-700' : 'border-transparent text-slate-600 hover:text-slate-900'}`}
             >
               Step View
             </button>
@@ -612,9 +612,9 @@ export default function AssessmentDetailPage() {
       </div>
 
       {validationErrors.size > 0 && (
-        <div className="rounded-xl border border-red-700 bg-red-900/20 p-4 flex items-center gap-3">
-          <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0" />
-          <p className="text-red-400">Please complete all required fields before submitting.</p>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 flex items-center gap-3">
+          <AlertCircle className="h-5 w-5 text-rose-600 flex-shrink-0" strokeWidth={1.75} />
+          <p className="text-rose-700">Please complete all required fields before submitting.</p>
         </div>
       )}
 
@@ -631,7 +631,7 @@ export default function AssessmentDetailPage() {
               </div>
               <p className="text-xl text-slate-900 font-medium">
                 {currentQuestion.question_text}
-                {currentQuestion.is_required && <span className="text-red-400 ml-1">*</span>}
+                {currentQuestion.is_required && <span className="text-rose-600 ml-1">*</span>}
               </p>
               {currentQuestion.guidance && (
                 <p className="text-sm text-slate-600 mt-3 flex items-start gap-1.5 bg-slate-100/30 p-3 rounded-lg">
@@ -644,7 +644,7 @@ export default function AssessmentDetailPage() {
               <div className="relative">
                 <button
                   onClick={() => void handleAIToggle(currentQuestion.id)}
-                  className="p-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
+                  className="p-2 rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100"
                   title="AI Assistant"
                 >
                   <Sparkles className="h-4 w-4" />
@@ -652,7 +652,7 @@ export default function AssessmentDetailPage() {
                 {showAISuggestions[currentQuestion.id] && (
                   <div className="absolute right-0 top-10 z-10 w-96 p-4 rounded-lg bg-slate-100 border border-slate-300 shadow-xl max-h-80 overflow-y-auto">
                     <div className="flex items-center gap-2 mb-2">
-                      <Sparkles className="h-4 w-4 text-purple-400" />
+                      <Sparkles className="h-4 w-4 text-primary-600" />
                       <span className="text-sm font-medium text-slate-900">AI Assistant</span>
                       {currentAISuggestion && (
                         <span className="text-xs text-slate-600">({Math.round(currentAISuggestion.confidence * 100)}% confidence)</span>
@@ -668,7 +668,7 @@ export default function AssessmentDetailPage() {
                         )}
                         {currentAISuggestion.evidence_recommendations && currentAISuggestion.evidence_recommendations.length > 0 && (
                           <div className="mb-3">
-                            <p className="text-xs font-medium text-purple-300 mb-2">Recommended Evidence to Upload:</p>
+                            <p className="text-xs font-medium text-primary-700 mb-2">Recommended Evidence to Upload:</p>
                             <div className="space-y-2">
                               {currentAISuggestion.evidence_recommendations.map((rec: EvidenceRecommendation, idx: number) => (
                                 <div key={idx} className="bg-white rounded p-2">
@@ -709,13 +709,13 @@ export default function AssessmentDetailPage() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {EFFECTIVENESS_OPTIONS.map(opt => {
                     const isSelected = (responses[currentQuestion.id] || {}).effectiveness === opt.value;
-                    const colorClass = opt.value === 'effective' 
-                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400' 
+                    const colorClass = opt.value === 'effective'
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                       : opt.value === 'partially_effective'
-                      ? 'border-amber-500 bg-amber-500/20 text-amber-400'
+                      ? 'border-amber-500 bg-amber-50 text-amber-700'
                       : opt.value === 'ineffective'
-                      ? 'border-rose-500 bg-rose-500/20 text-rose-400'
-                      : 'border-slate-500 bg-slate-500/20 text-slate-600';
+                      ? 'border-rose-500 bg-rose-50 text-rose-700'
+                      : 'border-slate-400 bg-slate-100 text-slate-700';
                     return (
                       <button
                         key={opt.value}
@@ -751,8 +751,8 @@ export default function AssessmentDetailPage() {
                         onClick={() => isEditable && updateResponse(currentQuestion.id, 'likelihood', opt.value)}
                         className={`w-full p-3 rounded-lg text-left border-2 transition-all ${
                           (responses[currentQuestion.id] || {}).likelihood === opt.value
-                            ? 'border-primary-500 bg-primary-500/20 text-primary-400'
-                            : 'border-slate-300 bg-slate-100/50 text-slate-700 hover:border-slate-500'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700'
+                            : 'border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-500'
                         }`}
                       >
                         {opt.label}
@@ -770,8 +770,8 @@ export default function AssessmentDetailPage() {
                         onClick={() => isEditable && updateResponse(currentQuestion.id, 'impact', opt.value)}
                         className={`w-full p-3 rounded-lg text-left border-2 transition-all ${
                           (responses[currentQuestion.id] || {}).impact === opt.value
-                            ? 'border-primary-500 bg-primary-500/20 text-primary-400'
-                            : 'border-slate-300 bg-slate-100/50 text-slate-700 hover:border-slate-500'
+                            ? 'border-primary-500 bg-primary-50 text-primary-700'
+                            : 'border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-500'
                         }`}
                       >
                         {opt.label}
@@ -789,8 +789,8 @@ export default function AssessmentDetailPage() {
                   onClick={() => isEditable && updateResponse(currentQuestion.id, 'yes_no_value', true)}
                   className={`flex-1 p-4 rounded-xl border-2 font-medium transition-all ${
                     (responses[currentQuestion.id] || {}).yes_no_value === true
-                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400'
-                      : 'border-slate-300 bg-slate-100/50 text-slate-700 hover:border-slate-500'
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                      : 'border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-500'
                   }`}
                 >
                   {(responses[currentQuestion.id] || {}).yes_no_value === true && <CheckCircle className="h-5 w-5 mx-auto mb-2" />}
@@ -801,8 +801,8 @@ export default function AssessmentDetailPage() {
                   onClick={() => isEditable && updateResponse(currentQuestion.id, 'yes_no_value', false)}
                   className={`flex-1 p-4 rounded-xl border-2 font-medium transition-all ${
                     (responses[currentQuestion.id] || {}).yes_no_value === false
-                      ? 'border-rose-500 bg-rose-500/20 text-rose-400'
-                      : 'border-slate-300 bg-slate-100/50 text-slate-700 hover:border-slate-500'
+                      ? 'border-rose-500 bg-rose-50 text-rose-700'
+                      : 'border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-500'
                   }`}
                 >
                   {(responses[currentQuestion.id] || {}).yes_no_value === false && <CheckCircle className="h-5 w-5 mx-auto mb-2" />}
@@ -843,7 +843,7 @@ export default function AssessmentDetailPage() {
               </div>
               
               {uploadingQuestion === currentQuestion.id && (
-                <div className="flex items-center gap-2 text-sm text-primary-400">
+                <div className="flex items-center gap-2 text-sm text-primary-600">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Uploading...
                 </div>
@@ -854,7 +854,7 @@ export default function AssessmentDetailPage() {
                   {evidenceFiles[currentQuestion.id].map(file => (
                     <div key={file.id} className="flex items-center justify-between p-2 bg-slate-100/50 rounded-lg">
                       <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-primary-400" />
+                        <FileText className="h-4 w-4 text-primary-600" />
                         <span className="text-sm text-slate-900">{file.filename}</span>
                         <span className="text-xs text-slate-500">{formatFileSize(file.file_size)}</span>
                       </div>
@@ -865,12 +865,12 @@ export default function AssessmentDetailPage() {
                         <EvidencePreviewButton
                           evidenceId={file.id}
                           title="Preview file"
-                          className="p-1 text-slate-600 hover:text-blue-600"
+                          className="p-1 text-slate-600 hover:text-primary-700"
                         />
                         {isEditable && (
                           <button
                             onClick={() => handleRemoveEvidence(currentQuestion.id, file.id)}
-                            className="p-1 text-slate-600 hover:text-rose-400"
+                            className="p-1 text-slate-600 hover:text-rose-600"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -937,19 +937,19 @@ export default function AssessmentDetailPage() {
             </button>
 
             {expandedSections.has(section) && (
-              <div className="divide-y divide-slate-700">
+              <div className="divide-y divide-slate-200">
                 {questions.sort((a, b) => (a.question_order || a.sequence) - (b.question_order || b.sequence)).map((question) => {
                   const response = responses[question.id] || {};
                   const aiSuggestion = aiSuggestionsByQuestion[question.id] || null;
                   const hasError = validationErrors.has(question.id);
 
                   return (
-                    <div key={question.id} className={`p-4 ${hasError ? 'bg-red-900/10' : ''}`}>
+                    <div key={question.id} className={`p-4 ${hasError ? 'bg-rose-50' : ''}`}>
                       <div className="flex items-start justify-between gap-4 mb-3">
                         <div className="flex-1">
                           <p className="text-slate-900 font-medium">
                             {question.question_text}
-                            {question.is_required && <span className="text-red-400 ml-1">*</span>}
+                            {question.is_required && <span className="text-rose-600 ml-1">*</span>}
                           </p>
                           {question.guidance && (
                             <p className="text-sm text-slate-600 mt-1 flex items-start gap-1.5">
@@ -962,7 +962,7 @@ export default function AssessmentDetailPage() {
                           <div className="relative">
                             <button
                               onClick={() => void handleAIToggle(question.id)}
-                              className="p-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
+                              className="p-2 rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100"
                               title="AI Assistant"
                             >
                               <Sparkles className="h-4 w-4" />
@@ -970,7 +970,7 @@ export default function AssessmentDetailPage() {
                             {showAISuggestions[question.id] && (
                               <div className="absolute right-0 top-10 z-10 w-96 p-4 rounded-lg bg-slate-100 border border-slate-300 shadow-xl max-h-80 overflow-y-auto">
                                 <div className="flex items-center gap-2 mb-2">
-                                  <Sparkles className="h-4 w-4 text-purple-400" />
+                                  <Sparkles className="h-4 w-4 text-primary-600" />
                                   <span className="text-sm font-medium text-slate-900">AI Assistant</span>
                                   {aiSuggestion && (
                                     <span className="text-xs text-slate-600">({Math.round(aiSuggestion.confidence * 100)}% confidence)</span>
@@ -985,7 +985,7 @@ export default function AssessmentDetailPage() {
                                     )}
                                     {aiSuggestion.evidence_recommendations && aiSuggestion.evidence_recommendations.length > 0 && (
                                       <div className="mb-3">
-                                        <p className="text-xs font-medium text-purple-300 mb-2">Recommended Evidence to Upload:</p>
+                                        <p className="text-xs font-medium text-primary-700 mb-2">Recommended Evidence to Upload:</p>
                                         <div className="space-y-2">
                                           {aiSuggestion.evidence_recommendations.map((rec: EvidenceRecommendation, idx: number) => (
                                             <div key={idx} className="bg-white rounded p-2">
@@ -1066,13 +1066,13 @@ export default function AssessmentDetailPage() {
                             <div className="flex flex-wrap gap-2">
                               {EFFECTIVENESS_OPTIONS.map(opt => {
                                 const isSelected = response.effectiveness === opt.value;
-                                const colorClass = opt.value === 'effective' 
-                                  ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400' 
+                                const colorClass = opt.value === 'effective'
+                                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                                   : opt.value === 'partially_effective'
-                                  ? 'border-amber-500 bg-amber-500/20 text-amber-400'
+                                  ? 'border-amber-500 bg-amber-50 text-amber-700'
                                   : opt.value === 'ineffective'
-                                  ? 'border-rose-500 bg-rose-500/20 text-rose-400'
-                                  : 'border-slate-500 bg-slate-500/20 text-slate-600';
+                                  ? 'border-rose-500 bg-rose-50 text-rose-700'
+                                  : 'border-slate-400 bg-slate-100 text-slate-700';
                                 return (
                                   <button
                                     key={opt.value}
@@ -1094,7 +1094,7 @@ export default function AssessmentDetailPage() {
                               })}
                             </div>
                             {response.effectiveness && (
-                              <p className="text-sm text-emerald-400 flex items-center gap-1.5">
+                              <p className="text-sm text-emerald-600 flex items-center gap-1.5">
                                 <CheckCircle className="h-4 w-4" />
                                 Selection saved
                               </p>
@@ -1162,7 +1162,7 @@ export default function AssessmentDetailPage() {
                         </div>
                         
                         {uploadingQuestion === question.id && (
-                          <div className="flex items-center gap-2 text-sm text-primary-400">
+                          <div className="flex items-center gap-2 text-sm text-primary-600">
                             <Loader2 className="h-4 w-4 animate-spin" />
                             Uploading...
                           </div>
@@ -1173,7 +1173,7 @@ export default function AssessmentDetailPage() {
                             {evidenceFiles[question.id].map(file => (
                               <div key={file.id} className="flex items-center justify-between p-2 bg-slate-100/50 rounded-lg">
                                 <div className="flex items-center gap-2">
-                                  <FileText className="h-4 w-4 text-primary-400" />
+                                  <FileText className="h-4 w-4 text-primary-600" />
                                   <span className="text-sm text-slate-900">{file.filename}</span>
                                   <span className="text-xs text-slate-500">{formatFileSize(file.file_size)}</span>
                                 </div>
@@ -1181,12 +1181,12 @@ export default function AssessmentDetailPage() {
                                   <EvidencePreviewButton
                                     evidenceId={file.id}
                                     title="Preview file"
-                                    className="p-1 text-slate-600 hover:text-blue-600"
+                                    className="p-1 text-slate-600 hover:text-primary-700"
                                   />
                                   {isEditable && (
                                     <button
                                       onClick={() => handleRemoveEvidence(question.id, file.id)}
-                                      className="p-1 text-slate-600 hover:text-rose-400"
+                                      className="p-1 text-slate-600 hover:text-rose-600"
                                     >
                                       <Trash2 className="h-4 w-4" />
                                     </button>
@@ -1202,8 +1202,8 @@ export default function AssessmentDetailPage() {
 
                       {/* AI Suggestion Toggle */}
                       {question.ai_suggestion_enabled && isEditable && (
-                        <div className="mt-4 p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-                          <div className="flex items-center gap-2 text-purple-400">
+                        <div className="mt-4 p-3 bg-primary-50 border border-primary-200 rounded-lg">
+                          <div className="flex items-center gap-2 text-primary-700">
                             <Lightbulb className="h-4 w-4" />
                             <span className="text-sm font-medium">AI Assistance Available</span>
                           </div>

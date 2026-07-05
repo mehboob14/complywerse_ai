@@ -42,17 +42,17 @@ interface Finding {
 }
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; border: string; label: string }> = {
-  critical: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500', label: 'Critical' },
-  high: { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500', label: 'High' },
-  medium: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500', label: 'Medium' },
-  low: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500', label: 'Low' },
+  critical: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-500', label: 'Critical' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-500', label: 'High' },
+  medium: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-500', label: 'Medium' },
+  low: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-500', label: 'Low' },
 };
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  open: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Open' },
-  in_progress: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'In Progress' },
-  remediated: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Remediated' },
-  closed: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Closed' },
+  open: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Open' },
+  in_progress: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'In Progress' },
+  remediated: { bg: 'bg-primary-50', text: 'text-primary-700', label: 'Remediated' },
+  closed: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Closed' },
 };
 
 const STATUS_FLOW = ['open', 'in_progress', 'remediated', 'closed'];
@@ -114,7 +114,7 @@ function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalPro
     >
       <div className="mb-4">
         <label className="mb-1 block text-sm font-medium text-slate-700">
-          {type === 'risk' ? 'Risk' : 'Control'} ID <span className="text-red-500">*</span>
+          {type === 'risk' ? 'Risk' : 'Control'} ID <span className="text-rose-500">*</span>
         </label>
         <input
           type="number"
@@ -172,7 +172,7 @@ function CreateActionModal({ isOpen, onClose, onConfirm, isLoading }: CreateActi
       <div className="space-y-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">
-            Title <span className="text-red-500">*</span>
+            Title <span className="text-rose-500">*</span>
           </label>
           <input
             type="text"
@@ -280,9 +280,9 @@ export default function FindingDetailPage() {
 
   if (error || !finding) {
     return (
-      <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
-        <p className="mt-2 text-red-400">Failed to load finding</p>
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+        <AlertCircle className="mx-auto h-8 w-8 text-rose-600" strokeWidth={1.75} />
+        <p className="mt-2 text-rose-700">Failed to load finding</p>
       </div>
     );
   }
@@ -342,7 +342,7 @@ export default function FindingDetailPage() {
                   onClick={() => isNext && handleStatusChange(status)}
                   disabled={!isNext || updateStatusMutation.isPending}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                    isActive ? `${style.bg} ${style.text} ring-2 ring-offset-2 ring-offset-slate-900 ${style.text.replace('text-', 'ring-')}` :
+                    isActive ? `${style.bg} ${style.text} ring-2 ring-offset-2 ring-offset-white ${style.text.replace('text-', 'ring-')}` :
                     isPast ? 'bg-slate-100 text-slate-700' :
                     isNext ? 'bg-slate-100 text-slate-900 hover:bg-slate-200 cursor-pointer' :
                     'bg-white text-slate-500'
@@ -370,9 +370,9 @@ export default function FindingDetailPage() {
           </div>
 
           {finding.ai_recommendation && (
-            <div className="card p-6 border-purple-500/30">
+            <div className="card p-6 border-primary-200">
               <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="h-5 w-5 text-purple-400" />
+                <Sparkles className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
                 <h3 className="text-lg font-medium text-slate-900">AI Recommendation</h3>
               </div>
               <p className="text-slate-700">{finding.ai_recommendation}</p>
@@ -399,9 +399,9 @@ export default function FindingDetailPage() {
                       <p className="text-sm text-slate-600">Due: {formatDate(action.due_date)}</p>
                     </div>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      action.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                      action.status === 'in_progress' ? 'bg-yellow-500/20 text-yellow-400' :
-                      'bg-slate-500/20 text-slate-600'
+                      action.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
+                      action.status === 'in_progress' ? 'bg-amber-50 text-amber-700' :
+                      'bg-slate-100 text-slate-700'
                     }`}>
                       {action.status}
                     </span>
@@ -424,7 +424,7 @@ export default function FindingDetailPage() {
               </div>
               <div>
                 <p className="text-sm text-slate-600">Due Date</p>
-                <p className={`${finding.due_date && new Date(finding.due_date) < new Date() && finding.status !== 'closed' ? 'text-red-400' : 'text-slate-900'}`}>
+                <p className={`${finding.due_date && new Date(finding.due_date) < new Date() && finding.status !== 'closed' ? 'text-rose-600' : 'text-slate-900'}`}>
                   {formatDate(finding.due_date)}
                 </p>
               </div>
@@ -447,7 +447,7 @@ export default function FindingDetailPage() {
                   {!finding.linked_risk && (
                     <button
                       onClick={() => setLinkModalType('risk')}
-                      className="text-xs text-primary-400 hover:text-primary-300"
+                      className="text-xs text-primary-700 hover:text-primary-600"
                     >
                       Link
                     </button>
@@ -456,10 +456,10 @@ export default function FindingDetailPage() {
                 {finding.linked_risk ? (
                   <Link
                     href={`/erm/risks/${finding.linked_risk.id}`}
-                    className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-between hover:bg-purple-500/20"
+                    className="p-2 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between hover:bg-slate-100"
                   >
                     <span className="text-slate-900">{finding.linked_risk.title}</span>
-                    <ExternalLink className="h-4 w-4 text-purple-400" />
+                    <ExternalLink className="h-4 w-4 text-slate-600" />
                   </Link>
                 ) : (
                   <p className="text-slate-500 text-sm">No risk linked</p>
@@ -474,7 +474,7 @@ export default function FindingDetailPage() {
                   {!finding.linked_control && (
                     <button
                       onClick={() => setLinkModalType('control')}
-                      className="text-xs text-primary-400 hover:text-primary-300"
+                      className="text-xs text-primary-700 hover:text-primary-600"
                     >
                       Link
                     </button>
@@ -483,10 +483,10 @@ export default function FindingDetailPage() {
                 {finding.linked_control ? (
                   <Link
                     href={`/erm/internal-controls/${finding.linked_control.id}`}
-                    className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-between hover:bg-blue-500/20"
+                    className="p-2 rounded-lg bg-primary-50 border border-primary-200 flex items-center justify-between hover:bg-primary-100"
                   >
                     <span className="text-slate-900">{finding.linked_control.name}</span>
-                    <ExternalLink className="h-4 w-4 text-blue-400" />
+                    <ExternalLink className="h-4 w-4 text-primary-600" />
                   </Link>
                 ) : (
                   <p className="text-slate-500 text-sm">No control linked</p>

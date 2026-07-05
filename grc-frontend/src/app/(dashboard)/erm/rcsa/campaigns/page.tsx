@@ -47,9 +47,9 @@ interface Template {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-600', icon: FileText },
-  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: Play },
-  closed: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: CheckCircle },
+  draft: { bg: 'bg-slate-100', text: 'text-slate-700', icon: FileText },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: Play },
+  closed: { bg: 'bg-primary-50', text: 'text-primary-700', icon: CheckCircle },
 };
 
 const PERIOD_OPTIONS = [
@@ -209,8 +209,8 @@ export default function RCSACampaignsPage() {
             <div key={campaign.id} className="card p-6 hover:border-primary-500/50 transition-all">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">
-                    <ClipboardList className="h-5 w-5 text-primary-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
+                    <ClipboardList className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
                   </div>
                   <div>
                     <h3 className="text-slate-900 font-medium">{campaign.name}</h3>
@@ -261,7 +261,7 @@ export default function RCSACampaignsPage() {
                 </div>
 
                 {campaign.pending_assessments > 0 && (
-                  <div className="flex items-center gap-1.5 text-amber-400 text-sm">
+                  <div className="flex items-center gap-1.5 text-amber-600 text-sm">
                     <Clock className="h-4 w-4" />
                     {campaign.pending_assessments} pending assessments
                   </div>
@@ -284,7 +284,7 @@ export default function RCSACampaignsPage() {
                         activateMutation.mutate(campaign.id);
                       }
                     }}
-                    className="p-1.5 text-slate-600 hover:text-emerald-400 hover:bg-emerald-500/20 rounded"
+                    className="p-1.5 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded"
                     title="Activate Campaign"
                   >
                     <Play className="h-4 w-4" />
@@ -298,7 +298,7 @@ export default function RCSACampaignsPage() {
                         closeMutation.mutate(campaign.id);
                       }
                     }}
-                    className="p-1.5 text-slate-600 hover:text-blue-400 hover:bg-blue-500/20 rounded"
+                    className="p-1.5 text-slate-600 hover:text-primary-700 hover:bg-primary-50 rounded"
                     title="Close Campaign"
                   >
                     <XCircle className="h-4 w-4" />
@@ -312,7 +312,7 @@ export default function RCSACampaignsPage() {
                         deleteMutation.mutate(campaign.id);
                       }
                     }}
-                    className="p-1.5 text-slate-600 hover:text-rose-400 hover:bg-rose-500/20 rounded"
+                    className="p-1.5 text-slate-600 hover:text-rose-700 hover:bg-rose-50 rounded"
                     title="Delete Campaign"
                   >
                     <Trash2 className="h-4 w-4" />

@@ -42,11 +42,11 @@ export default function RCSALayout({ children }: { children: React.ReactNode }) 
               href={item.href}
               className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                 active
-                  ? 'border-blue-600 text-blue-600'
+                  ? 'border-primary-600 text-primary-700'
                   : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
               }`}
             >
-              <item.icon className="h-4 w-4" />
+              <item.icon className="h-4 w-4" strokeWidth={1.75} />
               {item.label}
             </Link>
           );

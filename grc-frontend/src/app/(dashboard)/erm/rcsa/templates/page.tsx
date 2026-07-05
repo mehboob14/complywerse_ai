@@ -39,16 +39,16 @@ interface Template {
 }
 
 const SOURCE_COLORS: Record<string, { bg: string; text: string }> = {
-  system: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
-  custom: { bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  system: { bg: 'bg-primary-50', text: 'text-primary-700' },
+  custom: { bg: 'bg-slate-100', text: 'text-slate-700' },
 };
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
-  'Cybersecurity': { bg: 'bg-cyan-500/20', text: 'text-cyan-400' },
-  'Operational Risk': { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-  'Compliance': { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  'IT Risk': { bg: 'bg-violet-500/20', text: 'text-violet-400' },
-  'Financial Risk': { bg: 'bg-rose-500/20', text: 'text-rose-400' },
+  'Cybersecurity': { bg: 'bg-primary-50', text: 'text-primary-700' },
+  'Operational Risk': { bg: 'bg-amber-50', text: 'text-amber-700' },
+  'Compliance': { bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  'IT Risk': { bg: 'bg-slate-100', text: 'text-slate-700' },
+  'Financial Risk': { bg: 'bg-rose-50', text: 'text-rose-700' },
 };
 
 export default function RCSATemplatesPage() {
@@ -199,13 +199,13 @@ export default function RCSATemplatesPage() {
       </div>
 
       {uploadResult && (
-        <div className={`p-4 rounded-lg flex items-center gap-3 ${uploadResult.success ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-rose-500/20 border border-rose-500/30'}`}>
+        <div className={`p-4 rounded-lg flex items-center gap-3 ${uploadResult.success ? 'bg-emerald-50 border border-emerald-200' : 'bg-rose-50 border border-rose-200'}`}>
           {uploadResult.success ? (
-            <CheckCircle className="h-5 w-5 text-emerald-400" />
+            <CheckCircle className="h-5 w-5 text-emerald-600" strokeWidth={1.75} />
           ) : (
-            <AlertCircle className="h-5 w-5 text-rose-400" />
+            <AlertCircle className="h-5 w-5 text-rose-600" strokeWidth={1.75} />
           )}
-          <p className={uploadResult.success ? 'text-emerald-400' : 'text-rose-400'}>{uploadResult.message}</p>
+          <p className={uploadResult.success ? 'text-emerald-700' : 'text-rose-700'}>{uploadResult.message}</p>
           <button onClick={() => setUploadResult(null)} className="ml-auto">
             <X className="h-4 w-4 text-slate-600 hover:text-slate-900" />
           </button>
@@ -238,8 +238,8 @@ export default function RCSATemplatesPage() {
           <div key={template.id} className="card p-6 hover:border-primary-500/50 transition-all">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-500/20">
-                  <FileText className="h-5 w-5 text-primary-400" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50">
+                  <FileText className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
                 </div>
                 <div>
                   <h3 className="text-slate-900 font-medium">{template.name}</h3>
@@ -264,7 +264,7 @@ export default function RCSATemplatesPage() {
             </div>
 
             <div className="mb-4">
-              <span className={`text-xs px-2 py-1 rounded-full ${CATEGORY_COLORS[template.category]?.bg || 'bg-slate-500/20'} ${CATEGORY_COLORS[template.category]?.text || 'text-slate-600'}`}>
+              <span className={`text-xs px-2 py-1 rounded-full ${CATEGORY_COLORS[template.category]?.bg || 'bg-slate-100'} ${CATEGORY_COLORS[template.category]?.text || 'text-slate-700'}`}>
                 {template.category}
               </span>
             </div>
@@ -301,7 +301,7 @@ export default function RCSATemplatesPage() {
                         deleteMutation.mutate(template.id);
                       }
                     }}
-                    className="p-1.5 text-slate-600 hover:text-rose-400 hover:bg-rose-500/20 rounded"
+                    className="p-1.5 text-slate-600 hover:text-rose-700 hover:bg-rose-50 rounded"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -309,7 +309,7 @@ export default function RCSATemplatesPage() {
               )}
               <button
                 onClick={() => handleDownload(template)}
-                className="p-1.5 text-slate-600 hover:text-emerald-400 hover:bg-emerald-500/20 rounded"
+                className="p-1.5 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded"
                 title="Download Template"
               >
                 <Download className="h-4 w-4" />
@@ -424,7 +424,7 @@ export default function RCSATemplatesPage() {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">File (Excel or CSV) *</label>
             <div
-              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${uploadFile ? 'border-blue-500/50 bg-blue-500/10' : 'border-slate-300 hover:border-slate-500'}`}
+              className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${uploadFile ? 'border-primary-500/50 bg-primary-50' : 'border-slate-300 hover:border-slate-500'}`}
               onClick={() => fileInputRef.current?.click()}
             >
               <input
@@ -436,8 +436,8 @@ export default function RCSATemplatesPage() {
               />
               {uploadFile ? (
                 <div className="flex items-center justify-center gap-2">
-                  <FileSpreadsheet className="h-5 w-5 text-blue-400" />
-                  <span className="text-blue-700 text-sm">{uploadFile.name}</span>
+                  <FileSpreadsheet className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
+                  <span className="text-primary-700 text-sm">{uploadFile.name}</span>
                 </div>
               ) : (
                 <div>

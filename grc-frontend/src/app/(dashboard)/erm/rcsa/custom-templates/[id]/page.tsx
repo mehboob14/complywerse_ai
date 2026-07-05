@@ -226,16 +226,16 @@ export default function RCSACustomTemplateDetailPage() {
   }, [tplQ.data]);
 
   if (!templateId || templateId <= 0) {
-    return <div className="p-6 text-sm text-gray-500">Invalid template id.</div>;
+    return <div className="p-6 text-sm text-slate-500">Invalid template id.</div>;
   }
-  if (tplQ.isLoading) return <div className="p-6 text-sm text-gray-500">Loading template…</div>;
+  if (tplQ.isLoading) return <div className="p-6 text-sm text-slate-500">Loading template…</div>;
   if (tplQ.isError || !tplQ.data) {
     return (
       <div className="p-6">
-        <Link href="/erm/rcsa/custom-templates" className="text-sm text-blue-600 hover:underline">
+        <Link href="/erm/rcsa/custom-templates" className="text-sm text-primary-700 hover:underline">
           ← Back to Custom Templates
         </Link>
-        <p className="mt-3 text-sm text-red-600">Failed to load template.</p>
+        <p className="mt-3 text-sm text-rose-600">Failed to load template.</p>
       </div>
     );
   }
@@ -248,7 +248,7 @@ export default function RCSACustomTemplateDetailPage() {
       <div className="flex items-center justify-between gap-4">
         <Link
           href="/erm/rcsa/custom-templates"
-          className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+          className="inline-flex items-center gap-1.5 text-sm text-primary-700 hover:underline"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Custom Templates
@@ -260,7 +260,7 @@ export default function RCSACustomTemplateDetailPage() {
               const r = await rcsaApi.customTemplates.download(t.id);
               downloadBlob(r.data as Blob, t.original_filename);
             }}
-            className="inline-flex items-center gap-1.5 text-xs text-gray-700 hover:text-gray-900 border border-gray-300 rounded px-2 py-1"
+            className="inline-flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 border border-slate-300 rounded px-2 py-1"
             title="Re-download the original .xlsx"
           >
             <Download className="h-3.5 w-3.5" />
@@ -272,7 +272,7 @@ export default function RCSACustomTemplateDetailPage() {
               const r = await rcsaApi.customTemplates.exportCurrent(t.id);
               downloadBlob(r.data as Blob, t.original_filename.replace(/\.xlsx$/i, '_export.xlsx'));
             }}
-            className="inline-flex items-center gap-1.5 text-xs text-gray-700 hover:text-gray-900 border border-gray-300 rounded px-2 py-1"
+            className="inline-flex items-center gap-1.5 text-xs text-slate-700 hover:text-slate-900 border border-slate-300 rounded px-2 py-1"
             title="Export the current rows in the same layout"
           >
             <RefreshCw className="h-3.5 w-3.5" />
@@ -282,28 +282,28 @@ export default function RCSACustomTemplateDetailPage() {
       </div>
 
       {/* Header */}
-      <section className="rounded-lg border border-gray-200 bg-white p-5">
+      <section className="rounded-lg border border-slate-200 bg-white p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold text-gray-900">{t.name}</h1>
+            <h1 className="text-lg font-semibold text-slate-900">{t.name}</h1>
             {t.description && (
-              <p className="text-sm text-gray-600 mt-1 max-w-3xl">{t.description}</p>
+              <p className="text-sm text-slate-600 mt-1 max-w-3xl">{t.description}</p>
             )}
-            <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
+            <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
               {t.function_area && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-blue-200 bg-blue-50 text-blue-700">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-primary-200 bg-primary-50 text-primary-700">
                   {t.function_area}
                 </span>
               )}
               {t.sheet_name && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-gray-200 bg-gray-50 text-gray-700">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-700">
                   Sheet: {t.sheet_name}
                 </span>
               )}
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-gray-200 bg-gray-50 text-gray-700">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-700">
                 {t.column_schema.flat_columns.length} columns
               </span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-gray-200 bg-gray-50 text-gray-700">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-slate-200 bg-slate-50 text-slate-700">
                 {t.row_count} rows
               </span>
             </div>
@@ -321,43 +321,43 @@ export default function RCSACustomTemplateDetailPage() {
       {/* Matrix table */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-900">Assessment items</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Assessment items</h2>
           <button
             type="button"
             onClick={() => { setDraft({}); setCreatingRow(true); }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] bg-primary-600 rounded-md hover:bg-primary-700"
           >
             <Plus className="h-3.5 w-3.5" />
             Add assessment item
           </button>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 {primaryColumns.map((c) => (
                   <th key={c.key} className="px-3 py-2 whitespace-nowrap">
                     {c.label}
-                    {c.group && <div className="text-[10px] text-gray-400 normal-case font-normal">{c.group}</div>}
+                    {c.group && <div className="text-[10px] text-slate-400 normal-case font-normal">{c.group}</div>}
                   </th>
                 ))}
                 <th className="px-3 py-2 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-slate-100">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={primaryColumns.length + 1} className="px-3 py-6 text-center text-xs text-gray-500">
+                  <td colSpan={primaryColumns.length + 1} className="px-3 py-6 text-center text-xs text-slate-500">
                     No assessment items yet. Use “Add assessment item” above, or re-import from the original file.
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-gray-50">
+                  <tr key={r.id} className="hover:bg-slate-50">
                     {primaryColumns.map((c) => (
-                      <td key={c.key} className="px-3 py-2 text-gray-700 align-top max-w-[280px]">
+                      <td key={c.key} className="px-3 py-2 text-slate-700 align-top max-w-[280px]">
                         <div className="line-clamp-2" title={String(r.data?.[c.key] ?? '')}>
-                          {String(r.data?.[c.key] ?? '') || <span className="text-gray-400">—</span>}
+                          {String(r.data?.[c.key] ?? '') || <span className="text-slate-400">—</span>}
                         </div>
                       </td>
                     ))}
@@ -368,7 +368,7 @@ export default function RCSACustomTemplateDetailPage() {
                       <div className="inline-flex items-center gap-1.5 mr-2 align-middle">
                         {r.assigned_user_name ? (
                           <span
-                            className="inline-flex items-center gap-1 text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-1.5 py-0.5"
+                            className="inline-flex items-center gap-1 text-[10px] font-medium text-primary-700 bg-primary-50 border border-primary-200 rounded-full px-1.5 py-0.5"
                             title={`Assigned to ${r.assigned_user_name}`}
                           >
                             <UserCheck className="h-2.5 w-2.5" />
@@ -386,7 +386,7 @@ export default function RCSACustomTemplateDetailPage() {
                         ) : null}
                         {r.has_ai_explanation ? (
                           <span
-                            className="inline-flex items-center gap-1 text-[10px] font-medium text-violet-700 bg-violet-50 border border-violet-200 rounded-full px-1.5 py-0.5"
+                            className="inline-flex items-center gap-1 text-[10px] font-medium text-primary-700 bg-primary-50 border border-primary-200 rounded-full px-1.5 py-0.5"
                             title="AI explanation cached — open the assessment item to read"
                           >
                             <Sparkles className="h-2.5 w-2.5" />
@@ -397,7 +397,7 @@ export default function RCSACustomTemplateDetailPage() {
                       <button
                         type="button"
                         onClick={() => setSelectedRow(r)}
-                        className="text-xs text-blue-600 hover:underline"
+                        className="text-xs text-primary-700 hover:underline"
                       >
                         Edit
                       </button>
@@ -415,7 +415,7 @@ export default function RCSACustomTemplateDetailPage() {
                           type="button"
                           onClick={() => promoteM.mutate(r.id)}
                           disabled={promoteM.isPending}
-                          className="inline-flex items-center gap-1 text-xs text-gray-700 hover:text-gray-900 disabled:opacity-50"
+                          className="inline-flex items-center gap-1 text-xs text-slate-700 hover:text-slate-900 disabled:opacity-50"
                           title="Create a Risk Register entry from this assessment item"
                         >
                           <Link2 className="h-3 w-3" />
@@ -514,16 +514,16 @@ function RowDrawer({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3">
-          <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-900">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
+          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Tabs only appear for an existing row — creation stays single-pane. */}
         {isExisting && (
-          <div className="px-5 pt-3 border-b border-gray-100 bg-white">
+          <div className="px-5 pt-3 border-b border-slate-100 bg-white">
             <nav className="flex gap-1 -mb-px">
               {(
                 [
@@ -541,8 +541,8 @@ function RowDrawer({
                     onClick={() => setTab(key)}
                     className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
                       active
-                        ? 'border-blue-600 text-blue-700'
-                        : 'border-transparent text-gray-500 hover:text-gray-800'
+                        ? 'border-primary-600 text-primary-700'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
                     }`}
                   >
                     <Icon className="h-3.5 w-3.5" />
@@ -558,22 +558,22 @@ function RowDrawer({
           {(!isExisting || tab === 'fields') && (
             <>
               {schema.groups.map((g) => (
-                <fieldset key={g.key} className="border border-gray-200 rounded-lg p-4">
-                  <legend className="text-xs font-semibold uppercase tracking-wide text-gray-500 px-2">
+                <fieldset key={g.key} className="border border-slate-200 rounded-lg p-4">
+                  <legend className="text-xs font-semibold uppercase tracking-wide text-slate-500 px-2">
                     {g.label}
                   </legend>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {g.columns.map((c) => (
                       <div key={c.key}>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                        <label className="block text-xs font-medium text-slate-700 mb-1">
                           {c.label}
-                          <span className="ml-1 text-[10px] uppercase text-gray-400 font-normal">{c.data_type}</span>
+                          <span className="ml-1 text-[10px] uppercase text-slate-400 font-normal">{c.data_type}</span>
                         </label>
                         {c.data_type === 'yes_no' ? (
                           <select
                             value={String(values[c.key] ?? '')}
                             onChange={(e) => onChange(c.key, e.target.value)}
-                            className="block w-full text-sm rounded-md border border-gray-300 px-3 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            className="block w-full text-sm rounded-md border border-slate-300 px-3 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                           >
                             <option value="">—</option>
                             <option value="Yes">Yes</option>
@@ -584,14 +584,14 @@ function RowDrawer({
                             type="number"
                             value={String(values[c.key] ?? '')}
                             onChange={(e) => onChange(c.key, e.target.value)}
-                            className="block w-full text-sm rounded-md border border-gray-300 px-3 py-1.5 font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            className="block w-full text-sm rounded-md border border-slate-300 px-3 py-1.5 font-mono focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                           />
                         ) : (c.label || '').toLowerCase().includes('description') || (c.label || '').toLowerCase().includes('action') ? (
                           <textarea
                             rows={3}
                             value={String(values[c.key] ?? '')}
                             onChange={(e) => onChange(c.key, e.target.value)}
-                            className="block w-full text-sm rounded-md border border-gray-300 px-3 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            className="block w-full text-sm rounded-md border border-slate-300 px-3 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                           />
                         ) : (
                           <input
@@ -599,7 +599,7 @@ function RowDrawer({
                             value={String(values[c.key] ?? '')}
                             onChange={(e) => onChange(c.key, e.target.value)}
                             placeholder={c.sample_values?.[0] ? String(c.sample_values[0]).slice(0, 60) : ''}
-                            className="block w-full text-sm rounded-md border border-gray-300 px-3 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                            className="block w-full text-sm rounded-md border border-slate-300 px-3 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                           />
                         )}
                       </div>
@@ -627,12 +627,12 @@ function RowDrawer({
           )}
         </div>
 
-        <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-gray-200 bg-white px-5 py-3">
+        <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-3">
           {onDelete ? (
             <button
               type="button"
               onClick={onDelete}
-              className="inline-flex items-center gap-1 text-xs text-red-600 hover:underline"
+              className="inline-flex items-center gap-1 text-xs text-rose-600 hover:underline"
             >
               <Trash2 className="h-3.5 w-3.5" />
               Delete item
@@ -642,7 +642,7 @@ function RowDrawer({
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 text-sm border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              className="px-3 py-1.5 text-sm border border-slate-300 rounded-md text-slate-700 hover:bg-slate-50"
             >
               Close
             </button>
@@ -651,7 +651,7 @@ function RowDrawer({
                 type="button"
                 onClick={onSave}
                 disabled={isPending}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary-600 text-[#0a0a0a] rounded-md hover:bg-primary-700 disabled:opacity-50"
               >
                 <Save className="h-4 w-4" />
                 {isPending ? 'Saving…' : 'Save'}
@@ -682,12 +682,12 @@ function ExplainPanel({ templateId, row }: { templateId: number; row: Row }) {
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3 text-xs text-violet-800">
+      <div className="rounded-lg border border-primary-200 bg-primary-50/40 p-3 text-xs text-primary-800">
         <p className="font-medium">
           AI can summarise this assessment item in plain language — useful when handing it off to a
           process owner who isn&apos;t a risk specialist.
         </p>
-        <p className="mt-1 text-[11px] text-violet-700/80">
+        <p className="mt-1 text-[11px] text-primary-700/80">
           Output is cached on the assessment item; click <em>Re-analyze</em> to regenerate after edits.
         </p>
       </div>
@@ -697,7 +697,7 @@ function ExplainPanel({ templateId, row }: { templateId: number; row: Row }) {
           type="button"
           disabled={explainM.isPending}
           onClick={() => explainM.mutate(false)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-violet-600 rounded-md hover:bg-violet-700 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50"
         >
           {explainM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
           {latest || cachedExplanation ? 'Open AI explanation' : 'Analyze with AI'}
@@ -707,14 +707,14 @@ function ExplainPanel({ templateId, row }: { templateId: number; row: Row }) {
             type="button"
             disabled={explainM.isPending}
             onClick={() => explainM.mutate(true)}
-            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-gray-600 hover:text-gray-900 border border-gray-300 rounded"
+            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] text-slate-600 hover:text-slate-900 border border-slate-300 rounded"
           >
             <RefreshCw className="h-3 w-3" />
             Re-analyze
           </button>
         )}
         {latest?.generated_at && (
-          <span className="text-[10px] text-gray-500">
+          <span className="text-[10px] text-slate-500">
             Generated {new Date(latest.generated_at).toLocaleString()}
             {latest.from_cache ? ' · from cache' : ''}
           </span>
@@ -729,7 +729,7 @@ function ExplainPanel({ templateId, row }: { templateId: number; row: Row }) {
 
       {latest?.explanation && (
         <article
-          className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap"
+          className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-800 leading-relaxed whitespace-pre-wrap"
           aria-live="polite"
         >
           {latest.explanation}
@@ -817,45 +817,45 @@ function EvidencePanel({ templateId, row }: { templateId: number; row: Row }) {
 
       {/* Existing evidence list */}
       {listQ.isLoading ? (
-        <p className="text-xs text-gray-500">Loading evidence…</p>
+        <p className="text-xs text-slate-500">Loading evidence…</p>
       ) : items.length === 0 ? (
-        <p className="text-xs text-gray-500">No evidence attached yet.</p>
+        <p className="text-xs text-slate-500">No evidence attached yet.</p>
       ) : (
         <ul className="space-y-2">
           {items.map((ev) => (
             <li
               key={ev.id}
-              className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white p-3"
+              className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-3"
             >
-              <FileText className={`h-4 w-4 shrink-0 mt-0.5 ${ev.linked_evidence_id ? 'text-indigo-600' : 'text-emerald-600'}`} />
+              <FileText className={`h-4 w-4 shrink-0 mt-0.5 ${ev.linked_evidence_id ? 'text-primary-600' : 'text-emerald-600'}`} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => handleDownload(ev.id, ev.file_name)}
-                    className="text-sm font-medium text-gray-900 hover:text-emerald-700 hover:underline truncate text-left"
+                    className="text-sm font-medium text-slate-900 hover:text-emerald-700 hover:underline truncate text-left"
                     title={ev.file_name}
                   >
                     {ev.file_name}
                   </button>
                   {ev.linked_evidence_id && (
-                    <span className="inline-flex items-center gap-0.5 text-[9px] uppercase tracking-wide font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1 py-0.5">
+                    <span className="inline-flex items-center gap-0.5 text-[9px] uppercase tracking-wide font-semibold text-primary-700 bg-primary-50 border border-primary-200 rounded px-1 py-0.5">
                       <Link2 className="h-2.5 w-2.5" />
                       Library
                     </span>
                   )}
                 </div>
-                <p className="text-[10px] text-gray-500">
+                <p className="text-[10px] text-slate-500">
                   {ev.uploaded_by_name || 'Someone'} ·{' '}
                   {new Date(ev.uploaded_at).toLocaleString()}
                   {ev.file_size != null ? ` · ${Math.round(ev.file_size / 1024)} KB` : ''}
                 </p>
-                {ev.description && <p className="mt-1 text-xs text-gray-700">{ev.description}</p>}
+                {ev.description && <p className="mt-1 text-xs text-slate-700">{ev.description}</p>}
               </div>
               <button
                 type="button"
                 onClick={() => handleDownload(ev.id, ev.file_name)}
-                className="text-[11px] text-gray-600 hover:text-gray-900 px-2 py-1 border border-gray-300 rounded"
+                className="text-[11px] text-slate-600 hover:text-slate-900 px-2 py-1 border border-slate-300 rounded"
               >
                 <Download className="h-3 w-3" />
               </button>
@@ -864,7 +864,7 @@ function EvidencePanel({ templateId, row }: { templateId: number; row: Row }) {
                 onClick={() => {
                   if (confirm(`Delete "${ev.file_name}"?`)) deleteM.mutate(ev.id);
                 }}
-                className="text-[11px] text-red-600 hover:text-red-700 px-2 py-1 border border-red-200 rounded"
+                className="text-[11px] text-rose-600 hover:text-rose-700 px-2 py-1 border border-rose-200 rounded"
                 disabled={deleteM.isPending}
               >
                 <Trash2 className="h-3 w-3" />
@@ -893,15 +893,15 @@ function AssignPanel({
 }) {
   return (
     <div className="space-y-3">
-      <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 p-3 text-xs text-indigo-800">
+      <div className="rounded-lg border border-primary-200 bg-primary-50/40 p-3 text-xs text-primary-800">
         Assigning this assessment item to a tenant user makes them the named owner on dashboards
         and audit reports. They&apos;ll still need to be granted access to the template separately
         if they don&apos;t already have <code>erm:rcsa:view</code>.
       </div>
 
-      <label className="block text-xs font-medium text-gray-700">Assignee</label>
+      <label className="block text-xs font-medium text-slate-700">Assignee</label>
       {tenantUsersLoading ? (
-        <p className="text-xs text-gray-500">Loading users…</p>
+        <p className="text-xs text-slate-500">Loading users…</p>
       ) : tenantUsers.length === 0 ? (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
           No active users found in this tenant. Add users from <code>Administration → Users</code>.
@@ -916,12 +916,12 @@ function AssignPanel({
       )}
 
       {row.assigned_user_id && row.assigned_user_name && (
-        <div className="rounded-lg border border-gray-200 bg-white p-3 text-xs">
-          <div className="flex items-center gap-2 text-gray-700">
-            <UserCheck className="h-3.5 w-3.5 text-indigo-600" />
+        <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs">
+          <div className="flex items-center gap-2 text-slate-700">
+            <UserCheck className="h-3.5 w-3.5 text-primary-600" />
             <span>
               Currently assigned to{' '}
-              <span className="font-semibold text-gray-900">{row.assigned_user_name}</span>
+              <span className="font-semibold text-slate-900">{row.assigned_user_name}</span>
               {row.assigned_user_email ? ` (${row.assigned_user_email})` : ''}
             </span>
           </div>
@@ -989,12 +989,12 @@ function UserCombobox({
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
         className={`w-full flex items-center gap-2 rounded-md border bg-white text-slate-900 px-3 py-2 text-sm transition-colors disabled:opacity-50 ${
-          open ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300 hover:border-gray-400'
+          open ? 'border-primary-500 ring-1 ring-primary-500' : 'border-slate-300 hover:border-slate-400'
         }`}
       >
         {selected ? (
           <span className="min-w-0 flex-1 flex items-center gap-1.5 text-left">
-            <UserCheck className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+            <UserCheck className="h-3.5 w-3.5 text-primary-600 shrink-0" />
             <span className="truncate text-slate-900">{selected.display_name}</span>
             {selected.email && (
               <span className="truncate text-[10px] text-slate-500">({selected.email})</span>
@@ -1010,19 +1010,19 @@ function UserCombobox({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); pick(null); }}
-            className="shrink-0 inline-flex items-center justify-center h-4 w-4 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+            className="shrink-0 inline-flex items-center justify-center h-4 w-4 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100"
             title="Clear assignee"
           >
             <X className="h-3 w-3" />
           </button>
         )}
-        <ChevronDown className={`h-3.5 w-3.5 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`h-3.5 w-3.5 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
-          <div className="relative border-b border-gray-100">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+        <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+          <div className="relative border-b border-slate-100">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input
               ref={inputRef}
               type="text"
@@ -1038,15 +1038,15 @@ function UserCombobox({
               type="button"
               onClick={() => pick(null)}
               className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
-                value == null ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
+                value == null ? 'bg-primary-50 text-primary-700' : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <X className="h-3 w-3 text-gray-400" />
+              <X className="h-3 w-3 text-slate-400" />
               Unassigned
-              {value == null && <Check className="ml-auto h-3 w-3 text-blue-600" />}
+              {value == null && <Check className="ml-auto h-3 w-3 text-primary-600" />}
             </button>
             {filtered.length === 0 ? (
-              <p className="px-3 py-3 text-xs text-gray-500 text-center">
+              <p className="px-3 py-3 text-xs text-slate-500 text-center">
                 {q ? `No users matching "${q}"` : 'No active users in this tenant.'}
               </p>
             ) : (
@@ -1058,13 +1058,13 @@ function UserCombobox({
                     type="button"
                     onClick={() => pick(u)}
                     className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
-                      isSelected ? 'bg-blue-50 text-blue-800' : 'text-gray-700 hover:bg-gray-50'
+                      isSelected ? 'bg-primary-50 text-primary-800' : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <UserCheck className={`h-3 w-3 shrink-0 ${isSelected ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <UserCheck className={`h-3 w-3 shrink-0 ${isSelected ? 'text-primary-600' : 'text-slate-400'}`} />
                     <span className="truncate font-medium">{u.display_name}</span>
-                    {u.email && <span className="truncate text-[10px] text-gray-500">({u.email})</span>}
-                    {isSelected && <Check className="ml-auto h-3 w-3 text-blue-600 shrink-0" />}
+                    {u.email && <span className="truncate text-[10px] text-slate-500">({u.email})</span>}
+                    {isSelected && <Check className="ml-auto h-3 w-3 text-primary-600 shrink-0" />}
                   </button>
                 );
               })
@@ -1113,9 +1113,9 @@ function EvidenceAttachCard({
   });
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+    <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-2">
       {/* Mode tabs */}
-      <div className="flex gap-1 border-b border-gray-100 -mx-3 px-3 pb-2 mb-2">
+      <div className="flex gap-1 border-b border-slate-100 -mx-3 px-3 pb-2 mb-2">
         {(['upload', 'library'] as const).map((m) => {
           const Icon = m === 'upload' ? Upload : Library;
           const active = mode === m;
@@ -1127,7 +1127,7 @@ function EvidenceAttachCard({
               className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                 active
                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  : 'text-gray-600 hover:bg-gray-50 border border-transparent'
+                  : 'text-slate-600 hover:bg-slate-50 border border-transparent'
               }`}
             >
               <Icon className="h-3 w-3" />
@@ -1147,7 +1147,7 @@ function EvidenceAttachCard({
               className="text-xs"
             />
             {pendingFile && (
-              <span className="text-[11px] text-gray-600 truncate">
+              <span className="text-[11px] text-slate-600 truncate">
                 {pendingFile.name} ({Math.round(pendingFile.size / 1024)} KB)
               </span>
             )}
@@ -1157,7 +1157,7 @@ function EvidenceAttachCard({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Optional description — what does this evidence prove?"
-            className="block w-full text-sm rounded-md border border-gray-300 bg-white text-slate-900 px-3 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-3 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           />
           <div className="flex justify-end">
             <button
@@ -1182,14 +1182,14 @@ function EvidenceAttachCard({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Optional description — how does this evidence apply here?"
-            className="block w-full text-sm rounded-md border border-gray-300 bg-white text-slate-900 px-3 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-3 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           />
           <div className="flex justify-end">
             <button
               type="button"
               disabled={!pickedEvidenceId || linkM.isPending}
               onClick={() => pickedEvidenceId && linkM.mutate({ evidenceId: pickedEvidenceId, desc: description })}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50"
             >
               {linkM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Library className="h-3.5 w-3.5" />}
               Link from library
@@ -1264,12 +1264,12 @@ function EvidenceLibraryCombobox({
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={`w-full flex items-center gap-2 rounded-md border bg-white text-slate-900 px-3 py-2 text-sm transition-colors ${
-          open ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300 hover:border-gray-400'
+          open ? 'border-primary-500 ring-1 ring-primary-500' : 'border-slate-300 hover:border-slate-400'
         }`}
       >
         {selected ? (
           <span className="min-w-0 flex-1 flex items-center gap-1.5 text-left">
-            <Library className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+            <Library className="h-3.5 w-3.5 text-primary-600 shrink-0" />
             <span className="truncate text-slate-900">{selected.name}</span>
             {selected.file_name && selected.file_name !== selected.name && (
               <span className="truncate text-[10px] text-slate-500">({selected.file_name})</span>
@@ -1285,19 +1285,19 @@ function EvidenceLibraryCombobox({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); pick(null); }}
-            className="shrink-0 inline-flex items-center justify-center h-4 w-4 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+            className="shrink-0 inline-flex items-center justify-center h-4 w-4 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100"
             title="Clear selection"
           >
             <X className="h-3 w-3" />
           </button>
         )}
-        <ChevronDown className={`h-3.5 w-3.5 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`h-3.5 w-3.5 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg border border-gray-200 bg-white shadow-lg overflow-hidden">
-          <div className="relative border-b border-gray-100">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+        <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+          <div className="relative border-b border-slate-100">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input
               ref={inputRef}
               type="text"
@@ -1310,11 +1310,11 @@ function EvidenceLibraryCombobox({
           </div>
           <div className="max-h-72 overflow-y-auto py-1">
             {listQ.isLoading ? (
-              <div className="flex items-center justify-center py-6 text-xs text-gray-400">
+              <div className="flex items-center justify-center py-6 text-xs text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" />
               </div>
             ) : items.length === 0 ? (
-              <p className="px-3 py-3 text-xs text-gray-500 text-center">
+              <p className="px-3 py-3 text-xs text-slate-500 text-center">
                 {search.trim()
                   ? `No evidence matching "${search.trim()}"`
                   : 'No evidence in this tenant\'s library yet.'}
@@ -1328,26 +1328,26 @@ function EvidenceLibraryCombobox({
                     type="button"
                     onClick={() => pick(e.id)}
                     className={`w-full flex items-start gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
-                      isSelected ? 'bg-blue-50 text-blue-800' : 'text-gray-700 hover:bg-gray-50'
+                      isSelected ? 'bg-primary-50 text-primary-800' : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <FileText className={`h-3 w-3 shrink-0 mt-0.5 ${isSelected ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <FileText className={`h-3 w-3 shrink-0 mt-0.5 ${isSelected ? 'text-primary-600' : 'text-slate-400'}`} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{e.name}</p>
-                      <p className="text-[10px] text-gray-500 truncate">
+                      <p className="text-[10px] text-slate-500 truncate">
                         {e.file_name || '—'}
                         {e.evidence_type ? ` · ${e.evidence_type}` : ''}
                         {e.status ? ` · ${e.status}` : ''}
                       </p>
                     </div>
-                    {isSelected && <Check className="h-3 w-3 text-blue-600 shrink-0 mt-0.5" />}
+                    {isSelected && <Check className="h-3 w-3 text-primary-600 shrink-0 mt-0.5" />}
                   </button>
                 );
               })
             )}
           </div>
           {items.length === 200 && (
-            <p className="px-3 py-1.5 text-[10px] text-gray-400 border-t border-gray-100 bg-gray-50">
+            <p className="px-3 py-1.5 text-[10px] text-slate-400 border-t border-slate-100 bg-slate-50">
               Showing first 200 results — refine your search to narrow.
             </p>
           )}

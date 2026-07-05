@@ -47,12 +47,12 @@ interface Campaign {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  not_started: { bg: 'bg-slate-500/20', text: 'text-slate-600', label: 'Not Started' },
-  in_progress: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'In Progress' },
-  submitted: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Submitted' },
-  under_review: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'Under Review' },
-  approved: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Approved' },
-  rejected: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Rejected' },
+  not_started: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Not Started' },
+  in_progress: { bg: 'bg-primary-50', text: 'text-primary-700', label: 'In Progress' },
+  submitted: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Submitted' },
+  under_review: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Under Review' },
+  approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Approved' },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
 };
 
 function getStatusStyle(status: string) {
@@ -169,7 +169,7 @@ export default function RCSAAssessmentsPage() {
           <button
             onClick={() => startMutation.mutate(assessment.id)}
             disabled={startMutation.isPending}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100"
           >
             <Play className="h-3.5 w-3.5" />
             Start
@@ -179,7 +179,7 @@ export default function RCSAAssessmentsPage() {
         return (
           <Link
             href={`/erm/rcsa/assessments/${assessment.id}`}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100"
           >
             <ArrowRight className="h-3.5 w-3.5" />
             Continue
@@ -189,7 +189,7 @@ export default function RCSAAssessmentsPage() {
         return (
           <Link
             href={`/erm/rcsa/assessments/${assessment.id}`}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100"
           >
             <ArrowRight className="h-3.5 w-3.5" />
             Revise
@@ -199,7 +199,7 @@ export default function RCSAAssessmentsPage() {
         return (
           <Link
             href={`/erm/rcsa/assessments/${assessment.id}`}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-slate-500/20 text-slate-600 hover:bg-slate-500/30"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200"
           >
             <Eye className="h-3.5 w-3.5" />
             View
@@ -216,9 +216,9 @@ export default function RCSAAssessmentsPage() {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
-        <p className="mt-2 text-red-400">Failed to load assessments</p>
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+        <AlertCircle className="mx-auto h-8 w-8 text-rose-600" strokeWidth={1.75} />
+        <p className="mt-2 text-rose-700">Failed to load assessments</p>
       </div>
     );
   }
@@ -303,10 +303,10 @@ export default function RCSAAssessmentsPage() {
                 && !['approved', 'rejected'].includes(assessment.status);
               
               return (
-                <tr key={assessment.id} className="border-b border-slate-200/50 hover:bg-white/50">
+                <tr key={assessment.id} className="border-b border-slate-200 hover:bg-slate-50">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
-                      <ClipboardCheck className="h-4 w-4 text-primary-400" />
+                      <ClipboardCheck className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
                       <span className="text-slate-900 font-medium">{assessment.campaign_name || '—'}</span>
                     </div>
                   </td>
@@ -339,8 +339,8 @@ export default function RCSAAssessmentsPage() {
                       const rounded = Math.round(score);
                       return (
                         <span className={`font-medium ${
-                          rounded >= 80 ? 'text-green-400' :
-                          rounded >= 60 ? 'text-yellow-400' : 'text-red-400'
+                          rounded >= 80 ? 'text-emerald-600' :
+                          rounded >= 60 ? 'text-amber-600' : 'text-rose-600'
                         }`}>
                           {rounded}%
                         </span>
@@ -348,7 +348,7 @@ export default function RCSAAssessmentsPage() {
                     })()}
                   </td>
                   <td className="py-3 px-4">
-                    <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-400' : 'text-slate-700'}`}>
+                    <div className={`flex items-center gap-2 ${isOverdue ? 'text-rose-600' : 'text-slate-700'}`}>
                       <Calendar className="h-4 w-4" />
                       {formatDate(assessment.due_date || undefined)}
                     </div>

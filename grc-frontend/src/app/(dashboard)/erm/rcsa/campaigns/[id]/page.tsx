@@ -84,17 +84,17 @@ interface BusinessUnit {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-600' },
-  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
-  closed: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  draft: { bg: 'bg-slate-100', text: 'text-slate-700' },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  closed: { bg: 'bg-primary-50', text: 'text-primary-700' },
 };
 
 const ASSESSMENT_STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-  not_started: { bg: 'bg-slate-500/20', text: 'text-slate-600', icon: Clock },
-  in_progress: { bg: 'bg-amber-500/20', text: 'text-amber-400', icon: Clock },
-  submitted: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: FileText },
-  approved: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: CheckCircle },
-  rejected: { bg: 'bg-rose-500/20', text: 'text-rose-400', icon: XCircle },
+  not_started: { bg: 'bg-slate-100', text: 'text-slate-700', icon: Clock },
+  in_progress: { bg: 'bg-amber-50', text: 'text-amber-700', icon: Clock },
+  submitted: { bg: 'bg-primary-50', text: 'text-primary-700', icon: FileText },
+  approved: { bg: 'bg-emerald-50', text: 'text-emerald-700', icon: CheckCircle },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', icon: XCircle },
 };
 
 export default function CampaignDetailPage() {
@@ -225,7 +225,7 @@ export default function CampaignDetailPage() {
   if (error || !campaign) {
     return (
       <div className="card p-8 text-center">
-        <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
+        <AlertCircle className="h-12 w-12 text-rose-500 mx-auto mb-4" strokeWidth={1.75} />
         <h3 className="text-lg font-medium text-slate-900 mb-2">Campaign Not Found</h3>
         <p className="text-slate-600 mb-4">The requested campaign could not be loaded.</p>
         <Link href="/erm/rcsa/campaigns" className="btn-primary">
@@ -345,7 +345,7 @@ export default function CampaignDetailPage() {
       <div className="card p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-medium text-slate-900 flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary-400" />
+            <Users className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
             Assessment Progress ({(campaign.assessments || []).length} Business Units)
           </h3>
           <div className="flex items-center gap-3">
@@ -396,7 +396,7 @@ export default function CampaignDetailPage() {
                 const StatusIcon = astyle.icon;
 
                 return (
-                  <tr key={assessment.id} className="border-b border-slate-200/50 hover:bg-white/50">
+                  <tr key={assessment.id} className="border-b border-slate-200 hover:bg-slate-50">
                     <td className="py-3 px-4">
                       <input
                         type="checkbox"
@@ -443,9 +443,9 @@ export default function CampaignDetailPage() {
                     <td className="py-3 px-4">
                       {assessment.risk_score != null ? (
                         <span className={`font-medium ${
-                          assessment.risk_score >= 4 ? 'text-rose-400' :
-                          assessment.risk_score >= 3 ? 'text-amber-400' :
-                          'text-emerald-400'
+                          assessment.risk_score >= 4 ? 'text-rose-600' :
+                          assessment.risk_score >= 3 ? 'text-amber-600' :
+                          'text-emerald-600'
                         }`}>
                           {assessment.risk_score.toFixed(1)}
                         </span>
@@ -456,9 +456,9 @@ export default function CampaignDetailPage() {
                     <td className="py-3 px-4">
                       {assessment.control_score != null ? (
                         <span className={`font-medium ${
-                          assessment.control_score >= 4 ? 'text-emerald-400' :
-                          assessment.control_score >= 3 ? 'text-amber-400' :
-                          'text-rose-400'
+                          assessment.control_score >= 4 ? 'text-emerald-600' :
+                          assessment.control_score >= 3 ? 'text-amber-600' :
+                          'text-rose-600'
                         }`}>
                           {assessment.control_score.toFixed(1)}
                         </span>
@@ -468,7 +468,7 @@ export default function CampaignDetailPage() {
                     </td>
                     <td className="py-3 px-4">
                       {assessment.findings_count > 0 ? (
-                        <span className="text-amber-400 font-medium">{assessment.findings_count}</span>
+                        <span className="text-amber-600 font-medium">{assessment.findings_count}</span>
                       ) : (
                         <span className="text-slate-500">0</span>
                       )}
@@ -487,7 +487,7 @@ export default function CampaignDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="card p-6">
           <h3 className="text-lg font-medium text-slate-900 mb-4 flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary-400" />
+            <BarChart3 className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
             Status Summary
           </h3>
           <div className="space-y-3">
@@ -509,7 +509,7 @@ export default function CampaignDetailPage() {
 
         <div className="card p-6">
           <h3 className="text-lg font-medium text-slate-900 mb-4 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-amber-400" />
+            <AlertCircle className="h-5 w-5 text-amber-600" strokeWidth={1.75} />
             Pending Actions
           </h3>
           {pendingAssessments.length > 0 ? (

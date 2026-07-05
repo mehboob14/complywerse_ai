@@ -90,7 +90,7 @@ function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, action
             onClick={handleSubmit}
             disabled={isLoading || (actionType === 'reject' && !comments.trim())}
             className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-white disabled:opacity-50 ${
-              actionType === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+              actionType === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
             }`}
           >
             {isLoading && <Loader2 size={16} className="animate-spin" />}
@@ -101,7 +101,7 @@ function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, action
     >
       <div className="mb-4">
         <label className="mb-1 block text-sm font-medium text-slate-700">
-          Comments {actionType === 'reject' && <span className="text-red-400">*</span>}
+          Comments {actionType === 'reject' && <span className="text-rose-500">*</span>}
         </label>
         <textarea
           value={comments}
@@ -110,7 +110,7 @@ function ActionModal({ isOpen, onClose, onConfirm, title, assessmentName, action
           className="h-32 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         />
         {actionType === 'reject' && !comments.trim() && (
-          <p className="mt-1 text-xs text-red-500">Comments are required when rejecting</p>
+          <p className="mt-1 text-xs text-rose-600">Comments are required when rejecting</p>
         )}
       </div>
     </RightSlidePanel>
@@ -206,9 +206,9 @@ export default function RCSAApprovalsPage() {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
-        <p className="mt-2 text-red-400">Failed to load pending approvals</p>
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+        <AlertCircle className="mx-auto h-8 w-8 text-rose-600" strokeWidth={1.75} />
+        <p className="mt-2 text-rose-700">Failed to load pending approvals</p>
       </div>
     );
   }
@@ -246,8 +246,8 @@ export default function RCSAApprovalsPage() {
           <div key={approval.id} className="card p-4 hover:border-primary-500/50 transition-all">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-500/20">
-                  <Clock className="h-6 w-6 text-primary-400" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50">
+                  <Clock className="h-6 w-6 text-primary-600" strokeWidth={1.75} />
                 </div>
                 <div>
                   <h3 className="text-slate-900 font-medium">{approval.campaign_name}</h3>
@@ -276,8 +276,8 @@ export default function RCSAApprovalsPage() {
                 <div className="text-center">
                   <p className="text-xs text-slate-600">Score</p>
                   <p className={`font-medium ${
-                    approval.score >= 80 ? 'text-green-400' : 
-                    approval.score >= 60 ? 'text-yellow-400' : 'text-red-400'
+                    approval.score >= 80 ? 'text-emerald-600' :
+                    approval.score >= 60 ? 'text-amber-600' : 'text-rose-600'
                   }`}>
                     {approval.score}%
                   </p>
@@ -286,8 +286,8 @@ export default function RCSAApprovalsPage() {
                   <div className="text-center">
                     <p className="text-xs text-slate-600">AI Quality</p>
                     <p className={`font-medium ${
-                      approval.ai_quality_score >= 80 ? 'text-green-400' : 
-                      approval.ai_quality_score >= 60 ? 'text-yellow-400' : 'text-red-400'
+                      approval.ai_quality_score >= 80 ? 'text-emerald-600' :
+                      approval.ai_quality_score >= 60 ? 'text-amber-600' : 'text-rose-600'
                     }`}>
                       {approval.ai_quality_score}%
                     </p>
@@ -311,7 +311,7 @@ export default function RCSAApprovalsPage() {
                   </button>
                   <button
                     onClick={() => handleAction(approval, 'reject')}
-                    className="p-2 rounded-lg text-red-600 hover:bg-red-50"
+                    className="p-2 rounded-lg text-rose-600 hover:bg-rose-50"
                     title="Reject"
                   >
                     <XCircle className="h-4 w-4" />

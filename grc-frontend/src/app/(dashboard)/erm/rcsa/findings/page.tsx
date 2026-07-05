@@ -37,17 +37,17 @@ interface Finding {
 }
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  critical: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Critical' },
-  high: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'High' },
-  medium: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Medium' },
-  low: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Low' },
+  critical: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Critical' },
+  high: { bg: 'bg-orange-50', text: 'text-orange-700', label: 'High' },
+  medium: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Medium' },
+  low: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Low' },
 };
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  open: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Open' },
-  in_progress: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'In Progress' },
-  remediated: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'Remediated' },
-  closed: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Closed' },
+  open: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Open' },
+  in_progress: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'In Progress' },
+  remediated: { bg: 'bg-primary-50', text: 'text-primary-700', label: 'Remediated' },
+  closed: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Closed' },
 };
 
 function getSeverityStyle(severity: string) {
@@ -101,7 +101,7 @@ function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalPro
           <button
             onClick={handleSubmit}
             disabled={isLoading || !entityId}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-[#0a0a0a] hover:bg-primary-700"
           >
             {isLoading && <Loader2 size={16} className="animate-spin" />}
             Link
@@ -111,7 +111,7 @@ function LinkModal({ isOpen, onClose, onConfirm, type, isLoading }: LinkModalPro
     >
       <div className="mb-4">
         <label className="mb-1 block text-sm font-medium text-slate-700">
-          {type === 'risk' ? 'Risk' : 'Internal Control'} ID <span className="text-red-500">*</span>
+          {type === 'risk' ? 'Risk' : 'Internal Control'} ID <span className="text-rose-500">*</span>
         </label>
         <input
           type="number"
@@ -171,7 +171,7 @@ function CreateActionModal({ isOpen, onClose, onConfirm, findingTitle, isLoading
       <div className="space-y-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">
-            Action Title <span className="text-red-500">*</span>
+            Action Title <span className="text-rose-500">*</span>
           </label>
           <input
             type="text"
@@ -291,9 +291,9 @@ export default function RCSAFindingsPage() {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
-        <p className="mt-2 text-red-400">Failed to load findings</p>
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+        <AlertCircle className="mx-auto h-8 w-8 text-rose-600" strokeWidth={1.75} />
+        <p className="mt-2 text-rose-700">Failed to load findings</p>
       </div>
     );
   }
@@ -363,7 +363,7 @@ export default function RCSAFindingsPage() {
               const isOverdue = finding.due_date && new Date(finding.due_date) < new Date() && finding.status !== 'closed';
               
               return (
-                <tr key={finding.id} className="border-b border-slate-200/50 hover:bg-white/50">
+                <tr key={finding.id} className="border-b border-slate-200 hover:bg-slate-50">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
                       <AlertTriangle className={`h-4 w-4 ${severityStyle.text}`} />
@@ -372,13 +372,13 @@ export default function RCSAFindingsPage() {
                     {(finding.linked_risk_id || finding.linked_control_id) && (
                       <div className="flex items-center gap-2 mt-1">
                         {finding.linked_risk_id && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 flex items-center gap-1">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 flex items-center gap-1">
                             <Target className="h-3 w-3" />
                             Risk #{finding.linked_risk_id}
                           </span>
                         )}
                         {finding.linked_control_id && (
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 flex items-center gap-1">
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 flex items-center gap-1">
                             <Shield className="h-3 w-3" />
                             Control #{finding.linked_control_id}
                           </span>
@@ -406,7 +406,7 @@ export default function RCSAFindingsPage() {
                     {formatDate(finding.created_at)}
                   </td>
                   <td className="py-3 px-4">
-                    <div className={`flex items-center gap-2 ${isOverdue ? 'text-red-400' : 'text-slate-700'}`}>
+                    <div className={`flex items-center gap-2 ${isOverdue ? 'text-rose-600' : 'text-slate-700'}`}>
                       <Calendar className="h-4 w-4" />
                       {formatDate(finding.due_date)}
                     </div>
@@ -422,21 +422,21 @@ export default function RCSAFindingsPage() {
                       </Link>
                       <button
                         onClick={() => { setSelectedFinding(finding); setModalType('risk'); }}
-                        className="p-1.5 rounded-lg text-slate-600 hover:text-purple-400 hover:bg-purple-500/20"
+                        className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                         title="Link to Risk"
                       >
                         <Target className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => { setSelectedFinding(finding); setModalType('control'); }}
-                        className="p-1.5 rounded-lg text-slate-600 hover:text-blue-400 hover:bg-blue-500/20"
+                        className="p-1.5 rounded-lg text-slate-600 hover:text-primary-700 hover:bg-primary-50"
                         title="Link to Control"
                       >
                         <Shield className="h-4 w-4" />
                       </button>
                       {canCreate && <button
                         onClick={() => { setSelectedFinding(finding); setModalType('action'); }}
-                        className="p-1.5 rounded-lg text-slate-600 hover:text-green-400 hover:bg-green-500/20"
+                        className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-700 hover:bg-emerald-50"
                         title="Create Action"
                       >
                         <Plus className="h-4 w-4" />

@@ -116,10 +116,10 @@ function ActionModal({ isOpen, onClose, onConfirm, type, isLoading }: ActionModa
   };
 
   const buttonColors: Record<string, string> = {
-    approve: 'bg-green-600 hover:bg-green-700',
-    reject: 'bg-red-600 hover:bg-red-700',
-    return: 'bg-amber-600 hover:bg-amber-700',
-    delegate: 'bg-primary-600 hover:bg-primary-700',
+    approve: 'bg-emerald-600 text-white hover:bg-emerald-700',
+    reject: 'bg-rose-600 text-white hover:bg-rose-700',
+    return: 'bg-amber-600 text-white hover:bg-amber-700',
+    delegate: 'bg-primary-600 text-[#0a0a0a] hover:bg-primary-700',
   };
 
   return (
@@ -139,7 +139,7 @@ function ActionModal({ isOpen, onClose, onConfirm, type, isLoading }: ActionModa
           <button
             onClick={handleSubmit}
             disabled={isLoading || ((type === 'reject' || type === 'return') && !comments.trim()) || (type === 'delegate' && !delegateUserId)}
-            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium text-white ${buttonColors[type]}`}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 font-medium ${buttonColors[type]}`}
           >
             {isLoading && <Loader2 size={16} className="animate-spin" />}
             {titles[type].split(' ')[0]}
@@ -150,7 +150,7 @@ function ActionModal({ isOpen, onClose, onConfirm, type, isLoading }: ActionModa
       {type === 'delegate' && (
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-slate-700">
-            Delegate to User ID <span className="text-red-500">*</span>
+            Delegate to User ID <span className="text-rose-500">*</span>
           </label>
           <input
             type="number"
@@ -164,7 +164,7 @@ function ActionModal({ isOpen, onClose, onConfirm, type, isLoading }: ActionModa
 
       <div className="mb-4">
         <label className="mb-1 block text-sm font-medium text-slate-700">
-          Comments {(type === 'reject' || type === 'return') && <span className="text-red-500">*</span>}
+          Comments {(type === 'reject' || type === 'return') && <span className="text-rose-500">*</span>}
         </label>
         <textarea
           value={comments}
@@ -269,9 +269,9 @@ export default function ApprovalReviewPage() {
             <span className="text-slate-600">Likelihood: <span className="text-slate-900 font-medium">{response.likelihood}</span></span>
             <span className="text-slate-600">Impact: <span className="text-slate-900 font-medium">{response.impact}</span></span>
             <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-              (response.likelihood || 0) * (response.impact || 0) >= 15 ? 'bg-red-500/20 text-red-400' :
-              (response.likelihood || 0) * (response.impact || 0) >= 8 ? 'bg-yellow-500/20 text-yellow-400' :
-              'bg-green-500/20 text-green-400'
+              (response.likelihood || 0) * (response.impact || 0) >= 15 ? 'bg-rose-50 text-rose-700' :
+              (response.likelihood || 0) * (response.impact || 0) >= 8 ? 'bg-amber-50 text-amber-700' :
+              'bg-emerald-50 text-emerald-700'
             }`}>
               Score: {(response.likelihood || 0) * (response.impact || 0)}
             </span>
@@ -281,7 +281,7 @@ export default function ApprovalReviewPage() {
         return <span className="text-slate-900">{EFFECTIVENESS_LABELS[response.effectiveness || ''] || response.effectiveness}</span>;
       case 'yes_no':
         return (
-          <span className={response.yes_no_value ? 'text-green-400' : 'text-red-400'}>
+          <span className={response.yes_no_value ? 'text-emerald-600' : 'text-rose-600'}>
             {response.yes_no_value ? 'Yes' : 'No'}
           </span>
         );
@@ -300,9 +300,9 @@ export default function ApprovalReviewPage() {
 
   if (error || !assessment) {
     return (
-      <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
-        <p className="mt-2 text-red-400">Failed to load assessment</p>
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+        <AlertCircle className="mx-auto h-8 w-8 text-rose-600" strokeWidth={1.75} />
+        <p className="mt-2 text-rose-700">Failed to load assessment</p>
       </div>
     );
   }
@@ -342,11 +342,11 @@ export default function ApprovalReviewPage() {
             <RotateCcw className="h-4 w-4" />
             Return
           </button>
-          <button onClick={() => setModalType('reject')} className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 flex items-center gap-2">
+          <button onClick={() => setModalType('reject')} className="px-4 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700 flex items-center gap-2">
             <XCircle className="h-4 w-4" />
             Reject
           </button>
-          <button onClick={() => setModalType('approve')} className="px-4 py-2 rounded-lg bg-green-600 text-slate-900 hover:bg-green-700 flex items-center gap-2">
+          <button onClick={() => setModalType('approve')} className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-2">
             <CheckCircle className="h-4 w-4" />
             Approve
           </button>
@@ -361,18 +361,18 @@ export default function ApprovalReviewPage() {
         <div className="card p-4">
           <p className="text-sm text-slate-600">Assessment Score</p>
           <p className={`text-xl font-semibold ${
-            assessment.score >= 80 ? 'text-green-400' : 
-            assessment.score >= 60 ? 'text-yellow-400' : 'text-red-400'
+            assessment.score >= 80 ? 'text-emerald-600' :
+            assessment.score >= 60 ? 'text-amber-600' : 'text-rose-600'
           }`}>{assessment.score}%</p>
         </div>
         <div className="card p-4">
           <p className="text-sm text-slate-600 flex items-center gap-1">
-            <Sparkles className="h-4 w-4 text-purple-400" />
+            <Sparkles className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
             AI Quality Score
           </p>
           <p className={`text-xl font-semibold ${
-            (assessment.ai_quality_score || 0) >= 80 ? 'text-green-400' : 
-            (assessment.ai_quality_score || 0) >= 60 ? 'text-yellow-400' : 'text-red-400'
+            (assessment.ai_quality_score || 0) >= 80 ? 'text-emerald-600' :
+            (assessment.ai_quality_score || 0) >= 60 ? 'text-amber-600' : 'text-rose-600'
           }`}>{assessment.ai_quality_score || '-'}%</p>
         </div>
         <div className="card p-4">
@@ -387,15 +387,15 @@ export default function ApprovalReviewPage() {
           {assessment.approval_history.map((action) => (
             <div key={action.id} className="flex items-center gap-4 p-3 rounded-lg bg-white/50">
               <div className={`p-2 rounded-lg ${
-                action.action === 'approved' ? 'bg-green-500/20' :
-                action.action === 'rejected' ? 'bg-red-500/20' :
-                action.action === 'returned' ? 'bg-amber-500/20' :
-                'bg-blue-500/20'
+                action.action === 'approved' ? 'bg-emerald-50' :
+                action.action === 'rejected' ? 'bg-rose-50' :
+                action.action === 'returned' ? 'bg-amber-50' :
+                'bg-slate-100'
               }`}>
-                {action.action === 'approved' ? <CheckCircle className="h-4 w-4 text-green-400" /> :
-                 action.action === 'rejected' ? <XCircle className="h-4 w-4 text-red-400" /> :
-                 action.action === 'returned' ? <RotateCcw className="h-4 w-4 text-amber-400" /> :
-                 <Clock className="h-4 w-4 text-blue-400" />}
+                {action.action === 'approved' ? <CheckCircle className="h-4 w-4 text-emerald-600" /> :
+                 action.action === 'rejected' ? <XCircle className="h-4 w-4 text-rose-600" /> :
+                 action.action === 'returned' ? <RotateCcw className="h-4 w-4 text-amber-600" /> :
+                 <Clock className="h-4 w-4 text-slate-600" />}
               </div>
               <div className="flex-1">
                 <p className="text-slate-900 font-medium capitalize">{action.action}</p>
@@ -426,7 +426,7 @@ export default function ApprovalReviewPage() {
             </button>
 
             {expandedSections.has(section) && (
-              <div className="divide-y divide-slate-700">
+              <div className="divide-y divide-slate-200">
                 {questions.map((question) => (
                   <div key={question.id} className="p-4">
                     <p className="text-slate-700 mb-2">{question.question_text}</p>
