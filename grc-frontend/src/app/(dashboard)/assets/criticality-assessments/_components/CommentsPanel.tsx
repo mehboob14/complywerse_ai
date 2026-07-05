@@ -70,7 +70,7 @@ export function CommentsPanel({
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder={replyParent ? 'Replying to comment…' : 'Add a comment…'}
-            className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="block w-full text-sm rounded-md border border-slate-300 bg-white text-slate-900 px-2 py-1.5 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           />
         </div>
         <div className="mt-2 flex items-center justify-between">
@@ -87,7 +87,7 @@ export function CommentsPanel({
             type="button"
             disabled={addM.isPending || !body.trim()}
             onClick={handlePost}
-            className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-md bg-primary-600 px-3 py-1 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
           >
             {addM.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
             Post
@@ -138,7 +138,7 @@ function CommentRow({
             <button
               type="button"
               onClick={onReply}
-              className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 hover:underline"
+              className="inline-flex items-center gap-0.5 text-[10px] text-primary-700 hover:underline"
             >
               <Reply className="h-3 w-3" />
               Reply

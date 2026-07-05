@@ -18,18 +18,18 @@ import {
 } from '@/lib/api';
 
 const META: Record<string, { label: string; icon: typeof Activity; tone: string }> = {
-  created:           { label: 'Created the assessment',  icon: Plus,           tone: 'bg-blue-50 text-blue-700 border-blue-200' },
+  created:           { label: 'Created the assessment',  icon: Plus,           tone: 'bg-primary-50 text-primary-700 border-primary-200' },
   updated:           { label: 'Updated fields',          icon: ListChecks,     tone: 'bg-slate-50 text-slate-700 border-slate-200' },
   score_changed:     { label: 'Changed scoring',         icon: AlertTriangle,  tone: 'bg-amber-50 text-amber-700 border-amber-200' },
-  submitted:         { label: 'Submitted for review',    icon: Rocket,         tone: 'bg-blue-50 text-blue-700 border-blue-200' },
+  submitted:         { label: 'Submitted for review',    icon: Rocket,         tone: 'bg-primary-50 text-primary-700 border-primary-200' },
   approved:          { label: 'Approved',                icon: CheckCircle2,   tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   rejected:          { label: 'Rejected',                icon: X,              tone: 'bg-rose-50 text-rose-700 border-rose-200' },
   returned:          { label: 'Returned for changes',    icon: AlertTriangle,  tone: 'bg-orange-50 text-orange-700 border-orange-200' },
-  commented:         { label: 'Added a comment',         icon: MessageSquare,  tone: 'bg-violet-50 text-violet-700 border-violet-200' },
+  commented:         { label: 'Added a comment',         icon: MessageSquare,  tone: 'bg-primary-50 text-primary-700 border-primary-200' },
   evidence_uploaded: { label: 'Uploaded evidence',       icon: Paperclip,      tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   evidence_deleted:  { label: 'Deleted evidence',        icon: Trash2,         tone: 'bg-rose-50 text-rose-700 border-rose-200' },
-  promoted_to_risk:  { label: 'Promoted to Risk',        icon: ShieldCheck,    tone: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-  task_created:      { label: 'Created follow-up task',  icon: ExternalLink,   tone: 'bg-blue-50 text-blue-700 border-blue-200' },
+  promoted_to_risk:  { label: 'Promoted to Risk',        icon: ShieldCheck,    tone: 'bg-primary-50 text-primary-700 border-primary-200' },
+  task_created:      { label: 'Created follow-up task',  icon: ExternalLink,   tone: 'bg-primary-50 text-primary-700 border-primary-200' },
 };
 
 function meta(type: string) {
