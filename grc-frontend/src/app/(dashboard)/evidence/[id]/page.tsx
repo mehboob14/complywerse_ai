@@ -2295,12 +2295,12 @@ function CrossLinksTab({
                 <div key={link.id} className="flex items-center justify-between rounded bg-white p-2">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 text-rose-600" />
-                    <Link href={`/risks/${link.risk_id}`} className="text-sm text-slate-800 hover:text-primary-600">
+                    <Link href={`/erm/risks/${link.risk_id}`} className="text-sm text-slate-800 hover:text-primary-600">
                       {link.risk?.title || `Risk #${link.risk_id}`}
                     </Link>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Link href={`/risks/${link.risk_id}`} className="text-slate-600 hover:text-slate-800">
+                    <Link href={`/erm/risks/${link.risk_id}`} className="text-slate-600 hover:text-slate-800">
                       <ExternalLink className="h-4 w-4" />
                     </Link>
                     <button

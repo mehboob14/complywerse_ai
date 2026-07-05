@@ -248,7 +248,7 @@ function KriStatusPanel({ kris }: { kris: KriItem[] }) {
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <SectionHeader title="Key Risk Indicators" sub={`${kris.length} active KRIs monitored`} href="/risks/kris" />
+      <SectionHeader title="Key Risk Indicators" sub={`${kris.length} active KRIs monitored`} href="/erm/kris" />
 
       {/* Summary pills */}
       <div className="flex gap-2 flex-wrap mb-3">
@@ -292,7 +292,7 @@ function KriStatusPanel({ kris }: { kris: KriItem[] }) {
         <div className="flex flex-col items-center justify-center h-[120px]">
           <Activity className="h-7 w-7 text-gray-300 mb-2" />
           <p className="text-xs text-gray-400">No KRIs configured</p>
-          <Link href="/risks/kris" className="text-[11px] text-blue-600 hover:underline mt-1">Set up KRIs →</Link>
+          <Link href="/erm/kris" className="text-[11px] text-blue-600 hover:underline mt-1">Set up KRIs →</Link>
         </div>
       )}
     </div>
@@ -332,13 +332,13 @@ function IncidentSummaryPanel({ dash }: { dash: IncidentDashData | undefined }) 
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
-      <SectionHeader title="Risk Incidents" sub="Active incidents by severity & status" href="/risks/incidents" />
+      <SectionHeader title="Risk Incidents" sub="Active incidents by severity & status" href="/erm/incidents" />
 
       {total === 0 ? (
         <div className="flex flex-col items-center justify-center h-[140px]">
           <AlertTriangle className="h-7 w-7 text-gray-300 mb-2" />
           <p className="text-xs text-gray-400">No incidents recorded</p>
-          <Link href="/risks/incidents" className="text-[11px] text-blue-600 hover:underline mt-1">Log an incident →</Link>
+          <Link href="/erm/incidents" className="text-[11px] text-blue-600 hover:underline mt-1">Log an incident →</Link>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -1806,7 +1806,7 @@ function ExecutiveOverviewTab() {
         {/* 1. Board Reporting Dashboard */}
         <PanelShell title="1. Board Reporting Dashboard">
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <ScorePill label="Risk Profile" value={riskProfileScore} status={riskProfileLabel} tone={riskProfileScore >= 70 ? 'green' : riskProfileScore >= 50 ? 'amber' : 'red'} icon={AlertTriangle} href="/risks" />
+            <ScorePill label="Risk Profile" value={riskProfileScore} status={riskProfileLabel} tone={riskProfileScore >= 70 ? 'green' : riskProfileScore >= 50 ? 'amber' : 'red'} icon={AlertTriangle} href="/erm/risks" />
             <ScorePill label="Controls" value={controlsScore} status={controlsLabel} tone={controlsScore >= 70 ? 'green' : controlsScore >= 50 ? 'amber' : 'red'} icon={Shield} href="/control-library" />
             <ScorePill label="Compliance" value={complianceScore} status={complianceLabel} tone={complianceScore >= 70 ? 'green' : complianceScore >= 50 ? 'amber' : 'red'} icon={ClipboardList} href="/compliance" />
             <ScorePill label="Open Issues" value={issueCounts.open + issueCounts.inProgress} status="Open" tone="amber" icon={AlertCircle} href="/issues" />
@@ -1852,7 +1852,7 @@ function ExecutiveOverviewTab() {
         <PanelShell title="4. GRC Overview Dashboard">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <ScorePill label="Governance" value={grcPillars.governance} status={grcLabel(grcPillars.governance)} tone={grcPillars.governance >= 70 ? 'green' : grcPillars.governance >= 50 ? 'amber' : 'red'} icon={Building2} href="/governance" />
-            <ScorePill label="Risk" value={grcPillars.risk} status={grcLabel(grcPillars.risk)} tone={grcPillars.risk >= 70 ? 'green' : grcPillars.risk >= 50 ? 'amber' : 'red'} icon={Flame} href="/risks" />
+            <ScorePill label="Risk" value={grcPillars.risk} status={grcLabel(grcPillars.risk)} tone={grcPillars.risk >= 70 ? 'green' : grcPillars.risk >= 50 ? 'amber' : 'red'} icon={Flame} href="/erm/risks" />
             <ScorePill label="Compliance" value={grcPillars.compliance} status={grcLabel(grcPillars.compliance)} tone={grcPillars.compliance >= 70 ? 'green' : grcPillars.compliance >= 50 ? 'amber' : 'red'} icon={ClipboardList} href="/compliance" />
             <ScorePill label="Controls" value={grcPillars.controls} status={grcLabel(grcPillars.controls)} tone={grcPillars.controls >= 70 ? 'green' : grcPillars.controls >= 50 ? 'amber' : 'red'} icon={Shield} href="/control-library" />
           </div>
@@ -1929,7 +1929,7 @@ function ExecutiveOverviewTab() {
           <SectionHeader
             title="GRC Flow & Network"
             sub="Cross-domain relationships · hover a node to highlight flows"
-            href="/risks"
+            href="/erm/risks"
           />
           <GrcNetworkFlow counts={{
             risks: openRisks,
@@ -2078,7 +2078,7 @@ function ExecutiveOverviewTab() {
           </div>
           {/* Status cards */}
           {(unified?.executive_summary?.open_issues ?? 0) > 0 && (
-            <Link href="/risks" className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors hover:opacity-90"
+            <Link href="/erm/risks" className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors hover:opacity-90"
               style={{ backgroundColor: '#fef2f2' }}>
               <span className="h-2 w-2 rounded-full flex-shrink-0 animate-pulse" style={{ backgroundColor: '#dc2626' }} />
               <div className="flex-1 min-w-0">
@@ -2088,7 +2088,7 @@ function ExecutiveOverviewTab() {
             </Link>
           )}
           {(unified?.executive_summary?.pending_actions ?? 0) > 0 && (
-            <Link href="/risks" className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors hover:opacity-90"
+            <Link href="/erm/risks" className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors hover:opacity-90"
               style={{ backgroundColor: '#fffbeb' }}>
               <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#d97706' }} />
               <div className="flex-1 min-w-0">

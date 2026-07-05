@@ -194,7 +194,7 @@ export default function RiskDetailPage() {
   const deleteMutation = useMutation({
     mutationFn: () => risksApi.delete(riskId),
     onSuccess: () => {
-      router.push('/risks');
+      router.push('/erm/risks');
     },
   });
 
@@ -371,7 +371,7 @@ export default function RiskDetailPage() {
       <div className="flex h-64 flex-col items-center justify-center text-red-400">
         <AlertCircle className="mb-2 h-8 w-8" />
         <p>Failed to load risk details</p>
-        <Link href="/risks" className="mt-4 text-primary-400 hover:underline">
+        <Link href="/erm/risks" className="mt-4 text-primary-400 hover:underline">
           Back to Risks
         </Link>
       </div>

@@ -165,7 +165,7 @@ function PlatformDataPanel({ dataType }: { dataType: string }) {
       : '/artifacts/platform-data/asset-inventory';
 
   const label    = dataType === 'risk_register' ? 'Risk Register' : 'Asset Inventory';
-  const linkHref = dataType === 'risk_register' ? '/risks' : '/assets';
+  const linkHref = dataType === 'risk_register' ? '/erm/risks' : '/assets';
 
   const { data, isLoading } = useQuery<PlatformData>({
     queryKey: ['artifact-platform-data', dataType],

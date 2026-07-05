@@ -432,7 +432,7 @@ export default function PolicyExceptionsPage() {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['policy-exceptions'] });
       setViewingException(null);
-      if (result?.risk_id) router.push(`/risks/${result.risk_id}`);
+      if (result?.risk_id) router.push(`/erm/risks/${result.risk_id}`);
     },
   });
 
@@ -1250,7 +1250,7 @@ export default function PolicyExceptionsPage() {
           {viewingException.promoted_risk_id ? (
             <button
               type="button"
-              onClick={() => { const id = viewingException.promoted_risk_id; setViewingException(null); if (id) router.push(`/risks/${id}`); }}
+              onClick={() => { const id = viewingException.promoted_risk_id; setViewingException(null); if (id) router.push(`/erm/risks/${id}`); }}
               className="inline-flex items-center gap-1 text-xs font-medium text-green-700 hover:text-green-800"
             >
               <ExternalLink className="h-3.5 w-3.5" /> In risk register — assess

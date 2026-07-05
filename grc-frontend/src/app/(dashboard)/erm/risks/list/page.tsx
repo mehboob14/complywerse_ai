@@ -1544,7 +1544,7 @@ export default function ERMRisksPage() {
                           </td>
                           <td className="px-3 py-2 font-mono text-slate-600 whitespace-nowrap">{tf.risk_identifier || `RISK-${risk.id}`}</td>
                           <td className="px-3 py-2 max-w-[280px]">
-                            <Link href={`/risks/${risk.id}`} className="text-sm text-slate-900 font-medium hover:text-primary-600 line-clamp-1">
+                            <Link href={`/erm/risks/${risk.id}`} className="text-sm text-slate-900 font-medium hover:text-primary-600 line-clamp-1">
                               {truncate(risk.description || risk.title, 80)}
                             </Link>
                           </td>
@@ -1565,7 +1565,7 @@ export default function ERMRisksPage() {
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-0.5">
                               <Link
-                                href={`/risks/${risk.id}`}
+                                href={`/erm/risks/${risk.id}`}
                                 className="inline-flex items-center justify-center rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-primary-600"
                                 title="View Details"
                                 aria-label="View Details"
@@ -1656,7 +1656,7 @@ export default function ERMRisksPage() {
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1 min-w-0">
-                        <Link href={`/risks/${risk.id}`} className="block text-sm font-medium text-slate-900 hover:text-primary-500">
+                        <Link href={`/erm/risks/${risk.id}`} className="block text-sm font-medium text-slate-900 hover:text-primary-500">
                           {shortTitle}
                         </Link>
                         {shortDescription && (
@@ -1961,7 +1961,7 @@ export default function ERMRisksPage() {
           // Only navigate to the detail page on CREATE — edit should stay on
           // the list so the user can keep working through other rows.
           if (!wasEdit && bridgedRiskId) {
-            ncaAddRouter.push(`/risks/${bridgedRiskId}`);
+            ncaAddRouter.push(`/erm/risks/${bridgedRiskId}`);
           }
         }}
       />

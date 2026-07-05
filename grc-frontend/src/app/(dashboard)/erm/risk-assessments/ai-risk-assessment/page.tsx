@@ -415,7 +415,7 @@ export default function AIRiskAssessmentPage() {
                     </span>
                     {entry.bridged_risk_id && (
                       <Link
-                        href={`/risks/${entry.bridged_risk_id}`}
+                        href={`/erm/risks/${entry.bridged_risk_id}`}
                         className="mt-1 inline-flex items-center gap-1 text-[10px] text-blue-700 hover:underline"
                       >
                         <Link2 className="h-3 w-3" /> Risk #{entry.bridged_risk_id}

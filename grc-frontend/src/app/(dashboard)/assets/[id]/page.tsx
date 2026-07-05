@@ -2247,7 +2247,7 @@ function RisksTab({ asset }: { asset: AssetDetailData }) {
                 </div>
               </div>
               <Link 
-                href={`/risks/${risk.risk_id}`}
+                href={`/erm/risks/${risk.risk_id}`}
                 className="text-sm text-blue-600 hover:underline"
               >
                 View Details

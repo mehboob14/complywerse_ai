@@ -498,7 +498,7 @@ export default function NcaRiskRegisterTab() {
       }
     }
     if (bridgedId) {
-      router.push(`/risks/${bridgedId}`);
+      router.push(`/erm/risks/${bridgedId}`);
     } else {
       openInGeneralDetail(entry);
     }

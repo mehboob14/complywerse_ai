@@ -1798,7 +1798,7 @@ export function BoardReportingWidget() {
         <div className="mt-3 border-t border-slate-100 pt-2.5">
           <PanelHeading title="KRIs by Status" total={kris.length} totalLabel="active" />
           {kriChips.length ? <ChipGrid cols="grid-cols-3" items={kriChips} /> : <MiniEmpty label="No KRIs configured" />}
-          <Link href="/risks/kris" className="mt-2 block text-[11px] font-medium text-blue-600 hover:text-blue-700">Open KRIs →</Link>
+          <Link href="/erm/kris" className="mt-2 block text-[11px] font-medium text-blue-600 hover:text-blue-700">Open KRIs →</Link>
         </div>
       )}
 
@@ -1806,7 +1806,7 @@ export function BoardReportingWidget() {
         <div className="mt-3 border-t border-slate-100 pt-2.5">
           <PanelHeading title="Incidents by Severity" total={totalIncidents} />
           {incidentChips.length ? <ChipGrid cols="grid-cols-5" items={incidentChips} /> : <MiniEmpty label="No incidents recorded" />}
-          <Link href="/risks/incidents" className="mt-2 block text-[11px] font-medium text-blue-600 hover:text-blue-700">Open incidents →</Link>
+          <Link href="/erm/incidents" className="mt-2 block text-[11px] font-medium text-blue-600 hover:text-blue-700">Open incidents →</Link>
         </div>
       )}
     </div>

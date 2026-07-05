@@ -73,7 +73,7 @@ export default function RisksTab({ frameworkId }: { frameworkId: string }) {
               <td className="px-4 py-2 align-top text-xs">{r.residual_score?.toFixed?.(1) ?? '—'}</td>
               <td className="px-4 py-2 align-top text-xs text-slate-600">{r.source_type || '—'}</td>
               <td className="px-4 py-2 align-top text-right">
-                <Link href={`/risks/${r.id}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                <Link href={`/erm/risks/${r.id}`} target="_blank" className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline">
                   Open <ExternalLink className="h-3 w-3" />
                 </Link>
               </td>
