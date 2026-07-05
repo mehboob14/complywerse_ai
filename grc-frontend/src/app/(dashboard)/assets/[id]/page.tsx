@@ -9,7 +9,14 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { apiClient, assetsApi, compliancePluginsApi, criticalityApi, ermApi, evidenceApi, vulnManagementApi } from '@/lib/api';
 import type { IacaItem, IscaItem } from '@/lib/api';
 import type { ITAsset } from '@/types';
-import { SearchInput, InlineLinkPicker, PageLoader } from '@/components/ui';
+import { SearchInput, InlineLinkPicker, PageLoader, MultiSelectDropdown } from '@/components/ui';
+
+// Common compliance standards for the asset "Compliance Scope" picker (users can
+// still search + the asset's existing tags are always merged in).
+const COMPLIANCE_FRAMEWORKS = [
+  'PCI-DSS', 'HIPAA', 'ISO 27001', 'ISO 27002', 'SOC 2', 'GDPR', 'CCPA', 'PDPL',
+  'NIST CSF', 'NIST 800-53', 'SAMA CSF', 'NCA ECC', 'NCA CCC', 'CIS Controls', 'SOX', 'FedRAMP',
+];
 import {
   ArrowLeft, Loader2, AlertCircle, Shield, DollarSign,
   Target, TrendingUp, FileCheck, AlertTriangle,
@@ -1137,13 +1144,13 @@ function EditAssetModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
       {/*
         Layout: fixed-height column with sticky header + sticky footer.
         Body scrolls internally — the modal NEVER overflows the viewport,
         so the title and action buttons stay reachable on small screens.
       */}
-      <div className="w-full max-w-4xl flex flex-col max-h-[90vh] rounded-lg border border-slate-200 bg-white shadow-xl">
+      <div className="flex max-h-[92vh] w-full max-w-6xl flex-col rounded-xl border border-slate-200 bg-white shadow-lg">
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
           <h2 className="text-base font-semibold text-slate-900">Edit Asset</h2>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-900">
@@ -1343,14 +1350,26 @@ function EditAssetModal({
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-slate-600">
-                  Compliance Scope <span className="text-slate-400">(comma-separated, e.g. PCI-DSS, HIPAA)</span>
-                </label>
-                <input
-                  value={form.compliance_scope_text}
-                  onChange={(e) => setForm({ ...form, compliance_scope_text: e.target.value })}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                />
+                <label className="mb-1 block text-xs font-medium text-slate-600">Compliance Scope</label>
+                {(() => {
+                  const selected = form.compliance_scope_text.split(',').map((s) => s.trim()).filter(Boolean);
+                  const items = Array.from(new Set([...COMPLIANCE_FRAMEWORKS, ...selected])).map((f) => ({ value: f, label: f }));
+                  return (
+                    <MultiSelectDropdown
+                      title="Frameworks"
+                      items={items}
+                      selectedValues={selected}
+                      onApply={(vals) => setForm({ ...form, compliance_scope_text: vals.join(', ') })}
+                      multiSelect
+                      forceSearch
+                      triggerVariant="input"
+                      triggerClassName="w-full"
+                      placeholder="Select applicable frameworks…"
+                      searchPlaceholder="Search frameworks"
+                      size="md"
+                    />
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -1817,7 +1836,7 @@ function ControlsTab({
   return (
     <div className="space-y-6">
       {/* Header card — coverage summary + Link Control CTA */}
-      <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
@@ -2447,33 +2466,10 @@ function MappingRecommendationsTab({ assetId }: { assetId: number }) {
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-              <Sparkles className="h-4 w-4 text-amber-500" />
-              Auto-suggested framework controls
-            </h3>
-            <p className="mt-1 text-xs text-slate-600">
-              Scanned {data?.total_controls_scanned ?? 0} controls across {frameworkOptions.length} framework{frameworkOptions.length === 1 ? '' : 's'}.{' '}
-              {data?.total_already_linked ?? 0} already linked.
-            </p>
-          </div>
-          <div className="text-right text-xs text-slate-500">
-            <span className="rounded bg-slate-100 px-2 py-0.5">No LLM · regex-only</span>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {profileChip('OS', profile.os_family)}
-          {profileChip('Type', profile.asset_type)}
-          {profileChip('Vendor', profile.vendor)}
-          {profileChip('Criticality', profile.criticality)}
-          {profile.internet_facing ? profileChip('Exposure', 'internet-facing') : null}
-          {profileChip('Segment', profile.network_segment)}
-          {profileChip('Data class', profile.data_classification)}
-          {profileChip('Business function', profile.business_function)}
-        </div>
-      </div>
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+        <Sparkles className="h-4 w-4 text-amber-500" />
+        Auto-suggested framework controls
+      </h3>
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -2545,54 +2541,10 @@ function MappingRecommendationsTab({ assetId }: { assetId: number }) {
       </div>
 
       {recs.length === 0 ? (
-        (() => {
-          // Surface exactly which signal categories couldn't fire because the
-          // backing asset attribute is empty — so the operator sees a concrete
-          // checklist instead of generic advice.
-          const missing = PROFILE_FIELDS_FOR_SIGNALS.filter((f) => {
-            const v = profile[f.key];
-            return v == null || v === '' || (Array.isArray(v) && v.length === 0);
-          });
-          const allLinked = !!data?.total_already_linked
-            && (data?.total_controls_scanned ?? 0) > 0;
-          return (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-10 px-4 text-center">
-              <ShieldCheck className="mb-3 h-10 w-10 text-slate-400" />
-              <h4 className="text-base font-medium text-slate-900">No new recommendations</h4>
-              <p className="mt-1 text-sm text-slate-600 max-w-xl">
-                {allLinked
-                  ? 'All matched controls are already linked. Toggle "Include already-linked" above to see them.'
-                  : 'No framework controls scored above the current threshold. The matcher only fires signals when the asset has the relevant attribute set.'}
-              </p>
-              {!allLinked && missing.length > 0 && (
-                <div className="mt-4 w-full max-w-xl rounded-md border border-slate-200 bg-white p-3 text-left">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    Profile fields to fill in
-                  </div>
-                  <ul className="mt-2 space-y-1.5">
-                    {missing.map((f) => (
-                      <li key={f.key} className="flex items-start gap-2 text-xs">
-                        <span className="mt-0.5 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-amber-400" />
-                        <div>
-                          <span className="font-medium text-slate-800">{f.label}</span>
-                          <span className="text-slate-600"> — unlocks {f.explain}</span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-3 text-[11px] text-slate-500">
-                    Edit the asset from the Details tab to fill these in — every signal that fires adds its weight to the score.
-                  </p>
-                </div>
-              )}
-              {!allLinked && missing.length === 0 && (
-                <p className="mt-3 text-xs text-slate-500">
-                  Profile looks complete. Try lowering Min score, or check whether seeded frameworks contain controls relevant to this asset type.
-                </p>
-              )}
-            </div>
-          );
-        })()
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 py-10 px-4 text-center">
+          <ShieldCheck className="mb-3 h-10 w-10 text-slate-400" />
+          <h4 className="text-base font-medium text-slate-900">No recommendations</h4>
+        </div>
       ) : (
         (['high', 'medium', 'low'] as const).map((band) => {
           const list = groups[band];
@@ -3451,7 +3403,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
         const peers: any[] = selfIpPeersQ.data?.group ?? [];
         const hostInGroup = peers.find((g: any) => g.is_host_os && !g.is_self);
         return (
-          <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-indigo-50 p-4">
+          <div className="rounded-xl border border-purple-200 bg-purple-50 p-4">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-100 text-purple-700">
                 <Network className="h-4.5 w-4.5" />
@@ -3509,7 +3461,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
         );
       })()}
       {selfIpPeersQ.data && !selfIsConnected && !isBrowserAsset && (
-        <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
               <Network className="h-4.5 w-4.5" />
@@ -3605,7 +3557,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
           </dl>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-gradient-to-br from-indigo-50 to-blue-50 p-4">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
             <ClipboardList className="h-4 w-4 text-indigo-600" /> Matched benchmark
           </h3>
@@ -3894,7 +3846,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-300"
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-300"
                   style={{ width: `${pct}%` }}
                 />
               </div>
@@ -3915,9 +3867,6 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
         fmtDuration={fmtDuration}
         formatTime={formatTime}
       />
-      <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-600">
-        Compliverse onboards assets through the bank's CMDB API — we don't probe the network. Once an asset is here, the AI classifier above picks the right CIS rules and they execute automatically on the next agent tick (or scheduled cron).
-      </div>
     </div>
   );
 }
@@ -4209,7 +4158,7 @@ function ScanSessions({
                   <span className="ml-auto font-mono text-slate-600">Pass rate: <strong>{passRate}%</strong></span>
                 </div>
                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400" style={{ width: passRate + '%' }} />
+                  <div className="h-full bg-emerald-500" style={{ width: passRate + '%' }} />
                 </div>
               </div>
             </button>

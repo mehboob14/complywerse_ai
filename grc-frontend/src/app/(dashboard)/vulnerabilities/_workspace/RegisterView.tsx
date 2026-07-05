@@ -70,16 +70,11 @@ export function RegisterView({
       header: 'Title',
       accessor: (v) => v.title,
       sortable: true,
-      minWidth: '260px',
+      minWidth: '200px',
       render: (v) => (
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-medium text-slate-900">{v.title}</span>
-            <ThreatChips vuln={v} />
-          </div>
-          {v.affected_component && (
-            <div className="truncate text-xs text-slate-400">{v.affected_component}</div>
-          )}
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-medium text-slate-900">{v.title}</span>
+          <ThreatChips vuln={v} />
         </div>
       ),
     },
@@ -88,7 +83,7 @@ export function RegisterView({
       header: 'Severity',
       accessor: (v) => v.severity,
       sortable: true,
-      minWidth: '130px',
+      minWidth: '110px',
       render: (v) => <SeverityCell severity={v.severity} cvss={v.cvss_score} />,
     },
     {
@@ -96,7 +91,7 @@ export function RegisterView({
       header: 'Priority',
       accessor: (v) => v.composite_priority ?? -1,
       sortable: true,
-      minWidth: '130px',
+      minWidth: '100px',
       render: (v) => <PriorityCell priority={v.composite_priority} />,
     },
     {

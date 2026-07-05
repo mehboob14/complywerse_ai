@@ -11,17 +11,19 @@
  * Mirrors evidence/_workspace/EvidenceWorkspace + governance DocumentsWorkspace.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Boxes, AlertTriangle, Clock, Lock, History,
-  Table2, LayoutPanelLeft, Download, Upload, Plus, Search,
+  Download, Upload, Plus, Search,
 } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui';
+import { SegmentedMixCard, StackedOverTimeCard, type MixSlice, type StackedRow } from '@/components/charts/MixCharts';
 import type { ITAsset } from '@/types';
 import { RegisterView } from './RegisterView';
-import { WorkbenchView } from './WorkbenchView';
 
-type ViewMode = 'register' | 'workbench';
+// ─── Criticality mix + over-time colours ─────────────────────────────────────
+const CRIT_COLORS: Record<string, string> = { critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#10b981' };
+const CRIT_ORDER = ['critical', 'high', 'medium', 'low'];
 
 // The dashboard payload is a loose record — read defensively.
 type AssetDashboard = {
@@ -92,11 +94,6 @@ const LIFECYCLE_ITEMS = [
   { value: 'retired', label: 'Retired' },
 ];
 
-const VIEWS: { key: ViewMode; label: string; icon: typeof Table2 }[] = [
-  { key: 'register', label: 'Register', icon: Table2 },
-  { key: 'workbench', label: 'Workbench', icon: LayoutPanelLeft },
-];
-
 export function AssetsWorkspace({
   assets,
   filteredAssets,
@@ -125,8 +122,6 @@ export function AssetsWorkspace({
   onImport,
   onAdd,
 }: AssetsWorkspaceProps) {
-  const [view, setView] = useState<ViewMode>('register');
-  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const rows = filteredAssets ?? [];
 
@@ -154,9 +149,35 @@ export function AssetsWorkspace({
     { label: 'Stale > 30d', value: kpis.stale, icon: History, tint: 'bg-slate-100 text-slate-500', valueTone: kpis.stale > 0 ? 'text-rose-600' : 'text-slate-900' },
   ];
 
-  // Default the workbench selection to the first visible asset.
-  const effectiveSelected =
-    selectedId != null && rows.some((a) => a.id === selectedId) ? selectedId : (rows[0]?.id ?? null);
+  // ─── Criticality mix + monthly stacked mix ─────────────────────────────────
+  const chartData = useMemo(() => {
+    const all = assets ?? [];
+    const critCount: Record<string, number> = {};
+    all.forEach((a) => { const k = (a.criticality || '').toLowerCase(); if (k) critCount[k] = (critCount[k] || 0) + 1; });
+    const dist: MixSlice[] = CRIT_ORDER.filter((k) => critCount[k]).map((k) => ({ name: k, value: critCount[k], color: CRIT_COLORS[k] }));
+    // Monthly buckets, counted by criticality (for the stacked-over-time bars).
+    const byMonth: Record<string, Record<string, number>> = {};
+    all.forEach((a) => {
+      if (!a.created_at) return;
+      const d = new Date(a.created_at);
+      if (Number.isNaN(d.getTime())) return;
+      const k = (a.criticality || '').toLowerCase();
+      if (!CRIT_ORDER.includes(k)) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!byMonth[key]) byMonth[key] = {};
+      byMonth[key][k] = (byMonth[key][k] || 0) + 1;
+    });
+    const overTime: StackedRow[] = Object.keys(byMonth).sort().slice(-6).map((key) => {
+      const [y, mo] = key.split('-');
+      const label = new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      const row: StackedRow = { label };
+      CRIT_ORDER.forEach((k) => { row[k] = byMonth[key][k] || 0; });
+      return row;
+    });
+    // Bottom-to-top stacking: low → critical (only categories that appear).
+    const stackCats: MixSlice[] = ['low', 'medium', 'high', 'critical'].filter((k) => critCount[k]).map((k) => ({ name: k, value: 0, color: CRIT_COLORS[k] }));
+    return { dist, overTime, stackCats };
+  }, [assets]);
 
   return (
     <div className="assets-light space-y-4">
@@ -178,81 +199,49 @@ export function AssetsWorkspace({
         })}
       </div>
 
-      {/* ─── Toolbar ───────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
-            <Search strokeWidth={1.75} className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search assets…"
-              className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            />
-          </div>
-          <MultiSelectDropdown
-            title="Type"
-            items={TYPE_ITEMS}
-            selectedValues={typeFilter !== 'all' ? [typeFilter] : []}
-            onApply={(v) => setTypeFilter(v[0] || 'all')}
-            multiSelect={false}
-            autoApply
-            placeholder="Type"
-            size="md"
-          />
-          <MultiSelectDropdown
-            title="Criticality"
-            items={CRITICALITY_ITEMS}
-            selectedValues={criticalityFilter !== 'all' ? [criticalityFilter] : []}
-            onApply={(v) => setCriticalityFilter(v[0] || 'all')}
-            multiSelect={false}
-            autoApply
-            placeholder="Criticality"
-            size="md"
-          />
-          <MultiSelectDropdown
-            title="Status"
-            items={STATUS_ITEMS}
-            selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
-            onApply={(v) => setStatusFilter(v[0] || 'all')}
-            multiSelect={false}
-            autoApply
-            placeholder="Status"
-            size="md"
-          />
-          <MultiSelectDropdown
-            title="Lifecycle"
-            items={LIFECYCLE_ITEMS}
-            selectedValues={lifecycleFilter !== 'all' ? [lifecycleFilter] : []}
-            onApply={(v) => setLifecycleFilter(v[0] || 'all')}
-            multiSelect={false}
-            autoApply
-            placeholder="Lifecycle"
-            size="md"
+      {/* ─── Charts: criticality mix + monthly stacked mix ─────────────────── */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <SegmentedMixCard totalLabel="assets by criticality" data={chartData.dist} />
+        <StackedOverTimeCard title="Assets added over time" data={chartData.overTime} categories={chartData.stackCats} />
+      </div>
+
+      {/* ─── Toolbar (single compact row; scrolls on very narrow screens) ─────── */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-0.5 scrollbar-thin">
+        <div className="relative w-40 shrink-0 sm:w-52">
+          <Search strokeWidth={1.75} className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search assets…"
+            className="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-sm text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
         </div>
+        <MultiSelectDropdown
+          title="Type" items={TYPE_ITEMS}
+          selectedValues={typeFilter !== 'all' ? [typeFilter] : []}
+          onApply={(v) => setTypeFilter(v[0] || 'all')}
+          multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
+        />
+        <MultiSelectDropdown
+          title="Criticality" items={CRITICALITY_ITEMS}
+          selectedValues={criticalityFilter !== 'all' ? [criticalityFilter] : []}
+          onApply={(v) => setCriticalityFilter(v[0] || 'all')}
+          multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
+        />
+        <MultiSelectDropdown
+          title="Status" items={STATUS_ITEMS}
+          selectedValues={statusFilter !== 'all' ? [statusFilter] : []}
+          onApply={(v) => setStatusFilter(v[0] || 'all')}
+          multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
+        />
+        <MultiSelectDropdown
+          title="Lifecycle" items={LIFECYCLE_ITEMS}
+          selectedValues={lifecycleFilter !== 'all' ? [lifecycleFilter] : []}
+          onApply={(v) => setLifecycleFilter(v[0] || 'all')}
+          multiSelect={false} autoApply placeholder="All" size="sm" className="shrink-0"
+        />
 
-        <div className="flex items-center gap-2">
-          {/* View switcher */}
-          <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5">
-            {VIEWS.map((v) => {
-              const Icon = v.icon;
-              const active = view === v.key;
-              return (
-                <button
-                  key={v.key}
-                  onClick={() => setView(v.key)}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition-colors ${
-                    active ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  <Icon strokeWidth={1.75} className="h-4 w-4" />
-                  <span className="hidden sm:inline">{v.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {/* Actions */}
           <button
             onClick={onTemplate}
@@ -285,16 +274,14 @@ export function AssetsWorkspace({
 
       {/* ─── Section label ─────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-lg font-semibold text-slate-900">
-          {view === 'register' ? 'Asset Register' : 'Asset Workbench'}
-        </h2>
+        <h2 className="text-lg font-semibold text-slate-900">Asset Register</h2>
         <p className="text-sm text-slate-500">
           {rows.length} shown · {kpis.total} total
         </p>
       </div>
 
-      {/* ─── Active view ───────────────────────────────────────────────────── */}
-      {view === 'register' && (
+      {/* ─── Register ──────────────────────────────────────────────────────── */}
+      {(
         <RegisterView
           rows={rows}
           loading={loading}
@@ -306,14 +293,6 @@ export function AssetsWorkspace({
           onDelete={onDelete}
           onConnect={onConnect}
           onBulkConnect={onBulkConnect}
-        />
-      )}
-      {view === 'workbench' && (
-        <WorkbenchView
-          rows={rows}
-          selectedId={effectiveSelected}
-          onSelect={setSelectedId}
-          onOpenFull={onOpenFull}
         />
       )}
     </div>

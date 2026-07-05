@@ -1027,8 +1027,11 @@ export default function VulnerabilitiesPage() {
         {/* legacy inline toolbar + table removed — superseded by VulnsWorkspace */}
       </div>
 
-      {/* Add Vulnerability Slide-over */}
-      <div className={`fixed inset-y-0 right-0 z-50 flex w-[680px] flex-col bg-white shadow-2xl border-l border-slate-200 transform transition-transform duration-300 ${isModalOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+      {/* Add Vulnerability Slide-over — dimmed backdrop so the page behind stays visible but recedes */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-40 bg-black/40 transition-opacity" onClick={() => setIsModalOpen(false)} aria-hidden />
+      )}
+      <div className={`fixed inset-y-0 right-0 z-50 flex w-full max-w-[760px] flex-col bg-white shadow-xl border-l border-slate-200 transform transition-transform duration-300 ${isModalOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 flex-shrink-0">
           <h2 className="text-sm font-semibold text-slate-900">Add New Vulnerability</h2>
           <button
@@ -1237,7 +1240,7 @@ export default function VulnerabilitiesPage() {
 
       {/* Bulk Assign Modal */}
       {showBulkAssignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="w-full max-w-md mx-4 cw-card rounded-lg shadow-lg overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
               <h2 className="text-xl font-bold cw-text">Bulk Assign to Department</h2>
@@ -1459,7 +1462,7 @@ export default function VulnerabilitiesPage() {
 
           {/* Create Department Modal */}
           {showCreateDeptModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
               <div className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-bold cw-text">Create Department</h2>
@@ -1480,7 +1483,7 @@ export default function VulnerabilitiesPage() {
 
           {/* Edit Department Modal */}
           {showEditDeptModal && selectedDepartment && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
               <div className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-bold cw-text">Edit Department</h2>
@@ -1501,7 +1504,7 @@ export default function VulnerabilitiesPage() {
 
           {/* Members Modal */}
           {showMemberModal && selectedDepartment && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
               <div className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-bold cw-text">Members — {selectedDepartment.name}</h2>
@@ -1537,7 +1540,7 @@ export default function VulnerabilitiesPage() {
 
           {/* Escalation Paths Modal */}
           {showEscalationModal && selectedDepartment && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
               <div className="w-full max-w-lg rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-bold cw-text">Escalation Paths — {selectedDepartment.name}</h2>

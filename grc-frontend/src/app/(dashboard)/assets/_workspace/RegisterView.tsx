@@ -63,20 +63,17 @@ export function RegisterView({
       header: 'Asset',
       accessor: (a) => assetDisplayName(a),
       sortable: true,
-      minWidth: '260px',
+      minWidth: '200px',
       render: (a) => {
         const name = assetDisplayName(a);
         return (
           <div className="flex items-center gap-3">
             <AssetLetterTile name={name} />
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="truncate font-medium text-slate-900">{name}</span>
-                {a.cde_environment && (
-                  <span className="shrink-0 rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-rose-700">CDE</span>
-                )}
-              </div>
-              <div className="truncate text-xs text-slate-400">{a.description || 'No description'}</div>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-medium text-slate-900">{name}</span>
+              {a.cde_environment && (
+                <span className="shrink-0 rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-rose-700">CDE</span>
+              )}
             </div>
           </div>
         );
@@ -86,14 +83,14 @@ export function RegisterView({
       id: 'type',
       header: 'Type',
       accessor: 'asset_type',
-      minWidth: '120px',
+      minWidth: '100px',
       render: (a) => <AssetTypePill type={a.asset_type} />,
     },
     {
       id: 'owner',
       header: 'Owner',
       accessor: 'owner_name',
-      minWidth: '150px',
+      minWidth: '120px',
       render: (a) => <OwnerCell name={a.owner_name} />,
     },
     {
@@ -101,13 +98,13 @@ export function RegisterView({
       header: 'Criticality',
       accessor: 'criticality',
       sortable: true,
-      minWidth: '110px',
+      minWidth: '100px',
       render: (a) => <CriticalityPill criticality={a.criticality} />,
     },
     {
       id: 'cia',
       header: 'CIA',
-      minWidth: '80px',
+      minWidth: '70px',
       render: (a) => (
         <CiaMeter c={a.confidentiality_rating} i={a.integrity_rating} a={a.availability_rating} />
       ),
@@ -116,13 +113,13 @@ export function RegisterView({
       id: 'status',
       header: 'Status',
       accessor: 'status',
-      minWidth: '100px',
+      minWidth: '90px',
       render: (a) => <AssetStatusPill status={a.status} />,
     },
     {
       id: 'lifecycle',
       header: 'Lifecycle',
-      minWidth: '110px',
+      minWidth: '90px',
       render: (a) => <LifecycleDots state={a.lifecycle_state} />,
     },
     {
@@ -130,7 +127,7 @@ export function RegisterView({
       header: 'Last seen',
       accessor: 'last_seen_at',
       sortable: true,
-      minWidth: '100px',
+      minWidth: '90px',
       render: (a) => <LastSeenCell lastSeenAt={a.last_seen_at} />,
     },
     {

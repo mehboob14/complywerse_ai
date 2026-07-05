@@ -1633,7 +1633,7 @@ export default function VulnerabilityDetailPage() {
 
       {/* ── Modals (page-level, reused unchanged) ─────────────────────── */}
       {showStatusModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="cw-card w-full max-w-md p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold cw-text">Change Status</h2>
@@ -1680,7 +1680,7 @@ export default function VulnerabilityDetailPage() {
       )}
 
       {showMitigationModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="cw-card w-full max-w-lg p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xl font-bold cw-text">
@@ -1839,7 +1839,7 @@ export default function VulnerabilityDetailPage() {
           for status / due date / assignee / notes. Status transitions
           set completed_at server-side; the panel auto-closes on save. */}
       {selectedMitigation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="cw-card w-full max-w-2xl p-6 shadow-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between mb-4">
               <div className="min-w-0">
@@ -2024,7 +2024,7 @@ export default function VulnerabilityDetailPage() {
       )}
 
       {showDeptAssignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="cw-card w-full max-w-md p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold cw-text">Assign Department</h2>
@@ -2082,7 +2082,7 @@ export default function VulnerabilityDetailPage() {
       )}
 
       {showTransitionModal && selectedTransition && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="cw-card w-full max-w-md p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold cw-text">{selectedTransition.name}</h2>
@@ -2517,7 +2517,7 @@ function DependenciesTab({ vulnId }: { vulnId: number }) {
 
       {/* Add-prerequisite modal */}
       {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="cw-card w-full max-w-lg p-5 shadow-xl">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-slate-900">Add Prerequisite</h3>
