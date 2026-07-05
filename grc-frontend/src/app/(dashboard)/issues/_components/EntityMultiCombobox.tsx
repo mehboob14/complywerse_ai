@@ -136,10 +136,10 @@ export function EntityMultiCombobox({
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
         className={`w-full flex items-center gap-2 rounded-md border bg-white text-slate-900 px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50 ${
-          open ? 'border-blue-500 ring-1 ring-blue-500' : 'border-slate-300 hover:border-slate-400'
+          open ? 'border-primary-500 ring-1 ring-primary-500' : 'border-slate-300 hover:border-slate-400'
         }`}
       >
-        <Icon className={`h-3.5 w-3.5 shrink-0 ${selectedOptions.length > 0 ? 'text-blue-600' : 'text-slate-400'}`} />
+        <Icon className={`h-3.5 w-3.5 shrink-0 ${selectedOptions.length > 0 ? 'text-primary-600' : 'text-slate-400'}`} />
         <div className="min-w-0 flex-1 flex flex-wrap items-center gap-1 text-left">
           {selectedOptions.length === 0 ? (
             <span className="text-slate-500">{placeholder}</span>
@@ -147,13 +147,13 @@ export function EntityMultiCombobox({
             selectedOptions.map((o) => (
               <span
                 key={o.id}
-                className="inline-flex items-center gap-1 rounded bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 max-w-[180px]"
+                className="inline-flex items-center gap-1 rounded bg-primary-50 text-primary-700 border border-primary-200 px-1.5 py-0.5 max-w-[180px]"
               >
                 <span className="truncate" title={o.label}>{o.label}</span>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); removeOne(o.id); }}
-                  className="shrink-0 inline-flex items-center justify-center h-3 w-3 rounded text-blue-600 hover:bg-blue-100"
+                  className="shrink-0 inline-flex items-center justify-center h-3 w-3 rounded text-primary-600 hover:bg-primary-100"
                   title={`Remove ${o.label}`}
                 >
                   <X className="h-2.5 w-2.5" />
@@ -210,18 +210,18 @@ export function EntityMultiCombobox({
                     type="button"
                     onClick={() => toggle(o.id)}
                     className={`w-full flex items-start gap-2 px-3 py-1.5 text-left text-xs transition-colors ${
-                      isSelected ? 'bg-blue-50' : 'hover:bg-slate-50'
+                      isSelected ? 'bg-primary-50' : 'hover:bg-slate-50'
                     }`}
                   >
                     <span
                       className={`mt-0.5 inline-flex items-center justify-center h-3.5 w-3.5 rounded border shrink-0 ${
-                        isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white'
+                        isSelected ? 'bg-primary-600 border-primary-600 text-[#0a0a0a]' : 'border-slate-300 bg-white'
                       }`}
                     >
                       {isSelected && <Check className="h-2.5 w-2.5" />}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className={`truncate font-medium ${isSelected ? 'text-blue-800' : 'text-slate-800'}`}>
+                      <p className={`truncate font-medium ${isSelected ? 'text-primary-800' : 'text-slate-800'}`}>
                         {o.label}
                       </p>
                       {o.subtitle && (

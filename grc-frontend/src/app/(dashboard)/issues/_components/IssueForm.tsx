@@ -247,10 +247,10 @@ export function IssueForm({ open, onClose, presetSource, presetFields, onCreated
 
   if (!open) return null;
 
-  const inputClass = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20';
+  const inputClass = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
       <div
         className="w-full max-w-2xl max-h-[92vh] flex flex-col rounded-2xl bg-white shadow-2xl border border-slate-200"
         onClick={(e) => e.stopPropagation()}
@@ -310,11 +310,11 @@ export function IssueForm({ open, onClose, presetSource, presetFields, onCreated
             </div>
           </div>
 
-          <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">Severity</span>
               {!override && (
-                <button onClick={() => setOverride('high')} className="text-[10px] font-medium text-blue-700 hover:underline">
+                <button onClick={() => setOverride('high')} className="text-[10px] font-medium text-primary-700 hover:underline">
                   Override
                 </button>
               )}
@@ -352,12 +352,12 @@ export function IssueForm({ open, onClose, presetSource, presetFields, onCreated
               onClick={() => setLinksOpen((o) => !o)}
               className="w-full flex items-center gap-2 px-3 py-2 text-left"
             >
-              <Link2 className={`h-3.5 w-3.5 ${totalLinks > 0 ? 'text-blue-600' : 'text-slate-400'}`} />
+              <Link2 className={`h-3.5 w-3.5 ${totalLinks > 0 ? 'text-primary-600' : 'text-slate-400'}`} />
               <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-600">
                 Linkages
               </span>
               {totalLinks > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[18px] h-4 px-1 rounded-full bg-blue-100 text-[10px] font-semibold text-blue-700">
+                <span className="inline-flex items-center justify-center min-w-[18px] h-4 px-1 rounded-full bg-primary-100 text-[10px] font-semibold text-primary-700">
                   {totalLinks}
                 </span>
               )}
@@ -489,7 +489,7 @@ export function IssueForm({ open, onClose, presetSource, presetFields, onCreated
           <button
             onClick={() => createMutation.mutate()}
             disabled={!title.trim() || createMutation.isPending || (!!override && !overrideReason.trim())}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-4 py-1.5 text-xs font-semibold text-[#0a0a0a] shadow-sm hover:bg-primary-700 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed"
           >
             {createMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Create Issue

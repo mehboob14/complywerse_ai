@@ -84,7 +84,7 @@ export function AutomationFlags() {
               type="checkbox"
               checked={data.all_enabled}
               onChange={(e) => updateMutation.mutate({ all_enabled: e.target.checked })}
-              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
             />
             All on (override)
           </label>
@@ -122,7 +122,7 @@ export function AutomationFlags() {
                     checked={Boolean(data[t.key])}
                     disabled={disabled || updateMutation.isPending}
                     onChange={(e) => updateMutation.mutate({ [t.key]: e.target.checked } as Partial<FlagsPayload>)}
-                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500 disabled:opacity-50"
                   />
                 </label>
               </div>
@@ -137,7 +137,7 @@ export function AutomationFlags() {
         )}
       </div>
 
-      <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-3 text-[11px] text-slate-700">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-700">
         <strong>Safety note:</strong> auto-created issues are de-duplicated against existing open issues for the same
         source entity, so toggling a flag on won&apos;t flood the queue. Each spawned issue logs its trigger in the activity feed.
       </div>

@@ -34,11 +34,13 @@ import {
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'informational'] as const;
 type Severity = (typeof SEVERITY_ORDER)[number];
 
+// Sanctioned severity ramp (critical=rose, high=orange, medium=amber,
+// low=emerald, informational=slate). Genuine data-viz scale.
 const SEVERITY_COLOR: Record<Severity, string> = {
-  critical: '#dc2626',
+  critical: '#f43f5e',
   high: '#f97316',
   medium: '#f59e0b',
-  low: '#3b82f6',
+  low: '#10b981',
   informational: '#94a3b8',
 };
 
@@ -174,7 +176,7 @@ function TrendPanel({ data }: { data?: TrendPoint[] }) {
             <Line
               dataKey="net"
               name="Net (opened − closed)"
-              stroke="#6366f1"
+              stroke="#475569"
               strokeWidth={2}
               dot={{ r: 2.5 }}
               type="monotone"

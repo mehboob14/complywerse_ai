@@ -41,7 +41,7 @@ export default function IssuesPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowForm(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] shadow-sm hover:bg-primary-700"
           >
             <Plus className="h-3.5 w-3.5" />
             New Issue
@@ -60,7 +60,7 @@ export default function IssuesPage() {
               onClick={() => setTab(t.id)}
               className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
                 active
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm'
+                  ? 'bg-primary-600 text-[#0a0a0a] shadow-sm'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >

@@ -70,7 +70,7 @@ export function IssueList({ defaultFilters }: Props) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search title / code / description…"
-            className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-2 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-lg border border-slate-200 bg-white pl-8 pr-2 py-1.5 text-xs text-slate-800 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
           />
         </div>
         <select value={severity} onChange={(e) => setSeverity(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700">
@@ -142,10 +142,10 @@ export function IssueList({ defaultFilters }: Props) {
                 return (
                   <tr key={i.id} className="border-t border-slate-100 hover:bg-slate-50">
                     <td className="px-3 py-2 text-[11px] font-semibold text-slate-700">
-                      <Link href={`/issues/${i.id}`} className="hover:text-blue-700">{i.code || `#${i.id}`}</Link>
+                      <Link href={`/issues/${i.id}`} className="hover:text-primary-700">{i.code || `#${i.id}`}</Link>
                     </td>
                     <td className="px-3 py-2 text-xs text-slate-800 max-w-[280px]">
-                      <Link href={`/issues/${i.id}`} className="hover:text-blue-700">
+                      <Link href={`/issues/${i.id}`} className="hover:text-primary-700">
                         <span className="font-medium block truncate" title={i.title}>{i.title}</span>
                       </Link>
                     </td>

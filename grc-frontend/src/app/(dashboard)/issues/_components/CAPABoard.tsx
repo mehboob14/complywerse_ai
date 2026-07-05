@@ -21,18 +21,18 @@ interface ActionRow {
 
 const COLUMNS: Array<{ id: string; label: string; icon: React.ElementType; accent: string }> = [
   { id: 'planned',     label: 'Planned',     icon: ListChecks,    accent: 'border-slate-200 bg-slate-50' },
-  { id: 'in_progress', label: 'In Progress', icon: Clock,         accent: 'border-blue-200 bg-blue-50/40' },
+  { id: 'in_progress', label: 'In Progress', icon: Clock,         accent: 'border-primary-200 bg-primary-50/40' },
   { id: 'blocked',     label: 'Blocked',     icon: AlertOctagon,  accent: 'border-amber-200 bg-amber-50/40' },
   { id: 'completed',   label: 'Completed',   icon: CheckCircle2,  accent: 'border-emerald-200 bg-emerald-50/40' },
-  { id: 'verified',    label: 'Verified',    icon: ShieldCheck,   accent: 'border-green-300 bg-green-50/40' },
+  { id: 'verified',    label: 'Verified',    icon: ShieldCheck,   accent: 'border-emerald-300 bg-emerald-50/40' },
   { id: 'cancelled',   label: 'Cancelled',   icon: Ban,           accent: 'border-slate-200 bg-slate-100' },
 ];
 
 const TYPE_TONE: Record<string, string> = {
-  corrective:   'border-blue-200 bg-blue-50 text-blue-700',
+  corrective:   'border-primary-200 bg-primary-50 text-primary-700',
   preventive:   'border-emerald-200 bg-emerald-50 text-emerald-700',
   containment:  'border-amber-200 bg-amber-50 text-amber-700',
-  verification: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+  verification: 'border-slate-200 bg-slate-50 text-slate-700',
 };
 
 export function CAPABoard() {
@@ -101,11 +101,11 @@ export function CAPABoard() {
                       <span className={`rounded border px-1 py-px text-[9px] font-medium uppercase ${TYPE_TONE[a.action_type] || 'border-slate-200 bg-slate-50 text-slate-600'}`}>
                         {a.action_type}
                       </span>
-                      <Link href={`/issues/${a.issue_id}`} className="ml-auto text-[10px] font-semibold text-slate-500 hover:text-blue-700">
+                      <Link href={`/issues/${a.issue_id}`} className="ml-auto text-[10px] font-semibold text-slate-500 hover:text-primary-700">
                         #{a.issue_id}
                       </Link>
                     </div>
-                    <Link href={`/issues/${a.issue_id}`} className="block text-xs font-medium text-slate-900 line-clamp-2 hover:text-blue-700">
+                    <Link href={`/issues/${a.issue_id}`} className="block text-xs font-medium text-slate-900 line-clamp-2 hover:text-primary-700">
                       {a.title}
                     </Link>
                     <div className="mt-1.5 flex items-center justify-between text-[10px]">
@@ -119,7 +119,7 @@ export function CAPABoard() {
                     {col.id === 'planned' && (
                       <button
                         onClick={() => updateStatusMutation.mutate({ id: a.id, status: 'in_progress' })}
-                        className="mt-1.5 w-full rounded border border-blue-200 bg-white px-2 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-50"
+                        className="mt-1.5 w-full rounded border border-primary-200 bg-white px-2 py-1 text-[10px] font-medium text-primary-700 hover:bg-primary-50"
                       >
                         Start
                       </button>
@@ -135,7 +135,7 @@ export function CAPABoard() {
                     {col.id === 'completed' && (
                       <button
                         onClick={() => verifyMutation.mutate(a.id)}
-                        className="mt-1.5 w-full rounded border border-green-300 bg-white px-2 py-1 text-[10px] font-medium text-green-700 hover:bg-green-50"
+                        className="mt-1.5 w-full rounded border border-emerald-300 bg-white px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-50"
                       >
                         Verify Effectiveness
                       </button>

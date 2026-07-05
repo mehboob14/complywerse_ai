@@ -174,7 +174,7 @@ export default function IssueDetailPage() {
                   const reason = prompt('Reason for reopening?');
                   if (reason) issuesApi.reopen(issueId, { reason }).then(() => qc.invalidateQueries({ queryKey: ['issue-detail', issueId] }));
                 }}
-                className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-100"
+                className="inline-flex items-center gap-1 rounded border border-primary-200 bg-primary-50 px-2 py-1 text-[10px] font-medium text-primary-700 hover:bg-primary-100"
               >
                 Reopen
               </button>
@@ -201,13 +201,13 @@ export default function IssueDetailPage() {
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                active ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+                active ? 'bg-primary-600 text-[#0a0a0a]' : 'text-slate-600 hover:bg-slate-50'
               }`}
             >
               <Icon className="h-3.5 w-3.5" />
               {t.label}
               {t.count != null && t.count > 0 && (
-                <span className={`rounded-full px-1.5 text-[10px] ${active ? 'bg-white/20' : 'bg-slate-100 text-slate-700'}`}>{t.count}</span>
+                <span className={`rounded-full px-1.5 text-[10px] ${active ? 'bg-black/10 text-[#0a0a0a]' : 'bg-slate-100 text-slate-700'}`}>{t.count}</span>
               )}
             </button>
           );
@@ -314,12 +314,12 @@ interface CAPAActionRow {
 }
 
 const CAPA_STATUS_TONES: Record<string, { bg: string; text: string; border: string; label: string }> = {
-  planned:      { bg: 'bg-slate-50',   text: 'text-slate-700',   border: 'border-slate-200',   label: 'Planned' },
-  in_progress:  { bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200',    label: 'In Progress' },
-  blocked:      { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',   label: 'Blocked' },
-  completed:    { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', label: 'Completed' },
-  verified:     { bg: 'bg-violet-50',  text: 'text-violet-700',  border: 'border-violet-200',  label: 'Verified' },
-  cancelled:    { bg: 'bg-slate-100',  text: 'text-slate-500',   border: 'border-slate-200',   label: 'Cancelled' },
+  planned:      { bg: 'bg-slate-50',    text: 'text-slate-700',   border: 'border-slate-200',   label: 'Planned' },
+  in_progress:  { bg: 'bg-primary-50',  text: 'text-primary-700', border: 'border-primary-200', label: 'In Progress' },
+  blocked:      { bg: 'bg-amber-50',    text: 'text-amber-700',   border: 'border-amber-200',   label: 'Blocked' },
+  completed:    { bg: 'bg-emerald-50',  text: 'text-emerald-700', border: 'border-emerald-200', label: 'Completed' },
+  verified:     { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-300', label: 'Verified' },
+  cancelled:    { bg: 'bg-slate-100',   text: 'text-slate-500',   border: 'border-slate-200',   label: 'Cancelled' },
 };
 
 function CAPAStatusBadge({ status }: { status: string }) {
@@ -442,7 +442,7 @@ function CAPATab({ issueId }: { issueId: number }) {
       </div>
 
       {showAdd && (
-        <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50/40 p-3 space-y-2">
+        <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -499,7 +499,7 @@ function CAPATab({ issueId }: { issueId: number }) {
             <button
               onClick={() => addMutation.mutate()}
               disabled={!title.trim() || addMutation.isPending}
-              className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-slate-300"
+              className="rounded-lg bg-primary-600 px-3 py-1 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:bg-slate-300 disabled:text-slate-500"
             >
               {addMutation.isPending ? 'Adding…' : 'Add Action'}
             </button>
@@ -559,7 +559,7 @@ function CAPATab({ issueId }: { issueId: number }) {
                       <a
                         href={`/tasks/${a.linked_critical_task_id}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-0.5 rounded border border-indigo-200 bg-indigo-50 px-1.5 py-px text-[10px] font-medium text-indigo-700 hover:bg-indigo-100"
+                        className="inline-flex items-center gap-0.5 rounded border border-primary-200 bg-primary-50 px-1.5 py-px text-[10px] font-medium text-primary-700 hover:bg-primary-100"
                         title="Mirrored into Critical Tasks register"
                       >
                         <Rocket className="h-2.5 w-2.5" />
@@ -579,7 +579,7 @@ function CAPATab({ issueId }: { issueId: number }) {
                         promoteMutation.mutate(a.id);
                       }}
                       disabled={promoteMutation.isPending && promotingId === a.id}
-                      className="inline-flex items-center gap-0.5 rounded border border-indigo-200 bg-white px-1.5 py-px text-[10px] font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50"
+                      className="inline-flex items-center gap-0.5 rounded border border-primary-200 bg-white px-1.5 py-px text-[10px] font-medium text-primary-700 hover:bg-primary-50 disabled:opacity-50"
                       title="Promote this CAPA to a Critical Task — status syncs back automatically"
                     >
                       {promoteMutation.isPending && promotingId === a.id ? (
@@ -676,7 +676,7 @@ function CAPADetailModal({
   const isOverdue = dueIn !== null && dueIn < 0 && status !== 'completed' && status !== 'verified' && status !== 'cancelled';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-3">
       <div className="w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-xl bg-white shadow-2xl">
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-200 bg-white px-5 py-3">
           <div className="min-w-0 flex-1">
@@ -686,7 +686,7 @@ function CAPADetailModal({
               </span>
               <CAPAStatusBadge status={action.status} />
               {action.verified_at && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-1.5 py-px text-[10px] font-medium text-violet-700">
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-100 px-1.5 py-px text-[10px] font-medium text-emerald-800">
                   <ShieldCheck className="h-2.5 w-2.5" />
                   Verified
                 </span>
@@ -810,7 +810,7 @@ function CAPADetailModal({
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-slate-300"
+                className="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:bg-slate-300 disabled:text-slate-500"
               >
                 {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
                 {isSaving ? 'Saving…' : 'Save changes'}
@@ -820,28 +820,28 @@ function CAPADetailModal({
 
           {/* Verify panel — only meaningful when status reached 'completed' */}
           {canVerify && (
-            <div className="rounded-lg border border-violet-200 bg-violet-50/40 p-3 space-y-2">
-              <h4 className="text-[10px] font-semibold uppercase tracking-wider text-violet-700 inline-flex items-center gap-1">
+            <div className="rounded-lg border border-primary-200 bg-primary-50/40 p-3 space-y-2">
+              <h4 className="text-[10px] font-semibold uppercase tracking-wider text-primary-700 inline-flex items-center gap-1">
                 <ShieldCheck className="h-3 w-3" />
                 Verify effectiveness
               </h4>
-              <p className="text-[11px] text-violet-900">
+              <p className="text-[11px] text-slate-700">
                 A completed action stays open for effectiveness review. Verifying it
                 marks the CAPA as durably effective and stamps you as the verifier.
               </p>
               <div>
-                <label className="block text-[10px] font-medium text-violet-700 mb-1">
+                <label className="block text-[10px] font-medium text-primary-700 mb-1">
                   Effectiveness review date (optional)
                 </label>
                 <input
                   type="date"
                   value={effectivenessDate}
                   onChange={(e) => setEffectivenessDate(e.target.value)}
-                  className="w-full rounded border border-violet-300 bg-white px-2 py-1.5 text-xs"
+                  className="w-full rounded border border-primary-300 bg-white px-2 py-1.5 text-xs"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-medium text-violet-700 mb-1">
+                <label className="block text-[10px] font-medium text-primary-700 mb-1">
                   Verification notes (optional)
                 </label>
                 <textarea
@@ -849,14 +849,14 @@ function CAPADetailModal({
                   onChange={(e) => setVerifyNotes(e.target.value)}
                   rows={2}
                   placeholder="Evidence reviewed, residual risk, follow-ups…"
-                  className="w-full rounded border border-violet-300 bg-white px-2 py-1.5 text-xs resize-none"
+                  className="w-full rounded border border-primary-300 bg-white px-2 py-1.5 text-xs resize-none"
                 />
               </div>
               <div className="flex justify-end">
                 <button
                   onClick={handleVerify}
                   disabled={isVerifying}
-                  className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-violet-700 disabled:bg-slate-300"
+                  className="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:bg-slate-300 disabled:text-slate-500"
                 >
                   {isVerifying ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
                   {isVerifying ? 'Verifying…' : 'Verify effectiveness'}
@@ -913,7 +913,7 @@ function LinkedItemsTab({ issueId, counts }: { issueId: number; counts: IssueDet
               key={t.api}
               onClick={() => setLinkTab(t.api)}
               className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium ${
-                active ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                active ? 'border-primary-300 bg-primary-50 text-primary-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
               }`}
             >
               <Icon className="h-3 w-3" /> {t.label}
@@ -973,7 +973,7 @@ function CommentsTab({ issueId }: { issueId: number }) {
         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs resize-none" />
       <div className="flex justify-end">
         <button onClick={() => postMutation.mutate()} disabled={!body.trim() || postMutation.isPending}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300">
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-700 disabled:bg-slate-300 disabled:text-slate-500">
           {postMutation.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
           Post Comment
         </button>
@@ -1020,22 +1020,22 @@ const ACTIVITY_META: Record<
   string,
   { label: string; icon: typeof ActivityIcon; tone: string }
 > = {
-  created:           { label: 'Created the issue',       icon: Plus,           tone: 'bg-blue-50 text-blue-700 border-blue-200' },
+  created:           { label: 'Created the issue',       icon: Plus,           tone: 'bg-primary-50 text-primary-700 border-primary-200' },
   updated:           { label: 'Updated fields',          icon: ListChecks,     tone: 'bg-slate-50 text-slate-700 border-slate-200' },
   severity_change:   { label: 'Changed severity',        icon: AlertTriangle,  tone: 'bg-amber-50 text-amber-700 border-amber-200' },
-  status_change:     { label: 'Changed status',          icon: ActivityIcon,   tone: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  status_change:     { label: 'Changed status',          icon: ActivityIcon,   tone: 'bg-primary-50 text-primary-700 border-primary-200' },
   approved:          { label: 'Approved closure',        icon: CheckCircle2,   tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   reopened:          { label: 'Reopened the issue',      icon: Rocket,         tone: 'bg-rose-50 text-rose-700 border-rose-200' },
   cancelled:         { label: 'Cancelled the issue',     icon: X,              tone: 'bg-rose-50 text-rose-700 border-rose-200' },
-  commented:         { label: 'Added a comment',         icon: MessageSquare,  tone: 'bg-violet-50 text-violet-700 border-violet-200' },
-  action_added:      { label: 'Added a CAPA action',     icon: ClipboardList,  tone: 'bg-blue-50 text-blue-700 border-blue-200' },
+  commented:         { label: 'Added a comment',         icon: MessageSquare,  tone: 'bg-slate-50 text-slate-700 border-slate-200' },
+  action_added:      { label: 'Added a CAPA action',     icon: ClipboardList,  tone: 'bg-primary-50 text-primary-700 border-primary-200' },
   action_updated:    { label: 'Updated a CAPA action',   icon: ClipboardList,  tone: 'bg-slate-50 text-slate-700 border-slate-200' },
   action_completed:  { label: 'Completed a CAPA action', icon: CheckCircle2,   tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   action_verified:   { label: 'Verified a CAPA action',  icon: ShieldCheck,    tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   action_deleted:    { label: 'Deleted a CAPA action',   icon: Trash2,         tone: 'bg-rose-50 text-rose-700 border-rose-200' },
-  linked:            { label: 'Linked a related item',   icon: ExternalLink,   tone: 'bg-blue-50 text-blue-700 border-blue-200' },
+  linked:            { label: 'Linked a related item',   icon: ExternalLink,   tone: 'bg-primary-50 text-primary-700 border-primary-200' },
   unlinked:          { label: 'Unlinked a related item', icon: ExternalLink,   tone: 'bg-slate-50 text-slate-700 border-slate-200' },
-  action_promoted_to_task: { label: 'Promoted action to task', icon: Rocket,   tone: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  action_promoted_to_task: { label: 'Promoted action to task', icon: Rocket,   tone: 'bg-primary-50 text-primary-700 border-primary-200' },
 };
 
 function activityMeta(type: string) {
