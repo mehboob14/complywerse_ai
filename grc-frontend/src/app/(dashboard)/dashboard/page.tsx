@@ -2473,6 +2473,11 @@ export default function MainDashboard() {
   const [activeTab, setActiveTab] = useState<MainTab>('executive');
   const activeWidgets = useMemo(() => buildWidgetsForTab(activeTab), [activeTab]);
 
+  // Hidden for now: the legacy "Executive Overview" tab bar + draggable widget
+  // workspace. The new aggregated dashboard (MainModuleCards + CyberKpiPanel)
+  // stands alone. Flip to `true` to bring the old tabbed dashboard back.
+  const SHOW_LEGACY_TABS = false;
+
   return (
     <div className="-m-4 flex flex-col bg-[var(--color-surface)] lg:-m-5">
       {/* Aggregated module scorecards — each ring-card links to its module overview. */}
@@ -2481,32 +2486,37 @@ export default function MainDashboard() {
         {/* Cyber Security KPI reporting dashboard (quarterly target vs actual). */}
         <CyberKpiPanel />
       </div>
-      <div className="border-b border-gray-200 bg-white px-3 sm:px-6">
-        <div className="flex items-center gap-0 overflow-x-auto -mb-px">
-          {MAIN_TABS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setActiveTab(id)}
-              className={`relative inline-flex items-center gap-1.5 rounded-t-md px-3 sm:px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors -mb-px ${
-                activeTab === id
-                  ? 'text-blue-700 bg-blue-50/50'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-slate-50'
-              }`}
-            >
-              <Icon size={14} />
-              {label}
-              {activeTab === id && (
-                <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-blue-600" />
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
 
-      <div className="min-h-0 flex-1 bg-[var(--color-surface)] p-3 sm:p-4">
-        <WidgetWorkspace tabKey={activeTab} widgets={activeWidgets} />
-      </div>
+      {SHOW_LEGACY_TABS && (
+        <>
+          <div className="border-b border-gray-200 bg-white px-3 sm:px-6">
+            <div className="flex items-center gap-0 overflow-x-auto -mb-px">
+              {MAIN_TABS.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveTab(id)}
+                  className={`relative inline-flex items-center gap-1.5 rounded-t-md px-3 sm:px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors -mb-px ${
+                    activeTab === id
+                      ? 'text-blue-700 bg-blue-50/50'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <Icon size={14} />
+                  {label}
+                  {activeTab === id && (
+                    <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-blue-600" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 bg-[var(--color-surface)] p-3 sm:p-4">
+            <WidgetWorkspace tabKey={activeTab} widgets={activeWidgets} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

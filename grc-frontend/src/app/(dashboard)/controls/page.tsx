@@ -17,15 +17,14 @@
  * status-summary `control_status` record.
  */
 
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useState, useEffect, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { controlsApi, ermApi, adminApi } from '@/lib/api';
+import { controlsApi, ermApi, adminApi, aiRecommendationsApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SearchInput, MultiSelectDropdown, PageLoader, RightSlidePanel, AnimatedModal } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
-import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import {
   FrameworkControlEvidenceLinkSection,
   PriorityLevelBadge,
@@ -45,8 +44,6 @@ import {
   ChevronRight,
   ChevronLeft,
   FileText,
-  ArrowLeft,
-  FileStack,
   Paperclip,
   Sparkles,
   Link2,
@@ -60,6 +57,9 @@ import {
   ShieldAlert,
   Activity,
   ListChecks,
+  ChevronDown,
+  ArrowUpNarrowWide,
+  ArrowDownWideNarrow,
 } from 'lucide-react';
 
 interface TestProcedure {
@@ -135,6 +135,7 @@ export default function ControlsPage() {
   const searchParams = useSearchParams();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('controls:control_library:create');
+  const queryClient = useQueryClient();
   const initialFrameworkId = searchParams.get('framework');
 
   const [searchInput, setSearchInput] = useState('');
@@ -152,35 +153,45 @@ export default function ControlsPage() {
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [aiRecommendations, setAiRecommendations] = useState<Record<number, AIRecommendations>>({});
   const [loadingAI, setLoadingAI] = useState<number | null>(null);
-  const pageSize = 50;
+  // When a single framework is in view we load it whole (no pagination) so the
+  // domain hierarchy is complete; the cross-framework "All" view stays paginated.
+  const pageSize = frameworkFilter ? 1000 : 50;
+  // Collapsible framework→domain groups in the left master list.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // Auto-select PCI DSS (or the first framework) on first load when none is set.
+  const didAutoSelectFramework = useRef(false);
+  // Controls whose AI recommendation we've already loaded-or-generated this
+  // session (prevents duplicate auto-runs; a failure is removed so it retries).
+  const autoRecTried = useRef<Set<number>>(new Set());
 
-  void domainFilter; void setDomainFilter; void sortBy; void setSortBy; void sortOrder; void setSortOrder;
+  const AI_REC_KEY = {
+    module: 'control_library',
+    recommendation_type: 'control_ai_recommendations',
+    entity_type: 'framework_control',
+  } as const;
 
   const aiRecommendationMutation = useMutation({
     mutationFn: (data: { control_id: number; control_title: string; control_description?: string; framework_name?: string }) =>
       controlsApi.getAIRecommendations(data),
     onSuccess: (response, variables) => {
-      setAiRecommendations(prev => ({
-        ...prev,
-        [variables.control_id]: response.data
-      }));
+      const output = response.data as AIRecommendations;
+      setAiRecommendations(prev => ({ ...prev, [variables.control_id]: output }));
       setLoadingAI(null);
+      // Persist to the per-tenant AI-recommendations store so it loads instantly
+      // next time (for every user in this tenant) — no manual save, no re-run.
+      aiRecommendationsApi.save({
+        ...AI_REC_KEY,
+        entity_id: String(variables.control_id),
+        title: `AI recommendations · ${variables.control_title}`,
+        output: output as unknown as Record<string, unknown>,
+        model: 'gpt-4o',
+      }).catch(() => {});
     },
-    onError: () => {
+    onError: (_e, variables) => {
       setLoadingAI(null);
+      autoRecTried.current.delete(variables.control_id); // allow a retry on reopen
     }
   });
-
-  const handleGetAIRecommendations = (control: FrameworkControl) => {
-    if (aiRecommendations[control.id] || loadingAI === control.id) return;
-    setLoadingAI(control.id);
-    aiRecommendationMutation.mutate({
-      control_id: control.id,
-      control_title: control.title,
-      control_description: control.description || undefined,
-      framework_name: control.framework_name || undefined
-    });
-  };
 
   // ── Promote an AI "risk if not implemented" into the real ERM Risk Register ──
   const { toast } = useToast();
@@ -204,7 +215,22 @@ export default function ControlsPage() {
         }));
       } catch { return []; }
     },
-    enabled: !!promoteCtx,
+    // Loaded when the user can edit (owner picker) or the promote panel is open.
+    enabled: canCreate || !!promoteCtx,
+  });
+
+  // Standalone per-control ownership: set owner + implementation stage directly
+  // (no certification journey needed). Refreshes the status-summary on success.
+  const [ownerPendingId, setOwnerPendingId] = useState<number | null>(null);
+  const ownershipMutation = useMutation({
+    mutationFn: ({ controlId, data }: { controlId: number; data: { status?: string; assigned_user_ids?: number[] } }) =>
+      controlsApi.updateFrameworkControlOwnership(controlId, data),
+    onMutate: ({ controlId }) => setOwnerPendingId(controlId),
+    onSettled: () => {
+      setOwnerPendingId(null);
+      queryClient.invalidateQueries({ queryKey: ['framework-controls-status-summary'] });
+    },
+    onError: () => toast({ type: 'error', title: 'Could not update control', message: 'Please try again.' }),
   });
 
   const openPromote = (control: FrameworkControl, risk: PotentialRisk) => {
@@ -345,6 +371,20 @@ export default function ControlsPage() {
     },
   });
 
+  // Default the workbench to PCI DSS (fallback: first framework) when opened
+  // without an explicit framework — so controls always land framework-scoped &
+  // hierarchical rather than as a flat cross-framework dump. Runs once; a later
+  // manual switch to "All Frameworks" is respected.
+  useEffect(() => {
+    if (didAutoSelectFramework.current) return;
+    if (initialFrameworkId || frameworkFilter != null) { didAutoSelectFramework.current = true; return; }
+    const fws = summaryData?.frameworks;
+    if (!fws || fws.length === 0) return;
+    didAutoSelectFramework.current = true;
+    const pci = fws.find((f) => /pci/i.test(f.name)) ?? fws[0];
+    if (pci) { setFrameworkFilter(pci.id); setPage(0); }
+  }, [summaryData, initialFrameworkId, frameworkFilter]);
+
   // Control-health snapshot — endpoint-derived, unpaginated. Guarded to {} so a
   // 404/absent endpoint degrades gracefully. Drives the read-only status
   // pipeline + owner in the inspector (control_status record).
@@ -388,6 +428,45 @@ export default function ControlsPage() {
   });
 
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
+
+  // AUTO AI recommendations: the first time a control is opened, load its saved
+  // recommendation from the per-tenant store, or generate + persist it — no
+  // button, no manual save. Subsequent opens (this session or a future one, any
+  // user in the tenant) load instantly from the store.
+  useEffect(() => {
+    if (selectedControlId == null) return;
+    const cid = selectedControlId;
+    const c = (data?.controls || []).find((x) => x.id === cid);
+    if (!c) return;
+    if (aiRecommendations[cid] || loadingAI === cid || autoRecTried.current.has(cid)) return;
+    autoRecTried.current.add(cid);
+    setLoadingAI(cid);
+    const generate = () =>
+      aiRecommendationMutation.mutate({
+        control_id: cid,
+        control_title: c.title,
+        control_description: c.description || undefined,
+        framework_name: c.framework_name || undefined,
+      });
+    const clear = () => setLoadingAI((v) => (v === cid ? null : v));
+    aiRecommendationsApi
+      .list({ ...AI_REC_KEY, entity_id: cid })
+      .then((res) => {
+        const saved = ((res.data as { items?: Array<{ output?: unknown }> })?.items || [])[0];
+        if (saved?.output) {
+          // Everyone loads the saved recommendation from the per-tenant store.
+          setAiRecommendations((prev) => ({ ...prev, [cid]: saved.output as AIRecommendations }));
+          clear();
+        } else if (canCreate) {
+          // First time: only editors trigger (+persist) generation.
+          generate();
+        } else {
+          clear();
+        }
+      })
+      .catch(() => { if (canCreate) generate(); else clear(); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedControlId, data]);
 
   const getPriorityBadge = (priority: string) => {
     const colors: Record<string, string> = {
@@ -472,6 +551,47 @@ export default function ControlsPage() {
     { key: 'in_progress', label: 'In progress' },
   ];
 
+  // Domain filter options derived from the loaded (framework-scoped) controls.
+  const domainOptions = Array.from(new Set(allControls.map((c) => c.domain).filter(Boolean) as string[]))
+    .sort((a, b) => a.localeCompare(b))
+    .map((d) => ({ value: d, label: d }));
+
+  const userItems = (usersList || []).map((u) => ({ value: String(u.id), label: u.name }));
+
+  const sortOptions: { value: SortField; label: string }[] = [
+    { value: 'control_id', label: 'Control ID' },
+    { value: 'title', label: 'Title' },
+    { value: 'priority', label: 'Priority' },
+    { value: 'evidence_count', label: 'Evidence' },
+  ];
+
+  // Group the filtered controls into a Framework → Domain hierarchy (order
+  // preserved from the backend sort). The framework header is only shown when
+  // more than one framework is present (i.e. the "All Frameworks" view).
+  const groups: { framework: string; domains: { domain: string; controls: FrameworkControl[] }[] }[] = (() => {
+    const fwOrder: string[] = [];
+    const fwMap = new Map<string, Map<string, FrameworkControl[]>>();
+    for (const c of filteredControls) {
+      const fw = c.framework_name || 'Unknown framework';
+      const dom = c.domain || 'Uncategorized';
+      if (!fwMap.has(fw)) { fwMap.set(fw, new Map()); fwOrder.push(fw); }
+      const domMap = fwMap.get(fw)!;
+      if (!domMap.has(dom)) domMap.set(dom, []);
+      domMap.get(dom)!.push(c);
+    }
+    return fwOrder.map((fw) => ({
+      framework: fw,
+      domains: Array.from(fwMap.get(fw)!.entries()).map(([domain, controls]) => ({ domain, controls })),
+    }));
+  })();
+  const showFrameworkHeaders = groups.length > 1;
+  const toggleGroup = (key: string) =>
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+
   return (
     <div className="space-y-5">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -479,17 +599,7 @@ export default function ControlsPage() {
         <div>
           {frameworkFilter && (selectedFramework || effectiveFrameworkName) ? (
             <>
-              <div className="mb-1 flex items-center gap-2">
-                <Link
-                  href="/frameworks"
-                  className="flex items-center gap-1 text-sm text-slate-600 transition-colors hover:text-slate-900"
-                >
-                  <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
-                  Back to Frameworks
-                </Link>
-              </div>
-              <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-                <FileStack className="h-6 w-6 text-slate-900" strokeWidth={1.75} />
+              <h1 className="text-2xl font-bold text-slate-900">
                 {effectiveFrameworkName}
               </h1>
               <p className="text-slate-600">
@@ -546,6 +656,39 @@ export default function ControlsPage() {
           searchPlaceholder="Search frameworks"
           size="md"
         />
+        {domainOptions.length > 0 && (
+          <MultiSelectDropdown
+            title="Domain"
+            items={domainOptions}
+            selectedValues={domainFilter ? [domainFilter] : []}
+            onApply={(v) => { setDomainFilter(v[0] || ''); setPage(0); }}
+            multiSelect={false}
+            autoApply
+            forceSearch
+            placeholder="All"
+            searchPlaceholder="Search domains"
+            size="md"
+          />
+        )}
+        <MultiSelectDropdown
+          title="Sort"
+          items={sortOptions.map((s) => ({ value: s.value, label: s.label }))}
+          selectedValues={[sortBy]}
+          onApply={(v) => { setSortBy((v[0] as SortField) || 'control_id'); setPage(0); }}
+          multiSelect={false}
+          autoApply
+          placeholder="Control ID"
+          size="md"
+        />
+        <button
+          type="button"
+          onClick={() => { setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc')); setPage(0); }}
+          title={`Sort ${sortOrder === 'asc' ? 'ascending' : 'descending'}`}
+          className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          {sortOrder === 'asc' ? <ArrowUpNarrowWide className="h-4 w-4" strokeWidth={1.75} /> : <ArrowDownWideNarrow className="h-4 w-4" strokeWidth={1.75} />}
+          <span className="hidden sm:inline">{sortOrder === 'asc' ? 'Asc' : 'Desc'}</span>
+        </button>
       </div>
 
       {/* ── Split workbench ────────────────────────────────────────────────── */}
@@ -575,46 +718,83 @@ export default function ControlsPage() {
 
           <div className="card p-0">
             {filteredControls.length ? (
-              <div className="max-h-[75vh] divide-y divide-slate-100 overflow-y-auto">
-                {filteredControls.map((control) => {
-                  const isSelected = control.id === selectedControlId;
-                  const st = implStatusFor(control)?.status;
-                  // Right-side status dot: verified > tracked-status > pending.
-                  const dot =
-                    st === 'verified' || control.is_verified ? 'bg-emerald-500' :
-                    st === 'implemented' ? 'bg-primary-500' :
-                    st === 'in_progress' ? 'bg-amber-500' :
-                    'bg-slate-300';
+              <div className="max-h-[75vh] overflow-y-auto">
+                {groups.map((g) => {
+                  const fwKey = `fw::${g.framework}`;
+                  const fwCollapsed = collapsedGroups.has(fwKey);
+                  const fwCount = g.domains.reduce((n, d) => n + d.controls.length, 0);
                   return (
-                    <button
-                      key={control.id}
-                      type="button"
-                      onClick={() => setSelectedControlId(control.id)}
-                      className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors ${
-                        isSelected ? 'bg-primary-50' : 'hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-xs font-semibold text-slate-900">
-                            {control.original_reference || control.control_id}
-                          </span>
-                          <span className="rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] text-primary-700">
-                            {control.framework_name}
-                          </span>
-                          {control.priority_level && <PriorityLevelBadge level={control.priority_level} />}
-                        </div>
-                        <p className="mt-1 line-clamp-2 text-sm text-slate-700">{control.title}</p>
-                        <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
-                          <span className="inline-flex items-center gap-1">
-                            <Paperclip className="h-3 w-3" strokeWidth={1.75} />
-                            {control.evidence_count} evidence
-                          </span>
-                          {control.domain && <span className="truncate">{control.domain}</span>}
-                        </div>
-                      </div>
-                      <span className={`mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full ${dot}`} title={st ? IMPL_STATUS_META[st]?.label ?? st : (control.is_verified ? 'Verified' : 'Pending')} />
-                    </button>
+                    <div key={g.framework}>
+                      {showFrameworkHeaders && (
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(fwKey)}
+                          className="sticky top-0 z-10 flex w-full items-center gap-2 border-b border-slate-200 bg-slate-100 px-3 py-2 text-left text-xs font-semibold text-slate-700"
+                        >
+                          <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 transition-transform ${fwCollapsed ? '-rotate-90' : ''}`} strokeWidth={2} />
+                          <span className="truncate">{g.framework}</span>
+                          <span className="ml-auto rounded-full bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{fwCount}</span>
+                        </button>
+                      )}
+                      {!fwCollapsed && g.domains.map((d) => {
+                        const domKey = `dom::${g.framework}::${d.domain}`;
+                        const domCollapsed = collapsedGroups.has(domKey);
+                        return (
+                          <div key={domKey}>
+                            <button
+                              type="button"
+                              onClick={() => toggleGroup(domKey)}
+                              className={`sticky ${showFrameworkHeaders ? 'top-[33px]' : 'top-0'} z-[9] flex w-full items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-1.5 text-left text-[11px] font-medium uppercase tracking-wide text-slate-500`}
+                            >
+                              <ChevronDown className={`h-3 w-3 flex-shrink-0 transition-transform ${domCollapsed ? '-rotate-90' : ''}`} strokeWidth={2} />
+                              <span className="truncate">{d.domain}</span>
+                              <span className="ml-auto rounded-full bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-400">{d.controls.length}</span>
+                            </button>
+                            {!domCollapsed && (
+                              <div className="divide-y divide-slate-100">
+                                {d.controls.map((control) => {
+                                  const isSelected = control.id === selectedControlId;
+                                  const st = implStatusFor(control)?.status;
+                                  // Right-side status dot: verified > tracked-status > pending.
+                                  const dot =
+                                    st === 'verified' || control.is_verified ? 'bg-emerald-500' :
+                                    st === 'implemented' ? 'bg-primary-500' :
+                                    st === 'in_progress' ? 'bg-amber-500' :
+                                    'bg-slate-300';
+                                  return (
+                                    <button
+                                      key={control.id}
+                                      type="button"
+                                      onClick={() => setSelectedControlId(control.id)}
+                                      className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors ${
+                                        isSelected ? 'bg-primary-50' : 'hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="font-mono text-xs font-semibold text-slate-900">
+                                            {control.original_reference || control.control_id}
+                                          </span>
+                                          {control.priority_level && <PriorityLevelBadge level={control.priority_level} />}
+                                        </div>
+                                        <p className="mt-1 line-clamp-2 text-sm text-slate-700">{control.title}</p>
+                                        <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
+                                          <span className="inline-flex items-center gap-1">
+                                            <Paperclip className="h-3 w-3" strokeWidth={1.75} />
+                                            {control.evidence_count} evidence
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <span className={`mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full ${dot}`} title={st ? IMPL_STATUS_META[st]?.label ?? st : (control.is_verified ? 'Verified' : 'Pending')} />
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   );
                 })}
               </div>
@@ -698,43 +878,73 @@ export default function ControlsPage() {
                   </div>
 
                   <div className="max-h-[72vh] space-y-4 overflow-y-auto px-4 py-4 scrollbar-thin">
-                    {/* Status pipeline (read-only: no framework-control status endpoint) */}
+                    {/* Implementation stage — click a stage to set it directly. */}
                     <div>
                       <div className="mb-1.5 flex items-center justify-between">
                         <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Implementation stage</h4>
-                        {currentStatus === 'not_applicable' && <ImplStatusPill status="not_applicable" />}
+                        {canCreate ? (
+                          <button
+                            type="button"
+                            onClick={() => ownershipMutation.mutate({ controlId: control.id, data: { status: currentStatus === 'not_applicable' ? 'not_started' : 'not_applicable' } })}
+                            disabled={ownerPendingId === control.id}
+                            className="text-[11px] font-medium text-slate-500 hover:text-slate-800 disabled:opacity-50"
+                          >
+                            {currentStatus === 'not_applicable' ? 'Mark applicable' : 'Mark N/A'}
+                          </button>
+                        ) : currentStatus === 'not_applicable' ? <ImplStatusPill status="not_applicable" /> : null}
                       </div>
-                      <div className="flex overflow-hidden rounded-lg border border-slate-200">
+                      <div className={`flex overflow-hidden rounded-lg border border-slate-200 ${currentStatus === 'not_applicable' ? 'opacity-50' : ''}`}>
                         {PIPELINE_STAGES.map((stage, i) => {
                           const done = stageIdx >= 0 && i <= stageIdx;
                           const isCurrent = i === stageIdx;
-                          return (
-                            <div
+                          const cls = `flex-1 border-r border-slate-200 px-2 py-1.5 text-center text-[11px] font-medium last:border-r-0 ${
+                            isCurrent ? 'bg-primary-600 text-white'
+                            : done ? 'bg-primary-50 text-primary-700'
+                            : 'bg-white text-slate-400'
+                          } ${canCreate ? 'cursor-pointer hover:brightness-95' : ''}`;
+                          return canCreate ? (
+                            <button
                               key={stage.key}
-                              className={`flex-1 border-r border-slate-200 px-2 py-1.5 text-center text-[11px] font-medium last:border-r-0 ${
-                                isCurrent ? 'bg-primary-600 text-white'
-                                : done ? 'bg-primary-50 text-primary-700'
-                                : 'bg-white text-slate-400'
-                              }`}
-                              title={stage.label}
+                              type="button"
+                              onClick={() => ownershipMutation.mutate({ controlId: control.id, data: { status: stage.key } })}
+                              disabled={ownerPendingId === control.id}
+                              className={`${cls} disabled:opacity-60`}
+                              title={`Set stage: ${stage.label}`}
                             >
                               {stage.label}
-                            </div>
+                            </button>
+                          ) : (
+                            <div key={stage.key} className={cls} title={stage.label}>{stage.label}</div>
                           );
                         })}
                       </div>
-                      {!selectedImplStatus && (
-                        <p className="mt-1 text-[11px] text-slate-400">Not tracked in a certification journey yet — start one from Frameworks to update the stage.</p>
+                      {canCreate && (
+                        <p className="mt-1 text-[11px] text-slate-400">Click a stage to set this control&apos;s implementation status.</p>
                       )}
                     </div>
 
                     {/* Owner + link-evidence actions */}
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700">
-                        <User className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
-                        <span className="text-slate-500">Owner:</span>
-                        <span className="font-medium text-slate-800">{selectedImplStatus?.assignee_name || 'Unassigned'}</span>
-                      </span>
+                      {canCreate ? (
+                        <MultiSelectDropdown
+                          title="Owner"
+                          items={userItems}
+                          selectedValues={selectedImplStatus?.assigned_user_ids?.[0] ? [String(selectedImplStatus.assigned_user_ids[0])] : []}
+                          onApply={(v) => ownershipMutation.mutate({ controlId: control.id, data: { assigned_user_ids: v[0] ? [Number(v[0])] : [] } })}
+                          multiSelect={false}
+                          autoApply
+                          forceSearch
+                          placeholder="Unassigned"
+                          searchPlaceholder="Search users"
+                          size="sm"
+                        />
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-700">
+                          <User className="h-3.5 w-3.5 text-slate-400" strokeWidth={1.75} />
+                          <span className="text-slate-500">Owner:</span>
+                          <span className="font-medium text-slate-800">{selectedImplStatus?.assignee_name || 'Unassigned'}</span>
+                        </span>
+                      )}
                       <Link
                         href={`/evidence?control_id=${control.id}`}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
@@ -889,32 +1099,26 @@ export default function ControlsPage() {
                           <Sparkles className="h-4 w-4 text-primary-600" />
                           <h4 className="text-sm font-semibold text-slate-800">AI Recommendations</h4>
                         </div>
-                        {!aiRecommendations[control.id] && canCreate && (
-                          <button
-                            onClick={() => handleGetAIRecommendations(control)}
-                            disabled={loadingAI === control.id}
-                            className="flex items-center gap-2 rounded-lg bg-primary-50 px-3 py-1.5 text-sm text-primary-700 transition-colors hover:bg-primary-100 disabled:opacity-50"
-                          >
-                            {loadingAI === control.id ? (
-                              <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</>
-                            ) : (
-                              <><Sparkles className="h-4 w-4" /> Get AI Recommendations</>
-                            )}
-                          </button>
+                        {loadingAI === control.id && (
+                          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…
+                          </span>
                         )}
                       </div>
 
+                      {!aiRecommendations[control.id] && (
+                        <div className="flex items-center gap-2 py-4 text-sm text-slate-500">
+                          {loadingAI === control.id
+                            ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating AI recommendations…</>
+                            : <span className="text-xs text-slate-400">AI recommendations are prepared automatically when you open a control.</span>}
+                        </div>
+                      )}
+
                       {aiRecommendations[control.id] && (
                         <div className="space-y-6">
-                          <AiRecommendationSaver
-                            module="control_library"
-                            recommendationType="control_ai_recommendations"
-                            entityType="framework_control"
-                            entityId={control.id}
-                            title={`AI recommendations · ${control.control_id}`}
-                            output={aiRecommendations[control.id] as unknown as Record<string, unknown>}
-                            model="gpt-4o"
-                          />
+                          <p className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                            <Sparkles className="h-3 w-3 text-primary-400" /> Generated automatically &amp; saved for your team — no need to re-run.
+                          </p>
                           <div className="rounded-lg border border-primary-200 bg-primary-50 p-4">
                             <div className="mb-3 flex items-center gap-2">
                               <ClipboardList className="h-4 w-4 text-primary-600" />
@@ -1069,23 +1273,29 @@ export default function ControlsPage() {
                   subtitle={`${control.control_id} · ${control.evidence_requirements?.length || 0} suggested`}
                   size="lg"
                 >
-                  <div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
-                    {(control.evidence_requirements || []).map((evidence, idx) => {
-                      const evTitle = evidence.name || evidence.title || 'Evidence';
-                      const evType = evidence.filetype || evidence.artifact_type;
-                      return (
-                        <div key={idx} className="rounded-lg border border-slate-200 bg-white p-3">
-                          <div className="flex items-start gap-2">
-                            <div className="mt-0.5 flex-shrink-0 text-amber-600">{getEvidenceTypeIcon(evType || 'document')}</div>
+                  <div className="space-y-2.5 p-5">
+                    {(control.evidence_requirements || []).length === 0 ? (
+                      <p className="py-6 text-center text-sm text-slate-500">No recommended evidence for this control.</p>
+                    ) : (
+                      (control.evidence_requirements || []).map((evidence, idx) => {
+                        const evTitle = evidence.name || evidence.title || 'Evidence';
+                        const evType = evidence.filetype || evidence.artifact_type;
+                        return (
+                          <div key={idx} className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3">
+                            <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                              {getEvidenceTypeIcon(evType || 'document')}
+                            </span>
                             <div className="min-w-0 flex-1">
-                              <h5 className="text-sm font-medium text-slate-800">{evTitle}</h5>
-                              {evidence.description && <p className="mt-1 text-xs text-slate-600">{evidence.description}</p>}
-                              {evType && <span className="mt-2 inline-block rounded bg-amber-50 px-2 py-0.5 text-[10px] uppercase text-amber-700">{evType}</span>}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h5 className="text-sm font-medium text-slate-800">{evTitle}</h5>
+                                {evType && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-700">{evType}</span>}
+                              </div>
+                              {evidence.description && <p className="mt-1 text-xs leading-relaxed text-slate-600">{evidence.description}</p>}
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })
+                    )}
                   </div>
                 </AnimatedModal>
                 </>

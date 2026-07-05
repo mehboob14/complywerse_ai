@@ -89,6 +89,7 @@ export interface FrameworkSummaryResponse {
 export interface ControlImplStatus {
   status: string;
   assignee_name: string | null;
+  assigned_user_ids?: number[];
   implementation_date: string | null;
   verified_date: string | null;
 }

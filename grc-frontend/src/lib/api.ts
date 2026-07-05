@@ -233,6 +233,11 @@ export const controlsApi = {
     apiClient.post(`/controls/framework-control/${frameworkControlId}/evidence`, data),
   unlinkFrameworkControlEvidence: (frameworkControlId: number, linkId: number) =>
     apiClient.delete(`/controls/framework-control/${frameworkControlId}/evidence/${linkId}`),
+  // Standalone per-control owner + implementation stage (no journey required).
+  updateFrameworkControlOwnership: (
+    frameworkControlId: number,
+    data: { status?: string; assigned_user_ids?: number[] },
+  ) => apiClient.patch(`/controls/framework-control/${frameworkControlId}/ownership`, data),
 };
 
 export const evidenceApi = {

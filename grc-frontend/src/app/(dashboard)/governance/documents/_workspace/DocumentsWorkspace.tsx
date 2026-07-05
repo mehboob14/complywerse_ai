@@ -271,13 +271,13 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
           />
         </div>
         <div className="shrink-0">
-          <MultiSelectDropdown title="Type" items={TYPE_OPTIONS} selectedValues={typeFilter ? [typeFilter] : []} onApply={(v) => setTypeFilter(v[0] || '')} multiSelect={false} autoApply placeholder="Type: All" size="md" />
+          <MultiSelectDropdown title="Type" items={TYPE_OPTIONS} selectedValues={typeFilter ? [typeFilter] : []} onApply={(v) => setTypeFilter(v[0] || '')} multiSelect={false} autoApply placeholder="All" size="md" />
         </div>
         <div className="shrink-0">
-          <MultiSelectDropdown title="Status" items={STATUS_OPTIONS} selectedValues={statusFilter ? [statusFilter] : []} onApply={(v) => setStatusFilter(v[0] || '')} multiSelect={false} autoApply placeholder="Status: All" size="md" />
+          <MultiSelectDropdown title="Status" items={STATUS_OPTIONS} selectedValues={statusFilter ? [statusFilter] : []} onApply={(v) => setStatusFilter(v[0] || '')} multiSelect={false} autoApply placeholder="All" size="md" />
         </div>
         <div className="shrink-0">
-          <MultiSelectDropdown title="Owner" items={ownerOptions} selectedValues={ownerFilter ? [ownerFilter] : []} onApply={(v) => setOwnerFilter(v[0] || '')} multiSelect={false} autoApply forceSearch placeholder="Owner: All" size="md" />
+          <MultiSelectDropdown title="Owner" items={ownerOptions} selectedValues={ownerFilter ? [ownerFilter] : []} onApply={(v) => setOwnerFilter(v[0] || '')} multiSelect={false} autoApply forceSearch placeholder="All" size="md" />
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <div className="inline-flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5">
