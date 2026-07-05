@@ -326,6 +326,7 @@ export default function AssessmentsRedesignClient({ initialTab }: { initialTab?:
     if (tabKey === 'cs_cti') return <MaturityAssessmentTab format="cti_maturity" />;
     if (tabKey === 'cs_itsecops') return <MaturityAssessmentTab format="itsecops_maturity" />;
     if (tabKey === 'cs_incident') return <MaturityAssessmentTab format="incident_maturity" />;
+    if (tabKey === 'digital_ops_maturity') return <MaturityAssessmentTab format="digital_ops_maturity" />;
     if (tabKey === 'cs_kpi') return <KpiReportTab />;
     if (tabKey === 'dpia') return <DpiaAssessmentTab />;
     if (tabKey === 'nca_vuln') return <NcaRegisterTab kind="vuln" />;

@@ -1,7 +1,7 @@
 'use client';
 
-// Shared dashboard for the CREST cyber-maturity tools (CSIR, CTI, IT Security
-// Operations, Incident Management). Each rates a hierarchy of questions /
+// Shared dashboard for the cyber-maturity tools (CSIR, CTI, IT Security
+// Operations, Incident Management, Digital Operations). Each rates a hierarchy of questions /
 // capabilities on a 1-5 CMMI maturity scale, grouped by domain (Phase / Stage /
 // Security Function) and sub-heading. This page shows the overall maturity, the
 // gap to target (where a target is defined), per-domain maturity bars, and every
@@ -23,6 +23,7 @@ const META: Record<string, { title: string; subtitle: string }> = {
   cti_maturity: { title: 'CTI Maturity', subtitle: 'Cyber Threat Intelligence — Maturity Assessment' },
   itsecops_maturity: { title: 'IT Security Operations Maturity', subtitle: 'Security Operations current vs target state (CMMI)' },
   incident_maturity: { title: 'Incident Management Maturity', subtitle: 'Cyber Security Incident Response — Detailed Maturity' },
+  digital_ops_maturity: { title: 'Digital Operations Maturity', subtitle: 'Digital Operations current vs target state (CMMI)' },
 };
 
 // CMMI-style 1-5 maturity scale (CREST tools). Same scale for every question,
