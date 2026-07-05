@@ -2355,31 +2355,33 @@ def parse_dcc_tool_workbook(wb) -> tuple[List[dict], dict]:
     ctl_re = re.compile(r"^(\d+-\d+-\d+(?:-\d+)*)")  # "1-1-2" / "1-2-1-1" (control)
     clean = lambda s: re.sub(r"\s+", " ", s).strip()
 
-    # Pass 1: build ref→name maps for domains and subdomains from header cells.
-    domain_map: Dict[str, str] = {}
-    subdomain_map: Dict[str, str] = {}
-    for r in rows:
-        cells = [(raw, _dcc_norm(raw)) for raw in r if raw]
-        for raw, nv in cells:
-            dm = dom_re.match(nv)
-            if dm and not ctl_re.match(nv) and not sub_re.match(nv):
-                domain_map.setdefault(dm.group(1), clean(raw))
-            sm = sub_re.match(nv)
-            if sm and not ctl_re.match(nv):
-                key = sm.group(1)
-                name = max((o for o, onv in cells if onv != nv and not ctl_re.match(onv) and not dom_re.match(onv)), key=len, default="")
-                if key not in subdomain_map:
-                    subdomain_map[key] = clean(f"{key} {name}") if name else key
-
-    # Pass 2: emit one item per control (3+ part ref).
+    # Single pass with CARRY-FORWARD grouping. A control's real domain is the
+    # main-domain header it physically sits under (Governance / Defense /
+    # Third-Party) — NOT the first digit of its ref (the DCC ref numbering does
+    # not correspond to the domain, e.g. a "5-1-6-2" control lives under
+    # Defense). We track the last domain / subdomain header seen and assign it.
     items: List[dict] = []
+    current_domain = None
+    current_subdomain = None
     for r in rows:
         cells = [(raw, _dcc_norm(raw)) for raw in r if raw]
+        if not cells:
+            continue
+        # Main-domain header ("N- <name>"), not a ref cell.
+        dcell = next((raw for raw, nv in cells if dom_re.match(nv) and not ctl_re.match(nv) and len(raw) > 8), None)
+        if dcell:
+            current_domain = clean(dcell)
+            current_subdomain = None
+        # Subdomain header (a bare "N-M" ref + its name).
+        subm = next(((raw, nv) for raw, nv in cells if sub_re.match(nv) and not ctl_re.match(nv)), None)
+        if subm:
+            name = max((o for o, onv in cells if onv != subm[1] and not ctl_re.match(onv) and not dom_re.match(onv)), key=len, default="")
+            current_subdomain = clean(f"{subm[1]} {name}") if name else subm[1]
+        # Control row (3+ part ref).
         ref_m = next((ctl_re.match(nv) for _, nv in cells if ctl_re.match(nv)), None)
         if not ref_m:
             continue
         ref = ref_m.group(1)
-        parts = ref.split("-")
         text = max((raw for raw, nv in cells
                     if nv != ref and raw not in ("أساسي", "فرعي") and not ctl_re.match(nv) and len(raw) > 8),
                    key=len, default="")
@@ -2390,8 +2392,8 @@ def parse_dcc_tool_workbook(wb) -> tuple[List[dict], dict]:
             remark_parts.append(f"Type: {type_label}")
         items.append({
             "item_number": ref[:50],
-            "area_domain": domain_map.get(parts[0], f"Domain {parts[0]}"),
-            "subdomain_name": subdomain_map.get(f"{parts[0]}-{parts[1]}", f"{parts[0]}-{parts[1]}"),
+            "area_domain": current_domain or "DCC",
+            "subdomain_name": current_subdomain,
             "control_description": clean(text or ref)[:8000],
             "compliance_status": "in_progress",
             "priority": ("high" if ctrl_type == "أساسي" else "medium" if ctrl_type == "فرعي" else None),
@@ -5131,73 +5133,28 @@ def kpi_live_metrics(
     flags as 'external source' (no fabricated number). Nothing static.
     """
     from datetime import datetime
+    from grc.modules.assessments.kpi_live import compute_kpi_metrics
     now = datetime.utcnow()
+    tids = get_user_tenants(current_user, db) or []
+    metrics = compute_kpi_metrics(db, now)
 
-    def pct(n, d):
-        return round(100.0 * n / d, 1) if d else None
-
-    metrics = {}
-
-    # 1) Policy / document reviews on time — Governance
-    try:
-        from grc.models._13_governance_document_management_enhanced import GovernanceDocument
-        docs = db.query(GovernanceDocument).all()
-        with_date = [d for d in docs if getattr(d, "next_review_date", None)]
-        on_time = [d for d in with_date if d.next_review_date and d.next_review_date >= now]
-        if with_date:
-            metrics["policy_review"] = {
-                "label": "Policy & document reviews on time",
-                "actual": pct(len(on_time), len(with_date)),
-                "numerator": len(on_time), "denominator": len(with_date),
-                "formula": "documents reviewed on time / documents with a review date",
-                "target": 95, "direction": "higher",
-                "source": "Governance - document reviews", "href": "/governance",
-            }
-    except Exception:
-        pass
-
-    # 2) Vulnerabilities within remediation SLA — Vulnerability management
-    try:
+    # Snapshot today's value per KPI, then read the trend history so the dashboard
+    # can draw a real line over time (grc_metric_snapshot; idempotent daily upsert).
+    if tids:
         try:
-            from grc.models._22_vulnerability_management import Vulnerability
+            from grc.services import metric_snapshots as ms
+            ms.ensure_table(db)
+            today = now.date()
+            for key, m in metrics.items():
+                if m.get("actual") is not None:
+                    ms.upsert(db, tids[0], f"kpi_{key}", today, m["actual"])
+            db.commit()
+            for key, m in metrics.items():
+                m["history"] = ms.read_trend(db, tids, f"kpi_{key}", days=400)
         except Exception:
-            from grc.models import Vulnerability
-        vulns = db.query(Vulnerability).all()
-        if vulns:
-            overdue = [v for v in vulns if getattr(v, "due_date", None) and v.due_date < now
-                       and str(getattr(v, "status", "") or "").lower() not in ("resolved", "closed")]
-            n = len(vulns) - len(overdue)
-            metrics["vuln_sla"] = {
-                "label": "Vulnerabilities within remediation SLA",
-                "actual": pct(n, len(vulns)),
-                "numerator": n, "denominator": len(vulns),
-                "formula": "vulnerabilities not past their due date / total vulnerabilities",
-                "target": 90, "direction": "higher",
-                "source": "Vulnerability management", "href": "/vulnerabilities",
-            }
-    except Exception:
-        pass
-
-    # 3) Access certification completed — Access review
-    try:
-        from grc.models._40_access_review_models import AccessReviewItem
-        items = db.query(AccessReviewItem).all()
-        if items:
-            decided = [i for i in items if str(getattr(i, "decision", "pending") or "pending").lower() != "pending"]
-            metrics["access_cert"] = {
-                "label": "Access certification completed",
-                "actual": pct(len(decided), len(items)),
-                "numerator": len(decided), "denominator": len(items),
-                "formula": "access items certified / sampled access items",
-                "target": 100, "direction": "higher",
-                "source": "Access review certification", "href": "/access-reviews",
-            }
-    except Exception:
-        pass
-
-    for m in metrics.values():
-        a, t, d = m["actual"], m["target"], m["direction"]
-        m["on_target"] = None if (a is None or t is None) else (a <= t if d == "lower" else a >= t)
+            db.rollback()
+            for m in metrics.values():
+                m.setdefault("history", [])
 
     return {"as_of": now.isoformat(), "metrics": metrics}
 

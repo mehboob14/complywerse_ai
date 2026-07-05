@@ -17,15 +17,18 @@ export const BAD = '#e11d48';
 export const TEAL = '#0d9488';
 export const KPI_FORMAT = 'kpi_report';
 
+export type Point = { date: string; value: number | null };
 export type LiveMetric = {
   label: string; actual: number | null; numerator: number; denominator: number;
   formula: string; target: number | null; direction: string; source: string; href: string; on_target: boolean | null;
+  history?: Point[];
 };
 export type Kpi = {
   domain: string; topic: string; def: string; extSource: string;
   live: boolean; lowerBetter: boolean;
   actual: number | null; target: number | null; onTarget: boolean | null;
   numerator?: number; denominator?: number; formula?: string; source: string; href?: string;
+  history: Point[];
 };
 
 // Which cybersecurity domains map to a live in-platform metric.
@@ -33,6 +36,10 @@ const DOMAIN_TO_METRIC: Record<string, string> = {
   'cybersecurity assurance & compliance': 'policy_review',
   'identity and access management': 'access_cert',
   'vulnerability management': 'vuln_sla',
+  'asset management': 'asset_monitoring',
+  'physical security': 'asset_vuln_free',
+  'risk management': 'risk_treatment',
+  'business continuity': 'incident_resolution',
 };
 
 function catalog(item: any) {
@@ -55,11 +62,12 @@ export function buildKpis(items: any[], metrics: Record<string, LiveMetric>): Kp
         live: true, lowerBetter: m.direction === 'lower',
         actual: m.actual, target: m.target, onTarget: m.on_target,
         numerator: m.numerator, denominator: m.denominator, formula: m.formula, source: m.source, href: m.href,
+        history: m.history || [],
       };
     }
     return {
       domain: c.domain, topic: c.topic, def: c.def, extSource: c.extSource,
-      live: false, lowerBetter: false, actual: null, target: null, onTarget: null, source: 'External source',
+      live: false, lowerBetter: false, actual: null, target: null, onTarget: null, source: 'External source', history: [],
     };
   });
 }
@@ -67,7 +75,21 @@ export function buildKpis(items: any[], metrics: Record<string, LiveMetric>): Kp
 export const pct = (v: number | null) => (v == null ? '—' : `${Math.round(v)}%`);
 const clamp = (v: number | null) => Math.max(0, Math.min(100, v ?? 0));
 
-// Actual bar with a target marker (live KPIs only).
+// Auto-zoom the y-axis to the data (+ target) so the trend fills the chart height
+// instead of hugging a flat line — the way a trading chart scales to its range.
+function makeY(pts: Point[], target: number | null, H: number, padT: number, padB: number) {
+  const vals = pts.map((p) => p.value as number);
+  const refs = target != null ? [...vals, target] : vals;
+  let lo = Math.min(...refs), hi = Math.max(...refs);
+  const span = hi - lo;
+  const pad = Math.max(4, span * 0.18);
+  lo = Math.max(0, lo - pad);
+  hi = Math.min(100, hi + pad);
+  if (hi - lo < 1) hi = lo + 1;
+  return (v: number) => H - padB - ((clamp(v) - lo) / (hi - lo)) * (H - padT - padB);
+}
+
+// Actual bar with a target marker (fallback when there isn't enough history).
 export function TargetBar({ actual, target, tone }: { actual: number | null; target: number | null; tone: string }) {
   return (
     <div className="relative h-2 w-full rounded-full bg-slate-100">
@@ -77,9 +99,89 @@ export function TargetBar({ actual, target, tone }: { actual: number | null; tar
   );
 }
 
+// The trend line — teal actual over time vs a dashed target line ("trading chart").
+export function Trend({ history, target, actual, tone, width = 130, height = 40 }: { history: Point[]; target: number | null; actual: number | null; tone: string; width?: number; height?: number }) {
+  const pts = (history || []).filter((h) => h.value != null);
+  if (pts.length < 2) return <TargetBar actual={actual} target={target} tone={tone} />;
+  const W = width, H = height, pad = 4;
+  const n = pts.length;
+  const x = (i: number) => pad + ((W - 2 * pad) * i) / (n - 1);
+  const y = makeY(pts, target, H, pad, pad);
+  const line = pts.map((h, i) => `${x(i).toFixed(1)},${y(h.value as number).toFixed(1)}`).join(' ');
+  const lastY = y(pts[n - 1].value as number);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
+      {target != null && <line x1={pad} x2={W - pad} y1={y(target)} y2={y(target)} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="3 2" />}
+      <polyline points={line} fill="none" stroke={TEAL} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={x(n - 1)} cy={lastY} r="2.4" fill={TEAL} />
+    </svg>
+  );
+}
+
 export function toneOf(k: Kpi) {
   if (!k.live) return '#94a3b8';
   return k.onTarget == null ? '#94a3b8' : k.onTarget ? GOOD : BAD;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export function dlabel(iso: string) {
+  const p = (iso || '').split('-');
+  return p.length < 3 ? '' : `${MONTHS[+p[1] - 1] || ''} ${+p[2]}`;
+}
+
+// The full trend chart — teal actual line with value labels, dashed target line,
+// dated x-axis. The big "trading chart" view; shown inline on cards and in drill-in.
+export function RichTrend({ history, target, width = 520, height = 150 }: { history: Point[]; target: number | null; width?: number; height?: number }) {
+  const pts = (history || []).filter((h) => h.value != null);
+  if (pts.length < 2) return null;
+  const W = width, H = height, padL = 8, padR = 16, padT = 26, padB = 22;
+  const n = pts.length;
+  const x = (i: number) => padL + ((W - padL - padR) * i) / (n - 1);
+  const y = makeY(pts, target, H, padT, padB);
+  const line = pts.map((h, i) => `${x(i).toFixed(1)},${y(h.value as number).toFixed(1)}`).join(' ');
+  const showLbl = (i: number) => i === 0 || i === n - 1 || i % 2 === 1;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full" style={{ height: H }}>
+      {[25, 50, 75].map((g) => <line key={g} x1={padL} x2={W - padR} y1={y(g)} y2={y(g)} stroke="#f1f5f9" strokeWidth="1" />)}
+      {target != null && (
+        <>
+          <line x1={padL} x2={W - padR} y1={y(target)} y2={y(target)} stroke="#94a3b8" strokeWidth="1.2" strokeDasharray="4 3" />
+          <text x={W - padR} y={y(target) - 4} fontSize="9" fill="#94a3b8" textAnchor="end">target {Math.round(target)}%</text>
+        </>
+      )}
+      <polyline points={line} fill="none" stroke={TEAL} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+      {pts.map((h, i) => (
+        <g key={i}>
+          <circle cx={x(i)} cy={y(h.value as number)} r={i === n - 1 ? 3.4 : 2.3} fill={TEAL} />
+          {showLbl(i) && <text x={x(i)} y={y(h.value as number) - 7} fontSize="9" fontWeight="600" fill={TEAL} textAnchor="middle">{Math.round(h.value as number)}%</text>}
+          {(i % 2 === 0 || i === n - 1) && <text x={x(i)} y={H - 6} fontSize="8" fill="#94a3b8" textAnchor="middle">{dlabel(h.date)}</text>}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+// Recent snapshots as period cards (value, vs target, variance) — like the old
+// quarterly Q1–Q4 cards, but on the real weekly history.
+export function PeriodCards({ history, target }: { history: Point[]; target: number | null }) {
+  const recent = (history || []).filter((h) => h.value != null).slice(-5);
+  if (!recent.length) return null;
+  return (
+    <div className="grid grid-cols-5 gap-1.5">
+      {recent.map((p, i) => {
+        const v = Math.round(p.value as number);
+        const varc = target != null ? Math.round((p.value as number) - target) : null;
+        return (
+          <div key={i} className="rounded-lg border border-slate-100 px-1.5 py-1.5 text-center">
+            <div className="text-[8.5px] text-slate-400">{dlabel(p.date)}</div>
+            <div className="text-[12px] font-bold tabular-nums" style={{ color: TEAL }}>{v}%</div>
+            {target != null && <div className="text-[8px] text-slate-400">vs {Math.round(target)}%</div>}
+            {varc != null && <div className="text-[9px] font-semibold tabular-nums" style={{ color: varc >= 0 ? GOOD : BAD }}>{varc >= 0 ? '+' : ''}{varc}pp</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // Detail popup: for LIVE KPIs the exact computation (numerator/denominator/formula
@@ -101,6 +203,19 @@ export function KpiDetailModal({ k, onClose }: { k: Kpi | null; onClose: () => v
 
           {k.live ? (
             <>
+              {k.history.filter((h) => h.value != null).length >= 2 && (
+                <div className="rounded-xl border border-slate-100 bg-white p-3">
+                  <div className="mb-1 flex items-center justify-between text-[10px] text-slate-400">
+                    <span className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1"><span className="inline-block h-[2px] w-4" style={{ background: TEAL }} /> actual</span>
+                      <span className="inline-flex items-center gap-1"><span className="inline-block h-[2px] w-4 border-t border-dashed border-slate-400" /> target</span>
+                    </span>
+                    <span>recorded weekly · live</span>
+                  </div>
+                  <RichTrend history={k.history} target={k.target} />
+                  <div className="mt-2"><PeriodCards history={k.history} target={k.target} /></div>
+                </div>
+              )}
               <div className="rounded-xl p-4" style={{ backgroundColor: `${tone}0f` }}>
                 <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: tone }}>Current</p>
                 <p className="mt-1 text-[13px] text-slate-700">
@@ -149,7 +264,7 @@ export function KpiRow({ k, onOpen }: { k: Kpi; onOpen: () => void }) {
         <p className="truncate text-[12.5px] font-medium text-slate-700" title={k.topic}>{k.topic}</p>
       </div>
       <div className="hidden w-[130px] flex-shrink-0 sm:block">
-        {k.live ? <TargetBar actual={k.actual} target={k.target} tone={tone} /> : <span className="text-[10px] text-slate-300">not measured in-platform</span>}
+        {k.live ? <Trend history={k.history} target={k.target} actual={k.actual} tone={tone} width={130} height={30} /> : <span className="text-[10px] text-slate-300">not measured in-platform</span>}
       </div>
       <div className="w-[64px] flex-shrink-0 text-right">
         <div className="text-[13px] font-bold tabular-nums" style={{ color: tone }}>{pct(k.actual)}</div>

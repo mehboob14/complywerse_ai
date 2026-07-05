@@ -179,27 +179,46 @@ export default function NcaRegisterTab({ kind }: { kind: Kind }) {
               : <div className="rounded-xl border border-slate-200 bg-white px-4 py-3"><div className="text-[11px] uppercase tracking-wide text-slate-400">Register</div><div className="text-[16px] font-bold text-slate-900">NCA template</div></div>}
           </div>
 
-          {/* Rating distribution */}
-          {cfg.sev.length > 0 && distTotal > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h4 className="mb-2 text-[12.5px] font-bold uppercase tracking-wide text-slate-500">Inherent risk rating</h4>
-              <div className="flex h-3 w-full overflow-hidden rounded-full">
-                {BANDS.filter((b) => model.dist[b]).map((b) => <div key={b} title={`${b}: ${model.dist[b]}`} style={{ width: `${(model.dist[b] / distTotal) * 100}%`, background: BAND_COLOR[b] }} />)}
+          {/* Risk exposure: rating distribution + Likelihood×Severity heat-map. For the
+              vulnerability register these sit side by side in one row, so the compact
+              matrix reads as part of a paired risk panel (full colour bar + heat-map)
+              rather than a lonely half-empty grid. Other registers keep them stacked. */}
+          {(() => {
+            // Inherent risk rating as a per-band breakdown (one labelled row + a
+            // proportional bar + count/% each) so the card is data-rich and fills its
+            // height, matching the heat-map card beside it rather than leaving a gap.
+            const bar = cfg.sev.length > 0 && distTotal > 0 ? (
+              <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-4">
+                <h4 className="mb-3 text-[12.5px] font-bold uppercase tracking-wide text-slate-500">Inherent risk rating</h4>
+                <div className="flex flex-1 flex-col justify-center gap-2.5">
+                  {BANDS.map((b) => {
+                    const n = model.dist[b] || 0;
+                    const pct = distTotal ? Math.round((n / distTotal) * 100) : 0;
+                    return (
+                      <div key={b} className="flex items-center gap-3">
+                        <span className="flex w-[76px] shrink-0 items-center gap-1.5 text-[11px] font-medium text-slate-600"><span className="h-2.5 w-2.5 shrink-0 rounded" style={{ background: BAND_COLOR[b] }} />{b}</span>
+                        <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: BAND_COLOR[b] }} /></div>
+                        <span className="w-16 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-500">{n} <span className="text-slate-300">·</span> {pct}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="mt-2 flex flex-wrap gap-3 text-[11px]">{BANDS.map((b) => <span key={b} className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded" style={{ background: BAND_COLOR[b] }} />{b} <span className="font-semibold tabular-nums text-slate-500">{model.dist[b] || 0}</span></span>)}</div>
-            </div>
-          )}
-
-          {/* Inherent + residual heat-maps */}
-          {model.inhHeat.length > 0 && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <h4 className="mb-3 text-[12.5px] font-bold uppercase tracking-wide text-slate-500">Likelihood × {kind === 'vuln' ? 'Severity' : 'Impact'} heat-map</h4>
-              <div className="flex flex-wrap gap-8">
-                <Heatmap pts={model.inhHeat} label={cfg.res ? 'Inherent' : 'Risk exposure'} />
-                {cfg.res && model.resHeat.length > 0 && <div className="flex items-center gap-8"><ArrowRight className="h-5 w-5 text-slate-300" /><Heatmap pts={model.resHeat} label="Residual (after treatment)" /></div>}
+            ) : null;
+            const heat = model.inhHeat.length > 0 ? (
+              <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-4">
+                <h4 className="mb-3 text-[12.5px] font-bold uppercase tracking-wide text-slate-500">Likelihood × {kind === 'vuln' ? 'Severity' : 'Impact'} heat-map</h4>
+                <div className="flex flex-1 flex-wrap items-center justify-center gap-8">
+                  <Heatmap pts={model.inhHeat} label={cfg.res ? 'Inherent' : 'Risk exposure'} />
+                  {cfg.res && model.resHeat.length > 0 && <div className="flex items-center gap-8"><ArrowRight className="h-5 w-5 text-slate-300" /><Heatmap pts={model.resHeat} label="Residual (after treatment)" /></div>}
+                </div>
               </div>
-            </div>
-          )}
+            ) : null;
+            if (!bar && !heat) return null;
+            // Vuln: pair them in one equal-width, equal-height row (grid stretches both).
+            if (kind === 'vuln' && bar && heat) return <div className="grid gap-4 lg:grid-cols-2">{bar}{heat}</div>;
+            return <>{bar}{heat}</>;
+          })()}
 
           <div className="flex h-9 w-[280px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-3"><Search className="h-3.5 w-3.5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={`Search ${cfg.noun}…`} className="w-full border-0 bg-transparent text-[13px] outline-none" /></div>
 
