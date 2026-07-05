@@ -133,7 +133,7 @@ export default function AuditorPortalDetailPage() {
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-blue-600" />
+            <Shield className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
             <div>
               <h1 className="text-lg font-semibold text-slate-900 leading-tight">{frameworkLabel}</h1>
               <p className="text-xs text-slate-500">
@@ -196,7 +196,7 @@ export default function AuditorPortalDetailPage() {
                 onClick={() => handleTabClick(t.key)}
                 className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                   isActive
-                    ? 'border-blue-600 text-blue-700'
+                    ? 'border-primary-600 text-primary-700'
                     : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
                 }`}
               >

@@ -126,7 +126,7 @@ export default function ExceptionsTab({ frameworkId }: { frameworkId: string }) 
       {pe.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-blue-600" />
+            <ShieldCheck className="h-4 w-4 text-primary-600" />
             Policy exceptions ({pe.length})
           </h3>
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -175,7 +175,7 @@ export default function ExceptionsTab({ frameworkId }: { frameworkId: string }) 
       )}
 
       {active && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
             <h3 className="text-lg font-bold text-slate-900">
               {active.action === 'approved' ? 'Approve' : 'Reject'} {active.type === 'applicability' ? 'control N/A' : 'policy exception'}
@@ -186,7 +186,7 @@ export default function ExceptionsTab({ frameworkId }: { frameworkId: string }) 
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               rows={4}
-              className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
             />
             <div className="flex justify-end gap-2 mt-4">
               <button

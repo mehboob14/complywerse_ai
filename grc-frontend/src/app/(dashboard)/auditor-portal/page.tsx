@@ -85,10 +85,10 @@ export default function AuditorPortalIndexPage() {
               <Link
                 key={journey.id}
                 href={`/auditor-portal/${journey.id}`}
-                className="group flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-md transition-all"
+                className="group flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-primary-300 hover:shadow-md transition-all"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
                     <Shield className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
@@ -99,11 +99,11 @@ export default function AuditorPortalIndexPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0 text-xs font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 flex-shrink-0 text-xs font-medium text-primary-700 opacity-0 group-hover:opacity-100 transition-opacity">
                   Open
                   <ChevronRight className="h-3 w-3" />
                 </div>
-                <ExternalLink className="h-4 w-4 text-slate-400 group-hover:text-blue-600 transition-colors flex-shrink-0 group-hover:hidden" />
+                <ExternalLink className="h-4 w-4 text-slate-400 group-hover:text-primary-600 transition-colors flex-shrink-0 group-hover:hidden" />
               </Link>
             );
           })}

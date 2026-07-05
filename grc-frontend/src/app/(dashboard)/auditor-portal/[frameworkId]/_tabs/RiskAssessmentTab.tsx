@@ -56,7 +56,7 @@ export default function RiskAssessmentTab({ frameworkId }: { frameworkId: string
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <ClipboardList className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                  <ClipboardList className="h-4 w-4 text-primary-600 flex-shrink-0" />
                   <h3 className="text-sm font-semibold text-slate-900">{a.name}</h3>
                   <StatusPill value={a.status} />
                 </div>

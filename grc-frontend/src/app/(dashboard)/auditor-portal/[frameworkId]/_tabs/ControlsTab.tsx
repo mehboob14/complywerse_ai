@@ -195,7 +195,7 @@ export default function ControlsTab({ frameworkId }: Props) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by control ID, reference, title, domain, or category…"
-          className="w-full rounded-lg border border-slate-300 bg-white pl-9 pr-9 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="w-full rounded-lg border border-slate-300 bg-white pl-9 pr-9 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
         />
         {search && (
           <button
@@ -217,7 +217,7 @@ export default function ControlsTab({ frameworkId }: Props) {
             onClick={() => setApplicabilityFilter(f)}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               applicabilityFilter === f
-                ? 'bg-blue-600 text-white'
+                ? 'bg-primary-600 text-[#0a0a0a] hover:bg-primary-700'
                 : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
             }`}
           >
@@ -262,7 +262,7 @@ export default function ControlsTab({ frameworkId }: Props) {
             type="checkbox"
             checked={showCriticalOnly}
             onChange={(e) => setShowCriticalOnly(e.target.checked)}
-            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            className="rounded border-slate-300 text-primary-600 focus:ring-primary-500"
           />
           Critical only
         </label>
@@ -308,7 +308,7 @@ export default function ControlsTab({ frameworkId }: Props) {
               {rows.map((r) => (
                 <tr
                   key={r.id}
-                  className="border-t border-slate-100 hover:bg-blue-50/40 cursor-pointer transition-colors"
+                  className="border-t border-slate-100 hover:bg-primary-50/40 cursor-pointer transition-colors"
                   onClick={() => setDetailControlId(r.id)}
                 >
                   <td className="px-4 py-2 align-top whitespace-nowrap">
@@ -320,7 +320,7 @@ export default function ControlsTab({ frameworkId }: Props) {
                     )}
                   </td>
                   <td className="px-4 py-2 align-top">
-                    <p className="text-slate-900 font-medium line-clamp-2 hover:text-blue-700">{r.title}</p>
+                    <p className="text-slate-900 font-medium line-clamp-2 hover:text-primary-700">{r.title}</p>
                     {r.description && (
                       <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{r.description}</p>
                     )}
@@ -375,7 +375,7 @@ export default function ControlsTab({ frameworkId }: Props) {
                       <button
                         onClick={() => autoApproveMutation.mutate(r.id)}
                         disabled={autoApproveMutation.isPending && autoApproveMutation.variables === r.id}
-                        className="inline-flex items-center gap-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 text-xs font-medium disabled:opacity-50"
+                        className="inline-flex items-center gap-1 rounded-md bg-primary-600 hover:bg-primary-700 text-[#0a0a0a] px-2 py-1 text-xs font-medium disabled:opacity-50"
                         title="Mark as in-scope and approved in one click"
                       >
                         {autoApproveMutation.isPending && autoApproveMutation.variables === r.id ? (
@@ -403,7 +403,7 @@ export default function ControlsTab({ frameworkId }: Props) {
 
       {/* Review modal */}
       {activeReview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
             <h3 className="text-lg font-bold text-slate-900">
               {activeReview.action === 'approved' ? 'Approve' : 'Reject'} applicability
@@ -418,7 +418,7 @@ export default function ControlsTab({ frameworkId }: Props) {
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               rows={4}
-              className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20"
               placeholder={activeReview.action === 'rejected' ? 'Explain why this applicability decision is being rejected…' : 'Optional comment for the audit trail…'}
             />
             <div className="flex justify-end gap-2 mt-4">
@@ -513,7 +513,7 @@ function ControlDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onClick={onClose}
     >
       <div
@@ -532,7 +532,7 @@ function ControlDetailModal({
                 </span>
               )}
               {data?.is_mandatory && (
-                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700 uppercase">
+                <span className="rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-semibold text-primary-700 uppercase">
                   Mandatory
                 </span>
               )}
@@ -642,7 +642,7 @@ function ControlDetailModal({
                         {ev.evidence_id && (
                           <a
                             href={`/evidence/${ev.evidence_id}`}
-                            className="text-slate-400 hover:text-blue-600"
+                            className="text-slate-400 hover:text-primary-600"
                             title="Open evidence"
                             onClick={(e) => e.stopPropagation()}
                           >
@@ -661,7 +661,7 @@ function ControlDetailModal({
                   <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Expected evidence types</h4>
                   <div className="flex flex-wrap gap-1.5">
                     {data.evidence_requirements.map((er, i) => (
-                      <span key={i} className="rounded-full bg-blue-50 text-blue-700 px-2 py-0.5 text-[11px]">
+                      <span key={i} className="rounded-full bg-primary-50 text-primary-700 px-2 py-0.5 text-[11px]">
                         {er}
                       </span>
                     ))}
@@ -701,7 +701,7 @@ function ControlDetailModal({
               <button
                 onClick={() => onAutoApprove(data.id)}
                 disabled={autoApprovePending}
-                className="rounded-md bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-sm font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
+                className="rounded-md bg-primary-600 hover:bg-primary-700 text-[#0a0a0a] px-3 py-1.5 text-sm font-medium inline-flex items-center gap-1.5 disabled:opacity-50"
               >
                 {autoApprovePending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 Auto-approve as in-scope

@@ -147,7 +147,7 @@ export default function DocumentsTab({ frameworkId }: Props) {
                       <button
                         onClick={() => openPreview(d)}
                         disabled={isLoadingThis}
-                        className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                        className="inline-flex items-center gap-1 rounded-md bg-primary-50 px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-50"
                         title="View document + add remarks"
                       >
                         {isLoadingThis ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
