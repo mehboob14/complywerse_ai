@@ -62,41 +62,41 @@ const MILESTONE_STATUSES = ['Pending', 'In Progress', 'Completed', 'Delayed'];
 const healthColor = (h: string) => {
   if (h === 'On Track') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
   if (h === 'At Risk') return 'bg-amber-100 text-amber-700 border-amber-200';
-  return 'bg-red-100 text-red-700 border-red-200';
+  return 'bg-rose-100 text-rose-700 border-rose-200';
 };
 const healthDot = (h: string) => {
   if (h === 'On Track') return 'bg-emerald-500';
   if (h === 'At Risk') return 'bg-amber-500';
-  return 'bg-red-500';
+  return 'bg-rose-500';
 };
 const statusBadge = (s: string) => {
   const map: Record<string, string> = {
-    'Planning': 'bg-blue-50 text-blue-700 border-blue-200',
-    'In Progress': 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    'On Hold': 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    'Planning': 'bg-primary-50 text-primary-700 border-primary-200',
+    'In Progress': 'bg-primary-50 text-primary-700 border-primary-200',
+    'On Hold': 'bg-amber-50 text-amber-700 border-amber-200',
     'Completed': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    'Cancelled': 'bg-gray-50 text-gray-500 border-gray-200',
-    'To Do': 'bg-gray-50 text-gray-600 border-gray-200',
-    'In Review': 'bg-purple-50 text-purple-700 border-purple-200',
+    'Cancelled': 'bg-slate-50 text-slate-500 border-slate-200',
+    'To Do': 'bg-slate-50 text-slate-600 border-slate-200',
+    'In Review': 'bg-primary-50 text-primary-700 border-primary-200',
     'Done': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    'Blocked': 'bg-red-50 text-red-700 border-red-200',
-    'Pending': 'bg-gray-50 text-gray-600 border-gray-200',
-    'Delayed': 'bg-red-50 text-red-600 border-red-200',
+    'Blocked': 'bg-rose-50 text-rose-700 border-rose-200',
+    'Pending': 'bg-slate-50 text-slate-600 border-slate-200',
+    'Delayed': 'bg-rose-50 text-rose-600 border-rose-200',
     'Open': 'bg-amber-50 text-amber-700 border-amber-200',
-    'Mitigated': 'bg-blue-50 text-blue-700 border-blue-200',
-    'Closed': 'bg-gray-50 text-gray-500 border-gray-200',
+    'Mitigated': 'bg-primary-50 text-primary-700 border-primary-200',
+    'Closed': 'bg-slate-50 text-slate-500 border-slate-200',
     'Resolved': 'bg-emerald-50 text-emerald-700 border-emerald-200',
   };
-  return map[s] || 'bg-gray-50 text-gray-600 border-gray-200';
+  return map[s] || 'bg-slate-50 text-slate-600 border-slate-200';
 };
 const priorityBadge = (p: string) => {
   const map: Record<string, string> = {
-    'Critical': 'bg-red-50 text-red-700 border-red-200',
+    'Critical': 'bg-rose-50 text-rose-700 border-rose-200',
     'High': 'bg-orange-50 text-orange-700 border-orange-200',
-    'Medium': 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    'Low': 'bg-green-50 text-green-700 border-green-200',
+    'Medium': 'bg-amber-50 text-amber-700 border-amber-200',
+    'Low': 'bg-emerald-50 text-emerald-700 border-emerald-200',
   };
-  return map[p] || 'bg-gray-50 text-gray-600 border-gray-200';
+  return map[p] || 'bg-slate-50 text-slate-600 border-slate-200';
 };
 
 type TenantUserOption = {
@@ -219,7 +219,7 @@ function MilestoneEvidencePanel({ projectId, milestoneId }: { projectId: number;
             type="button"
             onClick={() => selectedFile && uploadEvidenceMut.mutate(selectedFile)}
             disabled={!selectedFile || uploadEvidenceMut.isPending}
-            className="inline-flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-blue-600 text-white disabled:opacity-50"
+            className="inline-flex items-center gap-1 px-2 py-1 text-[10px] rounded bg-primary-600 text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
           >
             {uploadEvidenceMut.isPending ? <Loader2 size={10} className="animate-spin" /> : <Upload size={10} />}
             Upload
@@ -240,7 +240,7 @@ function MilestoneEvidencePanel({ projectId, milestoneId }: { projectId: number;
               <button
                 type="button"
                 onClick={() => deleteEvidenceMut.mutate(ev.id)}
-                className="p-1 hover:bg-red-50 rounded text-red-500"
+                className="p-1 hover:bg-rose-50 rounded text-rose-500"
                 title="Delete evidence"
               >
                 <Trash2 size={12} />
@@ -643,7 +643,7 @@ export default function ProjectDetailPage() {
   }, [riskSearch, tenantRisks]);
 
   if (isLoading) {
-    return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
+    return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-primary-600" size={32} /></div>;
   }
 
   if (error || !project) {
@@ -652,7 +652,7 @@ export default function ProjectDetailPage() {
         <button onClick={() => router.push('/is-projects')} className="flex items-center gap-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)]">
           <ArrowLeft size={16} /> Back to Projects
         </button>
-        <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="flex items-center gap-2 p-4 bg-rose-50 border border-rose-200 rounded-lg text-rose-700">
           <AlertCircle size={16} /> Project not found
         </div>
       </div>
@@ -724,7 +724,7 @@ export default function ProjectDetailPage() {
                       <p className="text-xs font-semibold text-[var(--color-muted)] uppercase mb-1">Linked Risks</p>
                       <div className="flex flex-wrap gap-1">
                         {project.linked_risks.map((r: string, i: number) => (
-                          <span key={i} className="px-2 py-0.5 bg-red-50 text-red-700 border border-red-200 rounded text-xs">{r}</span>
+                          <span key={i} className="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded text-xs">{r}</span>
                         ))}
                       </div>
                     </div>
@@ -734,7 +734,7 @@ export default function ProjectDetailPage() {
                       <p className="text-xs font-semibold text-[var(--color-muted)] uppercase mb-1">Linked Controls</p>
                       <div className="flex flex-wrap gap-1">
                         {project.linked_controls.map((c: string, i: number) => (
-                          <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-xs">{c}</span>
+                          <span key={i} className="px-2 py-0.5 bg-primary-50 text-primary-700 border border-primary-200 rounded text-xs">{c}</span>
                         ))}
                       </div>
                     </div>
@@ -744,7 +744,7 @@ export default function ProjectDetailPage() {
                       <p className="text-xs font-semibold text-[var(--color-muted)] uppercase mb-1">Linked Frameworks</p>
                       <div className="flex flex-wrap gap-1">
                         {project.linked_frameworks.map((f: string, i: number) => (
-                          <span key={i} className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded text-xs">{f}</span>
+                          <span key={i} className="px-2 py-0.5 bg-primary-50 text-primary-700 border border-primary-200 rounded text-xs">{f}</span>
                         ))}
                       </div>
                     </div>
@@ -780,10 +780,10 @@ export default function ProjectDetailPage() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-[var(--color-muted)]">Estimated</span><span className="font-medium text-[var(--color-text)]">{formatCurrency(project.budget_estimated)}</span></div>
                 <div className="flex justify-between"><span className="text-[var(--color-muted)]">Actual</span><span className="font-medium text-[var(--color-text)]">{formatCurrency(project.budget_actual)}</span></div>
-                <div className="flex justify-between"><span className="text-[var(--color-muted)]">Utilization</span><span className={`font-medium ${budgetUtil > 100 ? 'text-red-600' : 'text-[var(--color-text)]'}`}>{budgetUtil}%</span></div>
+                <div className="flex justify-between"><span className="text-[var(--color-muted)]">Utilization</span><span className={`font-medium ${budgetUtil > 100 ? 'text-rose-600' : 'text-[var(--color-text)]'}`}>{budgetUtil}%</span></div>
               </div>
               <div className="cw-progress-track w-full rounded-full h-2">
-                <div className={`h-2 rounded-full ${budgetUtil > 100 ? 'bg-red-500' : budgetUtil > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(budgetUtil, 100)}%` }} />
+                <div className={`h-2 rounded-full ${budgetUtil > 100 ? 'bg-rose-500' : budgetUtil > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(budgetUtil, 100)}%` }} />
               </div>
             </div>
             <div className="cw-card p-5 space-y-3">
@@ -808,18 +808,18 @@ export default function ProjectDetailPage() {
               </div>
             </div>
             <div className="cw-card p-5 space-y-3">
-              <h3 className="text-sm font-semibold text-[var(--color-text)] flex items-center gap-2"><Sparkles size={14} className="text-purple-600" /> AI Assistant</h3>
+              <h3 className="text-sm font-semibold text-[var(--color-text)] flex items-center gap-2"><Sparkles size={14} className="text-primary-600" /> AI Assistant</h3>
               <div className="space-y-2">
-                <button onClick={() => runAi('generate-plan', () => isProjectsApi.aiGeneratePlan(projectId), 'AI-Generated Plan')} disabled={!!aiLoading} className="w-full flex items-center gap-2 px-3 py-2 border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors disabled:opacity-50">
+                <button onClick={() => runAi('generate-plan', () => isProjectsApi.aiGeneratePlan(projectId), 'AI-Generated Plan')} disabled={!!aiLoading} className="w-full flex items-center gap-2 px-3 py-2 border border-primary-200 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-50 transition-colors disabled:opacity-50">
                   {aiLoading === 'generate-plan' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Generate Plan
                 </button>
-                <button onClick={() => runAi('assess-risks', () => isProjectsApi.aiAssessRisks(projectId), 'AI Risk Assessment')} disabled={!!aiLoading} className="w-full flex items-center gap-2 px-3 py-2 border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors disabled:opacity-50">
+                <button onClick={() => runAi('assess-risks', () => isProjectsApi.aiAssessRisks(projectId), 'AI Risk Assessment')} disabled={!!aiLoading} className="w-full flex items-center gap-2 px-3 py-2 border border-primary-200 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-50 transition-colors disabled:opacity-50">
                   {aiLoading === 'assess-risks' ? <Loader2 size={14} className="animate-spin" /> : <AlertTriangle size={14} />} Assess Risks
                 </button>
-                <button onClick={() => runAi('draft-status-report', () => isProjectsApi.aiDraftStatusReport(projectId), 'AI Status Report')} disabled={!!aiLoading} className="w-full flex items-center gap-2 px-3 py-2 border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors disabled:opacity-50">
+                <button onClick={() => runAi('draft-status-report', () => isProjectsApi.aiDraftStatusReport(projectId), 'AI Status Report')} disabled={!!aiLoading} className="w-full flex items-center gap-2 px-3 py-2 border border-primary-200 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-50 transition-colors disabled:opacity-50">
                   {aiLoading === 'draft-status-report' ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />} Draft Status Report
                 </button>
-                <button onClick={() => runAi('suggest-team', () => isProjectsApi.aiSuggestTeam(projectId), 'AI Team Suggestions')} disabled={!!aiLoading} className="w-full flex items-center gap-2 px-3 py-2 border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors disabled:opacity-50">
+                <button onClick={() => runAi('suggest-team', () => isProjectsApi.aiSuggestTeam(projectId), 'AI Team Suggestions')} disabled={!!aiLoading} className="w-full flex items-center gap-2 px-3 py-2 border border-primary-200 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-50 transition-colors disabled:opacity-50">
                   {aiLoading === 'suggest-team' ? <Loader2 size={14} className="animate-spin" /> : <Users size={14} />} Suggest Team
                 </button>
               </div>
@@ -833,7 +833,7 @@ export default function ProjectDetailPage() {
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-[var(--color-text)]">Milestones</h3>
             <div className="flex items-center gap-2">
-              <button onClick={() => runAi('generate-plan', () => isProjectsApi.aiGeneratePlan(projectId), 'AI-Generated Plan')} disabled={!!aiLoading} className="flex items-center gap-1.5 px-3 py-2 border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors disabled:opacity-50">
+              <button onClick={() => runAi('generate-plan', () => isProjectsApi.aiGeneratePlan(projectId), 'AI-Generated Plan')} disabled={!!aiLoading} className="flex items-center gap-1.5 px-3 py-2 border border-primary-200 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-50 transition-colors disabled:opacity-50">
                 {aiLoading === 'generate-plan' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} AI Generate
               </button>
               <button onClick={() => { setShowModal('milestone'); setModalForm({ name: '', description: '', target_date: '', status: 'Pending', completion_percentage: '0' }); }} className="cw-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium">
@@ -893,7 +893,7 @@ export default function ProjectDetailPage() {
                       >
                         {MILESTONE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
-                      <button onClick={() => deleteMilestoneMut.mutate(m.id)} className="p-1 hover:bg-red-50 rounded text-red-500"><Trash2 size={14} /></button>
+                      <button onClick={() => deleteMilestoneMut.mutate(m.id)} className="p-1 hover:bg-rose-50 rounded text-rose-500"><Trash2 size={14} /></button>
                     </div>
                   </div>
                 </div>
@@ -908,7 +908,7 @@ export default function ProjectDetailPage() {
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-[var(--color-text)]">Tasks</h3>
             <div className="flex items-center gap-2">
-              <button onClick={() => runAi('generate-plan', () => isProjectsApi.aiGeneratePlan(projectId), 'AI-Generated Plan')} disabled={!!aiLoading} className="flex items-center gap-1.5 px-3 py-2 border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors disabled:opacity-50">
+              <button onClick={() => runAi('generate-plan', () => isProjectsApi.aiGeneratePlan(projectId), 'AI-Generated Plan')} disabled={!!aiLoading} className="flex items-center gap-1.5 px-3 py-2 border border-primary-200 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-50 transition-colors disabled:opacity-50">
                 {aiLoading === 'generate-plan' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} AI Generate
               </button>
               <button onClick={() => { setShowModal('task'); setModalForm({ title: '', description: '', assignee_name: '', priority: 'Medium', status: 'To Do', due_date: '' }); }} className="cw-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium">
@@ -974,7 +974,7 @@ export default function ProjectDetailPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <button onClick={() => deleteTaskMut.mutate(t.id)} className="p-1 hover:bg-red-50 rounded text-red-500"><Trash2 size={14} /></button>
+                        <button onClick={() => deleteTaskMut.mutate(t.id)} className="p-1 hover:bg-rose-50 rounded text-rose-500"><Trash2 size={14} /></button>
                       </td>
                     </tr>
                   ))}
@@ -990,7 +990,7 @@ export default function ProjectDetailPage() {
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-[var(--color-text)]">Team Members</h3>
             <div className="flex items-center gap-2">
-              <button onClick={() => runAi('suggest-team', () => isProjectsApi.aiSuggestTeam(projectId), 'AI Team Suggestions')} disabled={!!aiLoading} className="flex items-center gap-1.5 px-3 py-2 border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors disabled:opacity-50">
+              <button onClick={() => runAi('suggest-team', () => isProjectsApi.aiSuggestTeam(projectId), 'AI Team Suggestions')} disabled={!!aiLoading} className="flex items-center gap-1.5 px-3 py-2 border border-primary-200 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-50 transition-colors disabled:opacity-50">
                 {aiLoading === 'suggest-team' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} AI Suggest
               </button>
               <button onClick={() => { setTeamUserSearch(''); setShowModal('team'); setModalForm({ user_id: '', user_name: '', email: '', role: 'Member', responsibilities: '' }); }} className="cw-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium">
@@ -1013,8 +1013,8 @@ export default function ProjectDetailPage() {
                       <p className="text-xs text-[var(--color-muted)]">{tm.email || '—'}</p>
                     </div>
                     <div className="flex items-center gap-1">
-                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium">{tm.role}</span>
-                      <button onClick={() => removeTeamMut.mutate(tm.id)} className="p-1 hover:bg-red-50 rounded text-red-500"><Trash2 size={14} /></button>
+                      <span className="px-2 py-0.5 bg-primary-50 text-primary-700 rounded text-xs font-medium">{tm.role}</span>
+                      <button onClick={() => removeTeamMut.mutate(tm.id)} className="p-1 hover:bg-rose-50 rounded text-rose-500"><Trash2 size={14} /></button>
                     </div>
                   </div>
                   {tm.responsibilities && <p className="text-xs text-[var(--color-muted)] mt-2">{tm.responsibilities}</p>}
@@ -1039,7 +1039,7 @@ export default function ProjectDetailPage() {
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-[var(--color-text)]">Risks & Issues</h3>
             <div className="flex items-center gap-2">
-              <button onClick={() => runAi('assess-risks', () => isProjectsApi.aiAssessRisks(projectId), 'AI Risk Assessment')} disabled={!!aiLoading} className="flex items-center gap-1.5 px-3 py-2 border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors disabled:opacity-50">
+              <button onClick={() => runAi('assess-risks', () => isProjectsApi.aiAssessRisks(projectId), 'AI Risk Assessment')} disabled={!!aiLoading} className="flex items-center gap-1.5 px-3 py-2 border border-primary-200 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-50 transition-colors disabled:opacity-50">
                 {aiLoading === 'assess-risks' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} AI Assess
               </button>
               <button onClick={() => { setRiskSearch(''); setShowModal('risk'); setModalForm({ linked_risk_id: '', title: '', description: '', type: 'Risk', severity: 'Medium', mitigation: '', owner_user_id: '', owner_name: '' }); }} className="cw-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium">
@@ -1079,7 +1079,7 @@ export default function ProjectDetailPage() {
                       >
                         {['Open', 'Mitigated', 'Closed', 'Resolved'].map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
-                      <button onClick={() => deleteRiskMut.mutate(r.id)} className="p-1 hover:bg-red-50 rounded text-red-500"><Trash2 size={14} /></button>
+                      <button onClick={() => deleteRiskMut.mutate(r.id)} className="p-1 hover:bg-rose-50 rounded text-rose-500"><Trash2 size={14} /></button>
                     </div>
                   </div>
                 </div>
@@ -1094,7 +1094,7 @@ export default function ProjectDetailPage() {
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-[var(--color-text)]">Status Updates</h3>
             <div className="flex items-center gap-2">
-              <button onClick={() => runAi('draft-status-report', () => isProjectsApi.aiDraftStatusReport(projectId), 'AI Status Report')} disabled={!!aiLoading} className="flex items-center gap-1.5 px-3 py-2 border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors disabled:opacity-50">
+              <button onClick={() => runAi('draft-status-report', () => isProjectsApi.aiDraftStatusReport(projectId), 'AI Status Report')} disabled={!!aiLoading} className="flex items-center gap-1.5 px-3 py-2 border border-primary-200 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-50 transition-colors disabled:opacity-50">
                 {aiLoading === 'draft-status-report' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} AI Draft
               </button>
               <button onClick={() => { setShowModal('update'); setModalForm({ health_status: project.health, what_was_done: '', whats_planned: '', blockers: '', notes: '' }); }} className="cw-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium">
@@ -1113,8 +1113,8 @@ export default function ProjectDetailPage() {
                 <div key={su.id} className="cw-card p-5">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
-                        <MessageSquare size={14} className="text-blue-600" />
+                      <div className="w-8 h-8 rounded-full bg-primary-50 flex items-center justify-center">
+                        <MessageSquare size={14} className="text-primary-600" />
                       </div>
                       <div>
                         <p className="text-sm font-medium text-[var(--color-text)]">{su.author_name || 'Unknown'}</p>
@@ -1125,7 +1125,7 @@ export default function ProjectDetailPage() {
                       <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border ${healthColor(su.health_status)}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${healthDot(su.health_status)}`} />{su.health_status}
                       </span>
-                      <button onClick={() => deleteUpdateMut.mutate(su.id)} className="p-1 hover:bg-red-50 rounded text-red-500"><Trash2 size={14} /></button>
+                      <button onClick={() => deleteUpdateMut.mutate(su.id)} className="p-1 hover:bg-rose-50 rounded text-rose-500"><Trash2 size={14} /></button>
                     </div>
                   </div>
                   <div className="space-y-3 text-sm">
@@ -1143,7 +1143,7 @@ export default function ProjectDetailPage() {
                     )}
                     {su.blockers && (
                       <div>
-                        <p className="text-xs font-semibold text-red-500 uppercase mb-1">Blockers</p>
+                        <p className="text-xs font-semibold text-rose-500 uppercase mb-1">Blockers</p>
                         <p className="text-[var(--color-text)] whitespace-pre-wrap">{su.blockers}</p>
                       </div>
                     )}
@@ -1178,8 +1178,8 @@ export default function ProjectDetailPage() {
             <div className="space-y-3">
               {project.documents.map((d: { id: number; title: string; description: string; document_type: string; url: string; is_uploaded_file?: boolean; file_name?: string; created_by_name: string; created_at: string }) => (
                 <div key={d.id} className="cw-card p-4 flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                    <FileText size={18} className="text-blue-600" />
+                  <div className="w-10 h-10 rounded-lg bg-primary-50 flex items-center justify-center flex-shrink-0">
+                    <FileText size={18} className="text-primary-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium text-[var(--color-text)]">{d.title}</h4>
@@ -1192,15 +1192,15 @@ export default function ProjectDetailPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {d.is_uploaded_file ? (
-                      <button onClick={() => handleDownloadDocument(d.id, d.file_name || d.title)} className="p-2 hover:bg-[var(--color-subtle)] rounded text-blue-600" title="Download file">
+                      <button onClick={() => handleDownloadDocument(d.id, d.file_name || d.title)} className="p-2 hover:bg-[var(--color-subtle)] rounded text-primary-600" title="Download file">
                         <Download size={14} />
                       </button>
                     ) : d.url ? (
-                      <a href={d.url} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-[var(--color-subtle)] rounded text-blue-600">
+                      <a href={d.url} target="_blank" rel="noopener noreferrer" className="p-2 hover:bg-[var(--color-subtle)] rounded text-primary-600">
                         <Link2 size={14} />
                       </a>
                     ) : null}
-                    <button onClick={() => removeDocMut.mutate(d.id)} className="p-2 hover:bg-red-50 rounded text-red-500"><Trash2 size={14} /></button>
+                    <button onClick={() => removeDocMut.mutate(d.id)} className="p-2 hover:bg-rose-50 rounded text-rose-500"><Trash2 size={14} /></button>
                   </div>
                 </div>
               ))}
@@ -1214,7 +1214,7 @@ export default function ProjectDetailPage() {
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-[var(--color-text)]">Budget & Financials</h3>
             <div className="flex items-center gap-2">
-              <button onClick={() => runAi('estimate-budget', () => isProjectsApi.aiEstimateBudget(projectId), 'AI Budget Estimate')} disabled={aiLoading === 'estimate-budget'} className="flex items-center gap-1.5 px-3 py-2 border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors">
+              <button onClick={() => runAi('estimate-budget', () => isProjectsApi.aiEstimateBudget(projectId), 'AI Budget Estimate')} disabled={aiLoading === 'estimate-budget'} className="flex items-center gap-1.5 px-3 py-2 border border-primary-200 text-primary-700 rounded-lg text-sm font-medium hover:bg-primary-50 transition-colors">
                 {aiLoading === 'estimate-budget' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} AI Estimate
               </button>
               <button onClick={() => { setEditingId(null); setShowModal('budget'); setModalForm({ category: 'Hardware', description: '', amount: '', status: 'Pending', approved_by: '', notes: '', date: '' }); }} className="cw-btn-primary flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium">
@@ -1236,7 +1236,7 @@ export default function ProjectDetailPage() {
               {(() => {
                 const variance = (budgetData?.budget_estimated || 0) - (budgetData?.total_spent || 0);
                 const pct = budgetData?.budget_estimated ? Math.round((variance / budgetData.budget_estimated) * 100) : 0;
-                return <p className={`text-xl font-bold ${variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(Math.abs(variance))} <span className="text-sm font-normal">({pct}%)</span></p>;
+                return <p className={`text-xl font-bold ${variance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(Math.abs(variance))} <span className="text-sm font-normal">({pct}%)</span></p>;
               })()}
             </div>
             <div className="cw-card p-4">
@@ -1260,15 +1260,15 @@ export default function ProjectDetailPage() {
                       <span className="text-[var(--color-muted)]">{formatCurrency(vals.approved + vals.pending)}</span>
                     </div>
                     <div className="h-3 cw-progress-track rounded-full overflow-hidden flex">
-                      <div className="bg-blue-500 h-full" style={{ width: `${Math.min(100, (vals.approved / (budgetData?.budget_estimated || 1)) * 100)}%` }} />
-                      <div className="bg-blue-200 h-full" style={{ width: `${Math.min(100, (vals.pending / (budgetData?.budget_estimated || 1)) * 100)}%` }} />
+                      <div className="bg-primary-500 h-full" style={{ width: `${Math.min(100, (vals.approved / (budgetData?.budget_estimated || 1)) * 100)}%` }} />
+                      <div className="bg-primary-200 h-full" style={{ width: `${Math.min(100, (vals.pending / (budgetData?.budget_estimated || 1)) * 100)}%` }} />
                     </div>
                   </div>
                 ))}
               </div>
               <div className="flex items-center gap-4 mt-3 text-xs text-[var(--color-muted)]">
-                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-500 rounded-sm inline-block" /> Approved</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-200 rounded-sm inline-block" /> Pending</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-primary-500 rounded-sm inline-block" /> Approved</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 bg-primary-200 rounded-sm inline-block" /> Pending</span>
               </div>
             </div>
           )}
@@ -1297,8 +1297,8 @@ export default function ProjectDetailPage() {
                       <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-xs font-medium border ${statusBadge(item.status)}`}>{item.status}</span></td>
                       <td className="px-4 py-3 text-[var(--color-muted)]">{item.approved_by || '—'}</td>
                       <td className="px-4 py-3 flex items-center gap-1">
-                        <button onClick={() => { setEditingId(item.id); setShowModal('budget'); setModalForm({ category: item.category, description: item.description || '', amount: String(item.amount), status: item.status, approved_by: item.approved_by || '', notes: item.notes || '', date: item.date || '' }); }} className="p-1 hover:bg-blue-50 rounded text-blue-500"><Edit size={14} /></button>
-                        <button onClick={() => deleteBudgetMut.mutate(item.id)} className="p-1 hover:bg-red-50 rounded text-red-500"><Trash2 size={14} /></button>
+                        <button onClick={() => { setEditingId(item.id); setShowModal('budget'); setModalForm({ category: item.category, description: item.description || '', amount: String(item.amount), status: item.status, approved_by: item.approved_by || '', notes: item.notes || '', date: item.date || '' }); }} className="p-1 hover:bg-primary-50 rounded text-primary-600"><Edit size={14} /></button>
+                        <button onClick={() => deleteBudgetMut.mutate(item.id)} className="p-1 hover:bg-rose-50 rounded text-rose-500"><Trash2 size={14} /></button>
                       </td>
                     </tr>
                   ))}
@@ -1326,7 +1326,7 @@ export default function ProjectDetailPage() {
               return acc;
             }, {});
             const total = mappings.length;
-            const colors: Record<string, string> = { 'Verified': 'bg-green-500', 'Implemented': 'bg-blue-500', 'In Progress': 'bg-yellow-500', 'Planned': 'bg-gray-300', 'Not Applicable': 'bg-gray-100' };
+            const colors: Record<string, string> = { 'Verified': 'bg-emerald-500', 'Implemented': 'bg-primary-500', 'In Progress': 'bg-amber-500', 'Planned': 'bg-slate-300', 'Not Applicable': 'bg-slate-100' };
             return (
               <div className="cw-card p-4 space-y-4">
                 <div>
@@ -1379,13 +1379,13 @@ export default function ProjectDetailPage() {
                 <div key={m.id} className="cw-card p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-xs font-medium">{m.framework_name}</span>
+                      <span className="px-2 py-0.5 bg-primary-50 text-primary-700 border border-primary-200 rounded text-xs font-medium">{m.framework_name}</span>
                       <span className="font-medium text-[var(--color-text)]">{m.control_id} — {m.control_name}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium border ${statusBadge(m.coverage_status)}`}>{m.coverage_status}</span>
-                      <button onClick={() => { setEditingId(m.id); setShowModal('compliance'); setModalForm({ framework_name: m.framework_name, control_id: m.control_id, control_name: m.control_name, coverage_status: m.coverage_status, requirement_description: m.requirement_description || '', deliverable: m.deliverable || '', notes: m.notes || '' }); }} className="p-1 hover:bg-blue-50 rounded text-blue-500"><Edit size={14} /></button>
-                      <button onClick={() => deleteComplianceMut.mutate(m.id)} className="p-1 hover:bg-red-50 rounded text-red-500"><Trash2 size={14} /></button>
+                      <button onClick={() => { setEditingId(m.id); setShowModal('compliance'); setModalForm({ framework_name: m.framework_name, control_id: m.control_id, control_name: m.control_name, coverage_status: m.coverage_status, requirement_description: m.requirement_description || '', deliverable: m.deliverable || '', notes: m.notes || '' }); }} className="p-1 hover:bg-primary-50 rounded text-primary-600"><Edit size={14} /></button>
+                      <button onClick={() => deleteComplianceMut.mutate(m.id)} className="p-1 hover:bg-rose-50 rounded text-rose-500"><Trash2 size={14} /></button>
                     </div>
                   </div>
                   {m.requirement_description && <p className="text-xs text-[var(--color-muted)]">Requirement: {m.requirement_description}</p>}
@@ -1418,10 +1418,10 @@ export default function ProjectDetailPage() {
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="font-medium text-[var(--color-text)]">{l.title}</h4>
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-medium">{l.category}</span>
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-medium">{l.category}</span>
                       <span className={`px-2 py-0.5 rounded text-xs font-medium border ${priorityBadge(l.impact)}`}>{l.impact}</span>
-                      <button onClick={() => { setEditingId(l.id); setShowModal('lesson'); setModalForm({ title: l.title, description: l.description || '', category: l.category || 'Recommendation', impact: l.impact || 'Medium' }); }} className="p-1 hover:bg-blue-50 rounded text-blue-500"><Edit size={14} /></button>
-                      <button onClick={() => deleteLessonMut.mutate(l.id)} className="p-1 hover:bg-red-50 rounded text-red-500"><Trash2 size={14} /></button>
+                      <button onClick={() => { setEditingId(l.id); setShowModal('lesson'); setModalForm({ title: l.title, description: l.description || '', category: l.category || 'Recommendation', impact: l.impact || 'Medium' }); }} className="p-1 hover:bg-primary-50 rounded text-primary-600"><Edit size={14} /></button>
+                      <button onClick={() => deleteLessonMut.mutate(l.id)} className="p-1 hover:bg-rose-50 rounded text-rose-500"><Trash2 size={14} /></button>
                     </div>
                   </div>
                   {l.description && <p className="text-sm text-[var(--color-muted)]">{l.description}</p>}
@@ -1457,7 +1457,7 @@ export default function ProjectDetailPage() {
                 </div>
                 <div className="cw-card p-4">
                   <p className="text-xs text-[var(--color-muted)]">Blocked</p>
-                  <p className={`text-xl font-bold ${blocked > 0 ? 'text-red-600' : 'text-green-600'}`}>{blocked}</p>
+                  <p className={`text-xl font-bold ${blocked > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{blocked}</p>
                 </div>
                 <div className="cw-card p-4">
                   <p className="text-xs text-[var(--color-muted)]">High/Critical Impact</p>
@@ -1467,7 +1467,7 @@ export default function ProjectDetailPage() {
                   <p className="text-xs text-[var(--color-muted)]">By Type</p>
                   <div className="flex items-center gap-2 mt-1">
                     {Object.entries(byType).map(([t, c]) => (
-                      <span key={t} className={`px-2 py-0.5 rounded text-xs font-medium border ${t === 'external' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>{t}: {c}</span>
+                      <span key={t} className={`px-2 py-0.5 rounded text-xs font-medium border ${t === 'external' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-primary-50 text-primary-700 border-primary-200'}`}>{t}: {c}</span>
                     ))}
                   </div>
                 </div>
@@ -1478,7 +1478,7 @@ export default function ProjectDetailPage() {
             const deps = dependencies as Array<{id: number; direction: string; status: string; dependent_project_name: string; external_dependency: string}>;
             const directions = ['depends_on', 'blocks', 'related_to'];
             const dirLabels: Record<string, string> = { depends_on: 'Depends On', blocks: 'Blocks', related_to: 'Related To' };
-            const dirColors: Record<string, string> = { depends_on: 'border-l-blue-500', blocks: 'border-l-red-500', related_to: 'border-l-gray-400' };
+            const dirColors: Record<string, string> = { depends_on: 'border-l-primary-500', blocks: 'border-l-rose-500', related_to: 'border-l-slate-400' };
             const grouped = directions.filter(d => deps.some(dep => dep.direction === d));
             if (grouped.length <= 1) return null;
             return (
@@ -1492,7 +1492,7 @@ export default function ProjectDetailPage() {
                         {deps.filter(d => d.direction === dir).map(d => (
                           <div key={d.id} className={`border-l-2 ${dirColors[dir]} pl-2 py-1 text-xs text-[var(--color-muted)]`}>
                             {d.dependent_project_name || d.external_dependency || 'Unnamed'}
-                            <span className={`ml-1 px-1 rounded ${d.status === 'Blocked' ? 'bg-red-100 text-red-700' : d.status === 'Resolved' ? 'bg-green-100 text-green-700' : ''}`}>{d.status}</span>
+                            <span className={`ml-1 px-1 rounded ${d.status === 'Blocked' ? 'bg-rose-100 text-rose-700' : d.status === 'Resolved' ? 'bg-emerald-100 text-emerald-700' : ''}`}>{d.status}</span>
                           </div>
                         ))}
                       </div>
@@ -1513,14 +1513,14 @@ export default function ProjectDetailPage() {
                 <div key={dep.id} className="cw-card p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium border ${dep.dependency_type === 'external' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>{dep.dependency_type}</span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium border ${dep.dependency_type === 'external' ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-primary-50 text-primary-700 border-primary-200'}`}>{dep.dependency_type}</span>
                       <h4 className="font-medium text-[var(--color-text)]">{dep.dependent_project_name || dep.external_dependency || 'Unnamed'}</h4>
                       <span className="text-xs text-[var(--color-muted)]">({dep.direction})</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium border ${statusBadge(dep.status)}`}>{dep.status}</span>
-                      <button onClick={() => { setEditingId(dep.id); setShowModal('dependency'); setModalForm({ dependency_type: dep.dependency_type, dependent_project_name: dep.dependent_project_name || '', external_dependency: dep.external_dependency || '', description: dep.description || '', status: dep.status, direction: dep.direction || 'depends_on', impact_if_delayed: dep.impact_if_delayed || '', expected_date: dep.expected_date || '' }); }} className="p-1 hover:bg-blue-50 rounded text-blue-500"><Edit size={14} /></button>
-                      <button onClick={() => deleteDepMut.mutate(dep.id)} className="p-1 hover:bg-red-50 rounded text-red-500"><Trash2 size={14} /></button>
+                      <button onClick={() => { setEditingId(dep.id); setShowModal('dependency'); setModalForm({ dependency_type: dep.dependency_type, dependent_project_name: dep.dependent_project_name || '', external_dependency: dep.external_dependency || '', description: dep.description || '', status: dep.status, direction: dep.direction || 'depends_on', impact_if_delayed: dep.impact_if_delayed || '', expected_date: dep.expected_date || '' }); }} className="p-1 hover:bg-primary-50 rounded text-primary-600"><Edit size={14} /></button>
+                      <button onClick={() => deleteDepMut.mutate(dep.id)} className="p-1 hover:bg-rose-50 rounded text-rose-500"><Trash2 size={14} /></button>
                     </div>
                   </div>
                   {dep.description && <p className="text-sm text-[var(--color-muted)]">{dep.description}</p>}
@@ -1540,7 +1540,7 @@ export default function ProjectDetailPage() {
           <div className="cw-modal-panel rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 border-b border-[var(--color-border)]">
               <div className="flex items-center gap-2">
-                <Sparkles size={18} className="text-purple-600" />
+                <Sparkles size={18} className="text-primary-600" />
                 <h2 className="text-lg font-semibold text-[var(--color-text)]">{aiResult.title}</h2>
               </div>
               <button onClick={() => setAiResult(null)} className="p-1 hover:bg-[var(--color-subtle)] rounded"><X size={18} /></button>

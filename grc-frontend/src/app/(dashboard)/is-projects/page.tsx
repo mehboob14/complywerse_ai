@@ -40,34 +40,34 @@ const HEALTH_OPTIONS = ['On Track', 'At Risk', 'Off Track'];
 const healthColor = (h: string) => {
   if (h === 'On Track') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
   if (h === 'At Risk') return 'bg-amber-100 text-amber-700 border-amber-200';
-  return 'bg-red-100 text-red-700 border-red-200';
+  return 'bg-rose-100 text-rose-700 border-rose-200';
 };
 
 const healthDot = (h: string) => {
   if (h === 'On Track') return 'bg-emerald-500';
   if (h === 'At Risk') return 'bg-amber-500';
-  return 'bg-red-500';
+  return 'bg-rose-500';
 };
 
 const statusBadge = (s: string) => {
   const map: Record<string, string> = {
-    'Planning': 'bg-blue-50 text-blue-700 border-blue-200',
-    'In Progress': 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    'On Hold': 'bg-yellow-50 text-yellow-700 border-yellow-200',
+    'Planning': 'bg-primary-50 text-primary-700 border-primary-200',
+    'In Progress': 'bg-primary-50 text-primary-700 border-primary-200',
+    'On Hold': 'bg-amber-50 text-amber-700 border-amber-200',
     'Completed': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    'Cancelled': 'bg-gray-50 text-gray-500 border-gray-200',
+    'Cancelled': 'bg-slate-50 text-slate-500 border-slate-200',
   };
-  return map[s] || 'bg-gray-50 text-gray-600 border-gray-200';
+  return map[s] || 'bg-slate-50 text-slate-600 border-slate-200';
 };
 
 const priorityBadge = (p: string) => {
   const map: Record<string, string> = {
-    'Critical': 'bg-red-50 text-red-700 border-red-200',
+    'Critical': 'bg-rose-50 text-rose-700 border-rose-200',
     'High': 'bg-orange-50 text-orange-700 border-orange-200',
-    'Medium': 'bg-yellow-50 text-yellow-700 border-yellow-200',
-    'Low': 'bg-green-50 text-green-700 border-green-200',
+    'Medium': 'bg-amber-50 text-amber-700 border-amber-200',
+    'Low': 'bg-emerald-50 text-emerald-700 border-emerald-200',
   };
-  return map[p] || 'bg-gray-50 text-gray-600 border-gray-200';
+  return map[p] || 'bg-slate-50 text-slate-600 border-slate-200';
 };
 
 interface ISProject {
@@ -210,7 +210,7 @@ export default function ISProjectsPage() {
 
   return (
     <div className="-m-4 lg:-m-5 text-[var(--color-text)]">
-      <div className="border-b border-gray-200 px-3 sm:px-6 pt-3 overflow-x-auto">
+      <div className="border-b border-slate-200 px-3 sm:px-6 pt-3 overflow-x-auto">
         <div className="flex items-center gap-0 min-w-max">
           {projectTabs.map(({ id, label, icon: Icon }) => {
             const isActive = activeTab === id;
@@ -221,8 +221,8 @@ export default function ISProjectsPage() {
                 onClick={() => setActiveTab(id)}
                 className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
                   isActive
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-primary-600 text-primary-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                 }`}
               >
                 <Icon size={14} />
@@ -240,7 +240,7 @@ export default function ISProjectsPage() {
         <>
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Projects</h1>
+              <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Projects</h1>
               <p className="mt-1 text-sm text-slate-600">Browse, filter and create information security projects</p>
             </div>
             {canCreate && (
@@ -330,14 +330,14 @@ export default function ISProjectsPage() {
         <div className="flex items-center rounded-full border border-[var(--color-border)] bg-white overflow-hidden ml-auto">
           <button
             onClick={() => setViewMode('card')}
-            className={`p-2 transition-colors ${viewMode === 'card' ? 'bg-primary-600 text-white' : 'text-[var(--color-muted)] hover:bg-slate-50'}`}
+            className={`p-2 transition-colors ${viewMode === 'card' ? 'bg-primary-600 text-[#0a0a0a]' : 'text-[var(--color-muted)] hover:bg-slate-50'}`}
             aria-label="Card view"
           >
             <LayoutGrid size={16} />
           </button>
           <button
             onClick={() => setViewMode('table')}
-            className={`p-2 transition-colors ${viewMode === 'table' ? 'bg-primary-600 text-white' : 'text-[var(--color-muted)] hover:bg-slate-50'}`}
+            className={`p-2 transition-colors ${viewMode === 'table' ? 'bg-primary-600 text-[#0a0a0a]' : 'text-[var(--color-muted)] hover:bg-slate-50'}`}
             aria-label="Table view"
           >
             <List size={16} />
@@ -347,12 +347,12 @@ export default function ISProjectsPage() {
 
       {isLoading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="animate-spin text-blue-600" size={32} />
+          <Loader2 className="animate-spin text-primary-600" size={32} />
         </div>
       )}
 
       {error && (
-        <div className="flex items-center gap-2 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="flex items-center gap-2 p-4 bg-rose-50 border border-rose-200 rounded-lg text-rose-700">
           <AlertCircle size={16} /> Failed to load projects
         </div>
       )}
@@ -378,7 +378,7 @@ export default function ISProjectsPage() {
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-[var(--color-text)] truncate group-hover:text-blue-700 transition-colors">{p.name}</h3>
+                  <h3 className="font-semibold text-[var(--color-text)] truncate group-hover:text-primary-700 transition-colors">{p.name}</h3>
                   <p className="text-xs text-[var(--color-muted)] mt-0.5">{p.category} · {p.department || 'No dept'}</p>
                 </div>
                 <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border ${healthColor(p.health)}`}>
@@ -501,7 +501,7 @@ export default function ISProjectsPage() {
               type="text"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               placeholder="e.g., SIEM Platform Upgrade"
               required
             />
@@ -513,7 +513,7 @@ export default function ISProjectsPage() {
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               rows={3}
-              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               placeholder="Describe the project objectives..."
             />
           </div>
@@ -524,7 +524,7 @@ export default function ISProjectsPage() {
               <select
                 value={form.category}
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -534,7 +534,7 @@ export default function ISProjectsPage() {
               <select
                 value={form.priority}
                 onChange={(e) => setForm({ ...form, priority: e.target.value })}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               >
                 {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
@@ -600,7 +600,7 @@ export default function ISProjectsPage() {
               type="text"
               value={form.department}
               onChange={(e) => setForm({ ...form, department: e.target.value })}
-              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               placeholder="e.g., Information Security"
             />
           </div>
@@ -612,7 +612,7 @@ export default function ISProjectsPage() {
                 type="date"
                 value={form.start_date}
                 onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               />
             </div>
             <div>
@@ -621,7 +621,7 @@ export default function ISProjectsPage() {
                 type="date"
                 value={form.target_end_date}
                 onChange={(e) => setForm({ ...form, target_end_date: e.target.value })}
-                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               />
             </div>
           </div>
@@ -634,7 +634,7 @@ export default function ISProjectsPage() {
                 type="number"
                 value={form.budget_estimated}
                 onChange={(e) => setForm({ ...form, budget_estimated: e.target.value })}
-                className="w-full rounded border border-slate-200 bg-white pl-8 pr-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded border border-slate-200 bg-white pl-8 pr-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
                 placeholder="0.00"
               />
             </div>
@@ -646,7 +646,7 @@ export default function ISProjectsPage() {
               value={form.business_justification}
               onChange={(e) => setForm({ ...form, business_justification: e.target.value })}
               rows={3}
-              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+              className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none"
               placeholder="Why is this project needed?"
             />
           </div>
