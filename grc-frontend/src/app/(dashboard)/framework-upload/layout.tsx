@@ -27,7 +27,7 @@ export default function FrameworkUploadLayout({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-black">Framework Upload</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Framework Upload</h1>
         <p className="text-slate-600">Upload, parse, and assess compliance frameworks</p>
       </div>
 
@@ -42,8 +42,8 @@ export default function FrameworkUploadLayout({
               className={clsx(
                 'flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-primary-600 text-white'
-                  : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                  ? 'bg-primary-600 text-[#0a0a0a]'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               )}
             >
               <item.icon className="h-4 w-4" />

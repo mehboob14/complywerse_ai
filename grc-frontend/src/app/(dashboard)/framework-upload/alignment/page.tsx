@@ -104,9 +104,9 @@ interface FrameworksResponse {
 type TabType = 'all' | 'exact' | 'partial' | 'new';
 
 const ALIGNMENT_TYPE_STYLES: Record<string, { label: string; color: string; bgColor: string }> = {
-  exact: { label: 'Exact Match', color: 'text-green-600', bgColor: 'bg-green-50' },
-  partial: { label: 'Partial Match', color: 'text-yellow-600', bgColor: 'bg-yellow-50' },
-  new: { label: 'New Control', color: 'text-blue-600', bgColor: 'bg-blue-50' },
+  exact: { label: 'Exact Match', color: 'text-emerald-700', bgColor: 'bg-emerald-50' },
+  partial: { label: 'Partial Match', color: 'text-amber-700', bgColor: 'bg-amber-50' },
+  new: { label: 'New Control', color: 'text-primary-700', bgColor: 'bg-primary-50' },
 };
 
 const getAlignmentTypeStyle = (type: string) => {
@@ -114,10 +114,10 @@ const getAlignmentTypeStyle = (type: string) => {
 };
 
 const getScoreColor = (score: number) => {
-  if (score >= 0.9) return 'text-green-600';
-  if (score >= 0.7) return 'text-yellow-600';
+  if (score >= 0.9) return 'text-emerald-600';
+  if (score >= 0.7) return 'text-amber-600';
   if (score >= 0.5) return 'text-orange-600';
-  return 'text-red-600';
+  return 'text-rose-600';
 };
 
 export default function AlignmentPage() {
@@ -286,7 +286,7 @@ export default function AlignmentPage() {
 
   if (alignmentsError) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-4 text-red-600">
+      <div className="flex h-64 flex-col items-center justify-center gap-4 text-rose-600">
         <AlertCircle className="h-12 w-12" />
         <p>Failed to load alignment data</p>
       </div>
@@ -302,7 +302,7 @@ export default function AlignmentPage() {
             <select
               value={effectiveFrameworkId || ''}
               onChange={(e) => setSelectedFrameworkId(e.target.value ? parseInt(e.target.value) : null)}
-              className="w-full appearance-none rounded-lg border border-slate-300 bg-slate-200 px-4 py-2.5 pr-10 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full appearance-none rounded-lg border border-slate-300 bg-white px-4 py-2.5 pr-10 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             >
               {parsedFrameworks.map((framework) => (
                 <option key={framework.id} value={framework.id}>
@@ -318,7 +318,7 @@ export default function AlignmentPage() {
           <button
             onClick={handleAnalyze}
             disabled={!effectiveFrameworkId || analyzeMutation.isPending || !canCreate}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 font-medium text-[#0a0a0a] transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {analyzeMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -332,7 +332,7 @@ export default function AlignmentPage() {
             <button
               onClick={handleCreateNewControls}
               disabled={createNewControlsMutation.isPending || !canCreate}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {createNewControlsMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -346,13 +346,13 @@ export default function AlignmentPage() {
       </div>
 
       {analyzeMutation.isSuccess && (
-        <div className="rounded-lg bg-green-50 p-3 text-sm text-green-600">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
           Alignment analysis completed successfully!
         </div>
       )}
 
       {createNewControlsMutation.isSuccess && (
-        <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-600">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
           New controls created successfully in the normalized library!
         </div>
       )}
@@ -360,10 +360,10 @@ export default function AlignmentPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <CheckCircle className="h-5 w-5 text-emerald-600" strokeWidth={1.75} />
             <div>
               <p className="text-sm text-slate-600">Exact Matches</p>
-              <p className="text-2xl font-bold text-green-600">
+              <p className="text-2xl font-bold text-emerald-600">
                 {summaryLoading ? '-' : summaryData?.exact_matches || 0}
               </p>
             </div>
@@ -372,10 +372,10 @@ export default function AlignmentPage() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <Link2 className="h-5 w-5 text-yellow-600" />
+                          <Link2 className="h-5 w-5 text-amber-600" strokeWidth={1.75} />
             <div>
               <p className="text-sm text-slate-600">Partial Matches</p>
-              <p className="text-2xl font-bold text-yellow-600">
+              <p className="text-2xl font-bold text-amber-600">
                 {summaryLoading ? '-' : summaryData?.partial_matches || 0}
               </p>
             </div>
@@ -384,10 +384,10 @@ export default function AlignmentPage() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <Plus className="h-5 w-5 text-blue-600" />
+                          <Plus className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
             <div>
               <p className="text-sm text-slate-600">New Controls</p>
-              <p className="text-2xl font-bold text-blue-600">
+              <p className="text-2xl font-bold text-primary-600">
                 {summaryLoading ? '-' : summaryData?.new_controls || 0}
               </p>
             </div>
@@ -396,7 +396,7 @@ export default function AlignmentPage() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <Check className="h-5 w-5 text-primary-600" />
+                          <Check className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
             <div>
               <p className="text-sm text-slate-600">Confirmed</p>
               <p className="text-2xl font-bold text-primary-600">
@@ -408,10 +408,10 @@ export default function AlignmentPage() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-3">
-                          <Percent className="h-5 w-5 text-cyan-600" />
+                          <Percent className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
             <div>
               <p className="text-sm text-slate-600">Completion</p>
-              <p className="text-2xl font-bold text-cyan-600">
+              <p className="text-2xl font-bold text-primary-600">
                 {summaryLoading ? '-' : `${summaryData?.percentages.confirmed || 0}%`}
               </p>
             </div>
@@ -426,13 +426,13 @@ export default function AlignmentPage() {
             onClick={() => setActiveTab(tab.key)}
             className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === tab.key
-                ? 'bg-primary-600 text-white'
-                : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                ? 'bg-primary-600 text-[#0a0a0a]'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
             }`}
           >
             {tab.label}
             <span className={`rounded-full px-2 py-0.5 text-xs ${
-              activeTab === tab.key ? 'bg-white/20' : 'bg-slate-600'
+              activeTab === tab.key ? 'bg-black/10' : 'bg-slate-200 text-slate-600'
             }`}>
               {tab.count}
             </span>
@@ -448,14 +448,14 @@ export default function AlignmentPage() {
             placeholder="Search by control ID, title, or domain..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-slate-200 py-2 pl-10 pr-4 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-10 pr-4 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
           />
         </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white">
         <div className="border-b border-slate-200 p-4">
-          <h2 className="text-lg font-semibold text-black">
+          <h2 className="text-lg font-semibold text-slate-900">
             Control Alignments
             {alignmentsData?.framework_name && (
               <span className="ml-2 text-sm font-normal text-slate-600">
@@ -477,7 +477,7 @@ export default function AlignmentPage() {
             <p className="text-sm">Click "Analyze Alignment" to analyze parsed controls</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-700">
+          <div className="divide-y divide-slate-200">
             {filteredAlignments.map((alignment) => {
               const parsed = alignment.parsed_control;
               const matched = alignment.normalized_control || alignment.framework_control;
@@ -499,7 +499,7 @@ export default function AlignmentPage() {
                           {Math.round(alignment.match_score * 100)}%
                         </span>
                         {alignment.is_confirmed && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-600">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                             <Check className="h-3 w-3" />
                             Confirmed
                           </span>
@@ -507,9 +507,9 @@ export default function AlignmentPage() {
                       </div>
                       
                       <div>
-                        <h4 className="font-medium text-black">{parsed?.title}</h4>
+                        <h4 className="font-medium text-slate-900">{parsed?.title}</h4>
                         {parsed?.domain && (
-                          <span className="mt-1 inline-block rounded-full bg-slate-600 px-2 py-0.5 text-xs text-slate-600">
+                          <span className="mt-1 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700">
                             {parsed.domain}
                           </span>
                         )}
@@ -518,7 +518,7 @@ export default function AlignmentPage() {
                       {matched && (
                         <div className="rounded-lg bg-slate-50/50 p-3">
                           <p className="text-xs text-slate-600 mb-1">Matched Control</p>
-                          <p className="text-sm text-black">
+                          <p className="text-sm text-slate-900">
                             <span className="font-mono text-slate-600">{matched.code}</span>
                             {' - '}
                             {matched.name}
@@ -537,7 +537,7 @@ export default function AlignmentPage() {
                       {!alignment.is_confirmed && canCreate && (
                         <button
                           onClick={() => handleConfirmAlignment(alignment)}
-                          className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-700"
+                          className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
                         >
                           <Check className="h-4 w-4" />
                           Confirm
@@ -545,7 +545,7 @@ export default function AlignmentPage() {
                       )}
                       {canEdit && <button
                         onClick={() => handleEditAlignment(alignment)}
-                        className="flex items-center gap-1.5 rounded-lg bg-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-600 hover:text-slate-900"
+                        className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:border-slate-400"
                       >
                         <Edit2 className="h-4 w-4" />
                         Edit
@@ -563,7 +563,7 @@ export default function AlignmentPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
-              <h3 className="text-lg font-semibold text-black">Confirm Alignment</h3>
+              <h3 className="text-lg font-semibold text-slate-900">Confirm Alignment</h3>
               <button
                 onClick={() => setConfirmModal(null)}
                 className="rounded p-1 text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900"
@@ -575,14 +575,14 @@ export default function AlignmentPage() {
             <div className="p-4 space-y-4">
               <div className="rounded-lg bg-slate-50/50 p-3">
                 <p className="text-xs text-slate-600 mb-1">Parsed Control</p>
-                <p className="font-mono text-sm text-black">{confirmModal.parsed_control?.control_id}</p>
+                <p className="font-mono text-sm text-slate-900">{confirmModal.parsed_control?.control_id}</p>
                 <p className="text-sm text-slate-600">{confirmModal.parsed_control?.title}</p>
               </div>
 
               {(confirmModal.normalized_control || confirmModal.framework_control) && (
                 <div className="rounded-lg bg-slate-50/50 p-3">
                   <p className="text-xs text-slate-600 mb-1">Matched Control</p>
-                  <p className="font-mono text-sm text-black">
+                  <p className="font-mono text-sm text-slate-900">
                     {(confirmModal.normalized_control || confirmModal.framework_control)?.code}
                   </p>
                   <p className="text-sm text-slate-600">
@@ -608,14 +608,14 @@ export default function AlignmentPage() {
             <div className="flex justify-end gap-2 border-t border-slate-200 p-4">
               <button
                 onClick={() => setConfirmModal(null)}
-                className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-600"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:border-slate-400"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDoConfirm}
                 disabled={confirmMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
               >
                 {confirmMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -633,7 +633,7 @@ export default function AlignmentPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white">
             <div className="flex items-center justify-between border-b border-slate-200 p-4">
-              <h3 className="text-lg font-semibold text-black">Edit Alignment</h3>
+              <h3 className="text-lg font-semibold text-slate-900">Edit Alignment</h3>
               <button
                 onClick={() => setEditModal(null)}
                 className="rounded p-1 text-slate-600 transition-colors hover:bg-slate-200 hover:text-slate-900"
@@ -645,7 +645,7 @@ export default function AlignmentPage() {
             <div className="p-4 space-y-4">
               <div className="rounded-lg bg-slate-50/50 p-3">
                 <p className="text-xs text-slate-600 mb-1">Parsed Control</p>
-                <p className="font-mono text-sm text-black">{editModal.parsed_control?.control_id}</p>
+                <p className="font-mono text-sm text-slate-900">{editModal.parsed_control?.control_id}</p>
                 <p className="text-sm text-slate-600">{editModal.parsed_control?.title}</p>
               </div>
 
@@ -656,7 +656,7 @@ export default function AlignmentPage() {
                 <select
                   value={editFormData.alignment_type}
                   onChange={(e) => setEditFormData({ ...editFormData, alignment_type: e.target.value as 'exact' | 'partial' | 'new' })}
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 >
                   <option value="exact">Exact Match</option>
                   <option value="partial">Partial Match</option>
@@ -673,7 +673,7 @@ export default function AlignmentPage() {
                   onChange={(e) => setEditFormData({ ...editFormData, match_reason: e.target.value })}
                   rows={3}
                   placeholder="Explain why this alignment is correct..."
-                  className="w-full rounded-lg border border-slate-300 bg-slate-200 px-3 py-2 text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
             </div>
@@ -681,14 +681,14 @@ export default function AlignmentPage() {
             <div className="flex justify-end gap-2 border-t border-slate-200 p-4">
               <button
                 onClick={() => setEditModal(null)}
-                className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-600"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:border-slate-400"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveEdit}
                 disabled={updateMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] transition-colors hover:bg-primary-700 disabled:opacity-50"
               >
                 {updateMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
