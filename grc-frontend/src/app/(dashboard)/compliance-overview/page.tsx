@@ -169,14 +169,14 @@ function passColor(rate?: number | null): string {
   if (rate === undefined || rate === null || rate === 0) return 'text-slate-500';
   if (rate >= 80) return 'text-emerald-700';
   if (rate >= 50) return 'text-amber-700';
-  return 'text-red-700';
+  return 'text-rose-700';
 }
 
 function passBg(rate?: number | null): string {
   if (rate === undefined || rate === null || rate === 0) return 'bg-slate-200';
   if (rate >= 80) return 'bg-emerald-500';
   if (rate >= 50) return 'bg-amber-500';
-  return 'bg-red-500';
+  return 'bg-rose-500';
 }
 
 // Squeeze a CIS benchmark label to a tight one-liner for the asset row:
@@ -231,7 +231,7 @@ export default function ComplianceOverviewPage() {
 
   return (
     <div className="-m-4 lg:-m-5">
-      <div className="border-b border-gray-200 bg-white px-3 sm:px-6">
+      <div className="border-b border-slate-200 bg-white px-3 sm:px-6">
         <div className="flex items-center gap-0 overflow-x-auto -mb-px">
           {COMPLIANCE_TABS.map(({ id, label, icon: Icon }) => (
             <button
@@ -240,14 +240,14 @@ export default function ComplianceOverviewPage() {
               onClick={() => setActiveTab(id)}
               className={`relative inline-flex items-center gap-1.5 rounded-t-md px-3 sm:px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors -mb-px ${
                 activeTab === id
-                  ? 'text-blue-700 bg-blue-50/50'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-slate-50'
+                  ? 'text-primary-700 bg-primary-50'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
-              <Icon size={14} />
+              <Icon size={14} strokeWidth={1.75} />
               {label}
               {activeTab === id && (
-                <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-blue-600" />
+                <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary-600" />
               )}
             </button>
           ))}
@@ -273,16 +273,17 @@ type OverviewTotals = {
 };
 
 function scoreHex(pct: number): string {
-  if (pct >= 80) return '#16a34a';
-  if (pct >= 50) return '#f59e0b';
-  return '#dc2626';
+  if (pct >= 80) return '#059669';  // emerald-600
+  if (pct >= 50) return '#f59e0b';  // amber-500
+  return '#e11d48';                 // rose-600
 }
 
+// Sanctioned severity ramp: critical=rose, high=orange, medium/moderate=amber, low=emerald.
 const RISK_BANDS: Array<{ key: string; label: string; color: string }> = [
-  { key: 'critical', label: 'Critical', color: '#dc2626' },
-  { key: 'high',     label: 'High',     color: '#f97316' },
-  { key: 'moderate', label: 'Moderate', color: '#f59e0b' },
-  { key: 'low',      label: 'Low',      color: '#22c55e' },
+  { key: 'critical', label: 'Critical', color: '#e11d48' },  // rose-600
+  { key: 'high',     label: 'High',     color: '#f97316' },  // orange-500
+  { key: 'moderate', label: 'Moderate', color: '#f59e0b' },  // amber-500
+  { key: 'low',      label: 'Low',      color: '#10b981' },  // emerald-500
 ];
 
 function ExecutiveSummary({ totals }: { totals: OverviewTotals }) {
@@ -302,18 +303,18 @@ function ExecutiveSummary({ totals }: { totals: OverviewTotals }) {
   const gColor = hasScans ? scoreHex(passRate) : '#cbd5e1';
 
   const resultDonut = [
-    { name: 'Passed', value: totals.passed, color: '#22c55e' },
-    { name: 'Failed', value: totals.failed, color: '#ef4444' },
-    { name: 'Errored', value: totals.errored, color: '#94a3b8' },
+    { name: 'Passed', value: totals.passed, color: '#10b981' },   // emerald-500
+    { name: 'Failed', value: totals.failed, color: '#f43f5e' },   // rose-500
+    { name: 'Errored', value: totals.errored, color: '#94a3b8' }, // slate-400 (neutral)
   ].filter((d) => d.value > 0);
   const resultTotal = resultDonut.reduce((a, d) => a + d.value, 0);
 
   const awaiting = Math.max(0, totals.assetsWithBenchmark - totals.assetsActuallyScanned);
   const unmapped = Math.max(0, totals.assets - totals.assetsWithBenchmark);
   const coverage = [
-    { label: 'Scanned', value: totals.assetsActuallyScanned, color: '#22c55e' },
-    { label: 'Awaiting scan', value: awaiting, color: '#f59e0b' },
-    { label: 'Not mapped', value: unmapped, color: '#cbd5e1' },
+    { label: 'Scanned', value: totals.assetsActuallyScanned, color: '#10b981' }, // emerald-500
+    { label: 'Awaiting scan', value: awaiting, color: '#f59e0b' },               // amber-500
+    { label: 'Not mapped', value: unmapped, color: '#cbd5e1' },                  // slate-300
   ];
   const covTotal = totals.assets || 1;
 
@@ -347,7 +348,7 @@ function ExecutiveSummary({ totals }: { totals: OverviewTotals }) {
         {/* 2 — Check results donut */}
         <div className="p-5">
           <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Check Results
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" strokeWidth={1.75} /> Check Results
           </h3>
           {resultTotal > 0 ? (
             <div className="flex items-center gap-3">
@@ -384,7 +385,7 @@ function ExecutiveSummary({ totals }: { totals: OverviewTotals }) {
         {/* 3 — Scan coverage */}
         <div className="p-5">
           <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
-            <Gauge className="h-3.5 w-3.5 text-blue-600" /> Scan Coverage
+            <Gauge className="h-3.5 w-3.5 text-primary-600" strokeWidth={1.75} /> Scan Coverage
           </h3>
           <div className="flex items-baseline gap-1.5">
             <span className="text-3xl font-bold tabular-nums text-slate-900">{totals.assetsActuallyScanned}</span>
@@ -409,7 +410,7 @@ function ExecutiveSummary({ totals }: { totals: OverviewTotals }) {
         {/* 4 — Asset risk glance */}
         <div className="p-5">
           <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
-            <ShieldAlert className="h-3.5 w-3.5 text-rose-600" /> Asset Risk
+            <ShieldAlert className="h-3.5 w-3.5 text-rose-600" strokeWidth={1.75} /> Asset Risk
           </h3>
           {riskTotal > 0 ? (
             <>
@@ -432,7 +433,7 @@ function ExecutiveSummary({ totals }: { totals: OverviewTotals }) {
                 ))}
               </div>
               {topRisk.length > 0 && (
-                <Link href="/risk-posture" className="mt-3 block text-[11px] font-medium text-blue-600 hover:underline">
+                <Link href="/risk-posture" className="mt-3 block text-[11px] font-medium text-primary-700 hover:underline">
                   Highest risk: {topRisk.map((a) => a.name).join(', ')} →
                 </Link>
               )}
@@ -566,7 +567,7 @@ function OverviewTabContent() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter devices by name or host…"
-            className="w-72 rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-72 rounded-lg border border-slate-300 bg-white pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           />
         </div>
       </header>
@@ -580,7 +581,7 @@ function OverviewTabContent() {
         </div>
       )}
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
           Failed to load: {String((error as any)?.message || error)}
         </div>
       )}
@@ -625,7 +626,7 @@ function OverviewTabContent() {
                         onClick={() => { setExpandedCat(isOpen ? null : cat.key); setExpandedAsset(null); }}
                         className={
                           'group relative overflow-hidden rounded-xl border bg-white p-4 text-left transition-all ' +
-                          (isOpen ? 'border-transparent shadow-md ring-2 ring-blue-200' : 'border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md')
+                          (isOpen ? 'border-transparent shadow-md ring-2 ring-primary-200' : 'border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md')
                         }
                       >
                         {/* health accent stripe */}
@@ -682,7 +683,7 @@ function OverviewTabContent() {
                         </span>
                       );
                     })}
-                    <Link href="/admin/agents" className="ml-auto text-[11px] font-medium text-blue-600 hover:underline">
+                    <Link href="/admin/agents" className="ml-auto text-[11px] font-medium text-primary-700 hover:underline">
                       Connect a scanner →
                     </Link>
                   </div>
@@ -712,7 +713,7 @@ function OverviewTabContent() {
 
         return (
           <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <header className={`px-5 py-4 border-b border-slate-200 flex items-center gap-3 bg-gradient-to-r ${cat.cardTone.bgFrom} to-white`}>
+            <header className="px-5 py-4 border-b border-slate-200 flex items-center gap-3 bg-slate-50">
               <div className={`h-11 w-11 rounded-lg flex items-center justify-center ${cat.cardTone.iconBg} ${cat.cardTone.iconColor}`}>
                 <Icon className="h-5 w-5" />
               </div>
@@ -756,7 +757,7 @@ function OverviewTabContent() {
       {!isLoading && !error && totals.assets === 0 && (
         <div className="rounded-lg border border-slate-200 bg-white p-8 text-center">
           <p className="text-sm text-slate-600">
-            No devices onboarded yet. Add one via <Link href="/admin/agents" className="text-blue-700 hover:underline">Agents</Link>.
+            No devices onboarded yet. Add one via <Link href="/admin/agents" className="text-primary-700 hover:underline">Agents</Link>.
           </p>
         </div>
       )}
@@ -821,16 +822,16 @@ function AssetExpand({ asset, expanded, onToggle }: {
       <button
         type="button"
         onClick={onToggle}
-        className={'w-full text-left px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors ' + (expanded ? 'bg-blue-50/40' : '')}
+        className={'w-full text-left px-5 py-3 flex items-center gap-3 hover:bg-slate-50 transition-colors ' + (expanded ? 'bg-primary-50/60' : '')}
       >
-        {expanded ? <ChevronDown className="h-4 w-4 text-blue-700 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />}
+        {expanded ? <ChevronDown className="h-4 w-4 text-primary-700 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-slate-900 truncate">{asset.name}</span>
             {asset.criticality && (
               <span className={
                 'text-[10px] uppercase tracking-wider font-semibold rounded px-1.5 py-0.5 ' +
-                (asset.criticality === 'critical' ? 'bg-red-100 text-red-700' :
+                (asset.criticality === 'critical' ? 'bg-rose-100 text-rose-700' :
                  asset.criticality === 'high'     ? 'bg-orange-100 text-orange-700' :
                  asset.criticality === 'medium'   ? 'bg-amber-100 text-amber-700' :
                                                     'bg-slate-100 text-slate-600')
@@ -847,12 +848,12 @@ function AssetExpand({ asset, expanded, onToggle }: {
                 of. No badge means the asset has no benchmark mapping yet. */}
             {asset.matched_benchmark ? (
               <span
-                className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-800 ring-1 ring-indigo-200 rounded px-1.5 py-0.5 font-medium"
+                className="inline-flex items-center gap-1 bg-primary-50 text-primary-800 ring-1 ring-primary-200 rounded px-1.5 py-0.5 font-medium"
                 title={asset.matched_benchmark}
               >
                 {benchmarkShort}
                 {typeof asset.applicable_rules === 'number' && asset.applicable_rules > 0 && (
-                  <span className="text-[10px] text-indigo-600 font-mono">
+                  <span className="text-[10px] text-primary-700 font-mono">
                     · {asset.applicable_rules} rules
                   </span>
                 )}
@@ -872,14 +873,14 @@ function AssetExpand({ asset, expanded, onToggle }: {
         <div className="hidden sm:flex items-center gap-5 text-xs">
           <span className="text-center"><div className="font-semibold text-slate-900">{asset.scanned_rules ?? 0}</div><div className="text-[10px] text-slate-500">scanned</div></span>
           <span className="text-center"><div className="font-semibold text-emerald-700">{asset.passed ?? 0}</div><div className="text-[10px] text-slate-500">pass</div></span>
-          <span className="text-center"><div className="font-semibold text-red-700">{asset.failed ?? 0}</div><div className="text-[10px] text-slate-500">fail</div></span>
+          <span className="text-center"><div className="font-semibold text-rose-700">{asset.failed ?? 0}</div><div className="text-[10px] text-slate-500">fail</div></span>
           <div className="text-center min-w-[60px]">
             <div className={'font-semibold ' + passColor(asset.pass_rate)}>{asset.pass_rate ?? 0}%</div>
             <div className="text-[10px] text-slate-500">{fmtAgo(asset.last_scan_at)}</div>
           </div>
           {!isSynthetic && (
             <Link href={`/assets/${asset.id}`} onClick={(e) => e.stopPropagation()}
-                  className="text-blue-700 hover:bg-blue-50 rounded px-2 py-1 flex items-center gap-1 font-medium">
+                  className="text-primary-700 hover:bg-primary-50 rounded px-2 py-1 flex items-center gap-1 font-medium">
               Open <ExternalLink className="h-3 w-3" />
             </Link>
           )}
@@ -915,7 +916,7 @@ function AssetExpand({ asset, expanded, onToggle }: {
             </div>
           )}
           {!isSynthetic && hasOsProfile && matchQ.error && (
-            <div className="text-xs text-red-700 py-3">Could not load rules. (Check that the asset has an OS profile.)</div>
+            <div className="text-xs text-rose-700 py-3">Could not load rules. (Check that the asset has an OS profile.)</div>
           )}
           {!isSynthetic && hasOsProfile && matchQ.data && (() => {
             const r = matchQ.data;
@@ -958,10 +959,10 @@ function AssetExpand({ asset, expanded, onToggle }: {
                     <div className="mt-0.5 text-sm font-semibold text-slate-900">{stage2Kept ?? '—'} kept</div>
                     <div className="text-[10px] text-slate-500 truncate" title={pickedBenchmark || ''}>{pickedBenchmark || '—'}</div>
                   </div>
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-2.5">
-                    <div className="text-[10px] uppercase tracking-wider text-blue-700">Will execute on this device</div>
-                    <div className="mt-0.5 text-xl font-bold text-blue-900">{total}</div>
-                    <div className="text-[10px] text-blue-700">CIS rules</div>
+                  <div className="rounded-lg border border-primary-200 bg-primary-50 p-2.5">
+                    <div className="text-[10px] uppercase tracking-wider text-primary-700">Will execute on this device</div>
+                    <div className="mt-0.5 text-xl font-bold text-primary-900">{total}</div>
+                    <div className="text-[10px] text-primary-700">CIS rules</div>
                   </div>
                 </div>
 
@@ -977,7 +978,7 @@ function AssetExpand({ asset, expanded, onToggle }: {
                           </span>
                         )}
                       </div>
-                      <Link href={`/assets/${asset.id}`} className="text-[11px] text-blue-700 hover:underline font-medium">
+                      <Link href={`/assets/${asset.id}`} className="text-[11px] text-primary-700 hover:underline font-medium">
                         See full results with pass/fail →
                       </Link>
                     </div>
@@ -988,7 +989,7 @@ function AssetExpand({ asset, expanded, onToggle }: {
                       </div>
                     )}
                     {fullRulesQ.error && (
-                      <div className="px-3 py-3 text-xs text-red-700">Failed to load rule list.</div>
+                      <div className="px-3 py-3 text-xs text-rose-700">Failed to load rule list.</div>
                     )}
                     {fullRulesQ.data && (
                       <>
@@ -1009,7 +1010,7 @@ function AssetExpand({ asset, expanded, onToggle }: {
                                   <td className="px-3 py-1.5">
                                     <span className={
                                       'inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ' +
-                                      (p.severity === 'critical' ? 'bg-red-100 text-red-700' :
+                                      (p.severity === 'critical' ? 'bg-rose-100 text-rose-700' :
                                        p.severity === 'high'     ? 'bg-orange-100 text-orange-700' :
                                        p.severity === 'medium'   ? 'bg-amber-100 text-amber-700' :
                                        p.severity === 'low'      ? 'bg-emerald-100 text-emerald-700' :
@@ -1027,7 +1028,7 @@ function AssetExpand({ asset, expanded, onToggle }: {
                           <div className="px-3 py-2 bg-slate-50 border-t border-slate-200 text-center">
                             <button
                               onClick={() => setRuleLimit(ruleLimit + 50)}
-                              className="text-[11px] text-blue-700 hover:underline font-medium"
+                              className="text-[11px] text-primary-700 hover:underline font-medium"
                             >
                               Load 50 more ({fullRulesQ.data.total - fullRulesQ.data.returned} remaining)
                             </button>
