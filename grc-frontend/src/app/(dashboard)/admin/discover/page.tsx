@@ -28,23 +28,23 @@ function StepBreadcrumb({ current }: { current: Step }) {
             <span
               className={`flex items-center justify-center w-6 h-6 rounded-full font-semibold ${
                 isDone
-                  ? 'bg-green-600 text-white'
+                  ? 'bg-emerald-600 text-white'
                   : isActive
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 text-gray-500'
+                  ? 'bg-primary-600 text-[#0a0a0a]'
+                  : 'bg-slate-200 text-slate-500'
               }`}
             >
               {isDone ? '✓' : s.n}
             </span>
             <span
               className={`font-medium ${
-                isActive ? 'text-blue-700' : isDone ? 'text-green-700' : 'text-gray-500'
+                isActive ? 'text-primary-700' : isDone ? 'text-emerald-700' : 'text-slate-500'
               }`}
             >
               {s.label}
             </span>
             {i < steps.length - 1 && (
-              <span className={`mx-1 ${isDone ? 'text-green-400' : 'text-gray-300'}`}>›</span>
+              <span className={`mx-1 ${isDone ? 'text-emerald-400' : 'text-slate-300'}`}>›</span>
             )}
           </li>
         );
@@ -189,37 +189,37 @@ export default function DiscoverPage() {
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0 max-w-3xl">
-          <h1 className="text-2xl font-semibold text-gray-900">Bulk Host Discovery</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Scan a CIDR range (e.g. <code className="bg-gray-100 px-1 rounded">10.0.0.0/24</code>)
+          <h1 className="text-2xl font-semibold text-slate-900">Bulk Host Discovery</h1>
+          <p className="text-sm text-slate-600 mt-1">
+            Scan a CIDR range (e.g. <code className="bg-slate-100 px-1 rounded">10.0.0.0/24</code>)
             for live hosts on the runner's port, then bulk-import the responders
             as assets with credentials in one shot.
           </p>
         </div>
-        <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-lg px-4 py-3 shadow-sm">
           <StepBreadcrumb current={currentStep} />
         </div>
       </div>
 
       {/* Discovery form */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-gray-800 mb-3">1. Discover hosts in a network range</h2>
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
+        <h2 className="text-sm font-semibold text-slate-800 mb-3">1. Discover hosts in a network range</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">CIDR range</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">CIDR range</label>
             <input
               value={cidr}
               onChange={(e) => setCidr(e.target.value)}
               placeholder="10.0.0.0/24"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm font-mono"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Runner type</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Runner type</label>
             <select
               value={runnerType}
               onChange={(e) => setRunnerType(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
             >
               <option value="windows_winrm">Windows (WinRM 5986)</option>
               <option value="linux_ssh">Linux (SSH 22)</option>
@@ -228,25 +228,25 @@ export default function DiscoverPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Port override (optional)</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Port override (optional)</label>
             <input
               value={portOverride}
               onChange={(e) => setPortOverride(e.target.value)}
               placeholder={`Default ${RUNNER_PORTS[runnerType] ?? '—'}`}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Probe timeout (s)</label>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Probe timeout (s)</label>
             <input
               value={timeout}
               onChange={(e) => setTimeout(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
             />
           </div>
         </div>
         <div className="mt-4 flex items-center justify-between">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             Max 4096 hosts per scan. /24 takes ~10s, /22 ~30s.
           </p>
           <button
@@ -263,15 +263,15 @@ export default function DiscoverPage() {
             }}
             disabled={permsLoading || discoverMut.isPending || !cidr.trim()}
             title={!canDiscover && !permsLoading ? "You don't have permission to run network discovery" : undefined}
-            className={`px-4 py-2 text-white text-sm font-medium rounded-md disabled:opacity-50 ${
-              canDiscover ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'
+            className={`px-4 py-2 text-sm font-medium rounded-md disabled:opacity-50 ${
+              canDiscover ? 'bg-primary-600 text-[#0a0a0a] hover:bg-primary-700' : 'bg-slate-300 text-slate-500 cursor-not-allowed'
             }`}
           >
             {discoverMut.isPending ? 'Probing…' : canDiscover ? '🔍 Start Discovery' : '🔒 Start Discovery'}
           </button>
         </div>
         {discoverMut.isError && (
-          <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+          <div className="mt-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">
             {(discoverMut.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
               'Discovery failed.'}
           </div>
@@ -280,19 +280,19 @@ export default function DiscoverPage() {
 
       {/* Discovery results */}
       {discovery && (
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200 flex items-center justify-between">
             <div>
-              <div className="text-sm font-semibold text-gray-900">
+              <div className="text-sm font-semibold text-slate-900">
                 Probed {discovery.scanned} hosts in {discovery.cidr}
               </div>
-              <div className="text-xs text-gray-500 mt-0.5">
+              <div className="text-xs text-slate-500 mt-0.5">
                 {discovery.reachable_count} responded on port {discovery.port} ·
                 Select the ones you want to import as assets below
               </div>
             </div>
             <div className="flex items-center gap-3 text-xs">
-              <button onClick={toggleAll} className="text-blue-600 hover:underline">
+              <button onClick={toggleAll} className="text-primary-700 hover:underline">
                 {selectedIps.size === reachable.length ? 'Deselect all' : 'Select all reachable'}
               </button>
               {(() => {
@@ -314,7 +314,7 @@ export default function DiscoverPage() {
                       }));
                       router.push('/admin/agents?bulkEnroll=1');
                     }}
-                    className="px-3 py-1 border border-indigo-600 text-indigo-700 hover:bg-indigo-50 rounded-md font-medium"
+                    className="px-3 py-1 border border-primary-600 text-primary-700 hover:bg-primary-50 rounded-md font-medium"
                     title={`Pre-fill Bulk Enroll modal with ${hostnames.length} hostname(s)`}
                   >
                     ⚡ Send {hostnames.length} hostname{hostnames.length === 1 ? '' : 's'} to Bulk Enroll
@@ -325,7 +325,7 @@ export default function DiscoverPage() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-600">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                 <tr>
                   <th className="text-left px-3 py-2 w-10"></th>
                   <th className="text-left px-3 py-2 w-32">IP</th>
@@ -334,7 +334,7 @@ export default function DiscoverPage() {
                   <th className="text-right px-3 py-2 w-20">RTT</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-slate-100">
                 {discovery.hosts.map((h) => (
                   <tr key={h.ip} className={h.status === 'reachable' ? '' : 'opacity-60'}>
                     <td className="px-3 py-2">
@@ -351,19 +351,19 @@ export default function DiscoverPage() {
                       />
                     </td>
                     <td className="px-3 py-2 font-mono text-xs">{h.ip}</td>
-                    <td className="px-3 py-2 text-xs text-gray-700">
-                      {h.hostname || <span className="text-gray-400 italic">no DNS</span>}
+                    <td className="px-3 py-2 text-xs text-slate-700">
+                      {h.hostname || <span className="text-slate-400 italic">no DNS</span>}
                     </td>
                     <td className="px-3 py-2">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
-                        h.status === 'reachable' ? 'bg-green-100 text-green-800'
-                        : h.status === 'unreachable' ? 'bg-gray-200 text-gray-700'
-                        : 'bg-red-100 text-red-800'
+                        h.status === 'reachable' ? 'bg-emerald-50 text-emerald-700'
+                        : h.status === 'unreachable' ? 'bg-slate-100 text-slate-700'
+                        : 'bg-rose-50 text-rose-700'
                       }`}>
                         {h.status}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right text-xs text-gray-600">
+                    <td className="px-3 py-2 text-right text-xs text-slate-600">
                       {h.rtt_ms != null ? `${h.rtt_ms}ms` : '—'}
                     </td>
                   </tr>
@@ -394,44 +394,44 @@ export default function DiscoverPage() {
 
       {/* Import form */}
       {discovery && reachable.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-800 mb-3">
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-slate-800 mb-3">
             2. Import {selectedIps.size} selected host{selectedIps.size === 1 ? '' : 's'} as assets
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Username</label>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Username</label>
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder={runnerType === 'windows_winrm' ? 'DOMAIN\\administrator' : 'root'}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm font-mono"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Password</label>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm font-mono"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Asset name prefix</label>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Asset name prefix</label>
               <input
                 value={assetPrefix}
                 onChange={(e) => setAssetPrefix(e.target.value)}
                 placeholder="e.g. prod-"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Asset type</label>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Asset type</label>
               <select
                 value={assetType}
                 onChange={(e) => setAssetType(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
               >
                 <option value="infrastructure">Infrastructure</option>
                 <option value="application">Application</option>
@@ -440,11 +440,11 @@ export default function DiscoverPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Criticality</label>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Criticality</label>
               <select
                 value={criticality}
                 onChange={(e) => setCriticality(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -454,14 +454,14 @@ export default function DiscoverPage() {
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-slate-500">
               Same credentials are stored for every imported host. To use different
               credentials per host, import in batches.
             </p>
             <button
               onClick={() => importMut.mutate()}
               disabled={importMut.isPending || !username || !password || selectedIps.size === 0}
-              className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 disabled:opacity-50"
+              className="px-4 py-2 bg-primary-600 text-[#0a0a0a] text-sm font-medium rounded-md hover:bg-primary-700 disabled:opacity-50"
             >
               {importMut.isPending ? 'Importing…' : `📥 Import ${selectedIps.size} host${selectedIps.size === 1 ? '' : 's'}`}
             </button>
@@ -471,29 +471,29 @@ export default function DiscoverPage() {
 
       {/* Import results */}
       {importResult && (
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-800 mb-3">3. Import complete</h2>
+        <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-5">
+          <h2 className="text-sm font-semibold text-slate-800 mb-3">3. Import complete</h2>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <div className="text-xs uppercase tracking-wide text-gray-500">Assets created</div>
-              <div className="mt-1 text-2xl font-semibold text-green-700">{importResult.created_assets.length}</div>
+              <div className="text-xs uppercase tracking-wide text-slate-500">Assets created</div>
+              <div className="mt-1 text-2xl font-semibold text-emerald-700">{importResult.created_assets.length}</div>
             </div>
             <div>
-              <div className="text-xs uppercase tracking-wide text-gray-500">Connections created</div>
-              <div className="mt-1 text-2xl font-semibold text-blue-700">{importResult.created_connections.length}</div>
+              <div className="text-xs uppercase tracking-wide text-slate-500">Connections created</div>
+              <div className="mt-1 text-2xl font-semibold text-primary-700">{importResult.created_connections.length}</div>
             </div>
             <div>
-              <div className="text-xs uppercase tracking-wide text-gray-500">Skipped</div>
-              <div className="mt-1 text-2xl font-semibold text-gray-700">{importResult.skipped.length}</div>
+              <div className="text-xs uppercase tracking-wide text-slate-500">Skipped</div>
+              <div className="mt-1 text-2xl font-semibold text-slate-700">{importResult.skipped.length}</div>
             </div>
           </div>
           {importResult.created_assets.length > 0 && (
             <div className="mt-4 text-xs">
-              <div className="font-medium text-gray-700 mb-1">Created assets:</div>
-              <ul className="list-disc list-inside text-gray-600">
+              <div className="font-medium text-slate-700 mb-1">Created assets:</div>
+              <ul className="list-disc list-inside text-slate-600">
                 {importResult.created_assets.map((a) => (
                   <li key={a.id}>
-                    {a.name} <span className="font-mono text-gray-400">({a.host})</span>
+                    {a.name} <span className="font-mono text-slate-400">({a.host})</span>
                   </li>
                 ))}
               </ul>
