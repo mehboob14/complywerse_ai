@@ -38,6 +38,9 @@ const DIM_LABEL: Record<string, string> = {
   ctrl: 'Control coverage gap',
   risk: 'Linked-risk residual',
 };
+// 5-series categorical palette for the five risk dimensions — drives each
+// slider's accent colour and its % readout. A genuine multi-value data scale
+// (one distinct hue per dimension), not brand chrome, so it is preserved.
 const DIM_COLOR: Record<string, string> = {
   cis:  '#2563eb',
   vuln: '#dc2626',
@@ -122,19 +125,19 @@ export default function WeightsPanel({ open, onClose }: Props) {
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between mb-2">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Tune risk weights</h2>
-            <p className="text-xs text-gray-500 mt-1">
+            <h2 className="text-lg font-semibold text-slate-900">Tune risk weights</h2>
+            <p className="text-xs text-slate-500 mt-1">
               Each bank tunes how much each dimension drives the composite score.
               Total must equal 100%.
             </p>
           </div>
           <button onClick={onClose}
-                  className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+                  className="text-slate-400 hover:text-slate-600 text-lg leading-none">×</button>
         </div>
 
         {/* Presets */}
-        <div className="bg-amber-50 border border-amber-200 rounded p-3 mb-4">
-          <div className="text-[11px] font-semibold text-amber-900 mb-1">Quick presets</div>
+        <div className="bg-primary-50 border border-primary-100 rounded p-3 mb-4">
+          <div className="text-[11px] font-semibold text-slate-700 mb-1">Quick presets</div>
           <div className="flex flex-wrap gap-1.5">
             {Object.keys(q.data?.data?.presets || {}).map((name) => (
               <button
@@ -143,8 +146,8 @@ export default function WeightsPanel({ open, onClose }: Props) {
                 disabled={!canEdit}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-medium border ${
                   preset === name
-                    ? 'bg-amber-200 border-amber-400 text-amber-900'
-                    : 'bg-white border-amber-300 text-amber-800 hover:bg-amber-100'
+                    ? 'bg-primary-100 border-primary-300 text-primary-800'
+                    : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 {name}
@@ -156,7 +159,7 @@ export default function WeightsPanel({ open, onClose }: Props) {
         {/* Sliders */}
         {(['cis','vuln','cia','ctrl','risk'] as const).map((dim) => (
           <div key={dim} className="mb-3">
-            <div className="flex justify-between text-xs font-medium text-gray-700 mb-1">
+            <div className="flex justify-between text-xs font-medium text-slate-700 mb-1">
               <span>{DIM_LABEL[dim]}</span>
               <span style={{ color: DIM_COLOR[dim] }} className="font-semibold">
                 {w[dim].toFixed(0)}%
@@ -178,16 +181,16 @@ export default function WeightsPanel({ open, onClose }: Props) {
 
         {/* Total */}
         <div className={`flex items-center justify-between rounded p-3 mt-4 ${
-          isValid ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'
+          isValid ? 'bg-emerald-50 border border-emerald-200' : 'bg-rose-50 border border-rose-200'
         }`}>
-          <span className="text-xs text-gray-600">Total</span>
-          <span className={`text-sm font-bold ${isValid ? 'text-emerald-700' : 'text-red-700'}`}>
+          <span className="text-xs text-slate-600">Total</span>
+          <span className={`text-sm font-bold ${isValid ? 'text-emerald-700' : 'text-rose-700'}`}>
             {total.toFixed(1)}% {isValid ? '✓' : '— must equal 100%'}
           </span>
         </div>
 
         {q.data?.data?.updated_at && (
-          <p className="text-[11px] text-gray-400 mt-3 text-center">
+          <p className="text-[11px] text-slate-400 mt-3 text-center">
             Last changed {new Date(q.data.data.updated_at).toLocaleString()}
           </p>
         )}
@@ -200,13 +203,13 @@ export default function WeightsPanel({ open, onClose }: Props) {
 
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-50">
+                  className="px-4 py-2 border border-slate-300 text-slate-700 text-sm font-medium rounded-md hover:bg-slate-50">
             Cancel
           </button>
           <button
             onClick={() => saveMut.mutate()}
             disabled={!canEdit || !isValid || saveMut.isPending}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-primary-600 text-[#0a0a0a] text-sm font-medium rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saveMut.isPending ? 'Saving…' : 'Save weights'}
           </button>

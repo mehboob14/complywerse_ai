@@ -11,6 +11,7 @@ import { riskPostureApi } from '@/lib/api';
 import EmptyState from '@/components/common/EmptyState';
 import WeightsPanel from './_weights-panel';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useToast } from '@/components/ui/ToastProvider';
 
 type AssetRow = {
   id: number;
@@ -46,29 +47,31 @@ type Dashboard = {
 };
 
 const BAND_COLOR: Record<string, string> = {
-  low: 'bg-green-100 text-green-800 border-green-200',
-  moderate: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  high: 'bg-orange-100 text-orange-800 border-orange-200',
-  critical: 'bg-red-100 text-red-800 border-red-200',
-  unknown: 'bg-gray-100 text-gray-700 border-gray-200',
+  low: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  moderate: 'bg-amber-50 text-amber-700 border-amber-200',
+  high: 'bg-orange-50 text-orange-700 border-orange-200',
+  critical: 'bg-rose-50 text-rose-700 border-rose-200',
+  unknown: 'bg-slate-100 text-slate-700 border-slate-200',
 };
 
 const BAND_BAR: Record<string, string> = {
-  low: 'bg-green-500',
-  moderate: 'bg-yellow-500',
+  low: 'bg-emerald-500',
+  moderate: 'bg-amber-500',
   high: 'bg-orange-500',
-  critical: 'bg-red-500',
+  critical: 'bg-rose-500',
 };
 
 // Higher score = MORE risk, so the colour scale is inverted vs. compliance.
+// This is a sanctioned severity ramp (low=emerald, moderate=amber, high=orange,
+// critical=rose) — a genuine multi-value data scale, not brand chrome.
 const BAND_HEX: Record<string, string> = {
-  low: '#16a34a', moderate: '#eab308', high: '#f97316', critical: '#dc2626', unknown: '#cbd5e1',
+  low: '#10b981', moderate: '#f59e0b', high: '#f97316', critical: '#f43f5e', unknown: '#cbd5e1',
 };
 function riskHex(score: number): string {
-  if (score >= 75) return '#dc2626';
+  if (score >= 75) return '#f43f5e';
   if (score >= 50) return '#f97316';
-  if (score >= 25) return '#eab308';
-  return '#16a34a';
+  if (score >= 25) return '#f59e0b';
+  return '#10b981';
 }
 const BAND_META: Array<{ key: 'low' | 'moderate' | 'high' | 'critical'; label: string; range: string }> = [
   { key: 'critical', label: 'Critical', range: '75–100' },
@@ -89,6 +92,7 @@ export default function RiskPosturePage() {
   // Tune Weights modifies tenant-wide scoring formula — Tenant Admin only.
   // Scanning Admin can read but not change. Auditor / Banking User can't see.
   const { isAdmin } = usePermissions();
+  const toast = useToast();
 
   const q = useQuery<Dashboard>({
     queryKey: ['risk-posture.dashboard'],
@@ -131,10 +135,10 @@ export default function RiskPosturePage() {
   const sortIndicator = (k: SortKey) => (sortKey === k ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
 
   if (q.isLoading) {
-    return <div className="p-6 text-sm text-gray-500">Loading risk posture…</div>;
+    return <div className="p-6 text-sm text-slate-500">Loading risk posture…</div>;
   }
   if (q.isError || !q.data) {
-    return <div className="p-6 text-sm text-red-600">Failed to load risk posture.</div>;
+    return <div className="p-6 text-sm text-rose-600">Failed to load risk posture.</div>;
   }
 
   const { summary } = q.data;
@@ -145,27 +149,31 @@ export default function RiskPosturePage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 ring-1 ring-rose-100">
-            <ShieldAlert className="h-5 w-5 text-rose-600" />
+            <ShieldAlert className="h-5 w-5 text-rose-600" strokeWidth={1.75} />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight text-gray-900">Risk Posture</h1>
-            <p className="text-xs text-gray-500">Composite risk score per asset — higher means more risk.</p>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Risk Posture</h1>
+            <p className="text-xs text-slate-500">Composite risk score per asset — higher means more risk.</p>
           </div>
         </div>
         <button
           onClick={() => {
             if (!isAdmin) {
-              alert("🔒 Permission required\n\nOnly the Tenant Administrator can change risk weights.");
+              toast.toast({
+                title: 'Permission required',
+                message: 'Only the Tenant Administrator can change risk weights.',
+                type: 'warning',
+              });
               return;
             }
             setWeightsOpen(true);
           }}
           className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm whitespace-nowrap ${
-            isAdmin ? 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50' : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+            isAdmin ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50' : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
           }`}
           title={isAdmin ? 'Customise how each dimension contributes to the score' : 'Tenant Administrators only'}
         >
-          <SlidersHorizontal className="h-4 w-4" /> Tune weights
+          <SlidersHorizontal className="h-4 w-4" strokeWidth={1.75} /> Tune weights
         </button>
       </div>
 
@@ -196,7 +204,7 @@ export default function RiskPosturePage() {
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Assets by risk band</h3>
             {filterBand && (
-              <button onClick={() => setFilterBand('')} className="text-[11px] font-medium text-blue-600 hover:underline">Clear filter</button>
+              <button onClick={() => setFilterBand('')} className="text-[11px] font-medium text-primary-700 hover:underline">Clear filter</button>
             )}
           </div>
           {/* stacked distribution bar */}
@@ -240,23 +248,23 @@ export default function RiskPosturePage() {
       </section>
 
       {/* Search + sort toolbar */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm px-4 py-3 flex flex-wrap items-center gap-3">
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm px-4 py-3 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[240px] max-w-md">
-          <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={searchQ}
             onChange={(e) => setSearchQ(e.target.value)}
             placeholder="Search asset name, host or type…"
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-md text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           />
         </div>
-        <div className="text-xs text-gray-500">
-          Showing <strong className="text-gray-900">{filtered.length}</strong> of {q.data.assets.length}
+        <div className="text-xs text-slate-500">
+          Showing <strong className="text-slate-900">{filtered.length}</strong> of {q.data.assets.length}
         </div>
         {(searchQ || filterBand) && (
           <button
             onClick={() => { setSearchQ(''); setFilterBand(''); }}
-            className="text-xs text-blue-600 hover:underline"
+            className="text-xs text-primary-700 hover:underline"
           >
             Clear filters
           </button>
@@ -264,23 +272,23 @@ export default function RiskPosturePage() {
       </div>
 
       {/* Asset list */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-600">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
               <tr>
-                <th className="text-left px-4 py-2.5 cursor-pointer select-none hover:text-gray-900" onClick={() => toggleSort('name')}>
+                <th className="text-left px-4 py-2.5 cursor-pointer select-none hover:text-slate-900" onClick={() => toggleSort('name')}>
                   Asset{sortIndicator('name')}
                 </th>
                 <th className="text-left px-4 py-2.5 w-32">Host</th>
-                <th className="text-right px-4 py-2.5 w-28 cursor-pointer select-none hover:text-gray-900" onClick={() => toggleSort('score')}>
+                <th className="text-right px-4 py-2.5 w-28 cursor-pointer select-none hover:text-slate-900" onClick={() => toggleSort('score')}>
                   Risk Score{sortIndicator('score')}
                 </th>
                 <th className="text-left px-4 py-2.5 w-44">Breakdown</th>
-                <th className="text-right px-4 py-2.5 w-16 cursor-pointer select-none hover:text-gray-900" onClick={() => toggleSort('cis')}>
+                <th className="text-right px-4 py-2.5 w-16 cursor-pointer select-none hover:text-slate-900" onClick={() => toggleSort('cis')}>
                   CIS{sortIndicator('cis')}
                 </th>
-                <th className="text-right px-4 py-2.5 w-16 cursor-pointer select-none hover:text-gray-900" onClick={() => toggleSort('open_vulns')}>
+                <th className="text-right px-4 py-2.5 w-16 cursor-pointer select-none hover:text-slate-900" onClick={() => toggleSort('open_vulns')}>
                   Vulns{sortIndicator('open_vulns')}
                 </th>
                 <th className="text-right px-4 py-2.5 w-16">Risks</th>
@@ -288,7 +296,7 @@ export default function RiskPosturePage() {
                 <th className="text-right px-4 py-2.5 w-20">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-4 py-2">
@@ -318,31 +326,31 @@ export default function RiskPosturePage() {
                 </tr>
               )}
               {filtered.map((a) => (
-                <tr key={a.id} className="hover:bg-gray-50">
+                <tr key={a.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3">
                     <Link
                       href={`/risk-posture/asset/${a.id}`}
-                      className="font-medium text-blue-700 hover:underline"
+                      className="font-medium text-primary-700 hover:underline"
                     >
                       {a.name}
                     </Link>
                     {a.criticality && (
-                      <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-0.5">{a.criticality}</div>
+                      <div className="text-[10px] uppercase tracking-wide text-slate-500 mt-0.5">{a.criticality}</div>
                     )}
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs text-gray-700">
-                    {a.host_name || <span className="text-gray-400 italic">—</span>}
+                  <td className="px-4 py-3 font-mono text-xs text-slate-700">
+                    {a.host_name || <span className="text-slate-400 italic">—</span>}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       {a.score == null ? (
-                        <span className="text-xs text-gray-400 italic">No data</span>
+                        <span className="text-xs text-slate-400 italic">No data</span>
                       ) : (
-                        <span className="text-base font-semibold text-gray-900">{a.score}</span>
+                        <span className="text-base font-semibold text-slate-900">{a.score}</span>
                       )}
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-medium border uppercase ${
-                          BAND_COLOR[a.band.label] ?? 'bg-gray-100 text-gray-700'
+                          BAND_COLOR[a.band.label] ?? 'bg-slate-100 text-slate-700'
                         }`}
                       >
                         {a.band.label}
@@ -351,11 +359,14 @@ export default function RiskPosturePage() {
                   </td>
                   <td className="px-4 py-3">
                     {a.score == null ? (
-                      <span className="text-xs text-gray-400 italic">Onboard to measure</span>
+                      <span className="text-xs text-slate-400 italic">Onboard to measure</span>
                     ) : (
                       <>
+                        {/* 5-series categorical data-viz: CIS / Vuln / CIA / Ctrl / Risk
+                            dimensions. Palette preserved to match the dimension legend
+                            in the weights panel and asset detail. */}
                         <div
-                          className="flex h-2 w-full rounded-full overflow-hidden bg-gray-100"
+                          className="flex h-2 w-full rounded-full overflow-hidden bg-slate-100"
                           title={`CIS ${a.contributions.cis} · Vuln ${a.contributions.vuln} · CIA ${a.contributions.cia} · Ctrl ${a.contributions.ctrl} · Risk ${a.contributions.risk}`}
                         >
                           <div className="bg-red-400" style={{ width: `${a.contributions.cis}%` }} />
@@ -364,7 +375,7 @@ export default function RiskPosturePage() {
                           <div className="bg-blue-400" style={{ width: `${a.contributions.ctrl}%` }} />
                           <div className="bg-pink-400" style={{ width: `${a.contributions.risk}%` }} />
                         </div>
-                        <div className="text-[10px] text-gray-500 mt-1 flex gap-1.5 flex-wrap">
+                        <div className="text-[10px] text-slate-500 mt-1 flex gap-1.5 flex-wrap">
                           <span><span className="inline-block w-1.5 h-1.5 bg-red-400 rounded-sm mr-0.5" />{a.contributions.cis}</span>
                           <span><span className="inline-block w-1.5 h-1.5 bg-orange-400 rounded-sm mr-0.5" />{a.contributions.vuln}</span>
                           <span><span className="inline-block w-1.5 h-1.5 bg-purple-400 rounded-sm mr-0.5" />{a.contributions.cia}</span>
@@ -374,26 +385,26 @@ export default function RiskPosturePage() {
                       </>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right text-xs text-gray-700">
-                    {a.cis_pass_rate == null ? <span className="text-gray-400">—</span> : `${a.cis_pass_rate}%`}
+                  <td className="px-4 py-3 text-right text-xs text-slate-700">
+                    {a.cis_pass_rate == null ? <span className="text-slate-400">—</span> : `${a.cis_pass_rate}%`}
                   </td>
-                  <td className="px-4 py-3 text-right text-xs text-gray-700" title={`${a.active_vulns} active of ${a.total_vulns} total linked`}>
+                  <td className="px-4 py-3 text-right text-xs text-slate-700" title={`${a.active_vulns} active of ${a.total_vulns} total linked`}>
                     {a.active_vulns}
                     {a.total_vulns > a.active_vulns && (
-                      <span className="text-gray-400 text-[10px]"> /{a.total_vulns}</span>
+                      <span className="text-slate-400 text-[10px]"> /{a.total_vulns}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right text-xs text-gray-700" title={`${a.active_risks} active of ${a.total_risks} total linked`}>
+                  <td className="px-4 py-3 text-right text-xs text-slate-700" title={`${a.active_risks} active of ${a.total_risks} total linked`}>
                     {a.active_risks}
                     {a.total_risks > a.active_risks && (
-                      <span className="text-gray-400 text-[10px]"> /{a.total_risks}</span>
+                      <span className="text-slate-400 text-[10px]"> /{a.total_risks}</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right text-xs text-gray-700">{a.control_coverage_pct}%</td>
+                  <td className="px-4 py-3 text-right text-xs text-slate-700">{a.control_coverage_pct}%</td>
                   <td className="px-4 py-3 text-right">
                     <Link
                       href={`/risk-posture/asset/${a.id}`}
-                      className="text-xs text-blue-600 hover:underline"
+                      className="text-xs text-primary-700 hover:underline"
                     >
                       Drill down
                     </Link>
