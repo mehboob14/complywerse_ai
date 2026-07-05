@@ -80,13 +80,13 @@ interface AISuggestion {
 }
 
 const RISK_CATEGORIES: { value: RiskCategory; label: string; color: string; bgColor: string; borderColor: string }[] = [
-  { value: 'strategic', label: 'Strategic', color: 'text-purple-400', bgColor: 'bg-purple-500/20', borderColor: 'border-purple-500' },
-  { value: 'operational', label: 'Operational', color: 'text-blue-400', bgColor: 'bg-blue-500/20', borderColor: 'border-blue-500' },
-  { value: 'financial', label: 'Financial', color: 'text-green-400', bgColor: 'bg-green-500/20', borderColor: 'border-green-500' },
-  { value: 'compliance', label: 'Compliance', color: 'text-yellow-400', bgColor: 'bg-yellow-500/20', borderColor: 'border-yellow-500' },
-  { value: 'technology', label: 'Technology', color: 'text-cyan-400', bgColor: 'bg-cyan-500/20', borderColor: 'border-cyan-500' },
-  { value: 'third_party', label: 'Third Party', color: 'text-orange-400', bgColor: 'bg-orange-500/20', borderColor: 'border-orange-500' },
-  { value: 'project_change', label: 'Project/Change', color: 'text-pink-400', bgColor: 'bg-pink-500/20', borderColor: 'border-pink-500' },
+  { value: 'strategic', label: 'Strategic', color: 'text-primary-700', bgColor: 'bg-primary-50', borderColor: 'border-primary-200' },
+  { value: 'operational', label: 'Operational', color: 'text-primary-700', bgColor: 'bg-primary-50', borderColor: 'border-primary-200' },
+  { value: 'financial', label: 'Financial', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
+  { value: 'compliance', label: 'Compliance', color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200' },
+  { value: 'technology', label: 'Technology', color: 'text-primary-700', bgColor: 'bg-primary-50', borderColor: 'border-primary-200' },
+  { value: 'third_party', label: 'Third Party', color: 'text-orange-700', bgColor: 'bg-orange-50', borderColor: 'border-orange-200' },
+  { value: 'project_change', label: 'Project/Change', color: 'text-slate-700', bgColor: 'bg-slate-100', borderColor: 'border-slate-200' },
 ];
 
 const APPETITE_LEVELS: { value: AppetiteLevel; label: string }[] = [
@@ -108,13 +108,13 @@ const getAppetiteLevelLabel = (level: AppetiteLevel) => {
 
 const getAppetiteLevelColor = (level: AppetiteLevel) => {
   switch (level) {
-    case 'averse': return 'text-green-400 bg-green-500/20';
-    case 'minimal': return 'text-emerald-400 bg-emerald-500/20';
-    case 'cautious': return 'text-yellow-400 bg-yellow-500/20';
-    case 'moderate': return 'text-orange-400 bg-orange-500/20';
-    case 'open': return 'text-red-400 bg-red-500/20';
-    case 'hungry': return 'text-rose-400 bg-rose-500/20';
-    default: return 'text-slate-600 bg-slate-500/20';
+    case 'averse': return 'text-emerald-700 bg-emerald-50';
+    case 'minimal': return 'text-emerald-700 bg-emerald-50';
+    case 'cautious': return 'text-amber-700 bg-amber-50';
+    case 'moderate': return 'text-orange-700 bg-orange-50';
+    case 'open': return 'text-rose-700 bg-rose-50';
+    case 'hungry': return 'text-rose-700 bg-rose-50';
+    default: return 'text-slate-600 bg-slate-100';
   }
 };
 
@@ -358,7 +358,7 @@ export default function RiskAppetitePage() {
           <button
             onClick={handleSeedDefaults}
             disabled={seedMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-3 font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
           >
             {seedMutation.isPending ? (
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -383,7 +383,7 @@ export default function RiskAppetitePage() {
         </div>
         <div className="flex items-center gap-3">
           {saveSuccess && (
-            <span className="text-sm text-green-600">Configuration saved successfully!</span>
+            <span className="text-sm text-emerald-600">Configuration saved successfully!</span>
           )}
           {appetiteConfigs && canCreate && (
             <button
@@ -403,7 +403,7 @@ export default function RiskAppetitePage() {
             <button
               onClick={handleSave}
               disabled={isSaving || !hasChanges}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -438,9 +438,9 @@ export default function RiskAppetitePage() {
                       title="AI Suggest Thresholds"
                     >
                       {aiSuggestingFor === config.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
+                        <Loader2 className="h-4 w-4 animate-spin text-primary-500" />
                       ) : (
-                        <Sparkles className="h-4 w-4 text-purple-400" />
+                        <Sparkles className="h-4 w-4 text-primary-500" />
                       )}
                     </button>
                     {isEditing ? (
@@ -448,14 +448,14 @@ export default function RiskAppetitePage() {
                         <button
                           onClick={() => saveEditing(config.id)}
                           disabled={isSaving}
-                          className="p-1 rounded hover:bg-slate-50 text-green-600 hover:text-green-700 transition-colors"
+                          className="p-1 rounded hover:bg-slate-50 text-emerald-600 hover:text-emerald-700 transition-colors"
                           title="Save"
                         >
                           {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                         </button>
                         <button
                           onClick={cancelEditing}
-                          className="p-1 rounded hover:bg-slate-50 text-red-500 hover:text-red-600 transition-colors"
+                          className="p-1 rounded hover:bg-slate-50 text-rose-500 hover:text-rose-600 transition-colors"
                           title="Cancel"
                         >
                           <X className="h-4 w-4" />
@@ -473,7 +473,7 @@ export default function RiskAppetitePage() {
                         <button
                           onClick={() => { if (confirm('Delete this risk appetite configuration?')) deleteMutation.mutate(config.id); }}
                           disabled={deleteMutation.isPending}
-                          className="p-1 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"
+                          className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
                           title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -560,7 +560,7 @@ export default function RiskAppetitePage() {
                     
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-slate-600">Risks Exceeding</span>
-                      <span className={`font-bold ${config.exceeding_count > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                      <span className={`font-bold ${config.exceeding_count > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                         {config.exceeding_count} / {config.risks_count}
                       </span>
                     </div>
@@ -568,7 +568,7 @@ export default function RiskAppetitePage() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-slate-600">Alerts</span>
                       {config.alert_enabled ? (
-                        <Bell className="h-4 w-4 text-green-400" />
+                        <Bell className="h-4 w-4 text-emerald-600" />
                       ) : (
                         <BellOff className="h-4 w-4 text-slate-500" />
                       )}
@@ -581,10 +581,10 @@ export default function RiskAppetitePage() {
                 )}
 
                 {showAiSuggestion && (
-                  <div className="mt-3 p-3 rounded-lg border border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-blue-500/10">
+                  <div className="mt-3 p-3 rounded-lg border border-primary-200 bg-primary-50">
                     <div className="flex items-center gap-2 mb-2">
-                      <Sparkles className="h-3.5 w-3.5 text-purple-400" />
-                      <span className="text-xs font-semibold text-purple-400">AI Suggestion</span>
+                      <Sparkles className="h-3.5 w-3.5 text-primary-600" />
+                      <span className="text-xs font-semibold text-primary-700">AI Suggestion</span>
                     </div>
                     <div className="space-y-1 text-xs">
                       <p className="text-slate-700"><span className="text-slate-600">Level:</span> {getAppetiteLevelLabel(aiSuggestion.appetite_level as AppetiteLevel)}</p>
@@ -595,7 +595,7 @@ export default function RiskAppetitePage() {
                     {!isEditing && (
                       <button
                         onClick={() => applyAiSuggestion(config)}
-                        className="mt-2 w-full px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-300 text-xs font-medium hover:bg-purple-500/30 transition-colors"
+                        className="mt-2 w-full px-3 py-1.5 rounded-lg bg-primary-100 text-primary-700 text-xs font-medium hover:bg-primary-200 transition-colors"
                       >
                         Apply Suggestion
                       </button>
@@ -609,13 +609,13 @@ export default function RiskAppetitePage() {
       </div>
 
       {toleranceBreaches.length > 0 && (
-        <div className="rounded-xl border-2 border-red-500/50 bg-red-500/5 p-6">
+        <div className="rounded-xl border-2 border-rose-200 bg-rose-50 p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-lg bg-red-500/20">
-              <AlertTriangle className="h-6 w-6 text-red-400" />
+            <div className="p-2 rounded-lg bg-rose-100">
+              <AlertTriangle className="h-6 w-6 text-rose-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-red-400">Tolerance Breach Alerts</h3>
+              <h3 className="text-lg font-semibold text-rose-700">Tolerance Breach Alerts</h3>
               <p className="text-sm text-slate-600">{toleranceBreaches.length} risk(s) currently exceed their category tolerance threshold</p>
             </div>
           </div>
@@ -626,13 +626,13 @@ export default function RiskAppetitePage() {
               return (
                 <div
                   key={breach.risk_id}
-                  className="flex items-center justify-between rounded-lg border border-red-500/30 bg-white p-4"
+                  className="flex items-center justify-between rounded-lg border border-rose-200 bg-white p-4"
                 >
                   <div className="flex items-center gap-4">
                     <div className="flex flex-col">
                       <Link
                         href={`/erm/risks?id=${breach.risk_id}`}
-                        className="text-slate-900 font-medium hover:text-primary-400 flex items-center gap-1"
+                        className="text-slate-900 font-medium hover:text-primary-600 flex items-center gap-1"
                       >
                         {breach.risk_title}
                         <ExternalLink className="h-3 w-3" />
@@ -645,18 +645,18 @@ export default function RiskAppetitePage() {
                     <div className="text-center">
                       <p className="text-slate-600">Score vs Threshold</p>
                       <p className="font-medium">
-                        <span className="text-red-400">{breach.current_score}</span>
+                        <span className="text-rose-600">{breach.current_score}</span>
                         <span className="text-slate-500"> / </span>
                         <span className="text-slate-700">{breach.tolerance}</span>
                       </p>
                     </div>
                     <div className="text-center">
                       <p className="text-slate-600">Days Over</p>
-                      <p className="font-medium text-orange-400">{breach.days_over}</p>
+                      <p className="font-medium text-orange-600">{breach.days_over}</p>
                     </div>
                     <Link
                       href={`/erm/risks?id=${breach.risk_id}`}
-                      className="px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/30 transition-colors"
+                      className="px-3 py-1.5 rounded-lg bg-rose-100 text-rose-700 text-xs font-medium hover:bg-rose-200 transition-colors"
                     >
                       Remediate
                     </Link>
@@ -669,13 +669,13 @@ export default function RiskAppetitePage() {
       )}
 
       {toleranceBreaches.length === 0 && (
-        <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-6">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-500/20">
-              <Target className="h-6 w-6 text-green-400" />
+            <div className="p-2 rounded-lg bg-emerald-100">
+              <Target className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-green-400">All Risks Within Tolerance</h3>
+              <h3 className="text-lg font-semibold text-emerald-700">All Risks Within Tolerance</h3>
               <p className="text-sm text-slate-600">No risks currently exceed their category tolerance threshold</p>
             </div>
           </div>
@@ -685,7 +685,7 @@ export default function RiskAppetitePage() {
       <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200">
           <div className="flex items-center gap-3">
-            <TrendingUp className="h-5 w-5 text-primary-400" />
+            <TrendingUp className="h-5 w-5 text-primary-600" strokeWidth={1.75} />
             <h3 className="text-lg font-semibold text-slate-900">Risk Appetite Configuration</h3>
           </div>
           <p className="text-sm text-slate-600 mt-1">Configure appetite levels, thresholds, and escalation settings for each risk category</p>
@@ -702,7 +702,7 @@ export default function RiskAppetitePage() {
                 <th className="px-6 py-3 text-center text-xs font-medium text-slate-600 uppercase tracking-wider">Alerts Enabled</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700">
+            <tbody className="divide-y divide-slate-200">
               {appetiteConfigs.map(config => {
                 const catStyle = getCategoryStyle(config.category);
                 return (
@@ -768,7 +768,7 @@ export default function RiskAppetitePage() {
             <button
               type="button"
               onClick={() => setShowCreateModal(false)}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>
@@ -796,7 +796,7 @@ export default function RiskAppetitePage() {
           className="space-y-4"
         >
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Category *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Category *</label>
             <MultiSelectDropdown
               title="Category"
               items={RISK_CATEGORIES.map(c => ({ value: c.value, label: c.label }))}
@@ -810,7 +810,7 @@ export default function RiskAppetitePage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Appetite Level *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Appetite Level *</label>
             <MultiSelectDropdown
               title="Appetite Level"
               items={APPETITE_LEVELS.map(l => ({ value: l.value, label: l.label }))}
@@ -825,36 +825,36 @@ export default function RiskAppetitePage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Tolerance Threshold</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Tolerance Threshold</label>
               <input
                 type="number" min="1" max="25"
                 value={createForm.tolerance_threshold}
                 onChange={(e) => setCreateForm(prev => ({ ...prev, tolerance_threshold: parseFloat(e.target.value) || 0 }))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Max Acceptable Score</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Max Acceptable Score</label>
               <input
                 type="number" min="1" max="25"
                 value={createForm.max_acceptable_score}
                 onChange={(e) => setCreateForm(prev => ({ ...prev, max_acceptable_score: parseFloat(e.target.value) || 0 }))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
             <textarea
               value={createForm.description}
               onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
               rows={3}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
               placeholder="Optional description..."
             />
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-800">Enable Breach Alerts</span>
+            <span className="text-sm font-medium text-slate-700">Enable Breach Alerts</span>
             <button
               type="button"
               onClick={() => setCreateForm(prev => ({ ...prev, alert_enabled: !prev.alert_enabled }))}

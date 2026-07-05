@@ -118,30 +118,30 @@ const PRIORITIES = [
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   draft: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Draft' },
-  pending_approval: { bg: 'bg-yellow-100', text: 'text-slate-800', label: 'Pending Approval' },
-  active: { bg: 'bg-green-100', text: 'text-slate-800', label: 'Active' },
-  inactive: { bg: 'bg-red-100', text: 'text-slate-800', label: 'Inactive' },
-  rejected: { bg: 'bg-red-100', text: 'text-slate-800', label: 'Rejected' },
+  pending_approval: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Pending Approval' },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Active' },
+  inactive: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Inactive' },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
 };
 
 const EFFECTIVENESS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  effective: { bg: 'bg-green-100', text: 'text-slate-800', label: 'Effective' },
-  partially_effective: { bg: 'bg-yellow-100', text: 'text-slate-800', label: 'Partially Effective' },
-  ineffective: { bg: 'bg-red-100', text: 'text-slate-800', label: 'Ineffective' },
+  effective: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Effective' },
+  partially_effective: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Partially Effective' },
+  ineffective: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Ineffective' },
   not_tested: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Not Tested' },
 };
 
 const STATUS_PIE_COLORS: Record<string, string> = {
-  Active: '#22c55e',
+  Active: '#10b981',
   Draft: '#94a3b8',
-  Pending: '#eab308',
-  Inactive: '#ef4444',
+  Pending: '#f59e0b',
+  Inactive: '#f43f5e',
 };
 
 const EFFECTIVENESS_PIE_COLORS: Record<string, string> = {
-  Effective: '#22c55e',
-  Partial: '#eab308',
-  Ineffective: '#ef4444',
+  Effective: '#10b981',
+  Partial: '#f59e0b',
+  Ineffective: '#f43f5e',
   'Not Tested': '#94a3b8',
 };
 
@@ -247,7 +247,7 @@ function EvidenceLinkSection({ controlId }: { controlId: number }) {
                 <div className="min-w-0">
                   <Link
                     href={`/evidence/${lnk.evidence_id}`}
-                    className="block truncate text-xs font-medium text-blue-600 hover:underline"
+                    className="block truncate text-xs font-medium text-primary-600 hover:underline"
                   >
                     {lnk.title || lnk.file_name || `Evidence #${lnk.evidence_id}`}
                   </Link>
@@ -262,12 +262,12 @@ function EvidenceLinkSection({ controlId }: { controlId: number }) {
                     just to glance at the artifact. */}
                 <EvidencePreviewButton
                   evidenceId={lnk.evidence_id}
-                  className="rounded p-1 text-slate-400 hover:text-blue-600"
+                  className="rounded p-1 text-slate-400 hover:text-primary-600"
                   title="Preview evidence file"
                 />
                 <Link
                   href={`/evidence/${lnk.evidence_id}`}
-                  className="rounded p-1 text-slate-400 hover:text-blue-600"
+                  className="rounded p-1 text-slate-400 hover:text-primary-600"
                   title="Open evidence detail"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
@@ -276,7 +276,7 @@ function EvidenceLinkSection({ controlId }: { controlId: number }) {
                   type="button"
                   onClick={() => unlinkMutation.mutate(lnk.id)}
                   disabled={unlinkMutation.isPending}
-                  className="rounded p-1 text-slate-400 hover:text-red-500"
+                  className="rounded p-1 text-slate-400 hover:text-rose-500"
                   title="Unlink"
                 >
                   {unlinkMutation.isPending ? (
@@ -537,9 +537,9 @@ export default function InternalControlsPage() {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
-        <p className="mt-2 text-red-400">Failed to load internal controls</p>
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+        <AlertCircle className="mx-auto h-8 w-8 text-rose-500" />
+        <p className="mt-2 text-rose-600">Failed to load internal controls</p>
       </div>
     );
   }
@@ -557,7 +557,7 @@ export default function InternalControlsPage() {
                 <PieChart>
                   <Pie
                     data={[
-                      { name: 'Key', value: metrics.keyCount, fill: '#7c3aed' },
+                      { name: 'Key', value: metrics.keyCount, fill: '#0d9488' },
                       { name: 'Other', value: Math.max(0, metrics.total - metrics.keyCount), fill: '#cbd5e1' },
                     ]}
                     cx="50%" cy="50%" innerRadius={22} outerRadius={33} dataKey="value" paddingAngle={2}
@@ -571,7 +571,7 @@ export default function InternalControlsPage() {
             </div>
             <div className="flex flex-col gap-1 text-xs">
               <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-violet-600" />
+                <span className="h-2 w-2 rounded-full bg-primary-600" />
                 <span className="text-slate-500">Key</span>
                 <span className="ml-auto font-semibold text-slate-800">{metrics.keyCount}</span>
               </div>
@@ -605,12 +605,12 @@ export default function InternalControlsPage() {
             </div>
             <div className="flex flex-col gap-1 text-xs">
               <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 <span className="text-slate-500">Active</span>
                 <span className="ml-auto font-semibold text-slate-800">{metrics.activeCount}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-yellow-400" />
+                <span className="h-2 w-2 rounded-full bg-amber-400" />
                 <span className="text-slate-500">Pending</span>
                 <span className="ml-auto font-semibold text-slate-800">{metrics.pendingCount}</span>
               </div>
@@ -644,12 +644,12 @@ export default function InternalControlsPage() {
             </div>
             <div className="flex flex-col gap-1 text-xs">
               <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 <span className="text-slate-500">Effective</span>
                 <span className="ml-auto font-semibold text-slate-800">{metrics.effectiveCount}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-yellow-400" />
+                <span className="h-2 w-2 rounded-full bg-amber-400" />
                 <span className="text-slate-500">Partial</span>
                 <span className="ml-auto font-semibold text-slate-800">{metrics.partialCount}</span>
               </div>
@@ -685,17 +685,17 @@ export default function InternalControlsPage() {
                 </div>
                 <div className="flex flex-col gap-1 text-xs">
                   <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-green-500" />
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
                     <span className="text-slate-500">Effective</span>
                     <span className="ml-auto font-semibold text-slate-800">{metrics.effectiveCount}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-red-400" />
+                    <span className="h-2 w-2 rounded-full bg-rose-400" />
                     <span className="text-slate-500">Ineffective</span>
                     <span className="ml-auto font-semibold text-slate-800">{metrics.ineffectiveCount}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-yellow-400" />
+                    <span className="h-2 w-2 rounded-full bg-amber-400" />
                     <span className="text-slate-500">Pending</span>
                     <span className="ml-auto font-semibold text-slate-800">{metrics.pendingCount}</span>
                   </div>
@@ -748,7 +748,7 @@ export default function InternalControlsPage() {
               setUploadFile(null);
               setAutoCreateUpload(true);
             }}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 sm:px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
           >
             <Upload size={16} />
             Upload Manual + AI
@@ -813,7 +813,7 @@ export default function InternalControlsPage() {
                     <td className="px-3 py-2.5">
                       <Link
                         href={`/erm/internal-controls/${control.id}`}
-                        className="font-mono text-sm text-primary-400 hover:text-primary-300"
+                        className="font-mono text-sm text-primary-600 hover:text-primary-700"
                       >
                         {control.control_id}
                       </Link>
@@ -822,12 +822,12 @@ export default function InternalControlsPage() {
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/erm/internal-controls/${control.id}`}
-                          className="font-medium text-slate-900 hover:text-primary-400"
+                          className="font-medium text-slate-900 hover:text-primary-600"
                         >
                           {control.name}
                         </Link>
                         {control.is_key_control && (
-                          <span className="flex items-center gap-1 rounded bg-purple-500/20 px-1.5 py-0.5 text-xs text-purple-400">
+                          <span className="flex items-center gap-1 rounded bg-primary-50 px-1.5 py-0.5 text-xs text-primary-700">
                             <Key className="h-3 w-3" />
                             Key
                           </span>
@@ -875,7 +875,7 @@ export default function InternalControlsPage() {
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(control.id)}
-                          className="rounded p-1 text-slate-600 hover:bg-red-600/20 hover:text-red-400 transition-colors"
+                          className="rounded p-1 text-slate-600 hover:bg-rose-50 hover:text-rose-600 transition-colors"
                           title="Delete"
                           style={canDelete ? {} : { display: 'none' }}
                         >
@@ -906,7 +906,7 @@ export default function InternalControlsPage() {
                 type="button"
                 onClick={() => aiSuggestControlMutation.mutate({ name: modalName, description: modalDescription || undefined })}
                 disabled={aiSuggestControlMutation.isPending || !modalName}
-                className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                className="flex items-center gap-1 rounded border border-primary-200 bg-primary-50 px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-50"
               >
                 {aiSuggestControlMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
                 AI Suggest
@@ -922,7 +922,7 @@ export default function InternalControlsPage() {
                 setIsModalOpen(false);
                 setEditingControl(null);
               }}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>
@@ -954,7 +954,7 @@ export default function InternalControlsPage() {
         >
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
                       Control ID
                     </label>
                     {editingControl ? (
@@ -962,19 +962,19 @@ export default function InternalControlsPage() {
                         type="text"
                         value={editingControl.control_id}
                         readOnly
-                        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-slate-700 cursor-not-allowed"
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 cursor-not-allowed"
                       />
                     ) : (
                       <input
                         type="text"
                         value="Auto-generated on save (e.g., IC-0001)"
                         readOnly
-                        className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm italic text-slate-500 cursor-not-allowed"
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm italic text-slate-500 cursor-not-allowed"
                       />
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
                       Name *
                     </label>
                     <input
@@ -983,27 +983,27 @@ export default function InternalControlsPage() {
                       required
                       defaultValue={editingControl?.name || ''}
                       onChange={(e) => setModalName(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       placeholder="Control name"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
                   <textarea
                     name="description"
                     rows={2}
                     value={modalDescription}
                     onChange={(e) => setModalDescription(e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     placeholder="Describe the control..."
                   />
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Category</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
                     <input type="hidden" name="category" value={selectedModalCategory} />
                     <MultiSelectDropdown
                       title="Category"
@@ -1024,7 +1024,7 @@ export default function InternalControlsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Sub-Category</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Sub-Category</label>
                     <input type="hidden" name="sub_category" value={selectedModalSubCategory} />
                     <MultiSelectDropdown
                       title="Sub-Category"
@@ -1041,7 +1041,7 @@ export default function InternalControlsPage() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Control Type</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Control Type</label>
                     <input type="hidden" name="control_type" value={modalControlType} />
                     <MultiSelectDropdown
                       title="Control Type"
@@ -1055,7 +1055,7 @@ export default function InternalControlsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Control Nature</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Control Nature</label>
                     <input type="hidden" name="control_nature" value={modalControlNature} />
                     <MultiSelectDropdown
                       title="Control Nature"
@@ -1072,7 +1072,7 @@ export default function InternalControlsPage() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Frequency</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Frequency</label>
                     <input type="hidden" name="frequency" value={modalFrequency} />
                     <MultiSelectDropdown
                       title="Frequency"
@@ -1086,7 +1086,7 @@ export default function InternalControlsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Priority</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
                     <input type="hidden" name="priority" value={modalPriority} />
                     <MultiSelectDropdown
                       title="Priority"
@@ -1104,7 +1104,7 @@ export default function InternalControlsPage() {
                 {/* Status & Effectiveness */}
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Status</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
                     <MultiSelectDropdown
                       title="Status"
                       items={[
@@ -1122,7 +1122,7 @@ export default function InternalControlsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Design Effectiveness</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Design Effectiveness</label>
                     <MultiSelectDropdown
                       title="Design Effectiveness"
                       items={[
@@ -1139,7 +1139,7 @@ export default function InternalControlsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Operating Effectiveness</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Operating Effectiveness</label>
                     <MultiSelectDropdown
                       title="Operating Effectiveness"
                       items={[
@@ -1158,14 +1158,14 @@ export default function InternalControlsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-800 mb-1">Regulatory Source</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Regulatory Source</label>
                   <input
                     name="regulatory_source"
                     type="text"
                     value={modalRegulatorySource}
                     onChange={(e) => setModalRegulatorySource(e.target.value)}
                     list="regulatory-framework-options"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     placeholder="Search framework or enter source"
                   />
                   <datalist id="regulatory-framework-options">
@@ -1177,21 +1177,21 @@ export default function InternalControlsPage() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Effective Date</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Effective Date</label>
                     <input
                       name="effective_date"
                       type="date"
                       defaultValue={editingControl?.effective_date?.split('T')[0] || ''}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Review Date</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Review Date</label>
                     <input
                       name="review_date"
                       type="date"
                       defaultValue={editingControl?.review_date?.split('T')[0] || ''}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
                   </div>
                 </div>
@@ -1202,9 +1202,9 @@ export default function InternalControlsPage() {
                     type="checkbox"
                     value="true"
                     defaultChecked={editingControl?.is_key_control || false}
-                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
                   />
-                  <label className="text-sm font-medium text-gray-800">Key Control</label>
+                  <label className="text-sm font-medium text-slate-700">Key Control</label>
                 </div>
         </form>
 
@@ -1226,8 +1226,8 @@ export default function InternalControlsPage() {
 
             {uploadResult ? (
               <div className="space-y-3.5">
-                <div className={`rounded-lg p-4 ${uploadResult.created > 0 ? 'bg-green-500/10 border border-green-500/30' : 'bg-blue-500/10 border border-blue-500/30'}`}>
-                  <p className={`text-sm font-medium ${uploadResult.created > 0 ? 'text-green-400' : 'text-blue-400'}`}>
+                <div className={`rounded-lg p-4 ${uploadResult.created > 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-primary-50 border border-primary-200'}`}>
+                  <p className={`text-sm font-medium ${uploadResult.created > 0 ? 'text-emerald-700' : 'text-primary-700'}`}>
                     {uploadResult.message}
                   </p>
                   <p className="mt-1 text-sm text-slate-600">
@@ -1236,7 +1236,7 @@ export default function InternalControlsPage() {
                   {uploadResult.errors.length > 0 && (
                     <div className="mt-2 max-h-32 overflow-y-auto">
                       {uploadResult.errors.map((err, i) => (
-                        <p key={i} className="text-xs text-red-400">{err}</p>
+                        <p key={i} className="text-xs text-rose-600">{err}</p>
                       ))}
                     </div>
                   )}
@@ -1318,7 +1318,7 @@ export default function InternalControlsPage() {
                   <button
                     type="button"
                     onClick={() => setShowUploadModal(false)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
                   >
                     Cancel
                   </button>
@@ -1351,8 +1351,8 @@ export default function InternalControlsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5">
             <div className="mb-4 flex items-center gap-3">
-              <div className="rounded-full bg-red-500/20 p-2">
-                <XCircle className="h-6 w-6 text-red-400" />
+              <div className="rounded-full bg-rose-50 p-2">
+                <XCircle className="h-6 w-6 text-rose-500" />
               </div>
               <h3 className="text-lg font-bold text-slate-900">Delete Control</h3>
             </div>
@@ -1363,7 +1363,7 @@ export default function InternalControlsPage() {
               <button
                 type="button"
                 onClick={() => setDeleteConfirm(null)}
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
               >
                 Cancel
               </button>
@@ -1371,7 +1371,7 @@ export default function InternalControlsPage() {
                 type="button"
                 onClick={() => deleteMutation.mutate(deleteConfirm)}
                 disabled={deleteMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
               >
                 {deleteMutation.isPending ? (
                   <>

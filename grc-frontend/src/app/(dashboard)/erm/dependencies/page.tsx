@@ -21,11 +21,11 @@ import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import { PageLoader } from '@/components/ui';
 
 const DEPENDENCY_TYPES: { value: DependencyType; label: string; color: string }[] = [
-  { value: 'causes', label: 'Causes', color: 'text-red-400' },
-  { value: 'caused_by', label: 'Caused By', color: 'text-orange-400' },
-  { value: 'related', label: 'Related', color: 'text-blue-400' },
-  { value: 'amplifies', label: 'Amplifies', color: 'text-purple-400' },
-  { value: 'mitigates', label: 'Mitigates', color: 'text-green-400' },
+  { value: 'causes', label: 'Causes', color: 'text-rose-600' },
+  { value: 'caused_by', label: 'Caused By', color: 'text-orange-600' },
+  { value: 'related', label: 'Related', color: 'text-primary-600' },
+  { value: 'amplifies', label: 'Amplifies', color: 'text-primary-600' },
+  { value: 'mitigates', label: 'Mitigates', color: 'text-emerald-600' },
 ];
 
 export default function DependenciesPage() {
@@ -98,7 +98,7 @@ export default function DependenciesPage() {
         {canCreate && (
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-[#0a0a0a] hover:bg-primary-700"
           >
             <Plus className="h-4 w-4" />
             Add Dependency
@@ -107,10 +107,10 @@ export default function DependenciesPage() {
       </div>
 
       {cascadeAnalysis && (
-        <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-3 sm:p-4">
+        <div className="rounded-xl border border-primary-200 bg-primary-50 p-3 sm:p-4">
           <h3 className="text-sm font-semibold text-slate-900">Cascade Analysis: {cascadeAnalysis.risk_title}</h3>
           <p className="mt-1 text-xs text-slate-600">
-            Total Cascade Score: <span className="font-bold text-blue-400">{cascadeAnalysis.total_cascade_score.toFixed(1)}</span>
+            Total Cascade Score: <span className="font-bold text-primary-700">{cascadeAnalysis.total_cascade_score.toFixed(1)}</span>
           </p>
 
           {cascadeAnalysis.direct_impacts && cascadeAnalysis.direct_impacts.length > 0 && (
@@ -119,7 +119,7 @@ export default function DependenciesPage() {
               <div className="mt-2 space-y-1">
                 {cascadeAnalysis.direct_impacts.map((impact) => (
                   <div key={impact.id} className="flex items-center gap-2 text-xs">
-                    <ArrowRight className="h-4 w-4 text-blue-400" />
+                    <ArrowRight className="h-4 w-4 text-primary-600" />
                     <span className="text-slate-700">{impact.title}</span>
                     <span className="text-slate-500">({impact.type}, strength: {impact.strength})</span>
                   </div>
@@ -162,7 +162,7 @@ export default function DependenciesPage() {
                           deleteMutation.mutate(dep.id);
                         }
                       }}
-                      className="rounded p-1.5 text-slate-600 hover:bg-red-500/20 hover:text-red-400"
+                      className="rounded p-1.5 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -311,7 +311,7 @@ function DependencyPanel({
           <button
             type="submit"
             disabled={createMutation.isPending}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
           >
             {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Create

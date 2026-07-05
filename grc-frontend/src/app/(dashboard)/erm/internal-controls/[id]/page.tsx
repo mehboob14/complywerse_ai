@@ -130,24 +130,24 @@ const TABS = [
 ];
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  draft: { bg: 'bg-slate-500/20', text: 'text-slate-600', label: 'Draft' },
-  pending_approval: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Pending Approval' },
-  active: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Active' },
-  inactive: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Inactive' },
-  rejected: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Rejected' },
+  draft: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Draft' },
+  pending_approval: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Pending Approval' },
+  active: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Active' },
+  inactive: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Inactive' },
+  rejected: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Rejected' },
 };
 
 const EFFECTIVENESS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  effective: { bg: 'bg-green-500/20', text: 'text-green-400', label: 'Effective' },
-  partially_effective: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Partially Effective' },
-  ineffective: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Ineffective' },
-  not_tested: { bg: 'bg-slate-500/20', text: 'text-slate-600', label: 'Not Tested' },
+  effective: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Effective' },
+  partially_effective: { bg: 'bg-amber-50', text: 'text-amber-700', label: 'Partially Effective' },
+  ineffective: { bg: 'bg-rose-50', text: 'text-rose-700', label: 'Ineffective' },
+  not_tested: { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Not Tested' },
 };
 
 const TEST_RESULT_STYLES: Record<string, { bg: string; text: string }> = {
-  effective: { bg: 'bg-green-500/20', text: 'text-green-400' },
-  partially_effective: { bg: 'bg-yellow-500/20', text: 'text-yellow-400' },
-  ineffective: { bg: 'bg-red-500/20', text: 'text-red-400' },
+  effective: { bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  partially_effective: { bg: 'bg-amber-50', text: 'text-amber-700' },
+  ineffective: { bg: 'bg-rose-50', text: 'text-rose-700' },
 };
 
 function getStatusStyle(status: string) {
@@ -278,10 +278,10 @@ export default function InternalControlDetailPage() {
 
   if (error || !control) {
     return (
-      <div className="rounded-xl border border-red-700 bg-red-900/20 p-6 text-center">
-        <XCircle className="mx-auto h-8 w-8 text-red-400" />
-        <p className="mt-2 text-red-400">Failed to load control details</p>
-        <Link href="/erm/internal-controls" className="mt-4 inline-block text-primary-400 hover:underline">
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+        <XCircle className="mx-auto h-8 w-8 text-rose-500" />
+        <p className="mt-2 text-rose-600">Failed to load control details</p>
+        <Link href="/erm/internal-controls" className="mt-4 inline-block text-primary-600 hover:underline">
           Back to Controls
         </Link>
       </div>
@@ -308,7 +308,7 @@ export default function InternalControlDetailPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{control.name}</h1>
             {control.is_key_control && (
-              <span className="flex items-center gap-1 rounded bg-purple-500/20 px-2 py-1 text-xs font-medium text-purple-400">
+              <span className="flex items-center gap-1 rounded bg-primary-50 px-2 py-1 text-xs font-medium text-primary-700">
                 <Key className="h-3 w-3" />
                 Key Control
               </span>
@@ -323,7 +323,7 @@ export default function InternalControlDetailPage() {
           {canSubmit && (
             <button
               onClick={() => setShowWorkflowModal('submit')}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700"
             >
               <Send className="h-4 w-4" />
               Submit for Approval
@@ -333,14 +333,14 @@ export default function InternalControlDetailPage() {
             <>
               <button
                 onClick={() => setShowWorkflowModal('approve')}
-                className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-slate-900 hover:bg-green-500"
+                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
               >
                 <ThumbsUp className="h-4 w-4" />
                 Approve
               </button>
               <button
                 onClick={() => setShowWorkflowModal('reject')}
-                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500"
+                className="flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500"
               >
                 <ThumbsDown className="h-4 w-4" />
                 Reject
@@ -368,7 +368,7 @@ export default function InternalControlDetailPage() {
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors -mb-px ${
               activeTab === tab.id
-                ? 'border-blue-600 text-blue-600'
+                ? 'border-primary-600 text-primary-700'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -530,7 +530,7 @@ export default function InternalControlDetailPage() {
             {canCreate && (
             <button
               onClick={() => setShowTestModal(true)}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700"
             >
               <Plus className="h-4 w-4" />
               Add Test
@@ -595,7 +595,7 @@ export default function InternalControlDetailPage() {
             {canCreate && (
             <button
               onClick={() => setShowRiskModal(true)}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700"
             >
               <Plus className="h-4 w-4" />
               Link Risk
@@ -619,18 +619,18 @@ export default function InternalControlDetailPage() {
                     <div>
                       <Link
                         href={`/erm/risks/${link.risk_id}`}
-                        className="font-medium text-slate-900 hover:text-primary-400"
+                        className="font-medium text-slate-900 hover:text-primary-600"
                       >
                         {link.risk_title || `Risk #${link.risk_id}`}
                       </Link>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {link.link_type && (
-                          <span className="rounded bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+                          <span className="rounded bg-primary-50 px-2 py-0.5 text-xs text-primary-700">
                             {link.link_type}
                           </span>
                         )}
                         {link.effectiveness_rating && (
-                          <span className="rounded bg-green-500/20 px-2 py-0.5 text-xs capitalize text-green-400">
+                          <span className="rounded bg-emerald-50 px-2 py-0.5 text-xs capitalize text-emerald-700">
                             {link.effectiveness_rating.replace('_', ' ')}
                           </span>
                         )}
@@ -638,7 +638,7 @@ export default function InternalControlDetailPage() {
                     </div>
                     <button
                       onClick={() => unlinkRiskMutation.mutate(link.id)}
-                      className="rounded p-1 text-slate-600 hover:bg-red-600/20 hover:text-red-400"
+                      className="rounded p-1 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
                       title="Unlink"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -658,7 +658,7 @@ export default function InternalControlDetailPage() {
             {canCreate && (
             <button
               onClick={() => setShowEscalationModal(true)}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700"
             >
               <Plus className="h-4 w-4" />
               Add Escalation
@@ -679,7 +679,7 @@ export default function InternalControlDetailPage() {
                   className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-600/20 text-lg font-bold text-primary-400">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-50 text-lg font-bold text-primary-700">
                       {esc.escalation_level}
                     </div>
                     <div>
@@ -693,15 +693,15 @@ export default function InternalControlDetailPage() {
                     <span
                       className={`rounded-lg px-2 py-1 text-xs ${
                         esc.is_active
-                          ? 'bg-green-500/20 text-green-400'
-                          : 'bg-slate-500/20 text-slate-600'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-slate-100 text-slate-600'
                       }`}
                     >
                       {esc.is_active ? 'Active' : 'Inactive'}
                     </span>
                     <button
                       onClick={() => deleteEscalationMutation.mutate(esc.id)}
-                      className="rounded p-1 text-slate-600 hover:bg-red-600/20 hover:text-red-400"
+                      className="rounded p-1 text-slate-600 hover:bg-rose-50 hover:text-rose-600"
                       title="Delete"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -777,18 +777,18 @@ export default function InternalControlDetailPage() {
                   <div
                     className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full ${
                       action.action === 'approve'
-                        ? 'bg-green-600'
+                        ? 'bg-emerald-600'
                         : action.action === 'reject'
-                        ? 'bg-red-600'
-                        : 'bg-blue-600'
+                        ? 'bg-rose-600'
+                        : 'bg-primary-600'
                     }`}
                   >
                     {action.action === 'approve' ? (
-                      <CheckCircle className="h-5 w-5 text-slate-900" />
+                      <CheckCircle className="h-5 w-5 text-white" />
                     ) : action.action === 'reject' ? (
-                      <XCircle className="h-5 w-5 text-slate-900" />
+                      <XCircle className="h-5 w-5 text-white" />
                     ) : (
-                      <Send className="h-5 w-5 text-slate-900" />
+                      <Send className="h-5 w-5 text-[#0a0a0a]" />
                     )}
                   </div>
                   <div className="flex-1 rounded-xl border border-slate-200 bg-white p-4">
@@ -927,7 +927,7 @@ export default function InternalControlDetailPage() {
             type="submit"
             form="control-test-form"
             disabled={createTestMutation.isPending}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
           >
             {createTestMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Add Test
@@ -1008,7 +1008,7 @@ export default function InternalControlDetailPage() {
                 type="submit"
                 form="control-risk-form"
                 disabled={linkRiskMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
               >
                 {linkRiskMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 Link Risk
@@ -1090,7 +1090,7 @@ export default function InternalControlDetailPage() {
                 type="submit"
                 form="control-esc-form"
                 disabled={createEscalationMutation.isPending}
-                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500 disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-[#0a0a0a] hover:bg-primary-700 disabled:opacity-50"
               >
                 {createEscalationMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 Add Escalation
@@ -1136,12 +1136,12 @@ export default function InternalControlDetailPage() {
               disabled={
                 submitMutation.isPending || approveMutation.isPending || rejectMutation.isPending
               }
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 ${
                 showWorkflowModal === 'reject'
-                  ? 'bg-red-600 hover:bg-red-500'
+                  ? 'bg-rose-600 text-white hover:bg-rose-500'
                   : showWorkflowModal === 'approve'
-                  ? 'bg-green-600 hover:bg-green-500'
-                  : 'bg-blue-600 hover:bg-blue-500'
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                  : 'bg-primary-600 text-[#0a0a0a] hover:bg-primary-700'
               }`}
             >
               {(submitMutation.isPending ||

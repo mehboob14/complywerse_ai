@@ -30,11 +30,11 @@ interface TenantUserOption {
 }
 
 const REVIEW_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-500/20 text-yellow-400',
-  in_review: 'bg-blue-500/20 text-blue-400',
-  completed: 'bg-green-500/20 text-green-400',
-  skipped: 'bg-slate-500/20 text-slate-600',
-  overdue: 'bg-red-500/20 text-red-400',
+  pending: 'bg-amber-50 text-amber-700',
+  in_review: 'bg-primary-50 text-primary-700',
+  completed: 'bg-emerald-50 text-emerald-700',
+  skipped: 'bg-slate-100 text-slate-600',
+  overdue: 'bg-rose-50 text-rose-700',
 };
 
 export default function ReviewsPage() {
@@ -96,32 +96,32 @@ export default function ReviewsPage() {
   return (
     <div className="space-y-4 px-3 sm:px-6">
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 sm:p-4">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 sm:p-4">
           <div className="flex items-center gap-3">
-            <Clock className="h-5 w-5 text-yellow-400" />
+            <Clock className="h-5 w-5 text-amber-600" />
             <div>
               <p className="text-xl font-bold text-slate-900">{pendingReviews?.length || 0}</p>
-              <p className="text-xs text-yellow-400">Pending Reviews</p>
+              <p className="text-xs text-amber-700">Pending Reviews</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 sm:p-4">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 sm:p-4">
           <div className="flex items-center gap-3">
-            <AlertCircle className="h-5 w-5 text-red-400" />
+            <AlertCircle className="h-5 w-5 text-rose-600" />
             <div>
               <p className="text-xl font-bold text-slate-900">{overdueReviews?.length || 0}</p>
-              <p className="text-xs text-red-400">Overdue Reviews</p>
+              <p className="text-xs text-rose-700">Overdue Reviews</p>
             </div>
           </div>
         </div>
-        <div className="rounded-xl border border-green-500/30 bg-green-500/10 p-3 sm:p-4">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 sm:p-4">
           <div className="flex items-center gap-3">
-            <CheckCircle className="h-5 w-5 text-green-400" />
+            <CheckCircle className="h-5 w-5 text-emerald-600" />
             <div>
               <p className="text-xl font-bold text-slate-900">
                 {reviews?.filter((r) => r.status === 'completed').length || 0}
               </p>
-              <p className="text-xs text-green-400">Completed This Month</p>
+              <p className="text-xs text-emerald-700">Completed This Month</p>
             </div>
           </div>
         </div>
@@ -144,7 +144,7 @@ export default function ReviewsPage() {
         {canCreate && (
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+            className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-[#0a0a0a] hover:bg-primary-700"
           >
             <Plus className="h-4 w-4" />
             Schedule Review
@@ -193,7 +193,7 @@ function ReviewCard({ review, tenantUsers }: { review: RiskReview; tenantUsers: 
   const reviewerName = tenantUsers.find((u) => u.id === review.reviewer_id)?.display_name;
 
   return (
-    <div className={`rounded-xl border p-3 sm:p-4 ${isOverdue ? 'border-red-500/50 bg-red-500/5' : 'border-slate-200 bg-white'}`}>
+    <div className={`rounded-xl border p-3 sm:p-4 ${isOverdue ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white'}`}>
       <div className="flex items-start justify-between">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">{review.risk_title || `Risk #${review.risk_id}`}</h3>
@@ -213,10 +213,10 @@ function ReviewCard({ review, tenantUsers }: { review: RiskReview; tenantUsers: 
           </div>
         </div>
         <div className="text-right">
-          <p className={`text-xs font-medium ${isOverdue ? 'text-red-400' : 'text-slate-700'}`}>
+          <p className={`text-xs font-medium ${isOverdue ? 'text-rose-600' : 'text-slate-700'}`}>
             Due: {new Date(review.due_date).toLocaleDateString()}
           </p>
-          {isOverdue && <p className="text-xs text-red-400">Overdue</p>}
+          {isOverdue && <p className="text-xs text-rose-600">Overdue</p>}
         </div>
       </div>
 
@@ -224,7 +224,7 @@ function ReviewCard({ review, tenantUsers }: { review: RiskReview; tenantUsers: 
         <div className="mt-3 flex gap-2">
           <button
             onClick={() => setShowStartModal(true)}
-            className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm text-white hover:bg-primary-500"
+            className="rounded-lg bg-primary-600 px-3 py-1.5 text-sm text-[#0a0a0a] hover:bg-primary-700"
           >
             Start Review
           </button>
@@ -235,7 +235,7 @@ function ReviewCard({ review, tenantUsers }: { review: RiskReview; tenantUsers: 
         <div className="mt-3 flex gap-2">
           <button
             onClick={() => setShowStartModal(true)}
-            className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-500"
+            className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-500"
           >
             Complete Review
           </button>
@@ -296,7 +296,7 @@ function ReviewModal({
       <div className="px-6 py-4">
         <form id="review-schedule-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Risk *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Risk *</label>
             <MultiSelectDropdown
               title="Risk"
               items={risks.map((risk) => ({
@@ -318,7 +318,7 @@ function ReviewModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Review Cycle</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Review Cycle</label>
               <MultiSelectDropdown
                 title="Cycle"
                 items={[
@@ -337,7 +337,7 @@ function ReviewModal({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Review Type</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Review Type</label>
               <MultiSelectDropdown
                 title="Type"
                 items={[
@@ -358,7 +358,7 @@ function ReviewModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Assign To</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Assign To</label>
             <MultiSelectDropdown
               title="Assignee"
               items={tenantUsers.map((user) => ({
@@ -383,12 +383,12 @@ function ReviewModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Due Date *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Due Date *</label>
             <input
               type="date"
               value={formData.due_date}
               onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               required
             />
           </div>
@@ -397,7 +397,7 @@ function ReviewModal({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>
@@ -553,85 +553,85 @@ function StartReviewModal({
     >
       <div className="px-6 py-4">
         <form id="start-review-form" onSubmit={handleSubmit} className="space-y-4">
-          <div className="rounded-lg border border-gray-200 p-4">
+          <div className="rounded-lg border border-slate-200 p-4">
             <h3 className="text-sm font-semibold text-slate-900">Inherent Risk</h3>
             <div className="mt-3 grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1">Likelihood (1-5)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Likelihood (1-5)</label>
                 <input
                   type="number"
                   min={1}
                   max={5}
                   value={inherentLikelihood}
                   onChange={(e) => setInherentLikelihood(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1">Impact (1-5)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Impact (1-5)</label>
                 <input
                   type="number"
                   min={1}
                   max={5}
                   value={inherentImpact}
                   onChange={(e) => setInherentImpact(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 p-4">
+          <div className="rounded-lg border border-slate-200 p-4">
             <h3 className="text-sm font-semibold text-slate-900">Residual Risk</h3>
             <div className="mt-3 grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1">Likelihood (1-5)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Likelihood (1-5)</label>
                 <input
                   type="number"
                   min={1}
                   max={5}
                   value={residualLikelihood}
                   onChange={(e) => setResidualLikelihood(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-800 mb-1">Impact (1-5)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Impact (1-5)</label>
                 <input
                   type="number"
                   min={1}
                   max={5}
                   value={residualImpact}
                   onChange={(e) => setResidualImpact(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Findings (optional)</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Findings (optional)</label>
             <textarea
               value={findings}
               onChange={(e) => setFindings(e.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="Summary of review findings..."
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Recommendations (optional)</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Recommendations (optional)</label>
             <textarea
               value={recommendations}
               onChange={(e) => setRecommendations(e.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               placeholder="Any recommended next steps..."
             />
           </div>
 
-          <div className="rounded-lg border border-dashed border-gray-300 p-4">
+          <div className="rounded-lg border border-dashed border-slate-300 p-4">
             <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
               <Upload className="h-4 w-4" />
               Attach Evidence (optional)
@@ -640,27 +640,27 @@ function StartReviewModal({
               <input
                 type="file"
                 onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
-                className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-primary-600 file:px-3 file:py-1.5 file:text-sm file:text-white hover:file:bg-primary-500"
+                className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-primary-600 file:px-3 file:py-1.5 file:text-sm file:text-[#0a0a0a] hover:file:bg-primary-700"
               />
               {evidenceFile && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Evidence Name</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Evidence Name</label>
                     <input
                       type="text"
                       value={evidenceName}
                       onChange={(e) => setEvidenceName(e.target.value)}
                       placeholder={evidenceFile.name}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
                     <input
                       type="text"
                       value={evidenceDescription}
                       onChange={(e) => setEvidenceDescription(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     />
                   </div>
                 </>
@@ -669,7 +669,7 @@ function StartReviewModal({
           </div>
 
           {error && (
-            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
               {error}
             </div>
           )}
@@ -678,7 +678,7 @@ function StartReviewModal({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
             >
               Cancel
             </button>

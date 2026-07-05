@@ -89,7 +89,7 @@ export default function ReportsPage() {
               onClick={() => setSelectedReportType(type)}
               className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium capitalize transition-colors ${
                 selectedReportType === type
-                  ? 'border-blue-500 text-blue-600'
+                  ? 'border-primary-600 text-primary-700'
                   : 'border-transparent text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -108,7 +108,7 @@ export default function ReportsPage() {
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <p className="text-sm text-slate-600">Critical Risks</p>
-              <p className="text-3xl font-bold text-red-400">{executiveDashboard.summary?.critical_risks || 0}</p>
+              <p className="text-3xl font-bold text-rose-600">{executiveDashboard.summary?.critical_risks || 0}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <p className="text-sm text-slate-600">Avg Risk Score</p>
@@ -116,7 +116,7 @@ export default function ReportsPage() {
             </div>
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <p className="text-sm text-slate-600">Appetite Breaches</p>
-              <p className="text-3xl font-bold text-orange-400">{executiveDashboard.summary?.risks_exceeding_appetite || 0}</p>
+              <p className="text-3xl font-bold text-orange-600">{executiveDashboard.summary?.risks_exceeding_appetite || 0}</p>
             </div>
           </div>
 
@@ -130,9 +130,9 @@ export default function ReportsPage() {
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-slate-900">{risk.score}</span>
                       {risk.trend === 'up' ? (
-                        <TrendingUp className="h-4 w-4 text-red-400" />
+                        <TrendingUp className="h-4 w-4 text-rose-600" />
                       ) : risk.trend === 'down' ? (
-                        <TrendingDown className="h-4 w-4 text-green-400" />
+                        <TrendingDown className="h-4 w-4 text-emerald-600" />
                       ) : null}
                     </div>
                   </div>
@@ -147,7 +147,7 @@ export default function ReportsPage() {
                   <div key={alert.id} className="flex items-center justify-between">
                     <span className="text-sm text-slate-700">{alert.name}</span>
                     <span className={`rounded-full px-2 py-0.5 text-xs ${
-                      alert.status === 'red' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'
+                      alert.status === 'red' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'
                     }`}>
                       {alert.value} ({alert.status})
                     </span>
@@ -172,11 +172,11 @@ export default function ReportsPage() {
               </div>
               <div>
                 <p className="text-sm text-slate-600">New Risks</p>
-                <p className="text-2xl font-bold text-yellow-400">{boardSummary.risk_profile_summary?.new_risks || 0}</p>
+                <p className="text-2xl font-bold text-amber-600">{boardSummary.risk_profile_summary?.new_risks || 0}</p>
               </div>
               <div>
                 <p className="text-sm text-slate-600">Closed Risks</p>
-                <p className="text-2xl font-bold text-green-400">{boardSummary.risk_profile_summary?.closed_risks || 0}</p>
+                <p className="text-2xl font-bold text-emerald-600">{boardSummary.risk_profile_summary?.closed_risks || 0}</p>
               </div>
             </div>
           </div>
@@ -191,7 +191,7 @@ export default function ReportsPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-slate-500">{change.previous_score}</span>
                       <ArrowRight className="h-4 w-4 text-slate-500" />
-                      <span className={change.change > 0 ? 'text-red-400' : 'text-green-400'}>
+                      <span className={change.change > 0 ? 'text-rose-600' : 'text-emerald-600'}>
                         {change.current_score}
                       </span>
                     </div>
@@ -238,13 +238,13 @@ export default function ReportsPage() {
             {appetiteBreaches && appetiteBreaches.length > 0 ? (
               <div className="mt-4 space-y-3">
                 {appetiteBreaches.map((breach) => (
-                  <div key={breach.risk_id} className="flex items-center justify-between rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                  <div key={breach.risk_id} className="flex items-center justify-between rounded-lg border border-rose-200 bg-rose-50 p-3">
                     <div>
                       <p className="font-medium text-slate-900">{breach.risk_title}</p>
                       <p className="text-sm text-slate-600">{breach.category}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-red-400">+{breach.breach_percentage.toFixed(0)}% over appetite</p>
+                      <p className="text-rose-600">+{breach.breach_percentage.toFixed(0)}% over appetite</p>
                       <p className="text-xs text-slate-500">{breach.days_in_breach} days in breach</p>
                     </div>
                   </div>
@@ -259,7 +259,7 @@ export default function ReportsPage() {
             <button
               onClick={() => generateMutation.mutate({ name: `Audit Export ${new Date().toISOString().split('T')[0]}`, report_type: 'audit' })}
               disabled={generateMutation.isPending}
-              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-500"
+              className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm text-[#0a0a0a] hover:bg-primary-700"
             >
               {generateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               Export Audit Report
