@@ -238,7 +238,7 @@ export default function TemplateDetailPage() {
         <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-4" />
         <h3 className="text-lg font-medium text-slate-900 mb-2">Template Not Found</h3>
         <p className="text-slate-600 mb-4">The requested template could not be loaded.</p>
-        <Link href="/risks/rcsa/templates" className="btn-primary">
+        <Link href="/erm/rcsa/templates" className="btn-primary">
           Back to Templates
         </Link>
       </div>
@@ -249,7 +249,7 @@ export default function TemplateDetailPage() {
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div>
         <div className="flex items-center gap-4 mb-4">
-          <Link href="/risks/rcsa/templates" className="text-slate-600 hover:text-slate-900">
+          <Link href="/erm/rcsa/templates" className="text-slate-600 hover:text-slate-900">
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex-1">
@@ -292,7 +292,7 @@ export default function TemplateDetailPage() {
             )}
             {template.source === 'custom' && !isEditMode && (
               <Link
-                href={`/risks/rcsa/templates/${templateId}?edit=true`}
+                href={`/erm/rcsa/templates/${templateId}?edit=true`}
                 className="btn-secondary flex items-center gap-2"
               >
                 <Edit2 className="h-4 w-4" />

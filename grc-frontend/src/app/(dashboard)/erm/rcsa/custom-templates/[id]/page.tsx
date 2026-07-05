@@ -232,7 +232,7 @@ export default function RCSACustomTemplateDetailPage() {
   if (tplQ.isError || !tplQ.data) {
     return (
       <div className="p-6">
-        <Link href="/risks/rcsa/custom-templates" className="text-sm text-blue-600 hover:underline">
+        <Link href="/erm/rcsa/custom-templates" className="text-sm text-blue-600 hover:underline">
           ← Back to Custom Templates
         </Link>
         <p className="mt-3 text-sm text-red-600">Failed to load template.</p>
@@ -247,7 +247,7 @@ export default function RCSACustomTemplateDetailPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-4">
         <Link
-          href="/risks/rcsa/custom-templates"
+          href="/erm/rcsa/custom-templates"
           className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
         >
           <ArrowLeft className="h-4 w-4" />

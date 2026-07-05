@@ -202,7 +202,7 @@ export default function ApprovalReviewPage() {
     mutationFn: (data: Record<string, unknown>) => rcsaApi.approveAssessment(assessmentId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rcsa-pending-approvals'] });
-      router.push('/risks/rcsa/approvals');
+      router.push('/erm/rcsa/approvals');
     },
   });
 
@@ -210,7 +210,7 @@ export default function ApprovalReviewPage() {
     mutationFn: (data: Record<string, unknown>) => rcsaApi.rejectAssessment(assessmentId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rcsa-pending-approvals'] });
-      router.push('/risks/rcsa/approvals');
+      router.push('/erm/rcsa/approvals');
     },
   });
 
@@ -218,7 +218,7 @@ export default function ApprovalReviewPage() {
     mutationFn: (data: Record<string, unknown>) => rcsaApi.returnAssessment(assessmentId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rcsa-pending-approvals'] });
-      router.push('/risks/rcsa/approvals');
+      router.push('/erm/rcsa/approvals');
     },
   });
 
@@ -226,7 +226,7 @@ export default function ApprovalReviewPage() {
     mutationFn: (data: Record<string, unknown>) => rcsaApi.delegateAssessment(assessmentId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rcsa-pending-approvals'] });
-      router.push('/risks/rcsa/approvals');
+      router.push('/erm/rcsa/approvals');
     },
   });
 
@@ -311,7 +311,7 @@ export default function ApprovalReviewPage() {
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex items-center gap-4">
         <Link
-          href="/risks/rcsa/approvals"
+          href="/erm/rcsa/approvals"
           className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />

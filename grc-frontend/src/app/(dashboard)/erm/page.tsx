@@ -46,7 +46,7 @@ const ATTENTION_META: Array<{ key: string; label: string; href: string; color: s
   { key: 'unscored_active_risks', label: 'Unscored active risks', href: '/erm/risks/list', color: '#d97706' },
   { key: 'blocked_questions', label: 'Blocked framework questions', href: '/erm/risk-assessments/framework', color: '#8b5cf6' },
   { key: 'overdue_ai_reviews', label: 'Overdue AI reviews', href: '/erm/risk-assessments/ai-risk-assessment', color: '#2563eb' },
-  { key: 'rcsa_open_findings', label: 'RCSA open findings', href: '/risks/rcsa/findings', color: '#ea580c' },
+  { key: 'rcsa_open_findings', label: 'RCSA open findings', href: '/erm/rcsa/findings', color: '#ea580c' },
   { key: 'controls_tests_overdue', label: 'Control tests overdue', href: '/erm/internal-controls', color: '#0891b2' },
   { key: 'vendor_overdue_reassessments', label: 'Vendor overdue reassessments', href: '/vendor-risk/vendors', color: '#c026d3' },
   { key: 'vendor_critical_findings', label: 'Vendor critical findings', href: '/vendor-risk/findings', color: '#e11d48' },

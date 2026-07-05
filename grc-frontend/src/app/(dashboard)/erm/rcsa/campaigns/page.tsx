@@ -270,7 +270,7 @@ export default function RCSACampaignsPage() {
 
               <div className="flex items-center gap-2 pt-4 border-t border-slate-200">
                 <Link
-                  href={`/risks/rcsa/campaigns/${campaign.id}`}
+                  href={`/erm/rcsa/campaigns/${campaign.id}`}
                   className="flex-1 btn-secondary text-center text-sm py-1.5 flex items-center justify-center gap-1"
                 >
                   <Eye className="h-4 w-4" />

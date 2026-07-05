@@ -414,7 +414,7 @@ export default function RCSAFindingsPage() {
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-1">
                       <Link
-                        href={`/risks/rcsa/findings/${finding.id}`}
+                        href={`/erm/rcsa/findings/${finding.id}`}
                         className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                         title="View Details"
                       >

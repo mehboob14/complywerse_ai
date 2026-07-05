@@ -221,7 +221,7 @@ export default function AssessmentDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rcsa-assessment', assessmentId] });
       queryClient.invalidateQueries({ queryKey: ['rcsa-assessments'] });
-      router.push('/risks/rcsa/assessments');
+      router.push('/erm/rcsa/assessments');
     },
   });
 
@@ -231,7 +231,7 @@ export default function AssessmentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['rcsa-assessment', assessmentId] });
       queryClient.invalidateQueries({ queryKey: ['rcsa-assessments'] });
       queryClient.invalidateQueries({ queryKey: ['rcsa-pending-reviews'] });
-      router.push('/risks/rcsa');
+      router.push('/erm/rcsa');
     },
   });
 
@@ -241,7 +241,7 @@ export default function AssessmentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['rcsa-assessment', assessmentId] });
       queryClient.invalidateQueries({ queryKey: ['rcsa-assessments'] });
       queryClient.invalidateQueries({ queryKey: ['rcsa-pending-reviews'] });
-      router.push('/risks/rcsa');
+      router.push('/erm/rcsa');
     },
   });
 
@@ -461,7 +461,7 @@ export default function AssessmentDetailPage() {
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
       <div className="flex items-center gap-4">
         <Link
-          href="/risks/rcsa/assessments"
+          href="/erm/rcsa/assessments"
           className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900"
         >
           <ArrowLeft className="h-5 w-5" />

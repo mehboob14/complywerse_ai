@@ -296,7 +296,7 @@ export default function RCSAApprovalsPage() {
 
                 <div className="flex items-center gap-2">
                   <Link
-                    href={`/risks/rcsa/approvals/${approval.id}`}
+                    href={`/erm/rcsa/approvals/${approval.id}`}
                     className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100"
                     title="Review Details"
                   >

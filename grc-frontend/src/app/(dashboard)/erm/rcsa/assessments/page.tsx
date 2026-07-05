@@ -178,7 +178,7 @@ export default function RCSAAssessmentsPage() {
       case 'in_progress':
         return (
           <Link
-            href={`/risks/rcsa/assessments/${assessment.id}`}
+            href={`/erm/rcsa/assessments/${assessment.id}`}
             className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30"
           >
             <ArrowRight className="h-3.5 w-3.5" />
@@ -188,7 +188,7 @@ export default function RCSAAssessmentsPage() {
       case 'rejected':
         return (
           <Link
-            href={`/risks/rcsa/assessments/${assessment.id}`}
+            href={`/erm/rcsa/assessments/${assessment.id}`}
             className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
           >
             <ArrowRight className="h-3.5 w-3.5" />
@@ -198,7 +198,7 @@ export default function RCSAAssessmentsPage() {
       default:
         return (
           <Link
-            href={`/risks/rcsa/assessments/${assessment.id}`}
+            href={`/erm/rcsa/assessments/${assessment.id}`}
             className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-slate-500/20 text-slate-600 hover:bg-slate-500/30"
           >
             <Eye className="h-3.5 w-3.5" />

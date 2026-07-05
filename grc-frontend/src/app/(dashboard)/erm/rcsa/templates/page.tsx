@@ -271,7 +271,7 @@ export default function RCSATemplatesPage() {
             
             <div className="flex items-center gap-2 pt-4 border-t border-slate-200">
               <Link
-                href={`/risks/rcsa/templates/${template.id}`}
+                href={`/erm/rcsa/templates/${template.id}`}
                 className="flex-1 btn-secondary text-center text-sm py-1.5 flex items-center justify-center gap-1"
               >
                 <Eye className="h-4 w-4" />
@@ -290,7 +290,7 @@ export default function RCSATemplatesPage() {
               {template.source === 'custom' && canDelete && (
                 <>
                   <Link
-                    href={`/risks/rcsa/templates/${template.id}?edit=true`}
+                    href={`/erm/rcsa/templates/${template.id}?edit=true`}
                     className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded"
                   >
                     <Edit2 className="h-4 w-4" />

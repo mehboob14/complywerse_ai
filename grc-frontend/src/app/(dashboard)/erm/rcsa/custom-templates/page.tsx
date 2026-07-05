@@ -300,7 +300,7 @@ export default function RCSACustomTemplatesPage() {
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap space-x-2">
                       <Link
-                        href={`/risks/rcsa/custom-templates/${t.id}`}
+                        href={`/erm/rcsa/custom-templates/${t.id}`}
                         className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
                         title="Open the matrix view"
                       >
@@ -426,7 +426,7 @@ export default function RCSACustomTemplatesPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Link
-                          href={`/risks/rcsa/custom-templates/${row.template_id}?open=${row.row_id}`}
+                          href={`/erm/rcsa/custom-templates/${row.template_id}?open=${row.row_id}`}
                           className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
                         >
                           Open
