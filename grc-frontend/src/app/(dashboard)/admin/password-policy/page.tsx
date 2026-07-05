@@ -129,12 +129,12 @@ export default function PasswordPolicyPage() {
             max={max}
             value={value}
             onChange={(e) => onChange(Number(e.target.value))}
-            className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-black focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+            className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
           />
           {hint && <p className="mt-1.5 text-xs text-slate-500">{hint}</p>}
         </>
       ) : (
-        <p className="text-black">{value}</p>
+        <p className="text-slate-900">{value}</p>
       )}
     </div>
   );
@@ -155,14 +155,14 @@ export default function PasswordPolicyPage() {
       {/* ── Card 1: Password Complexity ───────────────────────────────────── */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-card">
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
             <Lock size={16} className="text-slate-600" />
             Password Complexity
           </h2>
           {!editing ? (
             <button
               onClick={() => setEditing(true)}
-              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm transition-colors"
+              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm transition-colors"
             >
               Edit Policy
             </button>
@@ -182,7 +182,7 @@ export default function PasswordPolicyPage() {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
+                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm transition-colors disabled:opacity-50"
               >
                 {saving ? 'Saving...' : 'Save Changes'}
               </button>
@@ -227,7 +227,7 @@ export default function PasswordPolicyPage() {
                   ))}
                 </div>
               ) : (
-                <ul className="space-y-1.5 text-sm text-black">
+                <ul className="space-y-1.5 text-sm text-slate-900">
                   {([
                     ['require_uppercase', 'Uppercase letter (A–Z)'],
                     ['require_lowercase', 'Lowercase letter (a–z)'],
@@ -274,7 +274,7 @@ export default function PasswordPolicyPage() {
       {/* ── Card 2: Account Lockout & Session ─────────────────────────────── */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-card">
         <div className="p-6 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-black flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
             <Shield size={16} className="text-slate-600" />
             Account Lockout & Session
           </h2>
@@ -322,11 +322,11 @@ export default function PasswordPolicyPage() {
               <p className="text-sm font-medium text-slate-700 mb-1">Current configuration</p>
               <ul className="space-y-0.5 text-sm text-slate-600">
                 <li>
-                  Lockout: <span className="text-black font-medium">{policy.lockout_threshold}</span> attempts → lock for{' '}
-                  <span className="text-black font-medium">{policy.lockout_minutes}</span> min
+                  Lockout: <span className="text-slate-900 font-medium">{policy.lockout_threshold}</span> attempts → lock for{' '}
+                  <span className="text-slate-900 font-medium">{policy.lockout_minutes}</span> min
                 </li>
                 <li>
-                  Idle timeout: <span className="text-black font-medium">{policy.session_idle_timeout_minutes}</span> min
+                  Idle timeout: <span className="text-slate-900 font-medium">{policy.session_idle_timeout_minutes}</span> min
                 </li>
                 {policy.updated_at && (
                   <li className="text-xs text-slate-500 pt-1">

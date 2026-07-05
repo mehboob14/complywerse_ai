@@ -46,17 +46,19 @@ export function stageState(n: StageIndex, current: StageIndex, closed: boolean):
 export const isClosed = (status: CampaignStatus) => status === 'completed';
 
 // ---- display helpers (Tailwind classes consistent with the app) ----------
+// Severity is a genuine data-viz scale — critical→low runs rose→orange→amber→
+// slate so the gradient stays legible; info maps to neutral slate.
 export const severityClass: Record<Severity, string> = {
-  critical: 'bg-red-100 text-red-700',
+  critical: 'bg-rose-100 text-rose-700',
   high:     'bg-orange-100 text-orange-700',
   medium:   'bg-amber-100 text-amber-700',
   low:      'bg-slate-100 text-slate-600',
-  info:     'bg-blue-100 text-blue-700',
+  info:     'bg-slate-100 text-slate-600',
 };
 
 export const decisionClass: Record<Decision, string> = {
   approved:  'bg-emerald-100 text-emerald-700',
-  revoke:    'bg-red-100 text-red-700',
+  revoke:    'bg-rose-100 text-rose-700',
   exception: 'bg-amber-100 text-amber-700',
   pending:   'bg-slate-100 text-slate-500',
 };
@@ -65,9 +67,11 @@ export const decisionLabel: Record<Decision, string> = {
   approved: 'Approved', revoke: 'Revoked', exception: 'Exception', pending: 'Pending',
 };
 
+// Risk-score buckets — a genuine data-viz scale (high→low = rose→orange→amber→
+// emerald) kept distinct so reviewers can triage at a glance.
 export function riskClass(score: number | null | undefined): string {
   const s = score ?? 0;
-  if (s >= 60) return 'bg-red-100 text-red-700';
+  if (s >= 60) return 'bg-rose-100 text-rose-700';
   if (s >= 30) return 'bg-orange-100 text-orange-700';
   if (s > 0)   return 'bg-amber-100 text-amber-700';
   return 'bg-emerald-100 text-emerald-700';

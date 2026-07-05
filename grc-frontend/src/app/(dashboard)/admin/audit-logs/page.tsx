@@ -46,8 +46,8 @@ function UserAvatar({ name }: { name: string }) {
 
 const ACTION_CFG: Record<string, { bg: string; label: string }> = {
   create:         { bg: 'bg-emerald-50 text-emerald-700 border border-emerald-200', label: 'Create' },
-  update:         { bg: 'bg-blue-50 text-blue-700 border border-blue-200',          label: 'Update' },
-  delete:         { bg: 'bg-red-50 text-red-700 border border-red-200',             label: 'Delete' },
+  update:         { bg: 'bg-slate-50 text-slate-600 border border-slate-200',       label: 'Update' },
+  delete:         { bg: 'bg-rose-50 text-rose-700 border border-rose-200',          label: 'Delete' },
   read:           { bg: 'bg-slate-50 text-slate-500 border border-slate-200',       label: 'Read'   },
   create_failed:  { bg: 'bg-amber-50 text-amber-700 border border-amber-200',       label: 'Create Failed' },
   update_failed:  { bg: 'bg-amber-50 text-amber-700 border border-amber-200',       label: 'Update Failed' },
@@ -327,7 +327,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   return (
     <div className="flex gap-3 py-1.5 border-b border-slate-100 last:border-0">
       <span className="w-36 shrink-0 text-xs font-medium text-slate-500 uppercase tracking-wide pt-0.5">{label}</span>
-      <span className="text-sm text-black break-all">{value}</span>
+      <span className="text-sm text-slate-900 break-all">{value}</span>
     </div>
   );
 }
@@ -448,7 +448,7 @@ export default function AuditLogsPage() {
         const { date, time } = fmtTs(log.timestamp);
         return (
           <div className="min-w-[110px]">
-            <div className="text-xs font-medium text-black">{date}</div>
+            <div className="text-xs font-medium text-slate-900">{date}</div>
             <div className="text-xs text-slate-500 mt-0.5">{time}</div>
           </div>
         );
@@ -460,7 +460,7 @@ export default function AuditLogsPage() {
       accessor: (log: AuditLogEntry) => (
         <div className="flex items-center gap-2 min-w-[120px]">
           <UserAvatar name={log.user_name} />
-          <span className="text-sm font-medium text-black truncate max-w-[140px]" title={log.user_name}>
+          <span className="text-sm font-medium text-slate-900 truncate max-w-[140px]" title={log.user_name}>
             {log.user_name}
           </span>
         </div>
@@ -478,7 +478,7 @@ export default function AuditLogsPage() {
         const ctx = deriveModuleContext(log);
         return (
           <div className="min-w-[140px] max-w-[180px]">
-            <div className="text-sm font-medium text-black truncate" title={ctx.module}>
+            <div className="text-sm font-medium text-slate-900 truncate" title={ctx.module}>
               {ctx.module}
             </div>
             {ctx.submodule && (
@@ -494,7 +494,7 @@ export default function AuditLogsPage() {
       id: 'activity',
       header: 'Activity',
       accessor: (log: AuditLogEntry) => (
-        <span className="text-sm text-black">
+        <span className="text-sm text-slate-900">
           {enrichDescription(log)}
         </span>
       ),
@@ -535,12 +535,12 @@ export default function AuditLogsPage() {
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <div className="flex items-center gap-3">
               <ActionBadge action={selectedLog.action} />
-              <h3 className="text-sm font-semibold text-black">{selectedLog.description || 'Audit Log Details'}</h3>
+              <h3 className="text-sm font-semibold text-slate-900">{selectedLog.description || 'Audit Log Details'}</h3>
             </div>
             <button
               type="button"
               onClick={() => setSelectedLog(null)}
-              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-black"
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
               aria-label="Close"
             >
               <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -555,10 +555,10 @@ export default function AuditLogsPage() {
                 backend and cached on the row. Falls back gracefully when
                 the AI is unavailable or returns nothing. */}
             <section>
-              <p className="text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-2">What happened</p>
-              <div className="bg-indigo-50/40 border border-indigo-100 rounded-lg px-4 py-3 min-h-[44px]">
+              <p className="text-xs font-semibold text-primary-700 uppercase tracking-widest mb-2">What happened</p>
+              <div className="bg-primary-50 border border-primary-100 rounded-lg px-4 py-3 min-h-[44px]">
                 {aiSummaryLoading ? (
-                  <p className="text-xs font-medium text-indigo-600 inline-flex items-center gap-2">
+                  <p className="text-xs font-medium text-primary-700 inline-flex items-center gap-2">
                     <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
                       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
                       <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
@@ -628,7 +628,7 @@ export default function AuditLogsPage() {
                 )}
                 {selectedLog.status_code && (
                   <DetailRow label="Status" value={
-                    <span className={statusCode >= 400 ? 'text-red-600 font-medium' : 'text-emerald-700 font-medium'}>
+                    <span className={statusCode >= 400 ? 'text-rose-600 font-medium' : 'text-emerald-700 font-medium'}>
                       {selectedLog.status_code}
                     </span>
                   } />
@@ -648,7 +648,7 @@ export default function AuditLogsPage() {
             {hasPayload && (
               <section>
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Request Payload</p>
-                <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 text-black whitespace-pre-wrap break-words max-h-60 overflow-auto">
+                <pre className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-900 whitespace-pre-wrap break-words max-h-60 overflow-auto">
                   {JSON.stringify(req, null, 2)}
                 </pre>
               </section>
@@ -694,7 +694,7 @@ export default function AuditLogsPage() {
       {/* Title */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
-          <h1 className="text-lg sm:text-xl font-semibold text-black tracking-tight">Audit Logs</h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Audit Logs</h1>
           <p className="mt-1 text-sm text-slate-600">Track every action taken by users across the platform</p>
         </div>
         {total > 0 && (
@@ -738,7 +738,7 @@ export default function AuditLogsPage() {
           <button
             type="button"
             onClick={() => { setActionFilter('all'); setModuleFilter('all'); setDateFilter('all'); setPage(0); }}
-            className="text-xs text-slate-500 hover:text-black underline"
+            className="text-xs text-slate-500 hover:text-slate-900 underline"
           >
             Clear filters
           </button>
@@ -746,7 +746,7 @@ export default function AuditLogsPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-500/50 rounded-lg p-4 text-sm text-red-600 flex justify-between">
+        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 text-sm text-rose-700 flex justify-between">
           <span>{error}</span>
           <button onClick={() => setError(null)} className="underline ml-4 shrink-0">Dismiss</button>
         </div>

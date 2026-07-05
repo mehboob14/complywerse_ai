@@ -40,9 +40,9 @@ export default function AccessReviewsPage() {
   const reviewed = dash?.items_reviewed ?? 0;
   const sampled = dash?.items_total ?? 0;
   const kpis = [
-    { label: 'Active reviews', value: activeCount, sub: 'in progress', Icon: ShieldCheck, tone: 'text-blue-600' },
+    { label: 'Active reviews', value: activeCount, sub: 'in progress', Icon: ShieldCheck, tone: 'text-primary-600' },
     { label: 'Awaiting decision', value: Math.max(sampled - reviewed, 0), sub: 'users to certify', Icon: Clock, tone: 'text-amber-600' },
-    { label: 'Open exceptions', value: dash?.findings_open ?? 0, sub: `${dash?.users_with_open_exceptions ?? 0} users flagged`, Icon: AlertTriangle, tone: 'text-red-600' },
+    { label: 'Open exceptions', value: dash?.findings_open ?? 0, sub: `${dash?.users_with_open_exceptions ?? 0} users flagged`, Icon: AlertTriangle, tone: 'text-rose-600' },
     { label: 'Certified', value: sampled ? `${Math.round((reviewed / sampled) * 100)}%` : '0%', sub: `${reviewed} of ${sampled}`, Icon: CheckCircle2, tone: 'text-emerald-600' },
   ];
 

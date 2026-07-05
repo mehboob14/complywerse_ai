@@ -116,19 +116,19 @@ export default function ConnectWizardPage() {
 
   if (!permsLoading && !canConnect) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <div className="min-h-screen bg-slate-50">
         <div className="max-w-2xl mx-auto px-4 py-16">
           <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-8 text-center">
             <div className="text-5xl mb-3">🔒</div>
-            <h1 className="text-xl font-semibold text-gray-900 mb-2">Connect Wizard is locked</h1>
-            <p className="text-sm text-gray-600 mb-4">
+            <h1 className="text-xl font-semibold text-slate-900 mb-2">Connect Wizard is locked</h1>
+            <p className="text-sm text-slate-600 mb-4">
               Onboarding new Windows / Linux / AWS targets is restricted to users with the
               {' '}<strong>compliance:agents:manage</strong> permission (Tenant Admin or
               Scanning Admin role). Ask your tenant admin to grant the right role.
             </p>
             <button
               onClick={() => navigate('/dashboard')}
-              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+              className="px-4 py-2 bg-primary-600 text-[color:var(--color-on-base,#0a0a0a)] text-sm rounded-md hover:bg-primary-700"
             >
               ← Back to dashboard
             </button>
@@ -282,11 +282,11 @@ export default function ConnectWizardPage() {
   }, [status?.state, navigate, prefillAssetId]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="min-h-screen bg-slate-50">
       <div className="max-w-3xl mx-auto px-4 py-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Connect your first server</h1>
-          <p className="text-gray-600">
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">Connect your first server</h1>
+          <p className="text-slate-600">
             Compliverse needs at least one connected server to scan against. Pick a platform — we&apos;ll generate a one-liner that sets up everything for you.
           </p>
         </div>
@@ -308,7 +308,7 @@ export default function ConnectWizardPage() {
                   <p className="mt-2 text-xs text-slate-600">
                     <strong>Got assets in IT Assets already?</strong>{' '}
                     Skip this picker — go to{' '}
-                    <a href="/assets" className="underline font-semibold text-blue-700 hover:text-blue-800">
+                    <a href="/assets" className="underline font-semibold text-primary-700 hover:text-primary-800">
                       IT Assets
                     </a>{' '}
                     and click the <strong>Connect</strong> button on the asset row. The wizard opens with the hostname pre-filled — you only enter username + password.
@@ -341,13 +341,13 @@ export default function ConnectWizardPage() {
                           disabled={issuing}
                           className={`group p-6 rounded-xl border-2 transition-all text-left cursor-pointer ${
                             picked === p.id
-                              ? 'border-blue-500 bg-blue-50'
-                              : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-md'
+                              ? 'border-primary-500 bg-primary-50'
+                              : 'border-slate-200 bg-white hover:border-primary-300 hover:shadow-md'
                           }`}
                         >
                           <div className="text-4xl mb-2">{p.logo}</div>
-                          <div className="font-semibold text-gray-900 mb-1">{p.label}</div>
-                          <div className="text-xs text-gray-600">{p.subtitle}</div>
+                          <div className="font-semibold text-slate-900 mb-1">{p.label}</div>
+                          <div className="text-xs text-slate-600">{p.subtitle}</div>
                         </button>
                       );
                     })}
@@ -357,7 +357,7 @@ export default function ConnectWizardPage() {
             })}
 
             {error && (
-              <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700 mb-4">
+              <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 text-sm text-rose-700 mb-4">
                 {error}
               </div>
             )}
@@ -365,7 +365,7 @@ export default function ConnectWizardPage() {
             <div className="text-center">
               <button
                 onClick={() => navigate('/dashboard')}
-                className="text-sm text-gray-500 hover:text-gray-700 hover:underline"
+                className="text-sm text-slate-500 hover:text-slate-700 hover:underline"
               >
                 Skip for now — I'll connect later
               </button>
@@ -426,10 +426,10 @@ export default function ConnectWizardPage() {
         {tokenData && status?.state !== 'ready' && picked && !['windows', 'linux', 'digitalocean', 'aws', 'postgres', 'mssql', 'mysql', 'oracle'].includes(picked) && (
           <div className="bg-white rounded-xl shadow-md p-8 border border-amber-200 max-w-3xl mx-auto text-center">
             <div className="text-5xl mb-3">🚧</div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">
+            <h2 className="text-xl font-bold text-slate-900 mb-2">
               {PLATFORMS.find(p => p.id === picked)?.label} wizard coming soon
             </h2>
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-slate-600 mb-4">
               The backend runner for this platform is ready. The per-platform credential form
               (e.g. {picked === 'cisco' ? 'enable secret + SSH user' :
                 picked === 'ad' ? 'bind DN + base DN' :
@@ -444,7 +444,7 @@ export default function ConnectWizardPage() {
             </p>
             <button
               onClick={() => { setTokenData(null); setPicked(null); setStatus(null); }}
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm text-primary-600 hover:underline"
             >
               ← Pick a different platform
             </button>
@@ -452,36 +452,36 @@ export default function ConnectWizardPage() {
         )}
 
         {status?.state === 'ready' && (
-          <div className="bg-white rounded-xl shadow-md p-8 border-2 border-green-300 text-center">
+          <div className="bg-white rounded-xl shadow-md p-8 border-2 border-emerald-300 text-center">
             <div className="text-5xl mb-3">✅</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Connected!</h2>
-            <p className="text-gray-600 mb-4">
-              <strong className="text-gray-900">{status.hostname}</strong> is now ready to scan.
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">Connected!</h2>
+            <p className="text-slate-600 mb-4">
+              <strong className="text-slate-900">{status.hostname}</strong> is now ready to scan.
             </p>
             {status.os_name && (
-              <p className="text-sm text-gray-500 mb-4">Detected OS: {status.os_name}</p>
+              <p className="text-sm text-slate-500 mb-4">Detected OS: {status.os_name}</p>
             )}
             {prefillAssetId ? (
               <>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-slate-500">
                   Returning you to the asset&apos;s Compliance tab in a moment so the AI Classification
                   and matched benchmark refresh with the new connection data…
                 </div>
                 <button
                   onClick={() => navigate(`/assets/${prefillAssetId}?tab=compliance`)}
-                  className="mt-5 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                  className="mt-5 px-5 py-2 bg-primary-600 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm font-medium hover:bg-primary-700"
                 >
                   Back to this asset →
                 </button>
               </>
             ) : (
               <>
-                <div className="text-xs text-gray-400">
+                <div className="text-xs text-slate-400">
                   Taking you to your dashboard in a moment…
                 </div>
                 <button
                   onClick={() => navigate('/dashboard')}
-                  className="mt-5 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                  className="mt-5 px-5 py-2 bg-primary-600 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm font-medium hover:bg-primary-700"
                 >
                   Go to dashboard now →
                 </button>
@@ -619,15 +619,15 @@ function ManualCredsForm({
 
   if (success) {
     return (
-      <div className="bg-white rounded-xl shadow-md p-8 border-2 border-green-300 text-center">
+      <div className="bg-white rounded-xl shadow-md p-8 border-2 border-emerald-300 text-center">
         <div className="text-5xl mb-3">✅</div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Connected!</h2>
-        <p className="text-gray-600 mb-4">
-          <strong className="text-gray-900">{hostname}</strong> is now ready to scan.
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">Connected!</h2>
+        <p className="text-slate-600 mb-4">
+          <strong className="text-slate-900">{hostname}</strong> is now ready to scan.
         </p>
         <button
           onClick={() => window.location.href = '/dashboard'}
-          className="mt-3 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+          className="mt-3 px-5 py-2 bg-primary-600 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm font-medium hover:bg-primary-700"
         >
           Go to dashboard →
         </button>
@@ -639,13 +639,13 @@ function ManualCredsForm({
   const inputCls =
     "block w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 " +
     "placeholder:text-slate-400 shadow-sm transition " +
-    "focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100";
+    "focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100";
 
   return (
     <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
       {/* Header strip — platform icon + breadcrumb */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-700 px-6 py-5 flex items-center gap-4 text-white">
-        <div className="w-12 h-12 rounded-lg bg-white/10 backdrop-blur flex items-center justify-center text-2xl">
+      <div className="bg-slate-900 px-6 py-5 flex items-center gap-4 text-white">
+        <div className="w-12 h-12 rounded-lg bg-white/10 flex items-center justify-center text-2xl">
           {logo}
         </div>
         <div className="flex-1">
@@ -661,7 +661,7 @@ function ManualCredsForm({
       {/* Body */}
       <div className="px-6 py-6">
         {assetId && initialHostname && (
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs text-primary-900">
             <span className="text-base">🔗</span>
             <div>
               <span className="font-semibold">Connecting to asset #{assetId}</span> ·
@@ -680,7 +680,7 @@ function ManualCredsForm({
           {/* Section 1 — Connection details */}
           <fieldset>
             <legend className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2">
-              <span className="w-5 h-5 rounded bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold">1</span>
+              <span className="w-5 h-5 rounded bg-primary-100 text-primary-700 flex items-center justify-center text-[10px] font-bold">1</span>
               Connection details
             </legend>
             <div className="grid grid-cols-1 gap-4">
@@ -733,7 +733,7 @@ function ManualCredsForm({
           {/* Section 2 — Authentication */}
           <fieldset>
             <legend className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2">
-              <span className="w-5 h-5 rounded bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold">2</span>
+              <span className="w-5 h-5 rounded bg-primary-100 text-primary-700 flex items-center justify-center text-[10px] font-bold">2</span>
               Authentication (read-only service account)
             </legend>
             <div className="grid grid-cols-1 gap-4">
@@ -795,7 +795,7 @@ function ManualCredsForm({
 
           {/* Inline error */}
           {error && (
-            <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700 whitespace-pre-line">{error}</div>
+            <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 text-sm text-rose-700 whitespace-pre-line">{error}</div>
           )}
 
           {/* Action bar */}
@@ -810,7 +810,7 @@ function ManualCredsForm({
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-2.5 text-sm font-semibold text-[color:var(--color-on-base,#0a0a0a)] bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm flex items-center justify-center gap-2"
             >
               {submitting ? (
                 <>
@@ -995,7 +995,7 @@ function SqlDbForm({
   const inputCls =
     "block w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 " +
     "placeholder:text-slate-400 shadow-sm transition " +
-    "focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-100";
+    "focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -1070,24 +1070,24 @@ function SqlDbForm({
       ? `${hostname}:${port}/${database || oracleSid}`
       : `${hostname}:${port}/${database}`;
     return (
-      <div className="bg-white rounded-xl shadow-md p-8 border-2 border-green-300 text-center">
+      <div className="bg-white rounded-xl shadow-md p-8 border-2 border-emerald-300 text-center">
         <div className="text-5xl mb-3">✅</div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">{cfg.label} connected!</h2>
-        <p className="text-gray-600 mb-4">
-          <strong className="text-gray-900">{target}</strong> is now ready to scan.
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">{cfg.label} connected!</h2>
+        <p className="text-slate-600 mb-4">
+          <strong className="text-slate-900">{target}</strong> is now ready to scan.
         </p>
         <p className="text-xs text-slate-500 mb-4">
           Backend runner: <code className="font-mono">{cfg.runner}</code> · CIS {cfg.label} Benchmark plugins will execute on the next scan tick.
         </p>
-        <button onClick={onCancel} className="text-sm text-blue-600 hover:underline">← Connect another</button>
+        <button onClick={onCancel} className="text-sm text-primary-600 hover:underline">← Connect another</button>
       </div>
     );
   }
 
   return (
     <div className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden max-w-3xl mx-auto">
-      <div className="bg-gradient-to-r from-slate-900 to-slate-700 px-6 py-5 flex items-center gap-4 text-white">
-        <div className="w-12 h-12 rounded-lg bg-white/10 backdrop-blur flex items-center justify-center text-2xl">{cfg.icon}</div>
+      <div className="bg-slate-900 px-6 py-5 flex items-center gap-4 text-white">
+        <div className="w-12 h-12 rounded-lg bg-white/10 flex items-center justify-center text-2xl">{cfg.icon}</div>
         <div className="flex-1">
           <div className="text-xs uppercase tracking-wide text-slate-300 mb-0.5">Connect Wizard · Step 2 of 2</div>
           <h2 className="text-lg font-semibold leading-tight">{cfg.label} — Database Credentials</h2>
@@ -1100,7 +1100,7 @@ function SqlDbForm({
 
       <div className="px-6 py-6">
         {assetId && initialHostname && (
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-xs text-primary-900">
             <span className="text-base">🔗</span>
             <div>
               <span className="font-semibold">Connecting to asset #{assetId}</span> · hostname pre-filled.
@@ -1113,7 +1113,7 @@ function SqlDbForm({
         <form onSubmit={submit} className="space-y-6">
           <fieldset>
             <legend className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2">
-              <span className="w-5 h-5 rounded bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold">1</span>
+              <span className="w-5 h-5 rounded bg-primary-100 text-primary-700 flex items-center justify-center text-[10px] font-bold">1</span>
               Connection details
             </legend>
             <div className="grid grid-cols-1 gap-4">
@@ -1204,7 +1204,7 @@ function SqlDbForm({
 
           <fieldset>
             <legend className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2">
-              <span className="w-5 h-5 rounded bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold">2</span>
+              <span className="w-5 h-5 rounded bg-primary-100 text-primary-700 flex items-center justify-center text-[10px] font-bold">2</span>
               Authentication (read-only)
             </legend>
             <div className="grid grid-cols-2 gap-4">
@@ -1239,7 +1239,7 @@ function SqlDbForm({
           </fieldset>
 
           {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900 whitespace-pre-line">
+            <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900 whitespace-pre-line">
               {error}
             </div>
           )}
@@ -1255,7 +1255,7 @@ function SqlDbForm({
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2.5 text-sm font-semibold text-[color:var(--color-on-base,#0a0a0a)] shadow-sm hover:bg-primary-700 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {submitting ? 'Connecting…' : 'Connect & store securely'}
             </button>
@@ -1327,14 +1327,14 @@ function AwsForm({ token, onCancel }: { token: string; onCancel: () => void }) {
 
   if (success) {
     return (
-      <div className="bg-white rounded-xl shadow-md p-8 border-2 border-green-300 text-center">
+      <div className="bg-white rounded-xl shadow-md p-8 border-2 border-emerald-300 text-center">
         <div className="text-5xl mb-3">✅</div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">AWS Account Connected!</h2>
-        <p className="text-gray-600 mb-4">Compliverse can now run read-only CIS AWS Foundations scans against this account.</p>
-        <div className="text-xs text-gray-400">Reloading…</div>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">AWS Account Connected!</h2>
+        <p className="text-slate-600 mb-4">Compliverse can now run read-only CIS AWS Foundations scans against this account.</p>
+        <div className="text-xs text-slate-400">Reloading…</div>
         <button
           onClick={() => window.location.href = '/dashboard'}
-          className="mt-5 px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+          className="mt-5 px-5 py-2 bg-primary-600 text-[color:var(--color-on-base,#0a0a0a)] rounded-lg text-sm font-medium hover:bg-primary-700"
         >
           Go to dashboard →
         </button>
@@ -1343,19 +1343,19 @@ function AwsForm({ token, onCancel }: { token: string; onCancel: () => void }) {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-6 border border-gray-200">
+    <div className="bg-white rounded-xl shadow-md p-6 border border-slate-200">
       <div className="flex items-center gap-3 mb-4">
         <span className="text-3xl">☁️</span>
         <div>
-          <h2 className="font-semibold text-gray-900">Connect AWS Account</h2>
-          <p className="text-xs text-gray-600">
+          <h2 className="font-semibold text-slate-900">Connect AWS Account</h2>
+          <p className="text-xs text-slate-600">
             Paste an IAM <strong>ReadOnlyAccess</strong> key. Compliverse never modifies your AWS — only reads config for scanning.
           </p>
         </div>
       </div>
 
-      <details className="mb-4 text-xs text-gray-600 bg-blue-50 rounded-lg p-3 border border-blue-200">
-        <summary className="cursor-pointer font-medium text-blue-900">
+      <details className="mb-4 text-xs text-slate-600 bg-primary-50 rounded-lg p-3 border border-primary-200">
+        <summary className="cursor-pointer font-medium text-primary-900">
           How to create a read-only IAM key (2 minutes)
         </summary>
         <ol className="list-decimal ml-5 mt-2 space-y-1">
@@ -1369,22 +1369,22 @@ function AwsForm({ token, onCancel }: { token: string; onCancel: () => void }) {
 
       <form onSubmit={submit} className="space-y-3">
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Account label</label>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Account label</label>
           <input
             type="text"
             value={accountName}
             onChange={(e) => setAccountName(e.target.value)}
             placeholder="Production AWS"
             required
-            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Region</label>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Region</label>
           <select
             value={region}
             onChange={(e) => setRegion(e.target.value)}
-            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           >
             {['us-east-1','us-east-2','us-west-1','us-west-2','eu-west-1','eu-central-1','ap-south-1','ap-southeast-1','ap-northeast-1','me-south-1','me-central-1'].map((r) => (
               <option key={r} value={r}>{r}</option>
@@ -1392,47 +1392,47 @@ function AwsForm({ token, onCancel }: { token: string; onCancel: () => void }) {
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Access Key ID</label>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Access Key ID</label>
           <input
             type="text"
             value={accessKey}
             onChange={(e) => setAccessKey(e.target.value)}
             placeholder="AKIAIOSFODNN7EXAMPLE"
             required
-            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">Secret Access Key</label>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Secret Access Key</label>
           <input
             type="password"
             value={secretKey}
             onChange={(e) => setSecretKey(e.target.value)}
             placeholder="••••••••••••••••••••••••••••••••••••••••"
             required
-            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           />
-          <p className="mt-1 text-[10px] text-gray-500">
+          <p className="mt-1 text-[10px] text-slate-500">
             Encrypted at rest with your tenant's per-tenant key. Never logged or echoed back.
           </p>
         </div>
 
         {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 p-2 text-xs text-red-700">{error}</div>
+          <div className="rounded-lg bg-rose-50 border border-rose-200 p-2 text-xs text-rose-700">{error}</div>
         )}
 
         <div className="flex gap-2 pt-2">
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 text-sm text-gray-700 rounded-lg border border-gray-300 hover:bg-gray-50"
+            className="px-4 py-2 text-sm text-slate-700 rounded-lg border border-slate-300 hover:bg-slate-50"
           >
             ← Back
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="flex-1 px-4 py-2 text-sm font-medium text-[color:var(--color-on-base,#0a0a0a)] bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
           >
             {submitting ? 'Registering…' : 'Connect AWS Account'}
           </button>
@@ -1586,7 +1586,7 @@ function BulkCredsForm({
             <button
               type="submit"
               disabled={running || loadingAssets || !username || !password}
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-[color:var(--color-on-base,#0a0a0a)] hover:bg-primary-700 disabled:opacity-50"
             >
               {running
                 ? `Running… ${doneCount} of ${total}`
@@ -1606,8 +1606,8 @@ function BulkCredsForm({
               const r = results[a.id] || { status: 'pending' };
               const tone =
                 r.status === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' :
-                r.status === 'error' ? 'border-red-200 bg-red-50 text-red-800' :
-                r.status === 'running' ? 'border-blue-200 bg-blue-50 text-blue-800' :
+                r.status === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800' :
+                r.status === 'running' ? 'border-primary-200 bg-primary-50 text-primary-800' :
                 'border-slate-200 bg-white text-slate-700';
               return (
                 <div key={a.id} className={`rounded-md border px-3 py-1.5 text-xs ${tone}`}>
@@ -1638,7 +1638,7 @@ function BulkCredsForm({
           <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
             <strong>Done.</strong>{' '}
             {okCount} connected,{' '}
-            {errCount > 0 ? <span className="text-red-700">{errCount} failed</span> : <span>0 failed</span>}.
+            {errCount > 0 ? <span className="text-rose-700">{errCount} failed</span> : <span>0 failed</span>}.
             {errCount > 0 && ' Hover the ✗ rows for the per-asset error — fix on the target host then click Connect on each failed row individually from /assets.'}
           </div>
         )}

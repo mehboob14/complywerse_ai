@@ -190,7 +190,7 @@ function ConnectDrawer({ vendor, fields, onClose, onDone }: {
   };
 
   return (
-    <div onClick={onClose} className="fixed inset-0 z-40 flex justify-end bg-slate-900/45 backdrop-blur-[1px]">
+    <div onClick={onClose} className="fixed inset-0 z-40 flex justify-end bg-slate-900/45">
       <div onClick={(e) => e.stopPropagation()} className="flex h-full w-[460px] max-w-[94%] flex-col border-l border-slate-200 bg-white shadow-2xl">
         <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[13px] font-bold text-white" style={{ background: vendor.color }}>{vendor.initials}</div>
@@ -200,7 +200,7 @@ function ConnectDrawer({ vendor, fields, onClose, onDone }: {
 
         <div className="flex-1 overflow-y-auto px-5 py-5">
           <p className="mb-4 text-[12.5px] text-slate-500">Credentials are used for this sync only and are not stored. Users &amp; access land in one shared table.</p>
-          {msg && <div className={`mb-4 rounded-md px-3 py-2 text-[13px] ${msg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.text}</div>}
+          {msg && <div className={`mb-4 rounded-md px-3 py-2 text-[13px] ${msg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{msg.text}</div>}
 
           {vendor.kind === 'sso' ? (
             <button onClick={() => router.push('/admin?tab=identity')} style={ACCENT} className="w-full rounded-md px-4 py-2.5 text-[13px] font-semibold shadow-sm">Connect with Microsoft →</button>

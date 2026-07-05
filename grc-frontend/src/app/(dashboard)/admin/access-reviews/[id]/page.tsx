@@ -228,10 +228,10 @@ function UserPanel({ campaignId, user, onClose }: { campaignId: number; user: Re
   const setDecision = useSetDecision(campaignId);
   const uploadEvidence = useUploadEvidence(campaignId);
   const [note, setNote] = useState('');
-  const aiMeta = user.ai_recommendation === 'revoke' ? ['Revoke', 'text-red-600'] : user.ai_recommendation === 'exception' ? ['Exception', 'text-amber-600'] : ['Approve', 'text-emerald-600'];
+  const aiMeta = user.ai_recommendation === 'revoke' ? ['Revoke', 'text-rose-600'] : user.ai_recommendation === 'exception' ? ['Exception', 'text-amber-600'] : ['Approve', 'text-emerald-600'];
 
   return (
-    <div onClick={onClose} className="fixed inset-0 z-40 flex justify-end bg-slate-900/45 backdrop-blur-[1px]">
+    <div onClick={onClose} className="fixed inset-0 z-40 flex justify-end bg-slate-900/45">
       <div onClick={(e) => e.stopPropagation()} className="flex h-full w-[480px] max-w-[94%] flex-col border-l border-slate-200 bg-white shadow-2xl">
         <div className="border-b border-slate-100 px-5 pb-4 pt-5">
           <div className="flex items-start gap-3">
@@ -243,7 +243,7 @@ function UserPanel({ campaignId, user, onClose }: { campaignId: number; user: Re
           <div className="mt-3 flex flex-wrap gap-1.5">
             {user.is_privileged && <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-semibold text-orange-700">privileged</span>}
             {user.is_terminated && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700">terminated</span>}
-            {user.is_anomaly && <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700">anomaly</span>}
+            {user.is_anomaly && <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">anomaly</span>}
           </div>
         </div>
 
@@ -251,7 +251,7 @@ function UserPanel({ campaignId, user, onClose }: { campaignId: number; user: Re
           <div className="mb-5 grid grid-cols-2 gap-x-4 gap-y-3.5 text-[13px]">
             <Field k="Department" v={user.department} /><Field k="Title" v={user.designation} />
             <div className="col-span-2"><K>Roles</K><div className="font-semibold text-slate-800">{user.roles.join(', ') || '—'}</div></div>
-            <div><K>MFA</K><div className={`font-semibold ${user.mfa_enabled ? 'text-emerald-600' : 'text-red-600'}`}>{user.mfa_enabled ? 'Enabled' : 'Not enabled'}</div></div>
+            <div><K>MFA</K><div className={`font-semibold ${user.mfa_enabled ? 'text-emerald-600' : 'text-rose-600'}`}>{user.mfa_enabled ? 'Enabled' : 'Not enabled'}</div></div>
             <Field k="Account" v={user.account_enabled ? 'active' : 'disabled'} />
             <Field k="Last sign-in" v={user.last_sign_in ?? '—'} /><Field k="Terminated" v={user.termination_date ?? '—'} />
           </div>
@@ -290,7 +290,7 @@ function UserPanel({ campaignId, user, onClose }: { campaignId: number; user: Re
             })}
           </div>
           {user.decision === 'revoke' && (
-            <div className="mb-3.5 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-[11.5px] leading-snug text-red-700"><Info size={14} className="mt-0.5 shrink-0" /> Recorded as a revoke instruction. Disabling the account in the source is a separate remediation step.</div>
+            <div className="mb-3.5 flex items-start gap-2 rounded-lg bg-rose-50 p-3 text-[11.5px] leading-snug text-rose-700"><Info size={14} className="mt-0.5 shrink-0" /> Recorded as a revoke instruction. Disabling the account in the source is a separate remediation step.</div>
           )}
           <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a justification (recorded as audit evidence)…" className="mb-3 min-h-[64px] w-full resize-y rounded-md border border-slate-200 bg-slate-50 p-3 text-[12.5px] outline-none" />
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-[12.5px] font-semibold text-slate-600">
